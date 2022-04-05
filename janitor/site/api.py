@@ -1193,6 +1193,7 @@ def create_background_task(fn, title):
 async def handle_run_reprocess_logs(request):
     from ..reprocess_logs import reprocess_run_logs
     check_admin(request)
+    post = await request.post()
     run_id = request.match_info['run_id']
     dry_run = 'dry_run' in post
     reschedule = 'reschedule' in post
