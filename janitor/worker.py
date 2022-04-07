@@ -1014,7 +1014,8 @@ def run_worker(
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    with copy_output(os.path.join(output_directory, "worker.log")):
+    with ExitStack() as es:
+        es.enter_context(copy_output(os.path.join(output_directory, "worker.log")))
         try:
             with process_package(
                 branch_url,
