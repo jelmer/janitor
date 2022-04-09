@@ -4,8 +4,7 @@ import operator
 
 from . import env, json_chart_data
 from aiohttp import web
-import asyncpg
-from .common import iter_candidates, html_template
+from .common import html_template
 
 
 @json_chart_data(max_age=60)

@@ -43,8 +43,6 @@ from ..vcs import get_vcs_manager
 
 from . import (
     env,
-    is_admin,
-    check_qa_reviewer,
 )
 
 from .common import (

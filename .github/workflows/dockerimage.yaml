@@ -95,6 +95,15 @@ jobs:
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Build xmpp-notify image
+        uses: docker/build-push-action@v2
+        with:
+          file: "Dockerfile_xmpp_notify"
+          tags: |
+            ghcr.io/jelmer/janitor/xmpp_notify:latest
+          # build on feature branches, push only on main branch
+          push: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build publish image
         uses: docker/build-push-action@v2
         with:
