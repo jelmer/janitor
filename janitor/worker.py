@@ -30,7 +30,6 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from threading import Thread
 import traceback
 from typing import Any, Optional, List, Dict, Iterator, Tuple
 
@@ -42,7 +41,6 @@ from aiohttp import (
     ClientConnectorError,
     ContentTypeError,
     web,
-    WSMsgType,
     )
 import yarl
 

@@ -1450,8 +1450,8 @@ async def handle_status(request):
 async def _find_active_run(request):
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
-    queue_id = request.query.get('queue_id')
-    worker_name = request.query.get('worker_name')
+    queue_id = request.query.get('queue_id')  # noqa: F841
+    worker_name = request.query.get('worker_name')  # noqa: F841
     try:
         return queue_processor.active_runs[run_id]
     except KeyError:
@@ -1542,7 +1542,7 @@ queue.bucket ASC,
 queue.priority ASC,
 queue.id ASC
 """
-    if limit in request.query:
+    if 'limit' in request.query:
         query += " LIMIT %d" % int(request.query['limit'])
     async with queue_processor.database.acquire() as conn:
         for entry in await conn.fetch(query):

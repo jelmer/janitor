@@ -21,7 +21,6 @@
 import aiozipkin
 
 from aiohttp import web
-from aiohttp.web_middlewares import normalize_path_middleware
 
 from .. import state
 
@@ -373,4 +372,3 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
     )
-

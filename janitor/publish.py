@@ -1953,8 +1953,8 @@ applied independently.
                 )
             except PolicyUnavailable as e:
                 logging.warning(
-                    'Policy unavailable while attempting to reschedule %s/%s',
-                    last_run.package, last_run.suite)
+                    'Policy unavailable while attempting to reschedule %s/%s: %s',
+                    last_run.package, last_run.suite, e)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
@@ -2268,8 +2268,8 @@ def iter_all_mps(
                     e, instance)
             except UnsupportedHoster as e:
                 logging.warning(
-                    'Unsupported host instance, skipping %r',
-                    instance)
+                    'Unsupported host instance, skipping %r: %s',
+                    instance, e)
 
 
 async def check_existing(
