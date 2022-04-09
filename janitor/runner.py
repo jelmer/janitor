@@ -356,9 +356,9 @@ class JanitorResult(object):
         self,
         pkg: str,
         log_id: str,
-        branch_url,
+        branch_url: str,
+        code: str,
         description: Optional[str] = None,
-        code: Optional[str] = None,
         worker_result=None,
         logfilenames=None,
         suite=None,
@@ -483,8 +483,8 @@ class WorkerResult(object):
 
     def __init__(
         self,
-        code,
-        description,
+        code: str,
+        description: Optional[str],
         context=None,
         subworker=None,
         main_branch_revision=None,
@@ -559,7 +559,7 @@ class WorkerResult(object):
             else:
                 raise NotImplementedError('unsupported build target %r' % target_kind)
         return cls(
-            code=worker_result.get("code"),
+            code=worker_result.get("code", "missing-result-code"),
             description=worker_result.get("description"),
             context=worker_result.get("context"),
             subworker=worker_result.get("subworker"),
@@ -1115,7 +1115,7 @@ async def store_run(
     start_time: datetime,
     finish_time: datetime,
     command: str,
-    description: str,
+    description: Optional[str],
     instigated_context: Optional[str],
     context: Optional[str],
     main_branch_revision: Optional[bytes],
@@ -1325,7 +1325,7 @@ class QueueProcessor(object):
             "avoid_hosts": list(self.avoid_hosts),
             "rate_limit_hosts": {
                 host: ts.isoformat()
-                for (host, ts) in self.rate_limit_hosts}
+                for (host, ts) in self.rate_limit_hosts.items()}
         }
 
     def register_run(self, active_run: ActiveRun) -> None:
@@ -1369,18 +1369,18 @@ class QueueProcessor(object):
                 try:
                     await store_run(
                         conn,
-                        result.log_id,
-                        item.package,
-                        result.vcs_type,
-                        result.branch_url,
-                        result.start_time,
-                        result.finish_time,
-                        item.command,
-                        result.description,
-                        item.context,
-                        result.context,
-                        result.main_branch_revision,
-                        result.code,
+                        run_id=result.log_id,
+                        name=item.package,
+                        vcs_type=result.vcs_type,
+                        vcs_url=result.branch_url,
+                        start_time=result.start_time,
+                        finish_time=result.finish_time,
+                        command=item.command,
+                        description=result.description,
+                        instigated_context=item.context,
+                        context=result.context,
+                        main_branch_revision=result.main_branch_revision,
+                        result_code=result.code,
                         revision=result.revision,
                         subworker_result=result.subworker_result,
                         suite=item.suite,
