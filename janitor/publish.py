@@ -1239,7 +1239,7 @@ async def consider_request(request):
 
 async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
-) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
+) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[str]]:
     row = await conn.fetchrow(
         "SELECT publish, command "
         "FROM policy WHERE package = $1 AND suite = $2",
@@ -1247,10 +1247,10 @@ async def get_publish_policy(
         suite,
     )
     if row:
-        return (  # type: ignore
-            {k: (v, f) for k, v, f in row['publish']},
+        return (
+            {v['role']: (v['mode'], v['frequency_days']) for v in row['publish']},
             row['command']
-        )
+        )  # type: ignore
     return None, None, None
 
 
