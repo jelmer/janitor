@@ -5,6 +5,7 @@ from aiohttp_apispec import (
     )
 
 
+from aiohttp import web
 import aiozipkin
 import asyncpg
 from typing import List, Dict
