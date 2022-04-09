@@ -2566,7 +2566,6 @@ def main(argv=None):
         type=str,
         help="External URL",
         default=None)
-    )
     parser.add_argument(
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
