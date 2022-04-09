@@ -163,7 +163,7 @@ class WorkerResult(object):
         self,
         description: Optional[str],
         value: Optional[int],
-        branches: Optional[List[Tuple[str, str, bytes, bytes]]],
+        branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]],
         target: str,
         target_details: Optional[Any],
