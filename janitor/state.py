@@ -63,8 +63,6 @@ class Run(object):
     command: str
     description: Optional[str]
     package: str
-    build_version: Optional[Version]
-    build_distribution: Optional[str]
     result_code: str
     main_branch_revision: Optional[bytes]
     revision: Optional[bytes]
@@ -89,8 +87,6 @@ class Run(object):
         "command",
         "description",
         "package",
-        "build_version",
-        "build_distribution",
         "result_code",
         "value",
         "main_branch_revision",
@@ -118,8 +114,6 @@ class Run(object):
         command,
         description,
         package,
-        build_version,
-        build_distribution,
         result_code,
         value,
         main_branch_revision,
@@ -144,8 +138,6 @@ class Run(object):
         self.command = command
         self.description = description
         self.package = package
-        self.build_version = build_version
-        self.build_distribution = build_distribution
         self.result_code = result_code
         self.value = value
         self.main_branch_revision = main_branch_revision
@@ -194,8 +186,6 @@ class Run(object):
             command=row['command'],
             description=row['description'],
             package=row['package'],
-            build_version=row['build_version'],
-            build_distribution=row['build_distribution'],
             result_code=row['result_code'],
             main_branch_revision=(row['main_branch_revision'].encode("utf-8") if row['main_branch_revision'] else None),
             revision=(row['revision'].encode("utf-8") if row['revision'] else None),
@@ -244,8 +234,7 @@ async def _iter_runs(
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
+    result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment, worker,

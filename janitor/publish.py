@@ -2365,8 +2365,7 @@ async def get_run(conn: asyncpg.Connection, run_id):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
+    result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment, worker,
@@ -2375,8 +2374,6 @@ SELECT
     result_tags, target_branch_url
 FROM
     run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id
 WHERE id = $1
 """
     row = await conn.fetch(query, run_id)
@@ -2394,8 +2391,6 @@ SELECT
   finish_time,
   description,
   package,
-  debian_build.version AS build_version,
-  debian_build.distribution AS build_distribution,
   result_code,
   branch_name,
   main_branch_revision,
@@ -2413,7 +2408,6 @@ SELECT
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM last_runs
-LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
 WHERE main_branch_revision = $1 AND package = $2 AND suite != 'unchanged'
 ORDER BY start_time DESC
 """
@@ -2571,7 +2565,7 @@ def main(argv=None):
         "--external-url",
         type=str,
         help="External URL",
-        default="https://janitor.debian.net/",
+        default=None)
     )
     parser.add_argument(
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
