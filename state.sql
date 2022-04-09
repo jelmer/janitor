@@ -260,12 +260,6 @@ CREATE OR REPLACE VIEW absorbed_runs AS
   exists (select from new_result_branch WHERE run_id = run.id) and
   not exists (select from new_result_branch WHERE run_id = run.id AND not absorbed);
 
-CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
-  select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
-
-CREATE OR REPLACE VIEW last_unabsorbed_lintian_fixes AS
-  select last_unabsorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from last_unabsorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]) WHERE result_code = 'success';
-
 CREATE OR REPLACE VIEW perpetual_candidates AS
   select suite, package from candidate union select suite, package from run;
 
@@ -323,19 +317,6 @@ CREATE OR REPLACE VIEW queue_positions AS SELECT
 FROM
     queue
 ORDER BY bucket ASC, priority ASC, id ASC;
-
-CREATE TABLE debian_build (
- run_id text not null references run (id),
- -- Debian version text of the built package
- version debversion not null,
- -- Distribution the package was built for (e.g. "lintian-fixes")
- distribution text not null,
- source text not null,
- binary_packages text[],
- lintian_result json
-);
-CREATE INDEX ON debian_build (run_id);
-CREATE INDEX ON debian_build (distribution, source, version);
 
 CREATE TABLE result_branch (
  role text not null,
@@ -406,56 +387,6 @@ CREATE VIEW upstream_branch_urls as (
     select package, result->>'upstream_branch_url' as url from run where suite in ('fresh-snapshots', 'fresh-releases') and result->>'upstream_branch_url' != '')
 union
     (select name as package, upstream_branch_url as url from upstream);
-
-CREATE OR REPLACE VIEW debian_run AS
-SELECT
-    id,
-    command,
-    start_time,
-    finish_time,
-    description,
-    package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution,
-    debian_build.lintian_result AS lintian_result,
-    result_code,
-    main_branch_revision,
-    revision,
-    context,
-    result,
-    suite,
-    instigated_context,
-    branch_url,
-    logfilenames,
-    worker,
-    result_tags
-FROM
-    run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id;
-
-
-CREATE VIEW all_debian_versions AS
-SELECT
-  source,
-  distribution,
-  version
-FROM
-  debian_build
-
-UNION
-
-SELECT
-  name AS source,
-  distribution,
-  archive_version AS version
-FROM
-  package;
-
-CREATE VIEW lintian_results AS
-   select run_id, path, name, context, severity from debian_build, json_to_recordset(lintian_result->'groups'->0->'input-files') as entries(path text, tags json), json_to_recordset(tags) as hint(context text, name text, severity text);
-
-create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
 
 CREATE TABLE IF NOT EXISTS review (
  run_id text not null references run (id),
