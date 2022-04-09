@@ -54,7 +54,7 @@ def process_dist_log(logf):
     problem = find_build_failure_description(lines)[1]
     if problem is None:
         new_code = 'dist-command-failed'
-        new_description = description
+        new_description = "Dist command failed"
         new_failure_details = None
     else:
         if problem.is_global:

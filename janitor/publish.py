@@ -1239,7 +1239,7 @@ async def consider_request(request):
 
 async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
-) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
+) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[str]]:
     row = await conn.fetchrow(
         "SELECT publish, command "
         "FROM policy WHERE package = $1 AND suite = $2",
@@ -1247,10 +1247,10 @@ async def get_publish_policy(
         suite,
     )
     if row:
-        return (  # type: ignore
-            {k: (v, f) for k, v, f in row['publish']},
+        return (
+            {v['role']: (v['mode'], v['frequency_days']) for v in row['publish']},
             row['command']
-        )
+        )  # type: ignore
     return None, None, None
 
 
@@ -1953,8 +1953,8 @@ applied independently.
                 )
             except PolicyUnavailable as e:
                 logging.warning(
-                    'Policy unavailable while attempting to reschedule %s/%s',
-                    last_run.package, last_run.suite)
+                    'Policy unavailable while attempting to reschedule %s/%s: %s',
+                    last_run.package, last_run.suite, e)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
@@ -2268,8 +2268,8 @@ def iter_all_mps(
                     e, instance)
             except UnsupportedHoster as e:
                 logging.warning(
-                    'Unsupported host instance, skipping %r',
-                    instance)
+                    'Unsupported host instance, skipping %r: %s',
+                    instance, e)
 
 
 async def check_existing(

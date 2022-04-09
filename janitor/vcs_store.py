@@ -29,6 +29,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
 from http.client import parse_headers  # type: ignore
 
+from breezy import urlutils
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium

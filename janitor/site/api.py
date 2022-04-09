@@ -25,7 +25,6 @@ from aiohttp import (
     ClientConnectorError,
     ClientOSError,
     ServerDisconnectedError,
-    WSMsgType,
 )
 import aiozipkin
 import asyncio
@@ -45,7 +44,7 @@ from aiohttp_apispec import (
 from marshmallow import Schema, fields
 from yarl import URL
 
-from janitor import state, SUITE_REGEX
+from janitor import SUITE_REGEX
 from janitor.config import Config
 from janitor.queue import get_queue_position
 from . import (
@@ -380,7 +379,7 @@ async def handle_merge_proposal_change(request):
 
     url = urllib.parse.urljoin(request.app['publisher_url'], "merge-proposal")
     async with request.app['http_client_session'].post(url, data={
-            'url': post['url'], 'status': post['status']}, raise_for_status=True) as resp:
+            'url': post['url'], 'status': post['status']}, raise_for_status=True):
         return web.json_response({})
 
 
@@ -1216,8 +1215,8 @@ async def handle_run_reprocess_logs(request):
         return web.json_response(
             {'changed': True,
              'result_code': new_code,
-             'description': description,
-             'failure_details': failure_details})
+             'description': new_description,
+             'failure_details': new_failure_details})
     else:
         return web.json_response({
             'changed': False,
