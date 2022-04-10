@@ -59,7 +59,7 @@ jobs:
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build runner image
+      - name: Build differ image
         uses: docker/build-push-action@v2
         with:
           file: "Dockerfile_differ"
@@ -68,7 +68,7 @@ jobs:
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build runner image
+      - name: Build archive image
         uses: docker/build-push-action@v2
         with:
           file: "Dockerfile_archive"
@@ -121,6 +121,3 @@ jobs:
             ghcr.io/jelmer/janitor/vcs_store:latest
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
