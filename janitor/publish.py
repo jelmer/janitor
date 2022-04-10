@@ -1247,7 +1247,7 @@ async def get_publish_policy(
         suite,
     )
     if row:
-        return (
+        return (  # type: ignore
             {v['role']: (v['mode'], v['frequency_days']) for v in row['publish']},
             row['command']
         )  # type: ignore
