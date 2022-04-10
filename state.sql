@@ -407,9 +407,11 @@ CREATE TABLE IF NOT EXISTS review (
 CREATE INDEX ON review (run_id);
 CREATE UNIQUE INDEX ON review (run_id, reviewer);
 
+CREATE TYPE change_set_state AS ENUM ('working', 'ready', 'publishing', 'done');
+
 CREATE TABLE IF NOT EXISTS change_set (
   id text not null primary key,
   initial_run_id text references run(id)
   campaign text not null,
-  published bool not null default False
+  state change_set_state default 'working' not null
 );

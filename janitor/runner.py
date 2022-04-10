@@ -281,6 +281,8 @@ class DebianBuilder(Builder):
             apt_location = "https://storage.googleapis.com/%s/" % bucket_name
         else:
             apt_location = self.apt_location
+        # TODO(jelmer,change_set): Add change_set apt repository as overlay
+        # with priority
         env = {
             "EXTRA_REPOSITORIES": ":".join(
                 [
