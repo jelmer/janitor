@@ -79,6 +79,7 @@ class Run(object):
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]]
     result_tags: Optional[List[Tuple[str, bytes]]]
     target_branch_url: Optional[str]
+    change_set: Optional[str]
 
     __slots__ = [
         "id",
@@ -104,6 +105,7 @@ class Run(object):
         "result_branches",
         "result_tags",
         "target_branch_url",
+        "change_set",
     ]
 
     def __init__(
@@ -131,6 +133,7 @@ class Run(object):
         result_branches,
         result_tags,
         target_branch_url,
+        change_set,
     ):
         self.id = run_id
         self.start_time = start_time
@@ -169,6 +172,7 @@ class Run(object):
         else:
             self.result_tags = [(name, r.encode("utf-8")) for (name, r) in result_tags]
         self.target_branch_url = target_branch_url
+        self.change_set = change_set
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -203,6 +207,7 @@ class Run(object):
             result_branches=row['result_branches'],
             result_tags=row['result_tags'],
             target_branch_url=row['target_branch_url'],
+            change_set=row['change_set'],
         )
 
     def __eq__(self, other) -> bool:
@@ -240,7 +245,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url
+    result_tags, target_branch_url, change_set
 FROM
     run
 LEFT JOIN
