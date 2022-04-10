@@ -1236,6 +1236,7 @@ async def followup_run(
                     conn,
                     item.package,
                     result.main_branch_revision,
+                    change_set=result.change_set,
                     estimated_duration=result.duration,
                     requestor="control",
                 )
@@ -1251,6 +1252,7 @@ async def followup_run(
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
                         conn, run_to_retry['package'],
+                        change_set=result.change_set,
                         bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % item.package,
                         suite=run_to_retry['suite'])
 
@@ -1379,10 +1381,10 @@ class QueueProcessor(object):
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
                 if item.change_set:
-                    change_set = item.change_set
+                    change_set_id = item.change_set
                 else:
-                    change_set = result.log_id
-                    await store_change_set(conn, result.log_id, initial_run_id=result.log_id)
+                    change_set_id = result.log_id
+                    await store_change_set(conn, change_set_id, initial_run_id=result.log_id)
                 try:
                     await store_run(
                         conn,

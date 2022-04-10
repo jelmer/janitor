@@ -72,7 +72,7 @@ def process_dist_log(logf):
 
 async def reprocess_run_logs(
         db, logfile_manager, package: str, suite: str, log_id: str, command: str,
-        duration: timedelta,
+        change_set: Optional[str], duration: timedelta,
         result_code: str, description: str, failure_details, dry_run: bool = False,
         reschedule: bool = False, log_timeout: Optional[int] = None):
     """Reprocess run logs.
@@ -122,6 +122,7 @@ async def reprocess_run_logs(
                         conn,
                         package,
                         suite,
+                        change_set=change_set,
                         estimated_duration=duration,
                         requestor="reprocess-build-results",
                         bucket="reschedule",
