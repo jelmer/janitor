@@ -472,7 +472,7 @@ async def do_schedule_control(
     conn: asyncpg.Connection,
     package: str,
     change_set: Optional[str] = None,
-    main_branch_revision: Optional[bytes],
+    main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
     refresh: bool = False,
     bucket: str = "control",
