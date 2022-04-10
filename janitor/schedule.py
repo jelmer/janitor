@@ -240,6 +240,7 @@ async def _add_to_queue(
     package: str,
     command: str,
     suite: str,
+    change_set: Optional[str] = None,
     offset: float = 0.0,
     bucket: str = "default",
     context: Optional[str] = None,
@@ -250,12 +251,12 @@ async def _add_to_queue(
     await conn.execute(
         "INSERT INTO queue "
         "(package, command, priority, bucket, context, "
-        "estimated_duration, suite, refresh, requestor) "
+        "estimated_duration, suite, refresh, requestor, change_set) "
         "VALUES "
         "($1, $2, "
         "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
-        + " + $3, $4, $5, $6, $7, $8, $9) "
-        "ON CONFLICT (package, suite) DO UPDATE SET "
+        + " + $3, $4, $5, $6, $7, $8, $9, $10) "
+        "ON CONFLICT (package, suite, change_set) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "bucket = EXCLUDED.bucket, "
         "estimated_duration = EXCLUDED.estimated_duration, "
@@ -348,6 +349,7 @@ async def bulk_add_to_queue(
                 conn,
                 package=package,
                 suite=suite,
+                change_set=None,
                 command=command,
                 offset=offset,
                 bucket=bucket,
@@ -469,6 +471,7 @@ async def main():
 async def do_schedule_control(
     conn: asyncpg.Connection,
     package: str,
+    change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes],
     offset: Optional[float] = None,
     refresh: bool = False,
@@ -483,6 +486,7 @@ async def do_schedule_control(
         conn,
         package,
         "control",
+        change_set=change_set,
         offset=offset,
         refresh=refresh,
         bucket=bucket,
@@ -501,6 +505,7 @@ async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
     suite: str,
+    change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: str = "default",
     refresh: bool = False,
@@ -522,10 +527,11 @@ async def do_schedule(
         estimated_duration = await estimate_duration(conn, package, suite)
     await _add_to_queue(
         conn,
-        package,
-        command,
-        suite,
-        offset,
+        package=package,
+        command=command,
+        suite=suite,
+        change_set=change_set,
+        offset=offset,
         bucket=bucket,
         estimated_duration=estimated_duration,
         refresh=refresh,

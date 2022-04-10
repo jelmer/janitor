@@ -1163,14 +1163,14 @@ async def handle_run_reprocess_logs(request):
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
             'SELECT package, suite, command, finish_time - start_time AS duration, '
-            'result_code, description, failure_details FROM run WHERE id = $1',
+            'result_code, description, failure_details, change_set FROM run WHERE id = $1',
             run_id)
 
     result = await reprocess_run_logs(
         request.app['db'],
         request.app['logfile_manager'],
         run['package'], run['suite'], run_id,
-        run['command'], run['duration'], run['result_code'],
+        run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
         dry_run=dry_run, reschedule=reschedule)
 
@@ -1236,7 +1236,8 @@ SELECT
   finish_time - start_time AS duration,
   result_code,
   description,
-  failure_details
+  failure_details,
+  change_set
 FROM run
 WHERE
   id = ANY($1::text[])
@@ -1250,7 +1251,7 @@ WHERE
                 request.app['db'],
                 request.app['logfile_manager'],
                 row['package'], row['suite'], row['id'],
-                row['command'], row['duration'], row['result_code'],
+                row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]

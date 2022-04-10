@@ -64,7 +64,7 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             yield row['package'], row['suite'], requirement
 
 
-async def schedule_new_package(conn, upstream_info, policy, requestor=None, origin=None):
+async def schedule_new_package(conn, upstream_info, policy, change_set=None, requestor=None, origin=None):
     from debmutate.vcs import unsplit_vcs_url
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
@@ -88,10 +88,12 @@ async def schedule_new_package(conn, upstream_info, policy, requestor=None, orig
     command = policy['command']
     if upstream_info['version']:
         command += ' --upstream-version=%s' % upstream_info['version']
-    await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps', command=command)
+    await do_schedule(
+        conn, package, "debianize", change_set=change_set,
+        requestor=requestor, bucket='missing-deps', command=command)
 
 
-async def schedule_update_package(conn, policy, package, desired_version, requestor=None):
+async def schedule_update_package(conn, policy, package, desired_version, change_set=None, requestor=None):
     logging.info('Scheduling new run for %s/fresh-releases', package)
     # TODO(jelmer): Do something with desired_version
     # TODO(jelmer): fresh-snapshots?
@@ -103,7 +105,7 @@ async def schedule_update_package(conn, policy, package, desired_version, reques
         DEFAULT_SUCCESS_CHANCE)
     await sync_policy(conn, policy, selected_package=package)
     try:
-        await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
+        await do_schedule(conn, package, "fresh-releases", change_set=change_set, requestor=requestor, bucket='missing-deps')
     except PolicyUnavailable as e:
         logging.warning(
             'Unable to schedule %s/fresh-releases: %s',
