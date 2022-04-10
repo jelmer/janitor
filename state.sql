@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS run (
    failure_details json,
    target_branch_url text,
    resume_from text references run (id),
+   change_set text references change_set(id),
    foreign key (package) references package(name),
    check(finish_time >= start_time)
 );
@@ -110,6 +111,7 @@ CREATE INDEX ON run (suite);
 CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
 CREATE INDEX ON run (main_branch_revision);
+CREATE INDEX ON run (change_set);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip', 'bts');
 CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
@@ -146,8 +148,10 @@ CREATE TABLE IF NOT EXISTS queue (
    estimated_duration interval,
    refresh boolean default false,
    requestor text,
-   unique(package, suite)
+   change_set text references change_set(id),
+   unique(package, suite, change_set)
 );
+CREATE INDEX ON queue (change_set);
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
 CREATE TABLE IF NOT EXISTS candidate (
@@ -156,7 +160,8 @@ CREATE TABLE IF NOT EXISTS candidate (
    context text,
    value integer,
    success_chance float,
-   unique(package, suite),
+   change_set text references change_set(id),
+   unique(package, suite, change_set),
    foreign key (package) references package(name)
 );
 CREATE TABLE IF NOT EXISTS publish_policy (
@@ -177,6 +182,7 @@ CREATE TABLE IF NOT EXISTS policy (
    unique(package, suite)
 );
 CREATE INDEX ON candidate (suite);
+CREATE INDEX ON candidate(change_set);
 CREATE TABLE IF NOT EXISTS worker (
    name text not null unique,
    password text not null,
@@ -394,3 +400,8 @@ CREATE TABLE IF NOT EXISTS review (
 );
 CREATE INDEX ON review (run_id);
 CREATE UNIQUE INDEX ON review (run_id, reviewer);
+
+CREATE TABLE IF NOT EXISTS change_set (
+  id text not null primary key,
+  initial_run_id text references run(id)
+);
