@@ -274,6 +274,7 @@ async def _add_to_queue(
         suite,
         refresh,
         requestor,
+        change_set,
     )
 
 
