@@ -367,6 +367,7 @@ class JanitorResult(object):
         worker_name=None,
         vcs_type=None,
         resume_from=None,
+        change_set=None,
     ):
         self.package = pkg
         self.suite = suite
@@ -377,6 +378,7 @@ class JanitorResult(object):
         self.logfilenames = logfilenames or []
         self.worker_name = worker_name
         self.vcs_type = vcs_type
+        self.change_set = change_set
         if worker_result is not None:
             self.context = worker_result.context
             if self.code is None:
@@ -732,6 +734,7 @@ class ActiveRun(object):
             log_id=self.log_id,
             worker_name=self.worker_name,
             resume_from=self.resume_from,
+            change_set=self.queue_item.change_set,
             **kwargs)
 
     @property
@@ -1236,7 +1239,7 @@ async def followup_run(
                 await do_schedule_control(
                     conn,
                     item.package,
-                    result.main_branch_revision,
+                    main_branch_revision=result.main_branch_revision,
                     change_set=result.change_set,
                     estimated_duration=result.duration,
                     requestor="control",
@@ -1855,6 +1858,7 @@ async def handle_finish(request):
             worker_result=worker_result,
             logfilenames=logfilenames,
             resume_from=resume_from,
+            change_set=queue_item.change_set,
             )
 
         if result.builder_result is not None:
