@@ -1,28 +1,33 @@
 CREATE EXTENSION IF NOT EXISTS debversion;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
    upstream_branch_url text,
    primary key(name)
 );
-CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
-CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
+CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS codebase (
+   name codebase_name,
    branch_url text not null,
    subpath text,
    vcs_last_revision text,
    vcs_type vcs_type,
-   unique(branch_url, subpath)
+   unique(branch_url, subpath),
+   unique(name)
 );
 CREATE INDEX ON codebase (branch_url);
+CREATE INDEX ON codebase (name);
+
+CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
+CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
    distribution distribution_name not null,
 
    -- TODO(jelmer): Move these to codebase
-   -- codebase text references codebase(name)
+   codebase text references codebase(name),
    vcs_type vcs_type,
    branch_url text,
    subpath text,
