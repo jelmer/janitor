@@ -380,7 +380,8 @@ CREATE OR REPLACE VIEW publishable AS
    WHERE rb.run_id = run.id AND not absorbed
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches,
-  target_branch_url
+  target_branch_url,
+  run.change_set AS change_set
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
