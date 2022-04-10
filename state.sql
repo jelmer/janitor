@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS run (
    main_branch_revision text,
    revision text,
    result json,
-   suite suite_name not null,
+   suite suite_name not null, -- DEPRECATED
    vcs_type vcs_type,
    branch_url text,
    logfilenames text[] not null,
@@ -410,4 +410,6 @@ CREATE UNIQUE INDEX ON review (run_id, reviewer);
 CREATE TABLE IF NOT EXISTS change_set (
   id text not null primary key,
   initial_run_id text references run(id)
+  campaign text not null,
+  published bool not null default False
 );
