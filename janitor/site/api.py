@@ -748,42 +748,6 @@ async def handle_run_success_list(request):
 
 
 @docs()
-@routes.get("/pkg/{package}/run/{run_id}", name="package-run")
-@routes.get("/run/{run_id}", name="run")
-async def handle_run(request):
-    run_id = request.match_info.get("run_id")
-    async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            'SELECT id, start_time, finish_time, command, description, '
-            'package, build_info, result_code, vcs_type, branch_url '
-            'debian_build.version as build_version, '
-            'debian_build.distribution as build_distribution '
-            'FROM run LEFT JOIN debian_build ON debian_build.run_id = run.id '
-            'WHERE id = $1', run_id)
-    if run is None:
-        raise web.HTTPNotFound(text='no such run')
-    if run['build_version']:
-        build_info = {
-            "version": str(run['build_version']),
-            "distribution": run['build_distribution'],
-        }
-    else:
-        build_info = None
-    return web.json_response({
-            "run_id": run['id'],
-            "start_time": run['start_time'].isoformat(),
-            "finish_time": run['finish_time'].isoformat(),
-            "command": run['command'],
-            "description": run['description'],
-            "package": run['package'],
-            "build_info": build_info,
-            "result_code": run['result_code'],
-            "vcs_type": run['vcs_type'],
-            "branch_url": run['branch_url'],
-        }, headers={"Cache-Control": "max-age=600"})
-
-
-@docs()
 @routes.post("/publish/scan", name="publish-scan")
 async def handle_publish_scan(request):
     check_admin(request)
