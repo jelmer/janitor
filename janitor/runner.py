@@ -1106,6 +1106,15 @@ def cache_branch_name(distro_config, role):
     return "%s/latest" % (distro_config.vendor or dpkg_vendor().lower())
 
 
+async def store_change_set(
+        conn: asyncpg.Connection,
+        name: str,
+        initial_run_id: Optional[str] = None):
+    await conn.execute(
+        """INSERT INTO change_set (id, initial_run_id) VALUES ($1, $2)""",
+        name, initial_run_id)
+
+
 async def store_run(
     conn: asyncpg.Connection,
     run_id: str,
@@ -1131,6 +1140,7 @@ async def store_run(
     resume_from: Optional[str] = None,
     failure_details: Optional[Any] = None,
     target_branch_url: Optional[str] = None,
+    change_set: Optional[str] = None,
 ):
     """Store a run.
 
@@ -1157,7 +1167,8 @@ async def store_run(
       result_tags: Result tags
       resume_from: Run this one was resumed from
       failure_details: Result failure details
-      target_branch_url: 
+      target_branch_url: Branch URL to target
+      change_set: Change set id
     """
     if result_tags is None:
         result_tags_updated = None
@@ -1170,9 +1181,9 @@ async def store_run(
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, result_tags, "
-        "resume_from, failure_details, target_branch_url) "
+        "resume_from, failure_details, target_branch_url, change_set) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
         run_id,
         command,
         description,
@@ -1195,6 +1206,7 @@ async def store_run(
         resume_from,
         failure_details,
         target_branch_url,
+        change_set,
     )
 
     if result_branches:
@@ -1366,6 +1378,11 @@ class QueueProcessor(object):
         )
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
+                if item.change_set:
+                    change_set = item.change_set
+                else:
+                    change_set = result.log_id
+                    await store_change_set(conn, result.log_id, initial_run_id=result.log_id)
                 try:
                     await store_run(
                         conn,
@@ -1392,6 +1409,7 @@ class QueueProcessor(object):
                         failure_details=result.failure_details,
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
+                        change_set=change_set_id,
                     )
                 except asyncpg.UniqueViolationError as e:
                     logging.info('Unique violation error creating run: %r', e)

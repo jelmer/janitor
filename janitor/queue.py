@@ -34,6 +34,7 @@ class QueueItem(object):
         "requestor",
         "vcs_type",
         "upstream_branch_url",
+        "change_set",
     ]
 
     def __init__(
@@ -50,6 +51,7 @@ class QueueItem(object):
         requestor,
         vcs_type,
         upstream_branch_url,
+        change_set,
     ):
         self.id = id
         self.package = package
@@ -63,6 +65,7 @@ class QueueItem(object):
         self.requestor = requestor
         self.vcs_type = vcs_type
         self.upstream_branch_url = upstream_branch_url
+        self.change_set = change_set
 
     @classmethod
     def from_row(cls, row) -> "QueueItem":
@@ -79,6 +82,7 @@ class QueueItem(object):
             requestor=row['requestor'],
             vcs_type=row['vcs_type'],
             upstream_branch_url=row['upstream_branch_url'],
+            change_set=row['change_set'],
         )
 
     def _tuple(self):
@@ -95,6 +99,7 @@ class QueueItem(object):
             self.requestor,
             self.vcs_type,
             self.upstream_branch_url,
+            self.change_set,
         )
 
     def __eq__(self, other):
@@ -133,7 +138,8 @@ SELECT
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url
+    upstream.upstream_branch_url AS upstream_branch_url,
+    package.change_set AS change_set
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -160,7 +166,8 @@ SELECT
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url
+    upstream.upstream_branch_url AS upstream_branch_url,
+    package.change_set AS change_set
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
