@@ -44,8 +44,8 @@ def iter_candidates_from_script(stdin):
 async def store_candidates(conn: asyncpg.Connection, entries):
     await conn.executemany(
         "INSERT INTO candidate "
-        "(package, suite, context, value, success_chance) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
+        "(package, suite, change_set, context, value, success_chance) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite, change_set) "
         "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
         "success_chance = EXCLUDED.success_chance",
         entries,
@@ -99,7 +99,7 @@ async def main():
 
         logging.info("Adding candidates.")
         proposed_candidates = [
-            (package, suite, context, value, success_chance)
+            (package, suite, None, context, value, success_chance)
             for (
                 package,
                 suite,
