@@ -354,6 +354,12 @@ def get_builder(config, campaign_config):
 
 
 class JanitorResult(object):
+
+    package: str
+    log_id: str
+    branch_url: str
+    code: str
+
     def __init__(
         self,
         pkg: str,
@@ -383,8 +389,7 @@ class JanitorResult(object):
         self.change_set = change_set
         if worker_result is not None:
             self.context = worker_result.context
-            if self.code is None:
-                self.code = worker_result.code or 'success'
+            self.code = worker_result.code
             if self.description is None:
                 self.description = worker_result.description
             self.main_branch_revision = worker_result.main_branch_revision
@@ -1853,6 +1858,7 @@ async def handle_finish(request):
         result = JanitorResult(
             pkg=queue_item.package,
             suite=queue_item.suite,
+            code='success',
             log_id=run_id,
             worker_name=worker_name,
             branch_url=main_branch_url,
