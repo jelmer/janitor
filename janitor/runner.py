@@ -1119,11 +1119,10 @@ def cache_branch_name(distro_config, role):
 async def store_change_set(
         conn: asyncpg.Connection,
         name: str,
-        campaign: str,
-        initial_run_id: Optional[str] = None):
+        campaign: str):
     await conn.execute(
-        """INSERT INTO change_set (id, initial_run_id, campaign) VALUES ($1, $2, $3)""",
-        name, initial_run_id, campaign)
+        """INSERT INTO change_set (id, campaign) VALUES ($1, $2)""",
+        name, campaign)
 
 
 async def store_run(
@@ -1395,8 +1394,7 @@ class QueueProcessor(object):
                     change_set_id = item.change_set
                 else:
                     change_set_id = result.log_id
-                    await store_change_set(
-                        conn, change_set_id, campaign=result.suite, initial_run_id=result.log_id)
+                    await store_change_set(conn, change_set_id, campaign=result.suite)
                 try:
                     await store_run(
                         conn,
