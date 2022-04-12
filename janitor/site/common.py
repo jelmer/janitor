@@ -170,7 +170,8 @@ LEFT JOIN
 WHERE
     suite = 'unchanged' AND revision = $1 AND
     package = $2 AND
-    result_code = 'success'
+    result_code = 'success' AND
+    change_set IS NULL
 ORDER BY finish_time DESC
 """
     if isinstance(main_branch_revision, bytes):

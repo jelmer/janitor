@@ -208,7 +208,8 @@ LEFT JOIN
 WHERE
     revision = $1 AND
     package = $2 AND
-    result_code = 'success'
+    result_code = 'success' AND
+    change_set IS NULL
 ORDER BY finish_time DESC
 """
     return await conn.fetchrow(query, main_branch_revision, package)
