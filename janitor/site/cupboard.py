@@ -296,6 +296,26 @@ async def handle_cupboard_start(request):
     return {'extra_cupboard_links': _extra_cupboard_links}
 
 
+@html_template(env, "cupboard/changeset.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+async def handle_changeset(request):
+    span = aiozipkin.request_span(request)
+    async with request.app.database.acquire() as conn:
+        with span.new_child('sql:changeset'):
+            cs = await conn.fetchrow('SELECT * FROM change_set WHERE id = $1', request.match_info['id'])
+        with span.new_child('sql:runs'):
+            runs = await conn.fetch('SELECT * FROM run WHERE change_set = $1', request.match_info['id'])
+    return {'changeset': cs, 'runs': runs}
+
+
+@html_template(env, "cupboard/changeset-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+async def handle_changeset_list(request):
+    span = aiozipkin.request_span(request)
+    async with request.app.database.acquire() as conn:
+        with span.new_child('sql:changesets'):
+            cs = await conn.fetch('SELECT id FROM change_set')
+    return {'changesets': cs}
+
+
 @html_template(env, "cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_pkg(request):
     from .pkg import generate_pkg_file
@@ -368,6 +388,10 @@ def register_cupboard_endpoints(router):
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
+    router.add_get(
+        "/cupboard/cs//", handle_changeset_list, name="cupboard-changeset-list")
+    router.add_get(
+        "/cupboard/cs/{cs}/", handle_changeset, name="cupboard-changeset")
     router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
