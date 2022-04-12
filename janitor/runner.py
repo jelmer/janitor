@@ -281,13 +281,14 @@ class DebianBuilder(Builder):
             apt_location = "https://storage.googleapis.com/%s/" % bucket_name
         else:
             apt_location = self.apt_location
-        # TODO(jelmer,change_set): Add change_set apt repository as overlay
-        # with priority
+        extra_janitor_distributions = list(campaign_config.debian_build.extra_build_distribution)
+        if item.change_set:
+            extra_janitor_distributions.append('cs/%s' % item.change_set)
         env = {
             "EXTRA_REPOSITORIES": ":".join(
                 [
                     "deb %s %s/ main" % (apt_location, suite)
-                    for suite in campaign_config.debian_build.extra_build_distribution
+                    for suite in extra_janitor_distributions
                 ]
             )
         }
@@ -1246,7 +1247,6 @@ async def followup_run(
                     conn,
                     item.package,
                     main_branch_revision=result.main_branch_revision,
-                    change_set=result.change_set,
                     estimated_duration=result.duration,
                     requestor="control",
                 )
@@ -1276,11 +1276,11 @@ async def followup_run(
                         await schedule_new_package(
                             conn, action['upstream-info'],
                             policy,
-                            requestor=requestor)
+                            requestor=requestor, change_set=result.change_set)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
                             conn, policy, action['package'], action['desired-version'],
-                            requestor=requestor)
+                            requestor=requestor, change_set=result.change_set)
         from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
         problem = reconstruct_problem(result.code, result.failure_details)
         if problem is not None:
@@ -1290,12 +1290,44 @@ async def followup_run(
         if requirement:
             logging.info('TODO: attempt to find a resolution for %r', requirement)
 
+    # If there was a successful run, trigger builds for any
+    # reverse dependencies in the same changeset.
+    if item.suite in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
+        # Find all binaries that have changed in this run
+        debian_result = janitor_result.builder_result
+        build_version = debian_result.build_version
+        binary_packages = 
+
+        for binary_package in debian_result.binary_packages:
+            pass
+            # TODO(jelmer): Find reverse build dependencies involving those binary packages
+            # TODO(jelmer): For all reverse build dependencies that are no longer buildable -> trigger fresh-releases
+            # TODO(jelmer): For all other reverse build dependencies, trigger control builds
+            # TODO(jelmer): Find reverse runtime/test dependencies involving those binary packages
+            # TODO(jelmer): For all reverse dependencies that are no longer buildable -> trigger fresh-releases
+            # TODO(jelmer): For all other dependencies, trigger control builds
+
 
 class RunExists(Exception):
     """Run already exists."""
 
     def __init__(self, run_id):
         self.run_id = run_id
+
+
+async def change_set_ready(conn, change_set_id):
+    missing = await conn.fetch(
+        "SELECT * FROM candidate WHERE change_set = $1 AND NOT EXISTS ("
+        "  SELECT FROM last_run WHERE change_set = candidate.change_set AND "
+        "    package = candidate.package AND suite = candidate.suite AND "
+        "    result_code ('success', 'nothing-to-do', 'nothing-new-to-do'))")
+    if missing:
+        logging.info('More work to do for change set %s', change_set_id)
+        for row in missing:
+            logging.debug('  %s/%s', row['package'], row['suite'])
+        return False
+    logging.info('Change set %s ready', change_set_id)
+    return True
 
 
 class QueueProcessor(object):
@@ -1390,11 +1422,9 @@ class QueueProcessor(object):
         )
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
-                if item.change_set:
-                    change_set_id = item.change_set
-                else:
-                    change_set_id = result.log_id
-                    await store_change_set(conn, change_set_id, campaign=result.suite)
+                if not result.change_set:
+                    result.change_set = result.log_id
+                    await store_change_set(conn, result.change_set, campaign=result.suite)
                 try:
                     await store_run(
                         conn,
@@ -1421,7 +1451,7 @@ class QueueProcessor(object):
                         failure_details=result.failure_details,
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
-                        change_set=change_set_id,
+                        change_set=result.change_set,
                     )
                 except asyncpg.UniqueViolationError as e:
                     logging.info('Unique violation error creating run: %r', e)
@@ -1434,6 +1464,12 @@ class QueueProcessor(object):
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
+
+        # If there is no more work to be done for this change set, mark it as ready.
+        if await change_set_ready(conn, result.change_set):
+            await conn.execute(
+                "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
+                result.change_set)
 
     def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()

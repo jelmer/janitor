@@ -689,7 +689,6 @@ async def handle_publish_failure(e, conn, run, bucket):
                 conn,
                 unchanged_run['package'],
                 unchanged_run['revision'].encode('utf-8'),
-                change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
                 bucket=bucket,
@@ -701,7 +700,6 @@ async def handle_publish_failure(e, conn, run, bucket):
                     conn,
                     run.package,
                     run.main_branch_revision,
-                    change_set=run.change_set,
                     requestor="publisher (missing control run for diff)",
                     bucket=bucket,
                 )
@@ -1765,6 +1763,8 @@ async def check_existing_mp(
                     await conn.execute("""
                     UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
                     """, (status == 'merged'), revision.decode('utf-8'))
+
+            # TODO(jelmer): Check if the change_set should be marked as published
 
             topic_merge_proposal.publish(
                 {
