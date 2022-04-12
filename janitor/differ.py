@@ -202,9 +202,9 @@ async def get_unchanged_run(conn, package, main_branch_revision):
     query = """
 SELECT result_code, package, suite, id, debian_build.version AS build_version
 FROM
-    last_runs
+    run
 LEFT JOIN
-    debian_build ON debian_build.run_id = last_runs.id
+    debian_build ON debian_build.run_id = run.id
 WHERE
     revision = $1 AND
     package = $2 AND
