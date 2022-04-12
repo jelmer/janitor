@@ -139,7 +139,7 @@ SELECT
     queue.requestor AS requestor,
     package.vcs_type AS vcs_type,
     upstream.upstream_branch_url AS upstream_branch_url,
-    package.change_set AS change_set
+    queue.change_set AS change_set
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
