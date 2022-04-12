@@ -201,7 +201,7 @@ CREATE OR REPLACE VIEW last_runs AS
   FROM
   run
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
-  ORDER BY package, suite, start_time DESC;
+  ORDER BY package, suite, change_set, start_time DESC;
 
 -- The last effective run per package/suite; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
@@ -213,7 +213,7 @@ CREATE VIEW last_effective_runs AS
   run
   WHERE
     result_code != 'nothing-new-to-do'
-  ORDER BY package, suite, start_time DESC;
+  ORDER BY package, suite, change_set, start_time DESC;
 
 CREATE TABLE new_result_branch (
  run_id text not null references run (id),

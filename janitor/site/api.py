@@ -566,8 +566,9 @@ async def handle_archive_diff(request):
         if run is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
         unchanged_run_id = await conn.fetchval(
-            "SELECT id FROM last_runs WHERE "
-            "package = $1 AND revision = $2 AND result_code = 'success'",
+            "SELECT id FROM run WHERE "
+            "package = $1 AND revision = $2 AND result_code = 'success' "
+            "ORDER BY finish_time DESC LIMIT 1",
             run['package'], run['main_branch_revision'])
         if unchanged_run_id is None:
             return web.json_response(

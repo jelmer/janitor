@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block page_title %}Changeset List{% endblock %}
+{% block body %}
+<div class="section">
+
+<h1>Changeset {{ changeset['id'] }}</h1>
+
+<ul>
+{% for run in runs %}
+  <li><a href="../run/{{ run['id'] }}">{{ run['id'] }}</a></li>
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}
