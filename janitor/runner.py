@@ -1857,6 +1857,7 @@ async def handle_finish(request):
             pkg=queue_item.package,
             suite=queue_item.suite,
             log_id=run_id,
+            code='success',
             worker_name=worker_name,
             branch_url=main_branch_url,
             vcs_type=queue_item.vcs_type,
