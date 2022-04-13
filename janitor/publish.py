@@ -35,6 +35,12 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
 
+from aiohttp_apispec import (
+    docs,
+    response_schema,
+    setup_aiohttp_apispec,
+    )
+
 from aiohttp_openmetrics import (
     Counter,
     Gauge,
@@ -1493,6 +1499,14 @@ async def run_web_server(
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
+    setup_aiohttp_apispec(
+        app=app,
+        title="Publish Documentation",
+        version=None,
+        url="/swagger.json",
+        swagger_path="/docs",
+    )
+
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
