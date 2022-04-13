@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'abstained');
 CREATE TABLE result_tag (
  actual_name text,
@@ -169,19 +170,25 @@ CREATE TABLE IF NOT EXISTS candidate (
    unique(package, suite, change_set),
    foreign key (package) references package(name)
 );
-CREATE TABLE IF NOT EXISTS publish_policy (
+CREATE TABLE IF NOT EXISTS branch_publish_policy (
    role text not null,
    mode publish_mode default 'build-only',
    frequency_days int,
    unique(role)
 );
+CREATE TABLE IF NOT EXISTS publish_policy (
+   package text not null,
+   campaign campaign_name not null,
+   per_branch_policy branch_publish_policy[]
+   qa_review review_policy,
+   foreign key (package) references package(name),
+   unique(package, campaign)
+);
 CREATE TYPE notify_mode AS ENUM('no_notification', 'email', 'bts');
 CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
-   publish publish_policy[],
    command text,
-   qa_review review_policy,
    broken_notify notify_mode,
    foreign key (package) references package(name),
    unique(package, suite)
@@ -412,6 +419,6 @@ CREATE TYPE change_set_state AS ENUM ('working', 'ready', 'publishing', 'done');
 CREATE TABLE IF NOT EXISTS change_set (
   id text not null primary key,
   initial_run_id text references run(id)
-  campaign text not null,
+  campaign campaign_name not null,
   state change_set_state default 'working' not null
 );

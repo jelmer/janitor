@@ -43,6 +43,7 @@ from aiohttp_openmetrics import (
     setup_metrics,
     push_to_gateway
 )
+from marshmallow import Schema, fields
 
 from breezy import urlutils
 import gpg
@@ -1194,6 +1195,81 @@ async def get_publish_attempt_count(
         revision.decode("utf-8"),
         transient_result_codes,
     )
+
+
+class BranchPublishPolicySchema(Schema):
+
+    mode = fields.Str(description="publish mode")
+
+
+class PolicySchema(Schema):
+
+    per_branch_policy = fields.Dict(keys=fields.Str(), values=fields.Nested(BranchPublishPolicySchema))
+
+
+@docs(
+    responses={
+        404: {"description": "Package does not exist or does not have a policy"},
+        200: {"description": "Success response"}
+    }
+)
+@response_schema(PolicySchema())
+@routes.get("/{package}/{campaign}/policy", name="get-policy")
+async def handle_policy_get(request):
+    package = request.match_info["package"]
+    campaign = request.match_info["campaign"]
+    async with request.app['db'].acquire() as conn:
+        rows = await conn.fetchrow(
+            "SELECT * "
+            "FROM publish_policy WHERE package = $1 AND campaign = $2", package, campaign)
+    if not rows:
+        return web.json_response({"reason": "Package or campaign not found"}, status=404)
+    return web.json_response({
+        "per_branch": {p['role']: {'mode': p['mode']} for p in row['publish']},
+        "qa_policy": row['qa_policy'],
+    })
+
+
+@docs(
+    responses={
+        404: {"description": "Package does not exist or does not have a policy"},
+        200: {"description": "Success response"}
+    }
+)
+@response_schema(PolicySchema())
+@routes.put("/{package}/{campaign}/policy", name="put-policy")
+async def handle_policy_put(request):
+    package = request.match_info["package"]
+    campaign = request.match_info["campaign"]
+    policy = await request.json()
+    async with request.app['db'].acquire() as conn:
+        rows = await conn.execute(
+            "INSERT INTO publish_policy (package, campaign, qa_review, per_branch_policy) "
+            "VALUES ($1, $2, $3, $4) ON CONFLICT (package, campaign) "
+            "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
+            "per_branch_policy = EXCLUDED.per_branch_policy", package, campaign,
+            policy['qa_review'], policy['per_branch'])
+    # TODO(jelmer): Call consider_publish_run
+    return web.json_response({})
+
+
+@docs(
+    responses={
+        404: {"description": "Package does not exist or does not have a policy"},
+        200: {"description": "Success response"}
+    }
+)
+@response_schema(PolicySchema())
+@routes.delete("/{package}/{campaign}/policy", name="delete-policy")
+async def handle_policy_del(request):
+    package = request.match_info["package"]
+    campaign = request.match_info["campaign"]
+    policy = await request.json()
+    async with request.app['db'].acquire() as conn:
+        rows = await conn.execute(
+            "DELETE FROM publish_policy WHERE package = $1 AND campaign = $2",
+            package, campaign)
+    return web.json_response({})
 
 
 @routes.post("/merge-proposal", name="merge-proposal")
