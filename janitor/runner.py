@@ -1296,7 +1296,6 @@ async def followup_run(
         # Find all binaries that have changed in this run
         debian_result = janitor_result.builder_result
         build_version = debian_result.build_version
-        binary_packages = 
 
         for binary_package in debian_result.binary_packages:
             pass
