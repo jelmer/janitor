@@ -1232,6 +1232,33 @@ async def store_run(
         )
 
 
+def has_relation(v, pkg):
+    from debian.deb822 import PkgRelation
+    for r in PkgRelation.parse_relations(v):
+        for o in r:
+            if o['name'] == pkg:
+                return True
+    return False
+
+
+def has_build_relation(c, pkg):
+    for f in ["Build-Depends", "Build-Depends-Indep", "Build-Depends-Arch",
+              "Build-Conflicts", "Build-Conflicts-Indep",
+              "Build-Conflicts-Arch"]:
+        if has_relation(c.get(f, ""), pkg):
+            return True
+    return False
+
+
+def has_runtime_relation(c, pkg):
+    for f in ["Depends", "Recommends", "Suggests",
+              "Breaks", "Replaces"]:
+        if has_relation(c.get(f, ""), pkg):
+            return True
+    return False
+
+
+
 async def followup_run(
         config: Config, database: state.Database, policy: PolicyConfig,
         item: QueueItem, result: JanitorResult) -> None:
@@ -1293,18 +1320,42 @@ async def followup_run(
     # If there was a successful run, trigger builds for any
     # reverse dependencies in the same changeset.
     if item.suite in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
+        from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
-        debian_result = janitor_result.builder_result
-        build_version = debian_result.build_version
+        debian_result = result.builder_result
+        binary_packages = debian_result.binary_packages
+        campaign_config = get_campaign_config(config, item.suite)
+        base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
+        apt = RemoteApt(base_distribution.archive_mirror_uri)
 
-        for binary_package in debian_result.binary_packages:
-            pass
-            # TODO(jelmer): Find reverse build dependencies involving those binary packages
-            # TODO(jelmer): For all reverse build dependencies that are no longer buildable -> trigger fresh-releases
-            # TODO(jelmer): For all other reverse build dependencies, trigger control builds
-            # TODO(jelmer): Find reverse runtime/test dependencies involving those binary packages
-            # TODO(jelmer): For all reverse dependencies that are no longer buildable -> trigger fresh-releases
-            # TODO(jelmer): For all other dependencies, trigger control builds
+        new_build_version = debian_result.build_version   # noqa: F841
+        # TODO(jelmer): Get old_build_version from base_distribution
+
+        # TODO(jelmer): in the future, we may want to do more than trigger
+        # control builds here, e.g. trigger fresh-releases
+        # (or maybe just if the control build fails?)
+
+        need_control = set()
+
+        for source in apt.iter_sources(base_distribution.name):
+            if any([has_build_relation(source, p) for p in binary_packages]):
+                need_control.add(source)
+                break
+
+        for binary in apt.iter_binaries(base_distribution.name):
+            if any([has_runtime_relation(binary, p) for p in binary_packages]):
+                need_control.add(binary['Source'])
+                break
+
+        # TODO(jelmer): check test dependencies?
+        for source in need_control:
+            logging.info("Scheduling control run for %s.", source)
+            await do_schedule_control(
+                conn,
+                source,
+                change_set=result.change_set,
+                requestor="control",
+            )
 
 
 class RunExists(Exception):
