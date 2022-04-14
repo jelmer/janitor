@@ -389,7 +389,7 @@ def register_cupboard_endpoints(router):
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get(
-        "/cupboard/cs//", handle_changeset_list, name="cupboard-changeset-list")
+        "/cupboard/cs/", handle_changeset_list, name="cupboard-changeset-list")
     router.add_get(
         "/cupboard/cs/{cs}/", handle_changeset, name="cupboard-changeset")
     router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
