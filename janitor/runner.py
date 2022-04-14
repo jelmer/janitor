@@ -1326,13 +1326,21 @@ async def followup_run(
         from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
-        binary_packages = debian_result.binary_packages
+        if not result.builder_result is None:
+            logging.warning(
+                'Missing debian result for run %s (%s/%s)',result.log_id,
+                result.package, result.suite)
+            binary_packages = []
+            new_build_version = None   # noqa: F841
+            old_build_version = None   # noqa: F841
+        else:
+            binary_packages = debian_result.binary_packages
+            new_build_version = debian_result.build_version   # noqa: F841
+            # TODO(jelmer): Get old_build_version from base_distribution
+
         campaign_config = get_campaign_config(config, item.suite)
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
         apt = RemoteApt(base_distribution.archive_mirror_uri)
-
-        new_build_version = debian_result.build_version   # noqa: F841
-        # TODO(jelmer): Get old_build_version from base_distribution
 
         # TODO(jelmer): in the future, we may want to do more than trigger
         # control builds here, e.g. trigger fresh-releases
@@ -1347,7 +1355,7 @@ async def followup_run(
 
         for binary in apt.iter_binaries(base_distribution.name):
             if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                need_control.add(binary['Source'])
+                need_control.add(binary['Source'].split(' ')[0])
                 break
 
         # TODO(jelmer): check test dependencies?
