@@ -177,8 +177,12 @@ async def handle_review_post(request):
             run = await conn.fetchrow(
                 'SELECT package, suite FROM run WHERE id = $1',
                 post["run_id"])
-            review_status = post["review_status"].lower()
-            if review_status == "reschedule":
+            review_status = {
+                'approve': 'approved',
+                'reject': 'rejected',
+                'reschedule': 'rescheduled',
+                'abstain': 'abstained'}[post["review_status"].lower()]
+            if review_status == "rescheduled":
                 review_status = "rejected"
                 from ..schedule import do_schedule
 
