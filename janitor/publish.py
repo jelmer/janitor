@@ -563,7 +563,7 @@ SELECT * FROM publish_ready
         )
 
 
-async def publish_pending_new(
+async def publish_pending_ready(
     db,
     config,
     template_env_path,
@@ -1625,7 +1625,7 @@ async def autopublish_request(request):
     reviewed_only = "unreviewed" not in request.query
 
     async def autopublish():
-        await publish_pending_new(
+        await publish_pending_ready(
             request.app['db'],
             request.app['config'],
             request.app['template_env_path'],
@@ -1679,7 +1679,7 @@ async def process_queue_loop(
                 modify_limit=modify_mp_limit,
             )
         if auto_publish:
-            await publish_pending_new(
+            await publish_pending_ready(
                 db,
                 config,
                 template_env_path,
@@ -2704,7 +2704,7 @@ def main(argv=None):
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(
-            publish_pending_new(
+            publish_pending_ready(
                 db,
                 config,
                 args.template_env_path,
