@@ -1152,6 +1152,7 @@ async def store_run(
     failure_details: Optional[Any] = None,
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
+    followup_actions: Optional[Any] = None,
 ):
     """Store a run.
 
@@ -1192,9 +1193,10 @@ async def store_run(
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, result_tags, "
-        "resume_from, failure_details, target_branch_url, change_set) "
+        "resume_from, failure_details, target_branch_url, change_set, "
+        "followup_actions) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)",
         run_id,
         command,
         description,
@@ -1218,6 +1220,7 @@ async def store_run(
         failure_details,
         target_branch_url,
         change_set,
+        followup_actions,
     )
 
     if result_branches:
@@ -1503,6 +1506,7 @@ class QueueProcessor(object):
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
                         change_set=result.change_set,
+                        followup_actions=result.followup_actions,
                     )
                 except asyncpg.UniqueViolationError as e:
                     logging.info('Unique violation error creating run: %r', e)
