@@ -1517,9 +1517,11 @@ class QueueProcessor(object):
 
         # If there is no more work to be done for this change set, mark it as ready.
         if await change_set_ready(conn, result.change_set):
-            await conn.execute(
-                "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
-                result.change_set)
+            if not self.dry_run:
+                async with self.database.acquire() as conn, conn.transaction():
+                    await conn.execute(
+                        "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
+                        result.change_set)
 
     def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
