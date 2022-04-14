@@ -1368,9 +1368,9 @@ class RunExists(Exception):
 async def change_set_ready(conn, change_set_id):
     missing = await conn.fetch(
         "SELECT * FROM candidate WHERE change_set = $1 AND NOT EXISTS ("
-        "  SELECT FROM last_run WHERE change_set = candidate.change_set AND "
+        "  SELECT FROM last_runs WHERE change_set = candidate.change_set AND "
         "    package = candidate.package AND suite = candidate.suite AND "
-        "    result_code ('success', 'nothing-to-do', 'nothing-new-to-do'))")
+        "    result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'))")
     if missing:
         logging.info('More work to do for change set %s', change_set_id)
         for row in missing:
