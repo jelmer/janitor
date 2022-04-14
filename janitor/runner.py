@@ -1370,7 +1370,8 @@ async def change_set_ready(conn, change_set_id):
         "SELECT * FROM candidate WHERE change_set = $1 AND NOT EXISTS ("
         "  SELECT FROM last_runs WHERE change_set = candidate.change_set AND "
         "    package = candidate.package AND suite = candidate.suite AND "
-        "    result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'))")
+        "    result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'))",
+        change_set_id)
     if missing:
         logging.info('More work to do for change set %s', change_set_id)
         for row in missing:
@@ -1514,16 +1515,15 @@ class QueueProcessor(object):
         # If there is no more work to be done for this change set, mark it as ready.
         async with self.database.acquire() as conn, conn.transaction():
             if await change_set_ready(conn, result.change_set):
-                if not dry_run:
+                if not self.dry_run:
                     await conn.execute(
                         "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
-                            result.change_set)
+                        result.change_set)
 
         self.topic_result.publish(result.json())
         await self.unclaim_run(result.log_id)
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
-
 
     def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
