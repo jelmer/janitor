@@ -282,8 +282,8 @@ class DebianBuilder(Builder):
         else:
             apt_location = self.apt_location
         extra_janitor_distributions = list(campaign_config.debian_build.extra_build_distribution)
-        if item.change_set:
-            extra_janitor_distributions.append('cs/%s' % item.change_set)
+        if queue_item.change_set:
+            extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
         env = {
             "EXTRA_REPOSITORIES": ":".join(
                 [
