@@ -1470,8 +1470,8 @@ class QueueProcessor(object):
         build_duration.labels(package=item.package, suite=item.suite).observe(
             result.duration.total_seconds()
         )
-        if not self.dry_run:
-            async with self.database.acquire() as conn, conn.transaction():
+        async with self.database.acquire() as conn, conn.transaction():
+            if not self.dry_run:
                 if not result.change_set:
                     result.change_set = result.log_id
                     await store_change_set(conn, result.change_set, campaign=result.suite)
@@ -1509,19 +1509,21 @@ class QueueProcessor(object):
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
+        await followup_run(self.config, self.database, self.policy, item, result)
+
+        # If there is no more work to be done for this change set, mark it as ready.
+        async with self.database.acquire() as conn, conn.transaction():
+            if await change_set_ready(conn, result.change_set):
+                if not dry_run:
+                    await conn.execute(
+                        "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
+                            result.change_set)
+
         self.topic_result.publish(result.json())
         await self.unclaim_run(result.log_id)
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
-        await followup_run(self.config, self.database, self.policy, item, result)
 
-        # If there is no more work to be done for this change set, mark it as ready.
-        if await change_set_ready(conn, result.change_set):
-            if not self.dry_run:
-                async with self.database.acquire() as conn, conn.transaction():
-                    await conn.execute(
-                        "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
-                        result.change_set)
 
     def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
