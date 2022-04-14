@@ -237,7 +237,7 @@ async def generate_run_file(
         else:
             if name not in cache_logs:
                 cache_logs[name] = await _get_log(name)
-            log = cache_logs[name] 
+            log = cache_logs[name]
         if log is None:
             return BytesIO(b"Log file missing.")
         return BytesIO(log)
@@ -307,13 +307,6 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
                 for row in await iter_candidates(conn, packages=[package['name']])
             }
     return kwargs
-
-
-async def generate_maintainer_list(packages):
-    by_maintainer = {}
-    for name, maintainer in packages:
-        by_maintainer.setdefault(maintainer, []).append(name)
-    return {"by_maintainer": by_maintainer}
 
 
 async def generate_ready_list(
