@@ -391,7 +391,7 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/cs/", handle_changeset_list, name="cupboard-changeset-list")
     router.add_get(
-        "/cupboard/cs/{cs}/", handle_changeset, name="cupboard-changeset")
+        "/cupboard/cs/{id}/", handle_changeset, name="cupboard-changeset")
     router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
