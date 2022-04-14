@@ -36,7 +36,7 @@ function loadRun(package, command, run_id, roles, value) {
       var diff_url = '/api/run/' + run_id + '/diff?role=' + role;
       $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2>' +
         '<div class="revisions" id="revisions-' + role + '">Loading revisions...</div>' +
-        '<div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div>'
+        '<div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div>' +
         '</div>').insertBefore('#debdiff');
       deferreds.push($('#diff-' + role).load(diff_url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
            if (req.status == 413) {
