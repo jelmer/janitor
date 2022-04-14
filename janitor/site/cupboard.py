@@ -191,7 +191,10 @@ async def handle_review_post(request):
                     bucket="default",
                 )
             review_comment = post.get("review_comment")
-            await store_review(conn, post["run_id"], review_comment, review_status, request['user'])
+            await store_review(
+                conn, post["run_id"], status=review_status,
+                comment=review_comment,
+                reviewer=request['user'])
         text = await generate_review(
             conn,
             request,
