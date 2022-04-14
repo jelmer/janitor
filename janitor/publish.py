@@ -1225,10 +1225,10 @@ async def handle_policy_get(request):
     package = request.match_info["package"]
     campaign = request.match_info["campaign"]
     async with request.app['db'].acquire() as conn:
-        rows = await conn.fetchrow(
+        row = await conn.fetchrow(
             "SELECT * "
             "FROM publish_policy WHERE package = $1 AND campaign = $2", package, campaign)
-    if not rows:
+    if not row:
         return web.json_response({"reason": "Package or campaign not found"}, status=404)
     return web.json_response({
         "per_branch": {p['role']: {'mode': p['mode']} for p in row['publish']},
@@ -1249,7 +1249,7 @@ async def handle_policy_put(request):
     campaign = request.match_info["campaign"]
     policy = await request.json()
     async with request.app['db'].acquire() as conn:
-        rows = await conn.execute(
+        await conn.execute(
             "INSERT INTO publish_policy (package, campaign, qa_review, per_branch_policy) "
             "VALUES ($1, $2, $3, $4) ON CONFLICT (package, campaign) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
@@ -1270,9 +1270,8 @@ async def handle_policy_put(request):
 async def handle_policy_del(request):
     package = request.match_info["package"]
     campaign = request.match_info["campaign"]
-    policy = await request.json()
     async with request.app['db'].acquire() as conn:
-        rows = await conn.execute(
+        await conn.execute(
             "DELETE FROM publish_policy WHERE package = $1 AND campaign = $2",
             package, campaign)
     return web.json_response({})
