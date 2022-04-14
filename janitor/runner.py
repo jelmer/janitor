@@ -1521,7 +1521,8 @@ class QueueProcessor(object):
             if await change_set_ready(conn, result.change_set):
                 if not self.dry_run:
                     await conn.execute(
-                        "UPDATE change_set SET status = 'ready' WHERE id = $1 AND status = 'working'",
+                        "UPDATE change_set SET state = 'ready' "
+                        "WHERE id = $1 AND state = 'working'",
                         result.change_set)
 
         self.topic_result.publish(result.json())
