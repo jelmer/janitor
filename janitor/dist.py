@@ -84,6 +84,10 @@ if __name__ == '__main__':
         '--directory', '-d',
         type=str, default='.',
         help='Path to tree to create dist tarball for')
+    parser.add_argument(
+        '--require-declared',
+        action='store_true',
+        help='Fail if declared dependencies can not be installed')
     args = parser.parse_args()
 
     from ognibuild.session.schroot import SchrootSession
@@ -130,6 +134,25 @@ if __name__ == '__main__':
                 logging.warning(
                     'Ignoring error installing declared build dependencies '
                     '(%s): %s', e.error.kind, str(e.error))
+                if args.require_declared:
+                    sys.exit(1)
+            except UnidentifiedError as e:
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    logging.warning(
+                        'Ignoring error installing declared build dependencies (%r): %s',
+                        e.argv, e.secondary.line)
+                    report_failure('dist-command-failed', e.secondary.line, e)
+                elif len(lines) == 1:
+                    logging.warning(
+                        'Ignoring error installing declared build dependencies (%r): %s',
+                        e.argv, lines[0])
+                else:
+                    logging.warning(
+                        'Ignoring error installing declared build dependencies (%r): %r',
+                        e.argv, lines)
+                if args.require_declared:
+                    sys.exit(1)
         else:
             packaging_tree = None
             packaging_debian_path = None
