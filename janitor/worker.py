@@ -95,7 +95,7 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
-from breezy.transform import MalformedTransform
+from breezy.transform import MalformedTransform, TransformRenamefailed
 from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
@@ -707,6 +707,9 @@ def process_package(
     except MalformedTransform as e:
         traceback.print_exc()
         raise WorkerFailure("worker-clone-malformed-transform", str(e))
+    except TransformRenamefailed as e:
+        traceback.print_exc()
+        raise WorkerFailure("worker-clone-transform-rename-failed", str(e))
     except UnexpectedHttpStatus as e:
         traceback.print_exc()
         if e.code == 502:
