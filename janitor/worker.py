@@ -95,7 +95,7 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
-from breezy.transform import MalformedTransform, TransformRenamefailed
+from breezy.transform import MalformedTransform, TransformRenameFailed
 from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
@@ -707,7 +707,7 @@ def process_package(
     except MalformedTransform as e:
         traceback.print_exc()
         raise WorkerFailure("worker-clone-malformed-transform", str(e))
-    except TransformRenamefailed as e:
+    except TransformRenameFailed as e:
         traceback.print_exc()
         raise WorkerFailure("worker-clone-transform-rename-failed", str(e))
     except UnexpectedHttpStatus as e:
@@ -918,12 +918,16 @@ async def upload_results(
 
 
 @contextmanager
-def copy_output(output_log: str):
+def copy_output(output_log: str, tee: bool = False):
     old_stdout = os.dup(sys.stdout.fileno())
     old_stderr = os.dup(sys.stderr.fileno())
     p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
-    os.dup2(p.stdin.fileno(), sys.stdout.fileno())  # type: ignore
-    os.dup2(p.stdin.fileno(), sys.stderr.fileno())  # type: ignore
+    if tee:
+        newfd = p.stdin.fileno()
+        os.dup2(newfd, sys.stdout.fileno())  # type: ignore
+        os.dup2(newfd, sys.stderr.fileno())  # type: ignore
+    else:
+        newfd = os.open(output_log, os.O_CREAT|os.O_RDWR)
     try:
         yield
     finally:
@@ -931,7 +935,7 @@ def copy_output(output_log: str):
         sys.stderr.flush()
         os.dup2(old_stdout, sys.stdout.fileno())
         os.dup2(old_stderr, sys.stderr.fileno())
-        p.stdin.close()  # type: ignore
+        fd.close()  # type: ignore
 
 
 def push_branch(
@@ -1011,12 +1015,13 @@ def run_worker(
         List[Tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
     possible_transports: Optional[List[Transport]] = None,
     force_build: bool = False,
-    retry_count=5
+    retry_count: int = 5,
+    tee: bool = False,
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     with ExitStack() as es:
-        es.enter_context(copy_output(os.path.join(output_directory, "worker.log")))
+        es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
         try:
             with process_package(
                 branch_url,
@@ -1295,7 +1300,8 @@ async def process_single_item(
         jenkins_build_url=None, prometheus: Optional[str] = None,
         vcs_store_urls=None,
         package: Optional[str] = None, campaign: Optional[str] = None,
-        retry_count: int = 5):
+        retry_count: int = 5,
+        tee: bool = False):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
         jenkins_build_url=jenkins_build_url,
@@ -1376,6 +1382,7 @@ async def process_single_item(
                 possible_transports=possible_transports,
                 force_build=force_build,
                 retry_count=retry_count,
+                tee=tee,
             ),
         )
         try:
@@ -1479,6 +1486,9 @@ async def main(argv=None):
         "--loop", action="store_true", help="Keep building until the queue is empty")
     parser.add_argument(
         "--retry-count", type=int, default=5, help="Number of retries when pushing")
+    parser.add_argument(
+        "--tee", action="store_true",
+        help="Copy work output to standard out, in addition to worker.log")
 
     args = parser.parse_args(argv)
 
@@ -1608,7 +1618,8 @@ async def main(argv=None):
                     prometheus=args.prometheus,
                     vcs_store_urls=vcs_store_urls,
                     retry_count=args.retry_count,
-                    package=args.package, campaign=args.campaign)
+                    package=args.package, campaign=args.campaign,
+                    tee=args.tee)
             except AssignmentFailure as e:
                 logging.fatal("failed to get assignment: %s", e.reason)
                 return 1
