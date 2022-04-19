@@ -1122,7 +1122,8 @@ async def store_change_set(
         name: str,
         campaign: str):
     await conn.execute(
-        """INSERT INTO change_set (id, campaign) VALUES ($1, $2)""",
+        """INSERT INTO change_set (id, campaign) VALUES ($1, $2)
+        ON CONFLICT DO NOTHING""",
         name, campaign)
 
 
@@ -1348,17 +1349,21 @@ async def followup_run(
 
         need_control = set()
 
-        for source in apt.iter_sources(base_distribution.name):
-            if any([has_build_relation(source, p) for p in binary_packages]):
-                need_control.add(source)
-                break
+        try:
+            for source in apt.iter_sources(base_distribution.name):
+                if any([has_build_relation(source, p) for p in binary_packages]):
+                    need_control.add(source)
+                    break
 
-        for binary in apt.iter_binaries(base_distribution.name):
-            if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                need_control.add(binary['Source'].split(' ')[0])
-                break
+            for binary in apt.iter_binaries(base_distribution.name):
+                if any([has_runtime_relation(binary, p) for p in binary_packages]):
+                    need_control.add(binary['Source'].split(' ')[0])
+                    break
+        except NotImplementedError:
+            pass
 
         # TODO(jelmer): check test dependencies?
+
         for source in need_control:
             logging.info("Scheduling control run for %s.", source)
             await do_schedule_control(
