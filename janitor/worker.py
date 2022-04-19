@@ -935,7 +935,7 @@ def copy_output(output_log: str, tee: bool = False):
         sys.stderr.flush()
         os.dup2(old_stdout, sys.stdout.fileno())
         os.dup2(old_stderr, sys.stderr.fileno())
-        fd.close()  # type: ignore
+        newfd.close()  # type: ignore
 
 
 def push_branch(
