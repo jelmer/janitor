@@ -921,13 +921,13 @@ async def upload_results(
 def copy_output(output_log: str, tee: bool = False):
     old_stdout = os.dup(sys.stdout.fileno())
     old_stderr = os.dup(sys.stderr.fileno())
-    p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
     if tee:
-        newfd = p.stdin.fileno()
-        os.dup2(newfd, sys.stdout.fileno())  # type: ignore
-        os.dup2(newfd, sys.stderr.fileno())  # type: ignore
+        p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
+        newfd = p.stdin
     else:
-        newfd = os.open(output_log, os.O_CREAT|os.O_RDWR)
+        newfd = open(output_log, 'w')
+    os.dup2(newfd.fileno(), sys.stdout.fileno())  # type: ignore
+    os.dup2(newfd.fileno(), sys.stderr.fileno())  # type: ignore
     try:
         yield
     finally:
@@ -935,7 +935,7 @@ def copy_output(output_log: str, tee: bool = False):
         sys.stderr.flush()
         os.dup2(old_stdout, sys.stdout.fileno())
         os.dup2(old_stderr, sys.stderr.fileno())
-        newfd.close()  # type: ignore
+        newfd.close()
 
 
 def push_branch(
