@@ -223,25 +223,6 @@ async def handle_static_file(path, request):
     return web.FileResponse(path)
 
 
-@html_template(env, "package-name-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
-async def handle_pkg_list(request):
-    # TODO(jelmer): The javascript plugin thingy should just redirect to
-    # the right URL, not rely on query parameters here.
-    pkg = request.query.get("package")
-    if pkg:
-        async with request.app.database.acquire() as conn:
-            if not await conn.fetchrow('SELECT 1 FROM package WHERE name = $1', pkg):
-                raise web.HTTPNotFound(text="No package with name %s" % pkg)
-        return web.HTTPFound(pkg)
-
-    async with request.app.database.acquire() as conn:
-        packages = [
-            row['name']
-            for row in await conn.fetch(
-                'SELECT name FROM package WHERE NOT removed ORDER BY name')]
-    return {'packages': packages}
-
-
 async def handle_result_file(request):
     pkg = request.match_info["pkg"]
     filename = request.match_info["filename"]
@@ -461,9 +442,6 @@ async def create_app(
         "/{suite:%s}/ready" % SUITE_REGEX, handle_ready_proposals, name="suite-ready"
     )
     app.router.add_get(
-        "/{suite:%s}/pkg/" % SUITE_REGEX, handle_pkg_list, name="suite-package-list"
-    )
-    app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
     app.router.add_get(
@@ -477,7 +455,6 @@ async def create_app(
         name="merge-proposal",
     )
     app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
-    app.router.add_get("/cupboard/pkg/", handle_pkg_list, name="package-list")
     app.router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
