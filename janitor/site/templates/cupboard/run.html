@@ -156,11 +156,11 @@ function submit_review(status) {
 <h2>Reviews</h2>
 
 <table class="reviews">
-	<thead><td>Reviewer</td><td>Verdict</td><td>Comment</td></thead>
+   <thead><tr><th>Reviewer</th><th>Verdict</th><th>Comment</th></tr></thead>
 
-	{% for review in reviews %}
-	<tr><td>{{ review['reviewer'] }}</td><td>{{ review['review_status'] }}</td><td>{{ review['review_comment'] }}</td></tr>
-	{% endfor %}
+   {% for review in reviews %}
+   <tr><td>{{ review['reviewer'] }}</td><td><span class="review-{{ review['review_status'] }}">{{ review['review_status'] }}</span></td><td>{{ review['review_comment'] }}</td></tr>
+   {% endfor %}
 </table>
 
 {% endif %}
