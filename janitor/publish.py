@@ -651,8 +651,8 @@ async def handle_publish_failure(e, conn, run, bucket):
         logger.info("Merge proposal would cause conflict; restarting.")
         await do_schedule(
             conn,
-            run.package,
-            run.suite,
+            package=run.package,
+            suite=run.suite,
             change_set=run.change_set,
             requestor="publisher (pre-creation merge conflict)",
             bucket=bucket,
@@ -661,8 +661,8 @@ async def handle_publish_failure(e, conn, run, bucket):
         logger.info("Branches have diverged; restarting.")
         await do_schedule(
             conn,
-            run.package,
-            run.suite,
+            package=run.package,
+            suite=run.suite,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
             bucket=bucket,
@@ -674,8 +674,8 @@ async def handle_publish_failure(e, conn, run, bucket):
             description = "Missing build artifacts, rescheduling"
             await do_schedule(
                 conn,
-                run.package,
-                run.suite,
+                package=run.package,
+                suite=run.suite,
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
@@ -694,8 +694,8 @@ async def handle_publish_failure(e, conn, run, bucket):
             )
             await do_schedule_control(
                 conn,
-                unchanged_run['package'],
-                unchanged_run['revision'].encode('utf-8'),
+                package=unchanged_run['package'],
+                main_branch_revision=unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
                 bucket=bucket,
@@ -705,8 +705,8 @@ async def handle_publish_failure(e, conn, run, bucket):
             if run.main_branch_revision is not None:
                 await do_schedule_control(
                     conn,
-                    run.package,
-                    run.main_branch_revision,
+                    package=run.package,
+                    main_branch_revision=run.main_branch_revision,
                     requestor="publisher (missing control run for diff)",
                     bucket=bucket,
                 )
