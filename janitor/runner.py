@@ -1327,10 +1327,10 @@ async def followup_run(
         from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
-        if not result.builder_result is None:
+        if result.builder_result is None:
             logging.warning(
-                'Missing debian result for run %s (%s/%s)',result.log_id,
-                result.package, result.suite)
+                'Missing debian result for run %s (%s/%s)',
+                result.log_id, result.package, result.suite)
             binary_packages = []
             new_build_version = None   # noqa: F841
             old_build_version = None   # noqa: F841
