@@ -1,0 +1,28 @@
+Source: janitor
+Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
+Homepage: https://github.com/jelmer/janitor
+Build-Depends: python3-all, python3-setuptools, debhelper-compat (= 13)
+Vcs-Git: https://salsa.debian.org/jelmer/janitor.git -b debian/main
+Vcs-Browser: https://salsa.debian.org/jelmer/janitor/tree/debian/main
+Standards-Version: 4.6.0
+
+Package: python3-janitor
+Architecture: all
+Depends: python3-breezy
+Description: 
+
+Package: janitor-worker
+Architecture: all
+Description: 
+
+Package: janitor-runner
+Architecture: all
+Description: 
+
+Package: janitor-publisher
+Architecture: all
+Description: 
+
+Package: janitor-apt
+Architecture: all
+Description: 

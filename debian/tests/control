@@ -1,0 +1,2 @@
+Test: testsuite
+Test-Command: python3 setup.py test

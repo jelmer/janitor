@@ -1,0 +1,26 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: janitor
+Upstream-Contact: Jelmer Vernooĳ <jelmer@jelmer.uk>
+Source: https://www.dulwich.io/
+Files-Excluded:
+  dulwich/*
+  breezy/*
+  breezy-debian/*
+  debmutate/*
+  ognibuild/*
+  upstream-ontologist/*
+  buildlog-consultant/*
+  lintian-brush/*
+
+Files: *
+Copyright:
+  2018-2022 Jelmer Vernooĳ <jelmer@jelmer.uk>
+License: GPL-3+
+
+Files: debian/*
+Copyright: 2022 Jelmer Vernooĳ <jelmer@debian.org>
+License: GPL-3+
+
+License: GPL-3+
+ On Debian systems the full text of the GNU General Public License version 3
+ can be found in the `/usr/share/common-licenses/GPL-3' file.
