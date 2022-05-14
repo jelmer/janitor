@@ -21,6 +21,7 @@ import asyncio
 import asyncpg
 import logging
 import sys
+from typing import List, Optional, Tuple
 
 from google.protobuf import text_format  # type: ignore
 
@@ -41,11 +42,13 @@ def iter_candidates_from_script(stdin):
         )
 
 
-async def store_candidates(conn: asyncpg.Connection, entries):
+async def store_candidates(
+        conn: asyncpg.Connection,
+        entries: List[Tuple[str, str, str, Optional[str], Optional[int], Optional[float]]]):
     await conn.executemany(
         "INSERT INTO candidate "
         "(package, suite, change_set, context, value, success_chance) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite, change_set) "
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (package, suite, change_set) "
         "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
         "success_chance = EXCLUDED.success_chance",
         entries,
