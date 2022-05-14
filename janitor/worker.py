@@ -925,7 +925,7 @@ def copy_output(output_log: str, tee: bool = False):
         p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
         newfd = p.stdin
     else:
-        newfd = open(output_log, 'w')
+        newfd = open(output_log, 'wb')
     os.dup2(newfd.fileno(), sys.stdout.fileno())  # type: ignore
     os.dup2(newfd.fileno(), sys.stderr.fileno())  # type: ignore
     try:
@@ -935,7 +935,8 @@ def copy_output(output_log: str, tee: bool = False):
         sys.stderr.flush()
         os.dup2(old_stdout, sys.stdout.fileno())
         os.dup2(old_stderr, sys.stderr.fileno())
-        newfd.close()
+        if newfd is not None:
+            newfd.close()
 
 
 def push_branch(
