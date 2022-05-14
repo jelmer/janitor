@@ -1034,8 +1034,9 @@ def role_branch_url(url, remote_branch_name):
     return urlutils.join_segment_parameters(base_url, params)
 
 
-def run_allow_proposal_creation(campaign_config, run):
-    if campaign_config.merge_proposal is not None and campaign_config.merge_proposal.value_threshold:
+def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bool:
+    if (run.value is not None and campaign_config.merge_proposal is not None and
+            campaign_config.merge_proposal.value_threshold):
         return (run.value >= campaign_config.merge_proposal.value_threshold)
     else:
         return True
