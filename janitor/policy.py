@@ -33,7 +33,7 @@ def read_policy(f: TextIO) -> policy_pb2.PolicyConfig:
     return text_format.Parse(f.read(), policy_pb2.PolicyConfig())
 
 
-def matches(match, package_name, vcs_url, package_maintainer, package_uploaders, in_base, release_stages_passed):
+def matches(match, package_name, vcs_url, package_maintainer, package_uploaders, in_base):
     package_maintainer_email = parseaddr(package_maintainer)[1]
     for maintainer in match.maintainer:
         if not fnmatch(package_maintainer_email, maintainer):
@@ -52,12 +52,6 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
             return False
     if match.HasField("in_base"):
         if match.in_base != in_base:
-            return False
-    if match.before_stage:
-        if release_stages_passed is None:
-            raise ValueError(
-                'no release stages passed in, unable to match on before_stage')
-        if match.before_stage in release_stages_passed:
             return False
     return True
 
@@ -101,7 +95,6 @@ def apply_policy(
     maintainer: str,
     uploaders: List[str],
     in_base: bool,
-    release_stages_passed: Set[str]
 ) -> Tuple[Dict[str, Tuple[str, Optional[int]]], Optional[str], Optional[str], Optional[str]]:
     publish_mode = {}
     env = {}
@@ -111,7 +104,7 @@ def apply_policy(
     for policy in config.policy:
         if policy.match and not any(
             [
-                matches(m, package_name, vcs_url, maintainer, uploaders, in_base, release_stages_passed)
+                matches(m, package_name, vcs_url, maintainer, uploaders, in_base)
                 for m in policy.match
             ]
         ):
@@ -145,24 +138,6 @@ def apply_policy(
         REVIEW_POLICY_STR[qa_review],
         NOTIFY_MODE_STR[broken_notify],
     )
-
-
-async def read_release_stages(url: str) -> Set[str]:
-    from aiohttp import ClientSession
-    from datetime import datetime
-    import yaml
-    ret: Set[str] = set()
-    async with ClientSession() as session:
-        async with session.get(url) as resp:
-            body = await resp.read()
-            y = yaml.safe_load(body)
-            for stage, data in y['stages'].items():
-                if data['starts'] == 'TBA':
-                    continue
-                starts = datetime.fromisoformat(data['starts'][:-1])
-                if datetime.utcnow() > starts:
-                    ret.add(stage)
-    return ret
 
 
 async def update_policy(
@@ -234,11 +209,6 @@ WHERE
 async def sync_policy(conn, policy, selected_package=None):
     current_policy = {}
     campaigns = known_campaigns(policy)
-    if policy.freeze_dates_url:
-        release_stages_passed = await read_release_stages(policy.freeze_dates_url)
-        logging.info('Release stages passed: %r', release_stages_passed)
-    else:
-        release_stages_passed = None
     num_updated = 0
     logging.info('Creating current policy')
     async for (package, campaign, cur_pol) in iter_policy(conn, package=selected_package):
@@ -256,7 +226,6 @@ async def sync_policy(conn, policy, selected_package=None):
                 package['maintainer_email'],
                 package['uploader_emails'],
                 package['in_base'],
-                release_stages_passed
             )
             stored_policy = current_policy.pop((package['name'], campaign), None)
             if stored_policy != intended_policy:

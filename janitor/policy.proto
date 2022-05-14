@@ -54,9 +54,6 @@ message Match {
 
     // Match on whether the package is present in the base distribution
     optional bool in_base = 5;
-
-    // Match before a particular stage of the release is reached.
-    optional string before_stage = 6;
 }
 
 message PublishPolicy {
@@ -95,5 +92,4 @@ message Policy {
 
 message PolicyConfig {
     repeated Policy policy = 1;
-    optional string freeze_dates_url = 2;
 }
