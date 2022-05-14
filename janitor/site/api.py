@@ -777,16 +777,6 @@ async def handle_publish_autopublish(request):
 
 
 @docs()
-@routes.get("/policy", name="policy")
-async def handle_global_policy(request):
-    return web.Response(
-        content_type="text/protobuf",
-        text=str(request.app['policy_config']),
-        headers={"Cache-Control": "max-age=60"},
-    )
-
-
-@docs()
 @routes.get("/runner/status", name="runner-status")
 async def handle_runner_status(request):
     url = URL(request.app['runner_url']) / "status"
@@ -1401,7 +1391,6 @@ def create_app(
     vcs_manager: VcsManager,
     differ_url: str,
     config: Config,
-    policy_config: PolicyConfig,
     external_url: Optional[URL] = None,
     trace_configs=None,
 ) -> web.Application:
@@ -1413,7 +1402,6 @@ def create_app(
     app['logfile_manager'] = get_log_manager(config.logs_location)
     app['db'] = db
     app['external_url'] = external_url
-    app['policy_config'] = policy_config
     app['publisher_url'] = publisher_url
     app['vcs_manager'] = vcs_manager
     app['runner_url'] = runner_url
