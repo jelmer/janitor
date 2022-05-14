@@ -64,7 +64,6 @@ from .common import (
     )
 from janitor.logs import get_log_manager
 from .webhook import process_webhook
-from ..policy_pb2 import PolicyConfig
 from ..schedule import (
     do_schedule,
     do_schedule_control,
