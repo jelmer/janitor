@@ -140,16 +140,18 @@ async def generate_review(
             return ""
         external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
         try:
-            diff = (await get_vcs_diff(
-                client, vcs_manager, vcs_type, package, base_revid.encode('utf-8') if base_revid else None,
-                revid.encode('utf-8'))).decode("utf-8", "replace")
-            if len(diff) > MAX_DIFF_SIZE:
-                return "Diff too large (%d). See it at %s" % (
-                    len(diff),
-                    external_url,
-                )
-            else:
-                return diff
+            with span.new_child('vcs-diff'):
+                diff = (await get_vcs_diff(
+                    client, vcs_manager, vcs_type, package,
+                    base_revid.encode('utf-8') if base_revid else None,
+                    revid.encode('utf-8'))).decode("utf-8", "replace")
+                if len(diff) > MAX_DIFF_SIZE:
+                    return "Diff too large (%d). See it at %s" % (
+                        len(diff),
+                        external_url,
+                    )
+                else:
+                    return diff
         except ClientResponseError as e:
             return "Unable to retrieve diff; error code %d" % e.status
         except NotImplementedError as e:
@@ -189,16 +191,17 @@ async def generate_review(
         if unchanged_run is None:
             return "<p>No control run</p>"
         try:
-            text, unused_content_type = await get_archive_diff(
-                client,
-                differ_url,
-                run_id,
-                unchanged_run.id,
-                kind="debdiff",
-                filter_boring=True,
-                accept="text/html",
-            )
-            return text.decode("utf-8", "replace")
+            with span.new_child('archive-diff'):
+                text, unused_content_type = await get_archive_diff(
+                    client,
+                    differ_url,
+                    run_id,
+                    unchanged_run.id,
+                    kind="debdiff",
+                    filter_boring=True,
+                    accept="text/html",
+                )
+                return text.decode("utf-8", "replace")
         except DebdiffRetrievalError as e:
             return "Unable to retrieve debdiff: %r" % e
         except BuildDiffUnavailable:

@@ -165,10 +165,11 @@ async def generate_run_file(
         if base_revid == revid:
             return ""
         try:
-            diff = await get_vcs_diff(
-                client, vcs_manager, run['vcs_type'], run['package'],
-                base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
-                revid.encode('utf-8') if revid is not None else NULL_REVISION)
+            with span.new_child('vcs-diff'):
+                diff = await get_vcs_diff(
+                    client, vcs_manager, run['vcs_type'], run['package'],
+                    base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
+                    revid.encode('utf-8') if revid is not None else NULL_REVISION)
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
@@ -186,16 +187,17 @@ async def generate_run_file(
         if not unchanged_run or unchanged_run.result_code != 'success':
             return ""
         try:
-            debdiff, unused_content_type = await get_archive_diff(
-                client,
-                differ_url,
-                run['id'],
-                unchanged_run.id,
-                kind="debdiff",
-                filter_boring=True,
-                accept="text/html",
-            )
-            return debdiff.decode("utf-8", "replace")
+            with span.new_child('archive-diff'):
+                debdiff, unused_content_type = await get_archive_diff(
+                    client,
+                    differ_url,
+                    run['id'],
+                    unchanged_run.id,
+                    kind="debdiff",
+                    filter_boring=True,
+                    accept="text/html",
+                )
+                return debdiff.decode("utf-8", "replace")
         except BuildDiffUnavailable:
             return ""
         except DebdiffRetrievalError as e:
