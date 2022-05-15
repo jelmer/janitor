@@ -306,7 +306,7 @@ async def handle_health(request):
 
 
 async def create_app(
-        config, policy_config, minified=False,
+        config, minified=False,
         external_url=None, debugtoolbar=None,
         runner_url=None, publisher_url=None,
         archiver_url=None, vcs_manager=None,
@@ -527,7 +527,6 @@ async def create_app(
     app.runner_url = runner_url
     app.archiver_url = archiver_url
     app.differ_url = differ_url
-    app.policy = policy_config
     app.publisher_url = publisher_url
     app['vcs_manager'] = vcs_manager
     app.on_startup.append(start_pubsub_forwarder)
@@ -568,7 +567,6 @@ async def create_app(
             vcs_manager,
             differ_url,
             config,
-            policy_config,
             external_url=(
                 app['external_url'].join(URL("api")) if app['external_url'] else None
             ),
@@ -594,7 +592,6 @@ async def main(argv=None):
     import argparse
     import os
     from janitor.config import read_config
-    from janitor.policy import read_policy
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
@@ -633,12 +630,6 @@ async def main(argv=None):
         help="URL for differ.",
     )
     parser.add_argument(
-        "--policy",
-        help="Policy file to read.",
-        type=str,
-        default=os.path.join(os.path.dirname(__file__), "..", "..", "policy.conf"),
-    )
-    parser.add_argument(
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
     parser.add_argument(
@@ -662,11 +653,8 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    with open(args.policy, "r") as f:
-        policy_config = read_policy(f)
-
     private_app, public_app = await create_app(
-        config, policy_config, minified=args.debug,
+        config, minified=args.debug,
         external_url=args.external_url,
         debugtoolbar=args.debugtoolbar,
         runner_url=args.runner_url,
