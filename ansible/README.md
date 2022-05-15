@@ -22,9 +22,7 @@ Roles
 
 * janitor-db: The postgresql database
 * janitor-irc-notify: Notifies on IRC when merge proposals are merged
-* janitor-maintenance: Regular importing of package metadata and candidates
 * janitor-mastodon-notify: Notifies on Mastodon when merge proposals are merged
-* janitor-prometheus: Prometheus setup for all janitor jobs
 * janitor-publish: VCS manager; keeps cache of packaging branches and holds
     results. Needs ample disk space.
 * janitor-runner: Processing coordinator
