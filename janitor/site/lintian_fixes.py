@@ -25,13 +25,12 @@ renamed_tags = load_renamed_tags()
 
 
 async def generate_pkg_file(
-    db, config, policy, client, differ_url, vcs_manager, package, span, run_id=None
+    db, config, client, differ_url, vcs_manager, package, span, run_id=None
 ):
     kwargs = await generate_pkg_context(
         db,
         config,
         SUITE,
-        policy,
         client,
         differ_url,
         vcs_manager,
@@ -319,7 +318,6 @@ async def handle_lintian_fixes_pkg(request):
     return await generate_pkg_file(
         request.app.database,
         request.app['config'],
-        request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,
         request.app['vcs_manager'],
