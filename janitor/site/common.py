@@ -183,7 +183,7 @@ ORDER BY finish_time DESC
 
 
 async def generate_pkg_context(
-    db, config, suite, policy, client, differ_url, vcs_manager, package, span, run_id=None
+    db, config, suite, client, differ_url, vcs_manager, package, span, run_id=None
 ):
     async with db.acquire() as conn:
         with span.new_child('sql:package'):

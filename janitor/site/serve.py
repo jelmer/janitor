@@ -284,7 +284,6 @@ async def handle_generic_pkg(request):
         request.app.database,
         request.app['config'],
         request.match_info["suite"],
-        request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,
         request.app['vcs_manager'],
