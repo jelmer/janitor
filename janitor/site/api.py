@@ -490,6 +490,7 @@ async def handle_diff(request):
     package = request.match_info.get("package")
     suite = request.match_info.get("suite")
     run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
+    span = aiozipkin.request_span(request)
     if run is None:
         if run_id:
             raise web.HTTPNotFound(text="no run %s" % (run_id, ))
@@ -503,11 +504,12 @@ async def handle_diff(request):
         max_diff_size = None
     try:
         try:
-            diff = await get_vcs_diff(
-                request.app['http_client_session'], request.app['vcs_manager'],
-                run['vcs_type'], run['package'],
-                run['base_revision'].encode('utf-8') if run['base_revision'] else None,
-                run['revision'].encode('utf-8') if run['revision'] else None)
+            with span.new_child('vcs-diff'):
+                diff = await get_vcs_diff(
+                    request.app['http_client_session'], request.app['vcs_manager'],
+                    run['vcs_type'], run['package'],
+                    run['base_revision'].encode('utf-8') if run['base_revision'] else None,
+                    run['revision'].encode('utf-8') if run['revision'] else None)
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:
@@ -558,27 +560,29 @@ async def handle_diff(request):
 async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
-    async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            'select id, package, suite, main_branch_revision, result_code from run where id = $1',
-            run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="No such run: %s" % run_id)
-        unchanged_run_id = await conn.fetchval(
-            "SELECT id FROM run WHERE "
-            "package = $1 AND revision = $2 AND result_code = 'success' "
-            "ORDER BY finish_time DESC LIMIT 1",
-            run['package'], run['main_branch_revision'])
-        if unchanged_run_id is None:
-            return web.json_response(
-                {
-                    "reason": "No matching unchanged build for %s" % run_id,
-                    "run_id": [run['id']],
-                    "unavailable_run_id": None,
-                    "suite": run['suite'],
-                },
-                status=404,
-            )
+    span = aiozipkin.request_span(request)
+    with span.new_child('sql:get-run'):
+        async with request.app['db'].acquire() as conn:
+            run = await conn.fetchrow(
+                'select id, package, suite, main_branch_revision, result_code from run where id = $1',
+                run_id)
+            if run is None:
+                raise web.HTTPNotFound(text="No such run: %s" % run_id)
+            unchanged_run_id = await conn.fetchval(
+                "SELECT id FROM run WHERE "
+                "package = $1 AND revision = $2 AND result_code = 'success' "
+                "ORDER BY finish_time DESC LIMIT 1",
+                run['package'], run['main_branch_revision'])
+            if unchanged_run_id is None:
+                return web.json_response(
+                    {
+                        "reason": "No matching unchanged build for %s" % run_id,
+                        "run_id": [run['id']],
+                        "unavailable_run_id": None,
+                        "suite": run['suite'],
+                    },
+                    status=404,
+                )
 
     if run['result_code'] != 'success':
         raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
@@ -586,15 +590,16 @@ async def handle_archive_diff(request):
     filter_boring = "filter_boring" in request.query
 
     try:
-        debdiff, content_type = await get_archive_diff(
-            request.app['http_client_session'],
-            request.app['differ_url'],
-            run_id,
-            unchanged_run_id,
-            kind=kind,
-            filter_boring=filter_boring,
-            accept=request.headers.get("ACCEPT", "*/*"),
-        )
+        with span.new_child('archive-diff'):
+            debdiff, content_type = await get_archive_diff(
+                request.app['http_client_session'],
+                request.app['differ_url'],
+                run_id,
+                unchanged_run_id,
+                kind=kind,
+                filter_boring=filter_boring,
+                accept=request.headers.get("ACCEPT", "*/*"),
+            )
     except BuildDiffUnavailable as e:
         return web.json_response(
             {
