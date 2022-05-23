@@ -1,2 +1,0 @@
-- name: reload policy
-  service: name=janitor-policy state=started

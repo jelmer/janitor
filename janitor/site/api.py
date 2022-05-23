@@ -64,7 +64,6 @@ from .common import (
     )
 from janitor.logs import get_log_manager
 from .webhook import process_webhook
-from ..policy_pb2 import PolicyConfig
 from ..schedule import (
     do_schedule,
     do_schedule_control,
@@ -491,6 +490,7 @@ async def handle_diff(request):
     package = request.match_info.get("package")
     suite = request.match_info.get("suite")
     run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
+    span = aiozipkin.request_span(request)
     if run is None:
         if run_id:
             raise web.HTTPNotFound(text="no run %s" % (run_id, ))
@@ -504,11 +504,12 @@ async def handle_diff(request):
         max_diff_size = None
     try:
         try:
-            diff = await get_vcs_diff(
-                request.app['http_client_session'], request.app['vcs_manager'],
-                run['vcs_type'], run['package'],
-                run['base_revision'].encode('utf-8') if run['base_revision'] else None,
-                run['revision'].encode('utf-8') if run['revision'] else None)
+            with span.new_child('vcs-diff'):
+                diff = await get_vcs_diff(
+                    request.app['http_client_session'], request.app['vcs_manager'],
+                    run['vcs_type'], run['package'],
+                    run['base_revision'].encode('utf-8') if run['base_revision'] else None,
+                    run['revision'].encode('utf-8') if run['revision'] else None)
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:
@@ -559,27 +560,29 @@ async def handle_diff(request):
 async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
-    async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            'select id, package, suite, main_branch_revision, result_code from run where id = $1',
-            run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="No such run: %s" % run_id)
-        unchanged_run_id = await conn.fetchval(
-            "SELECT id FROM run WHERE "
-            "package = $1 AND revision = $2 AND result_code = 'success' "
-            "ORDER BY finish_time DESC LIMIT 1",
-            run['package'], run['main_branch_revision'])
-        if unchanged_run_id is None:
-            return web.json_response(
-                {
-                    "reason": "No matching unchanged build for %s" % run_id,
-                    "run_id": [run['id']],
-                    "unavailable_run_id": None,
-                    "suite": run['suite'],
-                },
-                status=404,
-            )
+    span = aiozipkin.request_span(request)
+    with span.new_child('sql:get-run'):
+        async with request.app['db'].acquire() as conn:
+            run = await conn.fetchrow(
+                'select id, package, suite, main_branch_revision, result_code from run where id = $1',
+                run_id)
+            if run is None:
+                raise web.HTTPNotFound(text="No such run: %s" % run_id)
+            unchanged_run_id = await conn.fetchval(
+                "SELECT id FROM run WHERE "
+                "package = $1 AND revision = $2 AND result_code = 'success' "
+                "ORDER BY finish_time DESC LIMIT 1",
+                run['package'], run['main_branch_revision'])
+            if unchanged_run_id is None:
+                return web.json_response(
+                    {
+                        "reason": "No matching unchanged build for %s" % run_id,
+                        "run_id": [run['id']],
+                        "unavailable_run_id": None,
+                        "suite": run['suite'],
+                    },
+                    status=404,
+                )
 
     if run['result_code'] != 'success':
         raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
@@ -587,15 +590,16 @@ async def handle_archive_diff(request):
     filter_boring = "filter_boring" in request.query
 
     try:
-        debdiff, content_type = await get_archive_diff(
-            request.app['http_client_session'],
-            request.app['differ_url'],
-            run_id,
-            unchanged_run_id,
-            kind=kind,
-            filter_boring=filter_boring,
-            accept=request.headers.get("ACCEPT", "*/*"),
-        )
+        with span.new_child('archive-diff'):
+            debdiff, content_type = await get_archive_diff(
+                request.app['http_client_session'],
+                request.app['differ_url'],
+                run_id,
+                unchanged_run_id,
+                kind=kind,
+                filter_boring=filter_boring,
+                accept=request.headers.get("ACCEPT", "*/*"),
+            )
     except BuildDiffUnavailable as e:
         return web.json_response(
             {
@@ -774,16 +778,6 @@ async def handle_publish_autopublish(request):
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=400)
-
-
-@docs()
-@routes.get("/policy", name="policy")
-async def handle_global_policy(request):
-    return web.Response(
-        content_type="text/protobuf",
-        text=str(request.app['policy_config']),
-        headers={"Cache-Control": "max-age=60"},
-    )
 
 
 @docs()
@@ -1401,7 +1395,6 @@ def create_app(
     vcs_manager: VcsManager,
     differ_url: str,
     config: Config,
-    policy_config: PolicyConfig,
     external_url: Optional[URL] = None,
     trace_configs=None,
 ) -> web.Application:
@@ -1413,7 +1406,6 @@ def create_app(
     app['logfile_manager'] = get_log_manager(config.logs_location)
     app['db'] = db
     app['external_url'] = external_url
-    app['policy_config'] = policy_config
     app['publisher_url'] = publisher_url
     app['vcs_manager'] = vcs_manager
     app['runner_url'] = runner_url
