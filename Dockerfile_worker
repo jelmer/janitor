@@ -63,13 +63,8 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	gnome-pkg-tools \
 	python3-tr \
 	subversion \
-	&& \
-	apt \
-	clean \
-	&& \
-	pip3 \
-	install \
-	google-cloud-logging
+	&& apt clean \
+	&& pip3 install google-cloud-logging
 RUN apt-file update && apt -y install aptitude && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate:/code/python-debian/lib
 ENV PATH="/code/breezy-debian/scripts:/code/lintian-brush/scripts:/code/debmutate/scripts:/code/breezy:${PATH}"
