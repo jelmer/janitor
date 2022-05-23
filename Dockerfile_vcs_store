@@ -2,5 +2,5 @@ FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 VOLUME /vcs
 EXPOSE 9923
-RUN apt update && apt install -y python3-pip git && pip3 install klaus aiohttp-wsgi
+RUN apt update && apt install -y python3-pip git python3-chardet python3-aiohttp-wsgi && pip3 install klaus
 ENTRYPOINT ["python3", "-m", "janitor.vcs_store", "--port=9923", "--listen-address=0.0.0.0"]

@@ -183,7 +183,7 @@ ORDER BY finish_time DESC
 
 
 async def generate_pkg_context(
-    db, config, suite, policy, client, differ_url, vcs_manager, package, span, run_id=None
+    db, config, suite, client, differ_url, vcs_manager, package, span, run_id=None
 ):
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
@@ -256,10 +256,11 @@ WHERE run.package = $1 AND run.suite = $2
         if base_revid == revid:
             return ""
         try:
-            diff = await get_vcs_diff(
-                client, vcs_manager, run['vcs_type'], run['package'],
-                base_revid.encode('utf-8'), revid.encode('utf-8'))
-            return diff.decode("utf-8", "replace")
+            with span.new_child('vcs-diff'):
+                diff = await get_vcs_diff(
+                    client, vcs_manager, run['vcs_type'], run['package'],
+                    base_revid.encode('utf-8'), revid.encode('utf-8'))
+                return diff.decode("utf-8", "replace")
         except ClientResponseError as e:
             return b"Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
@@ -271,16 +272,17 @@ WHERE run.package = $1 AND run.suite = $2
         if not unchanged_run or not unchanged_run.build_version:
             return ""
         try:
-            debdiff, content_type = await get_archive_diff(
-                client,
-                differ_url,
-                run['id'],
-                unchanged_run.id,
-                kind="debdiff",
-                filter_boring=True,
-                accept="text/html",
-            )
-            return debdiff.decode("utf-8", "replace")
+            with span.new_child('archive-diff'):
+                debdiff, content_type = await get_archive_diff(
+                    client,
+                    differ_url,
+                    run['id'],
+                    unchanged_run.id,
+                    kind="debdiff",
+                    filter_boring=True,
+                    accept="text/html",
+                )
+                return debdiff.decode("utf-8", "replace")
         except BuildDiffUnavailable:
             return ""
         except DebdiffRetrievalError as e:
