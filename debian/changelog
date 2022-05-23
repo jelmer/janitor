@@ -1,5 +1,5 @@
 janitor (0.1~git20220512-1) UNRELEASED; urgency=medium
 
-  * Initial release. (Closes: #XXXXXX)
+  * Initial release. (Closes: #1006804)
 
  -- Jelmer Vernooĳ <jelmer@debian.org>  Thu, 12 May 2022 16:48:07 +0100

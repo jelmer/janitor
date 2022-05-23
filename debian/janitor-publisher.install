@@ -1,1 +1,2 @@
 usr/bin/janitor-publisher
+helpers/render-publish-template.py /usr/share/doc/python3-janitor/helpers/
