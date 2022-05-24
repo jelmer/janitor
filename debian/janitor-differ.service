@@ -1,0 +1,16 @@
+[Unit]
+Description=Differ for the Janitor
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+User=janitor-differ
+Type=simple
+EnvironmentFile=-/etc/default/janitor-differ
+ExecStart=python3 -m janitor.differ --listen-address 127.0.0.1 --config=/etc/janitor/janitor.conf --cache-path=/var/cache/janitor-differ --runner-url=http://localhost:9912/
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

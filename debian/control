@@ -1,7 +1,7 @@
 Source: janitor
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
 Homepage: https://github.com/jelmer/janitor
-Build-Depends: python3-all, python3-setuptools, debhelper-compat (= 13), python3-pygments, dh-python, mypy-protobuf
+Build-Depends: python3-all, python3-setuptools, debhelper-compat (= 13), python3-pygments, dh-python, mypy-protobuf, protobuf-compiler
 Vcs-Git: https://salsa.debian.org/jelmer/janitor.git -b debian/main
 Vcs-Browser: https://salsa.debian.org/jelmer/janitor/tree/debian/main
 Rules-Requires-Root: no
@@ -12,7 +12,7 @@ Priority: optional
 Package: python3-janitor
 Section: python
 Architecture: all
-Depends: python3-breezy, ${misc:Depends}, ${python3:Depends}
+Depends: python3-aiohttp, python3-aiohttp-apispec, python3-asyncpg, python3-breezy, ${misc:Depends}, ${python3:Depends}, python3-debian, python3-apt, python3-iso8601, python3-yaml, python3-protobuf
 Description: management platform for large-scale automated code improvements - core
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
@@ -28,9 +28,27 @@ Description: management platform for large-scale automated code improvements - c
  .
  This package containers the core Python libraries.
 
+Package: janitor-site-demo
+Architecture: all
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-jinja2, python3-aiohttp-openmetrics, python3-aiozipkin, python3-gpg
+Description: management platform for large-scale automated code improvements - demo site
+ The Janitor is a platform for running code improvement tools on a large number
+ of repositories.
+ .
+ It takes a collection of VCS repositories and will regularly try to run a set
+ of specified code improvement tools on those repositories. Scheduling takes
+ into account tool-specific hints, past success and chances of success.
+ .
+ The web UI allows review and analysis of changes made.
+ .
+ Depending on policy set, changes are either pushed directly back to the
+ repository or included in a pull request (that is kept up to date).
+ .
+ This package contains the demo site.
+
 Package: janitor-worker
 Architecture: all
-Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-jinja2, python3-aiohttp-openmetrics, python3-aiozipkin
 Description: management platform for large-scale automated code improvements - worker
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
@@ -48,7 +66,7 @@ Description: management platform for large-scale automated code improvements - w
 
 Package: janitor-runner
 Architecture: all
-Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-aiohttp-openmetrics, python3-aiozipkin
 Description: management platform for large-scale automated code improvements - runner
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
@@ -66,7 +84,7 @@ Description: management platform for large-scale automated code improvements - r
 
 Package: janitor-publisher
 Architecture: all
-Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-jinja2, python3-aiohttp-openmetrics, python3-aiozipkin, python3-gpg
 Description: management platform for large-scale automated code improvements - publisher
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
@@ -84,8 +102,8 @@ Description: management platform for large-scale automated code improvements - p
 
 Package: janitor-apt
 Architecture: all
-Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}
-Description: management platform for large-scale automated code improvements - apt repository generator
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-aiohttp-openmetrics, python3-aiozipkin
+Description: management platform for large-scale automated code improvements - apt repo generator
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -99,3 +117,21 @@ Description: management platform for large-scale automated code improvements - a
  repository or included in a pull request (that is kept up to date).
  .
  This package contains the APT repository generator.
+
+Package: janitor-differ
+Architecture: all
+Depends: python3-janitor, ${misc:Depends}, ${python3:Depends}, python3-aiohttp-openmetrics, python3-aiozipkin
+Description: management platform for large-scale automated code improvements - differ
+ The Janitor is a platform for running code improvement tools on a large number
+ of repositories.
+ .
+ It takes a collection of VCS repositories and will regularly try to run a set
+ of specified code improvement tools on those repositories. Scheduling takes
+ into account tool-specific hints, past success and chances of success.
+ .
+ The web UI allows review and analysis of changes made.
+ .
+ Depending on policy set, changes are either pushed directly back to the
+ repository or included in a pull request (that is kept up to date).
+ .
+ This package contains the result differ.

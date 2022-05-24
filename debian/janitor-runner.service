@@ -1,0 +1,21 @@
+[Unit]
+Description=Runner
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+User=janitor-runner
+Type=simple
+EnvironmentFile=-/etc/default/janitor
+ExecStart=python3 -m janitor.runner --listen-address=127.0.0.1 --config=/etc/janitor/janitor.conf --backup-directory=/var/cache/janitor-site
+Restart=on-failure
+RestartSec=5min
+MemoryAccounting=yes
+MemoryHigh=10G
+MemoryMax=12G
+LimitNOFILE=500000
+LimitNPROC=500000
+
+[Install]
+WantedBy=default.target
