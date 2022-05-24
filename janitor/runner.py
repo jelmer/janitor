@@ -19,6 +19,7 @@ from aiohttp import ClientOSError
 import aiozipkin
 import asyncio
 import asyncpg
+import asyncpg.pool
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
@@ -1274,7 +1275,7 @@ def has_runtime_relation(c, pkg):
 
 
 async def followup_run(
-        config: Config, database: state.Database, policy: PolicyConfig,
+        config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
         item: QueueItem, result: JanitorResult) -> None:
     if result.code == "success" and item.suite not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
@@ -1414,7 +1415,7 @@ class QueueProcessor(object):
 
     def __init__(
         self,
-        database: state.Database,
+        database: asyncpg.pool.Pool,
         policy: PolicyConfig,
         config: Config,
         run_timeout: int,
@@ -2160,7 +2161,7 @@ async def main(argv=None):
         else:
             backup_artifact_manager = None
             backup_logfile_manager = None
-        db = state.Database(config.database_location)
+        db = state.create_pool(config.database_location)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(

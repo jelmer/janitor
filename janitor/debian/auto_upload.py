@@ -252,7 +252,7 @@ async def main(argv=None):
 
     if args.backfill:
         from .. import state
-        db = state.Database(config.database_location)
+        db = state.create_pool(config.database_location)
         backfill_task = loop.create_task(
             backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, source_only=args.source_only))
         backfill_task.add_done_callback(log_result)

@@ -18,6 +18,7 @@
 """Manage VCS repositories."""
 
 import aiozipkin
+import asyncpg.pool
 import asyncio
 from io import BytesIO
 import logging
@@ -718,7 +719,7 @@ async def create_web_app(
     listen_addr: str,
     port: int,
     vcs_manager: VcsManager,
-    db: state.Database,
+    db: asyncpg.pool.Pool,
     config,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
@@ -850,7 +851,7 @@ async def main(argv=None):
     state.DEFAULT_URL = config.database_location
 
     vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     app, public_app = await create_web_app(
         args.listen_address,
         args.port,

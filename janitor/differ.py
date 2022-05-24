@@ -684,7 +684,7 @@ async def main(argv=None):
     artifact_manager = get_artifact_manager(
         config.artifact_location, trace_configs=trace_configs)
 
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     loop = asyncio.get_event_loop()
 
     if args.cache_path and not os.path.isdir(args.cache_path):
