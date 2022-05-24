@@ -34,6 +34,7 @@ import aiozipkin
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
+import asyncpg.pool
 
 from aiohttp_apispec import (
     docs,
@@ -1461,7 +1462,7 @@ async def run_web_server(
     template_env_path: Optional[str],
     rate_limiter: RateLimiter,
     vcs_manager: VcsManager,
-    db: state.Database,
+    db: asyncpg.pool.Pool,
     config,
     topic_merge_proposal: Topic,
     topic_publish: Topic,
@@ -2702,7 +2703,7 @@ def main(argv=None):
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
     vcs_manager = get_vcs_manager(args.vcs_path or config.vcs_location)
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     if args.once:
         loop.run_until_complete(
             publish_pending_ready(
