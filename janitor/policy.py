@@ -311,7 +311,7 @@ async def main(argv):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     async with db.acquire() as conn:
         num_updated = await sync_policy(
             conn, policy, selected_package=args.package)

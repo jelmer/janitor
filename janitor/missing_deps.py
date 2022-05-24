@@ -167,7 +167,7 @@ async def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     session = PlainSession()
     with session:
         requirements = {}

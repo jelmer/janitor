@@ -535,7 +535,7 @@ async def create_app(
         app['external_url'] = URL(external_url)
     else:
         app['external_url'] = None
-    database = state.Database(config.database_location)
+    database = state.create_pool(config.database_location)
     app.database = database
     app['config'] = config
 

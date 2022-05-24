@@ -92,7 +92,7 @@ async def main():
 
     campaign_names = [campaign.name for campaign in config.campaign]
 
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
 
     async with db.acquire() as conn:
         known_packages = set()

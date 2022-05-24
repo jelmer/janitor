@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncpg
 from datetime import datetime, timedelta
 
 import shlex
@@ -41,7 +42,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
 
 
 async def iter_queue_with_last_run(
-    db: state.Database, limit: Optional[int] = None
+    db: asyncpg.pool.Pool, limit: Optional[int] = None
 ):
     query = """
 SELECT
@@ -77,7 +78,7 @@ SELECT
 
 
 async def get_queue(
-    db: state.Database, limit: Optional[int] = None
+    db: asyncpg.pool.Pool, limit: Optional[int] = None
 ) -> AsyncIterator[
     Tuple[
         int,
@@ -123,7 +124,7 @@ async def get_buckets(db):
 
 async def write_queue(
     client,
-    db: state.Database,
+    db: asyncpg.pool.Pool,
     limit=None,
     is_admin=False,
     queue_status=None,
