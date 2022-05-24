@@ -48,6 +48,7 @@ from silver_platter.debian import (
     select_probers,
 )
 
+from ..compat import to_thread
 from ..vcs import (
     open_branch_ext,
     BranchOpenFailure,
@@ -121,7 +122,8 @@ def possible_urls_from_alioth_url(vcs_type, vcs_url):
 
 
 async def open_guessed_salsa_branch(
-    conn, pkg, vcs_type, vcs_url, possible_transports=None
+    conn, pkg, vcs_type, vcs_url, possible_transports=None,
+    timeout=None
 ):
     # Don't do this as a top-level export, since it imports asyncpg, which
     # isn't available on jenkins.debian.net.
@@ -146,7 +148,7 @@ async def open_guessed_salsa_branch(
 
         note("Trying to access salsa URL %s instead.", salsa_url)
         try:
-            branch = open_branch_ext(
+            branch = to_thread(open_branch_ext,
                 salsa_url, possible_transports=possible_transports, probers=probers
             )
         except BranchOpenFailure:
