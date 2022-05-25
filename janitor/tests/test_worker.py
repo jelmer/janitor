@@ -20,11 +20,11 @@ from aiohttp.multipart import MultipartReader
 
 from io import BytesIO
 
+import asyncio
 import os
 import shutil
 import tempfile
-
-import asynctest
+import unittest
 
 
 class AsyncBytesIO:
@@ -43,11 +43,8 @@ class AsyncBytesIO:
     async def read(self, size=None):
         return self._io.read(size)
 
-    def getvalue(self):
-        return b"".join(self.chunks)
 
-
-class BundleResultsTests(asynctest.TestCase):
+class BundleResultsTests(unittest.TestCase):
     def setUp(self):
         super(BundleResultsTests, self).setUp()
         self.test_dir = tempfile.mkdtemp()
@@ -56,16 +53,17 @@ class BundleResultsTests(asynctest.TestCase):
         self.addCleanup(os.chdir, old_dir)
         self.addCleanup(shutil.rmtree, self.test_dir)
 
-    async def test_simple(self):
+    def test_simple(self):
+        loop = asyncio.get_event_loop()
         with open("a", "w") as f:
             f.write("some data\n")
         with bundle_results({"result_code": "success"}, self.test_dir) as writer:
             self.assertEqual(["Content-Type"], list(writer.headers.keys()))
             b = AsyncBytesIO()
-            await writer.write(b)
+            loop.run_until_complete(writer.write(b))
             b.seek(0)
             reader = MultipartReader(writer.headers, b)
-            part = await reader.next()
+            part = loop.run_until_complete(reader.next())
             self.assertEqual(
                 part.headers,
                 {
@@ -76,8 +74,9 @@ class BundleResultsTests(asynctest.TestCase):
                 },
             )
             self.assertEqual("result.json", part.filename)
-            self.assertEqual(b'{"result_code": "success"}', bytes(await part.read()))
-            part = await reader.next()
+            self.assertEqual(
+                b'{"result_code": "success"}', bytes(loop.run_until_complete(part.read())))
+            part = loop.run_until_complete(reader.next())
             self.assertEqual(
                 part.headers,
                 {
@@ -88,5 +87,5 @@ class BundleResultsTests(asynctest.TestCase):
                 },
             )
             self.assertEqual("a", part.filename)
-            self.assertEqual(b"some data\n", bytes(await part.read()))
+            self.assertEqual(b"some data\n", bytes(loop.run_until_complete(part.read())))
             self.assertTrue(part.at_eof())
