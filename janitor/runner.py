@@ -19,6 +19,7 @@ from aiohttp import ClientOSError
 import aiozipkin
 import asyncio
 import asyncpg
+import asyncpg.pool
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
@@ -108,6 +109,8 @@ from .vcs import (
 )
 
 DEFAULT_RETRY_AFTER = 120
+REMOTE_BRANCH_OPEN_TIMEOUT = 10.0
+VCS_STORE_BRANCH_OPEN_TIMEOUT = 5.0
 
 
 routes = web.RouteTableDef()
@@ -120,6 +123,13 @@ run_result_count = Counter("result", "Result counts", ["package", "suite", "resu
 active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
 assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
+
+
+async def to_thread_timeout(timeout, func, *args, **kwargs):
+    cor = to_thread(func, *args, **kwargs)
+    if timeout is not None:
+        cor = asyncio.wait_for(cor, timeout=timeout)
+    return await cor
 
 
 class BuilderResult(object):
@@ -605,15 +615,15 @@ async def update_branch_url(
 
 
 async def open_branch_with_fallback(
-    conn, pkg, vcs_type, vcs_url, possible_transports=None
+    conn, pkg, vcs_type, vcs_url, possible_transports=None, timeout=None
 ):
     probers = select_preferred_probers(vcs_type)
     logging.info(
         'Opening branch %s with %r', vcs_url,
         [p.__name__ for p in probers])
     try:
-        return await to_thread(
-            open_branch_ext,
+        return await to_thread_timeout(
+            timeout, open_branch_ext,
             vcs_url, possible_transports=possible_transports, probers=probers)
     except BranchOpenFailure as e:
         if e.code == "hosted-on-alioth":
@@ -627,6 +637,7 @@ async def open_branch_with_fallback(
                     vcs_type,
                     vcs_url,
                     possible_transports=possible_transports,
+                    timeout=timeout,
                 )
             except BranchOpenFailure:
                 raise e
@@ -1034,7 +1045,7 @@ def open_resume_branch(
                     retry_after = None
                 else:
                     retry_after = None
-                raise BranchRateLimited(e.url, str(e), retry_after=retry_after)
+                raise BranchRateLimited(e.path, str(e), retry_after=retry_after)
             logging.warning(
                 'Unexpected HTTP status for %s: %s %s', e.path,
                 e.code, e.extra)
@@ -1264,7 +1275,7 @@ def has_runtime_relation(c, pkg):
 
 
 async def followup_run(
-        config: Config, database: state.Database, policy: PolicyConfig,
+        config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
         item: QueueItem, result: JanitorResult) -> None:
     if result.code == "success" and item.suite not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
@@ -1404,7 +1415,7 @@ class QueueProcessor(object):
 
     def __init__(
         self,
-        database: state.Database,
+        database: asyncpg.pool.Pool,
         policy: PolicyConfig,
         config: Config,
         run_timeout: int,
@@ -1777,6 +1788,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     item.vcs_type,
                     item.branch_url,
                     possible_transports=possible_transports,
+                    timeout=REMOTE_BRANCH_OPEN_TIMEOUT,
                 )
         except BranchRateLimited as e:
             host = urlutils.URL.from_string(item.branch_url).host
@@ -1797,7 +1809,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             if not item.refresh:
                 with span.new_child('resume-branch:open'):
                     try:
-                        resume_branch = await to_thread(
+                        resume_branch = await to_thread_timeout(
+                            REMOTE_BRANCH_OPEN_TIMEOUT,
                             open_resume_branch,
                             main_branch,
                             campaign_config.branch_name,
@@ -1820,7 +1833,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         if resume_branch is None and not item.refresh:
             with span.new_child('resume-branch:open'):
                 try:
-                    resume_branch = await to_thread(
+                    resume_branch = await to_thread_timeout(
+                        VCS_STORE_BRANCH_OPEN_TIMEOUT,
                         queue_processor.public_vcs_manager.get_branch,
                         item.package, '%s/%s' % (campaign_config.name, 'main'), vcs_type)
                 except UnsupportedVcs:
@@ -2147,7 +2161,7 @@ async def main(argv=None):
         else:
             backup_artifact_manager = None
             backup_logfile_manager = None
-        db = state.Database(config.database_location)
+        db = state.create_pool(config.database_location)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(
