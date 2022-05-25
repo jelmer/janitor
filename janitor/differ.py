@@ -95,7 +95,7 @@ async def handle_debdiff(request):
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
 
-    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.pool, old_id, new_id)
 
     cache_path = request.app.debdiff_cache_path(old_run['id'], new_run['id'])
     if cache_path:
@@ -215,8 +215,8 @@ ORDER BY finish_time DESC
     return await conn.fetchrow(query, main_branch_revision, package)
 
 
-async def get_run_pair(db, old_id, new_id):
-    async with db.acquire() as conn:
+async def get_run_pair(pool, old_id, new_id):
+    async with pool.acquire() as conn:
         new_run = await get_run(conn, new_id)
         old_run = await get_run(conn, old_id)
 
@@ -268,7 +268,7 @@ async def handle_diffoscope(request):
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
 
-    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.pool, old_id, new_id)
 
     cache_path = request.app.diffoscope_cache_path(old_run['id'], new_run['id'])
     if cache_path:
@@ -469,7 +469,7 @@ async def handle_precache(request):
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
 
-    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.pool, old_id, new_id)
 
     async def _precache():
         try:
@@ -497,7 +497,7 @@ async def handle_precache(request):
 @routes.post("/precache-all", name="precache-all")
 async def handle_precache_all(request):
     todo = []
-    async with request.app.db.acquire() as conn:
+    async with request.app.pool.acquire() as conn:
         rows = await conn.fetch(
             """
 select run.id, unchanged_run.id from run
@@ -543,11 +543,11 @@ async def handle_health(request):
 
 
 class DifferWebApp(web.Application):
-    def __init__(self, db, config, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
+    def __init__(self, pool, config, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)
         super(DifferWebApp, self).__init__(middlewares=[trailing_slash_redirect])
         self.router.add_routes(routes)
-        self.db = db
+        self.pool = pool
         self.config = config
         self.cache_path = cache_path
         self.artifact_manager = artifact_manager
@@ -592,7 +592,7 @@ async def listen_to_runner(runner_url, app):
     import urllib.parse
 
     url = urllib.parse.urljoin(runner_url, "ws/result")
-    async with ClientSession() as session, app.db.acquire() as conn:
+    async with ClientSession() as session, app.pool.acquire() as conn:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
@@ -684,27 +684,27 @@ async def main(argv=None):
     artifact_manager = get_artifact_manager(
         config.artifact_location, trace_configs=trace_configs)
 
-    db = state.create_pool(config.database_location)
     loop = asyncio.get_event_loop()
 
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
 
-    app = DifferWebApp(
-        db=db,
-        config=config,
-        cache_path=args.cache_path,
-        artifact_manager=artifact_manager,
-        task_memory_limit=args.task_memory_limit,
-        task_timeout=args.task_timeout,
-    )
+    async with state.create_pool(config.database_location) as pool:
+        app = DifferWebApp(
+            pool=pool,
+            config=config,
+            cache_path=args.cache_path,
+            artifact_manager=artifact_manager,
+            task_memory_limit=args.task_memory_limit,
+            task_timeout=args.task_timeout,
+        )
 
-    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
+        tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
 
-    if args.runner_url:
-        tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
+        if args.runner_url:
+            tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
 
-    await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

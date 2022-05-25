@@ -472,7 +472,7 @@ async def main(argv=None):
 
     os.makedirs(args.dists_directory, exist_ok=True)
 
-    db = state.create_pool(config.database_location)
+    db = await state.create_pool(config.database_location)
 
     endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:

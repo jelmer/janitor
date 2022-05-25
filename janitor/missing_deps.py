@@ -167,23 +167,23 @@ async def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    db = state.create_pool(config.database_location)
-    session = PlainSession()
-    with session:
-        requirements = {}
-        async for package, suite, requirement in gather_requirements(db, session, args.run_id or None):
-            requirements.setdefault(requirement, []).append((package, suite))
+    async with state.create_pool(config.database_location) as pool:
+        session = PlainSession()
+        with session:
+            requirements = {}
+            async for package, suite, requirement in gather_requirements(pool, session, args.run_id or None):
+                requirements.setdefault(requirement, []).append((package, suite))
 
-        with open(args.policy, "r") as f:
-            policy = read_policy(f)
+            with open(args.policy, "r") as f:
+                policy = read_policy(f)
 
-        apt_mgr = AptManager.from_session(session)
+            apt_mgr = AptManager.from_session(session)
 
-        async with db.acquire() as conn:
-            for requirement, needed_by in requirements.items():
-                await followup_missing_requirement(
-                    conn, apt_mgr, policy, requirement,
-                    needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]))
+            async with pool.acquire() as conn:
+                for requirement, needed_by in requirements.items():
+                    await followup_missing_requirement(
+                        conn, apt_mgr, policy, requirement,
+                        needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]))
 
 if __name__ == '__main__':
     asyncio.run(main())
