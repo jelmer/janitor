@@ -1,4 +1,4 @@
-janitor (0.1~git20220525+ds1-1) UNRELEASED; urgency=medium
+janitor (0.1~git20220525+ds1-1) experimental; urgency=medium
 
   * Initial release. (Closes: #1006804)
 
