@@ -19,33 +19,28 @@ import datetime
 from debian.changelog import Version
 import json
 import asyncpg
+import asyncpg.pool
 import logging
-from contextlib import asynccontextmanager
 from typing import Optional, Tuple, List, Any
 
 from breezy import urlutils
 
 
-class Database(object):
-    def __init__(self, url):
-        self.url = url
-        self.pool = None
+async def init_types(conn):
+    await conn.set_type_codec(
+        "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+    )
+    await conn.set_type_codec(
+        "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+    )
+    await conn.set_type_codec(
+        "debversion", format="text", encoder=str, decoder=Version
+    )
 
-    @asynccontextmanager
-    async def acquire(self):
-        if self.pool is None:
-            self.pool = await asyncpg.create_pool(self.url)
-        async with self.pool.acquire() as conn:
-            await conn.set_type_codec(
-                "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
-            )
-            await conn.set_type_codec(
-                "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
-            )
-            await conn.set_type_codec(
-                "debversion", format="text", encoder=str, decoder=Version
-            )
-            yield conn
+
+def create_pool(uri, *args, **kwargs) -> asyncpg.pool.Pool:
+    kwargs['init'] = init_types
+    return asyncpg.create_pool(uri, *args, **kwargs)
 
 
 def get_result_branch(result_branches, role):

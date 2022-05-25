@@ -18,6 +18,7 @@
 """Manage VCS repositories."""
 
 import aiozipkin
+import asyncpg.pool
 import asyncio
 from io import BytesIO
 import logging
@@ -408,9 +409,10 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def git_backend(request):
+async def cgit_backend(request):
     package = request.match_info["package"]
     subpath = request.match_info["subpath"]
+    span = aiozipkin.request_span(request)
 
     allow_writes = request.app.allow_writes
     if allow_writes is None:
@@ -419,7 +421,6 @@ async def git_backend(request):
     if service is not None:
         _git_check_service(service, allow_writes)
 
-    span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
@@ -718,7 +719,7 @@ async def create_web_app(
     listen_addr: str,
     port: int,
     vcs_manager: VcsManager,
-    db: state.Database,
+    db: asyncpg.pool.Pool,
     config,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
@@ -763,11 +764,11 @@ async def create_web_app(
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
                 method, "/git/{package}{subpath:" + regex.pattern + "}",
-                git_backend,
+                cgit_backend,
             )
             public_app.router.add_route(
                 method, "/git/{package}{subpath:" + regex.pattern + "}",
-                git_backend,
+                cgit_backend,
             )
 
 
@@ -850,7 +851,7 @@ async def main(argv=None):
     state.DEFAULT_URL = config.database_location
 
     vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
     app, public_app = await create_web_app(
         args.listen_address,
         args.port,

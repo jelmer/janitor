@@ -217,7 +217,7 @@ async def main():
     else:
         package_overrides = {}
 
-    db = state.Database(config.database_location)
+    db = state.create_pool(config.database_location)
 
     logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
