@@ -37,8 +37,8 @@ with open(args.config, "r") as f:
     config = read_config(f)
 
 
-async def process_build(db, run_id, role, format):
-    async with db.acquire() as conn:
+async def process_build(db_location, run_id, role, format):
+    async with state.create_pool(db_location) as conn:
         query = """
 SELECT
   package,
@@ -60,5 +60,4 @@ WHERE
         print(template_env.get_template(vs['suite'] + '.' + format).render(vs))
 
 
-db = state.Database(config.database_location)
-loop.run_until_complete(process_build(db, args.run_id, args.role, args.format))
+loop.run_until_complete(process_build(config.database_location, args.run_id, args.role, args.format))

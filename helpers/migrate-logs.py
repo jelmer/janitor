@@ -31,7 +31,7 @@ from_manager = get_log_manager(args.from_location)
 to_manager = get_log_manager(args.to_location)
 
 
-async def reprocess_run(db, package, log_id, logfilenames):
+async def reprocess_run(pool, package, log_id, logfilenames):
     if logfilenames is None:
         logfilenames = []
         if await from_manager.has_log(package, log_id, 'worker.log'):
@@ -44,7 +44,7 @@ async def reprocess_run(db, package, log_id, logfilenames):
             logfilenames.append(log_name)
             i += 1
 
-        async with db.acquire() as conn:
+        async with pool.acquire() as conn:
             await conn.execute(
                 'UPDATE run SET logfilenames = $1 WHERE id = $2', logfilenames,
                 log_id)
@@ -63,16 +63,15 @@ async def reprocess_run(db, package, log_id, logfilenames):
             await from_manager.delete_log(package, log_id, name)
 
 
-async def process_all_build_failures(db):
+async def process_all_build_failures(db_location):
     todo = []
-    async with db.acquire() as conn:
+    async with state.create_pool(db_location) as pool, pool.acquire() as conn:
         async with conn.transaction():
             async for row in conn.cursor(
                     "SELECT package, id, logfilenames FROM run"):
-                todo.append(reprocess_run(db, row[0], row[1], row[2]))
+                todo.append(reprocess_run(pool, row[0], row[1], row[2]))
     for i in range(0, len(todo), 100):
         await asyncio.gather(*todo[i:i+100])
 
 
-db = state.Database(config.database_location)
-loop.run_until_complete(process_all_build_failures(db))
+loop.run_until_complete(process_all_build_failures(config.database_location))

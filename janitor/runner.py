@@ -2161,7 +2161,7 @@ async def main(argv=None):
         else:
             backup_artifact_manager = None
             backup_logfile_manager = None
-        db = state.create_pool(config.database_location)
+        db = await state.create_pool(config.database_location)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(

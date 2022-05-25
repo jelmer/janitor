@@ -57,8 +57,7 @@ async def main(args):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    db = state.create_pool(config.database_location)
-    async with db.acquire() as conn:
+    async with state.create_pool(config.database_location) as conn:
         currents = {
             row['name']: row['upstream_branch_url']
             for row in await conn.fetch("""

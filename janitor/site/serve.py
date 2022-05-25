@@ -535,7 +535,8 @@ async def create_app(
         app['external_url'] = URL(external_url)
     else:
         app['external_url'] = None
-    database = state.create_pool(config.database_location)
+    database = await state.create_pool(config.database_location)
+    app['pool'] = database
     app.database = database
     app['config'] = config
 
@@ -556,12 +557,12 @@ async def create_app(
     app.router.add_post("/", handle_post_root, name="root-post")
     from .stats import stats_app
     app.add_subapp(
-        "/cupboard/stats", stats_app(app.database, config, app['external_url']))
+        "/cupboard/stats", stats_app(app['pool'], config, app['external_url']))
 
     app.add_subapp(
         "/api",
         create_api_app(
-            app.database,
+            app['pool'],
             publisher_url,
             runner_url,  # type: ignore
             vcs_manager,

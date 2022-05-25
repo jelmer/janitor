@@ -217,12 +217,10 @@ async def main():
     else:
         package_overrides = {}
 
-    db = state.create_pool(config.database_location)
-
     logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
 
-    async with db.acquire() as conn:
+    async with state.create_pool(config.database_location) as conn:
         logging.info(
             'Updating package data for %d packages',
             len(packages))
