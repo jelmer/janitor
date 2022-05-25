@@ -1045,7 +1045,7 @@ def open_resume_branch(
                     retry_after = None
                 else:
                     retry_after = None
-                raise BranchRateLimited(e.url, str(e), retry_after=retry_after)
+                raise BranchRateLimited(e.path, str(e), retry_after=retry_after)
             logging.warning(
                 'Unexpected HTTP status for %s: %s %s', e.path,
                 e.code, e.extra)

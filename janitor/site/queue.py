@@ -21,8 +21,6 @@ from datetime import datetime, timedelta
 import shlex
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
-from janitor import state
-
 
 class RunnerProcessingUnavailable(Exception):
     """Raised when unable to get processing data for runner."""

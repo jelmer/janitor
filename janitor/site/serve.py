@@ -590,7 +590,6 @@ async def create_app(
 
 async def main(argv=None):
     import argparse
-    import os
     from janitor.config import read_config
 
     parser = argparse.ArgumentParser()
