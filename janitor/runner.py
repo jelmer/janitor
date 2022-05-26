@@ -1652,6 +1652,12 @@ async def handle_log(request):
     return response
 
 
+@routes.get("/active-runs", name="get-active-runs")
+async def handle_get_active_runs(request):
+    queue_processor = request.app['queue_processor']
+    return web.json_response(queue_processor.status_json()["processing"])
+
+
 @routes.post("/active-runs", name="assign")
 async def handle_assign(request):
     json = await request.json()
