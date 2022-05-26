@@ -1434,6 +1434,9 @@ async def credentials_request(request):
                 current_user = instance.get_current_user()
             except HosterLoginRequired:
                 continue
+            except UnsupportedHoster:
+                # WTF? Well, whatever.
+                continue
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
