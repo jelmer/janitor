@@ -8,10 +8,15 @@ CREATE TABLE IF NOT EXISTS upstream (
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
 CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS codebase (
+   -- Name is intentionally optional
    name codebase_name,
    branch_url text not null,
+   -- the subpath may be unknown; it should be an empty string if it's the root
+   -- path.
    subpath text,
+   -- last revision, if known
    vcs_last_revision text,
+   -- vcs type, if known
    vcs_type vcs_type,
    unique(branch_url, subpath),
    unique(name)
@@ -143,7 +148,7 @@ CREATE TYPE queue_bucket AS ENUM(
     'update-existing-mp', 'manual', 'control', 'hook', 'reschedule', 'update-new-mp', 'missing-deps', 'default');
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
-   bucket queue_bucket default 'default',
+   bucket queue_bucket not null default 'default',
    package text not null,
    suite suite_name not null,
    command text,
@@ -155,7 +160,7 @@ CREATE TABLE IF NOT EXISTS queue (
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   unique(package, suite, change_set)
+   unique(package, suite, coalesce(change_set, ""))
 );
 CREATE INDEX ON queue (change_set);
 CREATE INDEX ON queue (priority ASC, id ASC);
@@ -167,7 +172,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    value integer,
    success_chance float,
    change_set text references change_set(id),
-   unique(package, suite, change_set),
+   unique(package, suite, coalesce(change_set, "")),
    foreign key (package) references package(name)
 );
 CREATE TABLE IF NOT EXISTS branch_publish_policy (
