@@ -15,12 +15,12 @@ Files-Excluded:
 Files: *
 Copyright:
   2018-2022 Jelmer Vernooĳ <jelmer@jelmer.uk>
-License: GPL-3+
+License: GPL-2+
 
 Files: debian/*
 Copyright: 2022 Jelmer Vernooĳ <jelmer@debian.org>
-License: GPL-3+
+License: GPL-2+
 
-License: GPL-3+
- On Debian systems the full text of the GNU General Public License version 3
- can be found in the `/usr/share/common-licenses/GPL-3' file.
+License: GPL-2+
+ On Debian systems the full text of the GNU General Public License version 2
+ can be found in the `/usr/share/common-licenses/GPL-2' file.
