@@ -34,6 +34,7 @@ import sys
 import tempfile
 from typing import List, Any, Optional, Dict, Tuple, Type, Set
 import uuid
+import warnings
 
 from aiohttp import (
     web,
@@ -2146,6 +2147,10 @@ async def main(argv=None):
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     loop = asyncio.get_event_loop()
+    if args.debug:
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(artifact_manager)
