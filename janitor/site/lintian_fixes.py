@@ -319,7 +319,7 @@ async def handle_lintian_fixes_pkg(request):
         request.app.database,
         request.app['config'],
         request.app.http_client_session,
-        request.app.differ_url,
+        request.app['differ_url'],
         request.app['vcs_manager'],
         pkg,
         aiozipkin.request_span(request),
