@@ -44,7 +44,8 @@ def iter_candidates_from_script(stdin):
 
 async def store_candidates(
         conn: asyncpg.Connection,
-        entries: List[Tuple[str, str, str, Optional[str], Optional[int], Optional[float]]]):
+        entries: List[Tuple[str, str, Optional[str], Optional[str], Optional[int],
+                            Optional[float]]]):
     await conn.executemany(
         "INSERT INTO candidate "
         "(package, suite, change_set, context, value, success_chance) "

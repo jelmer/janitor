@@ -24,6 +24,7 @@ from io import BytesIO
 import logging
 import os
 from typing import Optional
+import warnings
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -844,6 +845,12 @@ async def main(argv=None):
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    if args.debug:
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     with open(args.config, "r") as f:
         config = read_config(f)
