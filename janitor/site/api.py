@@ -301,7 +301,7 @@ async def handle_schedule_control(request):
             offset=offset,
             refresh=refresh,
             requestor=requestor,
-            main_branch_revision=run['main_branch_revision'],
+            main_branch_revision=run['main_branch_revision'].encode('utf-8'),
         )
         (queue_position, queue_wait_time) = await get_queue_position(
             conn, "unchanged", run['package']
