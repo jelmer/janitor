@@ -32,6 +32,7 @@ import sys
 from tempfile import TemporaryDirectory
 import traceback
 from typing import Any, Optional, List, Dict, Iterator, Tuple
+import warnings
 
 from aiohttp import (
     MultipartWriter,
@@ -1513,6 +1514,12 @@ async def main(argv=None):
             datefmt="%Y-%m-%d %H:%M:%S")
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+
+    if args.debug:
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     app = web.Application()
     app['workitem'] = {}
