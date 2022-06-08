@@ -19,7 +19,6 @@ import aiohttp
 from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
-import urllib.parse
 from yarl import URL
 
 from janitor.config import Config, get_distribution
@@ -146,9 +145,7 @@ async def get_archive_diff(
 ):
     if kind not in ("debdiff", "diffoscope"):
         raise DebdiffRetrievalError("invalid diff kind %r" % kind)
-    url = urllib.parse.urljoin(
-        differ_url, "%s/%s/%s" % (kind, unchanged_run_id, run_id)
-    )
+    url = URL(differ_url) / kind / unchanged_run_id / run_id
     params = {
         "jquery_url": "/_static/jquery.js",
     }

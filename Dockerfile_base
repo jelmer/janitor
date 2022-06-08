@@ -20,6 +20,7 @@ RUN apt -y update && apt -y upgrade && apt install --no-install-recommends -y \
 	python3-asyncpg \
 	python3-protobuf \
 	protobuf-compiler \
+	mypy-protobuf \
 	python3-yaml \
 	python3-gpg \
 	python3-cffi \
@@ -38,10 +39,11 @@ RUN apt -y update && apt -y upgrade && apt install --no-install-recommends -y \
 	python3-aiozipkin \
 	python3-setuptools-rust \
 	python3-aiohttp-openmetrics \
-	mypy-protobuf \
 	python3-apispec python3-webargs \
+	python3-typeshed \
+	python3-aiohttp-apispec \
 	wget \
-	&& pip3 install gcloud-aio-storage google-cloud-logging git+https://salsa.debian.org/python-debian-team/python-debian && wget http://ftp.de.debian.org/debian/pool/main/p/python-aiohttp-apispec/python3-aiohttp-apispec_3.0.0~b2+ds1-1_all.deb && dpkg -i python3-aiohttp-apispec*.deb
+	&& pip3 install gcloud-aio-storage google-cloud-logging git+https://salsa.debian.org/python-debian-team/python-debian
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/debmutate:/code/silver-platter:/code/upstream-ontologist:/code/buildlog-consultant:/code/ognibuild:/code/lintian-brush
 ADD . /code

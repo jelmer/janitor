@@ -28,6 +28,7 @@ from tempfile import TemporaryDirectory
 import traceback
 
 from aiohttp import web
+from yarl import URL
 
 from . import state
 from .artifacts import ArtifactsMissing, get_artifact_manager
@@ -588,9 +589,8 @@ async def run_web_server(app, listen_addr, port, tracer):
 
 async def listen_to_runner(runner_url, app):
     from aiohttp.client import ClientSession
-    import urllib.parse
 
-    url = urllib.parse.urljoin(runner_url, "ws/result")
+    url = URL(runner_url) / "ws/result"
     async with ClientSession() as session, app['pool'].acquire() as conn:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
