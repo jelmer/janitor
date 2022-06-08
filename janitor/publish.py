@@ -35,6 +35,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
 import asyncpg.pool
+from yarl import URL
 
 from aiohttp_apispec import (
     docs,
@@ -2561,9 +2562,8 @@ async def listen_to_runner(
             )
 
     from aiohttp.client import ClientSession
-    import urllib.parse
 
-    url = urllib.parse.urljoin(runner_url, "ws/result")
+    url = URL(runner_url) / "ws/result"
     async with ClientSession() as session:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
