@@ -188,10 +188,13 @@ class WorkerResult(object):
             "subworker": self.subworker,
             "description": self.description,
             "branches": [
-                (f, n, br.decode("utf-8") if br else None, r.decode("utf-8"))
+                (f, n, br.decode("utf-8") if br else None,
+                 r.decode("utf-8") if r else None)
                 for (f, n, br, r) in self.branches
             ],
-            "tags": [(n, r.decode("utf-8")) for (n, r) in self.tags.items()],
+            "tags": [
+                (n, r.decode("utf-8") if r else None)
+                for (n, r) in self.tags.items()],
             "target": {
                 "name": self.target,
                 "details": self.target_details,
