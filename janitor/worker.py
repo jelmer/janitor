@@ -1327,7 +1327,8 @@ async def process_single_item(
             resume_result = assignment["resume"]["result"]
             resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
             resume_branches = [
-                (role, name, base.encode("utf-8"), revision.encode("utf-8"))
+                (role, name, base.encode("utf-8") if base else None,
+                 revision.encode("utf-8") if revision else None)
                 for (role, name, base, revision) in assignment["resume"]["branches"]
             ]
         else:
