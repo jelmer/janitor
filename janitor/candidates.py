@@ -93,7 +93,7 @@ async def main():
 
     campaign_names = [campaign.name for campaign in config.campaign]
 
-    async with state.create_pool(config.database_location) as conn:
+    async with state.create_pool(config.database_location) as pool, pool.acquire() as conn:
         known_packages = set()
         async with conn.transaction():
             async for record in conn.cursor('SELECT name FROM package'):
