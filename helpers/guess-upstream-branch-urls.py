@@ -38,9 +38,9 @@ order by package.name asc
         yield row[0], row[1]
 
 
-async def main(db, start=None):
-    async with db.acquire() as conn:
-        async for pkg, version in iter_missing_upstream_branch_packages(conn):
+async def main(db_location, start=None):
+    async with state.create_pool(db_location) as pool:
+        async for pkg, version in iter_missing_upstream_branch_packages(pool):
             if start and pkg < start:
                 continue
             logging.info('Package: %s' % pkg)
@@ -85,5 +85,4 @@ with open(args.config, 'r') as f:
 
 logging.basicConfig(level=logging.INFO)
 
-db = state.Database(config.database_location)
-asyncio.run(main(db, args.start))
+asyncio.run(main(config.database_location, args.start))

@@ -35,6 +35,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
 import asyncpg.pool
+from yarl import URL
 
 from aiohttp_apispec import (
     docs,
@@ -1434,6 +1435,9 @@ async def credentials_request(request):
                 current_user = instance.get_current_user()
             except HosterLoginRequired:
                 continue
+            except UnsupportedHoster:
+                # WTF? Well, whatever.
+                continue
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
@@ -2558,9 +2562,8 @@ async def listen_to_runner(
             )
 
     from aiohttp.client import ClientSession
-    import urllib.parse
 
-    url = urllib.parse.urljoin(runner_url, "ws/result")
+    url = URL(runner_url) / "ws/result"
     async with ClientSession() as session:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
@@ -2588,7 +2591,7 @@ async def listen_to_runner(
                             package['branch_url'])
 
 
-def main(argv=None):
+async def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.publish")
@@ -2703,10 +2706,9 @@ def main(argv=None):
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
     vcs_manager = get_vcs_manager(args.vcs_path or config.vcs_location)
-    db = state.create_pool(config.database_location)
+    db = await state.create_pool(config.database_location)
     if args.once:
-        loop.run_until_complete(
-            publish_pending_ready(
+        await publish_pending_ready(
                 db,
                 config,
                 args.template_env_path,
@@ -2719,12 +2721,10 @@ def main(argv=None):
                 topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=args.reviewed_only,
                 require_binary_diff=args.require_binary_diff,
-            )
         )
         if args.prometheus:
-            loop.run_until_complete(
-                push_to_gateway(
-                    args.prometheus, job="janitor.publish", registry=REGISTRY))
+            await push_to_gateway(
+                args.prometheus, job="janitor.publish", registry=REGISTRY)
     else:
         tasks = [
             loop.create_task(
@@ -2785,8 +2785,8 @@ def main(argv=None):
                     )
                 )
             )
-        loop.run_until_complete(asyncio.gather(*tasks))
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(asyncio.run(main(sys.argv)))

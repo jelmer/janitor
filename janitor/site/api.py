@@ -31,7 +31,6 @@ import asyncio
 from datetime import datetime, timedelta
 import logging
 from typing import Optional
-import urllib.parse
 
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncpg
@@ -120,7 +119,7 @@ async def handle_publish(request):
     mode = post.get("mode")
     if mode not in (None, "push-derived", "push", "propose", "attempt-push"):
         return web.json_response({"error": "Invalid mode", "mode": mode}, status=400)
-    url = urllib.parse.urljoin(publisher_url, "%s/%s/publish" % (suite, package))
+    url = URL(publisher_url) / suite / package / "publish"
     if request['user']:
         try:
             requestor = request['user']["email"]
@@ -301,7 +300,7 @@ async def handle_schedule_control(request):
             offset=offset,
             refresh=refresh,
             requestor=requestor,
-            main_branch_revision=run['main_branch_revision'],
+            main_branch_revision=run['main_branch_revision'].encode('utf-8'),
         )
         (queue_position, queue_wait_time) = await get_queue_position(
             conn, "unchanged", run['package']
@@ -376,7 +375,7 @@ async def handle_merge_proposal_change(request):
     check_admin(request)
     post = await request.post()
 
-    url = urllib.parse.urljoin(request.app['publisher_url'], "merge-proposal")
+    url = URL(request.app['publisher_url']) / "merge-proposal"
     async with request.app['http_client_session'].post(url, data={
             'url': post['url'], 'status': post['status']}, raise_for_status=True):
         return web.json_response({})
@@ -392,7 +391,7 @@ async def handle_refresh_proposal_status(request):
         raise web.HTTPBadRequest(text="No URL specified")
 
     data = {"url": mp_url}
-    url = urllib.parse.urljoin(request.app['publisher_url'], "refresh-status")
+    url = URL(request.app['publisher_url']) / "refresh-status"
     async with request.app['http_client_session'].post(url, data=data) as resp:
         if resp.status in (200, 202):
             return web.Response(text="Success", status=resp.status)
@@ -628,7 +627,7 @@ async def handle_archive_diff(request):
 
 
 async def consider_publishing(session, publisher_url, run_id):
-    url = urllib.parse.urljoin(publisher_url, "/consider/%s" % run_id)
+    url = URL(publisher_url) / "consider" / run_id
     try:
         async with session.post(url) as resp:
             if resp.status != 200:
@@ -759,7 +758,7 @@ async def handle_run_success_list(request):
 async def handle_publish_scan(request):
     check_admin(request)
     publisher_url = request.app['publisher_url']
-    url = urllib.parse.urljoin(publisher_url, "/scan")
+    url = URL(publisher_url) / "scan"
     try:
         async with request.app['http_client_session'].post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
@@ -772,7 +771,7 @@ async def handle_publish_scan(request):
 async def handle_publish_autopublish(request):
     check_admin(request)
     publisher_url = request.app['publisher_url']
-    url = urllib.parse.urljoin(publisher_url, "/autopublish")
+    url = URL(publisher_url) / "autopublish"
     try:
         async with request.app['http_client_session'].post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
@@ -838,7 +837,7 @@ async def handle_runner_kill(request):
         check_admin(request)
     run_id = request.match_info["run_id"]
     with span.new_child('runner:kill'):
-        url = urllib.parse.urljoin(request.app['runner_url'], "kill/%s" % run_id)
+        url = URL(request.app['runner_url']) / "kill" / run_id
         try:
             async with request.app['http_client_session'].post(url) as resp:
                 return web.json_response(await resp.json(), status=resp.status)
@@ -857,7 +856,7 @@ async def handle_runner_log(request):
     filename = request.match_info["filename"]
     span = aiozipkin.request_span(request)
     with span.new_child('runner:log'):
-        url = urllib.parse.urljoin(request.app['runner_url'], "log/%s/%s" % (run_id, filename))
+        url = URL(request.app['runner_url']) / "log" / run_id / filename
         try:
             async with request.app['http_client_session'].get(url) as resp:
                 body = await resp.read()
@@ -1097,7 +1096,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
              'attachment; filename="result.json"; ' "filename*=utf-8''result.json")]
     )
 
-    runner_url = urllib.parse.urljoin(request.app['runner_url'], "active-runs/%s/finish" % run_id)
+    runner_url = URL(request.app['runner_url']) / "active-runs" / run_id / 'finish'
     with span.new_child('runner:finish'):
         try:
             async with request.app['http_client_session'].post(
@@ -1345,7 +1344,7 @@ WHERE
 async def handle_list_active_runs(request):
     span = aiozipkin.request_span(request)
     with span.new_child('runner:active-runs-list'):
-        url = urllib.parse.urljoin(request.app['runner_url'], "status")
+        url = URL(request.app['runner_url']) / "status"
         async with request.app['http_client_session'].get(url) as resp:
             if resp.status != 200:
                 return web.json_response(await resp.json(), status=resp.status)
@@ -1377,7 +1376,7 @@ async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
     span = aiozipkin.request_span(request)
     with span.new_child('runner:get-active-run'):
-        url = urllib.parse.urljoin(request.app['runner_url'], "status")
+        url = URL(request.app['runner_url']) / "status"
         async with request.app['http_client_session'].get(url) as resp:
             if resp.status != 200:
                 return web.json_response(await resp.json(), status=resp.status)

@@ -33,6 +33,7 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	python3-gpg \
 	python3-requirement-parser \
 	python3-ruamel.yaml \
+	python3-pcre \
 	quilt \
 	python3-psycopg2 \
 	sbuild \
@@ -63,6 +64,7 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	gnome-pkg-tools \
 	python3-tr \
 	subversion \
+	python3-pcre \
 	&& apt clean \
 	&& pip3 install google-cloud-logging
 RUN apt-file update && apt -y install aptitude && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install

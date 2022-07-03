@@ -34,6 +34,7 @@ import sys
 import tempfile
 from typing import List, Any, Optional, Dict, Tuple, Type, Set
 import uuid
+import warnings
 
 from aiohttp import (
     web,
@@ -1652,6 +1653,12 @@ async def handle_log(request):
     return response
 
 
+@routes.get("/active-runs", name="get-active-runs")
+async def handle_get_active_runs(request):
+    queue_processor = request.app['queue_processor']
+    return web.json_response(queue_processor.status_json()["processing"])
+
+
 @routes.post("/active-runs", name="assign")
 async def handle_assign(request):
     json = await request.json()
@@ -2140,6 +2147,10 @@ async def main(argv=None):
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     loop = asyncio.get_event_loop()
+    if args.debug:
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(artifact_manager)
@@ -2161,7 +2172,7 @@ async def main(argv=None):
         else:
             backup_artifact_manager = None
             backup_logfile_manager = None
-        db = state.create_pool(config.database_location)
+        db = await state.create_pool(config.database_location)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(

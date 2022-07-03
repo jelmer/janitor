@@ -39,9 +39,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         yield entry
 
 
-async def iter_queue_with_last_run(
-    db: asyncpg.pool.Pool, limit: Optional[int] = None
-):
+async def iter_queue_with_last_run(db: asyncpg.pool.Pool, limit: int):
     query = """
 SELECT
       queue.package AS package,
@@ -68,16 +66,13 @@ SELECT
   queue.priority ASC,
   queue.id ASC
 """
-    if limit:
-        query += " LIMIT %d" % limit
+    query += " LIMIT %d" % limit
     async with db.acquire() as conn:
         for row in await conn.fetch(query):
             yield row
 
 
-async def get_queue(
-    db: asyncpg.pool.Pool, limit: Optional[int] = None
-) -> AsyncIterator[
+async def get_queue(db: asyncpg.pool.Pool, limit: int) -> AsyncIterator[
     Tuple[
         int,
         str,
