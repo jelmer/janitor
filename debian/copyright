@@ -11,6 +11,7 @@ Files-Excluded:
   upstream-ontologist/*
   buildlog-consultant/*
   lintian-brush/*
+  silver-platter/*
 
 Files: *
 Copyright:
