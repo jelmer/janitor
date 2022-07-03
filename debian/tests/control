@@ -1,2 +1,2 @@
 Test-Command: python3 setup.py test
-Depends: @, python3-setuptools
+Depends: @, python3-setuptools, python3-breezy.tests
