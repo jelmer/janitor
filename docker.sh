@@ -1,6 +1,6 @@
 #!/bin/bash -e
 TODO="$@"
-TODO=${TODO:-base site runner publish archive differ worker vcs_store irc_notify mastodon_notify xmpp_notify}
+TODO=${TODO:-base site runner publish archive worker vcs_store differ irc_notify mastodon_notify xmpp_notify}
 for NAME in $TODO
 do
    SHA=$(git rev-parse HEAD)

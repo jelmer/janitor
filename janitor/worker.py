@@ -32,6 +32,7 @@ import sys
 from tempfile import TemporaryDirectory
 import traceback
 from typing import Any, Optional, List, Dict, Iterator, Tuple
+import warnings
 
 from aiohttp import (
     MultipartWriter,
@@ -187,10 +188,13 @@ class WorkerResult(object):
             "subworker": self.subworker,
             "description": self.description,
             "branches": [
-                (f, n, br.decode("utf-8") if br else None, r.decode("utf-8"))
+                (f, n, br.decode("utf-8") if br else None,
+                 r.decode("utf-8") if r else None)
                 for (f, n, br, r) in self.branches
             ],
-            "tags": [(n, r.decode("utf-8")) for (n, r) in self.tags.items()],
+            "tags": [
+                (n, r.decode("utf-8") if r else None)
+                for (n, r) in self.tags.items()],
             "target": {
                 "name": self.target,
                 "details": self.target_details,
@@ -1323,7 +1327,8 @@ async def process_single_item(
             resume_result = assignment["resume"]["result"]
             resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
             resume_branches = [
-                (role, name, base.encode("utf-8"), revision.encode("utf-8"))
+                (role, name, base.encode("utf-8") if base else None,
+                 revision.encode("utf-8") if revision else None)
                 for (role, name, base, revision) in assignment["resume"]["branches"]
             ]
         else:
@@ -1513,6 +1518,12 @@ async def main(argv=None):
             datefmt="%Y-%m-%d %H:%M:%S")
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+
+    if args.debug:
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     app = web.Application()
     app['workitem'] = {}

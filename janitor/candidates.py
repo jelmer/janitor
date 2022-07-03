@@ -44,7 +44,8 @@ def iter_candidates_from_script(stdin):
 
 async def store_candidates(
         conn: asyncpg.Connection,
-        entries: List[Tuple[str, str, str, Optional[str], Optional[int], Optional[float]]]):
+        entries: List[Tuple[str, str, Optional[str], Optional[str], Optional[int],
+                            Optional[float]]]):
     await conn.executemany(
         "INSERT INTO candidate "
         "(package, suite, change_set, context, value, success_chance) "
@@ -92,9 +93,7 @@ async def main():
 
     campaign_names = [campaign.name for campaign in config.campaign]
 
-    db = state.create_pool(config.database_location)
-
-    async with db.acquire() as conn:
+    async with state.create_pool(config.database_location) as conn:
         known_packages = set()
         async with conn.transaction():
             async for record in conn.cursor('SELECT name FROM package'):

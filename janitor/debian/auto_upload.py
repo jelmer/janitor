@@ -25,6 +25,8 @@ from typing import Optional, List
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
+from yarl import URL
+
 from aiohttp_openmetrics import (
     Counter,
     setup_metrics,
@@ -156,9 +158,8 @@ async def listen_to_runner(
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
     from aiohttp.client import ClientSession
-    import urllib.parse
 
-    url = urllib.parse.urljoin(runner_url, "ws/result")
+    url = URL(runner_url) / "ws/result"
     async with ClientSession() as session:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
@@ -252,7 +253,7 @@ async def main(argv=None):
 
     if args.backfill:
         from .. import state
-        db = state.create_pool(config.database_location)
+        db = await state.create_pool(config.database_location)
         backfill_task = loop.create_task(
             backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, source_only=args.source_only))
         backfill_task.add_done_callback(log_result)

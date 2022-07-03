@@ -24,6 +24,7 @@ from io import BytesIO
 import logging
 import os
 from typing import Optional
+import warnings
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -845,13 +846,19 @@ async def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
+    if args.debug:
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
+
     with open(args.config, "r") as f:
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
 
     vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
-    db = state.create_pool(config.database_location)
+    db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
         args.listen_address,
         args.port,

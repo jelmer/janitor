@@ -138,7 +138,7 @@ async def handle_apt_repo(request):
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
-            request.app.http_client_session, request.app.publisher_url
+            request.app.http_client_session, request.app['publisher_url']
         )
     except ClientConnectorError:
         return web.Response(status=500, text='Unable to retrieve credentials')
@@ -168,7 +168,7 @@ async def handle_credentials(request):
 
 async def handle_ssh_keys(request):
     credentials = await get_credentials(
-        request.app.http_client_session, request.app.publisher_url
+        request.app.http_client_session, request.app['publisher_url']
     )
     return web.Response(
         text="\n".join(credentials["ssh_keys"]), content_type="text/plain"
@@ -177,7 +177,7 @@ async def handle_ssh_keys(request):
 
 async def handle_pgp_keys(request):
     credentials = await get_credentials(
-        request.app.http_client_session, request.app.publisher_url
+        request.app.http_client_session, request.app['publisher_url']
     )
     armored = request.match_info["extension"] == ".asc"
     if armored:
@@ -197,7 +197,7 @@ async def handle_pgp_keys(request):
 
 
 async def handle_archive_keyring(request):
-    url = URL(request.app.archiver_url) / "pgp_keys"
+    url = URL(request.app['archiver_url']) / "pgp_keys"
     async with request.app.http_client_session.get(url=url) as resp:
         if resp.status != 200:
             raise Exception("unexpected response")
@@ -285,7 +285,7 @@ async def handle_generic_pkg(request):
         request.app['config'],
         request.match_info["suite"],
         request.app.http_client_session,
-        request.app.differ_url,
+        request.app['differ_url'],
         request.app['vcs_manager'],
         pkg,
         aiozipkin.request_span(request),
@@ -369,25 +369,25 @@ async def create_app(
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
-            url = URL(app.publisher_url) / "ws/publish"
+            url = URL(app['publisher_url']) / "ws/publish"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["publish", msg])
 
         async def listen_to_publisher_mp(app):
-            url = URL(app.publisher_url) / "ws/merge-proposal"
+            url = URL(app['publisher_url']) / "ws/merge-proposal"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["merge-proposal", msg])
 
         app['runner_status'] = None
 
         async def listen_to_queue(app):
-            url = URL(app.runner_url) / "ws/queue"
+            url = URL(app['runner_url']) / "ws/queue"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app['runner_status'] = msg
                 app.topic_notifications.publish(["queue", msg])
 
         async def listen_to_result(app):
-            url = URL(app.runner_url) / "ws/result"
+            url = URL(app['runner_url']) / "ws/result"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["result", msg])
 
@@ -524,10 +524,10 @@ async def create_app(
             return await process_webhook(request, request.app.database)
         raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
-    app.runner_url = runner_url
-    app.archiver_url = archiver_url
-    app.differ_url = differ_url
-    app.publisher_url = publisher_url
+    app['runner_url'] = runner_url
+    app['archiver_url'] = archiver_url
+    app['differ_url'] = differ_url
+    app['publisher_url'] = publisher_url
     app['vcs_manager'] = vcs_manager
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
@@ -535,7 +535,8 @@ async def create_app(
         app['external_url'] = URL(external_url)
     else:
         app['external_url'] = None
-    database = state.create_pool(config.database_location)
+    database = await state.create_pool(config.database_location)
+    app['pool'] = database
     app.database = database
     app['config'] = config
 
@@ -556,12 +557,12 @@ async def create_app(
     app.router.add_post("/", handle_post_root, name="root-post")
     from .stats import stats_app
     app.add_subapp(
-        "/cupboard/stats", stats_app(app.database, config, app['external_url']))
+        "/cupboard/stats", stats_app(app['pool'], config, app['external_url']))
 
     app.add_subapp(
         "/api",
         create_api_app(
-            app.database,
+            app['pool'],
             publisher_url,
             runner_url,  # type: ignore
             vcs_manager,
