@@ -256,7 +256,7 @@ async def _add_to_queue(
         "($1, $2, "
         "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
         + " + $3, $4, $5, $6, $7, $8, $9, $10) "
-        "ON CONFLICT (package, suite, change_set) DO UPDATE SET "
+        "ON CONFLICT DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "bucket = EXCLUDED.bucket, "
         "estimated_duration = EXCLUDED.estimated_duration, "
