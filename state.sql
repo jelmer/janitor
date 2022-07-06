@@ -160,8 +160,8 @@ CREATE TABLE IF NOT EXISTS queue (
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   unique(package, suite, coalesce(change_set, ""))
 );
+CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));
 CREATE INDEX ON queue (change_set);
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
@@ -172,9 +172,9 @@ CREATE TABLE IF NOT EXISTS candidate (
    value integer,
    success_chance float,
    change_set text references change_set(id),
-   unique(package, suite, coalesce(change_set, "")),
    foreign key (package) references package(name)
 );
+CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));
 CREATE TABLE IF NOT EXISTS branch_publish_policy (
    role text not null,
    mode publish_mode default 'build-only',

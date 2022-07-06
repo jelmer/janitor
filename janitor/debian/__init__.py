@@ -148,7 +148,7 @@ async def open_guessed_salsa_branch(
 
         note("Trying to access salsa URL %s instead.", salsa_url)
         try:
-            branch = to_thread(
+            branch = await to_thread(
                 open_branch_ext, salsa_url,
                 possible_transports=possible_transports, probers=probers)
         except BranchOpenFailure:
