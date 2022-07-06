@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 from typing import Optional, Set, AsyncIterator, Any
+from yarl import URL
 
 
 import aiohttp
@@ -87,7 +88,7 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
 
 
 async def pubsub_reader(
-    session: aiohttp.ClientSession, url: str, reconnect_interval: Optional[int] = 10
+    session: aiohttp.ClientSession, url: URL, reconnect_interval: Optional[int] = 10
 ) -> AsyncIterator[Any]:
     subscription_active.labels(url=url).set(0)
     while True:

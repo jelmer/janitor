@@ -424,8 +424,6 @@ async def create_app(
         r"/archive-keyring{extension:(\.asc|\.gpg)}", handle_archive_keyring,
         name="archive-keyring"
     )
-    from .lintian_fixes import register_lintian_fixes_endpoints
-    register_lintian_fixes_endpoints(app.router)
     SUITE_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,

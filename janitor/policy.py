@@ -104,7 +104,7 @@ def apply_policy(
     release_stages_passed: Set[str]
 ) -> Tuple[Dict[str, Tuple[str, Optional[int]]], Optional[str], Optional[str], Optional[str]]:
     publish_mode = {}
-    env = {}
+    env: Dict[str, str] = {}
     command = None
     qa_review = None
     broken_notify = policy_pb2.no_notification
