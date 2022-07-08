@@ -48,20 +48,13 @@ from lintian_brush.vcs import (
 
 
 async def update_package_metadata(
-    conn, distribution: str, provided_packages, package_overrides, origin
+    conn, distribution: str, provided_packages: List[PackageMetadata]
 ):
     logging.info("Updating package metadata.")
     packages = []
     for package in provided_packages:
-        try:
-            override = package_overrides[package.name]
-        except KeyError:
-            vcs_url = package.vcs_url
-        else:
-            vcs_url = override.branch_url or package.vcs_url or None
-
         vcs_last_revision = None
-
+        vcs_url = package.vcs_url
         if package.vcs_type and package.vcs_type.capitalize() == "Git":
             new_vcs_url = fixup_broken_git_url(vcs_url)
             if new_vcs_url != vcs_url:
@@ -113,7 +106,7 @@ async def update_package_metadata(
                 package.insts,
                 package.removed,
                 package.in_base,
-                origin
+                package.origin
             )
         )
     await conn.executemany(
@@ -165,7 +158,6 @@ def iter_packages_from_script(stdin) -> Tuple[Sequence[PackageMetadata], Sequenc
 async def main():
     import argparse
     import sys
-    from janitor.package_overrides import read_package_overrides
     from aiohttp_openmetrics import (
         Gauge,
         push_to_gateway,
@@ -187,12 +179,6 @@ async def main():
         help="Distribution to import metadata for.",
     )
 
-    parser.add_argument(
-        "--package-overrides",
-        type=str,
-        default=None,
-        help="Read package overrides.",
-    )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
@@ -211,12 +197,6 @@ async def main():
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    if args.package_overrides:
-        with open(args.package_overrides, "r") as f:
-            package_overrides = read_package_overrides(f)
-    else:
-        package_overrides = {}
-
     logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
 
@@ -224,10 +204,7 @@ async def main():
         logging.info(
             'Updating package data for %d packages',
             len(packages))
-        await update_package_metadata(
-            conn, args.distribution, packages, package_overrides,
-            args.package_overrides
-        )
+        await update_package_metadata(conn, args.distribution, packages)
         if removals:
             logging.info('Removing %d packages', len(removals))
             await mark_removed_packages(conn, args.distribution, removals)
