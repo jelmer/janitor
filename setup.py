@@ -55,6 +55,8 @@ setup(
         'debian': ['python_debian', 'debmutate', 'silver-platter[debian]', 'ognibuild[debian]'],
     },
     install_requires=[
+        "aiohttp",
+        "aiohttp_jinja2",
         "aiozipkin",
         "asyncpg",
         "klaus",
