@@ -1,4 +1,4 @@
-FROM debian:testing-slim
+FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 
 RUN apt -y update && apt -y upgrade && apt install --no-install-recommends -y \
