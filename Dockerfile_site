@@ -3,5 +3,5 @@ MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 8082
 # TODO: config
 # TODO: service discovery
-RUN apt update && apt -y install python3-ruamel.yaml python3-distro-info libjs-jquery-datatables libjs-chart.js libjs-jquery libjs-jquery-datatables libjs-moment python3-jinja2 python3-pygments libjs-jquery-typeahead
+RUN apt update && apt -y install python3-ruamel.yaml python3-distro-info libjs-jquery-datatables libjs-chart.js libjs-jquery libjs-jquery-datatables libjs-moment python3-jinja2 python3-pygments libjs-jquery-typeahead python3-aiohttp-jinja2
 ENTRYPOINT ["python3", "-m", "janitor.site.serve", "--port=8082", "--host=0.0.0.0"]
