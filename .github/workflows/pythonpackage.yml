@@ -40,9 +40,12 @@ jobs:
       run: |
         python -m pip install mypy types-PyYAML types-protobuf
         python -m mypy janitor
+    - name: Build
+      run: |
+        make all
     - name: Test suite run
       run: |
-        make test-it-all
+        make check
       env:
         PYTHONHASHSEED: random
     - name: Config compat test
