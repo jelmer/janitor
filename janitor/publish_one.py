@@ -62,6 +62,7 @@ from silver_platter.utils import create_temp_sprout
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches, NoSuchRevision
+from breezy.git.remote import RemoteGitBranch
 from breezy.transport import Transport
 from breezy.plugins.gitlab.forge import (
     ForkingDisabled,
