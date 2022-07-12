@@ -259,7 +259,8 @@ WHERE run.package = $1 AND run.suite = $2
             with span.new_child('vcs-diff'):
                 diff = await get_vcs_diff(
                     client, vcs_manager, run['vcs_type'], run['package'],
-                    base_revid.encode('utf-8'), revid.encode('utf-8'))
+                    base_revid.encode('utf-8') if base_revid is not None else None,
+                    revid.encode('utf-8') if revid is not None else None)
                 return diff.decode("utf-8", "replace")
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
