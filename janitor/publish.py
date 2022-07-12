@@ -2354,6 +2354,7 @@ async def check_existing(
     external_url: str,
     differ_url: str,
     modify_limit=None,
+    unexpected_limit=5,
 ):
     mps_per_maintainer: Dict[str, Dict[str, int]] = {
         "open": {},
@@ -2374,6 +2375,7 @@ async def check_existing(
         }
 
     modified_mps = 0
+    unexpected = 0
     check_only = False
     forge_ratelimited: Dict[Forge, int] = {}
 
@@ -2410,6 +2412,18 @@ async def check_existing(
                 mp.url, forge)
             forge_ratelimited[forge] = e.retry_after
             continue
+        except UnexpectedHttpStatus as e:
+            logging.warning(
+                'Got unexpected HTTP status %s, skipping %r',
+                e, mp.url)
+            # TODO(jelmer): print traceback?
+            unexpected += 1
+
+        if unexpected > unexpected_limit:
+            logging.warning(
+                "Saw %d unexpected HTTP responses, over threshold of %d. "
+                "Giving up for now.", unexpected, unexpected_limit)
+            return
 
         if modified:
             modified_mps += 1
