@@ -17,7 +17,7 @@
 
 __all__ = [
     "Config",
-    "Suite",
+    "Campaign",
     "read_config",
     "get_campaign_config",
 ]
@@ -28,7 +28,8 @@ from google.protobuf import text_format  # type: ignore
 
 from . import config_pb2
 
-from .config_pb2 import Config, Suite, Campaign, Distribution
+Config = config_pb2.Config
+Campaign = config_pb2.Campaign
 
 
 def read_config(f):
