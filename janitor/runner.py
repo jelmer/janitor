@@ -52,18 +52,18 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
 from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError, UnexpectedHttpStatus
-from breezy.propose import Hoster
 from breezy.transport import UnusableRedirect
 
 from silver_platter.debian import (
     select_preferred_probers,
 )
 from silver_platter.proposal import (
+    Forge,
     find_existing_proposed,
-    UnsupportedHoster,
-    HosterLoginRequired,
+    UnsupportedForge,
+    ForgeLoginRequired,
     NoSuchProject,
-    get_hoster,
+    get_forge,
 )
 from silver_platter.utils import (
     BranchRateLimited,
@@ -997,19 +997,19 @@ class PollingActiveRun(ActiveRun):
 
 def open_resume_branch(
         main_branch: Branch, campaign_name: str, package: str,
-        possible_hosters: Optional[List[Hoster]] = None) -> Optional[Branch]:
+        possible_forges: Optional[List[Forge]] = None) -> Optional[Branch]:
     try:
-        hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
-    except UnsupportedHoster as e:
+        forge = get_forge(main_branch, possible_forges=possible_forges)
+    except UnsupportedForge as e:
         # We can't figure out what branch to resume from when there's
-        # no hoster that can tell us.
-        logging.warning("Unsupported hoster (%s)", e)
+        # no forge that can tell us.
+        logging.warning("Unsupported forge (%s)", e)
         return None
-    except HosterLoginRequired as e:
-        logging.warning("No credentials for hoster (%s)", e)
+    except ForgeLoginRequired as e:
+        logging.warning("No credentials for forge (%s)", e)
         return None
     except ssl.SSLCertVerificationError as e:
-        logging.warning("SSL error probing for hoster(%s)", e)
+        logging.warning("SSL error probing for forge (%s)", e)
         return None
     except ConnectionError as e:
         logging.warning("Connection error opening resume branch (%s)", e)
@@ -1022,7 +1022,7 @@ def open_resume_branch(
                     unused_overwrite,
                     unused_existing_proposal,
                 ) = find_existing_proposed(
-                        main_branch, hoster, option,
+                        main_branch, forge, option,
                         preferred_schemes=['https', 'git', 'bzr'])
                 if resume_branch:
                     break
@@ -1717,7 +1717,7 @@ queue.id ASC
 
 async def next_item(request, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
     possible_transports = []
-    possible_hosters = []
+    possible_forges = []
 
     span = aiozipkin.request_span(request)
 
@@ -1822,7 +1822,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                             main_branch,
                             campaign_config.branch_name,
                             item.package,
-                            possible_hosters=possible_hosters)
+                            possible_forges=possible_forges)
                     except BranchRateLimited as e:
                         host = urlutils.URL.from_string(e.url).host
                         logging.warning('Rate limiting for %s: %r', host, e)

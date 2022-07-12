@@ -57,9 +57,11 @@ from breezy import urlutils
 import gpg
 
 from silver_platter.proposal import (
-    Hoster,
-    hosters,
-    iter_hoster_instances,
+    Forge,
+    forges,
+    ForgeLoginRequired,
+    UnsupportedForge,
+    iter_forge_instances,
 )
 from silver_platter.utils import (
     open_branch,
@@ -70,10 +72,8 @@ from silver_platter.utils import (
 )
 
 from breezy.errors import PermissionDenied, UnexpectedHttpStatus
-from breezy.propose import (
+from breezy.forge import (
     get_proposal_by_url,
-    HosterLoginRequired,
-    UnsupportedHoster,
     MergeProposal,
 )
 from breezy.transport import Transport
@@ -286,7 +286,7 @@ class PublishResult:
 
 async def publish_one(
     template_env_path: Optional[str],
-    suite: str,
+    campaign: str,
     pkg: str,
     command,
     subworker_result,
@@ -305,7 +305,7 @@ async def publish_one(
     differ_url: str,
     external_url: str,
     require_binary_diff: bool = False,
-    possible_hosters=None,
+    possible_forges=None,
     possible_transports: Optional[List[Transport]] = None,
     allow_create_proposal: bool = False,
     reviewers: Optional[List[str]] = None,
@@ -316,23 +316,23 @@ async def publish_one(
     """Publish a single run in some form.
 
     Args:
-      suite: The suite name
+      campaign: The campaign name
       pkg: Package name
       command: Command that was run
     """
     assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
-    local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (suite, role))
+    local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (campaign, role))
     if local_branch is None:
         raise PublishFailure(
             mode,
             "result-branch-not-found",
             "can not find local branch for %s / %s / %s (%s)"
-            % (pkg, suite, role, log_id),
+            % (pkg, campaign, role, log_id),
             )
 
     request = {
         "dry-run": dry_run,
-        "suite": suite,
+        "campaign": campaign,
         "package": pkg,
         "command": command,
         "subworker_result": subworker_result,
@@ -411,7 +411,7 @@ async def consider_publish_run(
         run, maintainer_email,
         uploader_emails, unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
-        possible_transports=None, possible_hosters=None, dry_run=False):
+        possible_transports=None, possible_forges=None, dry_run=False):
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id
@@ -481,7 +481,7 @@ async def consider_publish_run(
             publish_mode,
             max_frequency_days,
             command,
-            possible_hosters=possible_hosters,
+            possible_forges=possible_forges,
             possible_transports=possible_transports,
             dry_run=dry_run,
             external_url=external_url,
@@ -581,7 +581,7 @@ async def publish_pending_ready(
     require_binary_diff: bool = False,
 ):
     start = time.time()
-    possible_hosters: List[Hoster] = []
+    possible_forges: List[Forge] = []
     possible_transports: List[Transport] = []
     actions: Dict[str, int] = {}
 
@@ -618,7 +618,7 @@ async def publish_pending_ready(
                 unpublished_branches=unpublished_branches,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
-                possible_hosters=possible_hosters,
+                possible_forges=possible_forges,
                 possible_transports=possible_transports,
                 dry_run=dry_run)
             for role, actual_mode in actual_modes.items():
@@ -839,7 +839,7 @@ async def publish_from_policy(
     dry_run: bool,
     external_url: str,
     differ_url: str,
-    possible_hosters: Optional[List[Hoster]] = None,
+    possible_forges: Optional[List[Forge]] = None,
     possible_transports: Optional[List[Transport]] = None,
     require_binary_diff: bool = False,
     force: bool = False,
@@ -953,7 +953,7 @@ async def publish_from_policy(
             external_url=external_url,
             differ_url=differ_url,
             require_binary_diff=require_binary_diff,
-            possible_hosters=possible_hosters,
+            possible_forges=possible_forges,
             possible_transports=possible_transports,
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
@@ -1099,7 +1099,7 @@ async def publish_and_store(
                 external_url=external_url,
                 differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
-                possible_hosters=None,
+                possible_forges=None,
                 possible_transports=None,
                 allow_create_proposal=allow_create_proposal,
                 topic_merge_proposal=topic_merge_proposal,
@@ -1429,27 +1429,27 @@ async def credentials_request(request):
     for entry in list(request.app['gpg'].keylist(secret=True)):
         pgp_keys.append(request.app['gpg'].key_export_minimal(entry.fpr).decode())
     hosting = []
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
+    for name, forge_cls in forges.items():
+        for instance in forge_cls.iter_instances():
             try:
                 current_user = instance.get_current_user()
-            except HosterLoginRequired:
+            except ForgeLoginRequired:
                 continue
-            except UnsupportedHoster:
+            except UnsupportedForge:
                 # WTF? Well, whatever.
                 continue
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
                 current_user_url = None
-            hoster = {
+            forge = {
                 "kind": name,
                 "name": instance.name,
                 "url": instance.base_url,
                 "user": current_user,
                 "user_url": current_user_url,
             }
-            hosting.append(hoster)
+            hosting.append(forge)
 
     return web.json_response(
         {
@@ -1540,7 +1540,7 @@ async def check_mp_request(request):
     url = post["url"]
     try:
         mp = await to_thread(get_proposal_by_url, url)
-    except UnsupportedHoster:
+    except UnsupportedForge:
         raise web.HTTPNotFound()
     status = await get_mp_status(mp)
     async with request.app['db'].acquire() as conn:
@@ -2351,16 +2351,16 @@ applied independently.
 
 def iter_all_mps(
     statuses: Optional[List[str]] = None,
-) -> Iterator[Tuple[Hoster, MergeProposal, str]]:
+) -> Iterator[Tuple[Forge, MergeProposal, str]]:
     """iterate over all existing merge proposals."""
     if statuses is None:
         statuses = ["open", "merged", "closed"]
-    for instance in iter_hoster_instances():
+    for instance in iter_forge_instances():
         for status in statuses:
             try:
                 for mp in instance.iter_my_proposals(status=status):
                     yield instance, mp, status
-            except HosterLoginRequired:
+            except ForgeLoginRequired:
                 logging.info(
                     'Skipping %r, no credentials known.',
                     instance)
@@ -2368,7 +2368,7 @@ def iter_all_mps(
                 logging.warning(
                     'Got unexpected HTTP status %s, skipping %r',
                     e, instance)
-            except UnsupportedHoster as e:
+            except UnsupportedForge as e:
                 logging.warning(
                     'Unsupported host instance, skipping %r: %s',
                     instance, e)
@@ -2406,11 +2406,11 @@ async def check_existing(
 
     modified_mps = 0
     check_only = False
-    hoster_ratelimited: Dict[Hoster, int] = {}
+    forge_ratelimited: Dict[Forge, int] = {}
 
-    for hoster, mp, status in iter_all_mps():
+    for forge, mp, status in iter_all_mps():
         status_count[status] += 1
-        if hoster in hoster_ratelimited:
+        if forge in forge_ratelimited:
             continue
         try:
             modified = await check_existing_mp(
@@ -2432,14 +2432,14 @@ async def check_existing(
         except NoRunForMergeProposal as e:
             logger.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
             modified = False
-        except HosterLoginRequired as e:
-            logger.warning('Login required for hoster %s, skipping.', e)
+        except ForgeLoginRequired as e:
+            logger.warning('Login required for forge %s, skipping.', e)
             modified = False
         except BranchRateLimited as e:
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
-                mp.url, hoster)
-            hoster_ratelimited[hoster] = e.retry_after
+                mp.url, forge)
+            forge_ratelimited[forge] = e.retry_after
             continue
 
         if modified:
@@ -2451,8 +2451,8 @@ async def check_existing(
                 )
                 check_only = True
 
-    if hoster_ratelimited:
-        logging.info('Rate-Limited for hosters %r. Not updating stats', hoster_ratelimited)
+    if forge_ratelimited:
+        logging.info('Rate-Limited for forges %r. Not updating stats', forge_ratelimited)
         return
 
     for status, count in status_count.items():
