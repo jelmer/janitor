@@ -27,9 +27,6 @@ message Distribution {
 }
 
 message Config {
-  // Location at which to store VCS repositories.
-  optional string vcs_location = 1 [deprecated=true];
-
   // Location to store logs. Can either be a filesystem path or a http
   // location, for use with GCS or S3.
   optional string logs_location = 2;

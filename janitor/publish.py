@@ -2686,7 +2686,7 @@ async def main(argv=None):
     topic_merge_proposal = Topic("merge-proposal")
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
-    vcs_manager = get_vcs_manager(args.vcs_path or config.vcs_location)
+    vcs_manager = get_vcs_manager(args.vcs_path)
     db = await state.create_pool(config.database_location)
     if args.once:
         await publish_pending_ready(
