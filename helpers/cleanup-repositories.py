@@ -13,8 +13,8 @@ import breezy.plugins
 import breezy.bzr
 import breezy.git  # noqa: F401
 
-from breezy.propose import (
-    hosters,
+from breezy.forge import (
+    forges,
 )
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.github  # noqa: F401
@@ -39,8 +39,8 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Dry run.")
     args = parser.parse_args()
 
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
+    for name, forge_cls in forges.items():
+        for instance in forge_cls.iter_instances():
             for project in projects_to_remove(instance):
                 print("Deleting %s from %r" % (project, instance))
                 if not args.dry_run:

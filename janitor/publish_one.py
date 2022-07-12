@@ -43,28 +43,26 @@ from silver_platter.utils import (
 from silver_platter.publish import (
     EmptyMergeProposal,
     MergeProposal,
-    get_hoster,
+    get_forge,
     merge_conflicts,
     find_existing_proposed,
-    Hoster,
+    Forge,
     NoSuchProject,
     PermissionDenied,
-    UnsupportedHoster,
+    UnsupportedForge,
     SourceNotDerivedFromTarget,
     publish_changes,
     InsufficientChangesForNewProposal,
+    MergeProposalExists,
+    ForgeLoginRequired,
 )
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches, NoSuchRevision
-from breezy.plugins.gitlab.hoster import (
+from breezy.plugins.gitlab.forge import (
     ForkingDisabled,
     GitLabConflict,
     ProjectCreationTimeout,
-)
-from breezy.propose import (
-    MergeProposalExists,
-    HosterLoginRequired,
 )
 
 from jinja2 import (
@@ -122,13 +120,13 @@ class DebdiffRetrievalError(Exception):
 
 def publish(
     template_env,
-    suite: str,
+    campaign: str,
     pkg: str,
     commit_message_template: Optional[str],
     subworker_result: Any,
     mode: str,
     role: str,
-    hoster: Hoster,
+    forge: Forge,
     main_branch: Branch,
     local_branch: Branch,
     external_url: str,
@@ -148,7 +146,8 @@ def publish(
         vs = {
             'package': pkg,
             'log_id': log_id,
-            'suite': suite,
+            'campaign': campaign,
+            'suite': campaign,   # TODO(jelmer): Backwards compatibility
             'external_url': external_url,
             'debdiff_is_empty': debdiff_is_empty,
             'markdownify_debdiff': markdownify_debdiff,
@@ -159,9 +158,9 @@ def publish(
         if debdiff:
             vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
-            template = template_env.get_template(suite + '.md')
+            template = template_env.get_template(campaign + '.md')
         else:
-            template = template_env.get_template(suite + '.txt')
+            template = template_env.get_template(campaign + '.txt')
         return template.render(vs)
 
     def get_proposal_commit_message(existing_proposal):
@@ -182,8 +181,8 @@ def publish(
 
     labels: Optional[List[str]]
 
-    if hoster and hoster.supports_merge_proposal_labels:
-        labels = [suite]
+    if forge and forge.supports_merge_proposal_labels:
+        labels = [campaign]
     else:
         labels = None
     try:
@@ -196,7 +195,7 @@ def publish(
             get_proposal_description=get_proposal_description,
             get_proposal_commit_message=(get_proposal_commit_message),
             dry_run=dry_run,
-            hoster=hoster,
+            forge=forge,
             allow_create_proposal=allow_create_proposal,
             overwrite_existing=True,
             derived_owner=derived_owner,
@@ -212,9 +211,9 @@ def publish(
             description="Upstream branch has diverged from local changes.",
             code="diverged-branches",
         )
-    except UnsupportedHoster:
+    except UnsupportedForge:
         raise PublishFailure(
-            description="Hoster unsupported: %s." % (main_branch.repository.user_url),
+            description="Forge unsupported: %s." % (main_branch.repository.user_url),
             code="hoster-unsupported",
         )
     except NoSuchProject as e:
@@ -305,8 +304,8 @@ def _drop_env(args):
 
 def publish_one(
     template_env,
-    suite,
-    pkg,
+    campaign: str,
+    pkg: str,
     command,
     subworker_result,
     main_branch_url,
@@ -322,7 +321,7 @@ def publish_one(
     dry_run=False,
     require_binary_diff=False,
     derived_owner=None,
-    possible_hosters=None,
+    possible_forges=None,
     possible_transports=None,
     allow_create_proposal=None,
     reviewers=None,
@@ -355,50 +354,50 @@ def publish_one(
 
     try:
         if mode == MODE_BTS:
-            from breezy.plugins.debian.bts import DebianBtsHoster
+            from breezy.plugins.debian.bts import DebianBtsForge
 
-            hoster = DebianBtsHoster()
+            forge = DebianBtsForge()
             mode = MODE_PROPOSE
         else:
-            hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
-    except UnsupportedHoster as e:
+            forge = get_forge(main_branch, possible_forges=possible_forges)
+    except UnsupportedForge as e:
         if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
             netloc = urllib.parse.urlparse(main_branch.user_url).netloc
             raise PublishFailure(
-                description="Hoster unsupported: %s." % netloc,
+                description="Forge unsupported: %s." % netloc,
                 code="hoster-unsupported",
             )
-        # We can't figure out what branch to resume from when there's no hoster
+        # We can't figure out what branch to resume from when there's no forge
         # that can tell us.
         resume_branch = None
         existing_proposal = None
         if mode == MODE_PUSH:
             logging.warning(
-                "Unsupported hoster (%s), will attempt to push to %s",
+                "Unsupported forge (%s), will attempt to push to %s",
                 e,
                 full_branch_url(main_branch),
             )
-        hoster = None
-    except HosterLoginRequired as e:
+        forge = None
+    except ForgeLoginRequired as e:
         if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
             netloc = urllib.parse.urlparse(main_branch.user_url).netloc
             raise PublishFailure(
-                description="Hoster %s supported but not login known." % netloc,
+                description="Forge %s supported but not login known." % netloc,
                 code="hoster-no-login")
-        # We can't figure out what branch to resume from when there's no hoster
+        # We can't figure out what branch to resume from when there's no forge
         # that can tell us.
         resume_branch = None
         existing_proposal = None
         if mode == MODE_PUSH:
             logging.warning(
-                "No login for hoster (%s), will attempt to push to %s",
+                "No login for forge (%s), will attempt to push to %s",
                 e, full_branch_url(main_branch),
             )
-        hoster = None
+        forge = None
     else:
         try:
             (resume_branch, overwrite, existing_proposal) = find_existing_proposed(
-                main_branch, hoster, derived_branch_name, owner=derived_owner
+                main_branch, forge, derived_branch_name, owner=derived_owner
             )
         except NoSuchProject as e:
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
@@ -408,9 +407,9 @@ def publish_one(
                 )
             resume_branch = None
             existing_proposal = None
-        except HosterLoginRequired:
+        except ForgeLoginRequired:
             raise PublishFailure(
-                description="Hoster %s supported but not login known." % hoster,
+                description="Forge %s supported but not login known." % forge,
                 code="hoster-no-login")
         except PermissionDenied as e:
             raise PublishFailure(
@@ -456,13 +455,13 @@ def publish_one(
     try:
         publish_result = publish(
             template_env,
-            suite,
+            campaign,
             pkg,
             commit_message_template,
             subworker_result,
             mode,
             role,
-            hoster,
+            forge,
             main_branch,
             local_branch,
             external_url,
@@ -521,7 +520,7 @@ if __name__ == "__main__":
     try:
         publish_result, branch_name = publish_one(
             template_env,
-            suite=request["suite"],
+            campaign=request["campaign"],
             pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],
             command=request["command"],
@@ -536,7 +535,7 @@ if __name__ == "__main__":
             dry_run=request["dry-run"],
             derived_owner=request.get("derived-owner"),
             require_binary_diff=request["require-binary-diff"],
-            possible_hosters=None,
+            possible_forges=None,
             possible_transports=None,
             allow_create_proposal=request["allow_create_proposal"],
             differ_url=request["differ_url"],
