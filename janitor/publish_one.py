@@ -328,7 +328,7 @@ def publish_one(
     derived_owner: Optional[str] = None,
     possible_forges: Optional[List[Forge]] = None,
     possible_transports: Optional[List[Transport]] = None,
-    allow_create_proposal: bool = None,
+    allow_create_proposal: bool = False,
     reviewers: Optional[List[str]] = None,
     result_tags: Optional[Dict[str, bytes]] = None,
     commit_message_template: Optional[str] = None,
@@ -501,7 +501,7 @@ def publish_one(
                 description="merge would conflict (upstream changes?)",
             )
 
-        return publish_result, derived_branch_name
+    return publish_result, derived_branch_name
 
 
 if __name__ == "__main__":
