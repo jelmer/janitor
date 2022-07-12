@@ -46,6 +46,13 @@ async def store_candidates(
         conn: asyncpg.Connection,
         entries: List[Tuple[str, str, Optional[str], Optional[str], Optional[int],
                             Optional[float]]]):
+    """Store candidates.
+
+    Args:
+      conn: Database connection
+      entries: List of tuples with
+        (package, campaign, change_set, conext, value, success_chance)
+    """
     await conn.executemany(
         "INSERT INTO candidate "
         "(package, suite, change_set, context, value, success_chance) "
