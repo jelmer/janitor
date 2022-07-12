@@ -32,9 +32,11 @@ from aiohttp_openmetrics import metrics_middleware, metrics
 from http.client import parse_headers  # type: ignore
 
 from breezy import urlutils
+from breezy.branch import Branch
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium
+from breezy.repository import Repository
 from breezy.transport import get_transport_from_url
 from dulwich.objects import valid_hexsha
 from dulwich.web import HTTPGitApplication
@@ -50,10 +52,6 @@ from . import (
 from .compat import to_thread
 from .config import read_config, get_campaign_config
 from .site import is_worker, iter_accept, env as site_env
-from .vcs import (
-    VcsManager,
-    LocalVcsManager,
-)
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
@@ -103,7 +101,7 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = request.app.vcs_manager.get_repository(package)
+        repo = Repository.open(os.path.join(request.app.vcs_location, "bzr", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -122,7 +120,7 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = request.app.vcs_manager.get_repository(package)
+        repo = Repository.open(os.path.join(request.app.vcs_location, "bzr", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -150,7 +148,7 @@ async def git_diff_request(request):
         new_sha = new_sha.encode('utf-8')
     path = request.query.get('path')
     try:
-        repo = request.app.vcs_manager.get_repository(package)
+        repo = Repository.open(os.path.join(request.app.vcs_location, "git", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -172,7 +170,7 @@ async def git_revision_info_request(request):
     if new_sha is not None:
         new_sha = new_sha.encode('utf-8')
     try:
-        repo = request.app.vcs_manager.get_repository(package)
+        repo = Repository.open(os.path.join(request.app.vcs_location, "git", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -242,11 +240,13 @@ WHERE id = $1 AND new_result_branch.role = $2
 """, run_id, role)
             if not row:
                 raise web.HTTPNotFound(text="No such run: %r" % run_id)
-    try:
-        repo = request.app.vcs_manager.get_repository(row['package'])
-    except NotBranchError:
-        repo = None
-    if repo is None:
+    for vcs in ['bzr', 'git']:
+        path = os.path.join(request.app.vcs_location, vcs, row['package'])
+        if not os.path.exists(path):
+            continue
+        repo = Repository.open(path)
+        break
+    else:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             row['package'])
@@ -269,17 +269,15 @@ WHERE id = $1 AND new_result_branch.role = $2
             return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
 
-async def _git_open_repo(vcs_manager, db, package):
-    repo = vcs_manager.get_repository(package, "git")
+async def _git_open_repo(vcs_location, db, package):
+    repo_path = os.path.join(vcs_location, "git", package)
+    repo = Repository.open(repo_path)
 
     if repo is None:
         async with db.acquire() as conn:
             if not await package_exists(conn, package):
                 raise web.HTTPNotFound(text='no such package: %s' % package)
-        controldir = ControlDir.create(
-            vcs_manager.get_repository_url(package, "git"),
-            format=format_registry.get("git-bare")(),
-        )
+        controldir = ControlDir.create(repo_path, format=format_registry.get("git-bare")())
         logging.info(
             "Created missing git repository for %s at %s", package, controldir.user_url
         )
@@ -308,7 +306,7 @@ async def handle_klaus(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
 
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
@@ -379,7 +377,7 @@ async def handle_set_git_remote(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
 
     post = await request.post()
     r = repo._git
@@ -401,8 +399,10 @@ async def handle_set_bzr_remote(request):
     remote = request.match_info["remote"]
     post = await request.post()
 
-    local_branch = request.app.vcs_manager.get_branch(package, remote)
-
+    try:
+        local_branch = Branch.open(os.path.join(request.app.vcs_location, "bzr", package, remote))
+    except NotBranchError:
+        raise web.HTTPNotFound()
     local_branch.set_parent(post["url"])
 
     # TODO(jelmer): Run 'bzr pull'?
@@ -423,7 +423,7 @@ async def cgit_backend(request):
         _git_check_service(service, allow_writes)
 
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
 
     args = ["/usr/bin/git"]
     if allow_writes:
@@ -539,7 +539,7 @@ async def dulwich_refs(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
     r = repo._git
 
     service = request.query.get("service")
@@ -585,7 +585,7 @@ async def dulwich_service(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
 
     _git_check_service(service, allow_writes)
 
@@ -622,24 +622,23 @@ async def package_exists(conn, package):
     return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
 
 
-async def _bzr_open_repo(vcs_manager, db, package):
+async def _bzr_open_repo(vcs_location, db, package):
     async with db.acquire() as conn:
         if not await package_exists(conn, package):
             raise web.HTTPNotFound(text='no such package: %s' % package)
-    repo = vcs_manager.get_repository(package, "bzr")
-    if repo is None:
-        controldir = ControlDir.create(
-            vcs_manager.get_repository_url(package, "bzr")
-        )
+    repo_path = os.path.join(vcs_location, "bzr", package)
+    try:
+        repo = Repository.open(repo_path)
+    except NotBranchError:
+        controldir = ControlDir.create(repo_path)
         repo = controldir.create_repository(shared=True)
     return repo
 
 
 async def bzr_backend(request):
-    vcs_manager = request.app.vcs_manager
     package = request.match_info["package"]
     branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(vcs_manager, request.app.db, package)
+    repo = await _bzr_open_repo(request.app.vcs_location, request.app.db, package)
     if branch_name:
         try:
             get_campaign_config(request.app.config, branch_name)
@@ -692,7 +691,8 @@ async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
-        names = list(request.app.vcs_manager.list_repositories(vcs))
+        names = [entry.name
+                 for entry in os.scandir(os.path.join(request.app.vcs_location, vcs))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -719,7 +719,7 @@ async def handle_index(request):
 async def create_web_app(
     listen_addr: str,
     port: int,
-    vcs_manager: VcsManager,
+    local_path,
     db: asyncpg.pool.Pool,
     config,
     dulwich_server: bool = False,
@@ -729,14 +729,14 @@ async def create_web_app(
     app = web.Application(
         middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
-    app.vcs_manager = vcs_manager
+    app.local_path = local_path
     app.db = db
     app.allow_writes = True
     app.config = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
-    public_app.vcs_manager = vcs_manager
+    public_app.local_path = local_path
     public_app.db = db
     public_app.allow_writes = None
     public_app.config = config
@@ -857,12 +857,11 @@ async def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
 
-    vcs_manager = LocalVcsManager(args.vcs_path)
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
         args.listen_address,
         args.port,
-        vcs_manager,
+        args.vcs_path,
         db,
         config,
         dulwich_server=args.dulwich_server,
