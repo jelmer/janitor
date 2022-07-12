@@ -51,4 +51,4 @@ jobs:
     - name: Config compat test
       run: |
         git clone https://salsa.debian.org/jelmer/janitor.debian.net/ janitor.debian.net
-        PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+        PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
