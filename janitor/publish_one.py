@@ -22,8 +22,9 @@ to be published, this module gets invoked. It accepts some JSON on stdin with a
 request, and writes results to standard out as JSON.
 """
 
+from contextlib import ExitStack
 import os
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Tuple
 
 import logging
 
@@ -55,10 +56,13 @@ from silver_platter.publish import (
     InsufficientChangesForNewProposal,
     MergeProposalExists,
     ForgeLoginRequired,
+    PublishResult,
 )
+from silver_platter.utils import create_temp_sprout
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches, NoSuchRevision
+from breezy.transport import Transport
 from breezy.plugins.gitlab.forge import (
     ForkingDisabled,
     GitLabConflict,
@@ -108,9 +112,9 @@ class PublishNothingToDo(Exception):
 
 
 class MergeConflict(Exception):
-    def __init__(self, main_branch, local_branch):
-        self.main_branch = main_branch
-        self.local_branch = local_branch
+    def __init__(self, target_branch, source_branch):
+        self.target_branch = target_branch
+        self.source_branch = source_branch
 
 
 class DebdiffRetrievalError(Exception):
@@ -127,8 +131,8 @@ def publish(
     mode: str,
     role: str,
     forge: Forge,
-    main_branch: Branch,
-    local_branch: Branch,
+    target_branch: Branch,
+    source_branch: Branch,
     external_url: str,
     derived_branch_name: str,
     resume_branch: Optional[Branch] = None,
@@ -170,10 +174,10 @@ def publish(
         else:
             return None
 
-    with main_branch.lock_read(), local_branch.lock_read():
+    with target_branch.lock_read(), source_branch.lock_read():
         try:
-            if merge_conflicts(main_branch, local_branch, stop_revision):
-                raise MergeConflict(main_branch, local_branch)
+            if merge_conflicts(target_branch, source_branch, stop_revision):
+                raise MergeConflict(target_branch, source_branch)
         except NoSuchRevision as e:
             raise PublishFailure(
                 description="Revision missing: %s" % e.revision,  # type: ignore
@@ -187,8 +191,8 @@ def publish(
         labels = None
     try:
         return publish_changes(
-            local_branch,
-            main_branch,
+            source_branch,
+            target_branch,
             resume_branch,
             mode,
             derived_branch_name,
@@ -213,7 +217,7 @@ def publish(
         )
     except UnsupportedForge:
         raise PublishFailure(
-            description="Forge unsupported: %s." % (main_branch.repository.user_url),
+            description="Forge unsupported: %s." % (target_branch.repository.user_url),
             code="hoster-unsupported",
         )
     except NoSuchProject as e:
@@ -222,7 +226,7 @@ def publish(
         )
     except ForkingDisabled:
         raise PublishFailure(
-            description="Forking disabled: %s" % (main_branch.repository.user_url),
+            description="Forking disabled: %s" % (target_branch.repository.user_url),
             code="forking-disabled",
         )
     except PermissionDenied as e:
@@ -308,189 +312,195 @@ def publish_one(
     pkg: str,
     command,
     subworker_result,
-    main_branch_url,
-    mode,
-    role,
+    target_branch_url: str,
+    mode: str,
+    role: str,
     revision: bytes,
-    log_id,
-    unchanged_id,
-    local_branch_url,
+    log_id: str,
+    unchanged_id: str,
+    source_branch_url: str,
     differ_url: str,
     external_url: str,
     derived_branch_name: str,
-    dry_run=False,
-    require_binary_diff=False,
-    derived_owner=None,
-    possible_forges=None,
-    possible_transports=None,
-    allow_create_proposal=None,
-    reviewers=None,
-    result_tags=None,
-    commit_message_template=None,
-):
+    dry_run: bool = False,
+    require_binary_diff: bool = False,
+    derived_owner: Optional[str] = None,
+    possible_forges: Optional[List[Forge]] = None,
+    possible_transports: Optional[List[Transport]] = None,
+    allow_create_proposal: bool = None,
+    reviewers: Optional[List[str]] = None,
+    result_tags: Optional[Dict[str, bytes]] = None,
+    commit_message_template: Optional[str] = None,
+) -> Tuple[PublishResult, str]:
 
     args = shlex.split(command)
     _drop_env(args)
 
-    try:
-        local_branch = open_branch(
-            local_branch_url, possible_transports=possible_transports
-        )
-    except BranchUnavailable as e:
-        raise PublishFailure("local-branch-unavailable", str(e))
-    except BranchMissing as e:
-        raise PublishFailure("local-branch-missing", str(e))
-
-    try:
-        main_branch = open_branch(
-            main_branch_url, possible_transports=possible_transports
-        )
-    except BranchRateLimited as e:
-        raise PublishFailure('branch-rate-limited', str(e))
-    except BranchUnavailable as e:
-        raise PublishFailure("branch-unavailable", str(e))
-    except BranchMissing as e:
-        raise PublishFailure("branch-missing", str(e))
-
-    try:
-        if mode == MODE_BTS:
-            from breezy.plugins.debian.bts import DebianBtsForge
-
-            forge = DebianBtsForge()
-            mode = MODE_PROPOSE
-        else:
-            forge = get_forge(main_branch, possible_forges=possible_forges)
-    except UnsupportedForge as e:
-        if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
-            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
-            raise PublishFailure(
-                description="Forge unsupported: %s." % netloc,
-                code="hoster-unsupported",
-            )
-        # We can't figure out what branch to resume from when there's no forge
-        # that can tell us.
-        resume_branch = None
-        existing_proposal = None
-        if mode == MODE_PUSH:
-            logging.warning(
-                "Unsupported forge (%s), will attempt to push to %s",
-                e,
-                full_branch_url(main_branch),
-            )
-        forge = None
-    except ForgeLoginRequired as e:
-        if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
-            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
-            raise PublishFailure(
-                description="Forge %s supported but not login known." % netloc,
-                code="hoster-no-login")
-        # We can't figure out what branch to resume from when there's no forge
-        # that can tell us.
-        resume_branch = None
-        existing_proposal = None
-        if mode == MODE_PUSH:
-            logging.warning(
-                "No login for forge (%s), will attempt to push to %s",
-                e, full_branch_url(main_branch),
-            )
-        forge = None
-    else:
+    with ExitStack() as es:
         try:
-            (resume_branch, overwrite, existing_proposal) = find_existing_proposed(
-                main_branch, forge, derived_branch_name, owner=derived_owner
+            source_branch = open_branch(
+                source_branch_url, possible_transports=possible_transports
             )
-        except NoSuchProject as e:
+        except BranchUnavailable as e:
+            raise PublishFailure("local-branch-unavailable", str(e))
+        except BranchMissing as e:
+            raise PublishFailure("local-branch-missing", str(e))
+
+        if isinstance(source_branch, RemoteGitBranch):
+            local_tree, destroy = create_temp_sprout(source_branch)
+            es.callback(destroy)
+            source_branch = local_tree.branch
+
+        try:
+            target_branch = open_branch(
+                target_branch_url, possible_transports=possible_transports
+            )
+        except BranchRateLimited as e:
+            raise PublishFailure('branch-rate-limited', str(e))
+        except BranchUnavailable as e:
+            raise PublishFailure("branch-unavailable", str(e))
+        except BranchMissing as e:
+            raise PublishFailure("branch-missing", str(e))
+
+        try:
+            if mode == MODE_BTS:
+                from breezy.plugins.debian.bts import DebianBtsForge
+
+                forge = DebianBtsForge()
+                mode = MODE_PROPOSE
+            else:
+                forge = get_forge(target_branch, possible_forges=possible_forges)
+        except UnsupportedForge as e:
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
+                netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
-                    description="Project %s not found." % e.project,
-                    code="project-not-found",
+                    description="Forge unsupported: %s." % netloc,
+                    code="hoster-unsupported",
                 )
+            # We can't figure out what branch to resume from when there's no forge
+            # that can tell us.
             resume_branch = None
             existing_proposal = None
-        except ForgeLoginRequired:
+            if mode == MODE_PUSH:
+                logging.warning(
+                    "Unsupported forge (%s), will attempt to push to %s",
+                    e,
+                    full_branch_url(target_branch),
+                )
+            forge = None
+        except ForgeLoginRequired as e:
+            if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
+                netloc = urllib.parse.urlparse(target_branch.user_url).netloc
+                raise PublishFailure(
+                    description="Forge %s supported but not login known." % netloc,
+                    code="hoster-no-login")
+            # We can't figure out what branch to resume from when there's no forge
+            # that can tell us.
+            resume_branch = None
+            existing_proposal = None
+            if mode == MODE_PUSH:
+                logging.warning(
+                    "No login for forge (%s), will attempt to push to %s",
+                    e, full_branch_url(target_branch),
+                )
+            forge = None
+        else:
+            try:
+                (resume_branch, overwrite, existing_proposal) = find_existing_proposed(
+                    target_branch, forge, derived_branch_name, owner=derived_owner
+                )
+            except NoSuchProject as e:
+                if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
+                    raise PublishFailure(
+                        description="Project %s not found." % e.project,
+                        code="project-not-found",
+                    )
+                resume_branch = None
+                existing_proposal = None
+            except ForgeLoginRequired:
+                raise PublishFailure(
+                    description="Forge %s supported but not login known." % forge,
+                    code="hoster-no-login")
+            except PermissionDenied as e:
+                raise PublishFailure(
+                    description=(
+                        "Permission denied while finding existing proposal: %s" % e.extra
+                    ),
+                    code="permission-denied",
+                )
+
+        debdiff: Optional[bytes]
+        try:
+            debdiff = get_debdiff(differ_url, unchanged_id, log_id)
+        except DebdiffRetrievalError as e:
             raise PublishFailure(
-                description="Forge %s supported but not login known." % forge,
-                code="hoster-no-login")
-        except PermissionDenied as e:
+                description="Error from differ for build diff: %s" % e.reason,
+                code="differ-error",
+            )
+        except DifferUnavailable as e:
             raise PublishFailure(
+                description="Unable to contact differ for build diff: %s" % e.reason,
+                code="differ-unreachable",
+            )
+        except DebdiffMissingRun as e:
+            if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
+                if e.missing_run_id == log_id:
+                    raise PublishFailure(
+                        description=(
+                            "Build diff is not available. "
+                            "Run (%s) not yet published?" % log_id
+                        ),
+                        code="missing-build-diff-self",
+                    )
+                else:
+                    raise PublishFailure(
+                        description=(
+                            "Binary debdiff is not available. "
+                            "Control run (%s) not published?" % e.missing_run_id
+                        ),
+                        code="missing-build-diff-control",
+                    )
+            debdiff = None
+
+        try:
+            publish_result = publish(
+                template_env,
+                campaign,
+                pkg,
+                commit_message_template,
+                subworker_result,
+                mode,
+                role,
+                forge,
+                target_branch,
+                source_branch,
+                external_url,
+                derived_branch_name,
+                resume_branch,
+                dry_run=dry_run,
+                log_id=log_id,
+                existing_proposal=existing_proposal,
+                allow_create_proposal=allow_create_proposal,
+                debdiff=debdiff,
+                derived_owner=derived_owner,
+                reviewers=reviewers,
+                result_tags=result_tags,
+                stop_revision=revision,
+            )
+        except EmptyMergeProposal:
+            raise PublishFailure(
+                code="empty-merge-proposal",
                 description=(
-                    "Permission denied while finding existing proposal: %s" % e.extra
+                    "No changes to propose; " "changes made independently upstream?"
                 ),
-                code="permission-denied",
+            )
+        except MergeConflict:
+            raise PublishFailure(
+                code="merge-conflict",
+                description="merge would conflict (upstream changes?)",
             )
 
-    debdiff: Optional[bytes]
-    try:
-        debdiff = get_debdiff(differ_url, unchanged_id, log_id)
-    except DebdiffRetrievalError as e:
-        raise PublishFailure(
-            description="Error from differ for build diff: %s" % e.reason,
-            code="differ-error",
-        )
-    except DifferUnavailable as e:
-        raise PublishFailure(
-            description="Unable to contact differ for build diff: %s" % e.reason,
-            code="differ-unreachable",
-        )
-    except DebdiffMissingRun as e:
-        if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
-            if e.missing_run_id == log_id:
-                raise PublishFailure(
-                    description=(
-                        "Build diff is not available. "
-                        "Run (%s) not yet published?" % log_id
-                    ),
-                    code="missing-build-diff-self",
-                )
-            else:
-                raise PublishFailure(
-                    description=(
-                        "Binary debdiff is not available. "
-                        "Control run (%s) not published?" % e.missing_run_id
-                    ),
-                    code="missing-build-diff-control",
-                )
-        debdiff = None
-
-    try:
-        publish_result = publish(
-            template_env,
-            campaign,
-            pkg,
-            commit_message_template,
-            subworker_result,
-            mode,
-            role,
-            forge,
-            main_branch,
-            local_branch,
-            external_url,
-            derived_branch_name,
-            resume_branch,
-            dry_run=dry_run,
-            log_id=log_id,
-            existing_proposal=existing_proposal,
-            allow_create_proposal=allow_create_proposal,
-            debdiff=debdiff,
-            derived_owner=derived_owner,
-            reviewers=reviewers,
-            result_tags=result_tags,
-            stop_revision=revision,
-        )
-    except EmptyMergeProposal:
-        raise PublishFailure(
-            code="empty-merge-proposal",
-            description=(
-                "No changes to propose; " "changes made independently upstream?"
-            ),
-        )
-    except MergeConflict:
-        raise PublishFailure(
-            code="merge-conflict",
-            description="merge would conflict (upstream changes?)",
-        )
-
-    return publish_result, derived_branch_name
+        return publish_result, derived_branch_name
 
 
 if __name__ == "__main__":
@@ -516,7 +526,6 @@ if __name__ == "__main__":
         autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
     )
 
-
     try:
         publish_result, branch_name = publish_one(
             template_env,
@@ -525,13 +534,13 @@ if __name__ == "__main__":
             derived_branch_name=request["derived_branch_name"],
             command=request["command"],
             subworker_result=request["subworker_result"],
-            main_branch_url=request["main_branch_url"],
+            target_branch_url=request["target_branch_url"],
             mode=request["mode"],
             role=request["role"],
             log_id=request["log_id"],
             unchanged_id=request["unchanged_id"],
             external_url=request["external_url"].rstrip("/"),
-            local_branch_url=request["local_branch_url"],
+            source_branch_url=request["source_branch_url"],
             dry_run=request["dry-run"],
             derived_owner=request.get("derived-owner"),
             require_binary_diff=request["require-binary-diff"],
