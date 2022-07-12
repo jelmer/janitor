@@ -78,7 +78,7 @@ async def schedule_new_package(conn, upstream_info, policy, change_set=None, req
         'dummy@example.com', origin, vcs_url)
     await store_candidates(
         conn,
-        [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
+        [(package, 'debianize', change_set, None, DEFAULT_NEW_PACKAGE_PRIORITY,
           DEFAULT_SUCCESS_CHANCE)])
     await sync_policy(conn, policy, selected_package=package)
     policy = await conn.fetchrow(
