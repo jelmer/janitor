@@ -1,7 +1,7 @@
 FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 
-RUN apt -y update && apt -y upgrade && apt install --no-install-recommends -y \
+RUN apt -y update && apt -y upgrade && apt satisfy --no-install-recommends -y \
 	python3 \
 	python3-fastbencode \
 	git \
@@ -15,7 +15,7 @@ RUN apt -y update && apt -y upgrade && apt install --no-install-recommends -y \
 	python3-aiohttp \
 	python3-configobj \
 	python3-jinja2 \
-	python3-debian \
+	"python3-debian (>= 0.1.45)" \
 	python3-requirement-parser \
 	python3-asyncpg \
 	python3-protobuf \
