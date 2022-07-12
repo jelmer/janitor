@@ -692,39 +692,39 @@ def process_package(
     roles = {b: r for (r, b) in additional_colocated_branches.items()}
     roles[main_branch.name] = 'main'   # type: ignore
 
-    ws = Workspace(
-        main_branch,
-        resume_branch=resume_branch,
-        cached_branch=cached_branch,
-        path=os.path.join(output_directory, build_target.directory_name()),
-        additional_colocated_branches=[b for (r, b) in additional_colocated_branches.items()],
-        resume_branch_additional_colocated_branches=(
-            [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
-        ),
-    )
+    with ExitStack() as es:
+        ws = Workspace(
+            main_branch,
+            resume_branch=resume_branch,
+            cached_branch=cached_branch,
+            path=os.path.join(output_directory, build_target.directory_name()),
+            additional_colocated_branches=[b for (r, b) in additional_colocated_branches.items()],
+            resume_branch_additional_colocated_branches=(
+                [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
+            ),
+        )
 
-    try:
-        ws.__enter__()
-    except IncompleteRead as e:
-        traceback.print_exc()
-        raise WorkerFailure("worker-clone-incomplete-read", str(e))
-    except MalformedTransform as e:
-        traceback.print_exc()
-        raise WorkerFailure("worker-clone-malformed-transform", str(e))
-    except TransformRenameFailed as e:
-        traceback.print_exc()
-        raise WorkerFailure("worker-clone-transform-rename-failed", str(e))
-    except UnexpectedHttpStatus as e:
-        traceback.print_exc()
-        if e.code == 502:
-            raise WorkerFailure("worker-clone-bad-gateway", str(e))
-        else:
-            raise WorkerFailure("worker-clone-http-%s" % e.code, str(e))
-    except TransportError as e:
-        traceback.print_exc()
-        raise WorkerFailure("worker-clone-transport-error", str(e))
+        try:
+            es.enter_context(ws)
+        except IncompleteRead as e:
+            traceback.print_exc()
+            raise WorkerFailure("worker-clone-incomplete-read", str(e))
+        except MalformedTransform as e:
+            traceback.print_exc()
+            raise WorkerFailure("worker-clone-malformed-transform", str(e))
+        except TransformRenameFailed as e:
+            traceback.print_exc()
+            raise WorkerFailure("worker-clone-transform-rename-failed", str(e))
+        except UnexpectedHttpStatus as e:
+            traceback.print_exc()
+            if e.code == 502:
+                raise WorkerFailure("worker-clone-bad-gateway", str(e))
+            else:
+                raise WorkerFailure("worker-clone-http-%s" % e.code, str(e))
+        except TransportError as e:
+            traceback.print_exc()
+            raise WorkerFailure("worker-clone-transport-error", str(e))
 
-    try:
         logger.info('Workspace ready - starting.')
 
         if ws.local_tree.has_changes():
@@ -806,11 +806,6 @@ def process_package(
             refreshed=ws.refreshed
         )
         yield ws, wr
-    except BaseException:
-        if ws.__exit__(*sys.exc_info()) is not True:
-            raise
-    else:
-        ws.__exit__(None, None, None)
 
 
 async def abort_run(
