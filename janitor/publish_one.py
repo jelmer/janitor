@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-"""Publisher for individual changes.
+"""Publisher for a single branch.
 
 This is the worker module for the publish service. For each branch that needs
 to be published, this module gets invoked. It accepts some JSON on stdin with a
