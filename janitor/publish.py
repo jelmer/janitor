@@ -1561,7 +1561,7 @@ async def check_mp_request(request):
         except NoRunForMergeProposal as e:
             return web.Response(
                 status=500,
-                text="Unable to find local metadata for %s (%r), skipping."
+                text="Unable to find stored metadata for %s (%r), skipping."
                 % (e.mp.url, e.revision),
             )
     if modified:
@@ -1620,7 +1620,7 @@ async def refresh_proposal_status_request(request):
                 )
             except NoRunForMergeProposal as e:
                 logger.warning(
-                    "Unable to find local metadata for %s, skipping.", e.mp.url
+                    "Unable to find stored metadata for %s, skipping.", e.mp.url
                 )
     create_background_task(scan(), 'Refresh of proposal %s' % url)
     return web.Response(status=202, text="Refresh of proposal started.")
@@ -2430,7 +2430,7 @@ async def check_existing(
                 check_only=check_only,
             )
         except NoRunForMergeProposal as e:
-            logger.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
+            logger.warning("Unable to find metadata for %s, skipping.", e.mp.url)
             modified = False
         except ForgeLoginRequired as e:
             logger.warning('Login required for forge %s, skipping.', e)
