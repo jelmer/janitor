@@ -39,7 +39,7 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	PYTHONPATH=$(PYTHONPATH) python3 setup.py test
+	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) python3 setup.py test
 
 style:
 	flake8
