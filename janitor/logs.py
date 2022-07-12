@@ -39,7 +39,7 @@ class LogFileManager(object):
     async def get_log(self, pkg: str, run_id: str, name: str, timeout=None):
         raise NotImplementedError(self.get_log)
 
-    async def import_log(self, pkg: str, run_id: str, orig_path: str, timeout=None):
+    async def import_log(self, pkg: str, run_id: str, orig_path: str, timeout=None, mtime=None):
         raise NotImplementedError(self.import_log)
 
     async def iter_logs(self):
@@ -87,12 +87,12 @@ class FileSystemLogFileManager(LogFileManager):
                 return open(path, "rb")
         raise FileNotFoundError(name)
 
-    async def import_log(self, pkg, run_id, orig_path, timeout=None):
+    async def import_log(self, pkg, run_id, orig_path, timeout=None, mtime=None):
         dest_dir = os.path.join(self.log_directory, pkg, run_id)
         os.makedirs(dest_dir, exist_ok=True)
         with open(orig_path, "rb") as inf:
             dest_path = os.path.join(dest_dir, os.path.basename(orig_path) + ".gz")
-            with gzip.GzipFile(dest_path, mode="wb") as outf:
+            with gzip.GzipFile(dest_path, mode="wb", mtime=mtime) as outf:
                 outf.write(inf.read())
 
     async def delete_log(self, pkg, run_id, name):
@@ -149,9 +149,9 @@ class S3LogFileManager(LogFileManager):
                 "Unexpected response code %d: %s" % (resp.status, await resp.text())
             )
 
-    async def import_log(self, pkg, run_id, orig_path, timeout=360):
+    async def import_log(self, pkg, run_id, orig_path, timeout=360, mtime=None):
         with open(orig_path, "rb") as f:
-            data = gzip.compress(f.read())
+            data = gzip.compress(f.read(), mtime=mtime)
 
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
         self.s3_bucket.put_object(Key=key, Body=data, ACL="public-read")
@@ -212,10 +212,10 @@ class GCSLogFilemanager(LogFileManager):
         except ServerDisconnectedError:
             raise ServiceUnavailable()
 
-    async def import_log(self, pkg, run_id, orig_path, timeout=360):
+    async def import_log(self, pkg, run_id, orig_path, timeout=360, mtime=None):
         object_name = self._get_object_name(pkg, run_id, os.path.basename(orig_path))
         with open(orig_path, "rb") as f:
-            uploaded_data = gzip.compress(f.read())
+            uploaded_data = gzip.compress(f.read(), mtime=mtime)
         try:
             await self.storage.upload(
                 self.bucket_name, object_name, uploaded_data, timeout=timeout

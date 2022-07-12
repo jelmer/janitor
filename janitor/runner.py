@@ -15,11 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientOSError
-import aiozipkin
 import asyncio
-import asyncpg
-import asyncpg.pool
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
@@ -28,7 +24,6 @@ import json
 from io import BytesIO
 import logging
 import os
-from .queue import QueueItem, get_queue_item, iter_queue
 import ssl
 import sys
 import tempfile
@@ -36,8 +31,13 @@ from typing import List, Any, Optional, Dict, Tuple, Type, Set
 import uuid
 import warnings
 
+import aiozipkin
+import asyncpg
+import asyncpg.pool
+
 from aiohttp import (
     web,
+    ClientOSError,
     ClientSession,
     ClientTimeout,
     ClientConnectorError,
@@ -98,6 +98,7 @@ from .logs import (
 )
 from .policy import read_policy, PolicyConfig
 from .pubsub import Topic, pubsub_handler
+from .queue import QueueItem, get_queue_item, iter_queue
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (
     get_vcs_abbreviation,
@@ -124,6 +125,8 @@ run_result_count = Counter("result", "Result counts", ["package", "suite", "resu
 active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
 assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
+artifact_upload_failed_count = Counter(
+    "artifact_upload_failed", "Number of failed artifact uploads")
 
 
 async def to_thread_timeout(timeout, func, *args, **kwargs):
@@ -668,14 +671,7 @@ def create_background_task(fn, title):
     return task
 
 
-async def import_logs(
-    output_directory: str,
-    logfile_manager: LogFileManager,
-    backup_logfile_manager: Optional[LogFileManager],
-    pkg: str,
-    log_id: str,
-) -> List[str]:
-    logfilenames = []
+def gather_logs(output_directory: str):
     for entry in os.scandir(output_directory):
         if entry.is_dir():
             continue
@@ -683,24 +679,34 @@ async def import_logs(
         if parts[-1] == "log" or (
             len(parts) == 3 and parts[-2] == "log" and parts[-1].isdigit()
         ):
-            try:
-                await logfile_manager.import_log(pkg, log_id, entry.path)
-            except ServiceUnavailable as e:
-                logging.warning("Unable to upload logfile %s: %s", entry.name, e)
-                if backup_logfile_manager:
-                    await backup_logfile_manager.import_log(pkg, log_id, entry.path)
-            except asyncio.TimeoutError as e:
-                logging.warning("Timeout uploading logfile %s: %s", entry.name, e)
-                if backup_logfile_manager:
-                    await backup_logfile_manager.import_log(pkg, log_id, entry.path)
-            except PermissionDenied as e:
-                logging.warning(
-                    "Permission denied error while uploading logfile %s: %s",
-                    entry.name, e)
-                if backup_logfile_manager:
-                    await backup_logfile_manager.import_log(pkg, log_id, entry.path)
-            logfilenames.append(entry.name)
-    return logfilenames
+            yield entry
+
+
+async def import_logs(
+    entries,
+    logfile_manager: LogFileManager,
+    backup_logfile_manager: Optional[LogFileManager],
+    pkg: str,
+    log_id: str,
+    mtime: Optional[int] = None,
+):
+    for entry in entries:
+        try:
+            await logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
+        except ServiceUnavailable as e:
+            logging.warning("Unable to upload logfile %s: %s", entry.name, e)
+            if backup_logfile_manager:
+                await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
+        except asyncio.TimeoutError as e:
+            logging.warning("Timeout uploading logfile %s: %s", entry.name, e)
+            if backup_logfile_manager:
+                await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
+        except PermissionDenied as e:
+            logging.warning(
+                "Permission denied error while uploading logfile %s: %s",
+                entry.name, e)
+            if backup_logfile_manager:
+                await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
 
 
 class ActiveRun(object):
@@ -1974,13 +1980,9 @@ async def handle_finish(request):
         if worker_name is None:
             worker_name = worker_result.worker_name
 
-        logfilenames = await import_logs(
-            output_directory,
-            queue_processor.logfile_manager,
-            queue_processor.backup_logfile_manager,
-            queue_item.package,
-            run_id,
-        )
+        logfiles = gather_logs(output_directory)
+
+        logfilenames = [entry.name for entry in logfiles]
 
         result = JanitorResult(
             pkg=queue_item.package,
@@ -1995,6 +1997,15 @@ async def handle_finish(request):
             resume_from=resume_from,
             change_set=queue_item.change_set,
             )
+
+        await import_logs(
+            logfiles,
+            queue_processor.logfile_manager,
+            queue_processor.backup_logfile_manager,
+            queue_item.package,
+            run_id,
+            mtime=result.finish_time.timestamp(),
+        )
 
         if result.builder_result is not None:
             result.builder_result.from_directory(output_directory)
@@ -2011,6 +2022,7 @@ async def handle_finish(request):
             except BaseException as e:
                 result.code = "artifact-upload-failed"
                 result.description = str(e)
+                artifact_upload_failed_count.inc()
                 # TODO(jelmer): Mark ourselves as unhealthy?
                 artifact_names = None
         else:
