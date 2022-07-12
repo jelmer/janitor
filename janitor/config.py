@@ -26,21 +26,25 @@ from typing import Union
 
 from google.protobuf import text_format  # type: ignore
 
+from . import config_pb2
+
 from .config_pb2 import Config, Suite, Campaign, Distribution
 
 
 def read_config(f):
-    return text_format.Parse(f.read(), Config())
+    return text_format.Parse(f.read(), config_pb2.Config())
 
 
-def get_distribution(config: Config, name: str) -> Distribution:
+def get_distribution(config: Config, name: str) -> config_pb2.Distribution:
     for d in config.distribution:
         if d.name == name:
             return d
     raise KeyError(name)
 
 
-def get_campaign_config(config: Config, name: str) -> Union[Suite, Campaign]:
+def get_campaign_config(
+        config: config_pb2.Config, name: str
+        ) -> Union[config_pb2.Suite, config_pb2.Campaign]:
     for c in config.campaign:
         if c.name == name:
             return c
