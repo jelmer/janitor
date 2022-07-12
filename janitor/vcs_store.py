@@ -101,7 +101,7 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.vcs_location, "bzr", package))
+        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -120,7 +120,7 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.vcs_location, "bzr", package))
+        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -148,7 +148,7 @@ async def git_diff_request(request):
         new_sha = new_sha.encode('utf-8')
     path = request.query.get('path')
     try:
-        repo = Repository.open(os.path.join(request.app.vcs_location, "git", package))
+        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -170,7 +170,7 @@ async def git_revision_info_request(request):
     if new_sha is not None:
         new_sha = new_sha.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.vcs_location, "git", package))
+        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -241,7 +241,7 @@ WHERE id = $1 AND new_result_branch.role = $2
             if not row:
                 raise web.HTTPNotFound(text="No such run: %r" % run_id)
     for vcs in ['bzr', 'git']:
-        path = os.path.join(request.app.vcs_location, vcs, row['package'])
+        path = os.path.join(request.app.local_path, vcs, row['package'])
         if not os.path.exists(path):
             continue
         repo = Repository.open(path)
@@ -269,8 +269,8 @@ WHERE id = $1 AND new_result_branch.role = $2
             return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
 
-async def _git_open_repo(vcs_location, db, package):
-    repo_path = os.path.join(vcs_location, "git", package)
+async def _git_open_repo(local_path, db, package):
+    repo_path = os.path.join(local_path, "git", package)
     repo = Repository.open(repo_path)
 
     if repo is None:
@@ -306,7 +306,7 @@ async def handle_klaus(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
+        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
 
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
@@ -377,7 +377,7 @@ async def handle_set_git_remote(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
+        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
 
     post = await request.post()
     r = repo._git
@@ -400,7 +400,7 @@ async def handle_set_bzr_remote(request):
     post = await request.post()
 
     try:
-        local_branch = Branch.open(os.path.join(request.app.vcs_location, "bzr", package, remote))
+        local_branch = Branch.open(os.path.join(request.app.local_path, "bzr", package, remote))
     except NotBranchError:
         raise web.HTTPNotFound()
     local_branch.set_parent(post["url"])
@@ -423,7 +423,7 @@ async def cgit_backend(request):
         _git_check_service(service, allow_writes)
 
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
+        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
 
     args = ["/usr/bin/git"]
     if allow_writes:
@@ -539,7 +539,7 @@ async def dulwich_refs(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
+        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
     r = repo._git
 
     service = request.query.get("service")
@@ -585,7 +585,7 @@ async def dulwich_service(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.vcs_location, request.app.db, package)
+        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
 
     _git_check_service(service, allow_writes)
 
@@ -622,11 +622,11 @@ async def package_exists(conn, package):
     return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
 
 
-async def _bzr_open_repo(vcs_location, db, package):
+async def _bzr_open_repo(local_path, db, package):
     async with db.acquire() as conn:
         if not await package_exists(conn, package):
             raise web.HTTPNotFound(text='no such package: %s' % package)
-    repo_path = os.path.join(vcs_location, "bzr", package)
+    repo_path = os.path.join(local_path, "bzr", package)
     try:
         repo = Repository.open(repo_path)
     except NotBranchError:
@@ -638,7 +638,7 @@ async def _bzr_open_repo(vcs_location, db, package):
 async def bzr_backend(request):
     package = request.match_info["package"]
     branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app.vcs_location, request.app.db, package)
+    repo = await _bzr_open_repo(request.app.local_path, request.app.db, package)
     if branch_name:
         try:
             get_campaign_config(request.app.config, branch_name)
@@ -692,7 +692,7 @@ async def handle_repo_list(request):
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.vcs_location, vcs))]
+                 for entry in os.scandir(os.path.join(request.app.local_path, vcs))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -719,7 +719,7 @@ async def handle_index(request):
 async def create_web_app(
     listen_addr: str,
     port: int,
-    local_path,
+    local_path: str,
     db: asyncpg.pool.Pool,
     config,
     dulwich_server: bool = False,
