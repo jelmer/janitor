@@ -44,7 +44,7 @@ RUN apt -y update && apt -y upgrade && apt satisfy --no-install-recommends -y \
 	python3-typeshed \
 	python3-aiohttp-apispec \
 	wget \
-	&& pip3 install gcloud-aio-storage google-cloud-logging
+	&& pip3 install --upgrade gcloud-aio-storage google-cloud-logging git+https://github.com/jelmer/aiohttp-openmetrics
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/debmutate:/code/silver-platter:/code/upstream-ontologist:/code/buildlog-consultant:/code/ognibuild:/code/lintian-brush
 ADD . /code
