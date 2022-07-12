@@ -305,8 +305,6 @@ async def publish_one(
     differ_url: str,
     external_url: str,
     require_binary_diff: bool = False,
-    possible_forges=None,
-    possible_transports: Optional[List[Transport]] = None,
     allow_create_proposal: bool = False,
     reviewers: Optional[List[str]] = None,
     derived_owner: Optional[str] = None,
@@ -409,9 +407,9 @@ async def consider_publish_run(
         vcs_manager, rate_limiter, external_url, differ_url,
         topic_publish, topic_merge_proposal,
         run, maintainer_email,
-        uploader_emails, unpublished_branches, command,
+        unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
-        possible_transports=None, possible_forges=None, dry_run=False):
+        dry_run=False):
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id
@@ -474,15 +472,12 @@ async def consider_publish_run(
             run,
             role,
             maintainer_email,
-            uploader_emails,
             run.branch_url,
             topic_publish,
             topic_merge_proposal,
             publish_mode,
             max_frequency_days,
             command,
-            possible_forges=possible_forges,
-            possible_transports=possible_transports,
             dry_run=dry_run,
             external_url=external_url,
             differ_url=differ_url,
@@ -504,12 +499,8 @@ async def iter_publish_ready(
 ) -> AsyncIterable[
     Tuple[
         state.Run,
-        int,
-        str,
-        List[str],
         str,
         str,
-        bool,
         List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
     ]
 ]:
@@ -554,12 +545,8 @@ SELECT * FROM publish_ready
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
             [state.Run.from_row(record),
-             record['value'],
              record['maintainer_email'],
-             record['uploader_emails'],
              record['policy_command'],
-             record['qa_review_policy'],
-             record['needs_review'],
              record['unpublished_branches']
              ]
         )
@@ -581,8 +568,6 @@ async def publish_pending_ready(
     require_binary_diff: bool = False,
 ):
     start = time.time()
-    possible_forges: List[Forge] = []
-    possible_transports: List[Transport] = []
     actions: Dict[str, int] = {}
 
     if reviewed_only:
@@ -593,12 +578,8 @@ async def publish_pending_ready(
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (
             run,
-            value,
             maintainer_email,
-            uploader_emails,
             command,
-            qa_review_policy,
-            needs_review,
             unpublished_branches,
         ) in iter_publish_ready(
             conn1, review_status=review_status,
@@ -614,19 +595,15 @@ async def publish_pending_ready(
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
-                uploader_emails=uploader_emails,
                 unpublished_branches=unpublished_branches,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
-                possible_forges=possible_forges,
-                possible_transports=possible_transports,
                 dry_run=dry_run)
-            for role, actual_mode in actual_modes.items():
+            for actual_mode in actual_modes.values():
                 actions.setdefault(actual_mode, 0)
                 actions[actual_mode] += 1
             if MODE_PUSH in actual_modes.values() and push_limit is not None:
                 push_limit -= 1
-
 
     logger.info("Actions performed: %r", actions)
     logger.info(
@@ -829,7 +806,6 @@ async def publish_from_policy(
     run: state.Run,
     role: str,
     maintainer_email: str,
-    uploader_emails: List[str],
     main_branch_url: str,
     topic_publish,
     topic_merge_proposal,
@@ -839,8 +815,6 @@ async def publish_from_policy(
     dry_run: bool,
     external_url: str,
     differ_url: str,
-    possible_forges: Optional[List[Forge]] = None,
-    possible_transports: Optional[List[Transport]] = None,
     require_binary_diff: bool = False,
     force: bool = False,
     requestor: Optional[str] = None,
@@ -953,8 +927,6 @@ async def publish_from_policy(
             external_url=external_url,
             differ_url=differ_url,
             require_binary_diff=require_binary_diff,
-            possible_forges=possible_forges,
-            possible_transports=possible_transports,
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
             allow_create_proposal=run_allow_proposal_creation(campaign_config, run),
@@ -1099,8 +1071,6 @@ async def publish_and_store(
                 external_url=external_url,
                 differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
-                possible_forges=None,
-                possible_transports=None,
                 allow_create_proposal=allow_create_proposal,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
@@ -1298,7 +1268,7 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, value, maintainer_email, uploader_emails, command, qa_review_policy, needs_review, unpublished_branches) in iter_publish_ready(
+            async for (run, maintainer_email, command, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
                     needs_review=False, run_id=run_id):
                 break
@@ -1316,7 +1286,6 @@ async def consider_request(request):
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
-                uploader_emails=uploader_emails,
                 unpublished_branches=unpublished_branches,
                 require_binary_diff=request.app['require_binary_diff'],
                 dry_run=request.app['dry_run'])
@@ -2532,7 +2501,7 @@ async def listen_to_runner(
     differ_url: str,
     require_binary_diff: bool = False,
 ):
-    async def process_run(conn, run, maintainer_email, uploader_emails, branch_url):
+    async def process_run(conn, run, maintainer_email, branch_url):
         publish_policy, command = await get_publish_policy(
             conn, run.package, run.suite
         )
@@ -2546,7 +2515,6 @@ async def listen_to_runner(
                 run,
                 role,
                 maintainer_email,
-                uploader_emails,
                 branch_url,
                 topic_publish,
                 topic_merge_proposal,
@@ -2571,7 +2539,7 @@ async def listen_to_runner(
             async with db.acquire() as conn:
                 # TODO(jelmer): Fold these into a single query ?
                 package = await conn.fetchrow(
-                    'SELECT maintainer_email, uploader_emails, branch_url FROM package WHERE name = $1',
+                    'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
                     result["package"])
                 if package is None:
                     logging.warning('Package %s not in database?', result['package'])
@@ -2580,14 +2548,13 @@ async def listen_to_runner(
                 if run.suite != "unchanged":
                     await process_run(
                         conn, run, package['maintainer_email'],
-                        package['uploader_emails'], package['branch_url'])
+                        package['branch_url'])
                 else:
                     for run in await iter_control_matching_runs(
                             conn, main_branch_revision=run.revision,
                             package=run.package):
                         await process_run(
                             conn, run, package['maintainer_email'],
-                            package['uploader_emails'],
                             package['branch_url'])
 
 
