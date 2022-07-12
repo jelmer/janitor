@@ -857,7 +857,7 @@ async def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
 
-    vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
+    vcs_manager = LocalVcsManager(args.vcs_path)
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
         args.listen_address,
