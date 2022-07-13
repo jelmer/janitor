@@ -63,7 +63,7 @@ async def git_diff_request(request):
         new_sha = new_sha.encode('utf-8')
     path = request.query.get('path')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
+        repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -85,7 +85,7 @@ async def git_revision_info_request(request):
     if new_sha is not None:
         new_sha = new_sha.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
+        repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -138,7 +138,7 @@ async def git_diff_helper(repo, old_sha, new_sha, path=None):
 
 
 async def _git_open_repo(local_path, db, package):
-    repo_path = os.path.join(local_path, "git", package)
+    repo_path = os.path.join(local_path, package)
     repo = Repository.open(repo_path)
 
     if repo is None:
