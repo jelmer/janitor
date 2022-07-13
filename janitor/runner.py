@@ -1808,15 +1808,17 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         if resume_branch is None and not item.refresh:
             with span.new_child('resume-branch:open'):
                 try:
-                    resume_branch = await to_thread_timeout(
-                        VCS_STORE_BRANCH_OPEN_TIMEOUT,
-                        queue_processor.public_vcs_managers[vcs_type].get_branch,
-                        item.package, '%s/%s' % (campaign_config.name, 'main'))
-                except UnsupportedVcs:
+                    vcs_manager = queue_processor.public_vcs_managers[vcs_type]
+                except KeyError:
                     logging.warning(
                         'Unsupported vcs %s for resume branch of %s',
                         vcs_type, item.package)
                     resume_branch = None
+                else:
+                    resume_branch = await to_thread_timeout(
+                        VCS_STORE_BRANCH_OPEN_TIMEOUT,
+                        vcs_manager.get_branch,
+                        item.package, '%s/%s' % (campaign_config.name, 'main'))
 
         if resume_branch is not None:
             with span.new_child('resume-branch:check'):
@@ -1841,9 +1843,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 branch_name = cache_branch_name(distribution, "main")
             else:
                 branch_name = "main"
-            cached_branch_url = queue_processor.public_vcs_managers[vcs_type].get_branch_url(
-                item.package, branch_name
-            )
+            try:
+                vcs_manager = queue_processor.public_vcs_managers[vcs_type]
+            except KeyError:
+                pass
+            else:
+                cached_branch_url = queue_processor.public_vcs_managers[vcs_type].get_branch_url(
+                    item.package, branch_name
+                )
     except UnsupportedVcs:
         cached_branch_url = None
 
