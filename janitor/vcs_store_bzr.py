@@ -38,13 +38,6 @@ from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium
 from breezy.repository import Repository
 from breezy.transport import get_transport_from_url
-from dulwich.objects import valid_hexsha
-from dulwich.web import HTTPGitApplication
-from dulwich.protocol import ReceivableProtocol
-from dulwich.server import (
-    DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
-    DictBackend,
-)
 from . import (
     state,
 )
@@ -52,9 +45,6 @@ from . import (
 from .compat import to_thread
 from .config import read_config, get_campaign_config
 from .site import is_worker, iter_accept, env as site_env
-
-
-GIT_BACKEND_CHUNK_SIZE = 4096
 
 
 async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
@@ -138,215 +128,6 @@ async def bzr_revision_info_request(request):
     return web.json_response(ret)
 
 
-async def git_diff_request(request):
-    package = request.match_info["package"]
-    old_sha = request.query.get('old')
-    if old_sha is not None:
-        old_sha = old_sha.encode('utf-8')
-    new_sha = request.query.get('new')
-    if new_sha is not None:
-        new_sha = new_sha.encode('utf-8')
-    path = request.query.get('path')
-    try:
-        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            package)
-    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-        raise web.HTTPBadRequest(text='invalid shas specified')
-    return await git_diff_helper(repo, old_sha, new_sha, path)
-
-
-async def git_revision_info_request(request):
-    from dulwich.errors import MissingCommitError
-    package = request.match_info["package"]
-    old_sha = request.query.get('old')
-    if old_sha is not None:
-        old_sha = old_sha.encode('utf-8')
-    new_sha = request.query.get('new')
-    if new_sha is not None:
-        new_sha = new_sha.encode('utf-8')
-    try:
-        repo = Repository.open(os.path.join(request.app.local_path, "git", package))
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            package)
-    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-        raise web.HTTPBadRequest(text='invalid shas specified')
-    ret = []
-    try:
-        walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
-    except MissingCommitError:
-        return web.json_response({}, status=404)
-    for entry in walker:
-        ret.append({
-            'commit-id': entry.commit.id.decode('ascii'),
-            'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-            'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
-            'message': entry.commit.message.decode('utf-8', 'replace')})
-    return web.json_response(ret)
-
-
-async def git_diff_helper(repo, old_sha, new_sha, path=None):
-    args = [
-        "git",
-        "diff",
-        old_sha, new_sha
-    ]
-    if path:
-        args.extend(['-', path])
-
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE,
-        cwd=repo.user_transport.local_abspath('.'),
-    )
-
-    # TODO(jelmer): Stream this
-    try:
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
-
-    if p.returncode == 0:
-        return web.Response(body=stdout, content_type="text/x-diff")
-    logging.warning('git diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
-
-
-async def _git_open_repo(local_path, db, package):
-    repo_path = os.path.join(local_path, "git", package)
-    repo = Repository.open(repo_path)
-
-    if repo is None:
-        async with db.acquire() as conn:
-            if not await package_exists(conn, package):
-                raise web.HTTPNotFound(text='no such package: %s' % package)
-        controldir = ControlDir.create(repo_path, format=format_registry.get("git-bare")())
-        logging.info(
-            "Created missing git repository for %s at %s", package, controldir.user_url
-        )
-        return controldir.open_repository()
-    else:
-        return repo
-
-
-def _git_check_service(service: str, allow_writes: bool = False):
-    if service == "git-upload-pack":
-        return
-
-    if service == "git-receive-pack":
-        if not allow_writes:
-            raise web.HTTPUnauthorized(
-                text="git-receive-pack requires login",
-                headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
-            )
-        return
-
-    raise web.HTTPForbidden(text="Unsupported service %s" % service)
-
-
-async def handle_klaus(request):
-    package = request.match_info["package"]
-
-    span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
-
-    from klaus import views, utils, KLAUS_VERSION
-    from flask import Flask
-    from klaus.repo import FancyRepo
-
-    class Klaus(Flask):
-        def __init__(self, package, repo):
-            super(Klaus, self).__init__("klaus")
-            self.package = package
-            self.valid_repos = {package: FancyRepo(repo._transport.local_abspath("."))}
-
-        def should_use_ctags(self, git_repo, git_commit):
-            return False
-
-        def create_jinja_environment(self):
-            """Called by Flask.__init__"""
-            env = super(Klaus, self).create_jinja_environment()
-            for func in [
-                "force_unicode",
-                "timesince",
-                "shorten_sha1",
-                "shorten_message",
-                "extract_author_name",
-                "formattimestamp",
-            ]:
-                env.filters[func] = getattr(utils, func)
-
-            env.globals["KLAUS_VERSION"] = KLAUS_VERSION
-            env.globals["USE_SMARTHTTP"] = False
-            env.globals["SITE_NAME"] = "Package list"
-            return env
-
-    app = Klaus(package, repo)
-
-    for endpoint, rule in [
-        ("blob", "/blob/"),
-        ("blob", "/blob/<rev>/<path:path>"),
-        ("blame", "/blame/"),
-        ("blame", "/blame/<rev>/<path:path>"),
-        ("raw", "/raw/<path:path>/"),
-        ("raw", "/raw/<rev>/<path:path>"),
-        ("submodule", "/submodule/<rev>/"),
-        ("submodule", "/submodule/<rev>/<path:path>"),
-        ("commit", "/commit/<path:rev>/"),
-        ("patch", "/commit/<path:rev>.diff"),
-        ("patch", "/commit/<path:rev>.patch"),
-        ("index", "/"),
-        ("index", "/<path:rev>"),
-        ("history", "/tree/<rev>/"),
-        ("history", "/tree/<rev>/<path:path>"),
-        ("download", "/tarball/<path:rev>/"),
-        ("repo_list", "/.."),
-    ]:
-        app.add_url_rule(
-            rule, view_func=getattr(views, endpoint), defaults={"repo": package}
-        )
-
-    from aiohttp_wsgi import WSGIHandler
-
-    wsgi_handler = WSGIHandler(app)
-
-    return await wsgi_handler(request)
-
-
-async def handle_set_git_remote(request):
-    package = request.match_info["package"]
-    remote = request.match_info["remote"]
-
-    span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
-
-    post = await request.post()
-    r = repo._git
-    c = r.get_config()
-    section = ("remote", remote)
-    c.set(section, "url", post["url"])
-    c.set(section, "fetch", "+refs/heads/*:refs/remotes/%s/*" % remote)
-    b = BytesIO()
-    c.write_to_file(b)
-    r._controltransport.put_bytes("config", b.getvalue())
-
-    # TODO(jelmer): Run 'git fetch $remote'?
-
-    return web.Response()
-
-
 async def handle_set_bzr_remote(request):
     package = request.match_info["package"]
     remote = request.match_info["remote"]
@@ -361,214 +142,6 @@ async def handle_set_bzr_remote(request):
     # TODO(jelmer): Run 'bzr pull'?
 
     return web.Response()
-
-
-async def cgit_backend(request):
-    package = request.match_info["package"]
-    subpath = request.match_info["subpath"]
-    span = aiozipkin.request_span(request)
-
-    allow_writes = request.app.allow_writes
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
-    service = request.query.get("service")
-    if service is not None:
-        _git_check_service(service, allow_writes)
-
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
-
-    args = ["/usr/bin/git"]
-    if allow_writes:
-        args.extend(["-c", "http.receivepack=1"])
-    args.append("http-backend")
-    local_path = repo.user_transport.local_abspath(".")
-    full_path = os.path.join(local_path, subpath.lstrip('/'))
-    env = {
-        "GIT_HTTP_EXPORT_ALL": "true",
-        "REQUEST_METHOD": request.method,
-        "REMOTE_ADDR": request.remote,
-        "CONTENT_TYPE": request.content_type,
-        "PATH_TRANSLATED": full_path,
-        "QUERY_STRING": request.query_string,
-        # REMOTE_USER is not set
-    }
-
-    if request.content_type is not None:
-        env['CONTENT_TYPE'] = request.content_type
-
-    for key, value in request.headers.items():
-        env["HTTP_" + key.replace("-", "_").upper()] = value
-
-    for name in ["HTTP_CONTENT_ENCODING", "HTTP_CONTENT_LENGTH", "HTTP_TRANSFER_ENCODING"]:
-        try:
-            del env[name]
-        except KeyError:
-            pass
-
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-        stdin=asyncio.subprocess.PIPE,
-    )
-
-    async def feed_stdin(stream):
-        async for chunk in request.content.iter_any():
-            stream.write(chunk)
-            await stream.drain()
-        stream.close()
-
-    async def read_stderr(stream):
-        line = await stream.readline()
-        while line:
-            logging.warning("git: %s", line.decode().rstrip('\n'))
-            line = await stream.readline()
-
-    async def read_stdout(stream):
-        b = BytesIO()
-        line = await stream.readline()
-        while line != b'\r\n':
-            b.write(line)
-            line = await stream.readline()
-        b.seek(0)
-        headers = parse_headers(b)
-        status = headers.get("Status")
-        if status:
-            del headers["Status"]
-            (status_code, status_reason) = status.split(" ", 1)
-            status_code = int(status_code)
-            status_reason = status_reason
-        else:
-            status_code = 200
-            status_reason = "OK"
-
-        if 'Content-Length' in headers:
-            content_length = int(headers['Content-Length'])
-            return web.Response(
-                headers=headers, status=status_code, reason=status_reason,
-                body=await p.stdout.read(content_length))
-        else:
-            response = web.StreamResponse(
-                headers=headers,
-                status=status_code, reason=status_reason,
-            )
-
-            if tuple(request.version) == (1, 1):
-                response.enable_chunked_encoding()
-
-            await response.prepare(request)
-
-            chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
-            while chunk:
-                await response.write(chunk)
-                chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
-
-            await response.write_eof()
-
-            return response
-
-    with span.new_child('git-backend'):
-        try:
-            unused_stderr, response, unused_stdin = await asyncio.gather(*[
-                read_stderr(p.stderr), read_stdout(p.stdout),
-                feed_stdin(p.stdin),
-                ], return_exceptions=False)
-        except asyncio.CancelledError:
-            p.terminate()
-            await p.wait()
-            raise
-
-    return response
-
-
-async def dulwich_refs(request):
-    package = request.match_info["package"]
-
-    allow_writes = request.app.allow_writes
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
-
-    span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
-    r = repo._git
-
-    service = request.query.get("service")
-    _git_check_service(service, allow_writes)
-
-    headers = {
-        "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache, max-age=0, must-revalidate",
-    }
-
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
-
-    response = web.StreamResponse(status=200, headers=headers)
-    response.content_type = "application/x-%s-advertisement" % service
-
-    await response.prepare(request)
-
-    out = BytesIO()
-    proto = ReceivableProtocol(BytesIO().read, out.write)
-    handler = handler_cls(
-        DictBackend({".": r}), ["."], proto, stateless_rpc=True, advertise_refs=True
-    )
-    handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
-    handler.proto.write_pkt_line(None)
-
-    await to_thread(handler.handle)
-
-    await response.write(out.getvalue())
-
-    await response.write_eof()
-
-    return response
-
-
-async def dulwich_service(request):
-    package = request.match_info["package"]
-    service = request.match_info["service"]
-
-    allow_writes = request.app.allow_writes
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
-
-    span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
-
-    _git_check_service(service, allow_writes)
-
-    headers = {
-        "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache, max-age=0, must-revalidate",
-    }
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
-
-    response = web.StreamResponse(status=200, headers=headers)
-    response.content_type = "application/x-%s-result" % service
-
-    await response.prepare(request)
-
-    inf = BytesIO(await request.read())
-    outf = BytesIO()
-
-    def handle():
-        r = repo._git
-        proto = ReceivableProtocol(inf.read, outf.write)
-        handler = handler_cls(DictBackend({".": r}), ["."], proto, stateless_rpc=True)
-        handler.handle()
-
-    await to_thread(handle)
-
-    await response.write(outf.getvalue())
-
-    await response.write_eof()
-    return response
 
 
 async def package_exists(conn, package):
@@ -641,11 +214,10 @@ async def bzr_backend(request):
 
 
 async def handle_repo_list(request):
-    vcs = request.match_info["vcs"]
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.local_path, vcs))]
+                 for entry in os.scandir(os.path.join(request.app.local_path))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -656,7 +228,7 @@ async def handle_repo_list(request):
                 content_type='text/plain')
         elif accept in ('text/html', ):
             template = site_env.get_template('repo-list.html')
-            text = await template.render_async(vcs=vcs, repositories=names)
+            text = await template.render_async(vcs="bzr", repositories=names)
             return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
@@ -665,17 +237,12 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
-async def handle_index(request):
-    return web.Response(text='')
-
-
 async def create_web_app(
     listen_addr: str,
     port: int,
     local_path: str,
     db: asyncpg.pool.Pool,
     config,
-    dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
@@ -696,53 +263,17 @@ async def create_web_app(
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
-    if dulwich_server:
-        app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
-            dulwich_service,
-            name='dulwich-service'
-        )
-        public_app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
-            dulwich_service,
-            name='dulwich-service-public'
-        )
-        app.router.add_get(
-            "/git/{package}/info/refs",
-            dulwich_refs, name='dulwich-refs')
-        public_app.router.add_get(
-            "/git/{package}/info/refs",
-            dulwich_refs, name='dulwich-refs-public')
-    else:
-        for (method, regex), fn in HTTPGitApplication.services.items():
-            app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}",
-                cgit_backend,
-            )
-            public_app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}",
-                cgit_backend,
-            )
-
-
-    app.router.add_get("/", handle_index, name="index")
-    public_app.router.add_get("/", handle_index, name="index")
-    public_app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
-    app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
+    public_app.router.add_get("/", handle_repo_list, name='public-repo-list')
+    app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
-    public_app.router.add_get("/health", handle_health, name='health')
-    app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
-    app.router.add_get("/git/{package}/revision-info", git_revision_info_request, name='git-revision-info')
-    public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_get("/bzr/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
-    app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
-    endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
+    endpoint = aiozipkin.create_endpoint("janitor.vcs_store_bzr", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
@@ -755,21 +286,16 @@ async def create_web_app(
 async def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.vcs_store")
+    parser = argparse.ArgumentParser(prog="janitor.vcs_store_bzr")
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
     )
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
-    parser.add_argument("--port", type=int, help="Listen port", default=9923)
+    parser.add_argument("--port", type=int, help="Listen port", default=9929)
     parser.add_argument(
-        "--public-port", type=int, help="Public listen port", default=9924)
-    parser.add_argument(
-        "--dulwich-server",
-        action="store_true",
-        help="Use dulwich server implementation.",
-    )
+        "--public-port", type=int, help="Public listen port", default=9930)
     parser.add_argument(
         "--config",
         type=str,
@@ -816,7 +342,6 @@ async def main(argv=None):
         args.vcs_path,
         db,
         config,
-        dulwich_server=args.dulwich_server,
         client_max_size=args.client_max_size,
     )
 

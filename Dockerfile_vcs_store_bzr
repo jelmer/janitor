@@ -1,0 +1,6 @@
+FROM ghcr.io/jelmer/janitor/base:latest
+MAINTAINER Jelmer Vernooij <jelmer@debian.org>
+VOLUME /bzr
+EXPOSE 9929
+RUN apt update && apt install -y python3-pip git python3-chardet libjs-sphinxdoc
+ENTRYPOINT ["python3", "-m", "janitor.vcs_store_bzr", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]
