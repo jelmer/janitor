@@ -39,7 +39,7 @@ from .. import state
 from ..config import get_campaign_config
 from ..logs import get_log_manager
 from ..pubsub import pubsub_reader, pubsub_handler, Topic
-from ..vcs import get_vcs_manager
+from ..vcs import get_vcs_managers_from_config
 
 from . import (
     env,
@@ -286,7 +286,7 @@ async def handle_generic_pkg(request):
         request.match_info["suite"],
         request.app.http_client_session,
         request.app['differ_url'],
-        request.app['vcs_manager'],
+        request.app['vcs_managers'],
         pkg,
         aiozipkin.request_span(request),
         run_id,
@@ -296,7 +296,7 @@ async def handle_generic_pkg(request):
 @html_template(env, "repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
-    url = request.app['vcs_manager'].base_urls[vcs]
+    url = request.app['vcs_managers'][vcs].base_url
     async with request.app.http_client_session.get(url) as resp:
         return {"vcs": vcs, "repositories": await resp.json()}
 
@@ -309,7 +309,7 @@ async def create_app(
         config, minified=False,
         external_url=None, debugtoolbar=None,
         runner_url=None, publisher_url=None,
-        archiver_url=None, vcs_manager=None,
+        archiver_url=None, vcs_managers=None,
         differ_url=None,
         listen_address=None, port=None):
     if minified:
@@ -526,7 +526,7 @@ async def create_app(
     app['archiver_url'] = archiver_url
     app['differ_url'] = differ_url
     app['publisher_url'] = publisher_url
-    app['vcs_manager'] = vcs_manager
+    app['vcs_managers'] = vcs_managers
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
     if external_url:
@@ -563,7 +563,7 @@ async def create_app(
             app['pool'],
             publisher_url,
             runner_url,  # type: ignore
-            vcs_manager,
+            vcs_managers,
             differ_url,
             config,
             external_url=(
@@ -658,7 +658,7 @@ async def main(argv=None):
         runner_url=args.runner_url,
         archiver_url=args.archiver_url,
         publisher_url=args.publisher_url,
-        vcs_manager=get_vcs_manager(args.vcs_store_url),
+        vcs_managers=get_vcs_managers_from_config(config),
         differ_url=args.differ_url,
         listen_address=args.host,
         port=args.port)

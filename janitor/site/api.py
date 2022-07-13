@@ -442,11 +442,10 @@ async def handle_revision_info(request):
                 {"error": "no run %s" % (run_id, )}, status=404)
 
     try:
-        revision_info = await request.app['vcs_manager'].get_revision_info(
+        revision_info = await request.app['vcs_managers'][run['vcs_type'].get_revision_info(
             run['package'],
             run['base_revision'].encode('utf-8') if run['base_revision'] else None,
-            run['revision'].encode('utf-8') if run['revision'] else None,
-            run['vcs_type'])
+            run['revision'].encode('utf-8') if run['revision'] else None)
         return web.json_response(revision_info)
     except ContentTypeError as e:
         return web.json_response(
@@ -505,8 +504,8 @@ async def handle_diff(request):
         try:
             with span.new_child('vcs-diff'):
                 diff = await get_vcs_diff(
-                    request.app['http_client_session'], request.app['vcs_manager'],
-                    run['vcs_type'], run['package'],
+                    request.app['http_client_session'],
+                    request.app['vcs_managers'][run['vcs_type']], run['package'],
                     run['base_revision'].encode('utf-8') if run['base_revision'] else None,
                     run['revision'].encode('utf-8') if run['revision'] else None)
         except ClientResponseError as e:
@@ -1391,7 +1390,7 @@ def create_app(
     db,
     publisher_url: str,
     runner_url: str,
-    vcs_manager: VcsManager,
+    vcs_managers: VcsManager,
     differ_url: str,
     config: Config,
     external_url: Optional[URL] = None,
@@ -1406,7 +1405,7 @@ def create_app(
     app['db'] = db
     app['external_url'] = external_url
     app['publisher_url'] = publisher_url
-    app['vcs_manager'] = vcs_manager
+    app['vcs_managers'] = vcs_managers
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
 

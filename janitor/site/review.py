@@ -91,7 +91,7 @@ async def generate_rejected(conn, config, campaign=None):
 
 
 async def generate_review(
-    conn, request, client, differ_url, vcs_manager, suites=None,
+    conn, request, client, differ_url, vcs_managers, suites=None,
     publishable_only=True
 ):
     if 'required_only' in request.query:
@@ -142,7 +142,7 @@ async def generate_review(
         try:
             with span.new_child('vcs-diff'):
                 diff = (await get_vcs_diff(
-                    client, vcs_manager, vcs_type, package,
+                    client, vcs_managers[vcs_type], package,
                     base_revid.encode('utf-8') if base_revid else None,
                     revid.encode('utf-8'))).decode("utf-8", "replace")
                 if len(diff) > MAX_DIFF_SIZE:
@@ -172,7 +172,7 @@ async def generate_review(
         if old_revid == new_revid:
             return []
         try:
-            return await vcs_manager.get_revision_info(package, old_revid, new_revid, vcs_type)
+            return await vcs_managers[vcs_type].get_revision_info(package, old_revid, new_revid)
         except ClientResponseError as e:
             logging.warning("Unable to retrieve commit info; error code %d", e.status)
             return []

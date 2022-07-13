@@ -204,7 +204,7 @@ async def handle_review_post(request):
             request,
             request.app.http_client_session,
             request.app['differ_url'],
-            request.app['vcs_manager'],
+            request.app['vcs_managers'],
             suites=post.getall("suite", None),
             publishable_only=publishable_only,
         )
@@ -226,7 +226,7 @@ async def handle_review(request):
             request,
             request.app.http_client_session,
             request.app['differ_url'],
-            request.app['vcs_manager'],
+            request.app['vcs_managers'],
             suites=suites,
             publishable_only=publishable_only,
         )
@@ -258,7 +258,7 @@ async def handle_run(request):
         request.app['differ_url'],
         request.app.logfile_manager,
         run,
-        request.app['vcs_manager'],
+        request.app['vcs_managers'],
         is_admin=is_admin(request),
         span=span,
     )
