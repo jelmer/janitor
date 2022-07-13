@@ -1,9 +1,6 @@
 ---
 janitor_publish_port: 9912
 janitor_publish_address: "::1"
-janitor_vcs_store_port: 9923
-janitor_vcs_store_public_port: 9924
-janitor_vcs_store_address: "::1"
 # Maximum number of open merge proposals per maintainer (0 to disable)
 janitor_publish_max_mps_per_maintainer: 0
 # Seconds to wait in between background publish cycles.
@@ -16,3 +13,5 @@ janitor_publish_slowstart: true
 janitor_publish_reviewed_only: true
 # Require inclusion of binary diff for merge requests.
 janitor_publish_require_binary_diff: true
+janitor_git_location: "http://localhost:9912/git/"
+janitor_bzr_location: "http://localhost:9912/bzr/"
