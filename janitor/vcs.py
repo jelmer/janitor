@@ -518,7 +518,7 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
 
 
 def get_vcs_managers(location):
-    if ',' in location:
+    if ',' not in location:
         return {
             'git': RemoteGitVcsManager(str(URL(location) / "git")),
             'bzr': RemoteBzrVcsManager(str(URL(location) / "bzr")),
