@@ -532,7 +532,7 @@ async def create_web_app(
             name='dulwich-service'
         )
         public_app.router.add_post(
-            "/{package}/{service:git-receive-pack|git-upload-pack}",
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
             name='dulwich-service-public'
         )
@@ -540,7 +540,7 @@ async def create_web_app(
             "/{package}/info/refs",
             dulwich_refs, name='dulwich-refs')
         public_app.router.add_get(
-            "/{package}/info/refs",
+            "/git/{package}/info/refs",
             dulwich_refs, name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
@@ -549,17 +549,17 @@ async def create_web_app(
                 cgit_backend,
             )
             public_app.router.add_route(
-                method, "/{package}{subpath:" + regex.pattern + "}",
+                method, "/git/{package}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
 
 
-    public_app.router.add_get("/", handle_repo_list, name='public-repo-list')
+    public_app.router.add_get("/git/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
-    public_app.router.add_get("/{package}/{path_info:.*}", handle_klaus, name='klaus')
+    public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_post("/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     endpoint = aiozipkin.create_endpoint("janitor.vcs_store_git", ipv4=listen_addr, port=port)
     if config.zipkin_address:
