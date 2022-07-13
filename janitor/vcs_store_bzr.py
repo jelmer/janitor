@@ -91,7 +91,7 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
+        repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -110,7 +110,7 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
+        repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -134,7 +134,7 @@ async def handle_set_bzr_remote(request):
     post = await request.post()
 
     try:
-        local_branch = Branch.open(os.path.join(request.app.local_path, "bzr", package, remote))
+        local_branch = Branch.open(os.path.join(request.app.local_path, package, remote))
     except NotBranchError:
         raise web.HTTPNotFound()
     local_branch.set_parent(post["url"])
@@ -152,7 +152,7 @@ async def _bzr_open_repo(local_path, db, package):
     async with db.acquire() as conn:
         if not await package_exists(conn, package):
             raise web.HTTPNotFound(text='no such package: %s' % package)
-    repo_path = os.path.join(local_path, "bzr", package)
+    repo_path = os.path.join(local_path, package)
     try:
         repo = Repository.open(repo_path)
     except NotBranchError:
