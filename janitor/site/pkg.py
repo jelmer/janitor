@@ -112,7 +112,7 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, logfile_manager, run, vcs_manager, is_admin, span
+    db, client, config, differ_url, logfile_manager, run, vcs_managers, is_admin, span
 ):
     from ..schedule import estimate_success_probability
     kwargs = {}
@@ -167,7 +167,7 @@ async def generate_run_file(
         try:
             with span.new_child('vcs-diff'):
                 diff = await get_vcs_diff(
-                    client, vcs_manager, run['vcs_type'], run['package'],
+                    client, vcs_managers[run['vcs_type']], run['package'],
                     base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
                     revid.encode('utf-8') if revid is not None else NULL_REVISION)
         except ClientResponseError as e:

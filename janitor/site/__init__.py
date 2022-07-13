@@ -23,7 +23,7 @@ from yarl import URL
 
 from janitor.config import Config, get_distribution
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
-from janitor.vcs import RemoteVcsManager, VcsManager
+from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager, VcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
@@ -61,10 +61,12 @@ def update_vars_from_request(vs, request):
     vs["openid_configured"] = "openid_config" in request.app
     if request.app['external_url'] is not None:
         vs["url"] = request.app['external_url'].join(request.rel_url)
-        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.app['external_url']))
+        vcs_base_url = request.app['external_url']
     else:
         vs["url"] = request.url
-        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.url.with_path("/")))
+        vcs_base_url = request.url.with_path("/")
+    vs['git_vcs_manager'] = RemoteGitVcsManager(str(vcs_base_url / "git"))
+    vs['bzr_vcs_manager'] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
 
 
 def format_duration(duration):
@@ -134,10 +136,10 @@ class BuildDiffUnavailable(Exception):
         self.unavailable_run_id = unavailable_run_id
 
 
-async def get_vcs_diff(client, vcs_manager: VcsManager, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
+async def get_vcs_diff(client, vcs_manager: VcsManager, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
     if old_revid == new_revid:
         return b""
-    return await vcs_manager.get_diff(package, old_revid, new_revid, vcs_type)
+    return await vcs_manager.get_diff(package, old_revid, new_revid)
 
 
 async def get_archive_diff(

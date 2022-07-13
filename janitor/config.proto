@@ -55,6 +55,12 @@ message Config {
   optional string zipkin_address = 12;
 
   repeated Campaign campaign = 13;
+
+  // Location of git storage
+  optional string git_location = 14;
+
+  // Location of bzr storage
+  optional string bzr_location = 15;
 }
 
 message Env {

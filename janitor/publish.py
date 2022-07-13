@@ -94,7 +94,7 @@ from .schedule import (
 )
 from .vcs import (
     VcsManager,
-    get_vcs_manager,
+    get_vcs_managers_from_config,
     bzr_to_browse_url,
 )
 
@@ -404,7 +404,7 @@ async def publish_one(
 
 async def consider_publish_run(
         conn, config, template_env_path,
-        vcs_manager, rate_limiter, external_url, differ_url,
+        vcs_managers, rate_limiter, external_url, differ_url,
         topic_publish, topic_merge_proposal,
         run, maintainer_email,
         unpublished_branches, command,
@@ -468,7 +468,7 @@ async def consider_publish_run(
             campaign_config,
             template_env_path,
             rate_limiter,
-            vcs_manager,
+            vcs_managers,
             run,
             role,
             maintainer_email,
@@ -557,7 +557,7 @@ async def publish_pending_ready(
     config,
     template_env_path,
     rate_limiter,
-    vcs_manager,
+    vcs_managers,
     topic_publish,
     topic_merge_proposal,
     dry_run: bool,
@@ -588,7 +588,7 @@ async def publish_pending_ready(
             actual_modes = await consider_publish_run(
                 conn, config=config,
                 template_env_path=template_env_path,
-                vcs_manager=vcs_manager,
+                vcs_managers=vcs_managers,
                 rate_limiter=rate_limiter,
                 external_url=external_url, differ_url=differ_url,
                 topic_publish=topic_publish, topic_merge_proposal=topic_merge_proposal,
@@ -802,7 +802,7 @@ async def publish_from_policy(
     campaign_config: Campaign,
     template_env_path,
     rate_limiter,
-    vcs_manager,
+    vcs_managers,
     run: state.Run,
     role: str,
     maintainer_email: str,
@@ -921,7 +921,7 @@ async def publish_from_policy(
             unchanged_id=(unchanged_run['id'] if unchanged_run else None),
             derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
             maintainer_email=maintainer_email,
-            vcs_manager=vcs_manager,
+            vcs_manager=vcs_managers[run.vcs_type],
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run,
             external_url=external_url,
@@ -1027,7 +1027,7 @@ async def publish_and_store(
     mode,
     role: str,
     maintainer_email,
-    vcs_manager,
+    vcs_managers,
     rate_limiter,
     dry_run,
     external_url: str,
@@ -1066,7 +1066,7 @@ async def publish_and_store(
                 unchanged_run_id,
                 await derived_branch_name(conn, campaign_config, run, role),
                 maintainer_email,
-                vcs_manager,
+                vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -1277,7 +1277,7 @@ async def consider_request(request):
             await consider_publish_run(
                 conn, request.app['config'],
                 template_env_path=request.app['template_env_path'],
-                vcs_manager=request.app['vcs_manager'],
+                vcs_managers=request.app['vcs_managers'],
                 rate_limiter=request.app['rate_limiter'],
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
@@ -1312,7 +1312,7 @@ async def get_publish_policy(conn: asyncpg.Connection, package: str, suite: str)
 @routes.post("/{suite}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
-    vcs_manager = request.app['vcs_manager']
+    vcs_managers = request.app['vcs_managers']
     rate_limiter = request.app['rate_limiter']
     package = request.match_info["package"]
     suite = request.match_info["suite"]
@@ -1366,7 +1366,7 @@ async def publish_request(request):
                 mode,
                 role,
                 package['maintainer_email'],
-                vcs_manager=vcs_manager,
+                vcs_managers=vcs_managers,
                 rate_limiter=rate_limiter,
                 dry_run=dry_run,
                 external_url=request.app['external_url'],
@@ -1434,7 +1434,7 @@ async def run_web_server(
     port: int,
     template_env_path: Optional[str],
     rate_limiter: RateLimiter,
-    vcs_manager: VcsManager,
+    vcs_managers: Dict[str, VcsManager],
     db: asyncpg.pool.Pool,
     config,
     topic_merge_proposal: Topic,
@@ -1451,7 +1451,7 @@ async def run_web_server(
     app.router.add_routes(routes)
     app['gpg'] = gpg.Context(armor=True)
     app['template_env_path'] = template_env_path
-    app['vcs_manager'] = vcs_manager
+    app['vcs_managers'] = vcs_managers
     app['db'] = db
     app['config'] = config
     app['external_url'] = external_url
@@ -1521,7 +1521,7 @@ async def check_mp_request(request):
                 mp,
                 status,
                 topic_merge_proposal=request.app['topic_merge_proposal'],
-                vcs_manager=request.app['vcs_manager'],
+                vcs_managers=request.app['vcs_managers'],
                 dry_run=("dry_run" in post),
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
@@ -1548,7 +1548,7 @@ async def scan_request(request):
                 request.app['config'],
                 request.app['template_env_path'],
                 request.app['rate_limiter'],
-                request.app['vcs_manager'],
+                request.app['vcs_managers'],
                 request.app['topic_merge_proposal'],
                 dry_run=request.app['dry_run'],
                 differ_url=request.app['differ_url'],
@@ -1580,7 +1580,7 @@ async def refresh_proposal_status_request(request):
                     request.app['template_env_path'],
                     mp,
                     status,
-                    vcs_manager=request.app['vcs_manager'],
+                    vcs_managers=request.app['vcs_managers'],
                     rate_limiter=request.app['rate_limiter'],
                     topic_merge_proposal=request.app['topic_merge_proposal'],
                     dry_run=request.app['dry_run'],
@@ -1605,7 +1605,7 @@ async def autopublish_request(request):
             request.app['config'],
             request.app['template_env_path'],
             request.app['rate_limiter'],
-            request.app['vcs_manager'],
+            request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
             topic_publish=request.app['topic_publish'],
             external_url=request.app['external_url'],
@@ -1626,7 +1626,7 @@ async def process_queue_loop(
     template_env_path,
     rate_limiter,
     dry_run,
-    vcs_manager,
+    vcs_managers,
     interval,
     topic_merge_proposal,
     topic_publish,
@@ -1646,7 +1646,7 @@ async def process_queue_loop(
                 config,
                 template_env_path,
                 rate_limiter,
-                vcs_manager,
+                vcs_managers,
                 topic_merge_proposal,
                 dry_run=dry_run,
                 external_url=external_url,
@@ -1659,7 +1659,7 @@ async def process_queue_loop(
                 config,
                 template_env_path,
                 rate_limiter,
-                vcs_manager,
+                vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -1785,7 +1785,7 @@ async def check_existing_mp(
     mp,
     status,
     topic_merge_proposal,
-    vcs_manager,
+    vcs_managers,
     rate_limiter,
     dry_run: bool,
     external_url: str,
@@ -2197,7 +2197,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 unchanged_run_id,
                 source_branch_name,
                 maintainer_email,
-                vcs_manager=vcs_manager,
+                vcs_manager=vcs_managers[last_run.vcs_type],
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -2348,7 +2348,7 @@ async def check_existing(
     config,
     template_env_path,
     rate_limiter,
-    vcs_manager,
+    vcs_managers,
     topic_merge_proposal,
     dry_run: bool,
     external_url: str,
@@ -2391,7 +2391,7 @@ async def check_existing(
                 mp,
                 status,
                 topic_merge_proposal=topic_merge_proposal,
-                vcs_manager=vcs_manager,
+                vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -2506,7 +2506,7 @@ async def listen_to_runner(
     config,
     template_env_path,
     rate_limiter,
-    vcs_manager,
+    vcs_managers,
     runner_url,
     topic_publish,
     topic_merge_proposal,
@@ -2525,7 +2525,7 @@ async def listen_to_runner(
                 get_campaign_config(config, run.suite),
                 template_env_path,
                 rate_limiter,
-                vcs_manager,
+                vcs_managers,
                 run,
                 role,
                 maintainer_email,
@@ -2652,7 +2652,6 @@ async def main(argv=None):
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-    parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
     parser.add_argument(
         "--template-env-path", type=str,
         help="Path to merge proposal templates")
@@ -2686,7 +2685,7 @@ async def main(argv=None):
     topic_merge_proposal = Topic("merge-proposal")
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
-    vcs_manager = get_vcs_manager(args.vcs_path)
+    vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     if args.once:
         await publish_pending_ready(
@@ -2697,7 +2696,7 @@ async def main(argv=None):
                 dry_run=args.dry_run,
                 external_url=args.external_url,
                 differ_url=args.differ_url,
-                vcs_manager=vcs_manager,
+                vcs_managers=vcs_managers,
                 topic_publish=topic_publish,
                 topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=args.reviewed_only,
@@ -2715,7 +2714,7 @@ async def main(argv=None):
                     args.template_env_path,
                     rate_limiter,
                     dry_run=args.dry_run,
-                    vcs_manager=vcs_manager,
+                    vcs_managers=vcs_managers,
                     interval=args.interval,
                     topic_merge_proposal=topic_merge_proposal,
                     topic_publish=topic_publish,
@@ -2734,7 +2733,7 @@ async def main(argv=None):
                     args.port,
                     args.template_env_path,
                     rate_limiter,
-                    vcs_manager,
+                    vcs_managers,
                     db, config,
                     topic_merge_proposal,
                     topic_publish,
@@ -2755,7 +2754,7 @@ async def main(argv=None):
                         config,
                         args.template_env_path,
                         rate_limiter,
-                        vcs_manager,
+                        vcs_managers,
                         args.runner_url,
                         topic_publish,
                         topic_merge_proposal,

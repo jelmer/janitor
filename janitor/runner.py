@@ -105,7 +105,8 @@ from .vcs import (
     is_authenticated_url,
     open_branch_ext,
     BranchOpenFailure,
-    get_vcs_manager,
+    get_vcs_managers_from_config,
+    get_vcs_managers,
     UnsupportedVcs,
     VcsManager,
 )
@@ -1429,8 +1430,8 @@ class QueueProcessor(object):
         dry_run: bool = False,
         logfile_manager: Optional[LogFileManager] = None,
         artifact_manager: Optional[ArtifactManager] = None,
-        vcs_manager: Optional[VcsManager] = None,
-        public_vcs_manager: Optional[VcsManager] = None,
+        vcs_managers: Optional[Dict[str, VcsManager]] = None,
+        public_vcs_managers: Optional[Dict[str, VcsManager]] = None,
         use_cached_only: bool = False,
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
@@ -1445,8 +1446,8 @@ class QueueProcessor(object):
         self.dry_run = dry_run
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
-        self.vcs_manager = vcs_manager
-        self.public_vcs_manager = public_vcs_manager
+        self.vcs_managers = vcs_managers
+        self.public_vcs_managers = public_vcs_managers
         self.use_cached_only = use_cached_only
         self.topic_queue = Topic("queue", repeat_last=True)
         self.topic_result = Topic("result")
@@ -1848,8 +1849,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 try:
                     resume_branch = await to_thread_timeout(
                         VCS_STORE_BRANCH_OPEN_TIMEOUT,
-                        queue_processor.public_vcs_manager.get_branch,
-                        item.package, '%s/%s' % (campaign_config.name, 'main'), vcs_type)
+                        queue_processor.public_vcs_managers[vcs_type].get_branch,
+                        item.package, '%s/%s' % (campaign_config.name, 'main'))
                 except UnsupportedVcs:
                     logging.warning(
                         'Unsupported vcs %s for resume branch of %s',
@@ -1879,8 +1880,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 branch_name = cache_branch_name(distribution, "main")
             else:
                 branch_name = "main"
-            cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-                item.package, branch_name, vcs_type
+            cached_branch_url = queue_processor.public_vcs_managers[vcs_type].get_branch_url(
+                item.package, branch_name
             )
     except UnsupportedVcs:
         cached_branch_url = None
@@ -1909,7 +1910,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "command": command,
         "suite": item.suite,
         "force-build": campaign_config.force_build,
-        "vcs_store": queue_processor.public_vcs_manager.base_urls,
+        "vcs_store": {
+            k: v.base_url
+            for (k, v) in queue_processor.public_vcs_managers.items()},
     }
 
     if mode == 'assign':
@@ -2110,7 +2113,6 @@ async def main(argv=None):
         "--public-vcs-location", type=str, default="https://janitor.debian.net/",
         help="Public vcs location (used for URLs handed to worker)"
     )
-    parser.add_argument("--vcs-store-url", type=str, help="URL to vcs store")
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
@@ -2142,11 +2144,8 @@ async def main(argv=None):
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
-    public_vcs_manager = get_vcs_manager(args.public_vcs_location)
-    if args.vcs_store_url:
-        vcs_manager = get_vcs_manager(args.vcs_store_url)
-    else:
-        vcs_manager = public_vcs_manager
+    public_vcs_managers = get_vcs_managers(args.public_vcs_location)
+    vcs_managers = get_vcs_managers_from_config(config)
 
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
@@ -2195,8 +2194,8 @@ async def main(argv=None):
             dry_run=args.dry_run,
             logfile_manager=logfile_manager,
             artifact_manager=artifact_manager,
-            vcs_manager=vcs_manager,
-            public_vcs_manager=public_vcs_manager,
+            vcs_managers=vcs_managers,
+            public_vcs_managers=public_vcs_managers,
             use_cached_only=args.use_cached_only,
             committer=config.committer,
             backup_artifact_manager=backup_artifact_manager,
