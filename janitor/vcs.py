@@ -20,6 +20,7 @@ from io import BytesIO
 import logging
 import os
 from typing import Optional, List, Tuple, Iterable, Dict
+from yarl import URL
 
 import urllib.parse
 import breezy.git  # noqa: F401
@@ -253,11 +254,8 @@ class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
 
-def get_cached_repository_url(base_url: str, vcs_type: str, package: str) -> str:
-    if vcs_type in SUPPORTED_VCSES:
-        return "%s/%s" % (base_url.rstrip("/"), package)
-    else:
-        raise UnsupportedVcs(vcs_type)
+def get_cached_repository_url(base_url: str, package: str) -> str:
+    return "%s/%s" % (base_url.rstrip("/"), package)
 
 
 def get_cached_branch_url(
@@ -319,10 +317,6 @@ def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) ->
     return open_branch(url)
 
 
-def get_local_vcs_repo_url(vcs_directory: str, package: str, vcs_type: str) -> str:
-    return os.path.join(vcs_directory, vcs_type, package)
-
-
 def get_local_vcs_repo(
     vcs_directory: str, package: str, vcs_type: Optional[str] = None
 ) -> Optional[Repository]:
@@ -336,140 +330,161 @@ def get_local_vcs_repo(
 
 class VcsManager(object):
     def get_branch(
-        self, codebase: str, branch_name: str, vcs_type: Optional[str] = None
+        self, codebase: str, branch_name: str
     ) -> Branch:
         raise NotImplementedError(self.get_branch)
 
     def get_branch_url(
-        self, codebase: str, branch_name: str, vcs_type: str
+        self, codebase: str, branch_name: str
     ) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
     def get_repository(
-        self, codebase: str, vcs_type: Optional[str] = None
+        self, codebase: str
     ) -> Repository:
         raise NotImplementedError(self.get_repository)
 
-    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
+    def get_repository_url(self, codebase: str) -> str:
         raise NotImplementedError(self.get_repository_url)
 
-    def list_repositories(self, vcs_type: str) -> Iterable[str]:
+    def list_repositories(self) -> Iterable[str]:
         raise NotImplementedError(self.list_repositories)
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+    async def get_diff(self, codebase, old_revid, new_revid):
         raise NotImplementedError(self.get_diff)
 
-    async def get_revision_info(self, codebase, old_revid, new_revid, vcs_type):
+    async def get_revision_info(self, codebase, old_revid, new_revid):
         raise NotImplementedError(self.get_revision_info)
 
 
-class LocalVcsManager(VcsManager):
+class LocalGitVcsManager(VcsManager):
     def __init__(self, base_path: str):
         self.base_path = base_path
 
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
-    def get_branch(self, codebase, branch_name, vcs_type=None):
+    def get_branch(self, codebase, branch_name):
         try:
             return get_local_vcs_branch(self.base_path, codebase, branch_name)
         except (BranchUnavailable, BranchMissing):
             return None
 
-    def get_branch_url(self, codebase, branch_name, vcs_type):
-        return get_local_vcs_branch_url(self.base_path, vcs_type, codebase, branch_name)
+    def get_branch_url(self, codebase, branch_name):
+        return get_local_vcs_branch_url(self.base_path, "git", codebase, branch_name)
 
-    def get_repository(self, codebase, vcs_type=None):
-        return get_local_vcs_repo(self.base_path, codebase, vcs_type)
+    def get_repository(self, codebase):
+        return get_local_vcs_repo(self.base_path, codebase, "git")
 
-    def get_repository_url(self, codebase, vcs_type):
-        return get_local_vcs_repo_url(self.base_path, codebase, vcs_type)
+    def get_repository_url(self, codebase):
+        return os.path.join(self.base_path, codebase)
 
-    def list_repositories(self, vcs_type):
-        for entry in os.scandir(os.path.join(self.base_path, vcs_type)):
+    def list_repositories(self):
+        for entry in os.scandir(os.path.join(self.base_path, "git")):
             yield entry.name
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+    async def get_diff(self, codebase, old_revid, new_revid):
         raise NotImplementedError(self.get_diff)
 
 
-class RemoteVcsManager(VcsManager):
-    def __init__(self, git_base_url: Optional[str], bzr_base_url: Optional[str]):
-        self.base_urls = {}
-        if git_base_url:
-            self.base_urls['git'] = git_base_url
-        if bzr_base_url:
-            self.base_urls['bzr'] = bzr_base_url
+class LocalBzrVcsManager(VcsManager):
+    def __init__(self, base_path: str):
+        self.base_path = base_path
 
-    @classmethod
-    def from_single_url(cls, url: str):
-        return cls(urlutils.join(url, 'git'), urlutils.join(url, 'bzr'))
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.base_path)
 
-    @classmethod
-    def from_urls(cls, urls: Dict[str, str]):
-        return cls(urls.get('git'), urls.get('bzr'))
+    def get_branch(self, codebase, branch_name):
+        try:
+            return get_local_vcs_branch(self.base_path, codebase, branch_name)
+        except (BranchUnavailable, BranchMissing):
+            return None
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
-        url = self.get_diff_url(codebase, old_revid, new_revid, vcs_type)
-        if url is None:
-            raise NotImplementedError('vcs type %s' % vcs_type)
+    def get_branch_url(self, codebase, branch_name):
+        return get_local_vcs_branch_url(self.base_path, "bzr", codebase, branch_name)
+
+    def get_repository(self, codebase):
+        return get_local_vcs_repo(self.base_path, codebase, "bzr")
+
+    def get_repository_url(self, codebase):
+        return os.path.join(self.base_path, codebase)
+
+    def list_repositories(self):
+        for entry in os.scandir(os.path.join(self.base_path, "bzr")):
+            yield entry.name
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        raise NotImplementedError(self.get_diff)
+
+
+class RemoteGitVcsManager(VcsManager):
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        url = self.get_diff_url(codebase, old_revid, new_revid)
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
-    async def get_revision_info(self, codebase, old_revid, new_revid, vcs_type):
-        if vcs_type == 'bzr':
-            url = urllib.parse.urljoin(self.base_urls['bzr'], "%s/revision-info?old=%s&new=%s" % (
-                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
-        elif vcs_type == 'git':
-            url = urllib.parse.urljoin(self.base_urls['git'], "%s/revision-info?old=%s&new=%s" % (
-                codebase,
-                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
-        else:
-            raise NotImplementedError('vcs type %s' % vcs_type)
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
+            codebase,
+            old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
+            new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
     def __repr__(self):
-        return "%s(%r, %r)" % (
-            type(self).__name__, self.base_urls.get('git'),
-            self.base_urls.get('bzr'))
+        return "%s(%r)" % (type(self).__name__, self.base_url)
 
-    def get_diff_url(self, codebase, old_revid, new_revid, vcs_type=None):
-        if vcs_type == 'bzr':
-            return urllib.parse.urljoin(self.base_urls['bzr'], "%s/diff?old=%s&new=%s" % (
-                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
-        elif vcs_type == 'git':
-            return urllib.parse.urljoin(self.base_urls['git'], "%s/diff?old=%s&new=%s" % (
-                codebase,
-                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
-        else:
-            return None
+    def get_diff_url(self, codebase, old_revid, new_revid):
+        return urllib.parse.urljoin(self.base_url, "%s/diff?old=%s&new=%s" % (
+            codebase,
+            old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
+            new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
 
-    def get_branch(self, codebase, branch_name, vcs_type=None):
-        if vcs_type:
-            if vcs_type in self.base_urls:
-                return get_cached_branch(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
-            raise UnsupportedVcs(vcs_type)
-        for vcs_type, base_url in self.base_urls.items():
-            branch = get_cached_branch(base_url, vcs_type, codebase, branch_name)
-            if branch:
-                return branch
-        else:
-            return None
+    def get_branch(self, codebase, branch_name):
+        return get_cached_branch(self.base_url, "git", codebase, branch_name)
 
-    def get_branch_url(self, codebase, branch_name, vcs_type) -> str:
-        if vcs_type in self.base_urls:
-            return get_cached_branch_url(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
-        raise UnsupportedVcs(vcs_type)
+    def get_branch_url(self, codebase, branch_name) -> str:
+        return get_cached_branch_url(self.base_url, "git", codebase, branch_name)
 
-    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
-        if vcs_type in self.base_urls:
-            return get_cached_repository_url(self.base_urls[vcs_type], vcs_type, codebase)
-        raise UnsupportedVcs(vcs_type)
+    def get_repository_url(self, codebase: str) -> str:
+        return "%s/%s" % (self.base_url.rstrip("/"), codebase)
+
+
+class RemoteBzrVcsManager(VcsManager):
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        url = self.get_diff_url(codebase, old_revid, new_revid)
+        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.read()
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
+            codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
+            new_revid.decode('utf-8') if new_revid else NULL_REVISION))
+        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.json()
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.base_url)
+
+    def get_diff_url(self, codebase, old_revid, new_revid):
+        return urllib.parse.urljoin(self.base_url, "%s/diff?old=%s&new=%s" % (
+            codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
+            new_revid.decode('utf-8') if new_revid else NULL_REVISION))
+
+    def get_branch(self, codebase, branch_name):
+        return get_cached_branch(self.base_url, "bzr", codebase, branch_name)
+
+    def get_branch_url(self, codebase, branch_name) -> str:
+        return get_cached_branch_url(self.base_url, "bzr", codebase, branch_name)
+
+    def get_repository_url(self, codebase: str) -> str:
+        return "%s/%s" % (self.base_url.rstrip("/"), codebase)
 
 
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
@@ -502,18 +517,39 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     return f.getvalue()
 
 
-def get_vcs_manager(url: str) -> VcsManager:
-    if "=" in url:
-        urls = {}
-        for element in url.split(','):
-            (vcs, url) = element.split('=', 1)
-            urls[vcs] = url
-        return RemoteVcsManager.from_urls(urls)
-    else:
-        parsed = urlutils.URL.from_string(url)
+def get_vcs_managers(location):
+    if ',' in location:
+        return {
+            'git': RemoteGitVcsManager(str(URL(location) / "git")),
+            'bzr': RemoteBzrVcsManager(str(URL(location) / "bzr")),
+        }
+    ret = {}
+    for p in location.split(','):
+        (k, v) = p.split('=', 1)
+        if k == 'git':
+            ret[k] = RemoteGitVcsManager(str(URL(v) / "git"))
+        elif k == 'bzr':
+            ret[k] = RemoteBzrVcsManager(str(URL(v) / "bzr"))
+        else:
+            raise ValueError('unsupported vcs %s' % k)
+    return ret
+
+
+def get_vcs_managers_from_config(config) -> Dict[str, VcsManager]:
+    ret: Dict[str, VcsManager] = {}
+    if config.git_location:
+        parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
-            return LocalVcsManager(parsed.path)
-        return RemoteVcsManager.from_single_url(url)
+            ret['git'] = LocalGitVcsManager(parsed.path)
+        else:
+            ret['git'] = RemoteGitVcsManager(config.git_location)
+    if config.bzr_location:
+        parsed = urlutils.URL.from_string(config.git_location)
+        if parsed.scheme in ("", "file"):
+            ret['bzr'] = LocalBzrVcsManager(parsed.path)
+        else:
+            ret['bzr'] = RemoteBzrVcsManager(config.git_location)
+    return ret
 
 
 def bzr_to_browse_url(url: str) -> str:
