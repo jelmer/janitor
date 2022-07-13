@@ -127,6 +127,8 @@ assignment_count = Counter("assignments", "Number of assignments handed out", ["
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
 artifact_upload_failed_count = Counter(
     "artifact_upload_failed", "Number of failed artifact uploads")
+primary_logfile_upload_failed = Counter(
+    "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
 
 
 async def to_thread_timeout(timeout, func, *args, **kwargs):
@@ -660,16 +662,19 @@ async def import_logs(
         except ServiceUnavailable as e:
             logging.warning("Unable to upload logfile %s: %s", entry.name, e)
             if backup_logfile_manager:
+                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
         except asyncio.TimeoutError as e:
             logging.warning("Timeout uploading logfile %s: %s", entry.name, e)
             if backup_logfile_manager:
+                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
         except PermissionDenied as e:
             logging.warning(
                 "Permission denied error while uploading logfile %s: %s",
                 entry.name, e)
             if backup_logfile_manager:
+                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
 
 
