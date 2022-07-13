@@ -1851,7 +1851,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             try:
                 vcs_manager = queue_processor.public_vcs_managers[vcs_type]
             except KeyError:
-                pass
+                cached_branch_url = None
             else:
                 cached_branch_url = queue_processor.public_vcs_managers[vcs_type].get_branch_url(
                     item.package, branch_name
