@@ -222,53 +222,6 @@ async def git_diff_helper(repo, old_sha, new_sha, path=None):
     raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
 
 
-async def diff_request(request):
-    run_id = request.match_info["run_id"]
-    path = request.query.get('path')
-    role = request.match_info["role"]
-    span = aiozipkin.request_span(request)
-    with span.new_child('sql:run'):
-        async with request.app.db.acquire() as conn:
-            row = await conn.fetchrow("""\
-SELECT
-  package,
-  new_result_branch.base_revision AS base_revision,
-  new_result_branch.revision AS revision
-FROM run
-LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id
-WHERE id = $1 AND new_result_branch.role = $2
-""", run_id, role)
-            if not row:
-                raise web.HTTPNotFound(text="No such run: %r" % run_id)
-    for vcs in ['bzr', 'git']:
-        path = os.path.join(request.app.local_path, vcs, row['package'])
-        if not os.path.exists(path):
-            continue
-        repo = Repository.open(path)
-        break
-    else:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            row['package'])
-    if row['revision'] is None:
-        raise web.HTTPNotFound(text="No branch with role %s" % role)
-    old_revid = row['base_revision'].encode('utf-8')
-    new_revid = row['revision'].encode('utf-8')
-
-    if (hasattr(repo, '_git') and
-            old_revid.startswith(b'git-v1:') and
-            new_revid.startswith(b'git-v1:')):
-
-        with span.new_child('subprocess:git-diff'):
-            return await git_diff_helper(
-                repo, old_revid.decode()[len('git-v1:'):],
-                new_revid.decode()[len('git-v1:'):],
-                path)
-    else:
-        with span.new_child('subprocess:brz-diff'):
-            return await bzr_diff_helper(repo, old_revid, new_revid, path)
-
-
 async def _git_open_repo(local_path, db, package):
     repo_path = os.path.join(local_path, "git", package)
     repo = Repository.open(repo_path)
@@ -743,7 +696,6 @@ async def create_web_app(
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
-    app.router.add_get("/diff/{run_id}/{role}", diff_request, name='diff')
     if dulwich_server:
         app.router.add_post(
             "/git/{package}/{service:git-receive-pack|git-upload-pack}",
