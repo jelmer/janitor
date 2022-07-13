@@ -31,13 +31,9 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
 from http.client import parse_headers  # type: ignore
 
-from breezy import urlutils
-from breezy.branch import Branch
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
-from breezy.bzr.smart import medium
 from breezy.repository import Repository
-from breezy.transport import get_transport_from_url
 from dulwich.objects import valid_hexsha
 from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
@@ -55,87 +51,6 @@ from .site import is_worker, iter_accept, env as site_env
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
-
-
-async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
-    if path:
-        raise NotImplementedError
-    args = [
-        sys.executable,
-        '-m',
-        'breezy',
-        "diff",
-        '-rrevid:%s..revid:%s' % (
-            old_revid.decode(),
-            new_revid.decode(),
-        ),
-        urlutils.join(repo.user_url, path or '')
-    ]
-
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE,
-    )
-
-    # TODO(jelmer): Stream this
-    try:
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
-
-    if p.returncode != 3:
-        return web.Response(body=stdout, content_type="text/x-diff")
-    logging.warning('bzr diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
-
-
-async def bzr_diff_request(request):
-    package = request.match_info["package"]
-    old_revid = request.query.get('old')
-    path = request.query.get('path')
-    if old_revid is not None:
-        old_revid = old_revid.encode('utf-8')
-    new_revid = request.query.get('new')
-    if new_revid is not None:
-        new_revid = new_revid.encode('utf-8')
-    try:
-        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            package)
-    return await bzr_diff_helper(repo, old_revid, new_revid, path)
-
-
-async def bzr_revision_info_request(request):
-    package = request.match_info["package"]
-    old_revid = request.query.get('old')
-    if old_revid is not None:
-        old_revid = old_revid.encode('utf-8')
-    new_revid = request.query.get('new')
-    if new_revid is not None:
-        new_revid = new_revid.encode('utf-8')
-    try:
-        repo = Repository.open(os.path.join(request.app.local_path, "bzr", package))
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            package)
-    ret = []
-    with repo.lock_read():
-        graph = repo.get_graph()
-        for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
-            ret.append({
-                'revision-id': rev.revision_id.decode('utf-8'),
-                'link': None,
-                'message': rev.description})
-    return web.json_response(ret)
 
 
 async def git_diff_request(request):
@@ -343,22 +258,6 @@ async def handle_set_git_remote(request):
     r._controltransport.put_bytes("config", b.getvalue())
 
     # TODO(jelmer): Run 'git fetch $remote'?
-
-    return web.Response()
-
-
-async def handle_set_bzr_remote(request):
-    package = request.match_info["package"]
-    remote = request.match_info["remote"]
-    post = await request.post()
-
-    try:
-        local_branch = Branch.open(os.path.join(request.app.local_path, "bzr", package, remote))
-    except NotBranchError:
-        raise web.HTTPNotFound()
-    local_branch.set_parent(post["url"])
-
-    # TODO(jelmer): Run 'bzr pull'?
 
     return web.Response()
 
@@ -575,77 +474,11 @@ async def package_exists(conn, package):
     return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
 
 
-async def _bzr_open_repo(local_path, db, package):
-    async with db.acquire() as conn:
-        if not await package_exists(conn, package):
-            raise web.HTTPNotFound(text='no such package: %s' % package)
-    repo_path = os.path.join(local_path, "bzr", package)
-    try:
-        repo = Repository.open(repo_path)
-    except NotBranchError:
-        controldir = ControlDir.create(repo_path)
-        repo = controldir.create_repository(shared=True)
-    return repo
-
-
-async def bzr_backend(request):
-    package = request.match_info["package"]
-    branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app.local_path, request.app.db, package)
-    if branch_name:
-        try:
-            get_campaign_config(request.app.config, branch_name)
-        except KeyError:
-            raise web.HTTPNotFound(text='no such suite: %s' % branch_name)
-        transport = repo.user_transport.clone(branch_name)
-    else:
-        transport = repo.user_transport
-    transport.ensure_base()
-    allow_writes = request.app.allow_writes
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
-    if allow_writes:
-        backing_transport = transport
-    else:
-        backing_transport = get_transport_from_url("readonly+" + transport.base)
-    out_buffer = BytesIO()
-    request_data_bytes = await request.read()
-
-    protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(
-        request_data_bytes
-    )
-
-    smart_protocol_request = protocol_factory(
-        transport, out_buffer.write, ".", backing_transport
-    )
-    smart_protocol_request.accept_bytes(unused_bytes)
-    if smart_protocol_request.next_read_size() != 0:
-        # The request appears to be incomplete, or perhaps it's just a
-        # newer version we don't understand.  Regardless, all we can do
-        # is return an error response in the format of our version of the
-        # protocol.
-        response_data = b"error\x01incomplete request\n"
-    else:
-        response_data = out_buffer.getvalue()
-
-    response = web.StreamResponse(status=200)
-    response.content_type = "application/octet-stream"
-
-    await response.prepare(request)
-
-    await response.write(response_data)
-
-    await response.write_eof()
-
-    return response
-
-
 async def handle_repo_list(request):
-    vcs = request.match_info["vcs"]
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.local_path, vcs))]
+                 for entry in os.scandir(os.path.join(request.app.local_path))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -656,17 +489,13 @@ async def handle_repo_list(request):
                 content_type='text/plain')
         elif accept in ('text/html', ):
             template = site_env.get_template('repo-list.html')
-            text = await template.render_async(vcs=vcs, repositories=names)
+            text = await template.render_async(vcs="git", repositories=names)
             return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
 
 async def handle_health(request):
     return web.Response(text='ok')
-
-
-async def handle_index(request):
-    return web.Response(text='')
 
 
 async def create_web_app(
@@ -698,51 +527,41 @@ async def create_web_app(
     app.router.add_get("/metrics", metrics, name="metrics")
     if dulwich_server:
         app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            "/{package}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
             name='dulwich-service'
         )
         public_app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            "/{package}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
             name='dulwich-service-public'
         )
         app.router.add_get(
-            "/git/{package}/info/refs",
+            "/{package}/info/refs",
             dulwich_refs, name='dulwich-refs')
         public_app.router.add_get(
-            "/git/{package}/info/refs",
+            "/{package}/info/refs",
             dulwich_refs, name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}",
+                method, "/{package}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
             public_app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}",
+                method, "/{package}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
 
 
-    app.router.add_get("/", handle_index, name="index")
-    public_app.router.add_get("/", handle_index, name="index")
-    public_app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
-    app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
+    public_app.router.add_get("/", handle_repo_list, name='public-repo-list')
+    app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
-    public_app.router.add_get("/health", handle_health, name='health')
-    app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
-    app.router.add_get("/git/{package}/revision-info", git_revision_info_request, name='git-revision-info')
-    public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
-    app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_get("/bzr/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
-    public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
-    public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
-    app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
-    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
-    app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
-    app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
-    endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
+    app.router.add_get("/{package}/diff", git_diff_request, name='git-diff')
+    app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
+    public_app.router.add_get("/{package}/{path_info:.*}", handle_klaus, name='klaus')
+    app.router.add_post("/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
+    endpoint = aiozipkin.create_endpoint("janitor.vcs_store_git", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
@@ -755,7 +574,7 @@ async def create_web_app(
 async def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.vcs_store")
+    parser = argparse.ArgumentParser(prog="janitor.vcs_store_git")
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
     )
