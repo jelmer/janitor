@@ -237,6 +237,10 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_home(request):
+    return web.Response(text='')
+
+
 async def create_web_app(
     listen_addr: str,
     port: int,
@@ -263,6 +267,7 @@ async def create_web_app(
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
+    public_app.router.add_get("/", handle_health, name='home')
     public_app.router.add_get("/bzr/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
