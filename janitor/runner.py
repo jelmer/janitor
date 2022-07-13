@@ -85,7 +85,6 @@ from .compat import to_thread
 from .config import read_config, get_campaign_config, get_distribution, Config
 from .debian import (
     changes_filenames,
-    open_guessed_salsa_branch,
     find_changes,
     NoChangesFile,
     dpkg_vendor,
@@ -617,42 +616,6 @@ async def update_branch_url(
         vcs_url,
         package,
     )
-
-
-async def open_branch_with_fallback(
-    conn, pkg, vcs_type, vcs_url, possible_transports=None, timeout=None
-):
-    probers = select_preferred_probers(vcs_type)
-    logging.info(
-        'Opening branch %s with %r', vcs_url,
-        [p.__name__ for p in probers])
-    try:
-        return await to_thread_timeout(
-            timeout, open_branch_ext,
-            vcs_url, possible_transports=possible_transports, probers=probers)
-    except BranchOpenFailure as e:
-        if e.code == "hosted-on-alioth":
-            logging.info(
-                "Branch %s is hosted on alioth. Trying some other options..", vcs_url
-            )
-            try:
-                branch = await open_guessed_salsa_branch(
-                    conn,
-                    pkg,
-                    vcs_type,
-                    vcs_url,
-                    possible_transports=possible_transports,
-                    timeout=timeout,
-                )
-            except BranchOpenFailure:
-                raise e
-            else:
-                if branch:
-                    await update_branch_url(
-                        conn, pkg, "Git", full_branch_url(branch).rstrip("/")
-                    )
-                    return branch
-        raise
 
 
 def create_background_task(fn, title):
@@ -1774,7 +1737,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             queue_processor.register_run(active_run)
 
             if item.branch_url is None:
-                # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
@@ -1796,14 +1758,13 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
         try:
             with span.new_child('branch:open'):
-                main_branch = await open_branch_with_fallback(
-                    conn,
-                    item.package,
-                    item.vcs_type,
-                    item.branch_url,
-                    possible_transports=possible_transports,
-                    timeout=REMOTE_BRANCH_OPEN_TIMEOUT,
-                )
+                probers = select_preferred_probers(item.vcs_type)
+                logging.info(
+                    'Opening branch %s with %r', item.branch_url,
+                    [p.__name__ for p in probers])
+                main_branch = await to_thread_timeout(
+                    REMOTE_BRANCH_OPEN_TIMEOUT, open_branch_ext,
+                    item.branch_url, possible_transports=possible_transports, probers=probers)
         except BranchRateLimited as e:
             host = urlutils.URL.from_string(item.branch_url).host
             logging.warning('Rate limiting for %s: %r', host, e)

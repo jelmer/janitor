@@ -25,8 +25,6 @@ except ImportError:  # python < 3.9
 
 
 import os
-import itertools
-import re
 import subprocess
 
 from debian.changelog import Changelog, Version
@@ -34,25 +32,9 @@ from debian.deb822 import Changes
 
 from breezy import (
     osutils,
-    urlutils,
 )
 from breezy.trace import note
 from breezy.workingtree import WorkingTree
-
-from lintian_brush.salsa import (
-    guess_repository_url,
-    salsa_url_from_alioth_url,
-)
-
-from silver_platter.debian import (
-    select_probers,
-)
-
-from ..compat import to_thread
-from ..vcs import (
-    open_branch_ext,
-    BranchOpenFailure,
-)
 
 # Timeout in seconds for uploads
 UPLOAD_TIMEOUT = 30 * 60
@@ -101,62 +83,6 @@ def find_changes(path):
     if not names:
         raise NoChangesFile(path)
     return (names, source, version, distribution, binary_packages)
-
-
-def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):
-    yield guess_repository_url(package_name, maintainer_email)
-    yield "https://salsa.debian.org/debian/%s.git" % package_name
-
-
-def possible_urls_from_alioth_url(vcs_type, vcs_url):
-    # These are the same transformations applied by vcswatc. The goal is mostly
-    # to get a URL that properly redirects.
-    https_alioth_url = re.sub(
-        r"(https?|git)://(anonscm|git).debian.org/(git/)?",
-        r"https://anonscm.debian.org/git/",
-        vcs_url,
-    )
-
-    yield https_alioth_url
-    yield salsa_url_from_alioth_url(vcs_type, vcs_url)
-
-
-async def open_guessed_salsa_branch(
-    conn, pkg, vcs_type, vcs_url, possible_transports=None,
-    timeout=None
-):
-    # Don't do this as a top-level export, since it imports asyncpg, which
-    # isn't available on jenkins.debian.net.
-
-    package = await conn.fetchrow(
-        'SELECT name, maintainer_email FROM package WHERE name = $1', pkg)
-    probers = select_probers("git")
-    vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
-
-    tried = set(vcs_url)
-
-    for salsa_url in itertools.chain(
-        possible_urls_from_alioth_url(vcs_type, vcs_url),
-        possible_salsa_urls_from_package_name(package['name'], package['maintainer_email']),
-    ):
-        if not salsa_url or salsa_url in tried:
-            continue
-
-        tried.add(salsa_url)
-
-        salsa_url = urlutils.join_segment_parameters_raw(salsa_url, *params)
-
-        note("Trying to access salsa URL %s instead.", salsa_url)
-        try:
-            branch = await to_thread(
-                open_branch_ext, salsa_url,
-                possible_transports=possible_transports, probers=probers)
-        except BranchOpenFailure:
-            pass
-        else:
-            note("Converting alioth URL: %s -> %s", vcs_url, salsa_url)
-            return branch
-    return None
 
 
 def changes_filenames(changes_location):
