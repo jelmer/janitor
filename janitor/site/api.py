@@ -442,7 +442,7 @@ async def handle_revision_info(request):
                 {"error": "no run %s" % (run_id, )}, status=404)
 
     try:
-        revision_info = await request.app['vcs_managers'][run['vcs_type'].get_revision_info(
+        revision_info = await request.app['vcs_managers'][run['vcs_type']].get_revision_info(
             run['package'],
             run['base_revision'].encode('utf-8') if run['base_revision'] else None,
             run['revision'].encode('utf-8') if run['revision'] else None)
