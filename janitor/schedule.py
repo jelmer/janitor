@@ -31,6 +31,7 @@ import asyncpg
 
 from .compat import shlex_join
 from .config import read_config
+from .queue import Queue
 
 FIRST_RUN_BONUS = 100.0
 
@@ -235,50 +236,6 @@ async def estimate_duration(
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
-async def _add_to_queue(
-    conn: asyncpg.Connection,
-    package: str,
-    command: str,
-    suite: str,
-    change_set: Optional[str] = None,
-    offset: float = 0.0,
-    bucket: str = "default",
-    context: Optional[str] = None,
-    estimated_duration: Optional[timedelta] = None,
-    refresh: bool = False,
-    requestor: Optional[str] = None,
-) -> None:
-    await conn.execute(
-        "INSERT INTO queue "
-        "(package, command, priority, bucket, context, "
-        "estimated_duration, suite, refresh, requestor, change_set) "
-        "VALUES "
-        "($1, $2, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
-        + " + $3, $4, $5, $6, $7, $8, $9, $10) "
-        "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
-        "DO UPDATE SET "
-        "context = EXCLUDED.context, priority = EXCLUDED.priority, "
-        "bucket = EXCLUDED.bucket, "
-        "estimated_duration = EXCLUDED.estimated_duration, "
-        "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
-        "command = EXCLUDED.command "
-        "WHERE queue.bucket >= EXCLUDED.bucket OR "
-        "(queue.bucket = EXCLUDED.bucket AND "
-        "queue.priority >= EXCLUDED.priority)",
-        package,
-        command,
-        offset,
-        bucket,
-        context,
-        estimated_duration,
-        suite,
-        refresh,
-        requestor,
-        change_set,
-    )
-
-
 async def bulk_add_to_queue(
     conn: asyncpg.Connection,
     todo,
@@ -347,8 +304,8 @@ async def bulk_add_to_queue(
         )
 
         if not dry_run:
-            added = await _add_to_queue(
-                conn,
+            queue = Queue(conn)
+            added = await queue.add(
                 package=package,
                 suite=suite,
                 change_set=None,

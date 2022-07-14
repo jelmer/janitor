@@ -27,7 +27,7 @@ import asyncpg
 
 from breezy.revision import NULL_REVISION
 
-from janitor.queue import get_queue_position
+from janitor.queue import Queue
 from janitor import state
 from buildlog_consultant.sbuild import (
     SbuildLog,
@@ -126,8 +126,9 @@ async def generate_run_file(
                     conn, run['package'], run['main_branch_revision']
                 )
         with span.new_child('sql:queue-position'):
-            (queue_position, queue_wait_time) = await get_queue_position(
-                conn, run['suite'], run['package']
+            queue = Queue(conn)
+            (queue_position, queue_wait_time) = await queue.get_queue_position(
+                run['suite'], run['package']
             )
         with span.new_child('sql:package'):
             package = await conn.fetchrow(
