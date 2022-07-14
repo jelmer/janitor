@@ -15,8 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncpg
+from datetime import timedelta
 from typing import Optional, Set
+
+
+import asyncpg
 
 
 class QueueItem(object):
@@ -114,18 +117,22 @@ class QueueItem(object):
         return hash((type(self), self.id))
 
 
-async def get_queue_position(conn: asyncpg.Connection, suite, package):
-    row = await conn.fetchrow(
-        "SELECT position, wait_time FROM queue_positions "
-        "WHERE package = $1 AND suite = $2",
-        package, suite)
-    if not row:
-        return (None, None)
-    return row
+class Queue(object):
 
+    def __init__(self, conn: asyncpg.Connection):
+        self.conn = conn
 
-async def get_queue_item(conn: asyncpg.Connection, queue_id: int):
-    query = """
+    async def get_queue_position(self, suite, package):
+        row = await self.conn.fetchrow(
+            "SELECT position, wait_time FROM queue_positions "
+            "WHERE package = $1 AND suite = $2",
+            package, suite)
+        if not row:
+            return (None, None)
+        return row
+
+    async def get_queue_item(self, queue_id: int):
+        query = """
 SELECT
     package.branch_url AS branch_url,
     package.subpath AS subpath,
@@ -146,14 +153,13 @@ LEFT JOIN package ON package.name = queue.package
 LEFT OUTER JOIN upstream ON upstream.name = package.name
 WHERE queue.id = $1
 """
-    row = await conn.fetchrow(query, queue_id)
-    if row:
-        return QueueItem.from_row(row)
-    return None
+        row = await self.conn.fetchrow(query, queue_id)
+        if row:
+            return QueueItem.from_row(row)
+        return None
 
-
-async def iter_queue(conn: asyncpg.Connection, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, avoid_hosts: Optional[Set[str]] = None):
-    query = """
+    async def iter_queue(self, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, avoid_hosts: Optional[Set[str]] = None):
+        query = """
 SELECT
     package.branch_url AS branch_url,
     package.subpath AS subpath,
@@ -173,31 +179,73 @@ FROM
 LEFT JOIN package ON package.name = queue.package
 LEFT OUTER JOIN upstream ON upstream.name = package.name
 """
-    conditions = []
-    args = []
-    if package:
-        args.append(package)
-        conditions.append("queue.package = $%d" % len(args))
-    if campaign:
-        args.append(campaign)
-        conditions.append("queue.suite = $%d" % len(args))
+        conditions = []
+        args = []
+        if package:
+            args.append(package)
+            conditions.append("queue.package = $%d" % len(args))
+        if campaign:
+            args.append(campaign)
+            conditions.append("queue.suite = $%d" % len(args))
 
-    if avoid_hosts:
-        for host in avoid_hosts:
-            assert isinstance(host, str), "not a string: %r" % host
-            args.append(host)
-            conditions.append("package.branch_url NOT LIKE CONCAT('%%/', $%d::text, '/%%')" % len(args))
+        if avoid_hosts:
+            for host in avoid_hosts:
+                assert isinstance(host, str), "not a string: %r" % host
+                args.append(host)
+                conditions.append("package.branch_url NOT LIKE CONCAT('%%/', $%d::text, '/%%')" % len(args))
 
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
 
-    query += """
+        query += """
 ORDER BY
 queue.bucket ASC,
 queue.priority ASC,
 queue.id ASC
 """
-    if limit:
-        query += " LIMIT %d" % limit
-    for row in await conn.fetch(query, *args):
-        yield QueueItem.from_row(row)
+        if limit:
+            query += " LIMIT %d" % limit
+        for row in await self.conn.fetch(query, *args):
+            yield QueueItem.from_row(row)
+
+    async def add(
+            self, 
+            package: str,
+            command: str,
+            suite: str,
+            change_set: Optional[str] = None,
+            offset: float = 0.0,
+            bucket: str = "default",
+            context: Optional[str] = None,
+            estimated_duration: Optional[timedelta] = None,
+            refresh: bool = False,
+            requestor: Optional[str] = None) -> None:
+        await self.conn.execute(
+            "INSERT INTO queue "
+            "(package, command, priority, bucket, context, "
+            "estimated_duration, suite, refresh, requestor, change_set) "
+            "VALUES "
+            "($1, $2, "
+            "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
+            + " + $3, $4, $5, $6, $7, $8, $9, $10) "
+            "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+            "DO UPDATE SET "
+            "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+            "bucket = EXCLUDED.bucket, "
+            "estimated_duration = EXCLUDED.estimated_duration, "
+            "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
+            "command = EXCLUDED.command "
+            "WHERE queue.bucket >= EXCLUDED.bucket OR "
+            "(queue.bucket = EXCLUDED.bucket AND "
+            "queue.priority >= EXCLUDED.priority)",
+            package,
+            command,
+            offset,
+            bucket,
+            context,
+            estimated_duration,
+            suite,
+            refresh,
+            requestor,
+            change_set,
+        )
