@@ -122,7 +122,7 @@ class Queue(object):
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
 
-    async def get_queue_position(self, suite, package):
+    async def get_position(self, suite, package):
         row = await self.conn.fetchrow(
             "SELECT position, wait_time FROM queue_positions "
             "WHERE package = $1 AND suite = $2",
@@ -131,7 +131,7 @@ class Queue(object):
             return (None, None)
         return row
 
-    async def get_queue_item(self, queue_id: int):
+    async def get_item(self, queue_id: int):
         query = """
 SELECT
     package.branch_url AS branch_url,

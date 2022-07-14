@@ -1952,7 +1952,7 @@ async def handle_finish(request):
         if queue_item is None:
             async with queue_processor.database.acquire() as conn:
                 queue = Queue(conn)
-                queue_item = await queue.get_queue_item(worker_result.queue_id)
+                queue_item = await queue.get_item(worker_result.queue_id)
             if queue_item is None:
                 return web.json_response(
                     {"reason": "Unable to find relevant queue item %r" % worker_result.queue_id}, status=404)
