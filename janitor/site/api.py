@@ -208,7 +208,7 @@ async def handle_schedule(request):
                 {"reason": "Publish policy not yet available."}, status=503
             )
         queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_queue_position(
+        (queue_position, queue_wait_time) = await queue.get_position(
             suite, package['name']
         )
     response_obj = {
@@ -260,7 +260,7 @@ async def handle_run_reschedule(request):
                 {"reason": "Publish policy not yet available."}, status=503
             )
         queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_queue_position(
+        (queue_position, queue_wait_time) = await queue.get_position(
             run['suite'], run['package']
         )
     response_obj = {
@@ -305,7 +305,7 @@ async def handle_schedule_control(request):
             main_branch_revision=run['main_branch_revision'].encode('utf-8'),
         )
         queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_queue_position(
+        (queue_position, queue_wait_time) = await queue.get_position(
             "unchanged", run['package'])
     response_obj = {
         "package": run['package'],
