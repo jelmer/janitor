@@ -127,7 +127,7 @@ async def generate_run_file(
                 )
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
-            (queue_position, queue_wait_time) = await queue.get_queue_position(
+            (queue_position, queue_wait_time) = await queue.get_position(
                 run['suite'], run['package']
             )
         with span.new_child('sql:package'):

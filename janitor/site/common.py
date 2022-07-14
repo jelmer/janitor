@@ -239,7 +239,7 @@ WHERE run.package = $1 AND run.suite = $2
             previous_runs = await get_previous_runs(conn, package['name'], suite)
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
-            (queue_position, queue_wait_time) = await queue.get_queue_position(
+            (queue_position, queue_wait_time) = await queue.get_position(
                 suite, package['name'])
         if run_id:
             with span.new_child('sql:reviews'):
