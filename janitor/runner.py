@@ -1571,7 +1571,7 @@ class QueueProcessor(object):
                 limit=limit, campaign=campaign, package=package):
             if self.is_queue_item_assigned(item.id):
                 continue
-            vcs_info = await conn.fetchone(
+            vcs_info = await conn.fetchrow(
                 'SELECT vcs_type, branch_url, subpath FROM package '
                 'WHERE name = $1', item.package)
             if not self.can_process_url(vcs_info["branch_url"]):
