@@ -83,7 +83,7 @@ from .artifacts import (
     upload_backup_artifacts,
 )
 from .compat import to_thread
-from .config import read_config, get_campaign_config, get_distribution, Config
+from .config import read_config, get_campaign_config, get_distribution, Config, Campaign
 from .debian import (
     changes_filenames,
     find_changes,
@@ -163,7 +163,9 @@ class Builder(object):
 
     result_cls: Type[BuilderResult] = BuilderResult
 
-    async def build_env(self, conn, campaign_config, queue_item):
+    async def build_env(
+            self, conn: asyncpg.Connection,
+            campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
         raise NotImplementedError(self.build_env)
 
 
@@ -349,6 +351,12 @@ class DebianBuilder(Builder):
         env.update([(env.key, env.value) for env in campaign_config.debian_build.sbuild_env])
 
         env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
+
+        upstream_branch_url = await conn.fetchval(
+            "SELECT upstream_branch_url FROM upstream WHERE name = $1",
+            queue_item.package)
+        if upstream_branch_url:
+            env["UPSTREAM_BRANCH_URL"] = upstream_branch_url
 
         return env
 
@@ -1094,8 +1102,6 @@ class ResumeInfo(object):
 def queue_item_env(queue_item):
     env = {}
     env["PACKAGE"] = queue_item.package
-    if queue_item.upstream_branch_url:
-        env["UPSTREAM_BRANCH_URL"] = queue_item.upstream_branch_url
     return env
 
 
