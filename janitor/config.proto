@@ -61,6 +61,10 @@ message Config {
 
   // Location of bzr storage
   optional string bzr_location = 15;
+
+
+  // Location of the redis server
+  optional string redis_location = 16;
 }
 
 message Env {

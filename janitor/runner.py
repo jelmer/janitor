@@ -1392,6 +1392,7 @@ class QueueProcessor(object):
     def __init__(
         self,
         database: asyncpg.pool.Pool,
+        redis,
         policy: PolicyConfig,
         config: Config,
         run_timeout: int,
@@ -1409,6 +1410,7 @@ class QueueProcessor(object):
         """Create a queue processor.
         """
         self.database = database
+        self.redis = redis
         self.policy = policy
         self.config = config
         self.dry_run = dry_run
@@ -2157,10 +2159,13 @@ async def main(argv=None):
             backup_artifact_manager = None
             backup_logfile_manager = None
         db = await state.create_pool(config.database_location)
+        redis = await aioredis.create_redis(config.redis_location)
+        stack.callback(redis.close)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(
             db,
+            redis,
             policy,
             config,
             run_timeout=args.run_timeout,
