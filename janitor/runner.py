@@ -699,6 +699,7 @@ class ActiveRun(object):
     def __init__(
         self,
         queue_item: QueueItem,
+        vcs_info: Dict[str, str],
         worker_name: str,
         worker_link: Optional[str] = None,
     ):
@@ -706,8 +707,7 @@ class ActiveRun(object):
         self.start_time = datetime.utcnow()
         self.log_id = str(uuid.uuid4())
         self.worker_name = worker_name
-        self.main_branch_url = self.queue_item.branch_url
-        self.vcs_type = self.queue_item.vcs_type
+        self.vcs_info = vcs_info
         self.resume_branch_name = None
         self.worker_link = worker_link
         self.resume_from = None
@@ -748,6 +748,14 @@ class ActiveRun(object):
     @property
     def is_mia(self):
         return self.keepalive_age.total_seconds() > 60 * 60
+
+    @property
+    def vcs_type(self):
+        return self.vcs_info["vcs_type"]
+
+    @property
+    def main_branch_url(self):
+        return self.vcs_info["main_branch_url"]
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -1463,12 +1471,13 @@ class QueueProcessor(object):
 
     async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
         return await self.abort_run(
-            run, code='worker-timeout', description=("No keepalives received in %s." % duration))
+            run, code='worker-timeout',
+            description=("No keepalives received in %s." % duration))
 
     async def abort_run(self, run: ActiveRun, code: str, description: str) -> None:
         result = run.create_result(
-            branch_url=run.queue_item.branch_url,
-            vcs_type=run.queue_item.vcs_type,
+            branch_url=run.main_branch_url,
+            vcs_type=run.vcs_type,
             description=description,
             code=code,
             logfilenames=[],
@@ -1555,18 +1564,20 @@ class QueueProcessor(object):
             return False
         return True
 
-    async def next_queue_item(self, conn, package=None, campaign=None) -> Optional[QueueItem]:
+    async def next_queue_item(self, conn, package=None, campaign=None):
         limit = len(self.active_runs) + 300
         queue = Queue(conn)
         async for item in queue.iter_queue(
-                limit=limit, campaign=campaign, package=package,
-                avoid_hosts=self.avoid_hosts):
+                limit=limit, campaign=campaign, package=package):
             if self.is_queue_item_assigned(item.id):
                 continue
-            if not self.can_process_url(item.branch_url):
+            vcs_info = await conn.fetchone(
+                'SELECT vcs_type, branch_url, subpath FROM package '
+                'WHERE name = $1', item.package)
+            if not self.can_process_url(vcs_info["branch_url"]):
                 continue
-            return item
-        return None
+            return item, vcs_info
+        return None, None
 
     def is_queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
@@ -1666,35 +1677,20 @@ async def handle_peek(request):
 async def handle_queue(request):
     response_obj = []
     queue_processor = request.app['queue_processor']
-    query = """
-SELECT
-   queue.id AS queue_id,
-   package.branch_url AS branch_url,
-   package.subpath AS subpath,
-   package.name AS package,
-   queue.context AS context,
-   queue.id AS queue_id,
-   queue.command AS command
-FROM
-    queue
-LEFT JOIN package ON package.name = queue.package
-ORDER BY
-queue.bucket ASC,
-queue.priority ASC,
-queue.id ASC
-"""
     if 'limit' in request.query:
-        query += " LIMIT %d" % int(request.query['limit'])
+        limit = int(request.query['limit'])
+    else:
+        limit = None
     async with queue_processor.database.acquire() as conn:
-        for entry in await conn.fetch(query):
+        queue = Queue(conn)
+        for entry in await conn.iter_queue(limit=limit):
             response_obj.append(
                 {
-                    "queue_id": entry['queue_id'],
-                    "branch_url": entry['branch_url'],
-                    "subpath": entry['subpath'],
-                    "package": entry['package'],
-                    "context": entry['context'],
-                    "command": entry['command'],
+                    "queue_id": entry.id,
+                    "package": entry.package,
+                    "campaign": entry.suite,
+                    "context": entry.context,
+                    "command": entry.command,
                 }
             )
     return web.json_response(response_obj)
@@ -1724,7 +1720,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         item = None
         while item is None:
             with span.new_child('sql:queue-item'):
-                item = await queue_processor.next_queue_item(
+                item, vcs_info = await queue_processor.next_queue_item(
                     conn, package=package, campaign=campaign)
             if item is None:
                 return web.json_response({'reason': 'queue empty'}, status=503)
@@ -1734,6 +1730,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     my_url=URL(backchannel['url']),
                     worker_name=worker,
                     queue_item=item,
+                    vcs_info=vcs_info,
                     worker_link=worker_link
                 )
             elif backchannel and backchannel['kind'] == 'jenkins':
@@ -1741,17 +1738,19 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     my_url=URL(backchannel['url']),
                     worker_name=worker,
                     queue_item=item,
+                    vcs_info=vcs_info,
                     worker_link=worker_link)
             else:
                 active_run = ActiveRun(
                     worker_name=worker,
                     queue_item=item,
+                    vcs_info=vcs_info,
                     worker_link=worker_link
                 )
 
             queue_processor.register_run(active_run)
 
-            if item.branch_url is None:
+            if vcs_info["branch_url"] is None:
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
@@ -1773,15 +1772,16 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
         try:
             with span.new_child('branch:open'):
-                probers = select_preferred_probers(item.vcs_type)
+                probers = select_preferred_probers(vcs_info['vcs_type'])
                 logging.info(
-                    'Opening branch %s with %r', item.branch_url,
+                    'Opening branch %s with %r', vcs_info['branch_url'],
                     [p.__name__ for p in probers])
                 main_branch = await to_thread_timeout(
                     REMOTE_BRANCH_OPEN_TIMEOUT, open_branch_ext,
-                    item.branch_url, possible_transports=possible_transports, probers=probers)
+                    vcs_info['branch_url'],
+                    possible_transports=possible_transports, probers=probers)
         except BranchRateLimited as e:
-            host = urlutils.URL.from_string(item.branch_url).host
+            host = urlutils.URL.from_string(vcs_info['branch_url']).host
             logging.warning('Rate limiting for %s: %r', host, e)
             queue_processor.rate_limited(host, e.retry_after)
             await abort(active_run, 'pull-rate-limited', str(e))
@@ -1790,7 +1790,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
         except BranchOpenFailure:
             resume_branch = None
-            vcs_type = item.vcs_type
+            vcs_type = vcs_info['vcs_type']
         else:
             # We try the public branch first, since perhaps a maintainer
             # has made changes to the branch there.
@@ -1883,8 +1883,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "queue_id": item.id,
         "branch": {
             "url": active_run.main_branch_url,
-            "subpath": item.subpath,
-            "vcs_type": item.vcs_type,
+            "subpath": vcs_info['subpath'],
+            "vcs_type": vcs_info['vcs_type'],
             "cached_url": cached_branch_url,
         },
         "resume": resume.json() if resume else None,
@@ -1921,11 +1921,13 @@ async def handle_finish(request):
         queue_item = active_run.queue_item
         worker_name = active_run.worker_name
         main_branch_url = active_run.main_branch_url
+        vcs_type = active_run.vcs_type
         resume_from = active_run.resume_from
     else:
         queue_item = None
         worker_name = None
         main_branch_url = None
+        vcs_type = None
         resume_from = None
 
     reader = await request.multipart()
@@ -1962,8 +1964,6 @@ async def handle_finish(request):
             if queue_item is None:
                 return web.json_response(
                     {"reason": "Unable to find relevant queue item %r" % worker_result.queue_id}, status=404)
-            if main_branch_url is None:
-                main_branch_url = queue_item.branch_url
         if worker_name is None:
             worker_name = worker_result.worker_name
 
@@ -1978,7 +1978,7 @@ async def handle_finish(request):
             code='success',
             worker_name=worker_name,
             branch_url=main_branch_url,
-            vcs_type=queue_item.vcs_type,
+            vcs_type=vcs_type,
             worker_result=worker_result,
             logfilenames=logfilenames,
             resume_from=resume_from,
