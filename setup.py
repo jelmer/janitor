@@ -57,6 +57,7 @@ setup(
     install_requires=[
         "aiohttp",
         "aiohttp_jinja2",
+        "aioredis",
         "aiozipkin",
         "asyncpg",
         "klaus",
