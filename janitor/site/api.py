@@ -45,7 +45,7 @@ from yarl import URL
 
 from janitor import SUITE_REGEX
 from janitor.config import Config
-from janitor.queue import get_queue_position
+from janitor.queue import Queue
 from . import (
     check_admin,
     check_qa_reviewer,
@@ -207,8 +207,9 @@ async def handle_schedule(request):
             return web.json_response(
                 {"reason": "Publish policy not yet available."}, status=503
             )
-        (queue_position, queue_wait_time) = await get_queue_position(
-            conn, suite, package['name']
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_queue_position(
+            suite, package['name']
         )
     response_obj = {
         "package": package['name'],
@@ -258,8 +259,9 @@ async def handle_run_reschedule(request):
             return web.json_response(
                 {"reason": "Publish policy not yet available."}, status=503
             )
-        (queue_position, queue_wait_time) = await get_queue_position(
-            conn, run['suite'], run['package']
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_queue_position(
+            run['suite'], run['package']
         )
     response_obj = {
         "package": run['package'],
@@ -302,9 +304,9 @@ async def handle_schedule_control(request):
             requestor=requestor,
             main_branch_revision=run['main_branch_revision'].encode('utf-8'),
         )
-        (queue_position, queue_wait_time) = await get_queue_position(
-            conn, "unchanged", run['package']
-        )
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_queue_position(
+            "unchanged", run['package'])
     response_obj = {
         "package": run['package'],
         "suite": "unchanged",

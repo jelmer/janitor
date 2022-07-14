@@ -98,7 +98,7 @@ from .logs import (
 )
 from .policy import read_policy, PolicyConfig
 from .pubsub import Topic, pubsub_handler
-from .queue import QueueItem, get_queue_item, iter_queue
+from .queue import QueueItem, Queue
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (
     get_vcs_abbreviation,
@@ -1551,8 +1551,9 @@ class QueueProcessor(object):
 
     async def next_queue_item(self, conn, package=None, campaign=None) -> Optional[QueueItem]:
         limit = len(self.active_runs) + 300
-        async for item in iter_queue(
-                conn, limit=limit, campaign=campaign, package=package,
+        queue = Queue(conn)
+        async for item in queue.iter_queue(
+                limit=limit, campaign=campaign, package=package,
                 avoid_hosts=self.avoid_hosts):
             if self.is_queue_item_assigned(item.id):
                 continue
@@ -1950,7 +1951,8 @@ async def handle_finish(request):
 
         if queue_item is None:
             async with queue_processor.database.acquire() as conn:
-                queue_item = await get_queue_item(conn, worker_result.queue_id)
+                queue = Queue(conn)
+                queue_item = await queue.get_queue_item(worker_result.queue_id)
             if queue_item is None:
                 return web.json_response(
                     {"reason": "Unable to find relevant queue item %r" % worker_result.queue_id}, status=404)
