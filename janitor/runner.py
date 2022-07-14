@@ -31,6 +31,7 @@ from typing import List, Any, Optional, Dict, Tuple, Type, Set
 import uuid
 import warnings
 
+import aioredis
 import aiozipkin
 import asyncpg
 import asyncpg.pool
