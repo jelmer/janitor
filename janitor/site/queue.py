@@ -15,11 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncpg
 from datetime import datetime, timedelta
-
 import shlex
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
+
+import asyncpg
+from ..queue import Queue
 
 
 class RunnerProcessingUnavailable(Exception):
@@ -39,40 +40,30 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
         yield entry
 
 
-async def iter_queue_with_last_run(db: asyncpg.pool.Pool, limit: int):
-    query = """
-SELECT
-      queue.package AS package,
-      queue.command AS command,
-      queue.context AS context,
-      queue.id AS id,
-      queue.estimated_duration AS estimated_duration,
-      queue.suite AS suite,
-      queue.refresh AS refresh,
-      queue.requestor AS requestor,
-      run.id AS log_id,
-      run.result_code AS result_code
-  FROM
-      queue
-  LEFT JOIN
-      run
-  ON
-      run.id = (
-          SELECT id FROM run WHERE
-            package = queue.package AND run.suite = queue.suite
-          ORDER BY run.start_time desc LIMIT 1)
-  ORDER BY
-  queue.bucket ASC,
-  queue.priority ASC,
-  queue.id ASC
-"""
-    query += " LIMIT %d" % limit
-    async with db.acquire() as conn:
-        for row in await conn.fetch(query):
-            yield row
+async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, limit: int):
+    with db.acquire() as conn:
+        items = []
+        qs = []
+        vals = []
+        async for item in queue.iter_queue(limit=limit):
+            items.append(item)
+            vals.append(item.package)
+            vals.append(item.suite)
+            qs.append(
+                '(package = $%d AND suite = $%d)' % (len(vals) - 1, len(vals)))
+
+        runs = {}
+        if qs:
+            for row in await conn.fetch(
+                    'SELECT package, suite, id, result_code FROM last_runs '
+                    'WHERE ($1)', ' OR '.join(qs)):
+                runs[(row['package'], row['suite'])] = dict(row)
+
+    for item in items:
+        yield (item, runs[(item.package, item.suite)])
 
 
-async def get_queue(db: asyncpg.pool.Pool, limit: int) -> AsyncIterator[
+async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIterator[
     Tuple[
         int,
         str,
@@ -84,8 +75,8 @@ async def get_queue(db: asyncpg.pool.Pool, limit: int) -> AsyncIterator[
         Optional[str],
     ]
 ]:
-    async for row in iter_queue_with_last_run(db, limit=limit):
-        command = shlex.split(row["command"])
+    async for queue_item, row in iter_queue_items_with_last_run(db, queue, limit=limit):
+        command = shlex.split(queue_item.command)
         while command and '=' in command[0]:
             command.pop(0)
         expecting = None
@@ -95,31 +86,15 @@ async def get_queue(db: asyncpg.pool.Pool, limit: int) -> AsyncIterator[
             description = 'no-op'
         if expecting is not None:
             description += ", " + expecting
-        if row["refresh"]:
+        if queue_item.refresh:
             description += " (from scratch)"
-        yield (
-            row["id"],
-            row["package"],
-            row["requestor"],
-            row["suite"],
-            description,
-            row["estimated_duration"],
-            row["log_id"],
-            row["result_code"],
-        )
-
-
-async def get_buckets(db):
-    async with db.acquire() as conn:
-        for row in await conn.fetch("SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC"):
-            yield row[0], row[1]
+        yield (queue_item, row, description)
 
 
 async def write_queue(
     client,
     db: asyncpg.pool.Pool,
     limit=None,
-    is_admin=False,
     queue_status=None,
 ):
     if queue_status:
@@ -134,11 +109,13 @@ async def write_queue(
         active_queue_ids = set()
         avoid_hosts = None
         rate_limit_hosts = None
-    return {
-        "queue": get_queue(db, limit),
-        "buckets": get_buckets(db),
-        "active_queue_ids": active_queue_ids,
-        "processing": processing,
-        "avoid_hosts": avoid_hosts,
-        "rate_limit_hosts": rate_limit_hosts,
-    }
+    with db.acquire() as conn:
+        queue = Queue(conn)
+        return {
+            "queue": get_queue(db, queue, limit),
+            "buckets": queue.get_buckets(),
+            "active_queue_ids": active_queue_ids,
+            "processing": processing,
+            "avoid_hosts": avoid_hosts,
+            "rate_limit_hosts": rate_limit_hosts,
+        }
