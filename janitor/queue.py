@@ -36,7 +36,6 @@ class QueueItem(object):
         "refresh",
         "requestor",
         "vcs_type",
-        "upstream_branch_url",
         "change_set",
     ]
 
@@ -53,7 +52,6 @@ class QueueItem(object):
         refresh,
         requestor,
         vcs_type,
-        upstream_branch_url,
         change_set,
     ):
         self.id = id
@@ -67,7 +65,6 @@ class QueueItem(object):
         self.refresh = refresh
         self.requestor = requestor
         self.vcs_type = vcs_type
-        self.upstream_branch_url = upstream_branch_url
         self.change_set = change_set
 
     @classmethod
@@ -84,7 +81,6 @@ class QueueItem(object):
             refresh=row['refresh'],
             requestor=row['requestor'],
             vcs_type=row['vcs_type'],
-            upstream_branch_url=row['upstream_branch_url'],
             change_set=row['change_set'],
         )
 
@@ -101,7 +97,6 @@ class QueueItem(object):
             self.refresh,
             self.requestor,
             self.vcs_type,
-            self.upstream_branch_url,
             self.change_set,
         )
 
@@ -145,12 +140,10 @@ SELECT
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url,
     queue.change_set AS change_set
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
-LEFT OUTER JOIN upstream ON upstream.name = package.name
 WHERE queue.id = $1
 """
         row = await self.conn.fetchrow(query, queue_id)
@@ -172,12 +165,10 @@ SELECT
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url,
     queue.change_set AS change_set
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
-LEFT OUTER JOIN upstream ON upstream.name = package.name
 """
         conditions = []
         args = []
