@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional, Set
+from typing import Optional
 
 
 import asyncpg
@@ -43,7 +43,7 @@ class QueueItem(object):
         context,
         command,
         estimated_duration,
-        suite,
+        campaign,
         refresh,
         requestor,
         change_set,
@@ -53,7 +53,7 @@ class QueueItem(object):
         self.context = context
         self.command = command
         self.estimated_duration = estimated_duration
-        self.suite = suite
+        self.campaign = campaign
         self.refresh = refresh
         self.requestor = requestor
         self.change_set = change_set
@@ -66,7 +66,7 @@ class QueueItem(object):
             context=row['context'],
             command=row['command'],
             estimated_duration=row['estimated_duration'],
-            suite=row['suite'],
+            campaign=row['campaign'],
             refresh=row['refresh'],
             requestor=row['requestor'],
             change_set=row['change_set'],
@@ -79,7 +79,7 @@ class QueueItem(object):
             self.context,
             self.command,
             self.estimated_duration,
-            self.suite,
+            self.campaign,
             self.refresh,
             self.requestor,
             self.change_set,
@@ -102,11 +102,11 @@ class Queue(object):
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
 
-    async def get_position(self, suite, package):
+    async def get_position(self, campaign, package):
         row = await self.conn.fetchrow(
             "SELECT position, wait_time FROM queue_positions "
             "WHERE package = $1 AND suite = $2",
-            package, suite)
+            package, campaign)
         if not row:
             return (None, None)
         return row
@@ -119,7 +119,7 @@ SELECT
     queue.context AS context,
     queue.id AS id,
     queue.estimated_duration AS estimated_duration,
-    queue.suite AS suite,
+    queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     queue.change_set AS change_set
@@ -140,7 +140,7 @@ SELECT
     queue.context AS context,
     queue.id AS id,
     queue.estimated_duration AS estimated_duration,
-    queue.suite AS suite,
+    queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     queue.change_set AS change_set
@@ -174,7 +174,7 @@ queue.id ASC
             self,
             package: str,
             command: str,
-            suite: str,
+            campaign: str,
             change_set: Optional[str] = None,
             offset: float = 0.0,
             bucket: str = "default",
@@ -206,7 +206,7 @@ queue.id ASC
             bucket,
             context,
             estimated_duration,
-            suite,
+            campaign,
             refresh,
             requestor,
             change_set,
