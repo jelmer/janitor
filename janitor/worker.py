@@ -1302,7 +1302,6 @@ async def handle_log_id(request):
 async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
         jenkins_build_url=None, prometheus: Optional[str] = None,
-        vcs_store_urls=None,
         package: Optional[str] = None, campaign: Optional[str] = None,
         retry_count: int = 5,
         tee: bool = False):
@@ -1346,12 +1345,7 @@ async def process_single_item(
         }
         workitem['metadata'] = metadata
 
-        if vcs_store_urls is not None:
-            target_repo_url = urlutils.join(
-                vcs_store_urls[assignment["target_repository"]["vcs_type"]],
-                assignment["env"]['PACKAGE'])
-        else:
-            target_repo_url = assignment["target_repository"]["url"]
+        target_repo_url = assignment["target_repository"]["url"]
 
         run_id = assignment["id"]
 
@@ -1468,8 +1462,6 @@ async def main(argv=None):
         "--credentials", help="Path to credentials file (JSON).", type=str,
         default=os.environ.get('JANITOR_CREDENTIALS')
     )
-    parser.add_argument(
-        "--vcs-location", help="Override VCS location.", type=str)
     parser.add_argument(
         "--debug",
         help="Print out API communication",
@@ -1588,14 +1580,6 @@ async def main(argv=None):
     if not node_name:
         node_name = socket.gethostname()
 
-    if args.vcs_location:
-        vcs_store_urls = {}
-        for entry in args.vcs_location.split(','):
-            (vcs_type, url) = entry.split('=', 1)
-            vcs_store_urls[vcs_type] = url
-    else:
-        vcs_store_urls = None
-
     if args.my_url:
         my_url = yarl.URL(args.my_url)
     elif 'MY_IP' in os.environ:
@@ -1631,7 +1615,6 @@ async def main(argv=None):
                     workitem=app['workitem'],
                     jenkins_build_url=jenkins_build_url,
                     prometheus=args.prometheus,
-                    vcs_store_urls=vcs_store_urls,
                     retry_count=args.retry_count,
                     package=args.package, campaign=args.campaign,
                     tee=args.tee)
