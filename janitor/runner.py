@@ -128,8 +128,10 @@ assignment_count = Counter("assignments", "Number of assignments handed out", ["
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
 artifact_upload_failed_count = Counter(
     "artifact_upload_failed", "Number of failed artifact uploads")
-primary_logfile_upload_failed = Counter(
+primary_logfile_upload_failed_count = Counter(
     "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
+logfile_uploaded_count = Counter(
+    "logfile_uploads", "Number of uploaded log files")
 
 
 async def to_thread_timeout(timeout, func, *args, **kwargs):
@@ -670,21 +672,23 @@ async def import_logs(
             await logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
         except ServiceUnavailable as e:
             logging.warning("Unable to upload logfile %s: %s", entry.name, e)
+            primary_logfile_upload_failed_count.inc()
             if backup_logfile_manager:
-                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
         except asyncio.TimeoutError as e:
             logging.warning("Timeout uploading logfile %s: %s", entry.name, e)
+            primary_logfile_upload_failed_count.inc()
             if backup_logfile_manager:
-                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
         except PermissionDenied as e:
             logging.warning(
                 "Permission denied error while uploading logfile %s: %s",
                 entry.name, e)
+            primary_logfile_upload_failed_count.inc()
             if backup_logfile_manager:
-                primary_logfile_upload_failed.inc()
                 await backup_logfile_manager.import_log(pkg, log_id, entry.path, mtime=mtime)
+        else:
+            logfile_uploaded_count.inc()
 
 
 class ActiveRun(object):
@@ -1862,12 +1866,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 vcs_manager = queue_processor.public_vcs_managers[vcs_type]
             except KeyError:
                 cached_branch_url = None
+                target_repository_url = None
             else:
-                cached_branch_url = queue_processor.public_vcs_managers[vcs_type].get_branch_url(
-                    item.package, branch_name
-                )
+                cached_branch_url = vcs_manager.get_branch_url(
+                    item.package, branch_name)
+                target_repository_url = vcs_manager.get_repository_url(item.package)
     except UnsupportedVcs:
         cached_branch_url = None
+        target_repository_url = None
 
     env = {}
     env.update(queue_item_env(item))
@@ -1895,9 +1901,10 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         # TODO(jelmer): Remove suite
         "suite": item.campaign,
         "force-build": campaign_config.force_build,
-        "vcs_store": {
-            k: v.base_url
-            for (k, v) in queue_processor.public_vcs_managers.items()},
+        "target_repository": {
+            "url": target_repository_url,
+            "vcs_type": vcs_info['vcs_type'],
+        }
     }
 
     if mode == 'assign':
