@@ -37,7 +37,7 @@ _mod_http.default_user_agent = user_agent
 _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent()
 
 
-SUITE_REGEX = "[a-z0-9-]+"
+CAMPAIGN_REGEX = "[a-z0-9-]+"
 
 
 def splitout_env(command):
