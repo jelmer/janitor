@@ -87,8 +87,6 @@ async def git_revision_info_request(request):
     try:
         repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
-        repo = None
-    if repo is None:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             package)
@@ -139,9 +137,9 @@ async def git_diff_helper(repo, old_sha, new_sha, path=None):
 
 async def _git_open_repo(local_path: str, db, package: str) -> Repository:
     repo_path = os.path.join(local_path, package)
-    repo = Repository.open(repo_path)
-
-    if repo is None:
+    try:
+        repo = Repository.open(repo_path)
+    except NotBranchError:
         async with db.acquire() as conn:
             if not await package_exists(conn, package):
                 raise web.HTTPNotFound(text='no such package: %s' % package)
