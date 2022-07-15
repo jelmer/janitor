@@ -171,7 +171,7 @@ queue.id ASC
             yield QueueItem.from_row(row)
 
     async def add(
-            self, 
+            self,
             package: str,
             command: str,
             suite: str,
