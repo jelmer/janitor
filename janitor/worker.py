@@ -550,7 +550,7 @@ def _drop_env(command):
 
 
 def import_branches_git(
-        repo_url, local_branch: Branch, suite: str, log_id: str,
+        repo_url, local_branch: Branch, campaign: str, log_id: str,
         branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]]):
     from breezy.repository import InterRepository
@@ -570,7 +570,7 @@ def import_branches_git(
                 changed_refs[tagname] = (ZERO_SHA, r)
             else:
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
-            branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
+            branchname = ("refs/heads/%s/%s" % (campaign, fn)).encode("utf-8")
             # TODO(jelmer): Ideally this would be a symref:
             changed_refs[branchname] = changed_refs[tagname]
         for n, r in (tags or {}).items():
@@ -583,12 +583,12 @@ def import_branches_git(
 
 
 def import_branches_bzr(
-        repo_url: str, local_branch, suite: str, log_id: str, branches, tags
+        repo_url: str, local_branch, campaign: str, log_id: str, branches, tags
 ):
     from breezy.errors import NoSuchFile
     from breezy.transport import get_transport
     for fn, n, br, r in branches:
-        target_branch_path = urlutils.join(repo_url, suite)
+        target_branch_path = urlutils.join(repo_url, campaign)
         if fn is not None:
             target_branch_path = urlutils.join_segment_parameters(
                 target_branch_path,
@@ -1009,7 +1009,7 @@ def run_worker(
     metadata: Any,
     target_repo_url: str,
     vendor: str,
-    suite: str,
+    campaign: str,
     target: str,
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
@@ -1066,12 +1066,12 @@ def run_worker(
                     if vcs_type.lower() == "git":
                         import_branches_git(
                             target_repo_url, ws.local_tree.branch,
-                            suite, run_id, result.branches, result.tags
+                            campaign, run_id, result.branches, result.tags
                         )
                     elif vcs_type.lower() == "bzr":
                         import_branches_bzr(
                             target_repo_url, ws.local_tree.branch,
-                            suite, run_id, result.branches, result.tags
+                            campaign, run_id, result.branches, result.tags
                         )
                     else:
                         raise NotImplementedError
@@ -1316,7 +1316,7 @@ async def process_single_item(
 
     with ExitStack() as es:
         es.callback(workitem.clear)
-        suite = assignment["suite"]
+        campaign = assignment["campaign"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
         force_build = assignment.get('force-build', False)
@@ -1376,7 +1376,7 @@ async def process_single_item(
                 metadata,
                 target_repo_url,
                 vendor,
-                suite,
+                campaign,
                 target=target,
                 resume_branch_url=resume_branch_url,
                 resume_branches=resume_branches,
@@ -1437,7 +1437,7 @@ async def process_single_item(
                     prometheus, job="janitor.worker",
                     grouping_key={
                         'run_id': assignment['id'],
-                        'suite': suite,
+                        'campaign': campaign,
                     },
                     registry=REGISTRY)
             workitem.clear()
