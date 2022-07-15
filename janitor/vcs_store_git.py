@@ -137,7 +137,7 @@ async def git_diff_helper(repo, old_sha, new_sha, path=None):
     raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
 
 
-async def _git_open_repo(local_path, db, package):
+async def _git_open_repo(local_path: str, db, package: str) -> Repository:
     repo_path = os.path.join(local_path, package)
     repo = Repository.open(repo_path)
 
@@ -154,7 +154,7 @@ async def _git_open_repo(local_path, db, package):
         return repo
 
 
-def _git_check_service(service: str, allow_writes: bool = False):
+def _git_check_service(service: str, allow_writes: bool = False) -> None:
     if service == "git-upload-pack":
         return
 
@@ -631,7 +631,8 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
+    if not os.path.exists(args.vcs_path):
+        raise RuntimeError('vcs path %s does not exist' % args.vcs_path)
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(

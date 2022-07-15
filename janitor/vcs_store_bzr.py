@@ -338,7 +338,8 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
+    if not os.path.exists(args.vcs_path):
+        raise RuntimeError('vcs path %s does not exist' % args.vcs_path)
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(

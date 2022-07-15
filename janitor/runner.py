@@ -2129,7 +2129,6 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
     public_vcs_managers = get_vcs_managers(args.public_vcs_location)
     vcs_managers = get_vcs_managers_from_config(config)
 
