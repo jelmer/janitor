@@ -62,6 +62,9 @@ from silver_platter.apply import (
     ScriptMadeNoChanges,
     ResultFileFormatError,
     )
+from silver_platter.debian import (
+    select_probers,
+    )
 from silver_platter.debian.apply import (
     script_runner as debian_script_runner,
     DetailedFailure as DebianDetailedFailure,
@@ -551,7 +554,6 @@ def import_branches_git(
         branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]]):
     from breezy.repository import InterRepository
-
     from dulwich.objects import ZERO_SHA
 
     # The server is expected to have repositories ready for us, so we don't create
@@ -615,6 +617,7 @@ def import_branches_bzr(
 
 @contextmanager
 def process_package(
+    vcs_type: str,
     vcs_url: str,
     subpath: str,
     env: Dict[str, str],
@@ -652,7 +655,8 @@ def process_package(
     if cached_branch_url:
         try:
             cached_branch = open_branch(
-                cached_branch_url, possible_transports=possible_transports
+                cached_branch_url, possible_transports=possible_transports,
+                probers=select_probers(vcs_type)
             )
         except BranchMissing as e:
             logger.info("Cached branch URL %s missing: %s", cached_branch_url, e)
@@ -671,7 +675,8 @@ def process_package(
         logger.info('Using resume branch: %s', resume_branch_url)
         try:
             resume_branch = open_branch(
-                resume_branch_url, possible_transports=possible_transports
+                resume_branch_url, possible_transports=possible_transports,
+                probers=select_probers(vcs_type)
             )
         except BranchUnavailable as e:
             logger.info('Resume branch URL %s unavailable: %s', e.url, e)
@@ -1022,6 +1027,7 @@ def run_worker(
         es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
         try:
             with process_package(
+                vcs_type,
                 branch_url,
                 subpath,
                 env,
