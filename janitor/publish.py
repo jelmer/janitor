@@ -2669,8 +2669,6 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
-
     if args.slowstart:
         rate_limiter = SlowStartRateLimiter(args.max_mps_per_maintainer)
     elif args.max_mps_per_maintainer > 0:
