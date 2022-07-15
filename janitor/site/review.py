@@ -26,7 +26,7 @@ MAX_DIFF_SIZE = 200 * 1024
 
 async def iter_needs_review(
         conn: asyncpg.Connection,
-        suites: Optional[List[str]] = None,
+        campaigns: Optional[List[str]] = None,
         limit: Optional[int] = None,
         publishable_only: bool = False,
         required_only: Optional[bool] = None,
@@ -36,8 +36,8 @@ async def iter_needs_review(
 SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
 """
     conditions = []
-    if suites is not None:
-        args.append(suites)
+    if campaigns is not None:
+        args.append(campaigns)
         conditions.append("suite = ANY($%d::text[])" % len(args))
 
     publishable_condition = (
@@ -112,7 +112,7 @@ async def generate_review(
         entries = await iter_needs_review(
             conn,
             limit=limit,
-            suites=suites,
+            campaigns=suites,
             publishable_only=publishable_only,
             required_only=required_only,
             reviewer=reviewer

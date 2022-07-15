@@ -424,19 +424,19 @@ async def create_app(
         r"/archive-keyring{extension:(\.asc|\.gpg)}", handle_archive_keyring,
         name="archive-keyring"
     )
-    SUITE_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
+    CAMPAIGN_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
-        "/{suite:%s}/merge-proposals" % SUITE_REGEX,
+        "/{suite:%s}/merge-proposals" % CAMPAIGN_REGEX,
         handle_merge_proposals,
         name="suite-merge-proposals",
     )
     app.router.add_get(
-        "/{suite:%s}/merge-proposal" % SUITE_REGEX,
+        "/{suite:%s}/merge-proposal" % CAMPAIGN_REGEX,
         handle_merge_proposal,
         name="suite-merge-proposal",
     )
     app.router.add_get(
-        "/{suite:%s}/ready" % SUITE_REGEX, handle_ready_proposals, name="suite-ready"
+        "/{suite:%s}/ready" % CAMPAIGN_REGEX, handle_ready_proposals, name="suite-ready"
     )
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
@@ -460,25 +460,25 @@ async def create_app(
     from .cupboard import register_cupboard_endpoints
     register_cupboard_endpoints(app.router)
     app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/{run_id}/{filename:.+}",
+        "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
         name="result-file",
     )
     app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/", handle_generic_start, name="generic-start"
+        "/{suite:" + CAMPAIGN_REGEX + "}/", handle_generic_start, name="generic-start"
     )
     app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/candidates",
+        "/{suite:" + CAMPAIGN_REGEX + "}/candidates",
         handle_generic_candidates,
         name="generic-candidates",
     )
     app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/",
+        "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/",
         handle_generic_pkg,
         name="generic-package",
     )
     app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/{run_id}",
+        "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}",
         handle_generic_pkg,
         name="generic-run",
     )

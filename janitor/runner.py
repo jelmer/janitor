@@ -121,8 +121,8 @@ packages_processed_count = Counter("package_count", "Number of packages processe
 last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
 )
-build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
-run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
+build_duration = Histogram("build_duration", "Build duration", ["package", "campaign"])
+run_result_count = Counter("result", "Result counts", ["package", "campaign", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
 assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
@@ -397,7 +397,7 @@ class JanitorResult(object):
         description: Optional[str] = None,
         worker_result=None,
         logfilenames=None,
-        suite=None,
+        campaign=None,
         start_time=None,
         finish_time=None,
         worker_name=None,
@@ -406,7 +406,7 @@ class JanitorResult(object):
         change_set=None,
     ):
         self.package = pkg
-        self.suite = suite
+        self.campaign = campaign
         self.log_id = log_id
         self.description = description
         self.branch_url = branch_url
@@ -461,7 +461,7 @@ class JanitorResult(object):
     def json(self):
         return {
             "package": self.package,
-            "suite": self.suite,
+            "campaign": self.campaign,
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
@@ -736,7 +736,7 @@ class ActiveRun(object):
     def create_result(self, **kwargs):
         return JanitorResult(
             pkg=self.queue_item.package,
-            suite=self.queue_item.campaign,
+            campaign=self.queue_item.campaign,
             start_time=self.start_time,
             finish_time=datetime.utcnow(),
             log_id=self.log_id,
@@ -767,7 +767,7 @@ class ActiveRun(object):
             "queue_id": self.queue_item.id,
             "id": self.log_id,
             "package": self.queue_item.package,
-            "suite": self.queue_item.campaign,
+            "campaign": self.queue_item.campaign,
             "estimated_duration": self.queue_item.estimated_duration.total_seconds()
             if self.queue_item.estimated_duration
             else None,
@@ -1053,7 +1053,7 @@ def open_resume_branch(
 
 
 async def check_resume_result(
-        conn: asyncpg.Connection, suite: str,
+        conn: asyncpg.Connection, campaign: str,
         resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
         "SELECT id, result, review_status, "
@@ -1062,7 +1062,7 @@ async def check_resume_result(
         "FROM run "
         "WHERE suite = $1 AND revision = $2 AND result_code = 'success' "
         "ORDER BY finish_time DESC LIMIT 1",
-        suite,
+        campaign,
         resume_branch.last_revision().decode("utf-8"),
     )
     if row is not None:
@@ -1336,7 +1336,7 @@ async def followup_run(
         if result.builder_result is None:
             logging.warning(
                 'Missing debian result for run %s (%s/%s)',
-                result.log_id, result.package, result.suite)
+                result.log_id, result.package, result.campaign)
             binary_packages = []
             new_build_version = None   # noqa: F841
             old_build_version = None   # noqa: F841
@@ -1491,16 +1491,16 @@ class QueueProcessor(object):
     async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
             package=item.package,
-            suite=item.campaign,
+            campaign=item.campaign,
             result_code=result.code).inc()
-        build_duration.labels(package=item.package, suite=item.campaign).observe(
+        build_duration.labels(package=item.package, campaign=item.campaign).observe(
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
             if not self.dry_run:
                 if not result.change_set:
                     result.change_set = result.log_id
-                    await store_change_set(conn, result.change_set, campaign=result.suite)
+                    await store_change_set(conn, result.change_set, campaign=result.campaign)
                 try:
                     await store_run(
                         conn,
@@ -1692,7 +1692,7 @@ async def handle_queue(request):
                 {
                     "queue_id": entry.id,
                     "package": entry.package,
-                    "campaign": entry.suite,
+                    "campaign": entry.campaign,
                     "context": entry.context,
                     "command": entry.command,
                 }
@@ -1763,8 +1763,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 campaign_config = get_campaign_config(queue_processor.config, item.campaign)
             except KeyError:
                 logging.warning(
-                    'Unable to find details for suite %r', item.campaign)
-                await abort(active_run, 'unknown-suite', "Suite %s unknown" % item.campaign)
+                    'Unable to find details for campaign %r', item.campaign)
+                await abort(active_run, 'unknown-campaign', "Campaign %s unknown" % item.campaign)
                 item = None
                 continue
 
@@ -1898,8 +1898,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "env": env,
         "command": command,
         "campaign": item.campaign,
-        # TODO(jelmer): Remove suite
-        "suite": item.campaign,
         "force-build": campaign_config.force_build,
         "target_repository": {
             "url": target_repository_url,
@@ -1982,7 +1980,7 @@ async def handle_finish(request):
 
         result = JanitorResult(
             pkg=queue_item.package,
-            suite=queue_item.campaign,
+            campaign=queue_item.campaign,
             log_id=run_id,
             code='success',
             worker_name=worker_name,
