@@ -30,7 +30,7 @@ class QueueItem(object):
         "context",
         "command",
         "estimated_duration",
-        "suite",
+        "campaign",
         "refresh",
         "requestor",
         "change_set",
