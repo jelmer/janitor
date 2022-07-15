@@ -732,7 +732,7 @@ class ActiveRun(object):
     def create_result(self, **kwargs):
         return JanitorResult(
             pkg=self.queue_item.package,
-            suite=self.queue_item.suite,
+            suite=self.queue_item.campaign,
             start_time=self.start_time,
             finish_time=datetime.utcnow(),
             log_id=self.log_id,
@@ -763,7 +763,7 @@ class ActiveRun(object):
             "queue_id": self.queue_item.id,
             "id": self.log_id,
             "package": self.queue_item.package,
-            "suite": self.queue_item.suite,
+            "suite": self.queue_item.campaign,
             "estimated_duration": self.queue_item.estimated_duration.total_seconds()
             if self.queue_item.estimated_duration
             else None,
@@ -1145,7 +1145,7 @@ async def store_run(
     result_code: str,
     revision: Optional[bytes],
     subworker_result: Optional[Any],
-    suite: str,
+    campaign: str,
     logfilenames: List[str],
     value: Optional[int],
     worker_name: str,
@@ -1174,7 +1174,7 @@ async def store_run(
       result_code: Result code (as constant string)
       revision: Resulting revision id
       subworker_result: Subworker-specific result data (as json)
-      suite: Suite
+      campaign: The campaign
       logfilenames: List of log filenames
       value: Value of the run (as int)
       worker_name: Name of the worker
@@ -1212,7 +1212,7 @@ async def store_run(
         main_branch_revision.decode("utf-8") if main_branch_revision else None,
         revision.decode("utf-8") if revision else None,
         subworker_result if subworker_result else None,
-        suite,
+        campaign,
         vcs_type,
         vcs_url,
         logfilenames,
@@ -1268,7 +1268,7 @@ def has_runtime_relation(c, pkg):
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
         item: QueueItem, result: JanitorResult) -> None:
-    if result.code == "success" and item.suite not in ("unchanged", "debianize"):
+    if result.code == "success" and item.campaign not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
             run = await conn.fetchrow(
                 "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
@@ -1325,7 +1325,7 @@ async def followup_run(
 
     # If there was a successful run, trigger builds for any
     # reverse dependencies in the same changeset.
-    if item.suite in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
+    if item.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
         from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
@@ -1341,7 +1341,7 @@ async def followup_run(
             new_build_version = debian_result.build_version   # noqa: F841
             # TODO(jelmer): Get old_build_version from base_distribution
 
-        campaign_config = get_campaign_config(config, item.suite)
+        campaign_config = get_campaign_config(config, item.campaign)
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
         apt = RemoteApt(base_distribution.archive_mirror_uri)
 
@@ -1487,9 +1487,9 @@ class QueueProcessor(object):
     async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
             package=item.package,
-            suite=item.suite,
+            suite=item.campaign,
             result_code=result.code).inc()
-        build_duration.labels(package=item.package, suite=item.suite).observe(
+        build_duration.labels(package=item.package, suite=item.campaign).observe(
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
@@ -1514,7 +1514,7 @@ class QueueProcessor(object):
                         result_code=result.code,
                         revision=result.revision,
                         subworker_result=result.subworker_result,
-                        suite=item.suite,
+                        campaign=item.campaign,
                         logfilenames=result.logfilenames,
                         value=result.value,
                         worker_name=result.worker_name,
@@ -1756,11 +1756,11 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 continue
 
             try:
-                campaign_config = get_campaign_config(queue_processor.config, item.suite)
+                campaign_config = get_campaign_config(queue_processor.config, item.campaign)
             except KeyError:
                 logging.warning(
-                    'Unable to find details for suite %r', item.suite)
-                await abort(active_run, 'unknown-suite', "Suite %s unknown" % item.suite)
+                    'Unable to find details for suite %r', item.campaign)
+                await abort(active_run, 'unknown-suite', "Suite %s unknown" % item.campaign)
                 item = None
                 continue
 
@@ -1837,14 +1837,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
         if resume_branch is not None:
             with span.new_child('resume-branch:check'):
-                resume = await check_resume_result(conn, item.suite, resume_branch)
+                resume = await check_resume_result(conn, item.campaign, resume_branch)
                 if resume is not None:
                     if is_authenticated_url(resume.branch.user_url):
                         raise AssertionError('invalid resume branch %r' % (
                             resume.branch))
                     active_run.resume_from = resume.run_id
                     logging.info(
-                        'Resuming %s/%s from run %s', item.package, item.suite,
+                        'Resuming %s/%s from run %s', item.package, item.campaign,
                         resume.run_id)
         else:
             resume = None
@@ -1879,7 +1879,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
     assignment = {
         "id": active_run.log_id,
-        "description": "%s on %s" % (item.suite, item.package),
+        "description": "%s on %s" % (item.campaign, item.package),
         "queue_id": item.id,
         "branch": {
             "url": active_run.main_branch_url,
@@ -1891,7 +1891,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "build": {"target": builder.kind, "environment": build_env},
         "env": env,
         "command": command,
-        "suite": item.suite,
+        "campaign": item.campaign,
+        # TODO(jelmer): Remove suite
+        "suite": item.campaign,
         "force-build": campaign_config.force_build,
         "vcs_store": {
             k: v.base_url
@@ -1973,7 +1975,7 @@ async def handle_finish(request):
 
         result = JanitorResult(
             pkg=queue_item.package,
-            suite=queue_item.suite,
+            suite=queue_item.campaign,
             log_id=run_id,
             code='success',
             worker_name=worker_name,
