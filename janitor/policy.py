@@ -159,7 +159,7 @@ async def read_release_stages(url: str) -> Set[str]:
             for stage, data in y['stages'].items():
                 if data['starts'] == 'TBA':
                     continue
-                starts = datetime.fromisoformat(data['starts'][:-1])
+                starts = datetime.fromisoformat(data['starts'])
                 if datetime.utcnow() > starts:
                     ret.add(stage)
     return ret
