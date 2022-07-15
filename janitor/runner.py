@@ -1683,7 +1683,7 @@ async def handle_queue(request):
         limit = None
     async with queue_processor.database.acquire() as conn:
         queue = Queue(conn)
-        for entry in await conn.iter_queue(limit=limit):
+        for entry in await queue.iter_queue(limit=limit):
             response_obj.append(
                 {
                     "queue_id": entry.id,
@@ -1794,7 +1794,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         else:
             # We try the public branch first, since perhaps a maintainer
             # has made changes to the branch there.
-            active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
+            active_run.vcs_info["branch_url"] = full_branch_url(main_branch).rstrip('/')
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 with span.new_child('resume-branch:open'):
