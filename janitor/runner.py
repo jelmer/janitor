@@ -755,7 +755,7 @@ class ActiveRun(object):
 
     @property
     def main_branch_url(self):
-        return self.vcs_info["main_branch_url"]
+        return self.vcs_info["branch_url"]
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -1574,9 +1574,9 @@ class QueueProcessor(object):
             vcs_info = await conn.fetchrow(
                 'SELECT vcs_type, branch_url, subpath FROM package '
                 'WHERE name = $1', item.package)
-            if not self.can_process_url(vcs_info["branch_url"]):
+            if vcs_info and not self.can_process_url(vcs_info["branch_url"]):
                 continue
-            return item, vcs_info
+            return item, dict(vcs_info) if vcs_info else None
         return None, None
 
     def is_queue_item_assigned(self, queue_item_id: int) -> bool:
