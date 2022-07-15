@@ -547,12 +547,10 @@ def _drop_env(command):
 
 
 def import_branches_git(
-        vcs_store_url, local_branch: Branch, package: str,
-        suite: str, log_id: str,
+        repo_url, local_branch: Branch, suite: str, log_id: str,
         branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]]):
     from breezy.repository import InterRepository
-    repo_url = urlutils.join(vcs_store_url, package)
 
     from dulwich.objects import ZERO_SHA
 
@@ -583,12 +581,12 @@ def import_branches_git(
 
 
 def import_branches_bzr(
-    vcs_store_url, local_branch, package, suite, log_id, branches, tags
+        repo_url: str, local_branch, suite: str, log_id: str, branches, tags
 ):
     from breezy.errors import NoSuchFile
     from breezy.transport import get_transport
     for fn, n, br, r in branches:
-        target_branch_path = urlutils.join(vcs_store_url, package, suite)
+        target_branch_path = urlutils.join(repo_url, suite)
         if fn is not None:
             target_branch_path = urlutils.join_segment_parameters(
                 target_branch_path,
@@ -1004,7 +1002,7 @@ def run_worker(
     command: List[str],
     output_directory: str,
     metadata: Any,
-    vcs_store_urls: Dict[str, str],
+    target_repo_url: str,
     vendor: str,
     suite: str,
     target: str,
@@ -1043,7 +1041,7 @@ def run_worker(
                 force_build=force_build
             ) as (ws, result):
                 enable_tag_pushing(ws.local_tree.branch)
-                logging.info("Pushing result branch to %r", vcs_store_urls)
+                logging.info("Pushing result branch to %r", target_repo_url)
 
                 vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
                 if vcs:
@@ -1061,12 +1059,12 @@ def run_worker(
                 try:
                     if vcs_type.lower() == "git":
                         import_branches_git(
-                            vcs_store_urls["git"], ws.local_tree.branch, env['PACKAGE'],
+                            target_repo_url, ws.local_tree.branch,
                             suite, run_id, result.branches, result.tags
                         )
                     elif vcs_type.lower() == "bzr":
                         import_branches_bzr(
-                            vcs_store_urls["bzr"], ws.local_tree.branch, env['PACKAGE'],
+                            target_repo_url, ws.local_tree.branch,
                             suite, run_id, result.branches, result.tags
                         )
                     else:
@@ -1342,8 +1340,12 @@ async def process_single_item(
         }
         workitem['metadata'] = metadata
 
-        if vcs_store_urls is None:
-            vcs_store_urls = assignment["vcs_store"]
+        if vcs_store_urls is not None:
+            target_repo_url = urlutils.join(
+                vcs_store_urls[assignment["target_repository"]["vcs_type"]],
+                assignment["env"]['PACKAGE'])
+        else:
+            target_repo_url = assignment["target_repository"]["url"]
 
         run_id = assignment["id"]
 
@@ -1372,7 +1374,7 @@ async def process_single_item(
                 command,
                 output_directory,
                 metadata,
-                vcs_store_urls,
+                target_repo_url,
                 vendor,
                 suite,
                 target=target,
