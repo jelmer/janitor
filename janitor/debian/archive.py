@@ -293,6 +293,10 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_ready(request):
+    return web.Response(text='ok')
+
+
 async def handle_index(request):
     return web.Response(text='')
 
@@ -316,6 +320,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     app.router.add_get("/health", handle_health, name="health")
+    app.router.add_get("/ready", handle_ready, name="ready")
     app.router.add_get("/pgp_keys", handle_pgp_keys, name="pgp-keys")
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)

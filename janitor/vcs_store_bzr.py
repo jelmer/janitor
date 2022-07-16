@@ -235,6 +235,10 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_ready(request):
+    return web.Response(text='ok')
+
+
 async def handle_home(request):
     return web.Response(text='')
 
@@ -265,10 +269,11 @@ async def create_web_app(
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
-    public_app.router.add_get("/", handle_health, name='home')
+    public_app.router.add_get("/", handle_home, name='home')
     public_app.router.add_get("/bzr/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
+    app.router.add_get("/ready", handle_ready, name='ready')
     app.router.add_get("/{package}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_get("/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
