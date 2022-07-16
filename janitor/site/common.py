@@ -168,7 +168,7 @@ FROM
 LEFT JOIN
     debian_build ON debian_build.run_id = last_runs.id
 WHERE
-    suite = 'unchanged' AND revision = $1 AND
+    suite in ('control', 'unchanged') AND revision = $1 AND
     package = $2 AND
     result_code = 'success' AND
     change_set IS NULL

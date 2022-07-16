@@ -22,7 +22,7 @@
 <li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Success probability: {{ success_probability }} (based on {{ total_previous_runs }} previous runs)</li>
-<li>Status: {{ display_result_code(result_code)|safe }}{% if unchanged_run and suite != 'unchanged' %} (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(unchanged_run.result_code)|safe }}){% elif suite != 'unchanged' %} ({{ schedule_control_button(run.id, "schedule control run", id='schedule-control') }}){% endif %}{% if run.resume_from %} (<a href="/cupboard/pkg/{{ run.package }}/{{ run.resume_from }}">base run</a>){% endif %}
+<li>Status: {{ display_result_code(result_code)|safe }}{% if unchanged_run and suite not in ('unchanged', 'control') %} (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(unchanged_run.result_code)|safe }}){% elif suite not in ('unchanged', 'control') %} ({{ schedule_control_button(run.id, "schedule control run", id='schedule-control') }}){% endif %}{% if run.resume_from %} (<a href="/cupboard/pkg/{{ run.package }}/{{ run.resume_from }}">base run</a>){% endif %}
 </li>
 <li>Description: {{ description }}</li>
 {% if result_code == 'success' %}
@@ -53,13 +53,13 @@ function submit_review(status) {
 
 {{ result_code_explanation(result_code, run) }}
 
-{% if suite != 'unchanged' %}
+{% if suite not in ('unchanged', 'control') %}
 {% set debdiff = show_debdiff() %}
 {% else %}
 {% set debdiff = '' %}
 {% endif %}
 
-{% if revision and suite != 'unchanged' %}
+{% if revision and suite not in ('unchanged', 'control') %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">raw diff</a>,
     {% if debdiff %}<a href="/api/run/{{ run_id }}/debdiff?filter_boring=true">raw debdiff</a>{% else %}debdiff is not available{% endif %},
     {% if debdiff %}<a href="/api/run/{{ run_id }}/diffoscope?filter_boring=true">diffoscope</a> (<a href="/api/run/{{ run_id }}/diffoscope">unfiltered</a>){% else %}diffoscope diff is not available{% endif %}
@@ -82,7 +82,7 @@ function submit_review(status) {
 {{ file_bug_button(run_id, result_code, verbatim_id="#log") }}
 
 {% if run.result_branches %}
-{%  if suite != 'unchanged' %}
+{%  if suite not in ('unchanged', 'control') %}
 {{ merge_command(package, suite, run.result_branches, vcs) }}
 {%  endif %}
 {% else %}
@@ -110,7 +110,7 @@ function submit_review(status) {
 {% include [suite + "/summary.html", "generic/summary.html"] %}
 {% endif %}
 
-{% if revision and result_code in ('success', 'nothing-to-do') and suite != 'unchanged' %}
+{% if revision and result_code in ('success', 'nothing-to-do') and suite not in ('unchanged', 'control') %}
 {{ display_vcs_diffs(show_diff, run.result_branches, run.result_tags) }}
 {% endif %}
 
