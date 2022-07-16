@@ -46,7 +46,7 @@ from . import (
 )
 
 from .compat import to_thread
-from .config import read_config, get_campaign_config
+from .config import read_config
 from .site import is_worker, iter_accept, env as site_env
 
 
@@ -516,14 +516,12 @@ async def create_web_app(
     app.local_path = local_path
     app.db = db
     app.allow_writes = True
-    app.config = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
     public_app.local_path = local_path
     public_app.db = db
     public_app.allow_writes = None
-    public_app.config = config
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")

@@ -15,12 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from ..vcs import bzr_to_browse_url, LocalVcsManager, get_run_diff
+from ..vcs import bzr_to_browse_url, LocalBzrVcsManager, get_run_diff
 from . import TestCaseWithTransport
 
 from breezy import controldir
 
-import os
 import unittest
 
 
@@ -46,17 +45,16 @@ class BzrToBrowseUrlTests(unittest.TestCase):
 
 class GetRunDiffsTests(TestCaseWithTransport):
     def test_diff(self):
-        vcs_manager = LocalVcsManager(".")
-        os.mkdir("bzr")
-        self.make_repository("bzr/pkg", shared=True)
+        vcs_manager = LocalBzrVcsManager(".")
+        self.make_repository("pkg", shared=True)
         branch = controldir.ControlDir.create_branch_convenience(
-            "bzr/pkg/trunk", force_new_repo=False
+            "pkg/trunk", force_new_repo=False
         )
         tree = branch.controldir.open_workingtree()
         self.build_tree_contents(
             [
                 (
-                    "bzr/pkg/trunk/a",
+                    "pkg/trunk/a",
                     """\
 File a
 """,
@@ -69,7 +67,7 @@ File a
         self.build_tree_contents(
             [
                 (
-                    "bzr/pkg/trunk/a",
+                    "pkg/trunk/a",
                     """\
 File a
 File b
