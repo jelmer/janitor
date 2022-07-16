@@ -482,8 +482,8 @@ async def do_schedule(
         command = policy['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, suite)
-    await _add_to_queue(
-        conn,
+    queue = Queue(conn)
+    await queue.add(
         package=package,
         command=command,
         suite=suite,
