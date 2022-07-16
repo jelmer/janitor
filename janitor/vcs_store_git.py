@@ -55,12 +55,11 @@ GIT_BACKEND_CHUNK_SIZE = 4096
 
 async def git_diff_request(request):
     package = request.match_info["package"]
-    old_sha = request.query.get('old')
-    if old_sha is not None:
-        old_sha = old_sha.encode('utf-8')
-    new_sha = request.query.get('new')
-    if new_sha is not None:
-        new_sha = new_sha.encode('utf-8')
+    try:
+        old_sha = request.query['old'].encode('utf-8')
+        new_sha = request.query['new'].encode('utf-8')
+    except KeyError:
+        raise web.HTTPBadRequest(text='need both old and new')
     path = request.query.get('path')
     try:
         repo = Repository.open(os.path.join(request.app['local_path'], package))
@@ -102,12 +101,11 @@ async def git_diff_request(request):
 async def git_revision_info_request(request):
     from dulwich.errors import MissingCommitError
     package = request.match_info["package"]
-    old_sha = request.query.get('old')
-    if old_sha is not None:
-        old_sha = old_sha.encode('utf-8')
-    new_sha = request.query.get('new')
-    if new_sha is not None:
-        new_sha = new_sha.encode('utf-8')
+    try:
+        old_sha = request.query['old'].encode('utf-8')
+        new_sha = request.query['new'].encode('utf-8')
+    except KeyError:
+        raise web.HTTPBadRequest(text='need both old and new')
     try:
         repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
@@ -291,12 +289,6 @@ async def cgit_backend(request):
 
     for key, value in request.headers.items():
         env["HTTP_" + key.replace("-", "_").upper()] = value
-
-    for name in ["HTTP_CONTENT_ENCODING", "HTTP_CONTENT_LENGTH", "HTTP_TRANSFER_ENCODING"]:
-        try:
-            del env[name]
-        except KeyError:
-            pass
 
     p = await asyncio.create_subprocess_exec(
         *args,
