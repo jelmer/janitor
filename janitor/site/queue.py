@@ -17,10 +17,10 @@
 
 from datetime import datetime, timedelta
 import shlex
-from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
+from typing import AsyncIterator, Tuple, Dict, Any, Iterator
 
 import asyncpg
-from ..queue import Queue
+from ..queue import Queue, QueueItem
 
 
 class RunnerProcessingUnavailable(Exception):
@@ -65,14 +65,9 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
 
 async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIterator[
     Tuple[
-        int,
-        str,
-        Optional[str],
-        str,
-        str,
-        Optional[timedelta],
-        Optional[str],
-        Optional[str],
+        QueueItem,
+        Any,
+        str
     ]
 ]:
     async for queue_item, row in iter_queue_items_with_last_run(db, queue, limit=limit):

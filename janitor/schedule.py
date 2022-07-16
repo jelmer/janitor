@@ -307,7 +307,7 @@ async def bulk_add_to_queue(
             queue = Queue(conn)
             added = await queue.add(
                 package=package,
-                suite=suite,
+                campaign=suite,
                 change_set=None,
                 command=command,
                 offset=offset,
@@ -482,11 +482,11 @@ async def do_schedule(
         command = policy['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, suite)
-    await _add_to_queue(
-        conn,
+    queue = Queue(conn)
+    await queue.add(
         package=package,
         command=command,
-        suite=suite,
+        campaign=suite,
         change_set=change_set,
         offset=offset,
         bucket=bucket,

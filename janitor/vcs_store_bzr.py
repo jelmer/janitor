@@ -29,11 +29,10 @@ import warnings
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
-from http.client import parse_headers  # type: ignore
 
 from breezy import urlutils
 from breezy.branch import Branch
-from breezy.controldir import ControlDir, format_registry
+from breezy.controldir import ControlDir
 from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium
 from breezy.repository import Repository
@@ -42,7 +41,6 @@ from . import (
     state,
 )
 
-from .compat import to_thread
 from .config import read_config, get_campaign_config
 from .site import is_worker, iter_accept, env as site_env
 
