@@ -2516,7 +2516,7 @@ SELECT
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM last_runs
-WHERE main_branch_revision = $1 AND package = $2 AND suite != 'unchanged'
+WHERE main_branch_revision = $1 AND package = $2 AND main_branch_revision != revision AND suite NOT in ('unchanged', 'control')
 ORDER BY start_time DESC
 """
     return await conn.fetch(

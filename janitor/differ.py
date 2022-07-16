@@ -505,7 +505,8 @@ on run.main_branch_revision = unchanged_run.revision
 where
   run.result_code = 'success' and
   unchanged_run.result_code = 'success' and
-  run.suite != 'unchanged'
+  run.main_branch_revision != run.revision and
+  suite not in ('control', 'unchanged')
  order by run.finish_time desc, unchanged_run.finish_time desc
 """
         )

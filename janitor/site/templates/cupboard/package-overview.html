@@ -28,7 +28,7 @@
 <h2>Per-campaign pages</h2>
 <ul>
 {% for suite in available_suites %}
-{% if suite != 'unchanged' %}
+{% if suite not in ('unchanged', 'control') %}
 <li><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></li>
 {% endif %}
 {% endfor %}
