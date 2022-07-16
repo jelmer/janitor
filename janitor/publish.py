@@ -1694,7 +1694,25 @@ class NoRunForMergeProposal(Exception):
 
 async def get_last_effective_run(conn, package, campaign):
     last_success = False
-    async for run in state._iter_runs(conn, package=package, campaign=campaign):
+    query = """
+SELECT
+    id, command, start_time, finish_time, description, package,
+    result_code,
+    value, main_branch_revision, revision, context, result, suite,
+    instigated_context, vcs_type, branch_url, logfilenames, review_status,
+    review_comment, worker,
+    array(SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+    result_tags, target_branch_url, change_set
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
+WHERE package = $1 AND suite = $2
+ORDER BY finish_time DESC
+"""
+    for row in await conn.fetch(query, package, campaign):
+        run = state.Run.from_row(row)
         if run.result_code in ("success", "nothing-to-do"):
             return run
         elif run.result_code == "nothing-new-to-do":
