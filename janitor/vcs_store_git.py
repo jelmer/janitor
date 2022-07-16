@@ -63,57 +63,21 @@ async def git_diff_request(request):
         new_sha = new_sha.encode('utf-8')
     path = request.query.get('path')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, package))
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            package)
-    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-        raise web.HTTPBadRequest(text='invalid shas specified')
-    return await git_diff_helper(repo, old_sha, new_sha, path)
-
-
-async def git_revision_info_request(request):
-    from dulwich.errors import MissingCommitError
-    package = request.match_info["package"]
-    old_sha = request.query.get('old')
-    if old_sha is not None:
-        old_sha = old_sha.encode('utf-8')
-    new_sha = request.query.get('new')
-    if new_sha is not None:
-        new_sha = new_sha.encode('utf-8')
-    try:
-        repo = Repository.open(os.path.join(request.app.local_path, package))
+        repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             package)
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
-    ret = []
-    try:
-        walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
-    except MissingCommitError:
-        return web.json_response({}, status=404)
-    for entry in walker:
-        ret.append({
-            'commit-id': entry.commit.id.decode('ascii'),
-            'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-            'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
-            'message': entry.commit.message.decode('utf-8', 'replace')})
-    return web.json_response(ret)
 
-
-async def git_diff_helper(repo, old_sha, new_sha, path=None):
     args = [
         "git",
         "diff",
         old_sha, new_sha
     ]
     if path:
-        args.extend(['-', path])
+        args.extend(['--', path])
 
     p = await asyncio.create_subprocess_exec(
         *args,
@@ -133,6 +97,37 @@ async def git_diff_helper(repo, old_sha, new_sha, path=None):
         return web.Response(body=stdout, content_type="text/x-diff")
     logging.warning('git diff failed: %s', stderr.decode())
     raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
+
+
+async def git_revision_info_request(request):
+    from dulwich.errors import MissingCommitError
+    package = request.match_info["package"]
+    old_sha = request.query.get('old')
+    if old_sha is not None:
+        old_sha = old_sha.encode('utf-8')
+    new_sha = request.query.get('new')
+    if new_sha is not None:
+        new_sha = new_sha.encode('utf-8')
+    try:
+        repo = Repository.open(os.path.join(request.app['local_path'], package))
+    except NotBranchError:
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            package)
+    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
+        raise web.HTTPBadRequest(text='invalid shas specified')
+    ret = []
+    try:
+        walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+    except MissingCommitError:
+        return web.json_response({}, status=404)
+    for entry in walker:
+        ret.append({
+            'commit-id': entry.commit.id.decode('ascii'),
+            'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
+            'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
+            'message': entry.commit.message.decode('utf-8', 'replace')})
+    return web.json_response(ret)
 
 
 async def _git_open_repo(local_path: str, db, package: str) -> Repository:
@@ -172,7 +167,7 @@ async def handle_klaus(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
 
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
@@ -243,7 +238,7 @@ async def handle_set_git_remote(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
 
     post = await request.post()
     r = repo._git
@@ -265,15 +260,15 @@ async def cgit_backend(request):
     subpath = request.match_info["subpath"]
     span = aiozipkin.request_span(request)
 
-    allow_writes = request.app.allow_writes
+    allow_writes = request.app['allow_writes']
     if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
+        allow_writes = await is_worker(request.app['db'], request)
     service = request.query.get("service")
     if service is not None:
         _git_check_service(service, allow_writes)
 
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
 
     args = ["/usr/bin/git"]
     if allow_writes:
@@ -383,13 +378,13 @@ async def cgit_backend(request):
 async def dulwich_refs(request):
     package = request.match_info["package"]
 
-    allow_writes = request.app.allow_writes
+    allow_writes = request.app['allow_writes']
     if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
+        allow_writes = await is_worker(request.app['db'], request)
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
     r = repo._git
 
     service = request.query.get("service")
@@ -429,13 +424,13 @@ async def dulwich_service(request):
     package = request.match_info["package"]
     service = request.match_info["service"]
 
-    allow_writes = request.app.allow_writes
+    allow_writes = request.app['allow_writes']
     if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
+        allow_writes = await is_worker(request.app['db'], request)
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app.local_path, request.app.db, package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
 
     _git_check_service(service, allow_writes)
 
@@ -476,7 +471,7 @@ async def handle_repo_list(request):
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.local_path))]
+                 for entry in os.scandir(os.path.join(request.app['local_path']))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -493,6 +488,10 @@ async def handle_repo_list(request):
 
 
 async def handle_health(request):
+    return web.Response(text='ok')
+
+
+async def handle_ready(request):
     return web.Response(text='ok')
 
 
@@ -513,15 +512,15 @@ async def create_web_app(
     app = web.Application(
         middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
-    app.local_path = local_path
-    app.db = db
-    app.allow_writes = True
+    app['local_path'] = local_path
+    app['db'] = db
+    app['allow_writes'] = True
     public_app = web.Application(
         middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
-    public_app.local_path = local_path
-    public_app.db = db
-    public_app.allow_writes = None
+    public_app['local_path'] = local_path
+    public_app['db'] = db
+    public_app['allow_writes'] = None
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
@@ -558,6 +557,7 @@ async def create_web_app(
     public_app.router.add_get("/git/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
+    app.router.add_get("/ready", handle_ready, name='ready')
     app.router.add_get("/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
     public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')

@@ -1929,6 +1929,11 @@ async def handle_health(request):
     return web.Response(text="OK")
 
 
+@routes.get("/ready", name="ready")
+async def handle_ready(request):
+    return web.Response(text="OK")
+
+
 @routes.post("/active-runs/{run_id}/finish", name="finish")
 async def handle_finish(request):
     queue_processor = request.app['queue_processor']
