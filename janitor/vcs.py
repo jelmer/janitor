@@ -52,9 +52,6 @@ from silver_platter.utils import (
 )
 
 
-SUPPORTED_VCSES = ["git", "bzr"]
-
-
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
 
@@ -184,30 +181,7 @@ class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
 
-def get_cached_repository_url(base_url: str, package: str) -> str:
-    return "%s/%s" % (base_url.rstrip("/"), package)
-
-
-def get_cached_branch_url(
-    base_url: str, vcs_type: str, package: str, branch_name: str
-) -> str:
-    if vcs_type == "git":
-        return urlutils.join_segment_parameters("%s/%s" % (
-            base_url.rstrip("/"), package), {
-                "branch": urlutils.escape(branch_name, safe='')})
-    elif vcs_type == "bzr":
-        return "%s/%s/%s" % (base_url.rstrip("/"), package, branch_name)
-    else:
-        raise UnsupportedVcs(vcs_type)
-
-
-def get_cached_branch(
-    base_url: str, vcs_type: str, package: str, branch_name: str
-) -> Optional[Branch]:
-    try:
-        url = get_cached_branch_url(base_url, vcs_type, package, branch_name)
-    except UnsupportedVcs:
-        return None
+def open_cached_branch(url) -> Optional[Branch]:
     try:
         return Branch.open(url)
     except NotBranchError:
@@ -219,43 +193,6 @@ def get_cached_branch(
     except ConnectionError as e:
         logging.info("Unable to reach cache server: %s", e)
         return None
-
-
-def get_local_vcs_branch_url(
-    vcs_directory: str, vcs: str, codebase: str, branch_name: str
-) -> Optional[str]:
-    if vcs == "git":
-        return urlutils.join_segment_parameters(
-            "file:%s" % (
-                os.path.join(vcs_directory, "git", codebase)), {
-                    "branch": urlutils.escape(branch_name, safe='')})
-    elif vcs == "bzr":
-        return os.path.join(vcs_directory, "bzr", codebase, branch_name)
-    else:
-        raise AssertionError("unknown vcs type %r" % vcs)
-
-
-def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) -> Optional[Branch]:
-    for vcs in SUPPORTED_VCSES:
-        if os.path.exists(os.path.join(vcs_directory, vcs, codebase)):
-            break
-    else:
-        return None
-    url = get_local_vcs_branch_url(vcs_directory, vcs, codebase, branch_name)
-    if url is None:
-        return None
-    return open_branch(url)
-
-
-def get_local_vcs_repo(
-    vcs_directory: str, package: str, vcs_type: Optional[str] = None
-) -> Optional[Repository]:
-    for vcs in SUPPORTED_VCSES if not vcs_type else [vcs_type]:
-        path = os.path.join(vcs_directory, vcs, package)
-        if not os.path.exists(path):
-            continue
-        return Repository.open(path)
-    return None
 
 
 class VcsManager(object):
@@ -295,22 +232,29 @@ class LocalGitVcsManager(VcsManager):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name):
+        url = self.get_branch_url(self.base_path, codebase, branch_name)
         try:
-            return get_local_vcs_branch(self.base_path, codebase, branch_name)
+            return open_branch(url)
         except (BranchUnavailable, BranchMissing):
             return None
 
     def get_branch_url(self, codebase, branch_name):
-        return get_local_vcs_branch_url(self.base_path, "git", codebase, branch_name)
+        return urlutils.join_segment_parameters(
+            "file:%s" % (
+                os.path.join(self.base_path, codebase)), {
+                    "branch": urlutils.escape(branch_name, safe='')})
 
     def get_repository(self, codebase):
-        return get_local_vcs_repo(self.base_path, codebase, "git")
+        try:
+            return Repository.open(os.path.join(self.base_path, codebase))
+        except NotBranchError:
+            return None
 
     def get_repository_url(self, codebase):
         return os.path.join(self.base_path, codebase)
 
     def list_repositories(self):
-        for entry in os.scandir(os.path.join(self.base_path, "git")):
+        for entry in os.scandir(os.path.join(self.base_path)):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
@@ -325,22 +269,26 @@ class LocalBzrVcsManager(VcsManager):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name):
+        url = self.get_branch_url(self.base_path, codebase, branch_name)
         try:
-            return get_local_vcs_branch(self.base_path, codebase, branch_name)
+            return open_branch(url)
         except (BranchUnavailable, BranchMissing):
             return None
 
     def get_branch_url(self, codebase, branch_name):
-        return get_local_vcs_branch_url(self.base_path, "bzr", codebase, branch_name)
+        return os.path.join(self.base_path, codebase, branch_name)
 
     def get_repository(self, codebase):
-        return get_local_vcs_repo(self.base_path, codebase, "bzr")
+        try:
+            return Repository.open(os.path.join(self.base_path, codebase))
+        except NotBranchError:
+            return None
 
     def get_repository_url(self, codebase):
         return os.path.join(self.base_path, codebase)
 
     def list_repositories(self):
-        for entry in os.scandir(os.path.join(self.base_path, "bzr")):
+        for entry in os.scandir(os.path.join(self.base_path)):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
@@ -374,10 +322,13 @@ class RemoteGitVcsManager(VcsManager):
             new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
 
     def get_branch(self, codebase, branch_name):
-        return get_cached_branch(self.base_url, "git", codebase, branch_name)
+        url = self.get_branch_url(codebase, branch_name)
+        return open_cached_branch(url)
 
     def get_branch_url(self, codebase, branch_name) -> str:
-        return get_cached_branch_url(self.base_url, "git", codebase, branch_name)
+        return urlutils.join_segment_parameters("%s/%s" % (
+            self.base_url.rstrip("/"), codebase), {
+                "branch": urlutils.escape(branch_name, safe='')})
 
     def get_repository_url(self, codebase: str) -> str:
         return "%s/%s" % (self.base_url.rstrip("/"), codebase)
@@ -408,10 +359,11 @@ class RemoteBzrVcsManager(VcsManager):
             new_revid.decode('utf-8') if new_revid else NULL_REVISION))
 
     def get_branch(self, codebase, branch_name):
-        return get_cached_branch(self.base_url, "bzr", codebase, branch_name)
+        url = self.get_branch_url(codebase, branch_name)
+        return open_cached_branch(url)
 
     def get_branch_url(self, codebase, branch_name) -> str:
-        return get_cached_branch_url(self.base_url, "bzr", codebase, branch_name)
+        return "%s/%s/%s" % (self.base_url.rstrip("/"), codebase, branch_name)
 
     def get_repository_url(self, codebase: str) -> str:
         return "%s/%s" % (self.base_url.rstrip("/"), codebase)
@@ -457,9 +409,9 @@ def get_vcs_managers(location):
     for p in location.split(','):
         (k, v) = p.split('=', 1)
         if k == 'git':
-            ret[k] = RemoteGitVcsManager(str(URL(v) / "git"))
+            ret[k] = RemoteGitVcsManager(str(URL(v)))
         elif k == 'bzr':
-            ret[k] = RemoteBzrVcsManager(str(URL(v) / "bzr"))
+            ret[k] = RemoteBzrVcsManager(str(URL(v)))
         else:
             raise ValueError('unsupported vcs %s' % k)
     return ret
