@@ -22,7 +22,6 @@ from contextlib import ExitStack
 import json
 import logging
 import os
-import re
 import sys
 from tempfile import TemporaryDirectory
 import traceback
