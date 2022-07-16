@@ -216,59 +216,6 @@ class Run(object):
         return self.id < other.id
 
 
-async def _iter_runs(
-    conn: asyncpg.Connection,
-    package: Optional[str] = None,
-    run_id: Optional[str] = None,
-    worker: Optional[str] = None,
-    suite: Optional[str] = None,
-    limit: Optional[int] = None,
-):
-    """Iterate over runs.
-
-    Args:
-      package: package to restrict to
-    Returns:
-      iterator over Run objects
-    """
-    query = """
-SELECT
-    id, command, start_time, finish_time, description, package,
-    result_code,
-    value, main_branch_revision, revision, context, result, suite,
-    instigated_context, vcs_type, branch_url, logfilenames, review_status,
-    review_comment, worker,
-    array(SELECT row(role, remote_name, base_revision,
-     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set
-FROM
-    run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id
-"""
-    conditions = []
-    args = []
-    if package is not None:
-        args.append(package)
-        conditions.append("package = $%d" % len(args))
-    if run_id is not None:
-        args.append(run_id)
-        conditions.append("id = $%d" % len(args))
-    if worker is not None:
-        args.append(worker)
-        conditions.append("worker = $%d" % len(args))
-    if suite is not None:
-        args.append(suite)
-        conditions.append("suite = $%d" % len(args))
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += "ORDER BY finish_time DESC"
-    if limit:
-        query += " LIMIT %d" % limit
-    for row in await conn.fetch(query, *args):
-        yield Run.from_row(row)
-
-
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
     package: str

@@ -55,7 +55,7 @@ Rate limiting hosts:
 <thead valign="bottom">
 <tr class="row-odd">
   <th class="head">Package</th>
-  <th class="head">Suite</th>
+  <th class="head">Campaign</th>
   <th class="head">Estimated<br/>Duration</th>
   <th class="head">Current<br/>Duration</th>
   <th class="head">Worker</th>
@@ -70,7 +70,7 @@ Rate limiting hosts:
 {% for entry in processing %}
 <tr id="active-{{ entry['id'] }}"{% if entry['mia'] %} class="old-keepalive"{% endif %}>
     <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
-    <td>{{ entry['suite'] }}</td>
+    <td>{{ entry['campaign'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
     <td>{% if entry.get('worker_link') %}<a href="{{ entry['worker_link'] }}">{{ entry['worker'] }}</a>{% else %}{{ entry['worker'] }}{% endif %}</td>
@@ -131,7 +131,7 @@ registerHandler('queue', function(msg) {
       if (!$('#' + existing).length) {
          tr = $('<tr id="active-' + p['id'] + '"/>');
          tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
-         tr.append('<td>' + p['suite'] + '</td>');
+         tr.append('<td>' + p['campaign'] + '</td>');
          tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
          tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
          tr.append('<td>' + p['worker'] + '</td>');
