@@ -33,7 +33,6 @@ from debian.deb822 import Changes
 from breezy import (
     osutils,
 )
-from breezy.trace import note
 from breezy.workingtree import WorkingTree
 
 # Timeout in seconds for uploads
