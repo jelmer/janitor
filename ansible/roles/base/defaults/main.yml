@@ -17,3 +17,5 @@ janitor_fullname: Janitor
 janitor_committer: "{{ janitor_fullname }} <{{ janitor_email }}>"
 janitor_openid:
 janitor_local_proposal_template_path:
+janitor_bzr_location:
+janitor_git_location:
