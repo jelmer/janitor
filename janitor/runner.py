@@ -950,16 +950,18 @@ class PollingActiveRun(ActiveRun):
                             health_url, raise_for_status=True,
                             timeout=ClientTimeout(queue_processor.run_timeout * 60)) as resp:
                         log_id = (await resp.read()).decode()
-                        if log_id != self.log_id:
-                            logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
-                            self._log_id_mismatch = log_id
-                        else:
-                            self._reset_keepalive()
-                            self._log_id_mismatch = None
                 except (ClientConnectorError, ClientResponseError,
                         asyncio.TimeoutError, ClientOSError,
                         ServerDisconnectedError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                else:
+                    if log_id != self.log_id:
+                        logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+                        self._log_id_mismatch = log_id
+                    else:
+                        self._reset_keepalive()
+                        self._log_id_mismatch = None
+
                 if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
                         "No health checks to %s succeeded for %s in %s, aborting.",
@@ -1792,7 +1794,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             return web.json_response(
                 {'reason': str(e)}, status=429, headers={
                     'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
-        except BranchOpenFailure:
+        except BranchOpenFailure as e:
+            logging.debug(
+                'Error opening branch %s: %s', vcs_info['branch_url'],
+                e)
+            resume_branch = None
+            vcs_type = vcs_info['vcs_type']
+        except asyncio.TimeoutError:
+            logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
             resume_branch = None
             vcs_type = vcs_info['vcs_type']
         else:
@@ -1818,6 +1827,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                         return web.json_response(
                             {'reason': str(e)}, status=429, headers={
                                 'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                    except asyncio.TimeoutError:
+                        logging.debug('Timeout opening resume branch')
+                        resume_branch = None
             else:
                 resume_branch = None
 
@@ -1834,10 +1846,13 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                         vcs_type, item.package)
                     resume_branch = None
                 else:
-                    resume_branch = await to_thread_timeout(
-                        VCS_STORE_BRANCH_OPEN_TIMEOUT,
-                        vcs_manager.get_branch,
-                        item.package, '%s/%s' % (campaign_config.name, 'main'))
+                    try:
+                        resume_branch = await to_thread_timeout(
+                            VCS_STORE_BRANCH_OPEN_TIMEOUT,
+                            vcs_manager.get_branch,
+                            item.package, '%s/%s' % (campaign_config.name, 'main'))
+                    except asyncio.TimeoutError:
+                        logging.warning('Timeout opening resume branch')
 
         if resume_branch is not None:
             with span.new_child('resume-branch:check'):
