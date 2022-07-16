@@ -91,6 +91,7 @@ from breezy.config import (
 )
 from breezy.errors import (
     ConnectionError,
+    ConnectionReset,
     NotBranchError,
     InvalidHttpResponse,
     UnexpectedHttpStatus,
@@ -979,9 +980,9 @@ def _push_error_to_worker_failure(e):
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e
         )
-    if (isinstance(e, InvalidHttpResponse) or
-            isinstance(e, IncompleteRead) or
-            isinstance(e, ConnectionError)):
+    if isinstance(
+            e, (InvalidHttpResponse, IncompleteRead,
+                ConnectionError, ConnectionReset)):
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e
         )
