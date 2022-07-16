@@ -491,7 +491,7 @@ async def consider_publish_run(
 
 async def iter_publish_ready(
     conn: asyncpg.Connection,
-    suites: Optional[List[str]] = None,
+    campaigns: Optional[List[str]] = None,
     review_status: Optional[List[str]] = None,
     limit: Optional[int] = None,
     needs_review: Optional[bool] = None,
@@ -509,8 +509,8 @@ async def iter_publish_ready(
 SELECT * FROM publish_ready
 """
     conditions = []
-    if suites is not None:
-        args.append(suites)
+    if campaigns is not None:
+        args.append(campaigns)
         conditions.append("suite = ANY($%d::text[])" % len(args))
     if run_id is not None:
         args.append(run_id)
@@ -631,7 +631,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            suite=run.suite,
+            campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (pre-creation merge conflict)",
             bucket=bucket,
@@ -641,7 +641,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            suite=run.suite,
+            campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
             bucket=bucket,
@@ -654,7 +654,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             await do_schedule(
                 conn,
                 package=run.package,
-                suite=run.suite,
+                campaign=run.suite,
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
@@ -871,7 +871,7 @@ async def publish_from_policy(
                 rate_limiter.check_allowed(maintainer_email)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
-                    package=run.package, suite=run.suite
+                    package=run.package, campaign=run.suite
                 ).inc()
                 logger.debug(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
