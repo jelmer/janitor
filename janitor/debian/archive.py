@@ -333,7 +333,7 @@ async def listen_to_runner(runner_url, generator_manager):
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            campaign = get_campaign_config(generator_manager.config, result["suite"])
+            campaign = get_campaign_config(generator_manager.config, result["campaign"])
             if campaign:
                 generator_manager.trigger(campaign)
 

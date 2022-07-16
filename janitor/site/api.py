@@ -43,7 +43,7 @@ from aiohttp_apispec import (
 from marshmallow import Schema, fields
 from yarl import URL
 
-from janitor import SUITE_REGEX
+from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
 from janitor.queue import Queue
 from . import (
@@ -106,20 +106,20 @@ async def handle_policy(request):
             "publish_policy": {p['role']: {'mode': p['mode']} for p in row['publish']},
             "command": row['command'],
         }
-    return web.json_response({"by_suite": suite_policies})
+    return web.json_response({"by_campaign": suite_policies})
 
 
 @docs()
-@routes.post("/{suite}/pkg/{package}/publish", name="package-publish")
+@routes.post("/{campaign}/pkg/{package}/publish", name="package-publish")
 async def handle_publish(request):
     publisher_url = request.app['publisher_url']
     package = request.match_info["package"]
-    suite = request.match_info["suite"]
+    campaign = request.match_info["campaign"]
     post = await request.post()
     mode = post.get("mode")
     if mode not in (None, "push-derived", "push", "propose", "attempt-push"):
         return web.json_response({"error": "Invalid mode", "mode": mode}, status=400)
-    url = URL(publisher_url) / suite / package / "publish"
+    url = URL(publisher_url) / campaign / package / "publish"
     if request['user']:
         try:
             requestor = request['user']["email"]
@@ -160,7 +160,7 @@ async def handle_webhook(request):
 class ScheduleResultSchema(Schema):
 
     package = fields.Str(description="package name")
-    suite = fields.Str(description="suite")
+    campaign = fields.Str(description="campaign")
     offset = fields.Int(description="offset from top of queue")
     estimated_duration_seconds = fields.Int(description="estimated duration in seconds")
     queue_position = fields.Int(description="new position in the queue")
@@ -169,10 +169,10 @@ class ScheduleResultSchema(Schema):
 
 @response_schema(ScheduleResultSchema())
 @routes.post(
-    "/{suite:" + SUITE_REGEX + "}/pkg/{package}/schedule", name="package-schedule")
+    "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{package}/schedule", name="package-schedule")
 async def handle_schedule(request):
     package = request.match_info["package"]
-    suite = request.match_info["suite"]
+    campaign = request.match_info["campaign"]
     post = await request.post()
     offset = post.get("offset")
     try:
@@ -197,7 +197,7 @@ async def handle_schedule(request):
             offset, estimated_duration = await do_schedule(
                 conn,
                 package['name'],
-                suite,
+                campaign,
                 offset,
                 refresh=refresh,
                 requestor=requestor,
@@ -209,11 +209,11 @@ async def handle_schedule(request):
             )
         queue = Queue(conn)
         (queue_position, queue_wait_time) = await queue.get_position(
-            suite, package['name']
+            campaign, package['name']
         )
     response_obj = {
         "package": package['name'],
-        "suite": suite,
+        "campaign": campaign,
         "offset": offset,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
         "queue_position": queue_position,
@@ -241,7 +241,7 @@ async def handle_run_reschedule(request):
         requestor = "user from web UI"
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
-            "SELECT suite, package FROM run WHERE id = $1",
+            "SELECT suite AS campaign, package FROM run WHERE id = $1",
             run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
@@ -249,7 +249,7 @@ async def handle_run_reschedule(request):
             offset, estimated_duration = await do_schedule(
                 conn,
                 run['package'],
-                run['suite'],
+                run['campaign'],
                 offset,
                 refresh=refresh,
                 requestor=requestor,
@@ -261,11 +261,11 @@ async def handle_run_reschedule(request):
             )
         queue = Queue(conn)
         (queue_position, queue_wait_time) = await queue.get_position(
-            run['suite'], run['package']
+            run['campaign'], run['package']
         )
     response_obj = {
         "package": run['package'],
-        "suite": run['suite'],
+        "campaign": run['campaign'],
         "offset": offset,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
         "queue_position": queue_position,
@@ -309,7 +309,7 @@ async def handle_schedule_control(request):
             "unchanged", run['package'])
     response_obj = {
         "package": run['package'],
-        "suite": "unchanged",
+        "campaign": "unchanged",
         "offset": offset,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
         "queue_position": queue_position,
@@ -328,7 +328,7 @@ async def handle_packagename_list(request):
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
-async def get_proposals(conn: asyncpg.Connection, package=None, suite=None):
+async def get_proposals(conn: asyncpg.Connection, package=None, campaign=None):
     args = []
     query = """
 SELECT
@@ -343,11 +343,11 @@ ON merge_proposal.revision = run.revision AND run.result_code = 'success'
     if package is not None:
         args.append(package)
         query += " WHERE run.package = $1"
-        if suite:
+        if campaign:
             query += " AND run.suite = $2"
-            args.append(suite)
-    elif suite:
-        args.append(suite)
+            args.append(campaign)
+    elif campaign:
+        args.append(campaign)
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     return await conn.fetch(query, *args)
@@ -361,12 +361,13 @@ class MergeProposalSchema(Schema):
 
 
 @docs()
+@routes.get("/{campaign}/merge-proposals", name="campaign-merge-proposals")
 @routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
     async with request.app['db'].acquire() as conn:
-        for row in await get_proposals(conn, request.match_info.get("package"), request.match_info.get("suite")):
+        for row in await get_proposals(conn, request.match_info.get("package"), campaign=request.match_info.get("campaign")):
             response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
     return web.json_response(response_obj)
 
@@ -425,19 +426,19 @@ async def handle_queue(request):
 
 
 @docs()
-@routes.get("/{suite}/pkg/{package}/revision-info", name="package-revision-info")
+@routes.get("/{campaign}/pkg/{package}/revision-info", name="package-revision-info")
 @routes.get("/pkg/{package}/run/{run_id}/revision-info", name="package-run-revision-info")
 @routes.get("/run/{run_id}/revision-info", name="run-revision-info")
 async def handle_revision_info(request):
     role = request.query.get("role", "main")
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
-    suite = request.match_info.get("suite")
-    run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
+    campaign = request.match_info.get("campaign")
+    run = await find_vcs_info(request.app['db'], role, run_id, package, campaign)
     if run is None:
         if run_id is None:
             return web.json_response(
-                {"error": "no unabsorbed run for %s/%s" % (package, suite)},
+                {"error": "no unabsorbed run for %s/%s" % (package, campaign)},
                 status=404)
         else:
             return web.json_response(
@@ -460,7 +461,7 @@ async def handle_revision_info(request):
             {"error": "unable to contact publisher - oserror"}, status=502)
 
 
-async def find_vcs_info(db, role, run_id=None, package=None, suite=None):
+async def find_vcs_info(db, role, run_id=None, package=None, campaign=None):
     async with db.acquire() as conn:
         if run_id is None:
             return await conn.fetchrow(
@@ -469,7 +470,7 @@ async def find_vcs_info(db, role, run_id=None, package=None, suite=None):
                 'LEFT JOIN new_result_branch ON '
                 'new_result_branch.run_id = last_unabsorbed_runs.id '
                 'WHERE package = $1 AND suite = $2 AND role = $3',
-                package, suite, role)
+                package, campaign, role)
         else:
             return await conn.fetchrow(
                 'SELECT id, package, vcs_type, '
@@ -481,22 +482,22 @@ async def find_vcs_info(db, role, run_id=None, package=None, suite=None):
 
 
 @docs()
-@routes.get("/{suite}/pkg/{package}/diff", name="package-diff")
+@routes.get("/{campaign}/pkg/{package}/diff", name="package-diff")
 @routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
 @routes.get("/run/{run_id}/diff", name="run-diff")
 async def handle_diff(request):
     role = request.query.get("role", "main")
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
-    suite = request.match_info.get("suite")
-    run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
+    campaign = request.match_info.get("campaign")
+    run = await find_vcs_info(request.app['db'], role, run_id, package, campaign)
     span = aiozipkin.request_span(request)
     if run is None:
         if run_id:
             raise web.HTTPNotFound(text="no run %s" % (run_id, ))
         else:
             raise web.HTTPNotFound(
-                text="no unabsorbed run for %s/%s" % (package, suite))
+                text="no unabsorbed run for %s/%s" % (package, campaign))
 
     try:
         max_diff_size = int(request.query["max_diff_size"])
@@ -564,7 +565,7 @@ async def handle_archive_diff(request):
     with span.new_child('sql:get-run'):
         async with request.app['db'].acquire() as conn:
             run = await conn.fetchrow(
-                'select id, package, suite, main_branch_revision, result_code from run where id = $1',
+                'select id, package, suite AS campaign, main_branch_revision, result_code from run where id = $1',
                 run_id)
             if run is None:
                 raise web.HTTPNotFound(text="No such run: %s" % run_id)
@@ -579,7 +580,7 @@ async def handle_archive_diff(request):
                         "reason": "No matching unchanged build for %s" % run_id,
                         "run_id": [run['id']],
                         "unavailable_run_id": None,
-                        "suite": run['suite'],
+                        "campaign": run['campaign'],
                     },
                     status=404,
                 )
@@ -607,7 +608,7 @@ async def handle_archive_diff(request):
                 % (run['id'], unchanged_run_id),
                 "run_id": [unchanged_run_id, run['id']],
                 "unavailable_run_id": e.unavailable_run_id,
-                "suite": run['suite'],
+                "campaign": run['campaign'],
             },
             status=404,
         )
@@ -643,7 +644,7 @@ async def consider_publishing(session, publisher_url, run_id):
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
-@routes.post("/{suite}/pkg/{package}", name="suite-package-run-update")
+@routes.post("/{camaign}/pkg/{package}", name="campaign-package-run-update")
 async def handle_run_post(request):
     from .review import store_review
     async with request.app['db'].acquire() as conn:
@@ -651,10 +652,10 @@ async def handle_run_post(request):
             run_id = request.match_info["run_id"]
         except KeyError:
             package = request.match_info["package"]
-            suite = request.match_info["suite"]
+            campaign = request.match_info["campaign"]
             run_id = await conn.fetchval(
                 'SELECT id FROM run WHERE package = $1 AND suite = $2',
-                package, suite)
+                package, campaign)
 
         check_qa_reviewer(request)
         span = aiozipkin.request_span(request)
@@ -666,13 +667,13 @@ async def handle_run_post(request):
             if review_status == "reschedule":
                 with span.new_child('sql:run'):
                     run = await conn.fetchrow(
-                        'SELECT package, suite FROM run WHERE id = $1',
+                        'SELECT package, suite AS campaign FROM run WHERE id = $1',
                         run_id)
                 with span.new_child('schedule'):
                     await do_schedule(
                         conn,
                         run['package'],
-                        run['suite'],
+                        run['campaign'],
                         refresh=True,
                         requestor="reviewer",
                         bucket="default",
@@ -906,9 +907,9 @@ FROM publish WHERE id = $1
 
 
 @docs()
-@routes.get("/{suite:" + SUITE_REGEX + "}/report", name="report")
+@routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/report", name="report")
 async def handle_report(request):
-    suite = request.match_info["suite"]
+    campaign = request.match_info["campaign"]
     report = {}
     merge_proposal = {}
     async with request.app['db'].acquire() as conn:
@@ -922,7 +923,7 @@ LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 AND status = 'open'
 WHERE run.suite = $1
-""", suite):
+""", campaign):
             merge_proposal[package] = url
         query = """
 SELECT DISTINCT ON (package)
@@ -935,7 +936,7 @@ FROM
 WHERE suite = $1
 ORDER BY package, suite, start_time DESC
 """
-        for record in await conn.fetch(query, suite):
+        for record in await conn.fetch(query, campaign):
             if record['result_code'] not in ("success", "nothing-to-do"):
                 continue
             data = {
@@ -952,10 +953,10 @@ ORDER BY package, suite, start_time DESC
 
 @docs()
 @routes.get("/needs-review", name="needs-review")
-@routes.get("/{suite:" + SUITE_REGEX + "}/needs-review", name="needs-review-suite")
+@routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/needs-review", name="needs-review-campaign")
 async def handle_needs_review(request):
     from .review import iter_needs_review
-    suite = request.match_info.get("suite")
+    campaign = request.match_info.get("campaign")
     reviewer = request.query.get("reviewer")
     if reviewer is None and request.get('user'):
         reviewer = request['user'].get('email')
@@ -977,14 +978,14 @@ async def handle_needs_review(request):
                 run_id,
                 command,
                 package,
-                suite,
+                campaign,
                 vcs_type,
                 result_branches,
                 main_branch_revision,
                 value,
             ) in await iter_needs_review(
                 conn,
-                suites=([suite] if suite else None),
+                campaigns=([campaign] if campaign else None),
                 required_only=required_only,
                 publishable_only=publishable_only,
                 reviewer=reviewer,
@@ -1159,14 +1160,14 @@ async def handle_run_reprocess_logs(request):
     reschedule = 'reschedule' in post
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
-            'SELECT package, suite, command, finish_time - start_time AS duration, '
+            'SELECT package, suite AS campaign, command, finish_time - start_time AS duration, '
             'result_code, description, failure_details, change_set FROM run WHERE id = $1',
             run_id)
 
     result = await reprocess_run_logs(
         request.app['db'],
         request.app['logfile_manager'],
-        run['package'], run['suite'], run_id,
+        run['package'], run['campaign'], run_id,
         run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
         dry_run=dry_run, reschedule=reschedule)
@@ -1204,7 +1205,7 @@ async def handle_reprocess_logs(request):
         query = """
 SELECT
   package,
-  suite,
+  suite AS campaign,
   id,
   command,
   finish_time - start_time AS duration,
@@ -1227,7 +1228,7 @@ WHERE
         query = """
 SELECT
   package,
-  suite,
+  suite AS campaign,
   id,
   command,
   finish_time - start_time AS duration,
@@ -1247,7 +1248,7 @@ WHERE
             reprocess_run_logs(
                 request.app['db'],
                 request.app['logfile_manager'],
-                row['package'], row['suite'], row['id'],
+                row['package'], row['campaign'], row['id'],
                 row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
                 dry_run=dry_run, reschedule=reschedule)
@@ -1259,7 +1260,7 @@ WHERE
 
     return web.json_response([
         {'package': row['package'],
-         'suite': row['suite'],
+         'campaign': row['campaign'],
          'log_id': row['id']}
         for row in rows])
 
@@ -1273,7 +1274,7 @@ async def handle_mass_reschedule(request):
         result_code = post['result_code']
     except KeyError:
         raise web.HTTPBadRequest(text='result_code not specified')
-    suite = post.get('suite')
+    campaign = post.get('campaign')
     description_re = post.get('description_re')
     min_age = int(post.get('min_age', '0'))
     rejected = 'rejected' in post
@@ -1285,7 +1286,7 @@ async def handle_mass_reschedule(request):
         query = """
 SELECT
   package,
-  suite,
+  suite AS campaign,
   finish_time - start_time AS duration
 FROM last_runs
 WHERE
@@ -1297,8 +1298,8 @@ WHERE
         if result_code is not None:
             params.append(result_code)
             where.append("result_code = $%d" % len(params))
-        if suite:
-            params.append(suite)
+        if campaign:
+            params.append(campaign)
             where.append("suite = $%d" % len(params))
         else:
             params.append(all_campaigns)
@@ -1317,12 +1318,12 @@ WHERE
     async def do_reschedule():
         async with request.app['db'].acquire() as conn:
             for run in runs:
-                logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
+                logging.info("Rescheduling %s, %s" % (run['package'], run['campaign']))
                 try:
                     await do_schedule(
                         conn,
                         run['package'],
-                        run['suite'],
+                        run['campaign'],
                         estimated_duration=run['duration'],
                         requestor="reschedule",
                         refresh=refresh,
@@ -1332,11 +1333,11 @@ WHERE
                 except PolicyUnavailable:
                     logging.debug(
                         'Not rescheduling %s/%s: policy unavailable',
-                        run['package'], run['suite'])
+                        run['package'], run['campaign'])
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([
-            {'package': run['package'], 'suite': run['suite']}
+            {'package': run['package'], 'campaign': run['campaign']}
             for run in runs])
 
 

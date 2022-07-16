@@ -22,7 +22,6 @@ from contextlib import ExitStack
 import json
 import logging
 import os
-import re
 import sys
 from tempfile import TemporaryDirectory
 import traceback
@@ -51,7 +50,6 @@ from .pubsub import pubsub_reader
 from aiohttp_openmetrics import setup_metrics
 
 
-suite_check = re.compile("^[a-z0-9-]+$")
 PRECACHE_RETRIEVE_TIMEOUT = 300
 routes = web.RouteTableDef()
 
@@ -114,11 +112,11 @@ async def handle_debdiff(request):
             old_run['id'],
             old_run['package'],
             old_run['build_version'],
-            old_run['suite'],
+            old_run['campaign'],
             new_run['id'],
             new_run['package'],
             new_run['build_version'],
-            new_run['suite'],
+            new_run['campaign'],
         )
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
@@ -193,7 +191,7 @@ async def handle_debdiff(request):
 
 async def get_run(conn, run_id):
     return await conn.fetchrow("""\
-SELECT result_code, package, suite, id, debian_build.version AS build_version, main_branch_revision
+SELECT result_code, package, suite AS campaign, id, debian_build.version AS build_version, main_branch_revision
 FROM run
 LEFT JOIN debian_build ON debian_build.run_id = run.id
 WHERE id = $1""", run_id)
@@ -201,7 +199,7 @@ WHERE id = $1""", run_id)
 
 async def get_unchanged_run(conn, package, main_branch_revision):
     query = """
-SELECT result_code, package, suite, id, debian_build.version AS build_version
+SELECT result_code, package, suite AS campaign, id, debian_build.version AS build_version
 FROM
     run
 LEFT JOIN
@@ -287,11 +285,11 @@ async def handle_diffoscope(request):
             old_run['id'],
             old_run['package'],
             old_run['build_version'],
-            old_run['suite'],
+            old_run['campaign'],
             new_run['id'],
             new_run['package'],
             new_run['build_version'],
-            new_run['suite'],
+            new_run['campaign'],
         )
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
@@ -349,25 +347,25 @@ async def handle_diffoscope(request):
     diffoscope_diff["source1"] = "%s version %s (%s)" % (
         old_run['package'],
         old_run['build_version'],
-        old_run['suite'],
+        old_run['campaign'],
     )
     diffoscope_diff["source2"] = "%s version %s (%s)" % (
         new_run['package'],
         new_run['build_version'],
-        new_run['suite'],
+        new_run['campaign'],
     )
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = "diffoscope for %s applied to %s" % (new_run['suite'], new_run['package'])
+    title = "diffoscope for %s applied to %s" % (new_run['campaign'], new_run['package'])
 
     if "filter_boring" in request.query:
         filter_diffoscope_boring(
             diffoscope_diff,
             str(old_run['build_version']),
             str(new_run['build_version']),
-            old_run['suite'],
-            new_run['suite'],
+            old_run['campaign'],
+            new_run['campaign'],
         )
         title += " (filtered)"
 
