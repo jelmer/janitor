@@ -55,9 +55,9 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
         runs = {}
         if qs:
             for row in await conn.fetch(
-                    'SELECT package, suite, id, result_code FROM last_runs '
+                    'SELECT package, suite AS campaign, id, result_code FROM last_runs '
                     'WHERE ($1)', ' OR '.join(qs)):
-                runs[(row['package'], row['suite'])] = dict(row)
+                runs[(row['package'], row['campaign'])] = dict(row)
 
     for item in items:
         yield (item, runs[(item.package, item.campaign)])
