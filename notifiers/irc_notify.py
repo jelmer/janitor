@@ -53,17 +53,17 @@ class JanitorNotifier(pydle.Client):
     async def set_runner_status(self, status):
         self._runner_status = status
 
-    async def notify_merged(self, url, package, suite, merged_by=None):
+    async def notify_merged(self, url, package, campaign, merged_by=None):
         await self.message(
             self._channel,
             "Merge proposal %s (%s/%s) merged%s."
-            % (url, package, suite,
+            % (url, package, campaign,
                ((" by %s" % merged_by) if merged_by else "")),
         )
 
-    async def notify_pushed(self, url, package, suite, result):
-        msg = "Pushed %s changes to %s (%s)" % (suite, url, package)
-        if suite == "lintian-fixes":
+    async def notify_pushed(self, url, package, campaign, result):
+        msg = "Pushed %s changes to %s (%s)" % (campaign, url, package)
+        if campaign == "lintian-fixes":
             tags = set()
             for entry in result["applied"]:
                 tags.update(entry["fixed_lintian_tags"])
@@ -83,7 +83,7 @@ class JanitorNotifier(pydle.Client):
             if self._runner_status:
                 status_strs = [
                     "%s (%s) since %s"
-                    % (item["package"], item["suite"], item["start_time"])
+                    % (item["package"], item["campaign"], item["start_time"])
                     for item in self._runner_status["processing"]
                 ]
                 await self.message(
@@ -133,7 +133,7 @@ async def main(args):
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"), msg[1].get("suite"),
+                    msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
                     msg[1].get("merged_by")
                 )
             if msg[0] == "queue":
@@ -145,7 +145,7 @@ async def main(args):
             ):
                 url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
                 await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["suite"], msg[1]["result"]
+                    url, msg[1]["package"], msg[1]["campaign"], msg[1]["result"]
                 )
 
 

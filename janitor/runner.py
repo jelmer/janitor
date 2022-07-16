@@ -121,8 +121,8 @@ packages_processed_count = Counter("package_count", "Number of packages processe
 last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
 )
-build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
-run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
+build_duration = Histogram("build_duration", "Build duration", ["package", "campaign"])
+run_result_count = Counter("result", "Result counts", ["package", "campaign", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
 assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
@@ -397,7 +397,7 @@ class JanitorResult(object):
         description: Optional[str] = None,
         worker_result=None,
         logfilenames=None,
-        suite=None,
+        campaign=None,
         start_time=None,
         finish_time=None,
         worker_name=None,
@@ -406,7 +406,7 @@ class JanitorResult(object):
         change_set=None,
     ):
         self.package = pkg
-        self.suite = suite
+        self.campaign = campaign
         self.log_id = log_id
         self.description = description
         self.branch_url = branch_url
@@ -461,7 +461,7 @@ class JanitorResult(object):
     def json(self):
         return {
             "package": self.package,
-            "suite": self.suite,
+            "campaign": self.campaign,
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
@@ -736,7 +736,7 @@ class ActiveRun(object):
     def create_result(self, **kwargs):
         return JanitorResult(
             pkg=self.queue_item.package,
-            suite=self.queue_item.campaign,
+            campaign=self.queue_item.campaign,
             start_time=self.start_time,
             finish_time=datetime.utcnow(),
             log_id=self.log_id,
@@ -767,7 +767,7 @@ class ActiveRun(object):
             "queue_id": self.queue_item.id,
             "id": self.log_id,
             "package": self.queue_item.package,
-            "suite": self.queue_item.campaign,
+            "campaign": self.queue_item.campaign,
             "estimated_duration": self.queue_item.estimated_duration.total_seconds()
             if self.queue_item.estimated_duration
             else None,
@@ -950,16 +950,18 @@ class PollingActiveRun(ActiveRun):
                             health_url, raise_for_status=True,
                             timeout=ClientTimeout(queue_processor.run_timeout * 60)) as resp:
                         log_id = (await resp.read()).decode()
-                        if log_id != self.log_id:
-                            logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
-                            self._log_id_mismatch = log_id
-                        else:
-                            self._reset_keepalive()
-                            self._log_id_mismatch = None
                 except (ClientConnectorError, ClientResponseError,
                         asyncio.TimeoutError, ClientOSError,
                         ServerDisconnectedError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                else:
+                    if log_id != self.log_id:
+                        logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+                        self._log_id_mismatch = log_id
+                    else:
+                        self._reset_keepalive()
+                        self._log_id_mismatch = None
+
                 if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
                         "No health checks to %s succeeded for %s in %s, aborting.",
@@ -1053,7 +1055,7 @@ def open_resume_branch(
 
 
 async def check_resume_result(
-        conn: asyncpg.Connection, suite: str,
+        conn: asyncpg.Connection, campaign: str,
         resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
         "SELECT id, result, review_status, "
@@ -1062,7 +1064,7 @@ async def check_resume_result(
         "FROM run "
         "WHERE suite = $1 AND revision = $2 AND result_code = 'success' "
         "ORDER BY finish_time DESC LIMIT 1",
-        suite,
+        campaign,
         resume_branch.last_revision().decode("utf-8"),
     )
     if row is not None:
@@ -1294,14 +1296,14 @@ async def followup_run(
                     campaign.name for campaign in config.campaign
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
-                    "SELECT package, suite FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
+                    "SELECT package, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     item.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
                         conn, run_to_retry['package'],
                         change_set=result.change_set,
                         bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % item.package,
-                        suite=run_to_retry['suite'])
+                        campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package
@@ -1336,7 +1338,7 @@ async def followup_run(
         if result.builder_result is None:
             logging.warning(
                 'Missing debian result for run %s (%s/%s)',
-                result.log_id, result.package, result.suite)
+                result.log_id, result.package, result.campaign)
             binary_packages = []
             new_build_version = None   # noqa: F841
             old_build_version = None   # noqa: F841
@@ -1491,16 +1493,16 @@ class QueueProcessor(object):
     async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
             package=item.package,
-            suite=item.campaign,
+            campaign=item.campaign,
             result_code=result.code).inc()
-        build_duration.labels(package=item.package, suite=item.campaign).observe(
+        build_duration.labels(package=item.package, campaign=item.campaign).observe(
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
             if not self.dry_run:
                 if not result.change_set:
                     result.change_set = result.log_id
-                    await store_change_set(conn, result.change_set, campaign=result.suite)
+                    await store_change_set(conn, result.change_set, campaign=result.campaign)
                 try:
                     await store_run(
                         conn,
@@ -1692,7 +1694,7 @@ async def handle_queue(request):
                 {
                     "queue_id": entry.id,
                     "package": entry.package,
-                    "campaign": entry.suite,
+                    "campaign": entry.campaign,
                     "context": entry.context,
                     "command": entry.command,
                 }
@@ -1763,8 +1765,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 campaign_config = get_campaign_config(queue_processor.config, item.campaign)
             except KeyError:
                 logging.warning(
-                    'Unable to find details for suite %r', item.campaign)
-                await abort(active_run, 'unknown-suite', "Suite %s unknown" % item.campaign)
+                    'Unable to find details for campaign %r', item.campaign)
+                await abort(active_run, 'unknown-campaign', "Campaign %s unknown" % item.campaign)
                 item = None
                 continue
 
@@ -1792,7 +1794,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             return web.json_response(
                 {'reason': str(e)}, status=429, headers={
                     'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
-        except BranchOpenFailure:
+        except BranchOpenFailure as e:
+            logging.debug(
+                'Error opening branch %s: %s', vcs_info['branch_url'],
+                e)
+            resume_branch = None
+            vcs_type = vcs_info['vcs_type']
+        except asyncio.TimeoutError:
+            logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
             resume_branch = None
             vcs_type = vcs_info['vcs_type']
         else:
@@ -1818,6 +1827,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                         return web.json_response(
                             {'reason': str(e)}, status=429, headers={
                                 'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                    except asyncio.TimeoutError:
+                        logging.debug('Timeout opening resume branch')
+                        resume_branch = None
             else:
                 resume_branch = None
 
@@ -1834,10 +1846,13 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                         vcs_type, item.package)
                     resume_branch = None
                 else:
-                    resume_branch = await to_thread_timeout(
-                        VCS_STORE_BRANCH_OPEN_TIMEOUT,
-                        vcs_manager.get_branch,
-                        item.package, '%s/%s' % (campaign_config.name, 'main'))
+                    try:
+                        resume_branch = await to_thread_timeout(
+                            VCS_STORE_BRANCH_OPEN_TIMEOUT,
+                            vcs_manager.get_branch,
+                            item.package, '%s/%s' % (campaign_config.name, 'main'))
+                    except asyncio.TimeoutError:
+                        logging.warning('Timeout opening resume branch')
 
         if resume_branch is not None:
             with span.new_child('resume-branch:check'):
@@ -1898,8 +1913,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "env": env,
         "command": command,
         "campaign": item.campaign,
-        # TODO(jelmer): Remove suite
-        "suite": item.campaign,
         "force-build": campaign_config.force_build,
         "target_repository": {
             "url": target_repository_url,
@@ -1982,7 +1995,7 @@ async def handle_finish(request):
 
         result = JanitorResult(
             pkg=queue_item.package,
-            suite=queue_item.campaign,
+            campaign=queue_item.campaign,
             log_id=run_id,
             code='success',
             worker_name=worker_name,

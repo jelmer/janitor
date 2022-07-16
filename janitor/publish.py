@@ -121,7 +121,7 @@ SUPPORTED_MODES = [
 proposal_rate_limited_count = Counter(
     "proposal_rate_limited",
     "Number of attempts to create a proposal that was rate-limited",
-    ["package", "suite"],
+    ["package", "campaign"],
 )
 open_proposal_count = Gauge(
     "open_proposal_count", "Number of open proposals.", labelnames=("maintainer",)
@@ -491,7 +491,7 @@ async def consider_publish_run(
 
 async def iter_publish_ready(
     conn: asyncpg.Connection,
-    suites: Optional[List[str]] = None,
+    campaigns: Optional[List[str]] = None,
     review_status: Optional[List[str]] = None,
     limit: Optional[int] = None,
     needs_review: Optional[bool] = None,
@@ -509,8 +509,8 @@ async def iter_publish_ready(
 SELECT * FROM publish_ready
 """
     conditions = []
-    if suites is not None:
-        args.append(suites)
+    if campaigns is not None:
+        args.append(campaigns)
         conditions.append("suite = ANY($%d::text[])" % len(args))
     if run_id is not None:
         args.append(run_id)
@@ -631,7 +631,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            suite=run.suite,
+            campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (pre-creation merge conflict)",
             bucket=bucket,
@@ -641,7 +641,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            suite=run.suite,
+            campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
             bucket=bucket,
@@ -654,7 +654,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             await do_schedule(
                 conn,
                 package=run.package,
-                suite=run.suite,
+                campaign=run.suite,
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
@@ -734,12 +734,12 @@ ORDER BY timestamp DESC
 
 
 async def check_last_published(
-        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime]:
+        conn: asyncpg.Connection, campaign: str, package: str) -> Optional[datetime]:
     return await conn.fetchval("""
 SELECT timestamp from publish left join run on run.revision = publish.revision
 WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
 order by timestamp desc limit 1
-""", suite, package)
+""", campaign, package)
 
 
 async def store_publish(
@@ -871,7 +871,7 @@ async def publish_from_policy(
                 rate_limiter.check_allowed(maintainer_email)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
-                    package=run.package, suite=run.suite
+                    package=run.package, campaign=run.suite
                 ).inc()
                 logger.debug(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
@@ -982,7 +982,7 @@ async def publish_from_policy(
     topic_entry: Dict[str, Any] = {
         "id": publish_id,
         "package": run.package,
-        "suite": run.suite,
+        "campaign": run.suite,
         "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
         "main_branch_url": main_branch_url,
@@ -1100,7 +1100,7 @@ async def publish_and_store(
                     "result_code": e.code,
                     "description": e.description,
                     "package": run.package,
-                    "suite": run.suite,
+                    "campaign": run.suite,
                     "main_branch_url": run.branch_url,
                     "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
                     "result": run.result,
@@ -1136,7 +1136,7 @@ async def publish_and_store(
             {
                 "id": publish_id,
                 "package": run.package,
-                "suite": run.suite,
+                "campaign": run.suite,
                 "proposal_url": publish_result.proposal_url or None,
                 "mode": mode,
                 "main_branch_url": run.branch_url,
@@ -1294,12 +1294,12 @@ async def consider_request(request):
     return web.json_response({}, status=200)
 
 
-async def get_publish_policy(conn: asyncpg.Connection, package: str, suite: str):
+async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: str):
     row = await conn.fetchrow(
         "SELECT publish, command "
         "FROM policy WHERE package = $1 AND suite = $2",
         package,
-        suite,
+        campaign,
     )
     if row:
         return (
@@ -1309,13 +1309,13 @@ async def get_publish_policy(conn: asyncpg.Connection, package: str, suite: str)
     return None, None, None
 
 
-@routes.post("/{suite}/{package}/publish", name='publish')
+@routes.post("/{campaign}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
     vcs_managers = request.app['vcs_managers']
     rate_limiter = request.app['rate_limiter']
     package = request.match_info["package"]
-    suite = request.match_info["suite"]
+    campaign = request.match_info["campaign"]
     role = request.query.get("role")
     post = await request.post()
     mode = post.get("mode")
@@ -1326,13 +1326,13 @@ async def publish_request(request):
         if package is None:
             return web.json_response({}, status=400)
 
-        run = await get_last_effective_run(conn, package['name'], suite)
+        run = await get_last_effective_run(conn, package['name'], campaign)
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await get_publish_policy(conn, package['name'], suite))[0]
+        publish_policy = (await get_publish_policy(conn, package['name'], campaign))[0]
 
-        logger.info("Handling request to publish %s/%s", package['name'], suite)
+        logger.info("Handling request to publish %s/%s", package['name'], campaign)
 
     if role is not None:
         roles = [role]
@@ -1374,7 +1374,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), 'publish of %s/%s, role %s' % (package['name'], suite, role)
+            ), 'publish of %s/%s, role %s' % (package['name'], campaign, role)
         )
 
     if not publish_ids:
@@ -1692,9 +1692,9 @@ class NoRunForMergeProposal(Exception):
         self.revision = revision
 
 
-async def get_last_effective_run(conn, package, suite):
+async def get_last_effective_run(conn, package, campaign):
     last_success = False
-    async for run in state._iter_runs(conn, package=package, suite=suite):
+    async for run in state._iter_runs(conn, package=package, campaign=campaign):
         if run.result_code in ("success", "nothing-to-do"):
             return run
         elif run.result_code == "nothing-new-to-do":
@@ -1712,7 +1712,7 @@ async def get_merge_proposal_run(
 SELECT
     run.id AS id,
     run.package AS package,
-    run.suite AS suite,
+    run.suite AS campaign,
     run.branch_url AS branch_url,
     run.command AS command,
     rb.role AS role,
@@ -1935,7 +1935,7 @@ async def check_existing_mp(
             except (BranchMissing, BranchUnavailable):
                 pass
 
-    last_run = await get_last_effective_run(conn, mp_run['package'], mp_run['suite'])
+    last_run = await get_last_effective_run(conn, mp_run['package'], mp_run['campaign'])
     if last_run is None:
         logger.warning("%s: Unable to find any relevant runs.", mp.url)
         return False
@@ -2171,7 +2171,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
-        campaign_config = get_campaign_config(config, mp_run['suite'])
+        campaign_config = get_campaign_config(config, mp_run['campaign'])
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(conn, campaign_config, last_run, mp_run['role'])
 
@@ -2304,7 +2304,7 @@ applied independently.
                     await do_schedule(
                         conn,
                         mp_run['package'],
-                        mp_run['suite'],
+                        mp_run['campaign'],
                         change_set=last_run.change_set,
                         bucket="update-existing-mp",
                         refresh=True,
@@ -2314,7 +2314,7 @@ applied independently.
                     logging.warning(
                         'Policy unavailable while attempting to reschedule '
                         'conflicted %s/%s',
-                        mp_run['package'], mp_run['suite'])
+                        mp_run['package'], mp_run['campaign'])
         return False
 
 

@@ -46,9 +46,9 @@ class MastodonNotifier(object):
             % (url, package, ((" by %s" % merged_by) if merged_by else ""))
         )
 
-    async def notify_pushed(self, url, package, suite, result):
-        msg = "Pushed %s changes to %s (%s)" % (suite, url, package)
-        if suite == "lintian-fixes":
+    async def notify_pushed(self, url, package, campaign, result):
+        msg = "Pushed %s changes to %s (%s)" % (campaign, url, package)
+        if campaign == "lintian-fixes":
             tags = set()
             for entry in result["applied"]:
                 tags.update(entry["fixed_lintian_tags"])
@@ -88,7 +88,7 @@ async def main(args, mastodon):
             ):
                 url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
                 await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["suite"], msg[1]["result"]
+                    url, msg[1]["package"], msg[1]["campaign"], msg[1]["result"]
                 )
 
 
