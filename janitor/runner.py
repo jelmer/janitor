@@ -1930,7 +1930,7 @@ async def handle_health(request):
 
 
 @routes.get("/ready", name="ready")
-async def handle_health(request):
+async def handle_ready(request):
     return web.Response(text="OK")
 
 
