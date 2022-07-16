@@ -17,7 +17,7 @@
 
 from datetime import datetime, timedelta
 import shlex
-from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
+from typing import AsyncIterator, Tuple, Dict, Any, Iterator
 
 import asyncpg
 from ..queue import Queue, QueueItem

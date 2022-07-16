@@ -32,12 +32,9 @@ from breezy.errors import (
     ConnectionError,
     NotBranchError,
     NoSuchRevision,
-    NoRepositoryPresent,
-    IncompatibleRepositories,
     InvalidHttpResponse,
 )
 from breezy.git.remote import RemoteGitError
-from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
 from breezy.transport import Transport
@@ -48,7 +45,6 @@ from lintian_brush.vcs import (
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
-    full_branch_url,
     BranchMissing,
     BranchUnavailable,
     BranchRateLimited,

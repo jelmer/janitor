@@ -20,7 +20,6 @@ from . import TestCaseWithTransport
 
 from breezy import controldir
 
-import os
 import unittest
 
 
