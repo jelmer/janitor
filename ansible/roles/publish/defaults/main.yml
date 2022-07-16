@@ -13,5 +13,4 @@ janitor_publish_slowstart: true
 janitor_publish_reviewed_only: true
 # Require inclusion of binary diff for merge requests.
 janitor_publish_require_binary_diff: true
-janitor_git_location: "http://localhost:9912/git/"
-janitor_bzr_location: "http://localhost:9912/bzr/"
+janitor_git_location: /home/janitor/vcs/git

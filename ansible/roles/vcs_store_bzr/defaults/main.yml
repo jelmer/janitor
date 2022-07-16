@@ -1,0 +1,6 @@
+---
+janitor_vcs_store_address: "::1"
+janitor_vcs_store_path: "{{ janitor_home }}/vcs"
+janitor_vcs_store_bzr_port: 9929
+janitor_vcs_store_public_bzr_port: 9930
+janitor_vcs_store_bzr_path: "{{ janitor_vcs_store_path }}/bzr"
