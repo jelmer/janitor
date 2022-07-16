@@ -9,7 +9,7 @@ User={{ janitor_user }}
 Type=simple
 WorkingDirectory={{ janitor_code_path }}
 EnvironmentFile={{ janitor_home }}/env
-ExecStart=python3 -m janitor.vcs_store --listen-address={{ janitor_vcs_store_address }} --public-port={{ janitor_vcs_store_public_bzr_port }} --port={{ janitor_vcs_store_bzr_port }} --config={{ janitor_conf_path }} --vcs-path={{ janitor_vcs_store_path }}/bzr
+ExecStart=python3 -m janitor.vcs_store --listen-address={{ janitor_vcs_store_address }} --public-port={{ janitor_vcs_store_public_bzr_port }} --port={{ janitor_vcs_store_bzr_port }} --config={{ janitor_conf_path }} --vcs-path={{ janitor_vcs_store_bzr_path }}
 LimitNOFILE=500000
 LimitNPROC=500000
 
