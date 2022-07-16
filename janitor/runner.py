@@ -1296,14 +1296,14 @@ async def followup_run(
                     campaign.name for campaign in config.campaign
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
-                    "SELECT package, suite FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
+                    "SELECT package, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     item.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
                         conn, run_to_retry['package'],
                         change_set=result.change_set,
                         bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % item.package,
-                        suite=run_to_retry['suite'])
+                        campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package

@@ -36,7 +36,7 @@ from .queue import Queue
 FIRST_RUN_BONUS = 100.0
 
 
-# Default estimation if there is no median for the suite or the package.
+# Default estimation if there is no median for the campaign or the package.
 DEFAULT_ESTIMATED_DURATION = 15
 DEFAULT_SCHEDULE_OFFSET = -1.0
 
@@ -102,12 +102,12 @@ PUBLISH_MODE_VALUE = {
 async def iter_candidates_with_policy(
         conn: asyncpg.Connection,
         packages: Optional[List[str]] = None,
-        suite: Optional[str] = None):
+        campaign: Optional[str] = None):
     query = """
 SELECT
   package.name AS package,
   package.branch_url AS branch_url,
-  candidate.suite AS suite,
+  candidate.suite AS campaign,
   candidate.context AS context,
   candidate.value AS value,
   candidate.success_chance AS success_chance,
@@ -123,12 +123,12 @@ WHERE
   package.branch_url IS NOT NULL
 """
     args = []
-    if suite is not None and packages is not None:
+    if campaign is not None and packages is not None:
         query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
-        args.extend([packages, suite])
-    elif suite is not None:
+        args.extend([packages, campaign])
+    elif campaign is not None:
         query += " AND candidate.suite = $1"
-        args.append(suite)
+        args.append(campaign)
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
@@ -140,12 +140,12 @@ def queue_item_from_candidate_and_policy(row):
     for entry in row['publish']:
         value += PUBLISH_MODE_VALUE[entry['mode']]
 
-    return (row['package'], row['context'], row['command'], row['suite'],
+    return (row['package'], row['context'], row['command'], row['campaign'],
             value, row['success_chance'])
 
 
 async def estimate_success_probability(
-    conn: asyncpg.Connection, package: str, suite: str, context: Optional[str] = None
+    conn: asyncpg.Connection, package: str, campaign: str, context: Optional[str] = None
 ) -> Tuple[float, int]:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
@@ -159,7 +159,7 @@ SELECT result_code, instigated_context, context, failure_details, start_time
 FROM run
 WHERE package = $1 AND suite = $2
 ORDER BY start_time DESC
-""", package, suite):
+""", package, campaign):
         try:
             ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
         except KeyError:
@@ -175,7 +175,7 @@ ORDER BY start_time DESC
             same_context = True
         if (run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details']
                 and run['failure_details'].get('relations')):
-            if await deps_satisfied(conn, suite, run['failure_details']['relations']):
+            if await deps_satisfied(conn, campaign, run['failure_details']['relations']):
                 success += 1
                 same_context = False
         if same_context:
@@ -192,7 +192,7 @@ ORDER BY start_time DESC
 async def _estimate_duration(
     conn: asyncpg.Connection,
     package: Optional[str] = None,
-    suite: Optional[str] = None,
+    campaign: Optional[str] = None,
     limit: Optional[int] = 1000,
 ) -> Optional[timedelta]:
     query = """
@@ -203,11 +203,11 @@ WHERE """
     if package is not None:
         query += " package = $1"
         args.append(package)
-    if suite is not None:
+    if campaign is not None:
         if package:
             query += " AND"
         query += " suite = $%d" % (len(args) + 1)
-        args.append(suite)
+        args.append(campaign)
     query += " ORDER BY finish_time DESC"
     if limit is not None:
         query += " LIMIT %d" % limit
@@ -216,11 +216,11 @@ WHERE """
 
 
 async def estimate_duration(
-    conn: asyncpg.Connection, package: str, suite: str
+    conn: asyncpg.Connection, package: str, campaign: str
 ) -> timedelta:
-    """Estimate the duration of a package build for a certain suite."""
+    """Estimate the duration of a package build for a certain campaign."""
     estimated_duration = await _estimate_duration(
-        conn, package=package, suite=suite
+        conn, package=package, campaign=campaign
     )
     if estimated_duration is not None:
         return estimated_duration
@@ -229,7 +229,7 @@ async def estimate_duration(
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await _estimate_duration(conn, suite=suite)
+    estimated_duration = await _estimate_duration(conn, campaign=campaign)
     if estimated_duration is not None:
         return estimated_duration
 
@@ -250,17 +250,17 @@ async def bulk_add_to_queue(
             logging.info("Maximum inst count: %d", max_inst)
     else:
         max_inst = None
-    for package, context, command, suite, value, success_chance in todo:
+    for package, context, command, campaign, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
-        estimated_duration = await estimate_duration(conn, package, suite)
+        estimated_duration = await estimate_duration(conn, package, campaign)
         assert estimated_duration >= timedelta(
             0
         ), "%s: estimated duration < 0.0: %r" % (package, estimated_duration)
         (
             estimated_probability_of_success,
             total_previous_runs,
-        ) = await estimate_success_probability(conn, package, suite, context)
+        ) = await estimate_success_probability(conn, package, campaign, context)
         if total_previous_runs == 0:
             value += FIRST_RUN_BONUS
         assert (
@@ -295,7 +295,7 @@ async def bulk_add_to_queue(
             "estimated_popularity(%.2f) * "
             "probability_of_success(%.2f) * value(%d) = "
             "estimated_value(%.2f), estimated cost (%f)",
-            suite, package,
+            campaign, package,
             estimated_popularity,
             estimated_probability_of_success,
             value,
@@ -307,7 +307,7 @@ async def bulk_add_to_queue(
             queue = Queue(conn)
             added = await queue.add(
                 package=package,
-                campaign=suite,
+                campaign=campaign,
                 change_set=None,
                 command=command,
                 offset=offset,
@@ -319,7 +319,7 @@ async def bulk_add_to_queue(
         else:
             added = True
         if added:
-            logging.info("Scheduling %s (%s) with offset %f", package, suite, offset)
+            logging.info("Scheduling %s (%s) with offset %f", package, campaign, offset)
 
 
 async def dep_available(
@@ -350,7 +350,7 @@ WHERE
         query % {"version_match": version_match}, *args))
 
 
-async def deps_satisfied(conn: asyncpg.Connection, suite: str, dependencies) -> bool:
+async def deps_satisfied(conn: asyncpg.Connection, campaign: str, dependencies) -> bool:
     for dep in dependencies:
         for subdep in dep:
             if await dep_available(conn, **subdep):
@@ -382,7 +382,7 @@ async def main():
     parser.add_argument(
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
-    parser.add_argument("--suite", type=str, help="Restrict to a specific suite.")
+    parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("packages", help="Package to process.", nargs="*")
     parser.add_argument("--debug", action="store_true")
@@ -416,7 +416,7 @@ async def main():
             queue_item_from_candidate_and_policy(row)
             for row in
             await iter_candidates_with_policy(
-                conn, packages=(args.packages or None), suite=args.suite)]
+                conn, packages=(args.packages or None), campaign=args.campaign)]
         logging.info('Adding %d items to queue', len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
@@ -453,15 +453,15 @@ async def do_schedule_control(
 
 
 class PolicyUnavailable(Exception):
-    def __init__(self, suite: str, package: str):
-        self.suite = suite
+    def __init__(self, campaign: str, package: str):
+        self.campaign = campaign
         self.package = package
 
 
 async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
-    suite: str,
+    campaign: str,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: str = "default",
@@ -476,17 +476,17 @@ async def do_schedule(
         policy = await conn.fetchrow(
             "SELECT command "
             "FROM policy WHERE package = $1 AND suite = $2",
-            package, suite)
+            package, campaign)
         if not policy:
-            raise PolicyUnavailable(suite, package)
+            raise PolicyUnavailable(campaign, package)
         command = policy['command']
     if estimated_duration is None:
-        estimated_duration = await estimate_duration(conn, package, suite)
+        estimated_duration = await estimate_duration(conn, package, campaign)
     queue = Queue(conn)
     await queue.add(
         package=package,
         command=command,
-        campaign=suite,
+        campaign=campaign,
         change_set=change_set,
         offset=offset,
         bucket=bucket,
