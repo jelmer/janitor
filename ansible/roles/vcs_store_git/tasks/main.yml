@@ -14,17 +14,17 @@
   pip:
     name: aiohttp-wsgi
   when: 'aiohttp_wsgi_packaged.rc != 0'
-- name: System file for Janitor VCS store
+- name: System file for Janitor VCS store Git
   template:
-    src: vcs-store.service
-    dest: /etc/systemd/system/janitor-vcs-store.service
-- name: Enable systemd for Janitor VCS Store
+    src: vcs-store-git.service
+    dest: /etc/systemd/system/janitor-vcs-store-git.service
+- name: Enable systemd for Janitor VCS Store Git
   systemd:
-    name: janitor-vcs-store.service
+    name: janitor-vcs-store-git.service
     state: started
     enabled: yes
-- name: VCS directory
+- name: VCS directory for Git
   file:
     state: directory
-    path: "{{ janitor_vcs_store_path }}"
+    path: "{{ janitor_vcs_store_git_path }}"
     owner: "{{ janitor_user }}"

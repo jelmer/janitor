@@ -1,43 +1,17 @@
 ---
-- name: Install klaus from pip
-  pip:
-    name: klaus
-    state: latest
-- name: Check if aiohttp-wsgi is packaged
-  shell: '[ $(apt-cache showpkg python3-aiohttp-wsgi ) ]'
-  ignore_errors: True
-  register: aiohttp_wsgi_packaged
-- name: Install python3-aiohttp-wsgi from apt
-  apt: name=python3-aiohttp-wsgi state=present
-  when: 'aiohttp_wsgi_packaged.rc == 0'
-- name: Install aiohttp-wsgi from pip
-  pip:
-    name: aiohttp-wsgi
-  when: 'aiohttp_wsgi_packaged.rc != 0'
-- name: System file for Janitor VCS store Git
-  template:
-    src: vcs-store-git.service
-    dest: /etc/systemd/system/janitor-vcs-store-git.service
-  when: janitor_vcs_store_git_path is defined
 - name: System file for Janitor VCS store Bazaar
   template:
     src: vcs-store-bzr.service
     dest: /etc/systemd/system/janitor-vcs-store-bzr.service
   when: janitor_vcs_store_bzr_path is defined
-- name: Enable systemd for Janitor VCS Store Git
-  systemd:
-    name: janitor-vcs-store-git.service
-    state: started
-    enabled: yes
-  when: janitor_vcs_store_git_path is defined
 - name: Enable systemd for Janitor VCS Store Bazaar
   systemd:
     name: janitor-vcs-store-bzr.service
     state: started
     enabled: yes
   when: janitor_vcs_store_bzr_path is defined
-- name: VCS directory for Git
+- name: VCS directory for Bazaar
   file:
     state: directory
-    path: "{{ janitor_vcs_store_path }}"
+    path: "{{ janitor_vcs_store_path }}/bzr"
     owner: "{{ janitor_user }}"
