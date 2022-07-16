@@ -27,7 +27,7 @@ import os
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, Dict, Tuple, Type, Set
+from typing import List, Any, Optional, Dict, Tuple, Type, Set, Iterator
 import uuid
 import warnings
 
@@ -620,17 +620,6 @@ class WorkerResult(object):
         )
 
 
-async def update_branch_url(
-    conn: asyncpg.Connection, package: str, vcs_type: str, vcs_url: str
-) -> None:
-    await conn.execute(
-        "update package set vcs_type = $1, branch_url = $2 " "where name = $3",
-        vcs_type.lower(),
-        vcs_url,
-        package,
-    )
-
-
 def create_background_task(fn, title):
     loop = asyncio.get_event_loop()
     task = loop.create_task(fn)
@@ -648,7 +637,14 @@ def create_background_task(fn, title):
     return task
 
 
-def gather_logs(output_directory: str):
+def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
+    """Scan a directory for log files.
+
+    Args:
+      output_directory: Directory to scan
+    Returns:
+      Iterator over DirEntry objects matching logs
+    """
     for entry in os.scandir(output_directory):
         if entry.is_dir():
             continue
@@ -1989,7 +1985,7 @@ async def handle_finish(request):
         if worker_name is None:
             worker_name = worker_result.worker_name
 
-        logfiles = gather_logs(output_directory)
+        logfiles = list(gather_logs(output_directory))
 
         logfilenames = [entry.name for entry in logfiles]
 
