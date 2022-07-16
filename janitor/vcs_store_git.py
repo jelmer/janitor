@@ -65,14 +65,38 @@ async def git_diff_request(request):
     try:
         repo = Repository.open(os.path.join(request.app.local_path, package))
     except NotBranchError:
-        repo = None
-    if repo is None:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             package)
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
-    return await git_diff_helper(repo, old_sha, new_sha, path)
+
+    args = [
+        "git",
+        "diff",
+        old_sha, new_sha
+    ]
+    if path:
+        args.extend(['--', path])
+
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE,
+        cwd=repo.user_transport.local_abspath('.'),
+    )
+
+    # TODO(jelmer): Stream this
+    try:
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+    except asyncio.TimeoutError:
+        raise web.HTTPRequestTimeout(text='diff generation timed out')
+
+    if p.returncode == 0:
+        return web.Response(body=stdout, content_type="text/x-diff")
+    logging.warning('git diff failed: %s', stderr.decode())
+    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
 
 
 async def git_revision_info_request(request):
@@ -104,35 +128,6 @@ async def git_revision_info_request(request):
             'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
             'message': entry.commit.message.decode('utf-8', 'replace')})
     return web.json_response(ret)
-
-
-async def git_diff_helper(repo, old_sha, new_sha, path=None):
-    args = [
-        "git",
-        "diff",
-        old_sha, new_sha
-    ]
-    if path:
-        args.extend(['-', path])
-
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE,
-        cwd=repo.user_transport.local_abspath('.'),
-    )
-
-    # TODO(jelmer): Stream this
-    try:
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
-
-    if p.returncode == 0:
-        return web.Response(body=stdout, content_type="text/x-diff")
-    logging.warning('git diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
 
 
 async def _git_open_repo(local_path: str, db, package: str) -> Repository:
@@ -496,6 +491,10 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_ready(request):
+    return web.Response(text='ok')
+
+
 async def handle_home(request):
     return web.Response(text='')
 
@@ -558,6 +557,7 @@ async def create_web_app(
     public_app.router.add_get("/git/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
+    app.router.add_get("/ready", handle_ready, name='ready')
     app.router.add_get("/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
     public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')

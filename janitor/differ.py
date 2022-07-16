@@ -541,6 +541,11 @@ async def handle_health(request):
     return web.Response(text="OK")
 
 
+@routes.get("/ready", name="ready")
+async def handle_ready(request):
+    return web.Response(text="OK")
+
+
 class DifferWebApp(web.Application):
     def __init__(self, pool, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)

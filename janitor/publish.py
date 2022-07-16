@@ -1494,6 +1494,11 @@ async def handle_health(request):
     return web.Response(text="OK")
 
 
+@routes.get("/ready", name="ready")
+async def handle_ready(request):
+    return web.Response(text="OK")
+
+
 async def get_mp_status(mp):
     if await to_thread(mp.is_merged):
         return "merged"
