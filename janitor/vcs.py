@@ -16,9 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientSession, ClientTimeout
+import asyncio
 from io import BytesIO
 import logging
 import os
+import sys
 from typing import Optional, List, Tuple, Iterable, Dict
 from yarl import URL
 
@@ -235,7 +237,7 @@ class LocalGitVcsManager(VcsManager):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name):
-        url = self.get_branch_url(self.base_path, codebase, branch_name)
+        url = self.get_branch_url(codebase, branch_name)
         try:
             return open_branch(url)
         except (BranchUnavailable, BranchMissing):
@@ -261,7 +263,51 @@ class LocalGitVcsManager(VcsManager):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
-        raise NotImplementedError(self.get_diff)
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+
+        old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
+        new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
+
+        args = [
+            "git",
+            "diff",
+            old_sha, new_sha
+        ]
+
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+            cwd=repo.user_transport.local_abspath('.'),
+        )
+
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+
+        if p.returncode == 0:
+            return stdout
+        raise RuntimeError('git diff failed: %s', stderr.decode())
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        from dulwich.errors import MissingCommitError
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        ret = []
+        old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
+        new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
+        try:
+            walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+        except MissingCommitError:
+            raise KeyError
+        for entry in walker:
+            ret.append({
+                'commit-id': entry.commit.id.decode('ascii'),
+                'revision-id': repo.lookup_foreign_revision_id(entry.commit.id),
+                'message': entry.commit.message.decode('utf-8', 'replace')})
+        return ret
 
 
 class LocalBzrVcsManager(VcsManager):
@@ -272,7 +318,7 @@ class LocalBzrVcsManager(VcsManager):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name):
-        url = self.get_branch_url(self.base_path, codebase, branch_name)
+        url = self.get_branch_url(codebase, branch_name)
         try:
             return open_branch(url)
         except (BranchUnavailable, BranchMissing):
@@ -295,7 +341,48 @@ class LocalBzrVcsManager(VcsManager):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
-        raise NotImplementedError(self.get_diff)
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        args = [
+            sys.executable,
+            '-m',
+            'breezy',
+            "diff",
+            '-rrevid:%s..revid:%s' % (
+                old_revid.decode(),
+                new_revid.decode(),
+            ),
+            urlutils.join(repo.user_url)
+        ]
+
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+        )
+
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+
+        if p.returncode != 3:
+            return stdout
+
+        raise RuntimeError('diff returned %d' % p.returncode)
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        ret = []
+        with repo.lock_read():
+            graph = repo.get_graph()
+            for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
+                ret.append({
+                    'revision-id': rev.revision_id.decode('utf-8'),
+                    'link': None,
+                    'message': rev.description})
+        return ret
 
 
 class RemoteGitVcsManager(VcsManager):
