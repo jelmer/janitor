@@ -34,6 +34,7 @@ from http.client import parse_headers  # type: ignore
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.repository import Repository
+from dulwich.errors import HangupException
 from dulwich.objects import valid_hexsha
 from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
@@ -445,7 +446,10 @@ async def dulwich_service(request):
         r = repo._git
         proto = ReceivableProtocol(inf.read, outf.write)
         handler = handler_cls(DictBackend({".": r}), ["."], proto, stateless_rpc=True)
-        handler.handle()
+        try:
+            handler.handle()
+        except HangupException:
+            response.force_close()
 
     await to_thread(handle)
 
