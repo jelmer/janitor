@@ -41,7 +41,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
 
 
 async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, limit: int):
-    with db.acquire() as conn:
+    async with db.acquire() as conn:
         items = []
         qs = []
         vals = []
