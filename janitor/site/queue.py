@@ -60,7 +60,7 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
                 runs[(row['package'], row['campaign'])] = dict(row)
 
     for item in items:
-        yield (item, runs[(item.package, item.campaign)])
+        yield (item, runs.get((item.package, item.campaign)))
 
 
 async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIterator[
