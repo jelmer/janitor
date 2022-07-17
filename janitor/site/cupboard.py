@@ -24,7 +24,7 @@ from aiohttp import web
 
 from .. import state
 
-from . import is_admin, env, check_qa_reviewer
+from . import is_admin, env, check_logged_in, is_qa_reviewer
 from .common import html_template
 
 
@@ -175,7 +175,7 @@ async def handle_review_stats(request):
 
 async def handle_review_post(request):
     from .review import generate_review, store_review
-    check_qa_reviewer(request)
+    check_logged_in(request)
 
     post = await request.post()
     publishable_only = post.get("publishable_only", "true") == "true"
@@ -205,7 +205,7 @@ async def handle_review_post(request):
             await store_review(
                 conn, post["run_id"], status=review_status,
                 comment=review_comment,
-                reviewer=request['user'])
+                reviewer=request['user'], is_qa_reviewer(request))
         text = await generate_review(
             conn,
             request,

@@ -48,7 +48,8 @@ from janitor.config import Config
 from janitor.queue import Queue
 from . import (
     check_admin,
-    check_qa_reviewer,
+    is_qa_reviewer,
+    check_logged_in,
     check_worker_creds,
     env,
     highlight_diff,
@@ -657,7 +658,7 @@ async def handle_run_post(request):
                 'SELECT id FROM run WHERE package = $1 AND suite = $2',
                 package, campaign)
 
-        check_qa_reviewer(request)
+        check_logged_in(request)
         span = aiozipkin.request_span(request)
         post = await request.post()
         review_status = post.get("review-status")
@@ -686,7 +687,7 @@ async def handle_run_post(request):
                     user = request['user']['name']
                 await store_review(
                     conn, run_id, status=review_status, comment=review_comment,
-                    reviewer=user)
+                    reviewer=user, is_qa_reviewer(request))
             if review_status == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app['publisher_url'],
