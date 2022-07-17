@@ -56,7 +56,7 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
         if qs:
             for row in await conn.fetch(
                     'SELECT package, suite AS campaign, id, result_code FROM last_runs '
-                    'WHERE ($1)', ' OR '.join(qs)):
+                    'WHERE (%s)' % ' OR '.join(qs), *vals):
                 runs[(row['package'], row['campaign'])] = dict(row)
 
     for item in items:
@@ -104,11 +104,11 @@ async def write_queue(
         active_queue_ids = set()
         avoid_hosts = None
         rate_limit_hosts = None
-    with db.acquire() as conn:
+    async with db.acquire() as conn:
         queue = Queue(conn)
         return {
-            "queue": get_queue(db, queue, limit),
-            "buckets": queue.get_buckets(),
+            "queue": [x async for x in get_queue(db, queue, limit)],
+            "buckets": await queue.get_buckets(),
             "active_queue_ids": active_queue_ids,
             "processing": processing,
             "avoid_hosts": avoid_hosts,
