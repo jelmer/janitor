@@ -27,6 +27,7 @@ import breezy.git  # noqa: F401
 import breezy.bzr  # noqa: F401
 from breezy import urlutils
 from breezy.branch import Branch
+from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
 from breezy.errors import (
     ConnectionError,
@@ -192,6 +193,8 @@ def open_cached_branch(url) -> Optional[Branch]:
         return None
     except ConnectionError as e:
         logging.info("Unable to reach cache server: %s", e)
+        return None
+    except BranchReferenceLoop:
         return None
 
 
