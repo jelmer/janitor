@@ -687,7 +687,7 @@ async def handle_run_post(request):
                     user = request['user']['name']
                 await store_review(
                     conn, run_id, status=review_status, comment=review_comment,
-                    reviewer=user, is_qa_reviewer(request))
+                    reviewer=user, is_qa_reviewer=is_qa_reviewer(request))
             if review_status == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app['publisher_url'],
