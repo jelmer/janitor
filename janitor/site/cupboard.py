@@ -205,7 +205,8 @@ async def handle_review_post(request):
             await store_review(
                 conn, post["run_id"], status=review_status,
                 comment=review_comment,
-                reviewer=request['user'], is_qa_reviewer(request))
+                reviewer=request['user'],
+                is_qa_reviewer=is_qa_reviewer(request))
         text = await generate_review(
             conn,
             request,
