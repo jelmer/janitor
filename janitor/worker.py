@@ -1080,6 +1080,7 @@ def run_worker(
                     raise _push_error_to_worker_failure(e)
 
                 if cached_branch_url:
+                    # TODO(jelmer): integrate into import_branches_git / import_branches_bzr
                     logging.info("Pushing packaging branch cache to %s", cached_branch_url)
 
                     def tag_selector(tag_name):
@@ -1097,7 +1098,7 @@ def run_worker(
                         )
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                            TransportNotPossible) as e:
+                            TransportNotPossible, ConnectionReset) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",
                             cached_branch_url, e)
