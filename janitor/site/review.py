@@ -247,3 +247,9 @@ async def store_review(conn, run_id, status, comment, reviewer):
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
             "DO UPDATE SET review_status = EXCLUDED.review_status, comment = EXCLUDED.comment, "
             "reviewed_at = NOW()", run_id, comment, reviewer, status)
+
+
+def generate_review_stats(conn):
+    return {
+        'by_reviewer': conn.fetch(
+            "select distinct(reviewer), count(*) from review group by reviewer")}

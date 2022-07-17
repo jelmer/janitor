@@ -166,6 +166,13 @@ async def handle_publish_history(request):
         return await write_history(conn, limit=limit)
 
 
+@html_template(env, "cupboard/review-stats.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+async def handle_review_stats(request):
+    from .review import generate_review_stats
+    async with request.app.database.acquire() as conn:
+        return await generate_review_stats(conn)
+
+
 async def handle_review_post(request):
     from .review import generate_review, store_review
     check_qa_reviewer(request)
@@ -393,6 +400,9 @@ def register_cupboard_endpoints(router):
     router.add_get("/cupboard/review", handle_review, name="cupboard-review")
     router.add_post(
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
+    )
+    router.add_post(
+        "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get(

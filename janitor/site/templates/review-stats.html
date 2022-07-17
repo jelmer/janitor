@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block page_title %}Review Statistics{% endblock %}
+{% block body %}
+<div class="section" id="stats">
+<h1>Review Statistics</h1>
+
+<div name="current">
+<h2>Reviews by Reviewer</h2>
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+  <th class="head">Reviewer</th>
+  <th class="head">Count</th>
+</tr>
+</thead>
+<tbody valign="top" name="queue-table">
+{% for reviewer, count in by_reviewer.items() %}
+<tr>
+    <td>{{ email }}</td>
+    <td>{{ count }}</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
+</div>
+{% endblock %}
+<!-- vim: expandtab -->
