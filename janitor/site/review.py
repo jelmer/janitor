@@ -233,9 +233,9 @@ async def generate_review(
     return await render_template_for_request(env, "cupboard/review.html", request, kwargs)
 
 
-async def store_review(conn, run_id, status, comment, reviewer):
+async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
     async with conn.transaction():
-        if status != 'abstained':
+        if status != 'abstained' and is_qa_reviewer:
             await conn.execute(
                 "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
                 status,
@@ -247,3 +247,9 @@ async def store_review(conn, run_id, status, comment, reviewer):
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
             "DO UPDATE SET review_status = EXCLUDED.review_status, comment = EXCLUDED.comment, "
             "reviewed_at = NOW()", run_id, comment, reviewer, status)
+
+
+def generate_review_stats(conn):
+    return {
+        'by_reviewer': conn.fetch(
+            "select distinct(reviewer), count(*) from review group by reviewer")}

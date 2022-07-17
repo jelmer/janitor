@@ -180,11 +180,6 @@ def is_admin(request: web.Request) -> bool:
     return admin_group in request['user']["groups"]
 
 
-def check_qa_reviewer(request: web.Request) -> None:
-    if not is_qa_reviewer(request):
-        raise web.HTTPUnauthorized()
-
-
 def is_qa_reviewer(request: web.Request) -> bool:
     if not request['user']:
         return False
@@ -196,6 +191,11 @@ def is_qa_reviewer(request: web.Request) -> bool:
 
 def check_admin(request: web.Request) -> None:
     if not is_admin(request):
+        raise web.HTTPUnauthorized()
+
+
+def check_logged_in(request: web.Request) -> None:
+    if not request['user']:
         raise web.HTTPUnauthorized()
 
 
