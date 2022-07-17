@@ -233,9 +233,9 @@ async def generate_review(
     return await render_template_for_request(env, "cupboard/review.html", request, kwargs)
 
 
-async def store_review(conn, run_id, status, comment, reviewer):
+async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
     async with conn.transaction():
-        if status != 'abstained':
+        if status != 'abstained' and is_qa_reviewer:
             await conn.execute(
                 "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
                 status,
