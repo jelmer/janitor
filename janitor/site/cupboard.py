@@ -24,7 +24,7 @@ from aiohttp import web
 
 from .. import state
 
-from . import is_admin, env, check_qa_reviewer
+from . import is_admin, env, check_logged_in, is_qa_reviewer
 from .common import html_template
 
 
@@ -166,9 +166,16 @@ async def handle_publish_history(request):
         return await write_history(conn, limit=limit)
 
 
+@html_template(env, "cupboard/review-stats.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+async def handle_review_stats(request):
+    from .review import generate_review_stats
+    async with request.app.database.acquire() as conn:
+        return await generate_review_stats(conn)
+
+
 async def handle_review_post(request):
     from .review import generate_review, store_review
-    check_qa_reviewer(request)
+    check_logged_in(request)
 
     post = await request.post()
     publishable_only = post.get("publishable_only", "true") == "true"
@@ -198,7 +205,8 @@ async def handle_review_post(request):
             await store_review(
                 conn, post["run_id"], status=review_status,
                 comment=review_comment,
-                reviewer=request['user'])
+                reviewer=request['user'],
+                is_qa_reviewer=is_qa_reviewer(request))
         text = await generate_review(
             conn,
             request,
@@ -393,6 +401,9 @@ def register_cupboard_endpoints(router):
     router.add_get("/cupboard/review", handle_review, name="cupboard-review")
     router.add_post(
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
+    )
+    router.add_post(
+        "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get(
