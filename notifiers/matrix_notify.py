@@ -21,7 +21,7 @@ import logging
 from aiohttp.client import ClientSession
 from aiohttp import web
 
-from janitor.pubsub import pubsub_reader
+from janitor_client import pubsub_reader
 from aiohttp_openmetrics import setup_metrics
 
 import asyncio

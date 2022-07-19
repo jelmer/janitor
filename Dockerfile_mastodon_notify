@@ -1,5 +1,8 @@
-FROM ghcr.io/jelmer/janitor/base:latest
+FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9919
-RUN apt update && apt -y install python3-mastodon
+RUN apt update && apt -y install python3-mastodon python3-aiohttp python3-aiohttp-openmetrics
+ADD notifiers /code/notifiers
+ADD janitor_client /code/janitor_client
+ENV PYTHONPATH=/code
 ENTRYPOINT ["python3", "/code/notifiers/mastodon_notify.py", "--prometheus-port=9919", "--prometheus-listen-address=0.0.0.0"]
