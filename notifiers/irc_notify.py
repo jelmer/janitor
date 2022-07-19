@@ -25,7 +25,8 @@ from aiohttp.client import ClientSession
 from aiohttp import web
 import pydle
 
-from janitor.pubsub import pubsub_reader
+
+from janitor_client import pubsub_reader
 from aiohttp_openmetrics import setup_metrics, Counter
 
 
