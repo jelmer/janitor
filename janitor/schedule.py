@@ -305,7 +305,7 @@ async def bulk_add_to_queue(
 
         if not dry_run:
             queue = Queue(conn)
-            added = await queue.add(
+            await queue.add(
                 package=package,
                 campaign=campaign,
                 change_set=None,
@@ -316,10 +316,7 @@ async def bulk_add_to_queue(
                 context=context,
                 requestor="scheduler",
             )
-        else:
-            added = True
-        if added:
-            logging.info("Scheduling %s (%s) with offset %f", package, campaign, offset)
+        logging.info("Scheduled %s (%s) with offset %f", package, campaign, offset)
 
 
 async def dep_available(
