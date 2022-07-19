@@ -87,9 +87,6 @@ async def main(args):
     site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
-    asyncio.ensure_future(
-        notifier.connect(args.server, tls=True, tls_verify=False), loop=loop
-    )
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
