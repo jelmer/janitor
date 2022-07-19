@@ -402,7 +402,7 @@ def register_cupboard_endpoints(router):
     router.add_post(
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
     )
-    router.add_post(
+    router.add_get(
         "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
