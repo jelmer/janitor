@@ -21,7 +21,7 @@ from aiohttp import web
 
 from aiohttp_openmetrics import setup_metrics, Counter
 
-from janitor.pubsub import pubsub_reader
+from janitor_client import pubsub_reader
 
 import logging
 import sys

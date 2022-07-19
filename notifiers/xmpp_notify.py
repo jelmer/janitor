@@ -25,7 +25,7 @@ from urllib.parse import urljoin
 
 import slixmpp
 
-from janitor.pubsub import pubsub_reader
+from janitor_client import pubsub_reader
 from aiohttp_openmetrics import setup_metrics, Counter
 
 xmpp_messages_sent = Counter("xmpp_messages_sent", "Number of messages sent to XMPP")

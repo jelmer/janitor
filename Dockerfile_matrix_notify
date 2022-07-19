@@ -1,0 +1,8 @@
+FROM debian:sid-slim
+MAINTAINER Jelmer Vernooij <jelmer@debian.org>
+EXPOSE 9918
+RUN apt update && apt -y install python3-nio python3-aiohttp python3-aiohttp-openmetrics
+ADD notifiers /code/notifiers
+ADD janitor_client /code/janitor_client
+ENV PYTHONPATH=/code
+ENTRYPOINT ["python3", "/code/notifiers/matrix_notify.py", "--prometheus-port=9918", "--prometheus-listen-address=0.0.0.0"]
