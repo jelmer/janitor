@@ -17,45 +17,39 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import logging
-import re
-
-from urllib.parse import urljoin
 
 from aiohttp.client import ClientSession
 from aiohttp import web
-import pydle
 
 from janitor.pubsub import pubsub_reader
-from aiohttp_openmetrics import setup_metrics, Counter
+from aiohttp_openmetrics import setup_metrics
+
+import asyncio
+from nio import AsyncClient
 
 
-irc_messages_sent = Counter("irc_messages_sent", "Number of messages sent to IRC")
-
-
-class JanitorNotifier(pydle.Client):
-    def __init__(self, channel, **kwargs):
-        self.publisher_url = kwargs.pop("publisher_url")
+class JanitorNotifier(object):
+    def __init__(self, matrix_client, matrix_room, **kwargs):
+        self._matrix_client = matrix_client
+        self._matrix_room = matrix_room
         super(JanitorNotifier, self).__init__(**kwargs)
-        self._channel = channel
         self._runner_status = None
 
-    async def message(self, *args, **kwargs):
-        irc_messages_sent.inc()
-        return super(JanitorNotifier, self).message(*args, **kwargs)
-
-    async def on_connect(self):
-        await self.join(self._channel)
-
-    async def on_disconnect(self, expected):
-        if not expected:
-            logging.error('Unexpected disconnect, exiting')
+    async def message(self, message):
+        await self._matrix_client.room_send(
+            room_id=self._matrix_room,
+            message_type="m.room.message",
+            content={
+                "msgtype": "m.text",
+                "body": message
+            }
+        )
 
     async def set_runner_status(self, status):
         self._runner_status = status
 
     async def notify_merged(self, url, package, campaign, merged_by=None):
         await self.message(
-            self._channel,
             "Merge proposal %s (%s/%s) merged%s."
             % (url, package, campaign,
                ((" by %s" % merged_by) if merged_by else "")),
@@ -69,37 +63,7 @@ class JanitorNotifier(pydle.Client):
                 tags.update(entry["fixed_lintian_tags"])
             if tags:
                 msg += ", fixing: %s." % (", ".join(tags))
-        await self.message(self._channel, msg)
-
-    async def on_message(self, target, source, message):
-        if not message.startswith(self.nickname + ": "):
-            return
-        message = message[len(self.nickname + ": ") :]
-        m = re.match("reschedule (.*)", message)
-        if m:
-            await self.message(target, "Rescheduling %s" % m.group(1))
-            return
-        if message == "status":
-            if self._runner_status:
-                status_strs = [
-                    "%s (%s) since %s"
-                    % (item["package"], item["campaign"], item["start_time"])
-                    for item in self._runner_status["processing"]
-                ]
-                await self.message(
-                    target, "Currently processing: " + ", ".join(status_strs) + "."
-                )
-            else:
-                await self.message(target, "Current runner status unknown.")
-        if message == "scan":
-            url = urljoin(self.publisher_url, "scan")
-            async with ClientSession() as session, session.post(url) as resp:
-                if resp.status in (200, 202):
-                    await self.message(target, "Merge proposal scan started.")
-                else:
-                    await self.message(
-                        target, "Merge proposal scan failed: %d." % resp.status
-                    )
+        await self.message(msg)
 
 
 async def main(args):
@@ -111,12 +75,9 @@ async def main(args):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    notifier = JanitorNotifier(
-        args.channel,
-        nickname=args.nick,
-        realname=args.fullname,
-        publisher_url=args.publisher_url,
-    )
+    matrix_client = AsyncClient(args.homeserver_url, args.user)
+    await matrix_client.login(args.password)
+    notifier = JanitorNotifier(matrix_client=matrix_client)
     loop = asyncio.get_event_loop()
     app = web.Application()
     setup_metrics(app)
@@ -151,24 +112,24 @@ async def main(args):
 
 if __name__ == "__main__":
     import argparse
-    import asyncio
+    import os
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server", help="IRC server", default="irc.oftc.net")
-    parser.add_argument("--nick", help="IRC nick", default="janitor-notify")
-    parser.add_argument("--channel", help="IRC channel", default="#debian-janitor")
     parser.add_argument(
         "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
     )
     parser.add_argument(
+        "--password", help="Matrix password", type=str, default=os.environ.get('MATRIX_PASSWORD'))
+    parser.add_argument(
+        "--homeserver-url", type=str,
+        help="Matrix homeserver URL")
+    parser.add_argument(
+        "--user", type=str,
+        help="Matrix user string")
+    parser.add_argument(
         "--notifications-url",
         help="URL to retrieve notifications from",
         default="wss://janitor.debian.net/ws/notifications",
-    )
-    parser.add_argument(
-        "--fullname",
-        help="IRC fullname",
-        default="Debian Janitor Notifier (https://janitor.debian.net/contact/",
     )
     parser.add_argument(
         "--prometheus-listen-address",
