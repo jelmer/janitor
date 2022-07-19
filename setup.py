@@ -30,6 +30,7 @@ setup(
         "janitor",
         "janitor.tests",
         "janitor.site",
+        "janitor_client",
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",

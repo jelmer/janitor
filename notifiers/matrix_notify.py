@@ -16,34 +16,43 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import logging
+
 from aiohttp.client import ClientSession
 from aiohttp import web
 
-from aiohttp_openmetrics import setup_metrics, Counter
-
 from janitor_client import pubsub_reader
+from aiohttp_openmetrics import setup_metrics
 
-import logging
-import sys
-
-from mastodon import Mastodon
-
-
-toots_posted = Counter("toots_posted", "Number of toots posted")
+import asyncio
+from nio import AsyncClient
 
 
-class MastodonNotifier(object):
-    def __init__(self, mastodon):
-        self.mastodon = mastodon
+class JanitorNotifier(object):
+    def __init__(self, matrix_client, matrix_room, **kwargs):
+        self._matrix_client = matrix_client
+        self._matrix_room = matrix_room
+        super(JanitorNotifier, self).__init__(**kwargs)
+        self._runner_status = None
 
-    def toot(self, msg):
-        toots_posted.inc()
-        self.mastodon.toot(msg)
+    async def message(self, message):
+        await self._matrix_client.room_send(
+            room_id=self._matrix_room,
+            message_type="m.room.message",
+            content={
+                "msgtype": "m.text",
+                "body": message
+            }
+        )
 
-    async def notify_merged(self, url, package, merged_by=None):
-        self.toot(
-            "Merge proposal %s (%s) merged%s."
-            % (url, package, ((" by %s" % merged_by) if merged_by else ""))
+    async def set_runner_status(self, status):
+        self._runner_status = status
+
+    async def notify_merged(self, url, package, campaign, merged_by=None):
+        await self.message(
+            "Merge proposal %s (%s/%s) merged%s."
+            % (url, package, campaign,
+               ((" by %s" % merged_by) if merged_by else "")),
         )
 
     async def notify_pushed(self, url, package, campaign, result):
@@ -54,10 +63,10 @@ class MastodonNotifier(object):
                 tags.update(entry["fixed_lintian_tags"])
             if tags:
                 msg += ", fixing: %s." % (", ".join(tags))
-        self.toot(msg)
+        await self.message(msg)
 
 
-async def main(args, mastodon):
+async def main(args):
     if args.gcp_logging:
         import google.cloud.logging
         client = google.cloud.logging.Client()
@@ -66,6 +75,10 @@ async def main(args, mastodon):
     else:
         logging.basicConfig(level=logging.INFO)
 
+    matrix_client = AsyncClient(args.homeserver_url, args.user)
+    await matrix_client.login(args.password)
+    notifier = JanitorNotifier(matrix_client=matrix_client)
+    loop = asyncio.get_event_loop()
     app = web.Application()
     setup_metrics(app)
     app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
@@ -74,13 +87,18 @@ async def main(args, mastodon):
     site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
-    notifier = MastodonNotifier(mastodon)
+    asyncio.ensure_future(
+        notifier.connect(args.server, tls=True, tls_verify=False), loop=loop
+    )
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"), msg[1].get("merged_by")
+                    msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
+                    msg[1].get("merged_by")
                 )
+            if msg[0] == "queue":
+                await notifier.set_runner_status(msg[1])
             if (
                 msg[0] == "publish"
                 and msg[1]["mode"] == "push"
@@ -94,26 +112,24 @@ async def main(args, mastodon):
 
 if __name__ == "__main__":
     import argparse
-    import asyncio
+    import os
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
     )
     parser.add_argument(
+        "--password", help="Matrix password", type=str, default=os.environ.get('MATRIX_PASSWORD'))
+    parser.add_argument(
+        "--homeserver-url", type=str,
+        help="Matrix homeserver URL")
+    parser.add_argument(
+        "--user", type=str,
+        help="Matrix user string")
+    parser.add_argument(
         "--notifications-url",
         help="URL to retrieve notifications from",
         default="wss://janitor.debian.net/ws/notifications",
-    )
-    parser.add_argument("--register", help="Register the app", action="store_true")
-    parser.add_argument(
-        "--login", type=str, help="Login to the specified user (e-mail)."
-    )
-    parser.add_argument(
-        "--api-base-url",
-        type=str,
-        default="https://mastodon.cloud",
-        help="Mastodon API Base URL.",
     )
     parser.add_argument(
         "--prometheus-listen-address",
@@ -122,39 +138,9 @@ if __name__ == "__main__":
         help="Host to provide prometheus metrics on.",
     )
     parser.add_argument(
-        "--prometheus-port", type=int, default=9919, help="Port for prometheus metrics"
+        "--prometheus-port", type=int, default=9918, help="Port for prometheus metrics"
     )
-    parser.add_argument(
-        "--user-secret-path", type=str, default="mastodon-notify-user.secret",
-        help="Path to user secret.")
-    parser.add_argument(
-        "--app-secret-path", type=str, default="mastodon-notify-app.secret",
-        help="Path to app secret.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-
     args = parser.parse_args()
-    if args.register:
-        Mastodon.create_app(
-            "debian-janitor-notify",
-            api_base_url=args.api_base_url,
-            to_file=args.app_secret_path
-        )
-        sys.exit(0)
 
-    if args.login:
-        mastodon = Mastodon(
-            client_id=args.app_secret_path, api_base_url=args.api_base_url)
-
-        import getpass
-
-        password = getpass.getpass()
-
-        mastodon.log_in(args.login, password, to_file=args.user_secret_path)
-
-        sys.exit(0)
-
-    mastodon = Mastodon(
-        access_token=args.user_secret_path, api_base_url=args.api_base_url
-    )
-
-    asyncio.run(main(args, mastodon))
+    asyncio.run(main(args))
