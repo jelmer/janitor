@@ -1,7 +1,7 @@
 FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9919
-RUN apt update && apt -y install python3-mastodon python3-aiohttp python3-aiohttp-openmetrics
+RUN apt -y update && apt -y install python3-mastodon python3-aiohttp python3-aiohttp-openmetrics
 ADD notifiers /code/notifiers
 ADD janitor_client /code/janitor_client
 ENV PYTHONPATH=/code
