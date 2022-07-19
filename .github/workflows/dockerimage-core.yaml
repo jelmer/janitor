@@ -4,6 +4,8 @@ name: Build and Publish Most Docker Images
 on:
   # run it on push to the default repository branch
   push:
+    branches:
+      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
