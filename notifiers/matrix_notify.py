@@ -77,7 +77,7 @@ async def main(args):
 
     matrix_client = AsyncClient(args.homeserver_url, args.user)
     await matrix_client.login(args.password)
-    notifier = JanitorNotifier(matrix_client=matrix_client)
+    notifier = JanitorNotifier(matrix_client=matrix_client, matrix_room=args.room)
     loop = asyncio.get_event_loop()
     app = web.Application()
     setup_metrics(app)
@@ -131,6 +131,9 @@ if __name__ == "__main__":
         help="URL to retrieve notifications from",
         default="wss://janitor.debian.net/ws/notifications",
     )
+    parser.add_argument(
+        "--room", type=str,
+        help="Matrix room to send notifications to")
     parser.add_argument(
         "--prometheus-listen-address",
         type=str,
