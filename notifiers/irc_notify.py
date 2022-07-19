@@ -25,7 +25,8 @@ from aiohttp.client import ClientSession
 from aiohttp import web
 import pydle
 
-from janitor.pubsub import pubsub_reader
+
+from janitor_client import pubsub_reader
 from aiohttp_openmetrics import setup_metrics, Counter
 
 
@@ -39,7 +40,7 @@ class JanitorNotifier(pydle.Client):
         self._channel = channel
         self._runner_status = None
 
-    def message(self, *args, **kwargs):
+    async def message(self, *args, **kwargs):
         irc_messages_sent.inc()
         return super(JanitorNotifier, self).message(*args, **kwargs)
 
