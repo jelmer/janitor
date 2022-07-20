@@ -23,7 +23,7 @@ async def handle_graph_pushes_over_time(request, conn):
     return {"labels": labels, "push_count": counts}
 
 
-@html_template(env, "stats.html", headers={"Cache-Control": "max-age=60"})
+@html_template(env, "cupboard/stats.html", headers={"Cache-Control": "max-age=60"})
 async def handle_stats(request):
     async with request.app.database.acquire() as conn:
         by_status = {}
