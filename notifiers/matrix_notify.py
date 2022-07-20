@@ -78,7 +78,6 @@ async def main(args):
     matrix_client = AsyncClient(args.homeserver_url, args.user)
     await matrix_client.login(args.password)
     notifier = JanitorNotifier(matrix_client=matrix_client, matrix_room=args.room)
-    loop = asyncio.get_event_loop()
     app = web.Application()
     setup_metrics(app)
     app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
