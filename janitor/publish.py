@@ -56,7 +56,7 @@ from marshmallow import Schema, fields
 from breezy import urlutils
 import gpg
 
-from silver_platter.proposal import (
+from breezy.forge import (
     Forge,
     forges,
     ForgeLoginRequired,
