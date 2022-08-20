@@ -249,7 +249,7 @@ async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
             "reviewed_at = NOW()", run_id, comment, reviewer, status)
 
 
-def generate_review_stats(conn):
+async def generate_review_stats(conn):
     return {
-        'by_reviewer': conn.fetch(
+        'by_reviewer': await conn.fetch(
             "select distinct(reviewer), count(*) from review group by reviewer")}

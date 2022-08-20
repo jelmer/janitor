@@ -44,24 +44,26 @@ from silver_platter.utils import (
 from silver_platter.publish import (
     EmptyMergeProposal,
     MergeProposal,
-    get_forge,
     merge_conflicts,
     find_existing_proposed,
-    Forge,
     NoSuchProject,
     PermissionDenied,
-    UnsupportedForge,
     SourceNotDerivedFromTarget,
     publish_changes,
     InsufficientChangesForNewProposal,
     MergeProposalExists,
-    ForgeLoginRequired,
     PublishResult,
 )
 from silver_platter.utils import create_temp_sprout
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches, NoSuchRevision
+from breezy.forge import (
+    Forge,
+    get_forge,
+    ForgeLoginRequired,
+    UnsupportedForge,
+    )
 from breezy.git.remote import RemoteGitBranch
 from breezy.transport import Transport
 from breezy.plugins.gitlab.forge import (
