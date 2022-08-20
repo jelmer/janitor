@@ -595,25 +595,26 @@ async def listen_to_runner(runner_url, app):
     from aiohttp.client import ClientSession
 
     url = URL(runner_url) / "ws/result"
-    async with ClientSession() as session, app['pool'].acquire() as conn:
+    async with ClientSession() as session:
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            to_precache = []
-            if result["revision"] == result["main_branch_revision"]:
-                for row in await conn.fetch(
-                    "select id from run where result_code = 'success' "
-                    "and main_branch_revision = $1",
-                    result["revision"],
-                ):
-                    to_precache.append((result["log_id"], row[0]))
-            else:
-                unchanged_run = await get_unchanged_run(
-                    conn,
-                    result["package"],
-                    result["main_branch_revision"])
-                if unchanged_run:
-                    to_precache.append((unchanged_run['id'], result["log_id"]))
+            with app['pool'].acquire() as conn:
+                to_precache = []
+                if result["revision"] == result["main_branch_revision"]:
+                    for row in await conn.fetch(
+                        "select id from run where result_code = 'success' "
+                        "and main_branch_revision = $1",
+                        result["revision"],
+                    ):
+                        to_precache.append((result["log_id"], row[0]))
+                else:
+                    unchanged_run = await get_unchanged_run(
+                        conn,
+                        result["package"],
+                        result["main_branch_revision"])
+                    if unchanged_run:
+                        to_precache.append((unchanged_run['id'], result["log_id"]))
             # This could be concurrent, but risks hitting resource constraints
             # for large packages.
             for old_id, new_id in to_precache:
