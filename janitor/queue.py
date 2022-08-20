@@ -214,5 +214,5 @@ queue.id ASC
 
     async def get_buckets(self):
         return await self.conn.fetch(
-                    "SELECT bucket, count(*) FROM queue GROUP BY bucket "
-                    "ORDER BY bucket ASC")
+            "SELECT bucket, count(*) FROM queue GROUP BY bucket "
+            "ORDER BY bucket ASC")

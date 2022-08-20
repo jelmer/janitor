@@ -19,7 +19,7 @@ from . import (
 from .common import (
     get_unchanged_run,
     render_template_for_request,
-    )
+)
 
 MAX_DIFF_SIZE = 200 * 1024
 

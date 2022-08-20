@@ -71,8 +71,7 @@ async def handle_oauth_callback(request):
             return web.json_response(
                 status=resp.status, data={
                     "error": "token-error",
-                    "message": "received response %d" % resp.status,
-                    })
+                    "message": "received response %d" % resp.status})
         resp = await resp.json()
         if resp["token_type"] != "Bearer":
             return web.Response(

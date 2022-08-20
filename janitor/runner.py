@@ -44,7 +44,7 @@ from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
     ServerDisconnectedError,
-    )
+)
 
 from yarl import URL
 
@@ -374,7 +374,7 @@ def get_builder(config, campaign_config):
         return DebianBuilder(
             distribution,
             config.apt_location
-            )
+        )
     elif campaign_config.HasField('generic_build'):
         return GenericBuilder()
     else:
@@ -971,8 +971,8 @@ class PollingActiveRun(ActiveRun):
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break
-                if (self._log_id_mismatch is not None and
-                        (datetime.now() - self.start_time).total_seconds() > 30):
+                if (self._log_id_mismatch is not None
+                        and (datetime.now() - self.start_time).total_seconds() > 30):
                     logging.warning(
                         "Worker %s is now processing new run %s (age: %s). Marking run as MIA.",
                         self.worker_name,
@@ -1017,8 +1017,8 @@ def open_resume_branch(
                     unused_overwrite,
                     unused_existing_proposal,
                 ) = find_existing_proposed(
-                        main_branch, forge, option,
-                        preferred_schemes=['https', 'git', 'bzr'])
+                    main_branch, forge, option,
+                    preferred_schemes=['https', 'git', 'bzr'])
                 if resume_branch:
                     break
         except NoSuchProject as e:
@@ -1668,7 +1668,7 @@ async def handle_assign(request):
         backchannel=json['backchannel'],
         package=json.get('package'),
         campaign=json.get('campaign')
-        )
+    )
 
 
 @routes.get("/active-runs/+peek", name="peek")
@@ -2007,7 +2007,7 @@ async def handle_finish(request):
             logfilenames=logfilenames,
             resume_from=resume_from,
             change_set=queue_item.change_set,
-            )
+        )
 
         await import_logs(
             logfiles,
@@ -2075,8 +2075,7 @@ async def create_app(queue_processor, tracer=None):
         app.router['metrics'],
         app.router['ws-queue'],
         app.router['ws-result'],
-        ]
-    )
+    ])
     return app
 
 

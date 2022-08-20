@@ -89,19 +89,22 @@ async def main():
             else:
                 package.maintainer_email = args.default_maintainer_email
             package.vcs_type = "Git"
-            package.vcs_url = "https://git.launchpad.net/%s/+source/%s -b %s/devel" % (
-                args.distribution,
-                package.name,
-                args.distribution,
+            package.vcs_url = (
+                "https://git.launchpad.net/%s/+source/%s -b %s/devel" % (
+                    args.distribution,
+                    package.name,
+                    args.distribution,
+                )
             )
             package.vcs_browser = (
                 "https://code.launchpad.net/~usd-import-team/%s/+source"
                 "/%s/+git/%s/+ref/%s/devel"
-                % (args.distribution, package.name, package.name, args.distribution)
+                % (args.distribution, package.name, package.name,
+                   args.distribution)
             )
             package.archive_version = sp.source_package_version
             package.removed = False
-            # TODO(jelmer): set in_base 
+            # TODO(jelmer): set in_base
         print(pl)
 
 
