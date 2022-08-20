@@ -38,7 +38,7 @@ from aiohttp_apispec import (
     docs,
     response_schema,
     setup_aiohttp_apispec,
-    )
+)
 
 from marshmallow import Schema, fields
 from yarl import URL
@@ -61,7 +61,7 @@ from . import (
 )
 from .common import (
     render_template_for_request,
-    )
+)
 from janitor.logs import get_log_manager
 from .webhook import process_webhook
 from ..schedule import (
@@ -639,7 +639,7 @@ async def consider_publishing(session, publisher_url, run_id):
                     run_id, await resp.read())
     except ClientConnectorError:
         logging.warning(
-                'Failed to submit %s for publish consideration', run_id)
+            'Failed to submit %s for publish consideration', run_id)
 
 
 @docs()
@@ -1338,8 +1338,8 @@ WHERE
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([
-            {'package': run['package'], 'campaign': run['campaign']}
-            for run in runs])
+        {'package': run['package'], 'campaign': run['campaign']}
+        for run in runs])
 
 
 @docs()
@@ -1369,7 +1369,7 @@ async def handle_result_code(request):
                 'package': row['package'],
                 'vcs_type': row['vcs_type'],
                 'branch_url': row['branch_url'],
-                })
+            })
     return web.json_response(ret)
 
 

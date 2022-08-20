@@ -63,7 +63,7 @@ from breezy.forge import (
     get_forge,
     ForgeLoginRequired,
     UnsupportedForge,
-    )
+)
 from breezy.git.remote import RemoteGitBranch
 from breezy.transport import Transport
 from breezy.plugins.gitlab.forge import (
@@ -79,7 +79,7 @@ from jinja2 import (
     TemplateSyntaxError,
     Template,
     TemplateNotFound,
-    )
+)
 
 from .debian.debdiff import (
     debdiff_is_empty,
@@ -159,7 +159,7 @@ def publish(
             'debdiff_is_empty': debdiff_is_empty,
             'markdownify_debdiff': markdownify_debdiff,
             'role': role,
-            }
+        }
         if subworker_result:
             vs.update(subworker_result)
         if debdiff:

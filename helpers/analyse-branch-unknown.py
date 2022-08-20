@@ -11,7 +11,7 @@ import sys
 # Skip these repositories since they're very large.
 BANNED_URLS = [
     'https://salsa.debian.org/haskell-team/DHG_packages.git',
-    ]
+]
 
 check = tdb.open('checked.tdb', flags=O_RDWR | O_CREAT)
 

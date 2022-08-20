@@ -39,7 +39,7 @@ from debmutate.vcs import (
 )
 from upstream_ontologist.vcs import (
     find_public_repo_url,
-    )
+)
 from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,

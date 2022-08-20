@@ -43,9 +43,8 @@ def get_distribution(config: Config, name: str) -> config_pb2.Distribution:
     raise KeyError(name)
 
 
-def get_campaign_config(
-        config: config_pb2.Config, name: str
-        ) -> Union[config_pb2.Suite, config_pb2.Campaign]:
+def get_campaign_config(config: config_pb2.Config, name: str
+                        ) -> Union[config_pb2.Suite, config_pb2.Campaign]:
     for c in config.campaign:
         if c.name == name:
             return c

@@ -77,20 +77,24 @@ async def main(args):
 
     matrix_client = AsyncClient(args.homeserver_url, args.user)
     await matrix_client.login(args.password)
-    notifier = JanitorNotifier(matrix_client=matrix_client, matrix_room=args.room)
+    notifier = JanitorNotifier(
+        matrix_client=matrix_client, matrix_room=args.room)
     app = web.Application()
     setup_metrics(app)
-    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    app.router.add_get(
+        '/health', lambda req: web.Response(text='ok', status=200))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    site = web.TCPSite(
+        runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
+                    msg[1]["url"], msg[1].get("package"),
+                    msg[1].get("campaign"),
                     msg[1].get("merged_by")
                 )
             if msg[0] == "queue":
@@ -100,9 +104,11 @@ async def main(args):
                 and msg[1]["mode"] == "push"
                 and msg[1]["result_code"] == "success"
             ):
-                url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
+                url = (msg[1]["main_branch_browse_url"]
+                       or msg[1]["main_branch_url"])
                 await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["campaign"], msg[1]["result"]
+                    url, msg[1]["package"], msg[1]["campaign"],
+                    msg[1]["result"]
                 )
 
 
@@ -112,10 +118,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
+        "--publisher-url", help="Publisher URL",
+        default="http://localhost:9912/"
     )
     parser.add_argument(
-        "--password", help="Matrix password", type=str, default=os.environ.get('MATRIX_PASSWORD'))
+        "--password", help="Matrix password", type=str,
+        default=os.environ.get('MATRIX_PASSWORD'))
     parser.add_argument(
         "--homeserver-url", type=str,
         help="Matrix homeserver URL")
@@ -137,9 +145,11 @@ if __name__ == "__main__":
         help="Host to provide prometheus metrics on.",
     )
     parser.add_argument(
-        "--prometheus-port", type=int, default=9918, help="Port for prometheus metrics"
+        "--prometheus-port", type=int, default=9918,
+        help="Port for prometheus metrics"
     )
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
     asyncio.run(main(args))

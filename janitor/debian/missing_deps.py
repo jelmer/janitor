@@ -47,7 +47,7 @@ class UpdatePackage:
             'action': 'update-package',
             'package': self.name,
             'desired-version': self.desired_version,
-            }
+        }
 
 
 def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
