@@ -48,7 +48,7 @@ from . import (
 from .common import (
     html_template,
     render_template_for_request,
-    )
+)
 from .openid import setup_openid
 
 
@@ -342,10 +342,10 @@ async def create_app(
 
     aiozipkin.setup(private_app, tracer, skip_routes=[
         private_app.router['metrics'],
-        ])
+    ])
     aiozipkin.setup(app, tracer, skip_routes=[
         app.router['ws-notifications'],
-        ])
+    ])
 
     async def setup_client_session(app):
         app.http_client_session = ClientSession(trace_configs=trace_configs)

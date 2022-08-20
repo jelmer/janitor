@@ -32,7 +32,7 @@ BUG_ERROR_RESULT_CODES = [
     'autopkgtest-chroot-not-found',
     'build-chroot-not-found',
     'worker-killed',
-    ]
+]
 
 
 def json_chart_data(max_age=None):

@@ -30,7 +30,7 @@ from yarl import URL
 from aiohttp_openmetrics import (
     Counter,
     setup_metrics,
-    )
+)
 
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config

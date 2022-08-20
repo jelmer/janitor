@@ -42,7 +42,7 @@ from aiohttp import (
     ClientConnectorError,
     ContentTypeError,
     web,
-    )
+)
 import yarl
 
 from jinja2 import Template
@@ -61,15 +61,15 @@ from silver_platter.apply import (
     ScriptFailed,
     ScriptMadeNoChanges,
     ResultFileFormatError,
-    )
+)
 from silver_platter.debian import (
     select_probers,
-    )
+)
 from silver_platter.debian.apply import (
     script_runner as debian_script_runner,
     DetailedFailure as DebianDetailedFailure,
     MissingChangelog,
-    )
+)
 from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
@@ -222,7 +222,7 @@ class WorkerFailure(Exception):
             "code": self.code,
             "description": self.description,
             'details': self.details,
-            }
+        }
         if self.followup_actions:
             ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
@@ -651,7 +651,7 @@ def process_package(
         raise WorkerFailure(e.code, e.description, details={
             'url': vcs_url,
             'retry_after': e.retry_after,
-            })
+        })
 
     if cached_branch_url:
         try:
