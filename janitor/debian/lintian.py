@@ -33,9 +33,9 @@ def run_lintian(output_directory, changes_names, profile=None, suppress_tags=Non
         args.append('--profile=%s' % profile)
     try:
         lintian_output = subprocess.check_output(
-            ['lintian'] + args +
-            [os.path.join(output_directory, changes_name)
-             for changes_name in changes_names])
+            ['lintian'] + args
+            + [os.path.join(output_directory, changes_name)
+               for changes_name in changes_names])
     except subprocess.CalledProcessError:
         logger.warning('lintian failed to run.')
         return None

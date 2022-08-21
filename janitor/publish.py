@@ -41,7 +41,7 @@ from aiohttp_apispec import (
     docs,
     response_schema,
     setup_aiohttp_apispec,
-    )
+)
 
 from aiohttp_openmetrics import (
     Counter,
@@ -326,7 +326,7 @@ async def publish_one(
             "result-branch-not-found",
             "can not find local branch for %s / %s / %s (%s)"
             % (pkg, campaign, role, log_id),
-            )
+        )
 
     request = {
         "dry-run": dry_run,
@@ -880,8 +880,8 @@ async def publish_from_policy(
             if max_frequency_days is not None:
                 last_published = await check_last_published(
                     conn, run.suite, run.package)
-                if last_published is not None and \
-                        (datetime.utcnow()-last_published).days < max_frequency_days:
+                if (last_published is not None
+                        and (datetime.utcnow() - last_published).days < max_frequency_days):
                     logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
@@ -1009,8 +1009,8 @@ def role_branch_url(url, remote_branch_name):
 
 
 def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bool:
-    if (run.value is not None and campaign_config.merge_proposal is not None and
-            campaign_config.merge_proposal.value_threshold):
+    if (run.value is not None and campaign_config.merge_proposal is not None
+            and campaign_config.merge_proposal.value_threshold):
         return (run.value >= campaign_config.merge_proposal.value_threshold)
     else:
         return True
@@ -1798,7 +1798,7 @@ FROM
 WHERE
   branch_url = ANY($1::text[])
 """
-    return await conn.fetchrow(query, [url.rstrip('/'), url.rstrip('/')+'/'])
+    return await conn.fetchrow(query, [url.rstrip('/'), url.rstrip('/') + '/'])
 
 
 async def check_existing_mp(
@@ -1832,8 +1832,8 @@ async def check_existing_mp(
             merged_at = None
         if not dry_run:
             async with conn.transaction():
-                await conn.execute("""
-                    INSERT INTO merge_proposal (
+                await conn.execute(
+                    """INSERT INTO merge_proposal (
                         url, status, revision, package, merged_by, merged_at)
                     VALUES ($1, $2, $3, $4, $5, $6)
                     ON CONFLICT (url)
@@ -1843,8 +1843,8 @@ async def check_existing_mp(
                       package = EXCLUDED.package,
                       merged_by = EXCLUDED.merged_by,
                       merged_at = EXCLUDED.merged_at
-                    """, mp.url, status, (
-                        revision.decode("utf-8") if revision is not None else None),
+                    """, mp.url, status,
+                    revision.decode("utf-8") if revision is not None else None,
                     package_name, merged_by, merged_at)
                 if revision:
                     await conn.execute("""
@@ -1952,9 +1952,9 @@ async def check_existing_mp(
         else:
             try:
                 mp_remote_branch_name = (await to_thread(
-                        open_branch,
-                        target_branch_url, possible_transports=possible_transports)
-                    ).name
+                    open_branch,
+                    target_branch_url, possible_transports=possible_transports)
+                ).name
             except (BranchMissing, BranchUnavailable):
                 pass
 
@@ -2395,7 +2395,7 @@ async def check_existing(
         "applied": 0,
         "abandoned": 0,
         "rejected": 0,
-        }
+    }
 
     modified_mps = 0
     unexpected = 0
@@ -2710,18 +2710,18 @@ async def main(argv=None):
     db = await state.create_pool(config.database_location)
     if args.once:
         await publish_pending_ready(
-                db,
-                config,
-                args.template_env_path,
-                rate_limiter,
-                dry_run=args.dry_run,
-                external_url=args.external_url,
-                differ_url=args.differ_url,
-                vcs_managers=vcs_managers,
-                topic_publish=topic_publish,
-                topic_merge_proposal=topic_merge_proposal,
-                reviewed_only=args.reviewed_only,
-                require_binary_diff=args.require_binary_diff,
+            db,
+            config,
+            args.template_env_path,
+            rate_limiter,
+            dry_run=args.dry_run,
+            external_url=args.external_url,
+            differ_url=args.differ_url,
+            vcs_managers=vcs_managers,
+            topic_publish=topic_publish,
+            topic_merge_proposal=topic_merge_proposal,
+            reviewed_only=args.reviewed_only,
+            require_binary_diff=args.require_binary_diff,
         )
         if args.prometheus:
             await push_to_gateway(

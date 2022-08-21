@@ -514,7 +514,7 @@ async def main(argv=None):
             )
         ),
         loop.create_task(loop_publish(config, generator_manager)),
-        ]
+    ]
 
     if args.runner_url:
         tasks.append(loop.create_task(

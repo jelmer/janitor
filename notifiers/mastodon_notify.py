@@ -68,10 +68,12 @@ async def main(args, mastodon):
 
     app = web.Application()
     setup_metrics(app)
-    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    app.router.add_get(
+        '/health', lambda req: web.Response(text='ok', status=200))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    site = web.TCPSite(
+        runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
     notifier = MastodonNotifier(mastodon)
@@ -79,16 +81,19 @@ async def main(args, mastodon):
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"), msg[1].get("merged_by")
+                    msg[1]["url"], msg[1].get("package"),
+                    msg[1].get("merged_by")
                 )
             if (
                 msg[0] == "publish"
                 and msg[1]["mode"] == "push"
                 and msg[1]["result_code"] == "success"
             ):
-                url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
+                url = (msg[1]["main_branch_browse_url"]
+                       or msg[1]["main_branch_url"])
                 await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["campaign"], msg[1]["result"]
+                    url, msg[1]["package"], msg[1]["campaign"],
+                    msg[1]["result"]
                 )
 
 
@@ -98,14 +103,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
+        "--publisher-url", help="Publisher URL",
+        default="http://localhost:9912/"
     )
     parser.add_argument(
         "--notifications-url",
         help="URL to retrieve notifications from",
         default="wss://janitor.debian.net/ws/notifications",
     )
-    parser.add_argument("--register", help="Register the app", action="store_true")
+    parser.add_argument(
+        "--register", help="Register the app", action="store_true")
     parser.add_argument(
         "--login", type=str, help="Login to the specified user (e-mail)."
     )
@@ -122,7 +129,8 @@ if __name__ == "__main__":
         help="Host to provide prometheus metrics on.",
     )
     parser.add_argument(
-        "--prometheus-port", type=int, default=9919, help="Port for prometheus metrics"
+        "--prometheus-port", type=int, default=9919,
+        help="Port for prometheus metrics"
     )
     parser.add_argument(
         "--user-secret-path", type=str, default="mastodon-notify-user.secret",
@@ -130,7 +138,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--app-secret-path", type=str, default="mastodon-notify-app.secret",
         help="Path to app secret.")
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
     if args.register:

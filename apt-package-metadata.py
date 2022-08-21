@@ -44,7 +44,8 @@ async def iter_sources(url):
     async with ClientSession() as session:
         async with session.get(url) as resp:
             if resp.status != 200:
-                raise Exception("URL %s returned response code %d" % (url, resp.status))
+                raise Exception(
+                    "URL %s returned response code %d" % (url, resp.status))
             contents = await resp.read()
             if url.endswith(".gz"):
                 contents = gzip.decompress(contents)
@@ -64,7 +65,8 @@ async def main():
     parser.add_argument(
         "--version-re", type=str, help="Filter on versions matching regex."
     )
-    parser.add_argument("--override-vcs-type", type=str, help="Override VCS Type.")
+    parser.add_argument(
+        "--override-vcs-type", type=str, help="Override VCS Type.")
     parser.add_argument("--package", type=str, action='append')
     parser.add_argument(
         "--override-vcs-url",
@@ -85,7 +87,8 @@ async def main():
 
     for url in args.url:
         async for source in iter_sources(url):
-            if version_re is not None and not version_re.search(source["Version"]):
+            if (version_re is not None
+                    and not version_re.search(source["Version"])):
                 continue
             pl = PackageList()
             package = pl.package.add()
@@ -93,7 +96,8 @@ async def main():
             if args.package and package.name not in args.package:
                 continue
             package.maintainer_email = parseaddr(source["Maintainer"])[1]
-            if args.maintainer and package.maintainer_email not in args.maintainer:
+            if (args.maintainer
+                    and package.maintainer_email not in args.maintainer):
                 continue
             package.uploader_email.extend(
                 extract_uploader_emails(source.get("Uploaders"))

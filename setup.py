@@ -53,7 +53,9 @@ setup(
     },
     test_suite="janitor.tests.test_suite",
     extras_require={
-        'debian': ['python_debian', 'debmutate', 'silver-platter[debian]', 'ognibuild[debian]'],
+        'debian': [
+            'python_debian', 'debmutate', 'silver-platter[debian]',
+            'ognibuild[debian]'],
     },
     install_requires=[
         "aiohttp",
