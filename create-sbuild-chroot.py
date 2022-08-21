@@ -10,8 +10,10 @@ from iniparse import RawConfigParser
 from janitor.config import read_config, get_distribution
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True, make_sbuild_tarball=None):
-    cmd = ["sbuild-createchroot", distro.name, sbuild_path, distro.archive_mirror_uri]
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
+                  eatmydata=True, make_sbuild_tarball=None):
+    cmd = ["sbuild-createchroot", distro.name, sbuild_path,
+           distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
     if eatmydata:
         cmd.append("--command-prefix=eatmydata")
@@ -30,7 +32,8 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydat
 
 
 def get_sbuild_architecture():
-    return subprocess.check_output(["dpkg-architecture", "-qDEB_BUILD_ARCH"]).decode().strip()
+    return subprocess.check_output(
+        ["dpkg-architecture", "-qDEB_BUILD_ARCH"]).decode().strip()
 
 
 parser = argparse.ArgumentParser()
@@ -38,9 +41,12 @@ parser.add_argument('--remove-old', action='store_true')
 parser.add_argument(
     '--include', type=str, action='append', help='Include specified package.',
     default=[])
-parser.add_argument('--base-directory', type=str, help='Base directory for chroots')
-parser.add_argument('--user', type=str, help='User to create home directory for')
-parser.add_argument('--make-sbuild-tarball', action='store_true', help='Create sbuild tarball')
+parser.add_argument(
+    '--base-directory', type=str, help='Base directory for chroots')
+parser.add_argument(
+    '--user', type=str, help='User to create home directory for')
+parser.add_argument(
+    '--make-sbuild-tarball', action='store_true', help='Create sbuild tarball')
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
@@ -74,8 +80,9 @@ for distribution in args.distribution:
                     '%s-%s-sbuild' % (distro_config.name, sbuild_arch),
                     'directory')
                 if old_sbuild_path != sbuild_path:
-                    raise AssertionError('sbuild path has changed: %s != %s' % (
-                        old_sbuild_path, sbuild_path))
+                    raise AssertionError(
+                        'sbuild path has changed: %s != %s' % (
+                            old_sbuild_path, sbuild_path))
                 if os.path.isdir(old_sbuild_path):
                     shutil.rmtree(old_sbuild_path)
                 os.unlink(entry.path)
@@ -88,7 +95,8 @@ for distribution in args.distribution:
             continue
         suites.append(campaign.debian_build.build_distribution)
     if args.make_sbuild_tarball:
-        make_sbuild_tarball = os.path.join(args.base_directory, distro_config.chroot + '.tar.gz')
+        make_sbuild_tarball = os.path.join(
+            args.base_directory, distro_config.chroot + '.tar.gz')
     else:
         make_sbuild_tarball = None
     create_chroot(
@@ -97,6 +105,8 @@ for distribution in args.distribution:
 
     if args.user:
         subprocess.check_call(
-            ['schroot', '-c', '%s-%s-sbuild' % (distro_config.name, sbuild_arch),
-             '--directory', '/', '--', 'install', '-d', '--owner=%s' % args.user,
+            ['schroot', '-c',
+             '%s-%s-sbuild' % (distro_config.name, sbuild_arch),
+             '--directory', '/', '--', 'install', '-d',
+             '--owner=%s' % args.user,
              pwd.getpwnam(args.user).pw_dir])

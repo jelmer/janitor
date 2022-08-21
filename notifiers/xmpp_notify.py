@@ -28,7 +28,8 @@ import slixmpp
 from janitor_client import pubsub_reader
 from aiohttp_openmetrics import setup_metrics, Counter
 
-xmpp_messages_sent = Counter("xmpp_messages_sent", "Number of messages sent to XMPP")
+xmpp_messages_sent = Counter(
+    "xmpp_messages_sent", "Number of messages sent to XMPP")
 
 
 class JanitorNotifier(slixmpp.ClientXMPP):
@@ -54,7 +55,8 @@ class JanitorNotifier(slixmpp.ClientXMPP):
         self.send_presence(ptype="available", pstatus="Active")
         await self.get_roster()
         self.plugin["xep_0045"].join_muc(self.channel, self.nick, wait=True)
-        await self.send_message(mto=args.channel, mtype="groupchat", mbody="Hello")
+        await self.send_message(
+            mto=args.channel, mtype="groupchat", mbody="Hello")
 
     async def on_lost(self, event):
         logging.info("Connection lost, exiting.")
@@ -97,7 +99,8 @@ class JanitorNotifier(slixmpp.ClientXMPP):
                     % (item["package"], item["campaign"], item["start_time"])
                     for item in self._runner_status["processing"]
                 ]
-                await reply("Currently processing: " + ", ".join(status_strs) + ".")
+                await reply(
+                    "Currently processing: " + ", ".join(status_strs) + ".")
             else:
                 await reply("Current runner status unknown.")
         if message == "scan":
@@ -106,7 +109,8 @@ class JanitorNotifier(slixmpp.ClientXMPP):
                 if resp.status in (200, 202):
                     await reply("Merge proposal scan started.")
                 else:
-                    await reply("Merge proposal scan failed: %d." % resp.status)
+                    await reply(
+                        "Merge proposal scan failed: %d." % resp.status)
 
     async def on_muc_message(self, msg):
         if msg["type"] == "groupchat":
@@ -119,28 +123,33 @@ class JanitorNotifier(slixmpp.ClientXMPP):
                     mto=msg["from"].bare, mtype="groupchat", mbody=m
                 )
 
-            await self.handle_message(message[len(self.nick + ": ") :], reply)
+            await self.handle_message(
+                message[len(self.nick + ": ") :], reply)
 
     async def on_message(self, msg):
         if msg["type"] in ("chat", "normal"):
             message = msg["body"]
 
             async def reply(m):
-                await self.send_message(mto=msg["from"].bare, mtype="chat", mbody=m)
+                await self.send_message(
+                    mto=msg["from"].bare, mtype="chat", mbody=m)
 
             await self.handle_message(message, reply)
 
 
 async def main(args):
     notifier = JanitorNotifier(
-        args.jid, args.password, channel=args.channel, publisher_url=args.publisher_url
+        args.jid, args.password, channel=args.channel,
+        publisher_url=args.publisher_url
     )
     app = web.Application()
     setup_metrics(app)
-    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    app.router.add_get(
+        '/health', lambda req: web.Response(text='ok', status=200))
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    site = web.TCPSite(
+        runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
     notifier.connect()
@@ -148,7 +157,8 @@ async def main(args):
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"), msg[1].get("merged_by")
+                    msg[1]["url"], msg[1].get("package"),
+                    msg[1].get("merged_by")
                 )
             if msg[0] == "queue":
                 await notifier.set_runner_status(msg[1])
@@ -157,9 +167,11 @@ async def main(args):
                 and msg[1]["mode"] == "push"
                 and msg[1]["result_code"] == "success"
             ):
-                url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
+                url = (msg[1]["main_branch_browse_url"]
+                       or msg[1]["main_branch_url"])
                 await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["campaign"], msg[1]["result"]
+                    url, msg[1]["package"], msg[1]["campaign"],
+                    msg[1]["result"]
                 )
 
 
@@ -171,7 +183,8 @@ if __name__ == "__main__":
     parser.add_argument("--jid", help="Jabber ID", default="janitor@jelmer.uk")
     parser.add_argument("--password", help="Password", default=None)
     parser.add_argument(
-        "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
+        "--publisher-url", help="Publisher URL",
+        default="http://localhost:9912/"
     )
     parser.add_argument(
         "--notifications-url",
@@ -185,7 +198,8 @@ if __name__ == "__main__":
         help="Host to provide prometheus metrics on.",
     )
     parser.add_argument(
-        "--prometheus-port", type=int, default=9918, help="Port for prometheus metrics"
+        "--prometheus-port", type=int, default=9918,
+        help="Port for prometheus metrics"
     )
     parser.add_argument("--channel", type=str, help="Channel", default=None)
     parser.add_argument(
@@ -197,7 +211,8 @@ if __name__ == "__main__":
         const=logging.DEBUG,
         default=logging.INFO,
     )
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
     if args.gcp_logging:
@@ -206,6 +221,7 @@ if __name__ == "__main__":
         client.get_default_handler()
         client.setup_logging()
     else:
-        logging.basicConfig(level=args.loglevel, format="%(levelname)-8s %(message)s")
+        logging.basicConfig(
+            level=args.loglevel, format="%(levelname)-8s %(message)s")
 
     asyncio.run(main(args))

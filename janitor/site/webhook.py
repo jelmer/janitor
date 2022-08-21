@@ -33,11 +33,11 @@ from ..schedule import (
 
 
 def is_webhook_request(request):
-    return ("X-Gitlab-Event" in request.headers or
-            "X-GitHub-Event" in request.headers or
-            "X-Gitea-Event" in request.headers or
-            "X-Gogs-Event" in request.headers or
-            "X-Launchpad-Event-Type" in request.headers)
+    return ("X-Gitlab-Event" in request.headers
+            or "X-GitHub-Event" in request.headers
+            or "X-Gitea-Event" in request.headers
+            or "X-Gogs-Event" in request.headers
+            or "X-Launchpad-Event-Type" in request.headers)
 
 
 def get_branch_urls_from_github_webhook(body):
@@ -116,7 +116,7 @@ WHERE
     for url in branch_urls:
         candidates.extend([
             url.rstrip('/'),
-            url.rstrip('/')+'/'])
+            url.rstrip('/') + '/'])
     return await conn.fetchrow(query, candidates)
 
 
@@ -135,7 +135,7 @@ WHERE
     for url in upstream_branch_urls:
         candidates.extend([
             url.rstrip('/'),
-            url.rstrip('/')+'/',
+            url.rstrip('/') + '/',
         ])
     return await conn.fetchrow(query, candidates)
 

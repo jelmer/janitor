@@ -71,7 +71,7 @@ async def process_all_build_failures(db_location):
                     "SELECT package, id, logfilenames FROM run"):
                 todo.append(reprocess_run(pool, row[0], row[1], row[2]))
     for i in range(0, len(todo), 100):
-        await asyncio.gather(*todo[i:i+100])
+        await asyncio.gather(*todo[i:i + 100])
 
 
 loop.run_until_complete(process_all_build_failures(config.database_location))

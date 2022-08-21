@@ -136,8 +136,8 @@ def apply_policy(
             broken_notify = s.broken_notify
     if command is not None:
         command = ' '.join(
-            ['%s=%s' % e for e in sorted(env.items())] +
-            [command])
+            ['%s=%s' % e for e in sorted(env.items())]
+            + [command])
     assert publish_mode
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},

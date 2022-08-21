@@ -23,10 +23,10 @@ parser.add_argument(
     "-r", "--run-id", type=str, help="Run id to process"
 )
 parser.add_argument(
-        "--role", type=str, help="Role", default="main"
+    "--role", type=str, help="Role", default="main"
 )
 parser.add_argument(
-        '--format', type=str, choices=['md', 'txt'], default='md')
+    '--format', type=str, choices=['md', 'txt'], default='md')
 
 args = parser.parse_args()
 

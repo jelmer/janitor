@@ -359,7 +359,7 @@ async def cgit_backend(request):
             unused_stderr, response, unused_stdin = await asyncio.gather(*[
                 read_stderr(p.stderr), read_stdout(p.stdout),
                 feed_stdin(p.stdin),
-                ], return_exceptions=False)
+            ], return_exceptions=False)
         except asyncio.CancelledError:
             p.terminate()
             await p.wait()
