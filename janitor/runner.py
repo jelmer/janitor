@@ -52,7 +52,7 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
 
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import PermissionDenied, ConnectionError, UnexpectedHttpStatus
+from breezy.errors import PermissionDenied, ConnectionError, UnexpectedHttpStatus, UnsupportedProtocol
 from breezy.transport import UnusableRedirect
 
 from silver_platter.debian import (
@@ -2150,7 +2150,11 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    public_vcs_managers = get_vcs_managers(args.public_vcs_location)
+    try:
+        public_vcs_managers = get_vcs_managers(args.public_vcs_location)
+    except UnsupportedProtocol as e:
+        parser.error(
+            'Unsupported protocol in --public-vcs-location: %s' % e.url)
     vcs_managers = get_vcs_managers_from_config(config)
 
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)

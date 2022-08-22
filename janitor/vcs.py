@@ -40,7 +40,7 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
-from breezy.transport import Transport
+from breezy.transport import Transport, get_transport_from_url
 from lintian_brush.vcs import (
     determine_browser_url,
     unsplit_vcs_url,
@@ -387,6 +387,7 @@ class LocalBzrVcsManager(VcsManager):
 
 class RemoteGitVcsManager(VcsManager):
     def __init__(self, base_url: str):
+        get_transport_from_url(base_url)
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
@@ -426,6 +427,7 @@ class RemoteGitVcsManager(VcsManager):
 
 class RemoteBzrVcsManager(VcsManager):
     def __init__(self, base_url: str):
+        get_transport_from_url(base_url)
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
