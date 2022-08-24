@@ -445,6 +445,9 @@ async def handle_revision_info(request):
             return web.json_response(
                 {"error": "no run %s" % (run_id, )}, status=404)
 
+    if run['vcs_type'] is None:
+        return web.json_response({})
+
     try:
         revision_info = await request.app['vcs_managers'][run['vcs_type']].get_revision_info(
             run['package'],
@@ -504,6 +507,12 @@ async def handle_diff(request):
         max_diff_size = int(request.query["max_diff_size"])
     except KeyError:
         max_diff_size = None
+
+    if run['vcs_type'] is None:
+        return web.Response(
+            status=404,
+            text="Not in a VCS")
+
     try:
         try:
             with span.new_child('vcs-diff'):

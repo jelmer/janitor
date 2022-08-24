@@ -112,7 +112,8 @@ CREATE TABLE IF NOT EXISTS run (
    resume_from text references run (id),
    change_set text references change_set(id),
    foreign key (package) references package(name),
-   check(finish_time >= start_time)
+   check(finish_time >= start_time),
+   check(branch_url is null or vcs_type is not null)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
