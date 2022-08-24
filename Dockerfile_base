@@ -44,6 +44,7 @@ RUN apt -y update && apt -y upgrade && apt satisfy --no-install-recommends -y \
 	python3-apispec python3-webargs \
 	python3-typeshed \
 	python3-aiohttp-apispec \
+	python3-merge3 \
 	wget \
 	ca-certificates \
 	&& pip3 install --upgrade gcloud-aio-storage google-cloud-logging git+https://github.com/jelmer/aiohttp-openmetrics
