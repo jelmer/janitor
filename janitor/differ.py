@@ -599,7 +599,7 @@ async def listen_to_runner(runner_url, app):
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            with app['pool'].acquire() as conn:
+            async with app['pool'].acquire() as conn:
                 to_precache = []
                 if result["revision"] == result["main_branch_revision"]:
                     for row in await conn.fetch(
