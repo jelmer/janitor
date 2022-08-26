@@ -18,10 +18,9 @@
 
 import logging
 
-from aiohttp.client import ClientSession
 from aiohttp import web
 
-from janitor_client import pubsub_reader
+from janitor_client import JanitorClient
 from aiohttp_openmetrics import setup_metrics
 
 import asyncio
@@ -89,8 +88,8 @@ async def main(args):
         runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
-    async with ClientSession() as session:
-        async for msg in pubsub_reader(session, args.notifications_url):
+    async with JanitorClient(args.janitor_url) as janitor_client:
+        async for msg in janitor_client._iter_notifications():
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
                     msg[1]["url"], msg[1].get("package"),
@@ -131,9 +130,9 @@ if __name__ == "__main__":
         "--user", type=str,
         help="Matrix user string")
     parser.add_argument(
-        "--notifications-url",
-        help="URL to retrieve notifications from",
-        default="wss://janitor.debian.net/ws/notifications",
+        "--janitor-url",
+        help="Janitor instance URL",
+        default="https://janitor.debian.net/",
     )
     parser.add_argument(
         "--room", type=str,

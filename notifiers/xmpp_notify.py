@@ -25,7 +25,7 @@ from urllib.parse import urljoin
 
 import slixmpp
 
-from janitor_client import pubsub_reader
+from janitor_client import JanitorClient
 from aiohttp_openmetrics import setup_metrics, Counter
 
 xmpp_messages_sent = Counter(
@@ -153,8 +153,8 @@ async def main(args):
     await site.start()
 
     notifier.connect()
-    async with ClientSession() as session:
-        async for msg in pubsub_reader(session, args.notifications_url):
+    async with JanitorClient(args.janitor_url) as janitor_client:
+        async for msg in janitor_client._iter_notifications():
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
                     msg[1]["url"], msg[1].get("package"),
@@ -187,9 +187,9 @@ if __name__ == "__main__":
         default="http://localhost:9912/"
     )
     parser.add_argument(
-        "--notifications-url",
-        help="URL to retrieve notifications from",
-        default="wss://janitor.debian.net/ws/notifications",
+        "--janitor-url",
+        help="Janitor instance URL",
+        default="https://janitor.debian.net/",
     )
     parser.add_argument(
         "--prometheus-listen-address",
