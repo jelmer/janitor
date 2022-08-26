@@ -89,7 +89,7 @@ async def main(args):
     await site.start()
 
     async with JanitorClient(args.janitor_url) as janitor_client:
-        async for msg in janitor_client._iter_notififications():
+        async for msg in janitor_client._iter_notifications():
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
                     msg[1]["url"], msg[1].get("package"),
