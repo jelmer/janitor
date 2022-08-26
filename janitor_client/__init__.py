@@ -70,7 +70,7 @@ class JanitorClient(object):
     """Interface to the public API of the janitor."""
 
     def __init__(self, url):
-        self.url = url
+        self.url = URL(url)
         self.session = None
 
     async def __aenter__(self):
