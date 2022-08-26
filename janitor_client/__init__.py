@@ -75,7 +75,8 @@ class JanitorClient(object):
 
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
-        return await self.session.__aenter__()
+        await self.session.__aenter__()
+        return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.session.__aexit__(exc_type, exc_val, exc_tb)
