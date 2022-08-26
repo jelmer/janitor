@@ -45,7 +45,7 @@ Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{
 
 <ul>
 	{% for publish in publishes %}
-	<li>{{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}: {% if '\n' in publish.description %}<pre>{{ publish.description }}</pre>{% else %}{{ publish.description }}{% endif %}</li>
+	<li>{{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}: {% if '\n' in publish.description %}<pre>{{ publish.description }}</pre>{% else %}{{ publish.description }}<!-- {{ publish.revision }} -->{% endif %}</li>
 	{% endfor %}
 </ul>
 

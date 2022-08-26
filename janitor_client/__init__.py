@@ -64,3 +64,26 @@ async def pubsub_reader(
             return
         logging.info("Waiting %d seconds before reconnecting...", reconnect_interval)
         await asyncio.sleep(reconnect_interval)
+
+
+class JanitorClient(object):
+    """Interface to the public API of the janitor."""
+
+    def __init__(self, url):
+        self.url = URL(url)
+        self.session = None
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession()
+        await self.session.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.session.__aexit__(exc_type, exc_val, exc_tb)
+        return False
+
+    async def _iter_notifications(self):
+        notifications_url = self.url.with_scheme('wss').with_path(
+            self.url.path.join(['ws', 'notifications']))
+        async for msg in pubsub_reader(self.session, notifications_url):
+            yield msg
