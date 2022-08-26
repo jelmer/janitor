@@ -83,6 +83,7 @@ class JanitorClient(object):
         return False
 
     async def _iter_notifications(self):
-        notifications_url = URL(self.url).with_scheme('wss').join(['ws', 'notifications'])
+        notifications_url = self.url.with_scheme('wss').with_path(
+            self.url.path.join(['ws', 'notifications']))
         async for msg in pubsub_reader(self.session, notifications_url):
             yield msg
