@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% from "run_util.html" import display_result_code %}
+{% block page_title %}Queue{% endblock %}
+{% block body %}
+<div class="section" id="workers">
+<h1>Workers</h1>
+
+{% for worker in workers %}
+<div class="subsection">
+<h2>{{ worker.name }}</h2>
+
+</div>
+{% endfor %}
+
+</div>
+{% endblock %}
