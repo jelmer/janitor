@@ -171,6 +171,9 @@ async def generate_review(
         new_revid = revid.encode('utf-8') if revid else None
         if old_revid == new_revid:
             return []
+        if vcs_type is None:
+            logging.warning("No vcs known for run %s" run_id)
+            return []
         try:
             return await vcs_managers[vcs_type].get_revision_info(package, old_revid, new_revid)
         except ClientResponseError as e:
