@@ -261,7 +261,7 @@ async def derived_branch_name(conn, campaign_config, run, role):
         return name
 
 
-def branches_match(url_a, url_b):
+def branches_match(url_a: str, url_b: str) -> bool:
     if url_a == url_b:
         return True
     url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip("/"))
