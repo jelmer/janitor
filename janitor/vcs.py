@@ -20,6 +20,7 @@ import asyncio
 from io import BytesIO
 import logging
 import os
+import ssl
 import sys
 from typing import Optional, List, Tuple, Iterable, Dict
 from yarl import URL
@@ -198,6 +199,9 @@ def open_cached_branch(url) -> Optional[Branch]:
         return None
     except BranchReferenceLoop:
         return None
+    except ssl.SSLCertVerificationError as e:
+        logging.warning('Unable to access cache branch at %s: %r', url, e)
+        raise
 
 
 class VcsManager(object):
