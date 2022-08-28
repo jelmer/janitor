@@ -62,9 +62,10 @@ message Config {
   // Location of bzr storage
   optional string bzr_location = 15;
 
-
   // Location of the redis server
   optional string redis_location = 16;
+
+  repeated BugTracker bugtracker = 17;
 }
 
 message Env {
@@ -81,24 +82,6 @@ message MergeProposalConfig {
 
    repeated string label = 4;
 };
-
-message Suite {
-  // Name of the suite. E.g. "lintian-fixes"
-  optional string name = 1;
-
-  // VCS branch name to use
-  optional string branch_name = 2;
-
-  optional MergeProposalConfig merge_proposal = 5;
-
-  // Force building even if the command did not make any changes.
-  optional bool force_build = 6 [default=false];
-
-  oneof build {
-    DebianBuild debian_build = 3;
-    GenericBuild generic_build = 4;
-  }
-}
 
 message Campaign {
   // Name of the campaign. E.g. "lintian-fixes"
@@ -120,6 +103,8 @@ message Campaign {
   // Does this campaign fix issues based on the repository contents
   // or some external source?
   optional bool webhook_trigger = 7 [default=false];
+
+  repeated BugTracker bugtracker = 8;
 }
 
 message GenericBuild {
@@ -164,4 +149,18 @@ message OAuth2Provider {
 
   // Name of the OpenID group for admins
   optional string admin_group = 5;
+};
+
+enum BugTrackerKind {
+   gitlab = 1;
+   debian = 2;
+};
+
+message BugTracker {
+   optional BugTrackerKind kind = 1;
+
+   // URL to the project in the bugtracker
+   optional string url = 2;
+
+   optional string name = 3;
 };

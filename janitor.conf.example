@@ -27,6 +27,12 @@ committer: 'Debian Janitor <janitor@jelmer.uk>'
 # Origin set in published archives
 origin: "janitor.debian.net"
 
+bugtracker {
+  kind: gitlab
+  url: "https://salsa.debian.org/jelmer/some-project"
+  name: "some project"
+}
+
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
@@ -52,6 +58,11 @@ campaign {
     build_suffix: "jan+lint"
     base_distribution: "unstable"
     build_command: "sbuild -Asv"
+  }
+  bugtracker {
+    kind: debian
+    url: "https://bugs.debian.org/lintian-brush"
+    name: "lintian-brush"
   }
 }
 
