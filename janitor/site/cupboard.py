@@ -388,6 +388,7 @@ def register_cupboard_endpoints(router):
     router.add_get("/cupboard/rejected", handle_rejected, name="cupboard-rejected")
     router.add_get("/cupboard/history", handle_history, name="history")
     router.add_get("/cupboard/reprocess-logs", handle_reprocess_logs, name="reprocess-logs")
+    router.add_get("/cupboard/workers", handle_workers, name="workers")
     router.add_get("/cupboard/queue", handle_queue, name="queue")
     router.add_get(
         "/cupboard/never-processed", handle_never_processed, name="never-processed"
