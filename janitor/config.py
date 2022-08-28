@@ -22,8 +22,6 @@ __all__ = [
     "get_campaign_config",
 ]
 
-from typing import Union
-
 from google.protobuf import text_format  # type: ignore
 
 from . import config_pb2
