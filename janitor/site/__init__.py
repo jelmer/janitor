@@ -21,6 +21,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
 from yarl import URL
 
+from janitor import config_pb2
 from janitor.config import Config, get_distribution
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager, VcsManager
@@ -54,6 +55,7 @@ def json_chart_data(max_age=None):
 def update_vars_from_request(vs, request):
     vs["is_admin"] = is_admin(request)
     vs["is_qa_reviewer"] = is_qa_reviewer(request)
+    vs["config_pb2"] = config_pb2
     vs["user"] = request['user']
     vs["rel_url"] = request.rel_url
     vs["suites"] = [c for c in request.app['config'].campaign]
