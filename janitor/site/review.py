@@ -259,6 +259,6 @@ async def generate_review_stats(conn):
         'by_review_status': await conn.fetch(
              "with total as (select count(*) as cnt from review) "
              "select review_status, count(*) as cnt, "
-             "1.0 * count(*) / (select cnt from total) * 100.0 as pct"
+             "1.0 * count(*) / (select cnt from total) * 100.0 as pct "
              "from review group by 1")
         }
