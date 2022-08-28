@@ -165,6 +165,8 @@ async def generate_run_file(
             return "No branch with role %s" % role
         if base_revid == revid:
             return ""
+        if run['vcs_type'] is None:
+            return "Run not in VCS"
         try:
             with span.new_child('vcs-diff'):
                 diff = await get_vcs_diff(
