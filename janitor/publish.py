@@ -261,9 +261,13 @@ async def derived_branch_name(conn, campaign_config, run, role):
         return name
 
 
-def branches_match(url_a, url_b):
+def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
     if url_a == url_b:
         return True
+    if url_a is None and url_b is not None:
+        return False
+    if url_b is None and url_a is not None:
+        return False
     url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip("/"))
     url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip("/"))
     # TODO(jelmer): Support following redirects

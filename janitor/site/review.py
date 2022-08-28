@@ -172,7 +172,7 @@ async def generate_review(
         if old_revid == new_revid:
             return []
         if vcs_type is None:
-            logging.warning("No vcs known for run %s" run_id)
+            logging.warning("No vcs known for run %s", run_id)
             return []
         try:
             return await vcs_managers[vcs_type].get_revision_info(package, old_revid, new_revid)
