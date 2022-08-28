@@ -256,6 +256,8 @@ WHERE run.package = $1 AND run.suite = $2
             return "no result branch with role %s" % role
         if base_revid == revid:
             return ""
+        if run['vcs_type'] is None:
+            return "not in a VCS"
         try:
             with span.new_child('vcs-diff'):
                 diff = await get_vcs_diff(
