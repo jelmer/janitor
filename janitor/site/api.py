@@ -757,19 +757,6 @@ async def handle_run_success_list(request):
 
 
 @docs()
-@routes.post("/publish/scan", name="publish-scan")
-async def handle_publish_scan(request):
-    check_admin(request)
-    publisher_url = request.app['publisher_url']
-    url = URL(publisher_url) / "scan"
-    try:
-        async with request.app['http_client_session'].post(url) as resp:
-            return web.Response(body=await resp.read(), status=resp.status)
-    except ClientConnectorError:
-        return web.Response(text="unable to contact publisher", status=400)
-
-
-@docs()
 @routes.post("/publish/autopublish", name="publish-autopublish")
 async def handle_publish_autopublish(request):
     check_admin(request)
