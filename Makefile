@@ -55,3 +55,6 @@ clean:
 
 docker-%:
 	./docker.sh $*
+
+docker-all:
+	./docker.sh
