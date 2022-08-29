@@ -1149,7 +1149,11 @@ def create_background_task(fn, title):
 @docs()
 @routes.post('/run/{run_id}/reprocess-logs', name='admin-reprocess-logs-run')
 async def handle_run_reprocess_logs(request):
-    from ..reprocess_logs import reprocess_run_logs
+    from ..reprocess_logs import (
+        reprocess_run_logs,
+        process_sbuild_log,
+        process_dist_log,
+        )
     check_admin(request)
     post = await request.post()
     run_id = request.match_info['run_id']
@@ -1167,6 +1171,8 @@ async def handle_run_reprocess_logs(request):
         run['package'], run['campaign'], run_id,
         run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
+        [('dist-', 'dist.log': process_dist_log),
+         ('build-', 'build.log', process_sbuild_log)],
         dry_run=dry_run, reschedule=reschedule)
 
     if result:
@@ -1187,7 +1193,12 @@ async def handle_run_reprocess_logs(request):
 @docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
 async def handle_reprocess_logs(request):
-    from ..reprocess_logs import reprocess_run_logs
+    from ..reprocess_logs import (
+        reprocess_run_logs,
+        process_sbuild_log,
+        process_dist_log,
+        )
+
     check_admin(request)
     post = await request.post()
     dry_run = 'dry_run' in post
@@ -1248,6 +1259,8 @@ WHERE
                 row['package'], row['campaign'], row['id'],
                 row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
+                [('dist-', 'dist.log': process_dist_log),
+                 ('build-', 'build.log', process_sbuild_log)],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]
         for i in range(0, len(todo), 100):

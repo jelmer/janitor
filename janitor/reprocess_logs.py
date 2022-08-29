@@ -27,8 +27,31 @@ from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E
 from janitor.schedule import do_schedule  # noqa: E402
 
 
-def process_build_log(logf):
+def process_sbuild_log(logf):
     failure = worker_failure_from_sbuild_log(logf)
+    if failure.error:
+        if failure.stage and not failure.error.is_global:
+            new_code = "%s-%s" % (failure.stage, failure.error.kind)
+        else:
+            new_code = failure.error.kind
+        try:
+            new_failure_details = failure.error.json()
+        except NotImplementedError:
+            new_failure_details = None
+    elif failure.stage:
+        new_code = "build-failed-stage-%s" % failure.stage
+        new_failure_details = None
+    else:
+        new_code = "build-failed"
+        new_failure_details = None
+    new_description = failure.description
+    new_phase = failure.phase
+    return (new_code, new_description, new_phase, new_failure_details)
+
+
+def process_build_log(logf):
+    lines = [line.decode('utf-8', 'replace') for line in logf]
+    failure = find_build_failure_description(lines)[1]
     if failure.error:
         if failure.stage and not failure.error.is_global:
             new_code = "%s-%s" % (failure.stage, failure.error.kind)
@@ -73,29 +96,28 @@ def process_dist_log(logf):
 async def reprocess_run_logs(
         db, logfile_manager, package: str, campaign: str, log_id: str, command: str,
         change_set: Optional[str], duration: timedelta,
-        result_code: str, description: str, failure_details, dry_run: bool = False,
+        result_code: str, description: str, failure_details,
+        process_fns, dry_run: bool = False,
         reschedule: bool = False, log_timeout: Optional[int] = None):
     """Reprocess run logs.
     """
     if result_code in ('dist-no-tarball', ):
         return
-    if result_code.startswith('dist-'):
-        logname = 'dist.log'
+    for prefix, logname, fn in process_fns:
+        if not result_code.startswith(prefix):
+            continue
+        try:
+            logf = await logfile_manager.get_log(
+                package, log_id, logname, timeout=log_timeout
+            )
+        except FileNotFoundError:
+            return
+        else:
+            (new_code, new_description, new_phase,
+             new_failure_details) = fn(logf)
+            break
     else:
-        logname = 'build.log'
-    try:
-        logf = await logfile_manager.get_log(
-            package, log_id, logname, timeout=log_timeout
-        )
-    except FileNotFoundError:
         return
-
-    if logname == 'build.log':
-        (new_code, new_description, new_phase,
-         new_failure_details) = process_build_log(logf)
-    elif logname == 'dist.log':
-        (new_code, new_description, new_phase,
-         new_failure_details) = process_dist_log(logf)
 
     if new_code != result_code or description != new_description or failure_details != new_failure_details:
         logging.info(
