@@ -1153,7 +1153,7 @@ async def handle_run_reprocess_logs(request):
         reprocess_run_logs,
         process_sbuild_log,
         process_dist_log,
-        )
+    )
     check_admin(request)
     post = await request.post()
     run_id = request.match_info['run_id']
@@ -1171,7 +1171,7 @@ async def handle_run_reprocess_logs(request):
         run['package'], run['campaign'], run_id,
         run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
-        [('dist-', 'dist.log': process_dist_log),
+        [('dist-', 'dist.log', process_dist_log),
          ('build-', 'build.log', process_sbuild_log)],
         dry_run=dry_run, reschedule=reschedule)
 
@@ -1197,7 +1197,7 @@ async def handle_reprocess_logs(request):
         reprocess_run_logs,
         process_sbuild_log,
         process_dist_log,
-        )
+    )
 
     check_admin(request)
     post = await request.post()
@@ -1259,7 +1259,7 @@ WHERE
                 row['package'], row['campaign'], row['id'],
                 row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
-                [('dist-', 'dist.log': process_dist_log),
+                [('dist-', 'dist.log', process_dist_log),
                  ('build-', 'build.log', process_sbuild_log)],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]
