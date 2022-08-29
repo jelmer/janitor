@@ -38,5 +38,6 @@ jobs:
           file: "Dockerfile_worker"
           tags: |
             ghcr.io/jelmer/janitor/worker:latest
+            ghcr.io/jelmer/janitor/worker:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
