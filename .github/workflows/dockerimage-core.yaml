@@ -40,6 +40,7 @@ jobs:
           file: "Dockerfile_base"
           tags: |
             ghcr.io/jelmer/janitor/base:latest
+            ghcr.io/jelmer/janitor/base:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -49,6 +50,7 @@ jobs:
           file: "Dockerfile_runner"
           tags: |
             ghcr.io/jelmer/janitor/runner:latest
+            ghcr.io/jelmer/janitor/runner:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -58,6 +60,7 @@ jobs:
           file: "Dockerfile_archive"
           tags: |
             ghcr.io/jelmer/janitor/archive:latest
+            ghcr.io/jelmer/janitor/archive:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -67,6 +70,7 @@ jobs:
           file: "Dockerfile_irc_notify"
           tags: |
             ghcr.io/jelmer/janitor/irc_notify:latest
+            ghcr.io/jelmer/janitor/irc_notify:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -76,6 +80,7 @@ jobs:
           file: "Dockerfile_mastodon_notify"
           tags: |
             ghcr.io/jelmer/janitor/mastodon_notify:latest
+            ghcr.io/jelmer/janitor/mastodon_notify:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -85,6 +90,7 @@ jobs:
           file: "Dockerfile_xmpp_notify"
           tags: |
             ghcr.io/jelmer/janitor/xmpp_notify:latest
+            ghcr.io/jelmer/janitor/xmpp_notify:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -94,6 +100,7 @@ jobs:
           file: "Dockerfile_matrix_notify"
           tags: |
             ghcr.io/jelmer/janitor/matrix_notify:latest
+            ghcr.io/jelmer/janitor/matrix_notify:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -103,6 +110,7 @@ jobs:
           file: "Dockerfile_publish"
           tags: |
             ghcr.io/jelmer/janitor/publish:latest
+            ghcr.io/jelmer/janitor/publish:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -112,6 +120,7 @@ jobs:
           file: "Dockerfile_vcs_store_git"
           tags: |
             ghcr.io/jelmer/janitor/vcs_store_git:latest
+            ghcr.io/jelmer/janitor/vcs_store_git:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -121,6 +130,7 @@ jobs:
           file: "Dockerfile_vcs_store_bzr"
           tags: |
             ghcr.io/jelmer/janitor/vcs_store_bzr:latest
+            ghcr.io/jelmer/janitor/vcs_store_bzr:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
@@ -130,5 +140,6 @@ jobs:
           file: "Dockerfile_differ"
           tags: |
             ghcr.io/jelmer/janitor/differ:latest
+            ghcr.io/jelmer/janitor/differ:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
