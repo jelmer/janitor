@@ -88,15 +88,25 @@ groups:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor Mastodon notifier is down
 
-  - alert: JanitorVcsStoreDown
-    expr: up{job="janitor.vcs_store"} == 0
+  - alert: JanitorGitStoreDown
+    expr: up{job="janitor.git_store"} == 0
     for: 1h
     labels:
       severity: critical
       project: debian-janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
-      summary: Janitor vcs store is down
+      summary: Janitor git store is down
+
+  - alert: JanitorBzrStoreDown
+    expr: up{job="janitor.bzr_store"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor bzr store is down
 
   - alert: JanitorRunFinishFailing
     expr: increase(request_exceptions_total{job="janitor.runner",route="finish"}[5m]) > 0
