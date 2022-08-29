@@ -2,5 +2,5 @@ FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 VOLUME /git
 EXPOSE 9923
-RUN apt update && apt install -y python3-pip git python3-chardet libjs-sphinxdoc python3-aiohttp-wsgi python3-klaus && pip3 install git+https://github.com/jonashaag/klaus
+RUN apt update && apt install --no-install-recommends -y python3-pip git python3-chardet libjs-sphinxdoc python3-aiohttp-wsgi python3-klaus && pip3 install git+https://github.com/jonashaag/klaus
 ENTRYPOINT ["python3", "-m", "janitor.git_store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]
