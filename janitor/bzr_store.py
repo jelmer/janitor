@@ -281,7 +281,7 @@ async def create_web_app(
     app.router.add_post("/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
     app.router.add_post("/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
     app.router.add_post("/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
-    endpoint = aiozipkin.create_endpoint("janitor.vcs_store_bzr", ipv4=listen_addr, port=port)
+    endpoint = aiozipkin.create_endpoint("janitor.bzr_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
@@ -294,7 +294,7 @@ async def create_web_app(
 async def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.vcs_store_bzr")
+    parser = argparse.ArgumentParser(prog="janitor.bzr_store")
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
     )

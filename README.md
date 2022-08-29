@@ -3,8 +3,8 @@ a platform for managing large-scale automated code improvements on
 top of [silver-platter](https://github.com/jelmer/silver-platter).
 
 Any code that is not related to the platform but to actually making changes
-should probably live in either ``silver-platter``, ``lintian-brush`` or
-``breezy``.
+should probably live in either ``silver-platter``, ``breezy`` or a
+specific codemod (such as [lintian-brush](https://salsa.debian.org/jelmer/lintian-brush).
 
 There are currently several instances of the Janitor running. For their configuration, see:
 
@@ -93,13 +93,19 @@ Several docker images are provided
  * ghcr.io/jelmer/janitor/base - base image, essentially debian:sid-slim with some additional packages installed
  * ghcr.io/jelmer/janitor/archive - APT archive generator
  * ghcr.io/jelmer/janitor/differ - diffoscope/debdiff generator
- * ghcr.io/jelmer/janitor/irc_notify - IRC notification bot
- * ghcr.io/jelmer/janitor/mastodon_notify - Mastodon notification bot
  * ghcr.io/jelmer/janitor/publish - VCS publisher
  * ghcr.io/jelmer/janitor/runner - Queue management & Run handling
  * ghcr.io/jelmer/janitor/site - Web site & public API
- * ghcr.io/jelmer/janitor/vcs_store - VCS storage
+ * ghcr.io/jelmer/janitor/git_store - storage for Git
+ * ghcr.io/jelmer/janitor/bzr_store - storage for Bazaar
  * ghcr.io/jelmer/janitor/worker - Base for workers
+
+The notifiers/ directory contains a couple of convenience scripts for sending
+notification of accepted merge proposals and pushes.
+
+ * ghcr.io/jelmer/janitor/irc_notify - IRC notification bot
+ * ghcr.io/jelmer/janitor/mastodon_notify - Mastodon notification bot
+ * ghcr.io/jelmer/janitor/matrix_notify - Mastodon notification bot
  * ghcr.io/jelmer/janitor/xmpp_notify - XMPP Notification Bot
 
 Contributing
@@ -109,4 +115,5 @@ If you're interested in working on adding another campaign, see
 [adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
 
 Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC
-(irc.oftc.net).
+(irc.oftc.net) or
+[#debian-janitor:matrix.debian.social](https://matrix.to/#/#debian-janitor:matrix.debian.social).
