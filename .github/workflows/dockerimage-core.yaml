@@ -114,23 +114,23 @@ jobs:
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build vcs_store_git image
+      - name: Build git_store image
         uses: docker/build-push-action@v2
         with:
-          file: "Dockerfile_vcs_store_git"
+          file: "Dockerfile_git_store"
           tags: |
-            ghcr.io/jelmer/janitor/vcs_store_git:latest
-            ghcr.io/jelmer/janitor/vcs_store_git:${{ github.sha }}
+            ghcr.io/jelmer/janitor/git_store:latest
+            ghcr.io/jelmer/janitor/git_store:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build vcs_store_bzr image
+      - name: Build bzr_store image
         uses: docker/build-push-action@v2
         with:
-          file: "Dockerfile_vcs_store_bzr"
+          file: "Dockerfile_bzr_store"
           tags: |
-            ghcr.io/jelmer/janitor/vcs_store_bzr:latest
-            ghcr.io/jelmer/janitor/vcs_store_bzr:${{ github.sha }}
+            ghcr.io/jelmer/janitor/bzr_store:latest
+            ghcr.io/jelmer/janitor/bzr_store:${{ github.sha }}
           # build on feature branches, push only on main branch
           push: ${{ github.ref == 'refs/heads/main' }}
 

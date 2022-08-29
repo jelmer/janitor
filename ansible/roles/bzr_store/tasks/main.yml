@@ -1,0 +1,17 @@
+---
+- name: System file for Janitor Bazaar store
+  template:
+    src: bzr-store.service
+    dest: /etc/systemd/system/janitor-bzr-store.service
+  when: janitor_bzr_store_path is defined
+- name: Enable systemd for Janitor VCS Store Bazaar
+  systemd:
+    name: janitor-bzr-store.service
+    state: started
+    enabled: yes
+  when: janitor_bzr_store_path is defined
+- name: VCS directory for Bazaar
+  file:
+    state: directory
+    path: "{{ janitor_bzr_store_path }}/bzr"
+    owner: "{{ janitor_user }}"
