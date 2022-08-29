@@ -52,7 +52,7 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
 
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import PermissionDenied, ConnectionError, UnexpectedHttpStatus
+from breezy.errors import ConnectionError, UnexpectedHttpStatus, PermissionDenied
 from breezy.transport import UnusableRedirect, UnsupportedProtocol
 
 from silver_platter.debian import (
