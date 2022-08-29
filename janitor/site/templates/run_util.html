@@ -88,7 +88,7 @@ $(function() {
       if (data['changed']) {
           $("#{{ id }}").replaceWith("<span>Logs reprocessed and analysis updated.</span>");
       } else {
-          $("#{{ id }}").replaceWith("<span>Logs reprocessed but not changes made.</span>");
+          $("#{{ id }}").replaceWith("<span>Logs reprocessed but no changes made.</span>");
       }
     }, 'json')
     .fail(function(response) {
