@@ -25,6 +25,29 @@
 </tbody>
 </table>
 
+<div name="by-status">
+<h2>Review Status</h2>
+
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+  <th class="head">Status</th>
+  <th class="head">Count</th>
+  <th class="head">Percentage of total</th>
+</tr>
+</thead>
+<tbody valign="top" name="status-table">
+{% for status, count, percentage in by_review_status %}
+<tr>
+    <td>{{ status }}</td>
+    <td>{{ count }}</td>
+    <td>{{ percentage|round(2) }}%</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+
 </div>
 {% endblock %}
 <!-- vim: expandtab -->

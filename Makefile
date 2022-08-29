@@ -54,4 +54,7 @@ clean:
 	rm -f $(PB2_PY_OUTPUT)
 
 docker-%:
-	./docker.sh $%
+	./docker.sh $*
+
+docker-all:
+	./docker.sh
