@@ -1,7 +1,7 @@
 FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9918
-RUN apt -y update && apt -y install python3.9 python3-pydle python3-aiohttp python3-aiohttp-openmetrics python3-pip && pip3 install google-cloud-logging
+RUN apt -y update && apt --no-install-recommends -y install python3.9 python3-pydle python3-aiohttp python3-aiohttp-openmetrics python3-pip && pip3 install google-cloud-logging
 ADD notifiers /code/notifiers
 ADD janitor_client /code/janitor_client
 ENV PYTHONPATH=/code
