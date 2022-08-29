@@ -558,7 +558,7 @@ async def create_web_app(
     app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
     public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_post("/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
-    endpoint = aiozipkin.create_endpoint("janitor.vcs_store_git", ipv4=listen_addr, port=port)
+    endpoint = aiozipkin.create_endpoint("janitor.git_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
@@ -571,7 +571,7 @@ async def create_web_app(
 async def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.vcs_store_git")
+    parser = argparse.ArgumentParser(prog="janitor.git_store")
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
     )

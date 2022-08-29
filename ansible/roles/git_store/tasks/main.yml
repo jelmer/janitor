@@ -16,15 +16,15 @@
   when: 'aiohttp_wsgi_packaged.rc != 0'
 - name: System file for Janitor VCS store Git
   template:
-    src: vcs-store-git.service
-    dest: /etc/systemd/system/janitor-vcs-store-git.service
-- name: Enable systemd for Janitor VCS Store Git
+    src: git-store.service
+    dest: /etc/systemd/system/janitor-git-store.service
+- name: Enable systemd for Janitor Git Store
   systemd:
-    name: janitor-vcs-store-git.service
+    name: janitor-git-store.service
     state: started
     enabled: yes
 - name: VCS directory for Git
   file:
     state: directory
-    path: "{{ janitor_vcs_store_git_path }}"
+    path: "{{ janitor_git_store_path }}"
     owner: "{{ janitor_user }}"

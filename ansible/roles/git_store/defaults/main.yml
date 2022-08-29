@@ -1,0 +1,6 @@
+---
+janitor_vcs_store_address: "::1"
+janitor_vcs_store_path: "{{ janitor_home }}/vcs"
+janitor_git_store_port: 9923
+janitor_git_store_public_port: 9924
+janitor_git_store_path: "{{ janitor_vcs_store_path }}/git"
