@@ -1004,7 +1004,7 @@ async def publish_from_policy(
         return mode
 
 
-def role_branch_url(url, remote_branch_name):
+def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
     if remote_branch_name is None:
         return url
     base_url, params = urlutils.split_segment_parameters(url.rstrip("/"))
