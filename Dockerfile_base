@@ -1,5 +1,14 @@
+FROM debian:sid-slim AS build
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt -y update && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler mypy-protobuf python3-setuptools python3-setuptools-rust ca-certificates
+
+ADD . /code
+RUN make -C /code && make -C /code/breezy
+
 FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN echo "deb http://incoming.debian.org/debian-buildd/ buildd-unstable main" >> /etc/apt/sources.list.d/incoming.list && apt -y update && apt -y upgrade
 RUN apt satisfy --no-install-recommends -y \
@@ -7,10 +16,6 @@ RUN apt satisfy --no-install-recommends -y \
 	python3-fastbencode \
 	git \
 	python3-tqdm \
-	rustc \
-	libpython3-dev \
-	cargo \
-	cython3 \
 	python3-distro-info \
 	python3-patiencediff \
 	python3-aiohttp \
@@ -20,8 +25,6 @@ RUN apt satisfy --no-install-recommends -y \
 	python3-requirement-parser \
 	python3-asyncpg \
 	python3-protobuf \
-	protobuf-compiler \
-	mypy-protobuf \
 	python3-yaml \
 	python3-gpg \
 	python3-cffi \
@@ -38,9 +41,7 @@ RUN apt satisfy --no-install-recommends -y \
 	python3-iso8601 \
 	python3-pcre \
 	python3-aioredis \
-	make \
 	python3-aiozipkin \
-	python3-setuptools-rust \
 	python3-aiohttp-openmetrics \
 	python3-apispec python3-webargs \
 	python3-typeshed \
@@ -48,8 +49,7 @@ RUN apt satisfy --no-install-recommends -y \
 	python3-merge3 \
 	wget \
 	ca-certificates \
-	&& pip3 install --upgrade gcloud-aio-storage google-cloud-logging git+https://github.com/jelmer/aiohttp-openmetrics
+	&& pip3 install --upgrade gcloud-aio-storage google-cloud-logging
+COPY --from=build /code /code
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/debmutate:/code/silver-platter:/code/upstream-ontologist:/code/buildlog-consultant:/code/ognibuild:/code/lintian-brush
-ADD . /code
-RUN make -C /code
