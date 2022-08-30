@@ -117,12 +117,12 @@ VCS_STORE_BRANCH_OPEN_TIMEOUT = 5.0
 
 
 routes = web.RouteTableDef()
-packages_processed_count = Counter("package_count", "Number of packages processed.")
+run_count = Counter("run_count", "Number of runs executed.")
 last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
 )
-build_duration = Histogram("build_duration", "Build duration", ["package", "campaign"])
-run_result_count = Counter("result", "Result counts", ["package", "campaign", "result_code"])
+build_duration = Histogram("build_duration", "Build duration", ["campaign"])
+run_result_count = Counter("result", "Result counts", ["campaign", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
 assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
@@ -458,9 +458,14 @@ class JanitorResult(object):
     def duration(self):
         return self.finish_time - self.start_time
 
+    @property
+    def codebase(self):
+        return self.package
+
     def json(self):
         return {
             "package": self.package,
+            "codebase": self.codebase,
             "campaign": self.campaign,
             "log_id": self.log_id,
             "description": self.description,
@@ -764,6 +769,7 @@ class ActiveRun(object):
             "queue_id": self.queue_item.id,
             "id": self.log_id,
             "package": self.queue_item.package,
+            "codebase": self.queue_item.codebase,
             "campaign": self.queue_item.campaign,
             "estimated_duration": self.queue_item.estimated_duration.total_seconds()
             if self.queue_item.estimated_duration
@@ -1462,7 +1468,7 @@ class QueueProcessor(object):
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
-        packages_processed_count.inc()
+        run_count.inc()
 
     async def unclaim_run(self, log_id: str) -> None:
         active_run = self.active_runs.get(log_id)
@@ -1489,10 +1495,9 @@ class QueueProcessor(object):
 
     async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
-            package=item.package,
             campaign=item.campaign,
             result_code=result.code).inc()
-        build_duration.labels(package=item.package, campaign=item.campaign).observe(
+        build_duration.labels(campaign=item.campaign).observe(
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
@@ -1691,6 +1696,7 @@ async def handle_queue(request):
                 {
                     "queue_id": entry.id,
                     "package": entry.package,
+                    "codebase": entry.codebase,
                     "campaign": entry.campaign,
                     "context": entry.context,
                     "command": entry.command,

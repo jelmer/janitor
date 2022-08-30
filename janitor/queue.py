@@ -72,6 +72,10 @@ class QueueItem(object):
             change_set=row['change_set'],
         )
 
+    @property
+    def codebase(self):
+        return self.package
+
     def _tuple(self):
         return (
             self.id,
