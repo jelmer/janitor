@@ -67,7 +67,7 @@ async def handle_reprocess_logs(request):
 @html_template(env, "cupboard/workers.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_workers(request):
     async with request.app.database.acquire() as conn:
-        return {"worker": await conn.fetch('SELECT name, link FROM worker')}
+        return {"workers": await conn.fetch('SELECT name, link FROM worker')}
 
 
 @html_template(env, "cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
