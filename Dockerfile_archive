@@ -1,5 +1,6 @@
 FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9914
+# dpkg-dev is required for dpkg-scanpackages
 RUN apt update && apt install --no-install-recommends -y dpkg-dev rsync
 ENTRYPOINT ["python3", "-m", "janitor.debian.archive", "--port=9914", "--listen-address=0.0.0.0"]
