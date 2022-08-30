@@ -293,7 +293,10 @@ async def handle_schedule_control(request):
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
         if request['user']:
-            requestor = request['user']["email"]
+            try:
+                requestor = request['user']["email"]
+            except KeyError:
+                requestor = request['user']['name']
         else:
             requestor = "user from web UI"
         if run['branch_url'] is None:
