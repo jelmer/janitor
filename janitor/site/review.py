@@ -139,6 +139,8 @@ async def generate_review(
         except KeyError:
             return ""
         external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
+        if vcs_type is None:
+            return "no vcs known"
         try:
             with span.new_child('vcs-diff'):
                 diff = (await get_vcs_diff(
