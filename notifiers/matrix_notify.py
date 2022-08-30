@@ -27,44 +27,6 @@ import asyncio
 from nio import AsyncClient
 
 
-class JanitorNotifier(object):
-    def __init__(self, matrix_client, matrix_room, **kwargs):
-        self._matrix_client = matrix_client
-        self._matrix_room = matrix_room
-        super(JanitorNotifier, self).__init__(**kwargs)
-        self._runner_status = None
-
-    async def message(self, message):
-        await self._matrix_client.room_send(
-            room_id=self._matrix_room,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": message
-            }
-        )
-
-    async def set_runner_status(self, status):
-        self._runner_status = status
-
-    async def notify_merged(self, url, package, campaign, merged_by=None):
-        await self.message(
-            "Merge proposal %s (%s/%s) merged%s."
-            % (url, package, campaign,
-               ((" by %s" % merged_by) if merged_by else "")),
-        )
-
-    async def notify_pushed(self, url, package, campaign, result):
-        msg = "Pushed %s changes to %s (%s)" % (campaign, url, package)
-        if campaign == "lintian-fixes":
-            tags = set()
-            for entry in result["applied"]:
-                tags.update(entry["fixed_lintian_tags"])
-            if tags:
-                msg += ", fixing: %s." % (", ".join(tags))
-        await self.message(msg)
-
-
 async def main(args):
     if args.gcp_logging:
         import google.cloud.logging
@@ -75,9 +37,19 @@ async def main(args):
         logging.basicConfig(level=logging.INFO)
 
     matrix_client = AsyncClient(args.homeserver_url, args.user)
-    await matrix_client.login(args.password)
-    notifier = JanitorNotifier(
-        matrix_client=matrix_client, matrix_room=args.room)
+    logging.info('%s', await matrix_client.login(args.password))
+    await matrix_client.join(args.room)
+
+    async def message(msg):
+        await matrix_client.room_send(
+            room_id=args.room,
+            message_type="m.room.message",
+            content={
+                "msgtype": "m.text",
+                "body": msg
+            }
+        )
+
     app = web.Application()
     setup_metrics(app)
     app.router.add_get(
@@ -88,16 +60,16 @@ async def main(args):
         runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
+    asyncio.ensure_future(matrix_client.sync_forever(30000, full_state=True))
+
     async with JanitorClient(args.janitor_url) as janitor_client:
         async for msg in janitor_client._iter_notifications():
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
-                await notifier.notify_merged(
-                    msg[1]["url"], msg[1].get("package"),
-                    msg[1].get("campaign"),
-                    msg[1].get("merged_by")
+                await message(
+                    "Merge proposal %s (%s/%s) merged%s."
+                    % (msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
+                    ((" by %s" % msg[1]["merged_by"]) if msg[1].get("merged_by") else "")),
                 )
-            if msg[0] == "queue":
-                await notifier.set_runner_status(msg[1])
             if (
                 msg[0] == "publish"
                 and msg[1]["mode"] == "push"
@@ -105,10 +77,15 @@ async def main(args):
             ):
                 url = (msg[1]["main_branch_browse_url"]
                        or msg[1]["main_branch_url"])
-                await notifier.notify_pushed(
-                    url, msg[1]["package"], msg[1]["campaign"],
-                    msg[1]["result"]
-                )
+                msg = "Pushed %s changes to %s (%s)" % (
+                    msg[1].get("campaign"), url, msg[1]["package"])
+                if msg[1].get("campaign") == "lintian-fixes":
+                    tags = set()
+                    for entry in msg[1]["result"]["applied"]:
+                        tags.update(entry["fixed_lintian_tags"])
+                    if tags:
+                        msg += ", fixing: %s." % (", ".join(tags))
+                await message(msg)
 
 
 if __name__ == "__main__":
