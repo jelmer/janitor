@@ -66,9 +66,9 @@ async def main(args):
         async for msg in janitor_client._iter_notifications():
             if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await message(
-                    "Merge proposal %s (%s/%s) merged%s."
-                    % (msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
-                    ((" by %s" % msg[1]["merged_by"]) if msg[1].get("merged_by") else "")),
+                    "Merge proposal %s (%s/%s) merged%s." % (
+                        msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
+                        ((" by %s" % msg[1]["merged_by"]) if msg[1].get("merged_by") else "")),
                 )
             if (
                 msg[0] == "publish"
