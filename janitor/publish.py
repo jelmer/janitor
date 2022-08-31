@@ -1070,7 +1070,7 @@ async def publish_and_store(
                 unchanged_run_id,
                 await derived_branch_name(conn, campaign_config, run, role),
                 maintainer_email,
-                vcs_managers,
+                vcs_managers[run.vcs_type],
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,

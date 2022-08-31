@@ -3,7 +3,10 @@ DEPS="lintian-brush silver-platter breezy dulwich breezy-debian debmutate ognibu
 for NAME in $DEPS
 do
     pushd $NAME
-    if [ "$NAME" = "ognibuild" ]; then
+    if [ "$NAME" = "breezy" ] ; then
+	    git pull origin master
+	    git push origin HEAD:janitor
+    elif [ "$NAME" = "ognibuild" ]; then
         git pull origin main
     else
        git pull origin master
