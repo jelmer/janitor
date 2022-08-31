@@ -68,7 +68,7 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	subversion \
 	python3-pcre \
 	&& apt clean \
-	&& pip3 install google-cloud-logging && \
+	&& pip3 install google-cloud-logging \
 	&& apt-file update
 
 RUN rm -rf /usr/share/aclocal
