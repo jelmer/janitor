@@ -27,7 +27,7 @@ SELECT
   id,
   start_time,
   finish_time,
-  finish_time - start_time AS duration,
+  duration,
   description,
   package,
   result_code

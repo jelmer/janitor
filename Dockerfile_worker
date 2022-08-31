@@ -7,7 +7,7 @@ RUN apt -y update && apt -y --no-install-recommends install aptitude apt-file &&
 FROM debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y --no-install-recommends install cython3 rustc libpython3-dev cargo debcargo mypy-protobuf protobuf-compiler mypy python3-setuptools python3-setuptools-rust ca-certificates
+RUN apt -y update && apt -y --no-install-recommends install make cython3 rustc libpython3-dev cargo debcargo mypy-protobuf protobuf-compiler mypy python3-setuptools python3-setuptools-rust ca-certificates
 
 ADD . /code
 RUN make -C /code && make -C /code/breezy
