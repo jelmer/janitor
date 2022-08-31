@@ -3,32 +3,44 @@
 import argparse
 import os
 import pwd
+import shlex
 import shutil
 import subprocess
+import tempfile
 
 from iniparse import RawConfigParser
 from janitor.config import read_config, get_distribution
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
+def create_chroot(chroot_mode, distro, sbuild_path, suites, sbuild_arch, include=[],
                   eatmydata=True, make_sbuild_tarball=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
-           distro.archive_mirror_uri]
+           distro.archive_mirror_uri, '--chroot-mode=%s' % chroot_mode]
     cmd.append("--components=%s" % ','.join(distro.component))
     if eatmydata:
         cmd.append("--command-prefix=eatmydata")
         include = list(include) + ["eatmydata"]
     if include:
         cmd.append("--include=%s" % ','.join(include))
-    for suite in suites:
-        cmd.append("--alias=%s-%s-sbuild" % (suite, sbuild_arch))
+    if chroot_mode == 'schroot':
+        for suite in suites:
+            cmd.append("--alias=%s-%s-sbuild" % (suite, sbuild_arch))
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     for name in distro.extra:
         cmd.append("--extra-repository=deb %s %s %s" % (
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
+    print(shlex.join(cmd))
     subprocess.check_call(cmd)
+
+    if chroot_mode == 'unshare':
+        ext = os.path.splitext(make_sbuild_tarball)[1]
+        dirname, basename = os.path.split(make_sbuild_tarball)
+        for suite in suites:
+            os.symlink(
+                os.path.join(dirname, "%s-%s-sbuild%s" % (suite, sbuild_arch, ext)),
+                basename)
 
 
 def get_sbuild_architecture():
@@ -48,6 +60,10 @@ parser.add_argument(
 parser.add_argument(
     '--make-sbuild-tarball', action='store_true', help='Create sbuild tarball')
 parser.add_argument(
+    '--chroot-mode',
+    type=str, choices=["schroot", "unshare"],
+    help="Chroot mode to use")
+parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
 parser.add_argument("distribution", type=str, nargs="*")
@@ -66,10 +82,18 @@ for distribution in args.distribution:
         parser.error('no such distribution: %s' % distribution)
 
     sbuild_arch = get_sbuild_architecture()
+    if args.chroot_mode == 'unshare':
+        args.make_sbuild_tarball = True
+        if not args.base_directory:
+            args.base_directory = os.path.expanduser('~/.cache/sbuild')
     if not args.base_directory:
         parser.print_usage()
         parser.exit()
-    sbuild_path = os.path.join(args.base_directory, distro_config.chroot)
+
+    if args.make_sbuild_tarball:
+        sbuild_path = tempfile.mkdtemp()
+    else:
+        sbuild_path = os.path.join(args.base_directory, distro_config.chroot)
 
     if args.remove_old:
         for entry in os.scandir('/etc/schroot/chroot.d'):
@@ -96,14 +120,16 @@ for distribution in args.distribution:
         suites.append(campaign.debian_build.build_distribution)
     if args.make_sbuild_tarball:
         make_sbuild_tarball = os.path.join(
-            args.base_directory, distro_config.chroot + '.tar.gz')
+            args.base_directory, distro_config.chroot + '.tar.xz')
     else:
         make_sbuild_tarball = None
     create_chroot(
+        args.chroot_mode,
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
-        make_sbuild_tarball=make_sbuild_tarball)
+        make_sbuild_tarball=make_sbuild_tarball,
+        eatmydata=(args.chroot_mode == 'schroot'))
 
-    if args.user:
+    if args.user and args.chroot_mode == 'schroot':
         subprocess.check_call(
             ['schroot', '-c',
              '%s-%s-sbuild' % (distro_config.name, sbuild_arch),

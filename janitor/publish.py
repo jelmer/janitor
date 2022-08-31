@@ -1864,6 +1864,7 @@ async def check_existing_mp(
                     "package": package_name,
                     "merged_by": merged_by,
                     "merged_at": str(merged_at),
+                    # TODO(jelmer): Include "campaign"
                 }
             )
 
