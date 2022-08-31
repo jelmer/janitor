@@ -1,4 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS debversion;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
@@ -24,38 +23,7 @@ CREATE TABLE IF NOT EXISTS codebase (
 CREATE INDEX ON codebase (branch_url);
 CREATE INDEX ON codebase (name);
 
-CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TABLE IF NOT EXISTS package (
-   name debian_package_name not null primary key,
-   distribution distribution_name not null,
-
-   -- TODO(jelmer): Move these to codebase
-   codebase text references codebase(name),
-   vcs_type vcs_type,
-   branch_url text,
-   subpath text,
-   vcs_last_revision text,
-
-   maintainer_email text,
-   uploader_emails text[],
-   archive_version debversion,
-   vcs_url text,
-   vcs_browse text,
-   popcon_inst integer,
-   removed boolean default false,
-   vcswatch_status vcswatch_status,
-   vcswatch_version debversion,
-   in_base boolean,
-   origin text,
-   unique(distribution, name)
-);
-CREATE INDEX ON package (removed);
-CREATE INDEX ON package (vcs_url);
-CREATE INDEX ON package (branch_url);
-CREATE INDEX ON package (maintainer_email);
-CREATE INDEX ON package (uploader_emails);
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,
@@ -85,7 +53,7 @@ CREATE TABLE IF NOT EXISTS run (
    start_time timestamp,
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
-   -- duration interval generated always as (finish_time - start_time) stored,
+   duration interval generated always as (finish_time - start_time) stored,
    package text not null,
    result_code text not null,
    instigated_context text,
@@ -428,3 +396,39 @@ CREATE TABLE IF NOT EXISTS change_set (
   campaign campaign_name not null,
   state change_set_state default 'working' not null
 );
+
+
+-- TODO(jelmer): Move to Debian janitor
+CREATE EXTENSION IF NOT EXISTS debversion;
+CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
+CREATE TABLE IF NOT EXISTS package (
+   name debian_package_name not null primary key,
+   distribution distribution_name not null,
+
+   -- TODO(jelmer): Move these to codebase
+   codebase text references codebase(name),
+   vcs_type vcs_type,
+   branch_url text,
+   subpath text,
+   vcs_last_revision text,
+
+   maintainer_email text,
+   uploader_emails text[],
+   archive_version debversion,
+   vcs_url text,
+   vcs_browse text,
+   popcon_inst integer,
+   removed boolean default false,
+   vcswatch_status vcswatch_status,
+   vcswatch_version debversion,
+   in_base boolean,
+   origin text,
+   unique(distribution, name)
+);
+CREATE INDEX ON package (removed);
+CREATE INDEX ON package (vcs_url);
+CREATE INDEX ON package (branch_url);
+CREATE INDEX ON package (maintainer_email);
+CREATE INDEX ON package (uploader_emails);
+
