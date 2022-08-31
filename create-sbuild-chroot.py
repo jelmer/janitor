@@ -17,7 +17,7 @@ def create_chroot(chroot_mode, distro, sbuild_path, suites, sbuild_arch, include
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
            distro.archive_mirror_uri, '--chroot-mode=%s' % chroot_mode]
     cmd.append("--components=%s" % ','.join(distro.component))
-    if eatmydata and chroot_mode == 'schroot':
+    if eatmydata:
         cmd.append("--command-prefix=eatmydata")
         include = list(include) + ["eatmydata"]
     if include:
@@ -126,7 +126,8 @@ for distribution in args.distribution:
     create_chroot(
         args.chroot_mode,
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
-        make_sbuild_tarball=make_sbuild_tarball)
+        make_sbuild_tarball=make_sbuild_tarball,
+        eatmydata=(args.chroot_mode == 'schroot'))
 
     if args.user and args.chroot_mode == 'schroot':
         subprocess.check_call(
