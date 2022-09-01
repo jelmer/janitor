@@ -70,7 +70,7 @@ async def handle_workers(request):
         return {"workers": await conn.fetch(
             'select name, link, count(run.id) as run_count from worker '
             'left join run on run.worker = worker.name '
-            'group by worker.name')}
+            'group by worker.name, worker.link')}
 
 
 @html_template(env, "cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
