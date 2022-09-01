@@ -4,7 +4,8 @@ for NAME in $DEPS
 do
     pushd $NAME
     if [ "$NAME" = "breezy" ] ; then
-	    git pull origin master
+	    git pull origin janitor
+	    git pull --no-ff origin master
 	    git push origin HEAD:janitor
     elif [ "$NAME" = "ognibuild" ]; then
         git pull origin main
