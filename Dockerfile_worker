@@ -23,6 +23,7 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	python3-lz4 \
 	pristine-tar \
 	python3-iso8601 \
+	python3-backoff \
 	python3-tqdm \
 	python3-fastbencode \
 	python3-urllib3 \

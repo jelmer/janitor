@@ -43,6 +43,7 @@ from aiohttp import (
     ContentTypeError,
     web,
 )
+import backoff
 import yarl
 
 from jinja2 import Template
@@ -874,53 +875,46 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
         yield mpwriter
 
 
+@backoff.on_exception(
+        backoff.expo,
+        ClientConnectorError,
+        RetriableResultUploadFailure,
+        max_tries=5)
 async def upload_results(
     session: ClientSession,
     base_url: yarl.URL,
     run_id: str,
     metadata: Any,
     output_directory: Optional[str] = None,
-    retry_count=5,
 ) -> Any:
-    delay = 1.0
-    exit_e: Exception = AssertionError("no error raised")
-    for i in range(retry_count):
-        with bundle_results(metadata, output_directory) as mpwriter:
-            finish_url = base_url / "active-runs" / run_id / "finish"
-            try:
-                async with session.post(
-                    finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
-                ) as resp:
-                    if resp.status == 404:
-                        resp_json = await resp.json()
-                        raise ResultUploadFailure(resp_json["reason"])
-                    if resp.status in (500, 502, 503):
-                        raise RetriableResultUploadFailure(
-                            "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
-                        )
-                    if resp.status not in (201, 200):
-                        raise ResultUploadFailure(
-                            "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
-                        )
-                    result = await resp.json()
-                    if output_directory is not None:
-                        local_filenames = set(
-                            [entry.name for entry in os.scandir(output_directory)
-                             if entry.is_file()])
-                        runner_filenames = set(result.get('filenames', []))
-                        if local_filenames != runner_filenames:
-                            logging.warning(
-                                'Difference between local filenames and '
-                                'runner reported filenames: %r != %r',
-                                local_filenames, runner_filenames)
-                    return result
-            except (ClientConnectorError, RetriableResultUploadFailure) as e:
-                exit_e = e
-                logging.warning('Error connecting to %s: %s', finish_url, e)
-                await asyncio.sleep(delay)
-                delay *= 1.5
-    else:
-        raise exit_e
+    with bundle_results(metadata, output_directory) as mpwriter:
+        finish_url = base_url / "active-runs" / run_id / "finish"
+        async with session.post(
+            finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
+        ) as resp:
+            if resp.status == 404:
+                resp_json = await resp.json()
+                raise ResultUploadFailure(resp_json["reason"])
+            if resp.status in (500, 502, 503):
+                raise RetriableResultUploadFailure(
+                    "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
+                )
+            if resp.status not in (201, 200):
+                raise ResultUploadFailure(
+                    "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
+                )
+            result = await resp.json()
+            if output_directory is not None:
+                local_filenames = set(
+                    [entry.name for entry in os.scandir(output_directory)
+                     if entry.is_file()])
+                runner_filenames = set(result.get('filenames', []))
+                if local_filenames != runner_filenames:
+                    logging.warning(
+                        'Difference between local filenames and '
+                        'runner reported filenames: %r != %r',
+                        local_filenames, runner_filenames)
+            return result
 
 
 @contextmanager
@@ -945,6 +939,14 @@ def copy_output(output_log: str, tee: bool = False):
             newfd.close()
 
 
+@backoff.on_exception(
+        backoff.expo,
+        IncompleteRead,
+        UnexpectedHttpStatus,
+        InvalidHttpResponse,
+        ConnectionError,
+        ConnectionReset,
+        max_tries=5)
 def push_branch(
     source_branch: Branch,
     url: str,
@@ -1022,7 +1024,6 @@ def run_worker(
         List[Tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
     possible_transports: Optional[List[Transport]] = None,
     force_build: bool = False,
-    retry_count: int = 5,
     tee: bool = False,
 ):
     loop = asyncio.new_event_loop()
@@ -1308,7 +1309,6 @@ async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
         jenkins_build_url=None, prometheus: Optional[str] = None,
         package: Optional[str] = None, campaign: Optional[str] = None,
-        retry_count: int = 5,
         tee: bool = False):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
@@ -1389,7 +1389,6 @@ async def process_single_item(
                 resume_subworker_result=resume_result,
                 possible_transports=possible_transports,
                 force_build=force_build,
-                retry_count=retry_count,
                 tee=tee,
             ),
         )
@@ -1430,7 +1429,6 @@ async def process_single_item(
                 run_id=assignment["id"],
                 metadata=metadata,
                 output_directory=output_directory,
-                retry_count=retry_count,
             )
 
             logging.info('Results uploaded')
@@ -1490,8 +1488,6 @@ async def main(argv=None):
     parser.add_argument("--my-url", type=str, default=None)
     parser.add_argument(
         "--loop", action="store_true", help="Keep building until the queue is empty")
-    parser.add_argument(
-        "--retry-count", type=int, default=5, help="Number of retries when pushing")
     parser.add_argument(
         "--tee", action="store_true",
         help="Copy work output to standard out, in addition to worker.log")
@@ -1620,7 +1616,6 @@ async def main(argv=None):
                     workitem=app['workitem'],
                     jenkins_build_url=jenkins_build_url,
                     prometheus=args.prometheus,
-                    retry_count=args.retry_count,
                     package=args.package, campaign=args.campaign,
                     tee=args.tee)
             except AssignmentFailure as e:
