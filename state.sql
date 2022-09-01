@@ -26,14 +26,16 @@ CREATE INDEX ON codebase (name);
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   package text,
+   package text, -- TO BE REMOVED
    url text not null,
+   branch_url text,
    status merge_proposal_status NULL DEFAULT NULL,
    revision text,
    merged_by text,
    merged_at timestamp,
    foreign key (package) references package(name),
-   primary key(url)
+   primary key(url),
+   foreign key (branch_url) references codebase (branch_url)
 );
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
@@ -54,7 +56,7 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
    duration interval generated always as (finish_time - start_time) stored,
-   package text not null,
+   package text not null, -- TO BE REMOVED
    result_code text not null,
    instigated_context text,
    -- Some subworker-specific indication of what we attempted to do
@@ -97,6 +99,7 @@ CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    package text not null,
+   target_branch_url text,
    branch_name text,
    main_branch_revision text,
    revision text,
@@ -108,7 +111,8 @@ CREATE TABLE IF NOT EXISTS publish (
    requestor text,
    timestamp timestamp default now(),
    foreign key (package) references package(name),
-   foreign key (merge_proposal_url) references merge_proposal(url)
+   foreign key (merge_proposal_url) references merge_proposal(url),
+   foreign key (target_branch_url) references codebase(branch_url)
 );
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
@@ -119,6 +123,7 @@ CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
    package text not null,
+   branch_url text,
    suite suite_name not null,
    command text,
    priority bigint default 0 not null,
@@ -129,6 +134,7 @@ CREATE TABLE IF NOT EXISTS queue (
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
+   foreign key (branch_url) references codebase(branch_url)
 );
 CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));
 CREATE INDEX ON queue (change_set);
@@ -187,7 +193,7 @@ CREATE OR REPLACE VIEW last_runs AS
 -- The last effective run per package/suite; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
 -- changes.
-CREATE VIEW last_effective_runs AS
+CREATE OR REPLACE VIEW last_effective_runs AS
   SELECT DISTINCT ON (package, suite)
   *
   FROM
@@ -211,7 +217,7 @@ CREATE INDEX ON new_result_branch (absorbed);
 
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
-CREATE VIEW last_unabsorbed_runs AS
+CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   SELECT last_effective_runs.* FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
      -- Either the last run is unabsorbed because it failed:
      (result_code NOT in ('nothing-to-do', 'success')
@@ -331,6 +337,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.command AS command,
   run.start_time AS start_time,
   run.finish_time AS finish_time,
+  run.duration AS duration,
   run.description AS description,
   run.package AS package,
   run.result_code AS result_code,
