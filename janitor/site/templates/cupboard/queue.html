@@ -73,7 +73,7 @@ Rate limiting hosts:
     <td>{{ entry['campaign'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
-    <td>{% if entry.get('worker_link') %}<a href="{{ entry['worker_link'] }}">{{ entry['worker'] }}</a>{% else %}{{ entry['worker'] }}{% endif %}</td>
+    <td>{% if entry.get('worker_link') %}<a href="{{ entry['worker_link'] }}">{{ entry['worker'] or entry['worker_link'] }}</a>{% else %}{{ entry['worker'] }}{% endif %}</td>
     <td>{% for name in entry['logfilenames'] %}<a href="/api/active-runs/{{ entry['id'] }}/log/{{ name }}">{{ name }}</a>{% if not loop.last %} {% endif %}{%endfor %}</td>
     {% if 'keepalive_age' in entry %}
     <td>{{ format_duration(entry['keepalive_age']) }}</td>
