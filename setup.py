@@ -63,6 +63,7 @@ setup(
         "aioredis",
         "aiozipkin",
         "asyncpg",
+        "backoff",
         "klaus",
         "loggerhead",
         "lintian-brush",
