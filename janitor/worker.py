@@ -48,7 +48,7 @@ import yarl
 
 from jinja2 import Template
 
-from aiohttp_openmetrics import push_to_gateway
+from aiohttp_openmetrics import push_to_gateway, Counter
 
 import argparse
 import asyncio
@@ -111,6 +111,12 @@ from .vcs import (
     BranchOpenFailure,
     open_branch_ext,
 )
+
+
+push_branch_retries = Counter(
+    "push_branch_retries", "Number of branch push retries.")
+upload_result_retries = Counter(
+    "upload_result_retries", "Number of result upload retries.")
 
 
 DEFAULT_UPLOAD_TIMEOUT = ClientTimeout(30 * 60)
@@ -879,7 +885,8 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
         backoff.expo,
         ClientConnectorError,
         RetriableResultUploadFailure,
-        max_tries=5)
+        max_tries=5,
+        on_backoff=lambda m: upload_result_retries.inc())
 async def upload_results(
     session: ClientSession,
     base_url: yarl.URL,
@@ -946,7 +953,8 @@ def copy_output(output_log: str, tee: bool = False):
         InvalidHttpResponse,
         ConnectionError,
         ConnectionReset,
-        max_tries=5)
+        max_tries=5,
+        on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
     source_branch: Branch,
     url: str,
