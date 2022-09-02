@@ -883,8 +883,7 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
 
 @backoff.on_exception(
         backoff.expo,
-        ClientConnectorError,
-        RetriableResultUploadFailure,
+        (ClientConnectorError, RetriableResultUploadFailure),
         max_tries=5,
         on_backoff=lambda m: upload_result_retries.inc())
 async def upload_results(
@@ -948,11 +947,8 @@ def copy_output(output_log: str, tee: bool = False):
 
 @backoff.on_exception(
         backoff.expo,
-        IncompleteRead,
-        UnexpectedHttpStatus,
-        InvalidHttpResponse,
-        ConnectionError,
-        ConnectionReset,
+        (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
+         ConnectionError, ConnectionReset),
         max_tries=5,
         on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
