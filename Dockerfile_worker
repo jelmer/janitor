@@ -2,12 +2,12 @@ FROM debian:sid-slim AS m4
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt -y update && apt -y --no-install-recommends install aptitude apt-file && apt-file update && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
+RUN apt -y update && apt -y --no-install-recommends install auto-apt-proxy aptitude apt-file && apt-file update && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
 
 FROM debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y --no-install-recommends install make cython3 rustc libpython3-dev cargo debcargo mypy-protobuf protobuf-compiler mypy python3-setuptools python3-setuptools-rust ca-certificates
+RUN apt -y update && apt install -y auto-apt-proxy && apt -y --no-install-recommends install make cython3 rustc libpython3-dev cargo debcargo mypy-protobuf protobuf-compiler mypy python3-setuptools python3-setuptools-rust ca-certificates
 
 ADD . /code
 RUN make -C /code && make -C /code/breezy
@@ -16,7 +16,7 @@ FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install --no-install-recommends -y autoconf \
+RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
 	ssh \
 	python3 \
@@ -44,6 +44,7 @@ RUN apt update && apt install --no-install-recommends -y autoconf \
 	python3-requirement-parser \
 	python3-ruamel.yaml \
 	python3-pcre \
+	libpython3.10 \
 	quilt \
 	python3-psycopg2 \
 	sbuild \
