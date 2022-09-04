@@ -87,7 +87,6 @@ from . import (
 )
 from .compat import to_thread
 from .config import read_config, get_campaign_config, Campaign
-from .pubsub import Topic, pubsub_handler
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
@@ -305,7 +304,6 @@ async def publish_one(
     maintainer_email: str,
     vcs_manager: VcsManager,
     redis,
-    topic_merge_proposal,
     rate_limiter: RateLimiter,
     dry_run: bool,
     differ_url: str,
@@ -393,9 +391,9 @@ async def publish_one(
         description = response.get('description')
 
         if proposal_url and is_new:
-            topic_merge_proposal.publish(
-                {"url": proposal_url, "status": "open", "package": pkg}
-            )
+            await redis.publish_json(
+                'merge-proposal', 
+                {"url": proposal_url, "status": "open", "package": pkg})
 
             merge_proposal_count.labels(status="open").inc()
             rate_limiter.inc(maintainer_email)
@@ -412,7 +410,6 @@ async def consider_publish_run(
         conn, config, template_env_path,
         vcs_managers, rate_limiter, external_url, differ_url,
         redis,
-        topic_publish, topic_merge_proposal,
         run, maintainer_email,
         unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
@@ -481,8 +478,6 @@ async def consider_publish_run(
             maintainer_email,
             run.branch_url,
             redis,
-            topic_publish,
-            topic_merge_proposal,
             publish_mode,
             max_frequency_days,
             command,
@@ -567,8 +562,6 @@ async def publish_pending_ready(
     template_env_path,
     rate_limiter,
     vcs_managers,
-    topic_publish,
-    topic_merge_proposal,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -601,7 +594,6 @@ async def publish_pending_ready(
                 rate_limiter=rate_limiter,
                 external_url=external_url, differ_url=differ_url,
                 redis=redis,
-                topic_publish=topic_publish, topic_merge_proposal=topic_merge_proposal,
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
@@ -818,8 +810,6 @@ async def publish_from_policy(
     maintainer_email: str,
     main_branch_url: str,
     redis,
-    topic_publish,
-    topic_merge_proposal,
     mode: str,
     max_frequency_days: Optional[int],
     command: str,
@@ -934,7 +924,6 @@ async def publish_from_policy(
             maintainer_email=maintainer_email,
             vcs_manager=vcs_managers[run.vcs_type],
             redis=redis,
-            topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run,
             external_url=external_url,
             differ_url=differ_url,
@@ -1006,7 +995,6 @@ async def publish_from_policy(
         "publish_delay": (publish_delay.total_seconds() if publish_delay else None),
     }
 
-    topic_publish.publish(topic_entry)
     await redis.publish_json('publish', topic_entry)
 
     if code == "success":
@@ -1034,8 +1022,6 @@ async def publish_and_store(
     redis,
     campaign_config,
     template_env_path,
-    topic_publish,
-    topic_merge_proposal,
     publish_id,
     run,
     mode,
@@ -1087,7 +1073,6 @@ async def publish_and_store(
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
                 redis=redis,
-                topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
@@ -1120,7 +1105,6 @@ async def publish_and_store(
                 "result": run.result,
             }
 
-            topic_publish.publish(publish_entry)
             await redis.publish_json('publish', publish_entry)
             return
 
@@ -1164,7 +1148,6 @@ async def publish_and_store(
             "run_id": run.id,
         }
 
-        topic_publish.publish(publish_entry)
         await redis.publish_json('publish', publish_entry)
 
 
@@ -1299,8 +1282,6 @@ async def consider_request(request):
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
                 redis=request.app['redis'],
-                topic_publish=request.app['topic_publish'],
-                topic_merge_proposal=request.app['topic_merge_proposal'],
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
@@ -1378,8 +1359,6 @@ async def publish_request(request):
                 request.app['redis'],
                 get_campaign_config(request.app['config'], run.suite),
                 request.app['template_env_path'],
-                request.app['topic_publish'],
-                request.app['topic_merge_proposal'],
                 publish_id,
                 run,
                 mode,
@@ -1457,8 +1436,6 @@ async def run_web_server(
     db: asyncpg.pool.Pool,
     redis,
     config,
-    topic_merge_proposal: Topic,
-    topic_publish: Topic,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -1479,16 +1456,10 @@ async def run_web_server(
     app['differ_url'] = differ_url
     app['rate_limiter'] = rate_limiter
     app['modify_mp_limit'] = modify_mp_limit
-    app['topic_publish'] = topic_publish
-    app['topic_merge_proposal'] = topic_merge_proposal
     app['dry_run'] = dry_run
     app['push_limit'] = push_limit
     app['require_binary_diff'] = require_binary_diff
     setup_metrics(app)
-    app.router.add_get("/ws/publish", functools.partial(pubsub_handler, topic_publish))
-    app.router.add_get(
-        "/ws/merge-proposal", functools.partial(pubsub_handler, topic_merge_proposal)
-    )
     endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
@@ -1547,7 +1518,6 @@ async def check_mp_request(request):
                 request.app['template_env_path'],
                 mp,
                 status,
-                topic_merge_proposal=request.app['topic_merge_proposal'],
                 vcs_managers=request.app['vcs_managers'],
                 dry_run=("dry_run" in post),
                 external_url=request.app['external_url'],
@@ -1577,7 +1547,6 @@ async def scan_request(request):
                 request.app['template_env_path'],
                 request.app['rate_limiter'],
                 request.app['vcs_managers'],
-                request.app['topic_merge_proposal'],
                 dry_run=request.app['dry_run'],
                 differ_url=request.app['differ_url'],
                 external_url=request.app['external_url'],
@@ -1611,7 +1580,6 @@ async def refresh_proposal_status_request(request):
                     status,
                     vcs_managers=request.app['vcs_managers'],
                     rate_limiter=request.app['rate_limiter'],
-                    topic_merge_proposal=request.app['topic_merge_proposal'],
                     dry_run=request.app['dry_run'],
                     differ_url=request.app['differ_url'],
                     external_url=request.app['external_url'],
@@ -1637,10 +1605,8 @@ async def autopublish_request(request):
             request.app['rate_limiter'],
             request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
-            topic_publish=request.app['topic_publish'],
             external_url=request.app['external_url'],
             differ_url=request.app['differ_url'],
-            topic_merge_proposal=request.app['topic_merge_proposal'],
             reviewed_only=reviewed_only,
             push_limit=request.app['push_limit'],
             require_binary_diff=request.app['require_binary_diff'],
@@ -1659,8 +1625,6 @@ async def process_queue_loop(
     dry_run,
     vcs_managers,
     interval,
-    topic_merge_proposal,
-    topic_publish,
     external_url: str,
     differ_url: str,
     auto_publish: bool = True,
@@ -1679,7 +1643,6 @@ async def process_queue_loop(
                 template_env_path,
                 rate_limiter,
                 vcs_managers,
-                topic_merge_proposal,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -1696,8 +1659,6 @@ async def process_queue_loop(
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
-                topic_publish=topic_publish,
-                topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=reviewed_only,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
@@ -1836,7 +1797,6 @@ async def check_existing_mp(
     template_env_path,
     mp,
     status,
-    topic_merge_proposal,
     vcs_managers,
     rate_limiter,
     dry_run: bool,
@@ -1882,16 +1842,14 @@ async def check_existing_mp(
 
             # TODO(jelmer): Check if the change_set should be marked as published
 
-            topic_merge_proposal.publish(
-                {
-                    "url": mp.url,
-                    "status": status,
-                    "package": package_name,
-                    "merged_by": merged_by,
-                    "merged_at": str(merged_at),
-                    # TODO(jelmer): Include "campaign"
-                }
-            )
+            await redis.publish_json('merge-proposal', {
+                "url": mp.url,
+                "status": status,
+                "package": package_name,
+                "merged_by": merged_by,
+                "merged_at": str(merged_at),
+                # TODO(jelmer): Include "campaign"
+            })
 
     old_status: Optional[str]
     maintainer_email: Optional[str]
@@ -2257,7 +2215,6 @@ This merge proposal will be closed, since the branch has moved to %s.
                 require_binary_diff=False,
                 allow_create_proposal=True,
                 redis=redis,
-                topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
@@ -2404,7 +2361,6 @@ async def check_existing(
     template_env_path,
     rate_limiter,
     vcs_managers,
-    topic_merge_proposal,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -2446,7 +2402,6 @@ async def check_existing(
                 template_env_path,
                 mp,
                 status,
-                topic_merge_proposal=topic_merge_proposal,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
@@ -2564,8 +2519,6 @@ async def listen_to_runner(
     template_env_path,
     rate_limiter,
     vcs_managers,
-    topic_publish,
-    topic_merge_proposal,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -2587,8 +2540,6 @@ async def listen_to_runner(
                 maintainer_email,
                 branch_url,
                 redis,
-                topic_publish,
-                topic_merge_proposal,
                 mode,
                 max_frequency_days,
                 command,
@@ -2732,8 +2683,6 @@ async def main(argv=None):
         sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
         sys.exit(1)
 
-    topic_merge_proposal = Topic("merge-proposal")
-    topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
@@ -2752,8 +2701,6 @@ async def main(argv=None):
                 external_url=args.external_url,
                 differ_url=args.differ_url,
                 vcs_managers=vcs_managers,
-                topic_publish=topic_publish,
-                topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=args.reviewed_only,
                 require_binary_diff=args.require_binary_diff,
             )
@@ -2772,8 +2719,6 @@ async def main(argv=None):
                         dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
                         interval=args.interval,
-                        topic_merge_proposal=topic_merge_proposal,
-                        topic_publish=topic_publish,
                         auto_publish=not args.no_auto_publish,
                         external_url=args.external_url,
                         differ_url=args.differ_url,
@@ -2791,8 +2736,6 @@ async def main(argv=None):
                         rate_limiter,
                         vcs_managers,
                         db, redis, config,
-                        topic_merge_proposal,
-                        topic_publish,
                         dry_run=args.dry_run,
                         external_url=args.external_url,
                         differ_url=args.differ_url,
@@ -2812,8 +2755,6 @@ async def main(argv=None):
                             args.template_env_path,
                             rate_limiter,
                             vcs_managers,
-                            topic_publish,
-                            topic_merge_proposal,
                             dry_run=args.dry_run,
                             external_url=args.external_url,
                             differ_url=args.differ_url,

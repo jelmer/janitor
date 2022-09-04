@@ -98,7 +98,6 @@ from .logs import (
     FileSystemLogFileManager,
 )
 from .policy import read_policy, PolicyConfig
-from .pubsub import Topic, pubsub_handler
 from .queue import QueueItem, Queue
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (
@@ -1430,8 +1429,6 @@ class QueueProcessor(object):
         self.vcs_managers = vcs_managers
         self.public_vcs_managers = public_vcs_managers
         self.use_cached_only = use_cached_only
-        self.topic_queue = Topic("queue", repeat_last=True)
-        self.topic_result = Topic("result")
         self.committer = committer
         self.active_runs: Dict[str, ActiveRun] = {}
         self.backup_artifact_manager = backup_artifact_manager
@@ -1453,7 +1450,6 @@ class QueueProcessor(object):
 
     async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
-        self.topic_queue.publish(self.status_json())
         await self.redis.publish_json('queue', self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
@@ -1539,10 +1535,8 @@ class QueueProcessor(object):
                         "WHERE id = $1 AND state = 'working'",
                         result.change_set)
 
-        self.topic_result.publish(result.json())
         await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
-        self.topic_queue.publish(self.status_json())
         await self.redis.publish_json('queue', self.status_json())
         last_success_gauge.set_to_current_time()
 
@@ -2059,18 +2053,8 @@ async def create_app(queue_processor, tracer=None):
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     setup_metrics(app)
-    app.router.add_get(
-        "/ws/queue", functools.partial(pubsub_handler, queue_processor.topic_queue),
-        name="ws-queue"
-    )
-    app.router.add_get(
-        "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
-        name="ws-result"
-    )
     aiozipkin.setup(app, tracer, skip_routes=[
         app.router['metrics'],
-        app.router['ws-queue'],
-        app.router['ws-result'],
     ])
     return app
 
