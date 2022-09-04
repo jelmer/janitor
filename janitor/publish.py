@@ -305,6 +305,7 @@ async def publish_one(
     derived_branch_name: str,
     maintainer_email: str,
     vcs_manager: VcsManager,
+    redis,
     topic_merge_proposal,
     rate_limiter: RateLimiter,
     dry_run: bool,
@@ -411,6 +412,7 @@ async def publish_one(
 async def consider_publish_run(
         conn, config, template_env_path,
         vcs_managers, rate_limiter, external_url, differ_url,
+        redis,
         topic_publish, topic_merge_proposal,
         run, maintainer_email,
         unpublished_branches, command,
@@ -479,6 +481,7 @@ async def consider_publish_run(
             role,
             maintainer_email,
             run.branch_url,
+            redis,
             topic_publish,
             topic_merge_proposal,
             publish_mode,
@@ -560,6 +563,7 @@ SELECT * FROM publish_ready
 
 async def publish_pending_ready(
     db,
+    redis,
     config,
     template_env_path,
     rate_limiter,
@@ -597,6 +601,7 @@ async def publish_pending_ready(
                 vcs_managers=vcs_managers,
                 rate_limiter=rate_limiter,
                 external_url=external_url, differ_url=differ_url,
+                redis=redis,
                 topic_publish=topic_publish, topic_merge_proposal=topic_merge_proposal,
                 run=run,
                 command=command,
@@ -813,6 +818,7 @@ async def publish_from_policy(
     role: str,
     maintainer_email: str,
     main_branch_url: str,
+    redis,
     topic_publish,
     topic_merge_proposal,
     mode: str,
@@ -928,6 +934,7 @@ async def publish_from_policy(
             derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
             maintainer_email=maintainer_email,
             vcs_manager=vcs_managers[run.vcs_type],
+            redis=redis,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run,
             external_url=external_url,
@@ -1001,6 +1008,7 @@ async def publish_from_policy(
     }
 
     topic_publish.publish(topic_entry)
+    await redis.publish('publish', json.dumps(topic_entry))
 
     if code == "success":
         return mode
@@ -1024,6 +1032,7 @@ def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bo
 
 async def publish_and_store(
     db,
+    redis,
     campaign_config,
     template_env_path,
     topic_publish,
@@ -1078,6 +1087,7 @@ async def publish_and_store(
                 differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
+                redis=redis,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=run.result_tags,
@@ -1099,19 +1109,20 @@ async def publish_and_store(
                 publish_id=publish_id,
                 requestor=requestor,
             )
-            topic_publish.publish(
-                {
-                    "id": publish_id,
-                    "mode": e.mode,
-                    "result_code": e.code,
-                    "description": e.description,
-                    "package": run.package,
-                    "campaign": run.suite,
-                    "main_branch_url": run.branch_url,
-                    "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
-                    "result": run.result,
-                }
-            )
+            publish_entry = {
+                "id": publish_id,
+                "mode": e.mode,
+                "result_code": e.code,
+                "description": e.description,
+                "package": run.package,
+                "campaign": run.suite,
+                "main_branch_url": run.branch_url,
+                "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
+                "result": run.result,
+            }
+
+            topic_publish.publish(publish_entry)
+            await redis.publish('publish', json.dumps(publish_entry))
             return
 
         if mode == MODE_ATTEMPT_PUSH:
@@ -1138,23 +1149,24 @@ async def publish_and_store(
         publish_delay = datetime.utcnow() - run.finish_time
         publish_latency.observe(publish_delay.total_seconds())
 
-        topic_publish.publish(
-            {
-                "id": publish_id,
-                "package": run.package,
-                "campaign": run.suite,
-                "proposal_url": publish_result.proposal_url or None,
-                "mode": mode,
-                "main_branch_url": run.branch_url,
-                "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
-                "branch_name": publish_result.branch_name,
-                "result_code": "success",
-                "result": run.result,
-                "role": role,
-                "publish_delay": publish_delay.total_seconds(),
-                "run_id": run.id,
-            }
-        )
+        publish_entry = {
+            "id": publish_id,
+            "package": run.package,
+            "campaign": run.suite,
+            "proposal_url": publish_result.proposal_url or None,
+            "mode": mode,
+            "main_branch_url": run.branch_url,
+            "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
+            "branch_name": publish_result.branch_name,
+            "result_code": "success",
+            "result": run.result,
+            "role": role,
+            "publish_delay": publish_delay.total_seconds(),
+            "run_id": run.id,
+        }
+
+        topic_publish.publish(publish_entry)
+        await redis.publish('publish', json.dumps(publish_entry))
 
 
 def create_background_task(fn, title):
@@ -1287,6 +1299,7 @@ async def consider_request(request):
                 rate_limiter=request.app['rate_limiter'],
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
+                redis=request.app['redis'],
                 topic_publish=request.app['topic_publish'],
                 topic_merge_proposal=request.app['topic_merge_proposal'],
                 run=run,
@@ -1363,6 +1376,7 @@ async def publish_request(request):
         create_background_task(
             publish_and_store(
                 request.app['db'],
+                request.app['redis'],
                 get_campaign_config(request.app['config'], run.suite),
                 request.app['template_env_path'],
                 request.app['topic_publish'],
@@ -1442,6 +1456,7 @@ async def run_web_server(
     rate_limiter: RateLimiter,
     vcs_managers: Dict[str, VcsManager],
     db: asyncpg.pool.Pool,
+    redis,
     config,
     topic_merge_proposal: Topic,
     topic_publish: Topic,
@@ -1459,6 +1474,7 @@ async def run_web_server(
     app['template_env_path'] = template_env_path
     app['vcs_managers'] = vcs_managers
     app['db'] = db
+    app['redis'] = redis
     app['config'] = config
     app['external_url'] = external_url
     app['differ_url'] = differ_url
@@ -1527,6 +1543,7 @@ async def check_mp_request(request):
         try:
             modified = await check_existing_mp(
                 conn,
+                request.app['redis'],
                 request.app['config'],
                 request.app['template_env_path'],
                 mp,
@@ -1556,6 +1573,7 @@ async def scan_request(request):
         async with request.app['db'].acquire() as conn:
             await check_existing(
                 conn,
+                request.app['redis'],
                 request.app['config'],
                 request.app['template_env_path'],
                 request.app['rate_limiter'],
@@ -1587,6 +1605,7 @@ async def refresh_proposal_status_request(request):
             try:
                 await check_existing_mp(
                     conn,
+                    request.app['redis'],
                     request.app['config'],
                     request.app['template_env_path'],
                     mp,
@@ -1613,6 +1632,7 @@ async def autopublish_request(request):
     async def autopublish():
         await publish_pending_ready(
             request.app['db'],
+            request.app['redis'],
             request.app['config'],
             request.app['template_env_path'],
             request.app['rate_limiter'],
@@ -1633,6 +1653,7 @@ async def autopublish_request(request):
 
 async def process_queue_loop(
     db,
+    redis,
     config,
     template_env_path,
     rate_limiter,
@@ -1654,6 +1675,7 @@ async def process_queue_loop(
         async with db.acquire() as conn:
             await check_existing(
                 conn,
+                redis,
                 config,
                 template_env_path,
                 rate_limiter,
@@ -1667,6 +1689,7 @@ async def process_queue_loop(
         if auto_publish:
             await publish_pending_ready(
                 db,
+                redis,
                 config,
                 template_env_path,
                 rate_limiter,
@@ -1809,6 +1832,7 @@ WHERE
 
 async def check_existing_mp(
     conn,
+    redis,
     config,
     template_env_path,
     mp,
@@ -2233,6 +2257,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 differ_url=differ_url,
                 require_binary_diff=False,
                 allow_create_proposal=True,
+                redis=redis,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=last_run.result_tags,
@@ -2375,6 +2400,7 @@ def iter_all_mps(
 
 async def check_existing(
     conn,
+    redis,
     config,
     template_env_path,
     rate_limiter,
@@ -2416,6 +2442,7 @@ async def check_existing(
         try:
             modified = await check_existing_mp(
                 conn,
+                redis,
                 config,
                 template_env_path,
                 mp,
@@ -2533,6 +2560,7 @@ ORDER BY start_time DESC
 
 async def listen_to_runner(
     db,
+    redis,
     config,
     template_env_path,
     rate_limiter,
@@ -2560,6 +2588,7 @@ async def listen_to_runner(
                 role,
                 maintainer_email,
                 branch_url,
+                redis,
                 topic_publish,
                 topic_merge_proposal,
                 mode,
@@ -2725,6 +2754,7 @@ async def main(argv=None):
         if args.once:
             await publish_pending_ready(
                 db,
+                redis,
                 config,
                 args.template_env_path,
                 rate_limiter,
@@ -2745,6 +2775,7 @@ async def main(argv=None):
                 loop.create_task(
                     process_queue_loop(
                         db,
+                        redis,
                         config,
                         args.template_env_path,
                         rate_limiter,
@@ -2769,7 +2800,7 @@ async def main(argv=None):
                         args.template_env_path,
                         rate_limiter,
                         vcs_managers,
-                        db, config,
+                        db, redis, config,
                         topic_merge_proposal,
                         topic_publish,
                         dry_run=args.dry_run,
@@ -2786,6 +2817,7 @@ async def main(argv=None):
                     loop.create_task(
                         listen_to_runner(
                             db,
+                            redis,
                             config,
                             args.template_env_path,
                             rate_limiter,
