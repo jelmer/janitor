@@ -536,7 +536,7 @@ class WorkerResult(object):
     branches: Optional[List[
         Tuple[Optional[str], Optional[str],
               Optional[bytes], Optional[bytes]]]] = None
-    tags: Optional[Tuple[List[str, Optional[bytes]]]] = None
+    tags: Optional[List[Tuple[str, Optional[bytes]]]] = None
     remotes = None
     details: Any = None
     builder_result = None
