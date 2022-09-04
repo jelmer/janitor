@@ -19,3 +19,4 @@ janitor_openid:
 janitor_local_proposal_template_path:
 janitor_bzr_location:
 janitor_git_location:
+janitor_redis_location: redis://localhost
