@@ -663,6 +663,9 @@ def process_package(
             'retry_after': e.retry_after,
         })
 
+    metadata["branch_url"] = main_branch.user_url
+    metadata["vcs_type"} = get_branch_vcs_type(main_branch)
+
     if cached_branch_url:
         try:
             cached_branch = open_branch(
@@ -1008,6 +1011,14 @@ def _push_error_to_worker_failure(e):
     return e
 
 
+def get_branch_vcs_type(branch):
+    vcs = getattr(branch.repository, "vcs", None)
+    if vcs:
+        return vcs.abbreviation
+    else:
+        return "bzr"
+
+
 def run_worker(
     branch_url: str,
     run_id: str,
@@ -1058,11 +1069,7 @@ def run_worker(
                 enable_tag_pushing(ws.local_tree.branch)
                 logging.info("Pushing result branch to %r", target_repo_url)
 
-                vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
-                if vcs:
-                    actual_vcs_type = vcs.abbreviation
-                else:
-                    actual_vcs_type = "bzr"
+                actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
 
                 if vcs_type is None:
                     vcs_type = actual_vcs_type
@@ -1351,6 +1358,8 @@ async def process_single_item(
         metadata = {
             "queue_id": assignment["queue_id"],
             "start_time": start_time.isoformat()
+            "branch_url": branch_url,
+            "vcs_type": vcs_type,
         }
         workitem['metadata'] = metadata
 
