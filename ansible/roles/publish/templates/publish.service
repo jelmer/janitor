@@ -10,7 +10,6 @@ WorkingDirectory={{ janitor_code_path }}
 EnvironmentFile={{ janitor_home }}/env
 ExecStart=python3 -m janitor.publish \
 	{% if janitor_publish_require_binary_diff %}--require-binary-diff {% endif %} \
-	--runner-url={{ janitor_runner_url }} \
 	--listen-address={{ janitor_publish_address }} \
 	--port={{ janitor_publish_port }} \
 	--config={{ janitor_conf_path }} \

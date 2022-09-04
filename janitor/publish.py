@@ -88,7 +88,7 @@ from . import (
 )
 from .compat import to_thread
 from .config import read_config, get_campaign_config, Campaign
-from .pubsub import Topic, pubsub_handler, pubsub_reader
+from .pubsub import Topic, pubsub_handler
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
@@ -1008,7 +1008,7 @@ async def publish_from_policy(
     }
 
     topic_publish.publish(topic_entry)
-    await redis.publish('publish', json.dumps(topic_entry))
+    await redis.publish_json('publish', topic_entry)
 
     if code == "success":
         return mode
@@ -1122,7 +1122,7 @@ async def publish_and_store(
             }
 
             topic_publish.publish(publish_entry)
-            await redis.publish('publish', json.dumps(publish_entry))
+            await redis.publish_json('publish', publish_entry)
             return
 
         if mode == MODE_ATTEMPT_PUSH:
@@ -1166,7 +1166,7 @@ async def publish_and_store(
         }
 
         topic_publish.publish(publish_entry)
-        await redis.publish('publish', json.dumps(publish_entry))
+        await redis.publish_json('publish', publish_entry)
 
 
 def create_background_task(fn, title):
@@ -2565,7 +2565,6 @@ async def listen_to_runner(
     template_env_path,
     rate_limiter,
     vcs_managers,
-    runner_url,
     topic_publish,
     topic_merge_proposal,
     dry_run: bool,
@@ -2602,33 +2601,31 @@ async def listen_to_runner(
                 requestor="runner",
             )
 
-    from aiohttp.client import ClientSession
-
-    url = URL(runner_url) / "ws/result"
-    async with ClientSession() as session:
-        async for result in pubsub_reader(session, url):
-            if result["code"] != "success":
+    channel = await redis.subscribe('result')
+    while (await channel.wait_message()):
+        result = channel.get_json()
+        if result["code"] != "success":
+            continue
+        async with db.acquire() as conn:
+            # TODO(jelmer): Fold these into a single query ?
+            package = await conn.fetchrow(
+                'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
+                result["package"])
+            if package is None:
+                logging.warning('Package %s not in database?', result['package'])
                 continue
-            async with db.acquire() as conn:
-                # TODO(jelmer): Fold these into a single query ?
-                package = await conn.fetchrow(
-                    'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
-                    result["package"])
-                if package is None:
-                    logging.warning('Package %s not in database?', result['package'])
-                    continue
-                run = await get_run(conn, result["log_id"])
-                if run.suite != "unchanged":
+            run = await get_run(conn, result["log_id"])
+            if run.suite != "unchanged":
+                await process_run(
+                    conn, run, package['maintainer_email'],
+                    package['branch_url'])
+            else:
+                for run in await iter_control_matching_runs(
+                        conn, main_branch_revision=run.revision,
+                        package=run.package):
                     await process_run(
                         conn, run, package['maintainer_email'],
                         package['branch_url'])
-                else:
-                    for run in await iter_control_matching_runs(
-                            conn, main_branch_revision=run.revision,
-                            package=run.package):
-                        await process_run(
-                            conn, run, package['maintainer_email'],
-                            package['branch_url'])
 
 
 async def main(argv=None):
@@ -2675,9 +2672,6 @@ async def main(argv=None):
         type=str,
         default="janitor.conf",
         help="Path to load configuration from.",
-    )
-    parser.add_argument(
-        "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
     parser.add_argument(
         "--slowstart", action="store_true", help="Use slow start rate limiter."
@@ -2745,11 +2739,8 @@ async def main(argv=None):
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     async with AsyncExitStack() as stack:
-        if config.redis_location:
-            redis = await aioredis.create_redis(config.redis_location)
-            stack.callback(redis.close)
-        else:
-            redis = None
+        redis = await aioredis.create_redis(config.redis_location)
+        stack.callback(redis.close)
 
         if args.once:
             await publish_pending_ready(
@@ -2812,7 +2803,7 @@ async def main(argv=None):
                     )
                 ),
             ]
-            if args.runner_url and not args.reviewed_only and not args.no_auto_publish:
+            if not args.reviewed_only and not args.no_auto_publish:
                 tasks.append(
                     loop.create_task(
                         listen_to_runner(
@@ -2822,7 +2813,6 @@ async def main(argv=None):
                             args.template_env_path,
                             rate_limiter,
                             vcs_managers,
-                            args.runner_url,
                             topic_publish,
                             topic_merge_proposal,
                             dry_run=args.dry_run,

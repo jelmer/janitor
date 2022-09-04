@@ -39,7 +39,7 @@ import gpg
 from .. import state
 from ..config import get_campaign_config
 from ..logs import get_log_manager
-from ..pubsub import pubsub_reader, pubsub_handler, Topic
+from ..pubsub import pubsub_handler, Topic
 from ..vcs import get_vcs_managers_from_config
 
 from . import (
@@ -369,41 +369,38 @@ async def create_app(
         app.on_cleanup.append(cleanup_gpg)
 
     async def connect_redis(app):
-        if config.redis_location:
-            app['redis'] = await aioredis.create_redis(config.redis_location)
-        else:
-            app['redis'] = None
+        app['redis'] = await aioredis.create_redis(config.redis_location)
 
     async def disconnect_redis(app):
-        if app['redis']:
-            app['redis'].close()
+        app['redis'].close()
 
     app.on_startup.append(connect_redis)
     app.on_cleanup.append(disconnect_redis)
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
-            url = URL(app['publisher_url']) / "ws/publish"
-            async for msg in pubsub_reader(app.http_client_session, url):
-                app.topic_notifications.publish(["publish", msg])
+            ch = app['redis'].subscribe('publish')
+            while (await ch.wait_message()):
+                app.topic_notifications.publish(["publish", await ch.get_json()])
 
         async def listen_to_publisher_mp(app):
-            url = URL(app['publisher_url']) / "ws/merge-proposal"
-            async for msg in pubsub_reader(app.http_client_session, url):
-                app.topic_notifications.publish(["merge-proposal", msg])
+            ch = app['redis'].subscribe('merge-proposal')
+            while (await ch.wait_message()):
+                app.topic_notifications.publish(["merge-proposal", await ch.get_json()])
 
         app['runner_status'] = None
 
         async def listen_to_queue(app):
-            url = URL(app['runner_url']) / "ws/queue"
-            async for msg in pubsub_reader(app.http_client_session, url):
+            ch = app['redis'].subscribe('queue')
+            while (await ch.wait_message()):
+                msg = await ch.get_json()
                 app['runner_status'] = msg
                 app.topic_notifications.publish(["queue", msg])
 
         async def listen_to_result(app):
-            url = URL(app['runner_url']) / "ws/result"
-            async for msg in pubsub_reader(app.http_client_session, url):
-                app.topic_notifications.publish(["result", msg])
+            ch = app['redis'].subscribe('result')
+            while (await ch.wait_message()):
+                app.topic_notifications.publish(["result", await ch.get_json()])
 
         for cb, title in [
             (listen_to_publisher_publish, 'publisher publish listening'),

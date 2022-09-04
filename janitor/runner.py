@@ -1467,7 +1467,7 @@ class QueueProcessor(object):
     async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
-        await self.redis.publish('queue', json.dumps(self.status_json()))
+        await self.redis.publish_json('queue', self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
@@ -1553,10 +1553,10 @@ class QueueProcessor(object):
                         result.change_set)
 
         self.topic_result.publish(result.json())
-        await self.redis.publish('result', json.dumps(result.json()))
+        await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
         self.topic_queue.publish(self.status_json())
-        await self.redis.publish('queue', json.dumps(self.status_json()))
+        await self.redis.publish_json('queue', self.status_json())
         last_success_gauge.set_to_current_time()
 
     def rate_limited(self, host, retry_after):
@@ -2203,11 +2203,8 @@ async def main(argv=None):
             backup_artifact_manager = None
             backup_logfile_manager = None
         db = await state.create_pool(config.database_location)
-        if config.redis_location:
-            redis = await aioredis.create_redis(config.redis_location)
-            stack.callback(redis.close)
-        else:
-            redis = None
+        redis = await aioredis.create_redis(config.redis_location)
+        stack.callback(redis.close)
         with open(args.policy, 'r') as f:
             policy = read_policy(f)
         queue_processor = QueueProcessor(

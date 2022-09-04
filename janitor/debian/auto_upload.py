@@ -34,7 +34,6 @@ from aiohttp_openmetrics import (
 
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config
-from ..pubsub import pubsub_reader
 
 
 logger = logging.getLogger('janitor.debian.auto_upload')
@@ -153,15 +152,17 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
 
 
 async def listen_to_runner(
-        runner_url, artifact_manager, dput_host,
+        redis_location, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
-    from aiohttp.client import ClientSession
+    import aioredis
+    redis = await aioredis.create_redis(redis_location)
 
-    url = URL(runner_url) / "ws/result"
-    async with ClientSession() as session:
-        async for result in pubsub_reader(session, url):
+    ch = await redis.subscribe('result')
+    try:
+        while (await ch.wait_message()):
+            result = await ch.get_json()
             if result["code"] != "success":
                 continue
             if not result['target']:
@@ -172,6 +173,8 @@ async def listen_to_runner(
                 await upload_build_result(
                     result['log_id'], artifact_manager, dput_host,
                     debsign_keyid=debsign_keyid, source_only=source_only)
+    finally:
+        redis.close()
 
 
 async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None, source_only=False):
@@ -203,9 +206,6 @@ async def main(argv=None):
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--dput-host", type=str, help="dput host to upload to.")
     parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
-    parser.add_argument(
-        "--runner-url", type=str, default=None, help="URL to reach runner at."
-    )
     parser.add_argument(
         "--backfill",
         action="store_true", help="Upload previously built packages.")
@@ -245,7 +245,7 @@ async def main(argv=None):
 
     runner_task = loop.create_task(
         listen_to_runner(
-            args.runner_url, artifact_manager, args.dput_host,
+            config.redis_location, artifact_manager, args.dput_host,
             args.debsign_keyid, args.distribution,
             source_only=args.source_only))
     runner_task.add_done_callback(log_result)
