@@ -46,7 +46,6 @@ from .diffoscope import (
     format_diffoscope,
     DiffoscopeError,
 )
-from .pubsub import pubsub_reader
 from aiohttp_openmetrics import setup_metrics
 
 
@@ -591,12 +590,14 @@ async def run_web_server(app, listen_addr, port, tracer):
         await runner.cleanup()
 
 
-async def listen_to_runner(runner_url, app):
-    from aiohttp.client import ClientSession
+async def listen_to_runner(redis_location, app):
+    import aioredis
 
-    url = URL(runner_url) / "ws/result"
-    async with ClientSession() as session:
-        async for result in pubsub_reader(session, url):
+    redis = await aioredis.create_redis(redis_location)
+    channel = await redis.subscribe('result')
+    try:
+        while (await channel.wait_message()):
+            result = await channel.get_json()
             if result["code"] != "success":
                 continue
             async with app['pool'].acquire() as conn:
@@ -640,7 +641,9 @@ async def listen_to_runner(runner_url, app):
                         "Error precaching diff for %s: %r", result["log_id"], e
                     )
                     traceback.print_exc()
-
+    finally:
+        redis.close()
+    
 
 async def main(argv=None):
     import argparse
@@ -654,9 +657,6 @@ async def main(argv=None):
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
     parser.add_argument("--cache-path", type=str, default=None, help="Path to cache.")
-    parser.add_argument(
-        "--runner-url", type=str, default=None, help="URL to reach runner at."
-    )
     parser.add_argument(
         '--task-memory-limit', help='Task memory limit (in MB)',
         type=int, default=1500)
@@ -704,8 +704,7 @@ async def main(argv=None):
 
         tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
 
-        if args.runner_url:
-            tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
+        tasks.append(loop.create_task(listen_to_runner(config.redis_location, app)))
 
         await asyncio.gather(*tasks)
 

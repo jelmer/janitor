@@ -50,7 +50,6 @@ from aiohttp_openmetrics import (
 from .. import state
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config, get_distribution, Campaign, get_campaign_config
-from ..pubsub import pubsub_reader
 
 
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -329,18 +328,21 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     await site.start()
 
 
-async def listen_to_runner(runner_url, generator_manager):
-    from aiohttp.client import ClientSession
-    import urllib.parse
+async def listen_to_runner(redis_location, generator_manager):
+    import aioredis
+    redis = await aioredis.create_redis(redis_location)
 
-    url = urllib.parse.urljoin(runner_url, "ws/result")
-    async with ClientSession() as session:
-        async for result in pubsub_reader(session, url):
+    ch = await redis.subscribe('result')
+    try:
+        while (await ch.wait_message()):
+            result = await ch.get_json()
             if result["code"] != "success":
                 continue
             campaign = get_campaign_config(generator_manager.config, result["campaign"])
             if campaign:
                 generator_manager.trigger(campaign)
+    finally:
+        redis.close()
 
 
 async def publish_suite(
@@ -453,9 +455,6 @@ async def main(argv=None):
     parser.add_argument("--cache-directory", type=str, help="Cache directory")
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-    parser.add_argument(
-        "--runner-url", type=str, default=None, help="URL to reach runner at."
-    )
 
     args = parser.parse_args()
     if not args.dists_directory:
@@ -516,11 +515,10 @@ async def main(argv=None):
         loop.create_task(loop_publish(config, generator_manager)),
     ]
 
-    if args.runner_url:
-        tasks.append(loop.create_task(
-            listen_to_runner(
-                args.runner_url,
-                generator_manager)))
+    tasks.append(loop.create_task(
+        listen_to_runner(
+            config.redis_location,
+            generator_manager)))
 
     async with package_info_provider:
         await asyncio.gather(*tasks)
