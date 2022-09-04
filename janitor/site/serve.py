@@ -26,6 +26,7 @@ import shutil
 import tempfile
 import time
 
+import aioredis
 import aiozipkin
 from aiohttp.web_urldispatcher import (
     URL,
@@ -366,6 +367,19 @@ async def create_app(
             shutil.rmtree(gpg_home)
 
         app.on_cleanup.append(cleanup_gpg)
+
+    async def connect_redis(app):
+        if config.redis_location:
+            app['redis'] = await aioredis.create_redis(config.redis_location)
+        else:
+            app['redis'] = None
+
+    async def disconnect_redis(app):
+        if app['redis']:
+            app['redis'].close()
+
+    app.on_startup.append(connect_redis)
+    app.on_cleanup.append(disconnect_redis)
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
