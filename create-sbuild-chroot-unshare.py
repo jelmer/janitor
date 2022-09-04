@@ -4,11 +4,8 @@ import argparse
 import os
 import pwd
 import shlex
-import shutil
 import subprocess
-import tempfile
 
-from iniparse import RawConfigParser
 from janitor.config import read_config, get_distribution
 
 

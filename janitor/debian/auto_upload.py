@@ -25,8 +25,6 @@ from typing import Optional, List
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
-from yarl import URL
-
 from aiohttp_openmetrics import (
     Counter,
     setup_metrics,
