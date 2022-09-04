@@ -1467,6 +1467,7 @@ class QueueProcessor(object):
     def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
+        await self.redis.publish('queue', json.dumps(self.status_json()))
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
@@ -1552,8 +1553,10 @@ class QueueProcessor(object):
                         result.change_set)
 
         self.topic_result.publish(result.json())
+        await self.redis.publish('result', json.dumps(result.json()))
         await self.unclaim_run(result.log_id)
         self.topic_queue.publish(self.status_json())
+        await self.redis.publish('queue', json.dumps(self.status_json()))
         last_success_gauge.set_to_current_time()
 
     def rate_limited(self, host, retry_after):
