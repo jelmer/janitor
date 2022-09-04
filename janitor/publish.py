@@ -17,6 +17,7 @@
 
 """Publishing VCS changes."""
 
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import asyncio
@@ -30,6 +31,7 @@ from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterato
 import uuid
 
 
+import aioredis
 import aiozipkin
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
@@ -2713,85 +2715,92 @@ async def main(argv=None):
     loop = asyncio.get_event_loop()
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
-    if args.once:
-        await publish_pending_ready(
-            db,
-            config,
-            args.template_env_path,
-            rate_limiter,
-            dry_run=args.dry_run,
-            external_url=args.external_url,
-            differ_url=args.differ_url,
-            vcs_managers=vcs_managers,
-            topic_publish=topic_publish,
-            topic_merge_proposal=topic_merge_proposal,
-            reviewed_only=args.reviewed_only,
-            require_binary_diff=args.require_binary_diff,
-        )
-        if args.prometheus:
-            await push_to_gateway(
-                args.prometheus, job="janitor.publish", registry=REGISTRY)
-    else:
-        tasks = [
-            loop.create_task(
-                process_queue_loop(
-                    db,
-                    config,
-                    args.template_env_path,
-                    rate_limiter,
-                    dry_run=args.dry_run,
-                    vcs_managers=vcs_managers,
-                    interval=args.interval,
-                    topic_merge_proposal=topic_merge_proposal,
-                    topic_publish=topic_publish,
-                    auto_publish=not args.no_auto_publish,
-                    external_url=args.external_url,
-                    differ_url=args.differ_url,
-                    reviewed_only=args.reviewed_only,
-                    push_limit=args.push_limit,
-                    modify_mp_limit=args.modify_mp_limit,
-                    require_binary_diff=args.require_binary_diff,
-                )
-            ),
-            loop.create_task(
-                run_web_server(
-                    args.listen_address,
-                    args.port,
-                    args.template_env_path,
-                    rate_limiter,
-                    vcs_managers,
-                    db, config,
-                    topic_merge_proposal,
-                    topic_publish,
-                    dry_run=args.dry_run,
-                    external_url=args.external_url,
-                    differ_url=args.differ_url,
-                    require_binary_diff=args.require_binary_diff,
-                    modify_mp_limit=args.modify_mp_limit,
-                    push_limit=args.push_limit,
-                )
-            ),
-        ]
-        if args.runner_url and not args.reviewed_only and not args.no_auto_publish:
-            tasks.append(
+    async with AsyncExitStack() as stack:
+        if config.redis_location:
+            redis = await aioredis.create_redis(config.redis_location)
+            stack.callback(redis.close)
+        else:
+            redis = None
+
+        if args.once:
+            await publish_pending_ready(
+                db,
+                config,
+                args.template_env_path,
+                rate_limiter,
+                dry_run=args.dry_run,
+                external_url=args.external_url,
+                differ_url=args.differ_url,
+                vcs_managers=vcs_managers,
+                topic_publish=topic_publish,
+                topic_merge_proposal=topic_merge_proposal,
+                reviewed_only=args.reviewed_only,
+                require_binary_diff=args.require_binary_diff,
+            )
+            if args.prometheus:
+                await push_to_gateway(
+                    args.prometheus, job="janitor.publish", registry=REGISTRY)
+        else:
+            tasks = [
                 loop.create_task(
-                    listen_to_runner(
+                    process_queue_loop(
                         db,
                         config,
                         args.template_env_path,
                         rate_limiter,
+                        dry_run=args.dry_run,
+                        vcs_managers=vcs_managers,
+                        interval=args.interval,
+                        topic_merge_proposal=topic_merge_proposal,
+                        topic_publish=topic_publish,
+                        auto_publish=not args.no_auto_publish,
+                        external_url=args.external_url,
+                        differ_url=args.differ_url,
+                        reviewed_only=args.reviewed_only,
+                        push_limit=args.push_limit,
+                        modify_mp_limit=args.modify_mp_limit,
+                        require_binary_diff=args.require_binary_diff,
+                    )
+                ),
+                loop.create_task(
+                    run_web_server(
+                        args.listen_address,
+                        args.port,
+                        args.template_env_path,
+                        rate_limiter,
                         vcs_managers,
-                        args.runner_url,
-                        topic_publish,
+                        db, config,
                         topic_merge_proposal,
+                        topic_publish,
                         dry_run=args.dry_run,
                         external_url=args.external_url,
                         differ_url=args.differ_url,
                         require_binary_diff=args.require_binary_diff,
+                        modify_mp_limit=args.modify_mp_limit,
+                        push_limit=args.push_limit,
+                    )
+                ),
+            ]
+            if args.runner_url and not args.reviewed_only and not args.no_auto_publish:
+                tasks.append(
+                    loop.create_task(
+                        listen_to_runner(
+                            db,
+                            config,
+                            args.template_env_path,
+                            rate_limiter,
+                            vcs_managers,
+                            args.runner_url,
+                            topic_publish,
+                            topic_merge_proposal,
+                            dry_run=args.dry_run,
+                            external_url=args.external_url,
+                            differ_url=args.differ_url,
+                            require_binary_diff=args.require_binary_diff,
+                        )
                     )
                 )
-            )
-        await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
