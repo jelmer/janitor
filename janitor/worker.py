@@ -179,7 +179,7 @@ class WorkerResult(object):
         tags: Optional[Dict[str, bytes]],
         target: str,
         target_details: Optional[Any],
-        subworker: Any,
+        codemod: Any,
         refreshed: bool,
         target_branch_url: Optional[str] = None
     ) -> None:
@@ -190,13 +190,13 @@ class WorkerResult(object):
         self.target = target
         self.target_details = target_details
         self.target_branch_url = target_branch_url
-        self.subworker = subworker
+        self.codemod = codemod
         self.refreshed = refreshed
 
     def json(self):
         return {
             "value": self.value,
-            "subworker": self.subworker,
+            "codemod": self.codemod,
             "description": self.description,
             "branches": [
                 (f, n, br.decode("utf-8") if br else None,
@@ -640,7 +640,7 @@ def process_package(
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
     extra_resume_branches: Optional[List[Tuple[str, str]]] = None,
-    resume_subworker_result: Any = None,
+    resume_codemod_result: Any = None,
     force_build: bool = False
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     metadata["command"] = command
@@ -751,19 +751,19 @@ def process_package(
             "main_branch_revision"
         ] = ws.main_branch.last_revision().decode('utf-8')
 
-        metadata["subworker"] = {}
+        metadata["codemod"] = {}
         metadata["remotes"] = {}
 
         if ws.resume_branch is None:
             # If the resume branch was discarded for whatever reason, then we
-            # don't need to pass in the subworker result.
-            resume_subworker_result = None
+            # don't need to pass in the codemod result.
+            resume_codemod_result = None
 
         metadata["remotes"]["origin"] = {"url": main_branch.user_url}
 
         try:
             changer_result = build_target.make_changes(
-                ws.local_tree, subpath, resume_subworker_result, output_directory,
+                ws.local_tree, subpath, resume_codemod_result, output_directory,
             )
             if not ws.any_branch_changes():
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
@@ -818,7 +818,7 @@ def process_package(
             branches=result_branches,
             tags=(dict(changer_result.tags) if changer_result.tags else {}),
             target=build_target.name, target_details=build_target_details,
-            subworker=changer_result.context,
+            codemod=changer_result.context,
             target_branch_url=changer_result.target_branch_url,
             refreshed=ws.refreshed
         )
@@ -1034,7 +1034,7 @@ def run_worker(
     target: str,
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
-    resume_subworker_result=None,
+    resume_codemod_result=None,
     resume_branches: Optional[
         List[Tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
     possible_transports: Optional[List[Transport]] = None,
@@ -1057,7 +1057,7 @@ def run_worker(
                 target=target,
                 resume_branch_url=resume_branch_url,
                 cached_branch_url=cached_branch_url,
-                resume_subworker_result=resume_subworker_result,
+                resume_codemod_result=resume_codemod_result,
                 extra_resume_branches=[
                     (role, name) for (role, name, base, revision) in resume_branches
                 ]
@@ -1399,7 +1399,7 @@ async def process_single_item(
                 resume_branch_url=resume_branch_url,
                 resume_branches=resume_branches,
                 cached_branch_url=cached_branch_url,
-                resume_subworker_result=resume_result,
+                resume_codemod_result=resume_result,
                 possible_transports=possible_transports,
                 force_build=force_build,
                 tee=tee,

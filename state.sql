@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS run (
    package text not null, -- TO BE REMOVED
    result_code text not null,
    instigated_context text,
-   -- Some subworker-specific indication of what we attempted to do
+   -- Some codemod-specific indication of what we attempted to do
    context text,
    -- Main branch revision
    main_branch_revision text,
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS queue (
    command text,
    priority bigint default 0 not null,
    foreign key (package) references package(name),
-   -- Some subworker-specific indication of what we are expecting to do.
+   -- Some codemod-specific indication of what we are expecting to do.
    context text,
    estimated_duration interval,
    refresh boolean default false,
