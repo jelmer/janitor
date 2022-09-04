@@ -37,7 +37,6 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
 import asyncpg.pool
-from yarl import URL
 
 from aiohttp_apispec import (
     docs,

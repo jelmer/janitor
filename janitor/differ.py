@@ -27,7 +27,6 @@ from tempfile import TemporaryDirectory
 import traceback
 
 from aiohttp import web
-from yarl import URL
 
 from . import state
 from .artifacts import ArtifactsMissing, get_artifact_manager

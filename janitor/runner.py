@@ -528,7 +528,7 @@ class WorkerResult(object):
     """The result from a worker."""
 
     code: str
-    description: Optional[str],
+    description: Optional[str]
     context: Any
     subworker: Optional[Any] = None
     main_branch_revision: Optional[bytes] = None
@@ -537,13 +537,13 @@ class WorkerResult(object):
     branches: Optional[List[
         Optional[str], Optional[str], Optional[bytes], Optional[bytes]]] = None
     tags: Optional[List[str, Optional[bytes]]] = None
-    remotes=None
+    remotes = None
     details: Any = None
     builder_result = None
     start_time: Optional[datetime] = None
     finish_time: Optional[datetime] = None
     queue_id: Optional[int] = None
-    worker_name: Optional[str]= None
+    worker_name: Optional[str] = None
     followup_actions: Optional[List[Any]] = None
     refreshed: bool = False
     target_branch_url: Optional[str] = None

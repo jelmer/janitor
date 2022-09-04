@@ -664,7 +664,7 @@ def process_package(
         })
 
     metadata["branch_url"] = main_branch.user_url
-    metadata["vcs_type"} = get_branch_vcs_type(main_branch)
+    metadata["vcs_type"] = get_branch_vcs_type(main_branch)
 
     if cached_branch_url:
         try:
@@ -885,10 +885,10 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
 
 
 @backoff.on_exception(
-        backoff.expo,
-        (ClientConnectorError, RetriableResultUploadFailure),
-        max_tries=5,
-        on_backoff=lambda m: upload_result_retries.inc())
+    backoff.expo,
+    (ClientConnectorError, RetriableResultUploadFailure),
+    max_tries=5,
+    on_backoff=lambda m: upload_result_retries.inc())
 async def upload_results(
     session: ClientSession,
     base_url: yarl.URL,
@@ -949,11 +949,11 @@ def copy_output(output_log: str, tee: bool = False):
 
 
 @backoff.on_exception(
-        backoff.expo,
-        (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
-         ConnectionError, ConnectionReset),
-        max_tries=5,
-        on_backoff=lambda m: push_branch_retries.inc())
+    backoff.expo,
+    (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
+     ConnectionError, ConnectionReset),
+    max_tries=5,
+    on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
     source_branch: Branch,
     url: str,
@@ -1357,7 +1357,7 @@ async def process_single_item(
         start_time = datetime.utcnow()
         metadata = {
             "queue_id": assignment["queue_id"],
-            "start_time": start_time.isoformat()
+            "start_time": start_time.isoformat(),
             "branch_url": branch_url,
             "vcs_type": vcs_type,
         }
