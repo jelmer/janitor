@@ -130,7 +130,7 @@ def publish(
     campaign: str,
     pkg: str,
     commit_message_template: Optional[str],
-    subworker_result: Any,
+    codemod_result: Any,
     mode: str,
     role: str,
     forge: Forge,
@@ -160,8 +160,8 @@ def publish(
             'markdownify_debdiff': markdownify_debdiff,
             'role': role,
         }
-        if subworker_result:
-            vs.update(subworker_result)
+        if codemod_result:
+            vs.update(codemod_result)
         if debdiff:
             vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
@@ -173,7 +173,7 @@ def publish(
     def get_proposal_commit_message(existing_proposal):
         if commit_message_template:
             template = Template(commit_message_template)
-            return template.render(subworker_result or {})
+            return template.render(codemod_result or {})
         else:
             return None
 
@@ -314,7 +314,7 @@ def publish_one(
     campaign: str,
     pkg: str,
     command,
-    subworker_result,
+    codemod_result,
     target_branch_url: str,
     mode: str,
     role: str,
@@ -471,7 +471,7 @@ def publish_one(
                 campaign,
                 pkg,
                 commit_message_template,
-                subworker_result,
+                codemod_result,
                 mode,
                 role,
                 forge,
@@ -536,7 +536,7 @@ if __name__ == "__main__":
             pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],
             command=request["command"],
-            subworker_result=request["subworker_result"],
+            codemod_result=request["codemod_result"],
             target_branch_url=request["target_branch_url"],
             mode=request["mode"],
             role=request["role"],

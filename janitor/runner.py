@@ -421,7 +421,7 @@ class JanitorResult(object):
             if self.description is None:
                 self.description = worker_result.description
             self.main_branch_revision = worker_result.main_branch_revision
-            self.subworker_result = worker_result.subworker
+            self.codemod_result = worker_result.codemod
             self.revision = worker_result.revision
             self.value = worker_result.value
             self.builder_result = worker_result.builder_result
@@ -445,7 +445,7 @@ class JanitorResult(object):
             self.context = None
             self.main_branch_revision = None
             self.revision = None
-            self.subworker_result = None
+            self.codemod_result = None
             self.value = None
             self.builder_result = None
             self.branches = None
@@ -478,7 +478,7 @@ class JanitorResult(object):
                 "details": self.builder_result.json(),
             } if self.builder_result else {}),
             "logfilenames": self.logfilenames,
-            "subworker": self.subworker_result,
+            "codemod": self.codemod_result,
             "value": self.value,
             "remotes": self.remotes,
             "resume": {"run_id": self.resume_from} if self.resume_from else None,
@@ -529,7 +529,7 @@ class WorkerResult(object):
     code: str
     description: Optional[str]
     context: Any
-    subworker: Optional[Any] = None
+    codemod: Optional[Any] = None
     main_branch_revision: Optional[bytes] = None
     revision: Optional[bytes] = None
     value: Optional[int] = None
@@ -588,7 +588,7 @@ class WorkerResult(object):
             code=worker_result.get("code", "missing-result-code"),
             description=worker_result.get("description"),
             context=worker_result.get("context"),
-            subworker=worker_result.get("subworker"),
+            codemod=worker_result.get("codemod"),
             main_branch_revision=main_branch_revision,
             revision=revision,
             value=int(worker_result["value"]) if "value" in worker_result else None,
@@ -1140,7 +1140,7 @@ async def store_run(
     main_branch_revision: Optional[bytes],
     result_code: str,
     revision: Optional[bytes],
-    subworker_result: Optional[Any],
+    codemod_result: Optional[Any],
     campaign: str,
     logfilenames: List[str],
     value: Optional[int],
@@ -1169,7 +1169,7 @@ async def store_run(
       main_branch_revision: Main branch revision
       result_code: Result code (as constant string)
       revision: Resulting revision id
-      subworker_result: Subworker-specific result data (as json)
+      codemod_result: Subworker-specific result data (as json)
       campaign: The campaign
       logfilenames: List of log filenames
       value: Value of the run (as int)
@@ -1207,7 +1207,7 @@ async def store_run(
         context,
         main_branch_revision.decode("utf-8") if main_branch_revision else None,
         revision.decode("utf-8") if revision else None,
-        subworker_result if subworker_result else None,
+        codemod_result if codemod_result else None,
         campaign,
         vcs_type,
         branch_url,
@@ -1506,7 +1506,7 @@ class QueueProcessor(object):
                         main_branch_revision=result.main_branch_revision,
                         result_code=result.code,
                         revision=result.revision,
-                        subworker_result=result.subworker_result,
+                        codemod_result=result.codemod_result,
                         campaign=item.campaign,
                         logfilenames=result.logfilenames,
                         value=result.value,
