@@ -1,7 +1,7 @@
 FROM debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler mypy-protobuf python3-setuptools python3-setuptools-rust ca-certificates
+RUN apt -y update && apt -y install auto-apt-proxy && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler mypy-protobuf python3-setuptools python3-setuptools-rust ca-certificates
 
 ADD . /code
 RUN make -C /code && make -C /code/breezy
@@ -10,7 +10,7 @@ FROM debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN echo "deb http://incoming.debian.org/debian-buildd/ buildd-unstable main" >> /etc/apt/sources.list.d/incoming.list && apt -y update && apt -y upgrade
+RUN echo "deb http://incoming.debian.org/debian-buildd/ buildd-unstable main" >> /etc/apt/sources.list.d/incoming.list && apt -y update && apt -y install auto-apt-proxy && apt -y upgrade
 RUN apt satisfy --no-install-recommends -y \
 	python3 \
 	python3-fastbencode \
