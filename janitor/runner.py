@@ -17,6 +17,7 @@
 
 import asyncio
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
@@ -437,6 +438,8 @@ class JanitorResult(object):
             else:
                 self.resume_from = resume_from
             self.target_branch_url = worker_result.target_branch_url
+            self.branch_url = worker_result.branch_url
+            self.vcs_type = worker_result.vcs_type
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -520,50 +523,30 @@ def committer_env(committer):
     return env
 
 
+@dataclass
 class WorkerResult(object):
     """The result from a worker."""
 
-    def __init__(
-        self,
-        code: str,
-        description: Optional[str],
-        context=None,
-        subworker=None,
-        main_branch_revision=None,
-        revision=None,
-        value=None,
-        branches=None,
-        tags=None,
-        remotes=None,
-        details=None,
-        builder_result=None,
-        start_time=None,
-        finish_time=None,
-        queue_id=None,
-        worker_name=None,
-        followup_actions=None,
-        refreshed=False,
-        target_branch_url=None,
-    ):
-        self.code = code
-        self.description = description
-        self.context = context
-        self.subworker = subworker
-        self.main_branch_revision = main_branch_revision
-        self.revision = revision
-        self.value = value
-        self.branches = branches
-        self.tags = tags
-        self.remotes = remotes
-        self.details = details
-        self.builder_result = builder_result
-        self.start_time = start_time
-        self.finish_time = finish_time
-        self.queue_id = queue_id
-        self.worker_name = worker_name
-        self.followup_actions = followup_actions
-        self.refreshed = refreshed
-        self.target_branch_url = target_branch_url
+    code: str
+    description: Optional[str],
+    context: Any
+    subworker: Optional[Any] = None
+    main_branch_revision: Optional[bytes] = None
+    revision: Optional[bytes] = None
+    value: Optional[int] = None
+    branches: Optional[List[
+        Optional[str], Optional[str], Optional[bytes], Optional[bytes]]] = None
+    tags: Optional[List[str, Optional[bytes]]] = None
+    remotes=None
+    details: Any = None
+    builder_result = None
+    start_time: Optional[datetime] = None
+    finish_time: Optional[datetime] = None
+    queue_id: Optional[int] = None
+    worker_name: Optional[str]= None
+    followup_actions: Optional[List[Any]] = None
+    refreshed: bool = False
+    target_branch_url: Optional[str] = None
 
     @classmethod
     def from_file(cls, path):
@@ -608,7 +591,7 @@ class WorkerResult(object):
             subworker=worker_result.get("subworker"),
             main_branch_revision=main_branch_revision,
             revision=revision,
-            value=worker_result.get("value"),
+            value=int(worker_result["value"]) if "value" in worker_result else None,
             branches=branches,
             tags=tags,
             remotes=worker_result.get("remotes"),
@@ -618,11 +601,15 @@ class WorkerResult(object):
             if 'start_time' in worker_result else None,
             finish_time=datetime.fromisoformat(worker_result['finish_time'])
             if 'finish_time' in worker_result else None,
-            queue_id=worker_result.get("queue_id"),
+            queue_id=(
+                int(worker_result["queue_id"])
+                if "queue_id" in worker_result else None),
             worker_name=worker_result.get("worker_name"),
             followup_actions=worker_result.get("followup_actions"),
             refreshed=worker_result.get("refreshed", False),
             target_branch_url=worker_result.get("target_branch_url", None),
+            branch_url=worker_result.get("branch_url"),
+            vcs_type=worker_result.get("vcs_type"),
         )
 
 
@@ -1142,8 +1129,8 @@ async def store_run(
     conn: asyncpg.Connection,
     run_id: str,
     name: str,
-    vcs_type: str,
-    vcs_url: str,
+    vcs_type: Optional[str],
+    branch_url: Optional[str],
     start_time: datetime,
     finish_time: datetime,
     command: str,
@@ -1223,7 +1210,7 @@ async def store_run(
         subworker_result if subworker_result else None,
         campaign,
         vcs_type,
-        vcs_url,
+        branch_url,
         logfilenames,
         value,
         worker_name,
@@ -1512,7 +1499,7 @@ class QueueProcessor(object):
                         run_id=result.log_id,
                         name=item.package,
                         vcs_type=result.vcs_type,
-                        vcs_url=result.branch_url,
+                        branch_url=result.branch_url,
                         start_time=result.start_time,
                         finish_time=result.finish_time,
                         command=item.command,
