@@ -1464,7 +1464,7 @@ class QueueProcessor(object):
                 for (host, ts) in self.rate_limit_hosts.items()}
         }
 
-    def register_run(self, active_run: ActiveRun) -> None:
+    async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
         await self.redis.publish('queue', json.dumps(self.status_json()))
@@ -1760,7 +1760,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     worker_link=worker_link
                 )
 
-            queue_processor.register_run(active_run)
+            await queue_processor.register_run(active_run)
 
             if vcs_info["branch_url"] is None:
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
