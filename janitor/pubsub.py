@@ -32,10 +32,6 @@ subscription_count = Gauge(
     "subscriptions", "Subscriptions per topic", labelnames=("topic",)
 )
 
-subscription_active = Gauge(
-    "subscription_active", "Whether url is reachable", labelnames=("url",)
-)
-
 
 class Subscription(object):
     """A pubsub subscription."""
@@ -85,34 +81,3 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
                 raise TypeError("not jsonable: %r" % msg)
 
     return ws
-
-
-async def pubsub_reader(
-    session: aiohttp.ClientSession, url: URL, reconnect_interval: Optional[int] = 10
-) -> AsyncIterator[Any]:
-    subscription_active.labels(url=url).set(0)
-    while True:
-        try:
-            ws = await session.ws_connect(url)
-        except (ClientResponseError, ClientConnectorError) as e:
-            logging.warning("Unable to connect: %s" % e)
-        else:
-            subscription_active.labels(url=url).set(1)
-            logging.info("Subscribed to %s", url)
-            while True:
-                msg = await ws.receive()
-
-                if msg.type == aiohttp.WSMsgType.text:
-                    yield msg.json()
-                elif msg.type == aiohttp.WSMsgType.closed:
-                    break
-                elif msg.type == aiohttp.WSMsgType.error:
-                    logging.warning("Error on websocket: %s", ws.exception())
-                    break
-                else:
-                    logging.warning("Ignoring ws message type %r", msg.type)
-        subscription_active.labels(url=url).set(0)
-        if reconnect_interval is None:
-            return
-        logging.info("Waiting %d seconds before reconnecting...", reconnect_interval)
-        await asyncio.sleep(reconnect_interval)
