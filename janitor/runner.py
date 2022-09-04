@@ -534,8 +534,9 @@ class WorkerResult(object):
     revision: Optional[bytes] = None
     value: Optional[int] = None
     branches: Optional[List[
-        Optional[str], Optional[str], Optional[bytes], Optional[bytes]]] = None
-    tags: Optional[List[str, Optional[bytes]]] = None
+        Tuple[Optional[str], Optional[str],
+              Optional[bytes], Optional[bytes]]]] = None
+    tags: Optional[Tuple[List[str, Optional[bytes]]]] = None
     remotes = None
     details: Any = None
     builder_result = None

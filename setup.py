@@ -60,7 +60,7 @@ setup(
     install_requires=[
         "aiohttp",
         "aiohttp_jinja2",
-        "aioredis",
+        "aioredis<2.0",
         "aiozipkin",
         "asyncpg",
         "backoff",
