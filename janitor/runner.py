@@ -537,9 +537,9 @@ class WorkerResult(object):
         Tuple[Optional[str], Optional[str],
               Optional[bytes], Optional[bytes]]]] = None
     tags: Optional[List[Tuple[str, Optional[bytes]]]] = None
-    remotes = None
+    remotes: Optional[Dict[str, Dict[str, Any]]] = None
     details: Any = None
-    builder_result = None
+    builder_result: Any = None
     start_time: Optional[datetime] = None
     finish_time: Optional[datetime] = None
     queue_id: Optional[int] = None
@@ -547,6 +547,8 @@ class WorkerResult(object):
     followup_actions: Optional[List[Any]] = None
     refreshed: bool = False
     target_branch_url: Optional[str] = None
+    branch_url: Optional[str] = None
+    vcs_type: Optional[str] = None
 
     @classmethod
     def from_file(cls, path):

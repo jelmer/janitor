@@ -2551,7 +2551,7 @@ async def listen_to_runner(
                 requestor="runner",
             )
 
-    channel = await redis.subscribe('result')
+    channel = (await redis.subscribe('result'))[0]
     while (await channel.wait_message()):
         result = channel.get_json()
         if result["code"] != "success":

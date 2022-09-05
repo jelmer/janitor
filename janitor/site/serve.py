@@ -379,26 +379,26 @@ async def create_app(
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
-            ch = app['redis'].subscribe('publish')
+            ch = (await app['redis'].subscribe('publish'))[0]
             while (await ch.wait_message()):
                 app.topic_notifications.publish(["publish", await ch.get_json()])
 
         async def listen_to_publisher_mp(app):
-            ch = app['redis'].subscribe('merge-proposal')
+            ch = (await app['redis'].subscribe('merge-proposal'))[0]
             while (await ch.wait_message()):
                 app.topic_notifications.publish(["merge-proposal", await ch.get_json()])
 
         app['runner_status'] = None
 
         async def listen_to_queue(app):
-            ch = app['redis'].subscribe('queue')
+            ch = (await app['redis'].subscribe('queue'))[0]
             while (await ch.wait_message()):
                 msg = await ch.get_json()
                 app['runner_status'] = msg
                 app.topic_notifications.publish(["queue", msg])
 
         async def listen_to_result(app):
-            ch = app['redis'].subscribe('result')
+            ch = (await app['redis'].subscribe('result'))[0]
             while (await ch.wait_message()):
                 app.topic_notifications.publish(["result", await ch.get_json()])
 
