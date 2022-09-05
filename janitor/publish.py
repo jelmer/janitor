@@ -448,6 +448,11 @@ async def consider_publish_run(
                 run.suite,
             )
             return {}
+    if run.branch_url is None:
+        logger.warning(
+            '%s: considering publishing for branch without branch url',
+            run.id)
+        return {}
     actual_modes = {}
     for (
         role,
@@ -2440,8 +2445,8 @@ async def check_existing(
             modified_mps += 1
             if modify_limit and modified_mps > modify_limit:
                 logger.warning(
-                    "Already modified %d merge proposals, " "waiting with the rest.",
-                    modified_mps,
+                    "Already modified %d merge proposals, "
+                    "waiting with the rest.", modified_mps,
                 )
                 check_only = True
 
