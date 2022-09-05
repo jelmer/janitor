@@ -183,24 +183,19 @@ CREATE TABLE IF NOT EXISTS worker (
 
 -- The last run per package/suite
 CREATE OR REPLACE VIEW last_runs AS
-  SELECT DISTINCT ON (package, suite)
-  *
-  FROM
-  run
-  WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
-  ORDER BY package, suite, change_set, start_time DESC;
+  SELECT
+  run.*
+  FROM last_run
+  INNER JOIN run on last_run.last_run_id = run.id;
 
 -- The last effective run per package/suite; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
 -- changes.
 CREATE OR REPLACE VIEW last_effective_runs AS
-  SELECT DISTINCT ON (package, suite)
-  *
-  FROM
-  run
-  WHERE
-    result_code != 'nothing-new-to-do'
-  ORDER BY package, suite, change_set, start_time DESC;
+  SELECT
+  run.*
+  FROM last_run
+  INNER JOIN run on last_run.last_effective_run_id = run.id;
 
 CREATE TABLE new_result_branch (
  run_id text not null references run (id),
@@ -215,20 +210,108 @@ CREATE TABLE new_result_branch (
 CREATE INDEX ON new_result_branch (revision);
 CREATE INDEX ON new_result_branch (absorbed);
 
+CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
+  RETURNS void
+  LANGUAGE PLPGSQL
+  AS $$
+    DECLARE row RECORD;
+    BEGIN
+
+    SELECT package, suite INTO row FROM run WHERE id = run_id;
+    IF FOUND THEN
+	perform refresh_last_run(row.package, row.suite);
+    end if;
+    END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS $$
+    BEGIN
+
+    if (TG_OP = 'INSERT' AND NEW.absorbed) then
+	perform refresh_new_result_branch(new.run_id);
+    end if;
+
+    if (TG_OP = 'UPDATE' AND NEW.absorbed AND NOT OLD.absorbed) then
+	perform refresh_new_result_branch(new.run_id);
+    end if;
+
+    IF (TG_OP = 'DELETE' AND old.absorbed) THEN
+	perform refresh_new_result_branch(old.run_id);
+    END IF;
+
+    RETURN NEW;
+    END;
+$$;
+
+CREATE TRIGGER new_result_branch_refresh_last_run
+  AFTER INSERT OR UPDATE OR DELETE
+  ON new_result_branch
+  FOR EACH ROW
+  EXECUTE PROCEDURE new_result_branch_trigger_refresh_last_run();
+
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
 CREATE OR REPLACE VIEW last_unabsorbed_runs AS
-  SELECT last_effective_runs.* FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
-     -- Either the last run is unabsorbed because it failed:
-     (result_code NOT in ('nothing-to-do', 'success')
-     -- or because one of the result branch revisions has not been absorbed yet
-      OR exists (SELECT from new_result_branch WHERE run_id = id and not absorbed)) AND NOT package.removed;
+  SELECT
+     run.*
+  FROM last_run
+  INNER JOIN run on last_run.last_unabsorbed_run_id = run.id;
 
-CREATE OR REPLACE FUNCTION notify_run_update()
-  RETURNS TRIGGER AS $$
-   DECLARE
-    row RECORD;
+    
+CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
+  RETURNS void
+  LANGUAGE PLPGSQL
+  AS $$
+    DECLARE last_run RECORD;
+    DECLARE last_effective_run RECORD;
+    DECLARE last_unabsorbed_run RECORD;
+    DECLARE last_run_id TEXT;
+    DECLARE last_effective_run_id TEXT;
+    DECLARE last_unabsorbed_run_id TEXT;
+    DECLARE row_count int;
 
+    BEGIN
+    SELECT id, result_code INTO last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+
+    IF (last_run.result_code = 'nothing-new-to-do') THEN
+        SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' ORDER BY start_time DESC limit 1;
+    ELSE
+        last_effective_run := last_run;
+    END IF;
+
+    IF (last_effective_run.result_code = 'nothing-to-do') THEN
+	 last_unabsorbed_run := NULL;
+    ELSIF (last_effective_run.result_code != 'success') THEN
+	last_unabsorbed_run := last_effective_run;
+    ELSE
+       SELECT COUNT(*) INTO row_count from new_result_branch WHERE run_id = last_effective_run.id and not absorbed;
+       if row_count > 0 then
+	   last_unabsorbed_run := last_effective_run;
+       else
+	   last_unabsorbed_run := null;
+       end if;
+     END IF;
+
+    if last_run is not null then last_run_id := last_run.id; end if;
+    if last_effective_run is not null then last_effective_run_id = last_effective_run.id; end if;
+    if last_unabsorbed_run is not null then last_unabsorbed_run_id := last_unabsorbed_run.id; end if;
+
+    INSERT INTO last_run (package, campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id) VALUES (
+	    _package, _campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id)
+         ON CONFLICT (package, campaign) DO UPDATE SET last_run_id = EXCLUDED.last_run_id, last_effective_run_id = EXCLUDED.last_effective_run_id, last_unabsorbed_run_id = EXCLUDED.last_unabsorbed_run_id;
+    END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION run_trigger_refresh_last_run()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS $$
+    DECLARE row RECORD;
     BEGIN
     -- Checking the Operation Type
     IF (TG_OP = 'DELETE') THEN
@@ -237,26 +320,18 @@ CREATE OR REPLACE FUNCTION notify_run_update()
       row = NEW;
     END IF;
 
-    -- Calling the pg_notify for my_table_update event with output as payload
-    PERFORM pg_notify('run_update', row.id);
-
-    -- Returning null because it is an after trigger.
-    RETURN NULL;
+    PERFORM refresh_last_run(row.package, row.suite);
+    RETURN NEW;
     END;
-$$ LANGUAGE plpgsql;
+$$;
 
-CREATE TRIGGER notify_run_updates
+CREATE TRIGGER run_refresh_last_run
   AFTER INSERT OR UPDATE OR DELETE
   ON run
   FOR EACH ROW
-  EXECUTE PROCEDURE notify_run_update();
+  EXECUTE PROCEDURE run_trigger_refresh_last_run();
 
-create or replace view suites as select distinct suite as name from run;
-
-CREATE OR REPLACE VIEW absorbed_runs AS
-  SELECT * FROM run WHERE result_code = 'success' and
-  exists (select from new_result_branch WHERE run_id = run.id) and
-  not exists (select from new_result_branch WHERE run_id = run.id AND not absorbed);
+create or replace view campaigns as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW perpetual_candidates AS
   select suite, package from candidate union select suite, package from run;
@@ -404,6 +479,14 @@ CREATE TABLE IF NOT EXISTS change_set (
   state change_set_state default 'working' not null
 );
 
+CREATE TABLE last_run (
+   package text not null references package (name),
+   campaign campaign_name not null,
+   last_run_id text references run (id),
+   last_effective_run_id text references run (id),
+   last_unabsorbed_run_id text references run (id),
+   unique (package, campaign)
+);
 
 -- TODO(jelmer): Move to Debian janitor
 CREATE EXTENSION IF NOT EXISTS debversion;
@@ -438,4 +521,5 @@ CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
+
 
