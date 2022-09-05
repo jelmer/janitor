@@ -16,7 +16,6 @@ RUN apt satisfy --no-install-recommends -y \
 	python3-fastbencode \
 	git \
 	python3-tqdm \
-	python3-distro-info \
 	python3-patiencediff \
 	python3-aiohttp \
 	python3-configobj \
