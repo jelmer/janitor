@@ -28,14 +28,14 @@ CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied'
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text, -- TO BE REMOVED
    url text not null,
-   branch_url text,
+   target_branch_url text,
    status merge_proposal_status NULL DEFAULT NULL,
    revision text,
    merged_by text,
    merged_at timestamp,
    foreign key (package) references package(name),
    primary key(url),
-   foreign key (branch_url) references codebase (branch_url)
+   foreign key (target_branch_url)
 );
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);

@@ -1755,6 +1755,7 @@ SELECT
     package.maintainer_email,
     merge_proposal.revision,
     merge_proposal.status,
+    merge_proposal.target_branch_url,
     package.name
 FROM
     merge_proposal
@@ -1766,7 +1767,7 @@ WHERE
     )
     if not row:
         raise KeyError
-    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])
+    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[4], row[0])
 
 
 async def guess_package_from_revision(
@@ -1882,12 +1883,14 @@ async def check_existing_mp(
         (
             old_revision,
             old_status,
+            old_target_branch_url,
             package_name,
             maintainer_email,
         ) = await get_proposal_info(conn, mp.url)
     except KeyError:
         old_revision = None
         old_status = None
+        old_target_branch_url = None
         maintainer_email = None
         package_name = None
     revision = await to_thread(mp.get_source_revision)
@@ -1943,7 +1946,9 @@ async def check_existing_mp(
                 )
     if old_status in ("abandoned", "applied", "rejected") and status == "closed":
         status = old_status
-    if old_status != status or revision != old_revision:
+    if (old_status != status
+            or revision != old_revision
+            or target_branch_url != old_target_branch_url):
         await update_proposal_status(mp, status, revision, package_name, target_branch_url)
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
