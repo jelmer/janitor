@@ -332,7 +332,7 @@ async def listen_to_runner(redis_location, generator_manager):
     import aioredis
     redis = await aioredis.create_redis(redis_location)
 
-    ch = await redis.subscribe('result')
+    ch = (await redis.subscribe('result'))[0]
     try:
         while (await ch.wait_message()):
             result = await ch.get_json()

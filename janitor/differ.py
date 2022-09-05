@@ -593,7 +593,7 @@ async def listen_to_runner(redis_location, app):
     import aioredis
 
     redis = await aioredis.create_redis(redis_location)
-    channel = await redis.subscribe('result')
+    channel = (await redis.subscribe('result'))[0]
     try:
         while (await channel.wait_message()):
             result = await channel.get_json()
