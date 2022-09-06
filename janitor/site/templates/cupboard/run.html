@@ -84,7 +84,7 @@ function submit_review(status) {
 
 {% if run.result_branches %}
 {%  if suite not in ('unchanged', 'control') %}
-{{ merge_command(package, suite, run.result_branches, vcs) }}
+{{ merge_command(package, suite, run.result_branches, vcs_type) }}
 {%  endif %}
 {% else %}
 {%  if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root', 'success') %}
