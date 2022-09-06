@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Rejected in Review{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block page_title %}Rejected in Review{% endblock page_title %}
 {% block body %}
 <div class="section" id="rejected">
 <h1>Rejected runs during review</h1>
@@ -11,4 +11,4 @@
 {% endfor %}
 </ul>
 
-{% endblock %}
+{% endblock body %}

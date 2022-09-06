@@ -5,9 +5,9 @@
 {% else %}
 {% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
 {% endif %}
-{% endblock %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_publish_result_code %}
-{% block page_title %}Merge Proposal Status - {{ proposal.url }}{% endblock %}
+{% block page_title %}Merge Proposal Status - {{ proposal.url }}{% endblock page_title %}
 {% block body %}
 <div class="section" id="merge-proposal-status">
 <h1>Merge Proposal Status</h1>
@@ -40,6 +40,7 @@ Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{
 {% if proposal.suite %}
 <li><a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Run Details</a></li>
 {% endif %}
+</ul>
 
 <h2>State changes</h2>
 
@@ -49,4 +50,5 @@ Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{
 	{% endfor %}
 </ul>
 
-{% endblock %}
+</div>
+{% endblock body %}

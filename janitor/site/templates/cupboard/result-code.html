@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import result_code_explanation %}
-{% block page_title %}Result Code {{ code }}{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
+{% block page_title %}Result Code {{ code }}{% if suite %} - for {{ suite }}{% endif %}{% endblock page_title %}
 {% block body %}
 <div class="section" id="{{ code }}">
 <h1>{{ code }}</h1>
@@ -28,11 +28,11 @@ $('form').submit(function(e){
 {% endif %}
 <table id="result-codes-t" class="display docutils" border="1">
 <colgroup>
-<col width="21%">
-<col width="6%">
-<col width="10%">
-<col width="6%">
-<col width="63%">
+<col width="21%"/>
+<col width="6%"/>
+<col width="10%/">
+<col width="6%"/>
+<col width="63%"/>
 </colgroup>
 <thead valign="bottom">
 <tr><th class="head">Package</th>
@@ -55,4 +55,4 @@ $('form').submit(function(e){
 </table>
 <script>$(document).ready(function() {$('#result-codes-t').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": [2, "desc"]}); });</script>
 </div>
-{% endblock %}
+{% endblock body %}

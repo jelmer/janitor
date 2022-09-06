@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Cupboard - History{% endblock %}
+{% block page_title %}Cupboard - History{% endblock page_title %}
 {% block body %}
  <div class="section" id="history">
 <h1>History</h1>
@@ -9,13 +9,13 @@
 <p>Last {{ count }} runs:</p>
 <table class="docutils" border="1">
 <colgroup>
-<col width="10%">
-<col width="20%">
-<col width="10%">
-<col width="4%">
-<col width="4%">
-<col width="20%">
-<col width="40%">
+<col width="10%"/>
+<col width="20%"/>
+<col width="10%"/>
+<col width="4%"/>
+<col width="4%">/
+<col width="20%"/>
+<col width="40%"/>
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd">
@@ -42,4 +42,4 @@
 {% endfor %}
 </tbody>
 </table>
-{% endblock %}
+{% endblock body %}

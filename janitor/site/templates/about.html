@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block page_title %}About{% endblock %}
+{% block page_title %}About{% endblock page_title %}
 {% block body %}
 <div class="section" id="about">
 <h1>About</h1>
@@ -7,7 +7,7 @@
 
 <p>The code for the Debian-specific instance has now been split out into a <a
 href="https://salsa.debian.org/jelmer/janitor.debian.net/">separate
-repository</a>.
+repository</a>.</p>
 
 <p>Many thanks to everybody who has provided feedback and helped make the Janitor better. </p>
 
@@ -25,7 +25,7 @@ GitLab, Launchpad).</li>
     <li><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
  ties this all together; it manages branches, invokes codemods and pushes back or creates
 merge proposals.</li>
-    <li><a class="reference external" href="https://www.diffoscope.org/">Diffoscope</a> is used to show the diff between binary packages.</a></li>
+    <li><a class="reference external" href="https://www.diffoscope.org/">Diffoscope</a> is used to show the diff between binary packages.</li>
 </ul>
 
 <p>The source code is hosted <a href="https://github.com/jelmer/janitor">on GitHub</a>.</p>
@@ -35,4 +35,4 @@ merge proposals.</li>
 <p>Please report bugs in the <a href="https://github.com/jelmer/janitor/issues/new">bug tracker</a>.</p>
 
 </div>
-{% endblock %}
+{% endblock body %}

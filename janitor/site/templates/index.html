@@ -1,43 +1,23 @@
 {% extends "plain-layout.html" %}
-{% block page_title %}Contact{% endblock %}
+{% block page_title %}Contact{% endblock page_title %}
 {% block body %}
-<div class="section" id="the-debian-janitor">
-<h1>The Debian Janitor</h1>
-<p>The Debian janitor is a project to automatically make changes to Debian
+<div class="section" id="janitor">
+<h1>Janitor Instance</h1>
+<p>The janitor is a project to automatically make changes to Debian
 packages.</p>
 
-<p>It finds VCS repositories associated with packages in the Debian archive, runs a
-set of predefined operations on them, builds the resulting package and then
-publishes the result (both as a VCS repository and as a Debian package).
-</p>
+<p>This is a minimal website for a Janitor instance. </p>
 
-<p>The overall goal is to reduce the manual effort that is needed
-to maintain a Debian package, allowing maintainers to just click <em>Merge</em>
-in a web UI and allowing users to try out newer upstream versions of packages
-without the involvement of the maintainer.</p>
-
-{% set suite_names = suites|map(attribute='name')|list %}
+<h2>Campaigns</h2>
 
 <ul>
-{% if 'lintian-fixes' in suite_names %}
-  <li><a href="lintian-fixes">Fixes for common issues reported by Lintian</a></li>
-{% endif %}
-{% if 'fresh-releases' in suite_names or 'fresh-snapshots' in suite_names %}
-  <li><a href="fresh">Fresh releases and snapshots:</a>
-    <ul>
-{% if 'fresh-releases' in suite_names %}
-      <li><a href="fresh-releases">Packages of new upstream releases</a></li>
-{% endif %}
-{% if 'fresh-snapshots' in suite_names %}
-      <li><a href="fresh-snapshots">Packages of new upstream snapshots</a></li>
-{% endif %}
-    </ul>
-{% endif %}
-
+  {% for campaign in suites %}
+  <li><a href="{{ campaign.name }}">{{ campaign.name }}</a></li>
+  {% endfor %}
 </ul>
 
 </div>
 
 <p>For janitor internal status details, see the <a href="cupboard">cupboard</a>.</p>
 
-{% endblock %}
+{% endblock block %}

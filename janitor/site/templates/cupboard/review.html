@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Review{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block page_title %}Review{% endblock page_title %}
 {% block body %}
 <div class="section" id="review">
 <h1>Review</h1>
@@ -170,4 +170,4 @@ function submitReview(elem, status) {
 <p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>
 
 </div>
-{% endblock %}
+{% endblock body %}

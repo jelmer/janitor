@@ -5,8 +5,8 @@
 {% else %}
 {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
 {% endif %}
-{% endblock %}
-{% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
+{% endblock sidebar %}
+{% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock page_title %}
 {% block body %}
  <div class="section" id="history">
 <h1>Ready to publish</h1>
@@ -21,4 +21,4 @@
 </ul>
 </tbody>
 </table>
-{% endblock %}
+{% endblock body %}

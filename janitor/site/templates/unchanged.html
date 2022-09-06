@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "fresh-util.html" import package_list %}
-{% block page_title %}Unchanged Package Builds{% endblock %}
+{% block page_title %}Unchanged Package Builds{% endblock page_title %}
 {% block body %}
   <div class="section" id="unchanged">
 <h1>Unchanged Package Builds</h1>
@@ -65,4 +65,4 @@ $('#package').typeahead(null, {
 </script>
 
 
-{% endblock %}
+{% endblock body %}

@@ -1,13 +1,13 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Never Processed packages{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block page_title %}Never Processed packages{% if suite %} - for {{ suite }}{% endif %}{% endblock page_title %}
 {% block body %}
 <div class="section" id="{{ code }}">
 <h1>never-processed</h1>
 <table id="never-processed-table" class="display docutils" border="1">
 <colgroup>
-<col width="21%">
-<col width="6%">
+<col width="21%"/>
+<col width="6%"/>
 </colgroup>
 <thead valign="bottom">
 <tr><th class="head">Package</th>
@@ -24,4 +24,4 @@
 </table>
 <script>$(document).ready(function() {$('#never-processed-table').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": []}); });</script>
 </div>
-{% endblock %}
+{% endblock body %}

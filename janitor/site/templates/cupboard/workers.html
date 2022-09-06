@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Queue{% endblock %}
+{% block page_title %}Queue{% endblock page_title %}
 {% block body %}
 <div class="section" id="workers">
 <h1>Workers</h1>
@@ -18,4 +18,4 @@ Total runs: {{ worker.run_count }}
 {% endfor %}
 
 </div>
-{% endblock %}
+{% endblock body %}

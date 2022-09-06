@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Statistics{% endblock %}
+{% block page_title %}Statistics{% endblock page_title %}
 {% block body %}
 <div class="section" id="stats">
 <h1>Statistics</h1>
@@ -248,5 +248,5 @@ package_host_chart = new Chart($("#package-host-chart"), {
 </script>
 
 </div>
-{% endblock %}
+{% endblock body %}
 <!-- vim: expandtab -->
