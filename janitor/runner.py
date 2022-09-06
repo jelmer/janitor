@@ -110,6 +110,10 @@ from .vcs import (
     VcsManager,
 )
 
+from ._launchpad import override_launchpad_consumer_name
+override_launchpad_consumer_name()
+
+
 DEFAULT_RETRY_AFTER = 120
 REMOTE_BRANCH_OPEN_TIMEOUT = 10.0
 VCS_STORE_BRANCH_OPEN_TIMEOUT = 5.0

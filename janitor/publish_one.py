@@ -86,6 +86,9 @@ from .debian.debdiff import (
     markdownify_debdiff,
 )
 
+from ._launchpad import override_launchpad_consumer_name
+override_launchpad_consumer_name()
+
 
 MODE_SKIP = "skip"
 MODE_BUILD_ONLY = "build-only"

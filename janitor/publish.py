@@ -97,6 +97,11 @@ from .vcs import (
     bzr_to_browse_url,
 )
 
+
+from ._launchpad import override_launchpad_consumer_name
+override_launchpad_consumer_name()
+
+
 EXISTING_RUN_RETRY_INTERVAL = 30
 
 MODE_SKIP = "skip"
@@ -176,6 +181,11 @@ missing_main_result_branch_count = Counter(
     "missing_main_result_branch_count",
     "Runs not published because of missing main result branch")
 
+forge_rate_limited_count = Counter(
+    "forge_rate_limited_count",
+    "Runs were not published because the relevant forge was rate-limiting",
+    labelnames=("forge", ))
+
 
 logger = logging.getLogger('janitor.publish')
 
@@ -185,6 +195,18 @@ routes = web.RouteTableDef()
 
 class RateLimited(Exception):
     """A rate limit was reached."""
+
+
+class MaintainerRateLimited(RateLimited):
+    """Per-maintainer rate-limit was reached."""
+
+    def __init__(self, maintainer_email, open_mps, max_open_mps):
+        super(MaintainerRateLimited, self).__init__(
+            "Maintainer %s already has %d merge proposal open (max: %d)" % (
+                maintainer_email, open_mps, max_open_mps))
+        self.maintainer_email = maintainer_email
+        self.open_mps = open_mps
+        self.max_open_mps = max_open_mps
 
 
 class RateLimiter(object):
@@ -199,8 +221,11 @@ class RateLimiter(object):
     def inc(self, maintainer_email: str) -> None:
         raise NotImplementedError(self.inc)
 
+    def get_stats(self) -> Dict[str, Tuple[int, int]]:
+        raise NotImplementedError(self.get_stats)
 
-class MaintainerRateLimiter(RateLimiter):
+
+class FixedRateLimiter(RateLimiter):
 
     _open_mps_per_maintainer: Optional[Dict[str, int]]
 
@@ -219,16 +244,19 @@ class MaintainerRateLimiter(RateLimiter):
             raise RateLimited("Open mps per maintainer not yet determined.")
         current = self._open_mps_per_maintainer.get(maintainer_email, 0)
         if current > self._max_mps_per_maintainer:
-            raise RateLimited(
-                "Maintainer %s already has %d merge proposal open (max: %d)"
-                % (maintainer_email, current, self._max_mps_per_maintainer)
-            )
+            raise MaintainerRateLimited(
+                maintainer_email, current, self._max_mps_per_maintainer)
 
     def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
             return
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
+
+    def get_stats(self) -> Dict[str, Tuple[int, int]]:
+        return {
+            email: (current, self._max_mps_per_maintainer)
+            for (email, current) in self._open_mps_per_maintainer.items()}
 
 
 class NonRateLimiter(RateLimiter):
@@ -240,6 +268,9 @@ class NonRateLimiter(RateLimiter):
 
     def set_mps_per_maintainer(self, mps_per_maintainer):
         pass
+
+    def get_stats(self):
+        return {}
 
 
 class SlowStartRateLimiter(RateLimiter):
@@ -257,16 +288,14 @@ class SlowStartRateLimiter(RateLimiter):
             raise RateLimited("Open mps per maintainer not yet determined.")
         current = self._open_mps_per_maintainer.get(email, 0)
         if self._max_mps_per_maintainer and current >= self._max_mps_per_maintainer:
-            raise RateLimited(
-                "Maintainer %s already has %d merge proposal open (absmax: %d)"
-                % (email, current, self._max_mps_per_maintainer)
-            )
-        limit = self._merged_mps_per_maintainer.get(email, 0) + 1
+            raise MaintainerRateLimited(
+                email, current, self._max_mps_per_maintainer)
+        limit = self._get_limit(email)
         if current >= limit:
-            raise RateLimited(
-                "Maintainer %s has %d merge proposals open (current cap: %d)"
-                % (email, current, limit)
-            )
+            raise MaintainerRateLimited(email, current, limit)
+
+    def _get_limit(self, maintainer_email):
+        return self._merged_mps_per_maintainer.get(email, 0) + 1
 
     def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
@@ -277,6 +306,16 @@ class SlowStartRateLimiter(RateLimiter):
     def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
         self._open_mps_per_maintainer = mps_per_maintainer["open"]
         self._merged_mps_per_maintainer = mps_per_maintainer["merged"]
+
+    def get_stats(self):
+        if self._open_mps_per_maintainer is None:
+            return {}
+        else:
+            return {
+                email: (
+                    current,
+                    min(self._max_mps_per_maintainer, self._get_limit(email)))
+                for email, current in self._open_mps_per_maintainer.items()}
 
 
 class PublishFailure(Exception):
@@ -341,7 +380,7 @@ async def publish_one(
     maintainer_email: str,
     vcs_manager: VcsManager,
     redis,
-    rate_limiter: RateLimiter,
+    maintainer_rate_limiter: RateLimiter,
     dry_run: bool,
     differ_url: str,
     external_url: str,
@@ -434,7 +473,7 @@ async def publish_one(
                  "target_branch_url": main_branch_url.rstrip("/")})
 
             merge_proposal_count.labels(status="open").inc()
-            rate_limiter.inc(maintainer_email)
+            maintainer_rate_limiter.inc(maintainer_email)
             open_proposal_count.labels(maintainer=maintainer_email).inc()
 
         return PublishResult(
@@ -444,7 +483,7 @@ async def publish_one(
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
 
-def calculate_next_try_time(finish_time, attempt_count):
+def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
     try:
         return finish_time + (2 ** attempt_count * timedelta(hours=1))
     except OverflowError:
@@ -453,7 +492,7 @@ def calculate_next_try_time(finish_time, attempt_count):
 
 async def consider_publish_run(
         conn, config, template_env_path,
-        vcs_managers, rate_limiter, external_url, differ_url,
+        vcs_managers, maintainer_rate_limiter, external_url, differ_url,
         redis,
         run, maintainer_email,
         unpublished_branches, command,
@@ -523,7 +562,7 @@ async def consider_publish_run(
             conn,
             campaign_config,
             template_env_path,
-            rate_limiter,
+            maintainer_rate_limiter,
             vcs_managers,
             run,
             role,
@@ -612,7 +651,7 @@ async def publish_pending_ready(
     redis,
     config,
     template_env_path,
-    rate_limiter,
+    maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
     external_url: str,
@@ -643,7 +682,7 @@ async def publish_pending_ready(
                 conn, config=config,
                 template_env_path=template_env_path,
                 vcs_managers=vcs_managers,
-                rate_limiter=rate_limiter,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 external_url=external_url, differ_url=differ_url,
                 redis=redis,
                 run=run,
@@ -855,7 +894,7 @@ async def publish_from_policy(
     conn,
     campaign_config: Campaign,
     template_env_path,
-    rate_limiter,
+    maintainer_rate_limiter,
     vcs_managers,
     run: state.Run,
     role: str,
@@ -924,7 +963,7 @@ async def publish_from_policy(
         )
         if not open_mp:
             try:
-                rate_limiter.check_allowed(maintainer_email)
+                maintainer_rate_limiter.check_allowed(maintainer_email)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
                     package=run.package, campaign=run.suite
@@ -983,7 +1022,7 @@ async def publish_from_policy(
             external_url=external_url,
             differ_url=differ_url,
             require_binary_diff=require_binary_diff,
-            rate_limiter=rate_limiter,
+            maintainer_rate_limiter=maintainer_rate_limiter,
             result_tags=run.result_tags,
             allow_create_proposal=run_allow_proposal_creation(campaign_config, run),
             commit_message_template=(
@@ -1083,7 +1122,7 @@ async def publish_and_store(
     role: str,
     maintainer_email,
     vcs_managers,
-    rate_limiter,
+    maintainer_rate_limiter,
     dry_run,
     external_url: str,
     differ_url: str,
@@ -1128,7 +1167,7 @@ async def publish_and_store(
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
                 redis=redis,
-                rate_limiter=rate_limiter,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
@@ -1333,7 +1372,7 @@ async def consider_request(request):
                 conn, request.app['config'],
                 template_env_path=request.app['template_env_path'],
                 vcs_managers=request.app['vcs_managers'],
-                rate_limiter=request.app['rate_limiter'],
+                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
                 redis=request.app['redis'],
@@ -1367,7 +1406,7 @@ async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: s
 async def publish_request(request):
     dry_run = request.app['dry_run']
     vcs_managers = request.app['vcs_managers']
-    rate_limiter = request.app['rate_limiter']
+    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
     package = request.match_info["package"]
     campaign = request.match_info["campaign"]
     role = request.query.get("role")
@@ -1420,7 +1459,7 @@ async def publish_request(request):
                 role,
                 package['maintainer_email'],
                 vcs_managers=vcs_managers,
-                rate_limiter=rate_limiter,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=dry_run,
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
@@ -1486,7 +1525,8 @@ async def run_web_server(
     listen_addr: str,
     port: int,
     template_env_path: Optional[str],
-    rate_limiter: RateLimiter,
+    maintainer_rate_limiter: RateLimiter,
+    forge_rate_limiter: Dict[str, datetime],
     vcs_managers: Dict[str, VcsManager],
     db: asyncpg.pool.Pool,
     redis,
@@ -1509,7 +1549,8 @@ async def run_web_server(
     app['config'] = config
     app['external_url'] = external_url
     app['differ_url'] = differ_url
-    app['rate_limiter'] = rate_limiter
+    app['maintainer_rate_limiter'] = maintainer_rate_limiter
+    app['forge_rate_limiter'] = forge_rate_limiter
     app['modify_mp_limit'] = modify_mp_limit
     app['dry_run'] = dry_run
     app['push_limit'] = push_limit
@@ -1577,7 +1618,7 @@ async def check_mp_request(request):
                 dry_run=("dry_run" in post),
                 external_url=request.app['external_url'],
                 differ_url=request.app['differ_url'],
-                rate_limiter=request.app['rate_limiter'],
+                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
             )
         except NoRunForMergeProposal as e:
             return web.Response(
@@ -1600,7 +1641,8 @@ async def scan_request(request):
                 request.app['redis'],
                 request.app['config'],
                 request.app['template_env_path'],
-                request.app['rate_limiter'],
+                request.app['maintainer_rate_limiter'],
+                request.app['forge_rate_limiter'],
                 request.app['vcs_managers'],
                 dry_run=request.app['dry_run'],
                 differ_url=request.app['differ_url'],
@@ -1634,7 +1676,7 @@ async def refresh_proposal_status_request(request):
                     mp,
                     status,
                     vcs_managers=request.app['vcs_managers'],
-                    rate_limiter=request.app['rate_limiter'],
+                    maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
                     dry_run=request.app['dry_run'],
                     differ_url=request.app['differ_url'],
                     external_url=request.app['external_url'],
@@ -1657,7 +1699,7 @@ async def autopublish_request(request):
             request.app['redis'],
             request.app['config'],
             request.app['template_env_path'],
-            request.app['rate_limiter'],
+            request.app['maintainer_rate_limiter'],
             request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
             external_url=request.app['external_url'],
@@ -1669,6 +1711,47 @@ async def autopublish_request(request):
 
     create_background_task(autopublish(), 'autopublish')
     return web.Response(status=202, text="Autopublish started.")
+
+
+@routes.get("/rate-limits/{maintainer}", name="maintainer-rate-limits")
+async def maintainer_rate_limits_request(request):
+    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
+
+    stats = maintainer_rate_limiter.get_stats()
+
+    (current_open, max_open) = stats.get(
+        request.match_info['maintainer'], (None, None))
+
+    ret = {
+        'open': current_open,
+        'max_open': max_open,
+        'remaining':
+            None if (current_open is None or max_open is None)
+            else max_open - current_open}
+
+    return web.json_response(ret)
+
+
+@routes.get("/rate-limits", name="rate-limits")
+async def maintainer_rate_limits_request(request):
+    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
+
+    per_maintainer = {}
+    for email, (current_open, max_open) in (
+            maintainer_rate_limiter.get_stats().items()):
+        per_maintainer[email] = {
+            'open': current_open,
+            'max_open': max_open,
+            'remaining': (
+                None if (current_open is None or max_open is None)
+                else max_open - current_open)}
+
+    return web.json_response({
+        'proposals_per_maintainer': per_maintainer,
+        'per_forge': {
+            str(f): dt.isoformat()
+            for f, dt in forge_rate_limiter.items()},
+        'push_limit': request.app['push_limit']})
 
 
 @routes.get("/blockers/{run_id}", name='blockers')
@@ -1698,8 +1781,11 @@ WHERE id = $1
                 'reason': 'No such publish-ready run',
                 'run_id': request.match_info['run_id']}, status=404)
 
-        attempt_count = await get_publish_attempt_count(
-            conn, run['revision'].encode('utf-8'), {"differ-unreachable"}
+        if run['revision'] is not None:
+            attempt_count = await get_publish_attempt_count(
+                conn, run['revision'].encode('utf-8'), {"differ-unreachable"}
+        else:
+            attempt_count = 0
         )
     ret = {}
     ret['success'] = {
@@ -1734,12 +1820,18 @@ WHERE id = $1
             'attempt_count': attempt_count,
             'next_try_time': next_try_time.isoformat()}}
 
-    # TODO(jelmer): add rate limit per forge
+    # TODO(jelmer): include forge rate limits?
+
     ret['maintainer_propose_rate_limit'] = {
         'details': {
             'maintainer': run['maintainer_email']}}
     try:
-        request.app['rate_limiter'].check_allowed(run['maintainer_email'])
+        request.app['maintainer_rate_limiter'].check_allowed(run['maintainer_email'])
+    except MaintainerRateLimited as e:
+        ret['maintainer_propose_rate_limit']['result'] = False
+        ret['maintainer_propose_rate_limit']['details'] = {
+            'open': e.open_mps,
+            'max_open': e.max_open_mps}
     except RateLimited:
         ret['maintainer_propose_rate_limit']['result'] = False
     else:
@@ -1752,7 +1844,8 @@ async def process_queue_loop(
     redis,
     config,
     template_env_path,
-    rate_limiter,
+    maintainer_rate_limiter,
+    forge_rate_limiter,
     dry_run,
     vcs_managers,
     interval,
@@ -1772,7 +1865,8 @@ async def process_queue_loop(
                 redis,
                 config,
                 template_env_path,
-                rate_limiter,
+                maintainer_rate_limiter,
+                forge_rate_limiter,
                 vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
@@ -1785,7 +1879,7 @@ async def process_queue_loop(
                 redis,
                 config,
                 template_env_path,
-                rate_limiter,
+                maintainer_rate_limiter,
                 vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
@@ -1947,7 +2041,7 @@ async def check_existing_mp(
     mp,
     status,
     vcs_managers,
-    rate_limiter,
+    maintainer_rate_limiter,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -2373,7 +2467,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 require_binary_diff=False,
                 allow_create_proposal=True,
                 redis=redis,
-                rate_limiter=rate_limiter,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
@@ -2517,7 +2611,8 @@ async def check_existing(
     redis,
     config,
     template_env_path,
-    rate_limiter,
+    maintainer_rate_limiter,
+    forge_rate_limiter: Dict[Forge, datetime],
     vcs_managers,
     dry_run: bool,
     external_url: str,
@@ -2546,12 +2641,17 @@ async def check_existing(
     modified_mps = 0
     unexpected = 0
     check_only = False
-    forge_ratelimited: Dict[Forge, int] = {}
+    was_forge_ratelimited = False
 
     for forge, mp, status in iter_all_mps():
         status_count[status] += 1
-        if forge in forge_ratelimited:
-            continue
+        if forge in forge_rate_limiter:
+            if datetime.utcnow() < forge_rate_limiter[forge]:
+                del forge_rate_limiter[forge]
+            else:
+                forge_rate_limited_count.inc(forge=str(forge))
+                was_forge_ratelimited = True
+                continue
         try:
             modified = await check_existing_mp(
                 conn,
@@ -2564,7 +2664,7 @@ async def check_existing(
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
-                rate_limiter=rate_limiter,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 possible_transports=possible_transports,
                 mps_per_maintainer=mps_per_maintainer,
                 check_only=check_only,
@@ -2579,7 +2679,7 @@ async def check_existing(
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
                 mp.url, forge)
-            forge_ratelimited[forge] = e.retry_after
+            forge_rate_limiter[forge] = datetime.utcnow() + timedelta(seconds=e.retry_after)
             continue
         except UnexpectedHttpStatus as e:
             logging.warning(
@@ -2603,14 +2703,14 @@ async def check_existing(
                 )
                 check_only = True
 
-    if forge_ratelimited:
-        logging.info('Rate-Limited for forges %r. Not updating stats', forge_ratelimited)
+    if was_forge_ratelimited:
+        logging.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
         return
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
 
-    rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
+    maintainer_rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
     for maintainer_email, count in mps_per_maintainer["open"].items():
         open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
@@ -2675,7 +2775,7 @@ async def listen_to_runner(
     redis,
     config,
     template_env_path,
-    rate_limiter,
+    maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
     external_url: str,
@@ -2691,7 +2791,7 @@ async def listen_to_runner(
                 conn,
                 get_campaign_config(config, run.suite),
                 template_env_path,
-                rate_limiter,
+                maintainer_rate_limiter,
                 vcs_managers,
                 run,
                 role,
@@ -2831,15 +2931,17 @@ async def main(argv=None):
         config = read_config(f)
 
     if args.slowstart:
-        rate_limiter = SlowStartRateLimiter(args.max_mps_per_maintainer)
+        maintainer_rate_limiter = SlowStartRateLimiter(args.max_mps_per_maintainer)
     elif args.max_mps_per_maintainer > 0:
-        rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
+        maintainer_rate_limiter = FixedRateLimiter(args.max_mps_per_maintainer)
     else:
-        rate_limiter = NonRateLimiter()
+        maintainer_rate_limiter = NonRateLimiter()
 
     if args.no_auto_publish and args.once:
         sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
         sys.exit(1)
+
+    forge_rate_limiter: Dict[Forge, datetime] = {}
 
     loop = asyncio.get_event_loop()
     vcs_managers = get_vcs_managers_from_config(config)
@@ -2854,7 +2956,7 @@ async def main(argv=None):
                 redis,
                 config,
                 args.template_env_path,
-                rate_limiter,
+                maintainer_rate_limiter,
                 dry_run=args.dry_run,
                 external_url=args.external_url,
                 differ_url=args.differ_url,
@@ -2873,7 +2975,8 @@ async def main(argv=None):
                         redis,
                         config,
                         args.template_env_path,
-                        rate_limiter,
+                        maintainer_rate_limiter,
+                        forge_rate_limiter,
                         dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
                         interval=args.interval,
@@ -2891,7 +2994,8 @@ async def main(argv=None):
                         args.listen_address,
                         args.port,
                         args.template_env_path,
-                        rate_limiter,
+                        maintainer_rate_limiter,
+                        forge_rate_limiter,
                         vcs_managers,
                         db, redis, config,
                         dry_run=args.dry_run,
@@ -2911,7 +3015,7 @@ async def main(argv=None):
                             redis,
                             config,
                             args.template_env_path,
-                            rate_limiter,
+                            maintainer_rate_limiter,
                             vcs_managers,
                             dry_run=args.dry_run,
                             external_url=args.external_url,
