@@ -273,6 +273,7 @@ async def handle_run(request):
         request.app.http_client_session,
         request.app['config'],
         request.app['differ_url'],
+        request.app['publisher_url'],
         request.app.logfile_manager,
         run,
         request.app['vcs_managers'],

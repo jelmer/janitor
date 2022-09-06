@@ -232,15 +232,15 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
     BEGIN
 
     if (TG_OP = 'INSERT' AND NEW.absorbed) then
-	perform refresh_new_result_branch(new.run_id);
+	perform refresh_last_run(new.run_id);
     end if;
 
     if (TG_OP = 'UPDATE' AND NEW.absorbed AND NOT OLD.absorbed) then
-	perform refresh_new_result_branch(new.run_id);
+	perform refresh_last_run(new.run_id);
     end if;
 
     IF (TG_OP = 'DELETE' AND old.absorbed) THEN
-	perform refresh_new_result_branch(old.run_id);
+	perform refresh_last_run(old.run_id);
     END IF;
 
     RETURN NEW;

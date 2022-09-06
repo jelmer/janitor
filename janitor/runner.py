@@ -20,7 +20,6 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
-import functools
 import json
 from io import BytesIO
 import logging
@@ -593,7 +592,7 @@ class WorkerResult(object):
             codemod=worker_result.get("codemod"),
             main_branch_revision=main_branch_revision,
             revision=revision,
-            value=int(worker_result["value"]) if "value" in worker_result else None,
+            value=int(worker_result["value"]) if worker_result.get("value") else None,
             branches=branches,
             tags=tags,
             remotes=worker_result.get("remotes"),

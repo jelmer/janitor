@@ -17,14 +17,10 @@
 
 import asyncio
 import json
-import logging
-from typing import Optional, Set, AsyncIterator, Any
-from yarl import URL
+from typing import Set
 
 
-import aiohttp
 from aiohttp import web
-from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
 from aiohttp_openmetrics import Gauge
 
 
