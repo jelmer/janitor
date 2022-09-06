@@ -39,7 +39,6 @@ import gpg
 from .. import state
 from ..config import get_campaign_config
 from ..logs import get_log_manager
-from ..pubsub import pubsub_handler, Topic
 from ..vcs import get_vcs_managers_from_config
 
 from . import (
@@ -51,6 +50,7 @@ from .common import (
     render_template_for_request,
 )
 from .openid import setup_openid
+from .pubsub import pubsub_handler, Topic
 
 
 def create_background_task(fn, title):
