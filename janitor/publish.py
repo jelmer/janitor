@@ -1836,7 +1836,7 @@ LIMIT 1
 
 async def get_proposal_info(
     conn: asyncpg.Connection, url
-) -> Tuple[Optional[bytes], str, str, str]:
+) -> Tuple[Optional[bytes], str, str, str, str]:
     row = await conn.fetchrow(
         """\
 SELECT
