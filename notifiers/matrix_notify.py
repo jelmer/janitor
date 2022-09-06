@@ -77,15 +77,15 @@ async def main(args):
             ):
                 url = (msg[1]["main_branch_browse_url"]
                        or msg[1]["main_branch_url"])
-                msg = "Pushed %s changes to %s (%s)" % (
+                out = "Pushed %s changes to %s (%s)" % (
                     msg[1].get("campaign"), url, msg[1]["package"])
                 if msg[1].get("campaign") == "lintian-fixes":
                     tags = set()
                     for entry in msg[1]["result"]["applied"]:
                         tags.update(entry["fixed_lintian_tags"])
                     if tags:
-                        msg += ", fixing: %s." % (", ".join(tags))
-                await message(msg)
+                        out += ", fixing: %s." % (", ".join(tags))
+                await message(out)
 
 
 if __name__ == "__main__":
