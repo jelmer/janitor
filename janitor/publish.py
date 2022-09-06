@@ -21,7 +21,6 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import asyncio
-import functools
 import json
 import logging
 import os
@@ -138,6 +137,44 @@ last_publish_pending_success = Gauge(
 publish_latency = Histogram(
     "publish_latency", "Delay between build finish and publish."
 )
+
+exponential_backoff_count = Counter(
+    "exponential_backoff_count",
+    "Number of times publishing has been skipped due to exponential backoff")
+
+push_limit_count = Counter(
+    "push_limit_count",
+    "Number of times pushes haven't happened due to the limit")
+
+missing_branch_url_count = Counter(
+    "missing_branch_url_count",
+    "Number of runs that weren't published because they had a "
+    "missing branch URL")
+
+missing_publish_mode_count = Counter(
+    "missing_publish_mode_count",
+    "Number of runs not published due to missing publish mode",
+    labelnames=("role", ))
+
+unpublished_aux_branches_count = Counter(
+    "unpublished_aux_branches_count",
+    "Number of branches not published because auxiliary branches "
+    "were not yet published",
+    labelnames=("role", ))
+
+command_changed_count = Counter(
+    "command_changed_count",
+    "Number of runs not published because the codemod command changed")
+
+
+no_result_branches_count = Counter(
+    "no_result_branches_count",
+    "Runs not published since there were no result branches")
+
+
+missing_main_result_branch_count = Counter(
+    "missing_main_result_branch_count",
+    "Runs not published because of missing main result branch")
 
 
 logger = logging.getLogger('janitor.publish')
@@ -394,7 +431,7 @@ async def publish_one(
             await redis.publish_json(
                 'merge-proposal',
                 {"url": proposal_url, "status": "open", "package": pkg,
-                 "target_branch_url": main_branch_url.rstrip("/"),})
+                 "target_branch_url": main_branch_url.rstrip("/")})
 
             merge_proposal_count.labels(status="open").inc()
             rate_limiter.inc(maintainer_email)
@@ -405,6 +442,13 @@ async def publish_one(
             description=description)
 
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
+
+
+def calculate_next_try_time(run, attempt_count):
+    try:
+        return run.finish_time + (2 ** attempt_count * timedelta(hours=1))
+    except OverflowError:
+        return datetime.utcnow() + timedelta(hours=(7 * 24))
 
 
 async def consider_publish_run(
@@ -425,10 +469,7 @@ async def consider_publish_run(
     attempt_count = await get_publish_attempt_count(
         conn, run.revision, {"differ-unreachable"}
     )
-    try:
-        next_try_time = run.finish_time + (2 ** attempt_count * timedelta(hours=1))
-    except OverflowError:
-        return {}
+    next_try_time = calculate_next_try_time(run, attempt_count)
     if datetime.utcnow() < next_try_time:
         logger.info(
             "Not attempting to push %s / %s (%s) due to "
@@ -438,6 +479,7 @@ async def consider_publish_run(
             run.id,
             next_try_time - datetime.utcnow(),
         )
+        exponential_backoff_count.inc()
         return {}
     ms = [b[4] for b in unpublished_branches]
     if push_limit is not None and (
@@ -448,11 +490,13 @@ async def consider_publish_run(
                 run.package,
                 run.suite,
             )
+            push_limit_count.inc()
             return {}
     if run.branch_url is None:
         logger.warning(
             '%s: considering publishing for branch without branch url',
             run.id)
+        missing_branch_url_count.inc()
         return {}
     actual_modes = {}
     for (
@@ -467,11 +511,13 @@ async def consider_publish_run(
             logger.warning(
                 "%s: No publish mode for branch with role %s", run.id, role
             )
+            missing_publish_mode_count.labels(role=role).inc()
             continue
         if role == 'main' and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
                 "auxiliary branches were published.", run.id, role)
+            unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
             conn,
@@ -830,6 +876,7 @@ async def publish_from_policy(
         logger.warning("no command set for %s", run.id)
         return
     if command != run.command:
+        command_changed_count.inc()
         logger.warning(
             "Not publishing %s/%s: command is different (policy changed?). "
             "Build used %r, now: %r. Rescheduling.",
@@ -856,10 +903,12 @@ async def publish_from_policy(
         return
     if run.result_branches is None:
         logger.warning("no result branches for %s", run.id)
+        no_result_branches_count.inc()
         return
     try:
         (remote_branch_name, base_revision, revision) = run.get_result_branch(role)
     except KeyError:
+        missing_main_result_branch_count.inc()
         logger.warning("unable to find main branch: %s", run.id)
         return
 
@@ -1622,6 +1671,45 @@ async def autopublish_request(request):
     return web.Response(status=202, text="Autopublish started.")
 
 
+@routes.get("/blockers/{id}", name='blockers')
+async def blockers_request(request):
+    async with request.app['db'].acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT review_status, review_comment, qa_review_policy, needs_review, '
+            'maintainer_email, revision FROM publish_ready '
+            'WHERE id = $1', request.match_info['id'])
+
+        if run is None:
+            return web.json_response(404, {'reason': 'No such run'})
+
+        attempt_count = await get_publish_attempt_count(
+            conn, run['revision'].encode('utf-8'), {"differ-unreachable"}
+        )
+    ret = {}
+    ret['qa_review'] = {
+        'status': run['review_status'],
+        'comment': run['review_comment'],
+        'needs_review': run['needs_review'],
+        'policy': run['qa_review_policy']}
+
+    next_try_time = calculate_next_try_time(run, attempt_count)
+    ret['backoff'] = {
+        'attempt_count': attempt_count,
+        'next_try_time': next_try_time.isoformat()
+    }
+
+    # TODO(jelmer): add rate limit per forge
+    ret['maintainer_propose_rate_limit'] = {
+        'maintainer': run['maintainer_email']}
+    try:
+        request.app['rate_limiter'].check_allowed(run['maintainer_email'])
+    except RateLimited:
+        ret['maintainer_propose_rate_limit']['allowed'] = False
+    else:
+        ret['maintainer_propose_rate_limit']['allowed'] = True
+    return web.json_response(ret)
+
+
 async def process_queue_loop(
     db,
     redis,
@@ -1809,7 +1897,9 @@ ORDER BY length(branch_url) DESC
     source_branch = await to_thread(
         open_branch,
         result['branch_url'], possible_transports=possible_transports)
-    return (source_branch.user_url.rstrip('/') == url.rstrip('/'))
+    if source_branch.user_url.rstrip('/') != url.rstrip('/'):
+        return None
+    return result
 
 
 async def check_existing_mp(
@@ -1923,8 +2013,8 @@ async def check_existing_mp(
     target_branch_url = await to_thread(mp.get_target_branch_url)
     if maintainer_email is None:
         row = await guess_package_from_branch_url(
-                conn, target_branch_url,
-                possible_transports=possible_transports)
+            conn, target_branch_url,
+            possible_transports=possible_transports)
         if row is not None:
             maintainer_email = row['maintainer_email']
             package_name = row['name']

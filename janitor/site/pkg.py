@@ -19,10 +19,17 @@
 from datetime import datetime
 from functools import partial
 from io import BytesIO
+import logging
 
 from typing import Optional, Tuple
 
-from aiohttp import ClientConnectorError, ClientResponseError
+from yarl import URL
+
+from aiohttp import (
+    ClientConnectorError,
+    ClientResponseError,
+    ClientSession,
+)
 import asyncpg
 
 from breezy.revision import NULL_REVISION
@@ -112,7 +119,8 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, logfile_manager, run, vcs_managers, is_admin, span
+    db, client, config, differ_url, publisher_url, logfile_manager, run,
+    vcs_managers, is_admin, span
 ):
     from ..schedule import estimate_success_probability
     kwargs = {}
@@ -156,6 +164,21 @@ async def generate_run_file(
     kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
+
+    async def publish_blockers():
+        url = URL(publisher_url) / "blockers" / run['id']
+        try:
+            async with ClientSession() as session, \
+                    session.get(url, raise_for_status=True) as resp:
+                return await resp.json()
+        except (ClientResponseError, ClientConnectorError) as e:
+            logging.warning(
+                "Unable to retrieve publish blockers for %s: %r",
+                run['id'], e)
+            return {}
+
+
+    kwargs["publish_blockers"] = publish_blockers
 
     async def show_diff(role):
         try:

@@ -45,6 +45,7 @@ function submit_review(status) {
 {% if run.review_comment %}(<i>{{ run.review_comment }}</i>){% endif %}
 </li>
 {% endif %}
+<!-- {{ publish_blockers()|tojson }}<-->
 {% if queue_position %}
 <li class='queue-position.{{ package }}'><a href="/cupboard/queue">Queue</a> position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
 {% else %}
