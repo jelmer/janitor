@@ -1671,42 +1671,77 @@ async def autopublish_request(request):
     return web.Response(status=202, text="Autopublish started.")
 
 
-@routes.get("/blockers/{id}", name='blockers')
+@routes.get("/blockers/{run_id}", name='blockers')
 async def blockers_request(request):
     async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            'SELECT review_status, review_comment, qa_review_policy, needs_review, '
-            'maintainer_email, revision FROM publish_ready '
-            'WHERE id = $1', request.match_info['id'])
+        run = await conn.fetchrow("""\
+SELECT
+  run.review_status AS review_status,
+  run.command AS run_command,
+  review_comment AS review_comment,
+  policy.qa_review_policy AS qa_review_policy,
+  package.maintainer_email AS maintainer_email,
+  run.revision AS revision,
+  policy.command AS policy_command,
+  package.removed AS removed,
+  run.result_code AS result_code
+FROM run
+LEFT JOIN package ON package.name = run.package
+INNER JOIN policy ON policy.package = run.package
+   AND policy.suite = run.suite
+WHERE id = $1
+""", request.match_info['run_id'])
 
         if run is None:
-            return web.json_response(404, {'reason': 'No such run'})
+            return web.json_response({
+                'reason': 'No such publish-ready run',
+                'run_id': request.match_info['run_id']}, status=404)
 
         attempt_count = await get_publish_attempt_count(
             conn, run['revision'].encode('utf-8'), {"differ-unreachable"}
         )
     ret = {}
+    ret['success'] = {
+        'result': (run['result_code'] == 'success'),
+        'details': {'result_code': run['result_code']}}
+    ret['removed'] = {
+        'result': not run['removed'],
+        'details': {'removed': run['removed']}}
+    ret['command'] = {
+        'result': ret['run_command'] == ret['policy_command'],
+        'details': {
+            'correct': ret['policy_command'],
+            'actual': ret['run_command']}}
     ret['qa_review'] = {
-        'status': run['review_status'],
-        'comment': run['review_comment'],
-        'needs_review': run['needs_review'],
-        'policy': run['qa_review_policy']}
+        'result': (
+            run['review_status'] != 'rejected'
+            and not (run['qa_review_policy'] == 'required'
+                     and run['review_status'] == 'unreviewed')),
+        'details': {
+            'status': run['review_status'],
+            'comment': run['review_comment'],
+            'needs_review': (
+                run['qa_review_policy'] == 'required'
+                and run['review_status'] == 'unreviewed'),
+            'policy': run['qa_review_policy']}}
 
     next_try_time = calculate_next_try_time(run, attempt_count)
     ret['backoff'] = {
-        'attempt_count': attempt_count,
-        'next_try_time': next_try_time.isoformat()
-    }
+        'result': datetime.utcnow() >= next_try_time,
+        'details': {
+            'attempt_count': attempt_count,
+            'next_try_time': next_try_time.isoformat()}}
 
     # TODO(jelmer): add rate limit per forge
     ret['maintainer_propose_rate_limit'] = {
-        'maintainer': run['maintainer_email']}
+        'details': {
+            'maintainer': run['maintainer_email']}}
     try:
         request.app['rate_limiter'].check_allowed(run['maintainer_email'])
     except RateLimited:
-        ret['maintainer_propose_rate_limit']['allowed'] = False
+        ret['maintainer_propose_rate_limit']['result'] = False
     else:
-        ret['maintainer_propose_rate_limit']['allowed'] = True
+        ret['maintainer_propose_rate_limit']['result'] = True
     return web.json_response(ret)
 
 
