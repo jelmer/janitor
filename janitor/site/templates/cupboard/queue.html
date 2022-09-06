@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Queue{% endblock %}
+{% block page_title %}Queue{% endblock page_title %}
 {% block body %}
 <div class="section" id="queue">
 <h1>Queue</h1>
@@ -164,4 +164,4 @@ registerHandler('queue', function(msg) {
 </script>
 
 </div>
-{% endblock %}
+{% endblock body %}

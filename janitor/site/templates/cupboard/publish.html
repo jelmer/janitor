@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code, display_publish_result_code %}
-{% block page_title %}Cupboard - Publish {{ publish.id }}{% endblock %}
+{% block page_title %}Cupboard - Publish {{ publish.id }}{% endblock page_title %}
 {% block body %}
  <div class="section" id="publish">
 <h1>Publish {{ publish.id }}</h1>
@@ -19,4 +19,4 @@
 </li>
 </ul>
 
-{% endblock %}
+{% endblock body %}

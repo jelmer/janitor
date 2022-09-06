@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Review Statistics{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block page_title %}Review Statistics{% endblock page_title %}
 {% block body %}
 <div class="section" id="stats">
 <h1>Review Statistics</h1>
@@ -49,5 +49,5 @@
 </table>
 
 </div>
-{% endblock %}
+{% endblock body %}
 <!-- vim: expandtab -->

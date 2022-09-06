@@ -31,8 +31,8 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
     dirname, basename = os.path.split(sbuild_path)
     for suite in suites:
         os.symlink(
-            os.path.join(dirname, "%s-%s-sbuild%s" % (suite, sbuild_arch, ext)),
-            basename)
+            basename,
+            os.path.join(dirname, "%s-%s-sbuild%s" % (suite, sbuild_arch, ext)))
 
 
 def get_sbuild_architecture():

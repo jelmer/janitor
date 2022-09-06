@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Result Codes{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
+{% block page_title %}Result Codes{% if suite %} - for {{ suite }}{% endif %}{% endblock page_title %}
 {% block body %}
 
 <div class="section" id="result-codes">
@@ -63,8 +63,8 @@ document.getElementById("result-code-chart").onclick = function(e) {
 
 <table id="result-code-table" class="docutils display" border="1">
 <colgroup>
-<col width="95%">
-<col width="5%">
+<col width="95%"/>
+<col width="5%"/>
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd"><th class="head">Code</th>
@@ -85,4 +85,4 @@ document.getElementById("result-code-chart").onclick = function(e) {
 </table>
 	<script>$(function(){ $('#result-code-table').DataTable({"order": [[ 1, "desc" ]], "pageLength": 200, "lengthMenu": [50, 200]}); });</script>
 </div>
-{% endblock %}
+{% endblock body %}

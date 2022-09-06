@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code, display_branch_url %}
-{% block page_title %}Package Overview - {{ package }}{% endblock %}
+{% block page_title %}Package Overview - {{ package }}{% endblock page_title %}
 {% block body %}
 <div class="section" id="{{ package }}">
 
@@ -67,4 +67,4 @@
 </div>
 
 </div>
-{% endblock %}
+{% endblock body %}

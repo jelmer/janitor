@@ -5,8 +5,8 @@
 {% else %}
 {% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
 {% endif %}
-{% endblock %}
-{% block page_title %}Merge Proposal Status{% endblock %}
+{% endblock sidebar %}
+{% block page_title %}Merge Proposal Status{% endblock page_title %}
 {% block body %}
 <div class="section" id="merge-proposal-status">
 <h1>Merge Proposal Status</h1>
@@ -89,4 +89,4 @@ bot itself, e.g. because the maintainer didn't think the change was correct.
 {% endif %}
 </div>
 
-{% endblock %}
+{% endblock block %}

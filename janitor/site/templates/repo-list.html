@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block page_title %}Repository List - {{ vcs }}{% endblock %}
+{% block page_title %}Repository List - {{ vcs }}{% endblock page_title %}
 {% block body %}
 <div class="section" id="repo-list">
 <h1>Repository List - {{ vcs }}</h1>
@@ -10,4 +10,6 @@
 {% endfor %}
 </ul>
 
-{% endblock %}
+</div>
+
+{% endblock body %}

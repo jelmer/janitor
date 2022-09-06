@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Reprocess Logs{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block page_title %}Reprocess Logs{% endblock page_title %}
 {% block body %}
 <h1>Reprocess Logs</h1>
 <form id="mass_reschedule" method="POST" action="/api/reprocess-logs">
@@ -9,4 +9,4 @@
     <input type="submit" value="Reprocess Logs"/>
 </form>
 
-{% endblock %}
+{% endblock body %}

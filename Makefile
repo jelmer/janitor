@@ -43,6 +43,7 @@ test:
 
 style:
 	flake8
+	djlint --profile jinka janitor/site/templates
 
 typing:
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor

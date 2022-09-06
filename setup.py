@@ -53,6 +53,7 @@ setup(
     },
     test_suite="janitor.tests.test_suite",
     extras_require={
+        'dev': ['djlint'],
         'debian': [
             'python_debian', 'debmutate', 'silver-platter[debian]',
             'ognibuild[debian]'],

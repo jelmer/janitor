@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code, display_publish_result_code %}
-{% block page_title %}Cupboard - Publish History{% endblock %}
+{% block page_title %}Cupboard - Publish History{% endblock page_title %}
 {% block body %}
  <div class="section" id="publish-history">
 <h1>Publish History</h1>
@@ -20,11 +20,11 @@ $(document).ready(function(){
 <p>Last {{ count }} publish actions:</p>
 <table class="docutils" border="1">
 <colgroup>
-<col width="6%">
-<col width="10%">
-<col width="6%">
-<col width="4%">
-<col width="49%">
+<col width="6%"/>
+<col width="10%/">
+<col width="6%"/>
+<col width="4%"/>
+<col width="49%"/>
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd">
@@ -50,4 +50,4 @@ $(document).ready(function(){
 {% endfor %}
 </tbody>
 </table>
-{% endblock %}
+{% endblock body %}
