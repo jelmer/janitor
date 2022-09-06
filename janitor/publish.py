@@ -444,9 +444,9 @@ async def publish_one(
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
 
-def calculate_next_try_time(run, attempt_count):
+def calculate_next_try_time(finish_time, attempt_count):
     try:
-        return run.finish_time + (2 ** attempt_count * timedelta(hours=1))
+        return finish_time + (2 ** attempt_count * timedelta(hours=1))
     except OverflowError:
         return datetime.utcnow() + timedelta(hours=(7 * 24))
 
@@ -469,7 +469,7 @@ async def consider_publish_run(
     attempt_count = await get_publish_attempt_count(
         conn, run.revision, {"differ-unreachable"}
     )
-    next_try_time = calculate_next_try_time(run, attempt_count)
+    next_try_time = calculate_next_try_time(run.finish_time, attempt_count)
     if datetime.utcnow() < next_try_time:
         logger.info(
             "Not attempting to push %s / %s (%s) due to "
@@ -1676,10 +1676,11 @@ async def blockers_request(request):
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow("""\
 SELECT
+  run.finish_time AS finish_time,
   run.review_status AS review_status,
   run.command AS run_command,
   review_comment AS review_comment,
-  policy.qa_review_policy AS qa_review_policy,
+  policy.qa_review AS qa_review_policy,
   package.maintainer_email AS maintainer_email,
   run.revision AS revision,
   policy.command AS policy_command,
@@ -1708,10 +1709,10 @@ WHERE id = $1
         'result': not run['removed'],
         'details': {'removed': run['removed']}}
     ret['command'] = {
-        'result': ret['run_command'] == ret['policy_command'],
+        'result': run['run_command'] == run['policy_command'],
         'details': {
-            'correct': ret['policy_command'],
-            'actual': ret['run_command']}}
+            'correct': run['policy_command'],
+            'actual': run['run_command']}}
     ret['qa_review'] = {
         'result': (
             run['review_status'] != 'rejected'
@@ -1725,7 +1726,8 @@ WHERE id = $1
                 and run['review_status'] == 'unreviewed'),
             'policy': run['qa_review_policy']}}
 
-    next_try_time = calculate_next_try_time(run, attempt_count)
+    next_try_time = calculate_next_try_time(
+        run['finish_time'], attempt_count)
     ret['backoff'] = {
         'result': datetime.utcnow() >= next_try_time,
         'details': {

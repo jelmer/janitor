@@ -289,3 +289,11 @@ Tag: {{ tagname }}
 {% endif %}
 
 {% endmacro %}
+
+{% macro display_publish_blockers(blockers) %}
+<ul>
+{% for k, v in blockers.items() %}
+<li>{% if v.result %}&#9745;{% else %}&#9746;{% endif %} {{ k }}</li>
+{% endif %}
+</ul>
+{% endmacro %}
