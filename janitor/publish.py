@@ -470,6 +470,7 @@ async def publish_one(
             await redis.publish_json(
                 'merge-proposal',
                 {"url": proposal_url, "status": "open", "package": pkg,
+                 "campaign": campaign,
                  "target_branch_url": main_branch_url.rstrip("/")})
 
             merge_proposal_count.labels(status="open").inc()
@@ -2049,7 +2050,9 @@ async def check_existing_mp(
     possible_transports: Optional[List[Transport]] = None,
     check_only: bool = False,
 ) -> bool:
-    async def update_proposal_status(mp, status, revision, package_name, target_branch_url):
+    async def update_proposal_status(
+            mp, status, revision, package_name, target_branch_url,
+            campaign):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2087,14 +2090,15 @@ async def check_existing_mp(
 
             # TODO(jelmer): Check if the change_set should be marked as published
 
-            await redis.publish_json('merge-proposal', {
+            await redis.publish_json(
+                'merge-proposal', {
                 "url": mp.url,
                 "target_branch_url": target_branch_url,
                 "status": status,
                 "package": package_name,
                 "merged_by": merged_by,
                 "merged_at": str(merged_at),
-                # TODO(jelmer): Include "campaign"
+                "campaign": campaign,
             })
 
     old_status: Optional[str]
@@ -2170,7 +2174,12 @@ async def check_existing_mp(
     if (old_status != status
             or revision != old_revision
             or target_branch_url != old_target_branch_url):
-        await update_proposal_status(mp, status, revision, package_name, target_branch_url)
+        mp_run = await get_merge_proposal_run(conn, mp.url)
+        await update_proposal_status(
+            mp, status, revision, package_name, target_branch_url,
+            campaign=mp_run['campaign'])
+    else:
+        mp_run = None
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
         mps_per_maintainer[status][maintainer_email] += 1
@@ -2179,7 +2188,8 @@ async def check_existing_mp(
     if check_only:
         return False
 
-    mp_run = await get_merge_proposal_run(conn, mp.url)
+    if mp_run is None:
+        mp_run = await get_merge_proposal_run(conn, mp.url)
     if mp_run is None:
         raise NoRunForMergeProposal(mp, revision)
 
@@ -2243,7 +2253,9 @@ archive.
             "%s: Last run did not produce any changes, " "closing proposal.", mp.url
         )
         if not dry_run:
-            await update_proposal_status(mp, "applied", revision, package_name, target_branch_url)
+            await update_proposal_status(
+                mp, "applied", revision, package_name, target_branch_url,
+                mp_run['campaign'])
             try:
                 await to_thread(
                     mp.post_comment,
@@ -2357,7 +2369,9 @@ applied independently.
                     mp_remote_branch_name,
                     last_run_remote_branch_name,
                 )
-                await update_proposal_status(mp, "abandoned", revision, package_name, target_branch_url)
+                await update_proposal_status(
+                    mp, "abandoned", revision, package_name, target_branch_url,
+                    campaign=mp_run['campaign'])
                 try:
                     await to_thread(mp.post_comment, """
 This merge proposal will be closed, since the branch for the role '%s'
@@ -2392,7 +2406,9 @@ has changed from %s to %s.
         # or if one of the branches has a branch name included and the other
         # doesn't
         if not dry_run:
-            await update_proposal_status(mp, "abandoned", revision, package_name, target_branch_url)
+            await update_proposal_status(
+                mp, "abandoned", revision, package_name, target_branch_url,
+                campaign=mp_run['campaign'])
             try:
                 await to_thread(
                     mp.post_comment,
@@ -2485,7 +2501,9 @@ This merge proposal will be closed, since the branch has moved to %s.
                     mp.url,
                 )
                 if not dry_run:
-                    await update_proposal_status(mp, "applied", revision, package_name, target_branch_url)
+                    await update_proposal_status(
+                        mp, "applied", revision, package_name,
+                        target_branch_url, campaign=mp_run['campaign'])
                     try:
                         await to_thread(
                             mp.post_comment,
