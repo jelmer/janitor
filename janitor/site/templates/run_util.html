@@ -312,7 +312,7 @@ Tag: {{ tagname }}
 {% elif k == 'command' %}
   {% if r %}command has not changed{% else %}command changed from <code>{{ d.actual }}</code> to <code>{{ d.correct }}</code>{% endif %}
 {% elif k == 'maintainer_propose_rate_limit' %}
-  {% if r %}proposals not currently being rate-limited for maintainer {{ d.maintainer }} (open: {{ d.open }}, max open: {{ d.max_open }}){% else %}merge proposals for the package maintainer {{ d.maintainer }} are currently being rate-limited{% endif %}
+  {% if r %}proposals not currently being rate-limited for maintainer {{ d.maintainer }}{% else %}merge proposals for the package maintainer {{ d.maintainer }} are currently being rate-limited (open: {{ d.open }}, max open: {{ d.max_open }}){% endif %}
 {% elif k == 'success' %}
   {% if r %}run was successful{% else %}run was not successful{% endif %}
 {% else %}
