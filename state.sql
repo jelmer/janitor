@@ -202,7 +202,7 @@ CREATE TABLE new_result_branch (
  role text not null,
  remote_name text,
  base_revision text,
- revision text not null,
+ revision text,
  absorbed boolean default false,
  UNIQUE(run_id, role)
 );
