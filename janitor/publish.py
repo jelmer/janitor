@@ -1751,7 +1751,7 @@ async def maintainer_rate_limits_request(request):
         'proposals_per_maintainer': per_maintainer,
         'per_forge': {
             str(f): dt.isoformat()
-            for f, dt in forge_rate_limiter.items()},
+            for f, dt in request.app['forge_rate_limiter'].items()},
         'push_limit': request.app['push_limit']})
 
 
@@ -1784,10 +1784,10 @@ WHERE id = $1
 
         if run['revision'] is not None:
             attempt_count = await get_publish_attempt_count(
-                conn, run['revision'].encode('utf-8'), {"differ-unreachable"}
+                conn, run['revision'].encode('utf-8'),
+                {"differ-unreachable"})
         else:
             attempt_count = 0
-        )
     ret = {}
     ret['success'] = {
         'result': (run['result_code'] == 'success'),
