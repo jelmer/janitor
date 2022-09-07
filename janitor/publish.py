@@ -139,6 +139,9 @@ last_publish_pending_success = Gauge(
     "last_publish_pending_success",
     "Last time pending changes were successfully published",
 )
+last_scan_existing_success = Gauge(
+    "last_scan_existing_success",
+    "Last time existing merge proposals were successfully scanned")
 publish_latency = Histogram(
     "publish_latency", "Delay between build finish and publish."
 )
@@ -2721,16 +2724,18 @@ async def check_existing(
                 )
                 check_only = True
 
-    if was_forge_ratelimited:
+    logging.info('Successfully scanned existing merge proposals')
+    last_scan_existing_success.set_to_current_time()
+
+    if not was_forge_ratelimited:
+        for status, count in status_count.items():
+            merge_proposal_count.labels(status=status).set(count)
+
+        maintainer_rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
+        for maintainer_email, count in mps_per_maintainer["open"].items():
+            open_proposal_count.labels(maintainer=maintainer_email).set(count)
+    else:
         logging.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
-        return
-
-    for status, count in status_count.items():
-        merge_proposal_count.labels(status=status).set(count)
-
-    maintainer_rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
-    for maintainer_email, count in mps_per_maintainer["open"].items():
-        open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 
 async def get_run(conn: asyncpg.Connection, run_id):
