@@ -189,6 +189,11 @@ forge_rate_limited_count = Counter(
     "Runs were not published because the relevant forge was rate-limiting",
     labelnames=("forge", ))
 
+unexpected_http_response_count = Counter(
+    "unexpected_http_response_count",
+    "Number of unexpected HTTP responses during checks of existing "
+    "proposals")
+
 
 logger = logging.getLogger('janitor.publish')
 
@@ -2639,7 +2644,7 @@ async def check_existing(
     external_url: str,
     differ_url: str,
     modify_limit=None,
-    unexpected_limit=5,
+    unexpected_limit: int = 5,
 ):
     mps_per_maintainer: Dict[str, Dict[str, int]] = {
         "open": {},
@@ -2710,6 +2715,7 @@ async def check_existing(
             unexpected += 1
 
         if unexpected > unexpected_limit:
+            unexpected_http_response_count.inc()
             logging.warning(
                 "Saw %d unexpected HTTP responses, over threshold of %d. "
                 "Giving up for now.", unexpected, unexpected_limit)
