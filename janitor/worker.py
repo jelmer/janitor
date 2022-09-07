@@ -117,6 +117,8 @@ push_branch_retries = Counter(
     "push_branch_retries", "Number of branch push retries.")
 upload_result_retries = Counter(
     "upload_result_retries", "Number of result upload retries.")
+assignment_failed_count = Counter(
+    "assignment_failed_count", "Failed to obtain assignment")
 
 
 DEFAULT_UPLOAD_TIMEOUT = ClientTimeout(30 * 60)
@@ -1134,6 +1136,11 @@ class AssignmentFailure(Exception):
         self.reason = reason
 
 
+@backoff.on_exception(
+    backoff.expo,
+    AssignmentFailure,
+    max_tries=5,
+    on_backoff=lambda m: assignment_failed_count.inc())
 async def get_assignment(
     session: ClientSession,
     my_url: Optional[yarl.URL],
