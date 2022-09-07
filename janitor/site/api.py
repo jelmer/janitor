@@ -322,16 +322,6 @@ async def handle_schedule_control(request):
     return web.json_response(response_obj)
 
 
-@docs()
-@routes.get("/pkgnames", name="package-names")
-async def handle_packagename_list(request):
-    response_obj = []
-    async with request.app['db'].acquire() as conn:
-        for row in await conn.fetch('SELECT name FROM package WHERE NOT removed'):
-            response_obj.append(row['name'])
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
-
-
 async def get_proposals(conn: asyncpg.Connection, package=None, campaign=None):
     args = []
     query = """
