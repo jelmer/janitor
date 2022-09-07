@@ -11,7 +11,6 @@ from janitor.config import get_campaign_config
 from janitor.queue import Queue
 from janitor.site import (
     get_archive_diff,
-    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     tracker_url,
@@ -260,8 +259,8 @@ WHERE run.package = $1 AND run.suite = $2
             return "not in a VCS"
         try:
             with span.new_child('vcs-diff'):
-                diff = await get_vcs_diff(
-                    client, vcs_managers[run['vcs_type']], run['package'],
+                diff = await vcs_managers[run['vcs_type']].get_diff(
+                    run['package'],
                     base_revid.encode('utf-8') if base_revid is not None else None,
                     revid.encode('utf-8') if revid is not None else None)
                 return diff.decode("utf-8", "replace")

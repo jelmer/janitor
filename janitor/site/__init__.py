@@ -138,12 +138,6 @@ class BuildDiffUnavailable(Exception):
         self.unavailable_run_id = unavailable_run_id
 
 
-async def get_vcs_diff(client, vcs_manager: VcsManager, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
-    if old_revid == new_revid:
-        return b""
-    return await vcs_manager.get_diff(package, old_revid, new_revid)
-
-
 async def get_archive_diff(
     client, differ_url, run_id, unchanged_run_id, kind, accept=None, filter_boring=False
 ):
