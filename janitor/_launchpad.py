@@ -17,15 +17,22 @@
 
 
 def override_launchpad_consumer_name():
+    from breezy.forge import ForgeLoginRequired
     from breezy.plugins.launchpad import lp_api
     from launchpadlib.launchpad import Launchpad
     from launchpadlib.credentials import RequestTokenAuthorizationEngine
+
+    class LoginRequiredAuthorizationEngine(RequestTokenAuthorizationEngine):
+
+        def make_end_user_authorize_token(self, credentials, request_token):
+            raise ForgeLoginRequired(self.web_root)
+
 
     def connect_launchpad(base_url, timeout=None, proxy_info=None,
                           version=Launchpad.DEFAULT_VERSION):
         cache_directory = lp_api.get_cache_directory()
         credential_store = lp_api.BreezyCredentialStore()
-        authorization_engine = RequestTokenAuthorizationEngine(
+        authorization_engine = LoginRequiredAuthorizationEngine(
             base_url, consumer_name='Janitor')
         return Launchpad.login_with(
             'Janitor', base_url, cache_directory, timeout=timeout,

@@ -19,7 +19,6 @@
      - python3-yaml
      - python3-tqdm
      - python3-launchpadlib
-     - python3-keyrings.alt
      - python3-distro-info
      - python3-patiencediff
      - java-propose-classpath
