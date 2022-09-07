@@ -40,6 +40,8 @@ from aiohttp_apispec import (
     setup_aiohttp_apispec,
 )
 
+from breezy.revision import NULL_REVISION
+
 from marshmallow import Schema, fields
 from yarl import URL
 
@@ -54,7 +56,6 @@ from . import (
     env,
     highlight_diff,
     get_archive_diff,
-    get_vcs_diff,
     iter_accept,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
@@ -509,11 +510,12 @@ async def handle_diff(request):
     try:
         try:
             with span.new_child('vcs-diff'):
-                diff = await get_vcs_diff(
-                    request.app['http_client_session'],
-                    request.app['vcs_managers'][run['vcs_type']], run['package'],
-                    run['base_revision'].encode('utf-8') if run['base_revision'] else None,
-                    run['revision'].encode('utf-8') if run['revision'] else None)
+                diff = await request.app['vcs_managers'][run['vcs_type']].get_diff(
+                    run['package'],
+                    run['base_revision'].encode('utf-8')
+                    if run['base_revision'] else NULL_REVISION,
+                    run['revision'].encode('utf-8')
+                    if run['revision'] else NULL_REVISION)
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:

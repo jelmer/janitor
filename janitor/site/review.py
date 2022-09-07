@@ -8,11 +8,12 @@ from asyncio import TimeoutError
 from aiohttp import ClientConnectorError, ClientResponseError
 from typing import List, Optional, Any
 
+from breezy.revision import NULL_REVISION
+
 from janitor import state
 from . import (
     env,
     get_archive_diff,
-    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
@@ -143,10 +144,11 @@ async def generate_review(
             return "no vcs known"
         try:
             with span.new_child('vcs-diff'):
-                diff = (await get_vcs_diff(
-                    client, vcs_managers[vcs_type], package,
-                    base_revid.encode('utf-8') if base_revid else None,
-                    revid.encode('utf-8'))).decode("utf-8", "replace")
+                diff = (await vcs_managers[vcs_type].get_diff(
+                    package,
+                    base_revid.encode('utf-8') if base_revid else NULL_REVISION,
+                    revid.encode('utf-8') if revid else NULL_REVISION)
+                    ).decode("utf-8", "replace")
                 if len(diff) > MAX_DIFF_SIZE:
                     return "Diff too large (%d). See it at %s" % (
                         len(diff),

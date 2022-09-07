@@ -44,7 +44,6 @@ from buildlog_consultant.sbuild import (
 from janitor.logs import LogRetrievalError
 from janitor.site import (
     get_archive_diff,
-    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     tracker_url,
@@ -192,8 +191,8 @@ async def generate_run_file(
             return "Run not in VCS"
         try:
             with span.new_child('vcs-diff'):
-                diff = await get_vcs_diff(
-                    client, vcs_managers[run['vcs_type']], run['package'],
+                diff = await vcs_managers[run['vcs_type']].get_diff(
+                    run['package'],
                     base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
                     revid.encode('utf-8') if revid is not None else NULL_REVISION)
         except ClientResponseError as e:
