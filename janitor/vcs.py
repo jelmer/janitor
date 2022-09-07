@@ -226,7 +226,9 @@ class VcsManager(object):
     def list_repositories(self) -> Iterable[str]:
         raise NotImplementedError(self.list_repositories)
 
-    async def get_diff(self, codebase, old_revid, new_revid):
+    async def get_diff(
+            self, codebase: str, old_revid: Optional[bytes],
+            new_revid: Optional[bytes]) -> bytes:
         raise NotImplementedError(self.get_diff)
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
@@ -267,6 +269,8 @@ class LocalGitVcsManager(VcsManager):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
         repo = self.get_repository(codebase)
         if repo is None:
             raise KeyError
@@ -345,6 +349,8 @@ class LocalBzrVcsManager(VcsManager):
             yield entry.name
 
     async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
         repo = self.get_repository(codebase)
         if repo is None:
             raise KeyError
@@ -395,6 +401,9 @@ class RemoteGitVcsManager(VcsManager):
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
+
         url = self.get_diff_url(codebase, old_revid, new_revid)
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
@@ -435,6 +444,8 @@ class RemoteBzrVcsManager(VcsManager):
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
         url = self.get_diff_url(codebase, old_revid, new_revid)
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
