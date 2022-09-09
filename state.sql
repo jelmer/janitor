@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    revision text,
    merged_by text,
    merged_at timestamp,
+   last_scanned timestamp,
    foreign key (package) references package(name),
    primary key(url),
    foreign key (target_branch_url)

@@ -866,10 +866,12 @@ async def store_publish(
     async with conn.transaction():
         if merge_proposal_url:
             await conn.execute(
-                "INSERT INTO merge_proposal (url, package, status, "
-                "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
+                "INSERT INTO merge_proposal "
+                "(url, package, status, revision, last_scanned) "
+                "VALUES ($1, $2, 'open', $3, NOW()) ON CONFLICT (url) "
                 "DO UPDATE SET package = EXCLUDED.package, "
-                "revision = EXCLUDED.revision",
+                "revision = EXCLUDED.revision, "
+                "last_scanned = EXCLUDED.last_scanned",
                 merge_proposal_url,
                 package,
                 revision,
@@ -2080,8 +2082,8 @@ async def check_existing_mp(
                 await conn.execute(
                     """INSERT INTO merge_proposal (
                         url, status, revision, package, merged_by, merged_at,
-                        target_branch_url)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        target_branch_url, last_scanned)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
                     ON CONFLICT (url)
                     DO UPDATE SET
                       status = EXCLUDED.status,
@@ -2089,7 +2091,8 @@ async def check_existing_mp(
                       package = EXCLUDED.package,
                       merged_by = EXCLUDED.merged_by,
                       merged_at = EXCLUDED.merged_at,
-                      target_branch_url = EXCLUDED.target_branch_url
+                      target_branch_url = EXCLUDED.target_branch_url,
+                      last_scanned = EXCLUDED.last_scanned
                     """, mp.url, status,
                     revision.decode("utf-8") if revision is not None else None,
                     package_name, merged_by, merged_at, target_branch_url)
