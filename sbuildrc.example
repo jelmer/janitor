@@ -1,4 +1,6 @@
 $build_arch_all = 1;
+$apt_update = 1;
+$apt_distupgrade = 1;
 $run_lintian = 1;
 $run_piuparts = 0;
 $piuparts_require_success = 0;
