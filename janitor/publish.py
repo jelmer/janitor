@@ -856,6 +856,7 @@ async def store_publish(
     result_code,
     description,
     merge_proposal_url=None,
+    target_branch_url=None,
     publish_id=None,
     requestor=None,
 ):
@@ -867,14 +868,17 @@ async def store_publish(
         if merge_proposal_url:
             await conn.execute(
                 "INSERT INTO merge_proposal "
-                "(url, package, status, revision, last_scanned) "
-                "VALUES ($1, $2, 'open', $3, NOW()) ON CONFLICT (url) "
+                "(url, package, status, revision, last_scanned, "
+                " target_branch_url) "
+                "VALUES ($1, $2, 'open', $3, NOW(), $4) ON CONFLICT (url) "
                 "DO UPDATE SET package = EXCLUDED.package, "
                 "revision = EXCLUDED.revision, "
-                "last_scanned = EXCLUDED.last_scanned",
+                "last_scanned = EXCLUDED.last_scanned, "
+                "target_branch_url = EXCLUDED.target_branch_url",
                 merge_proposal_url,
                 package,
                 revision,
+                target_branch_url
             )
         else:
             # TODO(jelmer): do something by branch instead?
@@ -1073,6 +1077,7 @@ async def publish_from_policy(
         description,
         publish_result.proposal_url if publish_result.proposal_url else None,
         publish_id=publish_id,
+        target_branch_url=main_branch_url,
         requestor=requestor,
     )
 
@@ -1195,8 +1200,7 @@ async def publish_and_store(
                 role,
                 e.mode,
                 e.code,
-                e.description,
-                None,
+                description=e.description,
                 publish_id=publish_id,
                 requestor=requestor,
             )
@@ -1230,8 +1234,9 @@ async def publish_and_store(
             role,
             mode,
             "success",
-            "Success",
+            description="Success",
             publish_result.proposal_url if publish_result.proposal_url else None,
+            target_branch_url=run.branch_url,
             publish_id=publish_id,
             requestor=requestor,
         )
@@ -2209,7 +2214,6 @@ async def check_existing_mp(
     mp_remote_branch_name = mp_run['remote_branch_name']
 
     if mp_remote_branch_name is None:
-        target_branch_url = await to_thread(mp.get_target_branch_url)
         if target_branch_url is None:
             logger.warning("No target branch for %r", mp)
         else:
@@ -2362,7 +2366,7 @@ applied independently.
         and last_run_remote_branch_name is not None
     ):
         logger.warning(
-            "%s: Remote branch name has changed: %s => %s, " "skipping...",
+            "%s: Remote branch name has changed: %s => %s ",
             mp.url,
             mp_remote_branch_name,
             last_run_remote_branch_name,
@@ -2402,8 +2406,10 @@ has changed from %s to %s.
                     )
                     return False
             else:
-                return True
-        return False
+                target_branch_url = role_branch_url(
+                    mp_run['branch_url'], mp_remote_branch_name)
+        else:
+            return False
 
     if not await to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
         logger.warning(
@@ -2481,7 +2487,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 last_run.package,
                 last_run.command,
                 last_run.result,
-                role_branch_url(mp_run['branch_url'], mp_remote_branch_name),
+                target_branch_url,
                 MODE_PROPOSE,
                 mp_run['role'],
                 last_run_revision,
@@ -2560,7 +2566,7 @@ applied independently.
                     e.mode,
                     code,
                     description,
-                    mp.url,
+                    merge_proposal_url=mp.url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
                 )
@@ -2575,8 +2581,9 @@ applied independently.
                     mp_run['role'],
                     MODE_PROPOSE,
                     "success",
-                    publish_result.description or "Succesfully updated",
-                    publish_result.proposal_url,
+                    description=(publish_result.description or "Succesfully updated"),
+                    merge_proposal_url=publish_result.proposal_url,
+                    target_branch_url=target_branch_url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
                 )

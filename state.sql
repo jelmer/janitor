@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    subpath text,
    -- last revision, if known
    vcs_last_revision text,
+   last_scanned timestamp,
    -- vcs type, if known
    vcs_type vcs_type,
    unique(branch_url, subpath),
