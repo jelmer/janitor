@@ -110,15 +110,16 @@ async def update_package_metadata(
                 package.origin
             )
         )
-        codebases.append(
-            (
-                package.name,
-                branch_url if branch_url else None,
-                subpath if subpath else None,
-                package.vcs_type.lower() if package.vcs_type else None,
-                vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
+        if branch_url is not None:
+            codebases.append(
+                (
+                    package.name,
+                    branch_url,
+                    subpath if subpath else None,
+                    package.vcs_type.lower() if package.vcs_type else None,
+                    vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
+                )
             )
-        )
     await conn.executemany(
         "INSERT INTO package "
         "(name, distribution, branch_url, subpath, maintainer_email, "

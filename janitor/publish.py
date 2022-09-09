@@ -303,7 +303,7 @@ class SlowStartRateLimiter(RateLimiter):
             raise MaintainerRateLimited(email, current, limit)
 
     def _get_limit(self, maintainer_email):
-        return self._merged_mps_per_maintainer.get(email, 0) + 1
+        return self._merged_mps_per_maintainer.get(maintainer_email, 0) + 1
 
     def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
@@ -722,7 +722,8 @@ async def handle_publish_failure(e, conn, run, bucket):
     )
 
     unchanged_run = await conn.fetchrow(
-        "SELECT result_code, package, revision FROM last_runs WHERE revision = $2 AND package = $1 and result_code = 'success'",
+        "SELECT result_code, package, revision FROM last_runs "
+        "WHERE revision = $2 AND package = $1 and result_code = 'success'",
         run.package, run.main_branch_revision.decode('utf-8')
     )
 
@@ -995,7 +996,8 @@ async def publish_from_policy(
         return
 
     unchanged_run = await conn.fetchrow(
-        "SELECT id, result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+        "SELECT id, result_code FROM last_runs "
+        "WHERE package = $1 AND revision = $2 AND result_code = 'success'",
         run.package, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
@@ -2185,7 +2187,7 @@ async def check_existing_mp(
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await update_proposal_status(
             mp, status, revision, package_name, target_branch_url,
-            campaign=mp_run['campaign'])
+            campaign=mp_run['campaign'] if mp_run else None)
     else:
         mp_run = None
     if maintainer_email is not None and mps_per_maintainer is not None:
@@ -2705,7 +2707,11 @@ async def check_existing(
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
                 mp.url, forge)
-            forge_rate_limiter[forge] = datetime.utcnow() + timedelta(seconds=e.retry_after)
+            if e.retry_after is None:
+                retry_after = timedelta(minutes=30)
+            else:
+                retry_after = timedelta(seconds=e.retry_after)
+            forge_rate_limiter[forge] = datetime.utcnow() + retry_after
             continue
         except UnexpectedHttpStatus as e:
             logging.warning(
