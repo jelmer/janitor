@@ -595,11 +595,7 @@ def import_branches_git(
 def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches, tags
 ):
-    try:
-        from breezy.transport import NoSuchFile
-    except ImportError:
-        from breezy.errors import NoSuchFile  # type: ignore
-    from breezy.transport import get_transport
+    from breezy.transport import NoSuchFile, get_transport
     for fn, n, br, r in branches:
         target_branch_path = urlutils.join(repo_url, campaign)
         if fn is not None:

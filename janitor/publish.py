@@ -229,7 +229,7 @@ class RateLimiter(object):
     def inc(self, maintainer_email: str) -> None:
         raise NotImplementedError(self.inc)
 
-    def get_stats(self) -> Dict[str, Tuple[int, int]]:
+    def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
         raise NotImplementedError(self.get_stats)
 
 
@@ -261,10 +261,13 @@ class FixedRateLimiter(RateLimiter):
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
 
-    def get_stats(self) -> Dict[str, Tuple[int, int]]:
-        return {
-            email: (current, self._max_mps_per_maintainer)
-            for (email, current) in self._open_mps_per_maintainer.items()}
+    def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
+        if self._open_mps_per_maintainer:
+            return {
+                email: (current, self._max_mps_per_maintainer)
+                for (email, current) in self._open_mps_per_maintainer.items()}
+        else:
+            return {}
 
 
 class NonRateLimiter(RateLimiter):
@@ -1235,7 +1238,9 @@ async def publish_and_store(
             mode,
             "success",
             description="Success",
-            publish_result.proposal_url if publish_result.proposal_url else None,
+            merge_proposal_url=(
+                publish_result.proposal_url
+                if publish_result.proposal_url else None),
             target_branch_url=run.branch_url,
             publish_id=publish_id,
             requestor=requestor,
@@ -1751,7 +1756,7 @@ async def maintainer_rate_limits_request(request):
 
 
 @routes.get("/rate-limits", name="rate-limits")
-async def maintainer_rate_limits_request(request):
+async def rate_limits_request(request):
     maintainer_rate_limiter = request.app['maintainer_rate_limiter']
 
     per_maintainer = {}
