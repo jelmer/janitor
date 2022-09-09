@@ -25,6 +25,7 @@ from aiohttp_openmetrics import setup_metrics
 
 import asyncio
 from nio import AsyncClient
+from nio.exceptions import LocalProtocolError
 
 
 async def main(args):
@@ -41,14 +42,19 @@ async def main(args):
     await matrix_client.join(args.room)
 
     async def message(msg):
-        await matrix_client.room_send(
-            room_id=args.room,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": msg
-            }
-        )
+        try:
+            await matrix_client.room_send(
+                room_id=args.room,
+                message_type="m.room.message",
+                content={
+                    "msgtype": "m.text",
+                    "body": msg
+                }
+            )
+        except LocalProtocolError as e:
+            logging.warning(
+                'Error sending matrix message: %r',
+                e)
 
     app = web.Application()
     setup_metrics(app)
