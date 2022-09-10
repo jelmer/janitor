@@ -30,9 +30,9 @@
 {% endif %}
 
 {% if queue_position %}
-<li id='queue-position.{{ package }}'>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+<li id="queue-position.{{ package }}">Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
 {% else %}
-<li id='queue-position.{{ package }}'/>
+<li id="queue-position.{{ package }}"/>
 {% endif %}
 </ul>
 
@@ -57,7 +57,7 @@
 
 {% if run and run.result_code == 'nothing-to-do' %}
 <p>
-Nothing to do for {{ package }}.
+Nothing to do for {{ package }}.</p>
 {% else %}
 <p>No unpublished successful runs for {{ package }}.</p>
 {% endif %}

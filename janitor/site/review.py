@@ -148,7 +148,7 @@ async def generate_review(
                     package,
                     base_revid.encode('utf-8') if base_revid else NULL_REVISION,
                     revid.encode('utf-8') if revid else NULL_REVISION)
-                    ).decode("utf-8", "replace")
+                ).decode("utf-8", "replace")
                 if len(diff) > MAX_DIFF_SIZE:
                     return "Diff too large (%d). See it at %s" % (
                         len(diff),

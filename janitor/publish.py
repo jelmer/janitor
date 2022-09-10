@@ -2113,8 +2113,7 @@ async def check_existing_mp(
 
             # TODO(jelmer): Check if the change_set should be marked as published
 
-            await redis.publish_json(
-                'merge-proposal', {
+            await redis.publish_json('merge-proposal', {
                 "url": mp.url,
                 "target_branch_url": target_branch_url,
                 "status": status,

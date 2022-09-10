@@ -5,11 +5,11 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
-<div class="score">Score: <span id="score">{{ value }}</div></div>
-<div class="command">Command: <span id="command">{{ command }}</div></div>
+<div class="score">Score: <span id="score">{{ value }}</span></div>
+<div class="command">Command: <span id="command">{{ command }}</span></div>
 
 {% for role, remote_branch_name, base_revision, revision in branches %}
-<div class="branch" id='branch-{{ role }}'>
+<div class="branch" id="branch-{{ role }}">
 <h2>{{ role }}</h2>
 <div class="revisions" id="revisions-{{ role }}">
 <ul>
@@ -18,11 +18,11 @@
 {% endfor %}
 </ul>
 </div>
-<div class="diff" id='diff-{{ role }}'>{{highlight_diff(show_diff(role))|safe}}</div>
+<div class="diff" id="diff-{{ role }}">{{highlight_diff(show_diff(role))|safe}}</div>
 </div>
 {% endfor %}
 
-<div id='debdiff'>
+<div id="debdiff">
 {{show_debdiff()|safe}}
 </div>
 
@@ -151,17 +151,17 @@ function submitReview(elem, status) {
 
 
 <form action="/cupboard/review" method="POST" id="options">
-<input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
-<input type="hidden" name="package-name" id='package-name' value="{{ package_name }}"/>
+<input type="hidden" name="run_id" id="run-id" value="{{ run_id }}"/>
+<input type="hidden" name="package-name" id="package-name" value="{{ package_name }}"/>
 {% if suites %}
 {% for s in suites %}
 <input type="hidden" name="suites[]" value="{{ s }}"/>
 {% endfor %}
 {% endif %}
-<input class='review-button' type="submit" name="review_status" value="Approve" accesskey="a" onclick="submitReview(this, 'approved')">
-<input class='review-button' type="submit" name="review_status" value="Reject" accesskey="r" onclick="submitReview(this, 'rejected')">
-<input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this, 'reschedule')">
-<input class='review-button' type="submit" name="review_status" value="Abstain" accesskey="n" onclick="submitReview(this, 'abstained')">
+<input class="review-button" type="submit" name="review_status" value="Approve" accesskey="a" onclick="submitReview(this, 'approved')"/>
+<input class="review-button" type="submit" name="review_status" value="Reject" accesskey="r" onclick="submitReview(this, 'rejected')"/>
+<input class="review-button" type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this, 'reschedule')"/>
+<input class="review-button" type="submit" name="review_status" value="Abstain" accesskey="n" onclick="submitReview(this, 'abstained')"/>
 
 <input type="checkbox" value="true" name="publishable_only" id="publishable-only"{% if publishable_only %} checked{% endif %} onchange="$('#options').submit()"/>
 <label for="publishable_only">Publishable only</label>
