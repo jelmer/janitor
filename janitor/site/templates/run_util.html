@@ -35,14 +35,14 @@ cd {{ package }}
 
 {% macro file_bug_button(bugtracker, run_id, result_code, verbatim_id=None, accesskey="b") %}
 {% if bugtracker.kind == config_pb2.gitlab %}
-<form id="bugform" action="{{ bugtracker.url }}/-/issues/new" method="GET" style="display: contents;">
+<form id="bugform" action="{{ bugtracker.url }}/-/issues/new" method="get" style="display: contents;">
 <input type="hidden" name="issue[issue_type]" value="issue"/>
 <input type="hidden" name="issue[title]" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
-<input type="hidden" id="issue_description" name="issue[description]" value="{% filter escape -%}
+<input type="hidden" id="issue_description" name="issue[description]" value="{%- filter escape -%}
 See run [{{ run_id }}]({{ url }}).
 
-{%- endfilter %}"/>
-<button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
+{%- endfilter -%}"/>
+<button id="filebug"{%- if accesskey -%} accesskey="{{ accesskey }}"{%- endif -%}>File a Bug against {{ bugtracker.name }}</button>
 </form>
 
 {% if verbatim_id %}
@@ -65,10 +65,10 @@ window.bugform.onsubmit = function(e) {
 <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
 <form id="bugform" action="mailto:new@bugs.debian.org" method="GET" style="display: contents;">
 <input type="hidden" name="subject" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
-<input type="hidden" name="body" value="{% filter escape -%}
+<input type="hidden" name="body" value="{%- filter escape -%}
 See run [{{ run_id }}]({{ url }}).
 
-{%- endfilter %}"/>
+{%- endfilter -%}"/>
 <button {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
 </form>
 

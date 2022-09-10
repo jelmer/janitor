@@ -24,7 +24,7 @@ from yarl import URL
 from janitor import config_pb2
 from janitor.config import Config, get_distribution
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
-from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager, VcsManager
+from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',

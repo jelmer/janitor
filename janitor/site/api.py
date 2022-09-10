@@ -475,7 +475,7 @@ async def find_vcs_info(db, role, run_id=None, package=None, campaign=None):
                 'new_result_branch.base_revision AS base_revision, '
                 'new_result_branch.revision AS revision FROM run '
                 'LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id '
-                'WHERE id = $1 AND role = $2', run_id, role)
+                'WHERE run.id = $1 AND role = $2', run_id, role)
 
 
 
@@ -507,6 +507,8 @@ async def handle_diff(request):
             status=404,
             text="Not in a VCS")
 
+    if run['revision'] is None:
+        return web.Response(text='Branch deleted')
     try:
         try:
             with span.new_child('vcs-diff'):
