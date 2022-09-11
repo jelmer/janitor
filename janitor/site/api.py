@@ -445,8 +445,10 @@ async def handle_revision_info(request):
     try:
         revision_info = await request.app['vcs_managers'][run['vcs_type']].get_revision_info(
             run['package'],
-            run['base_revision'].encode('utf-8') if run['base_revision'] else None,
-            run['revision'].encode('utf-8') if run['revision'] else None)
+            run['base_revision'].encode('utf-8')
+            if run['base_revision'] else NULL_REVISION,
+            run['revision'].encode('utf-8')
+            if run['revision'] else NULL_REVISION)
         return web.json_response(revision_info)
     except ContentTypeError as e:
         return web.json_response(
@@ -516,8 +518,7 @@ async def handle_diff(request):
                     run['package'],
                     run['base_revision'].encode('utf-8')
                     if run['base_revision'] else NULL_REVISION,
-                    run['revision'].encode('utf-8')
-                    if run['revision'] else NULL_REVISION)
+                    run['revision'].encode('utf-8'))
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:

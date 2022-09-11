@@ -6,6 +6,8 @@ import asyncpg
 from functools import partial
 from typing import Optional, List
 
+from breezy.revision import NULL_REVISION
+
 from janitor import state, splitout_env
 from janitor.config import get_campaign_config
 from janitor.queue import Queue
@@ -257,12 +259,15 @@ WHERE run.package = $1 AND run.suite = $2
             return ""
         if run['vcs_type'] is None:
             return "not in a VCS"
+        if revid is None:
+            return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
                 diff = await vcs_managers[run['vcs_type']].get_diff(
                     run['package'],
-                    base_revid.encode('utf-8') if base_revid is not None else None,
-                    revid.encode('utf-8') if revid is not None else None)
+                    base_revid.encode('utf-8')
+                    if base_revid is not None else NULL_REVISION,
+                    revid.encode('utf-8'))
                 return diff.decode("utf-8", "replace")
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status

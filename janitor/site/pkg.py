@@ -189,12 +189,14 @@ async def generate_run_file(
             return ""
         if run['vcs_type'] is None:
             return "Run not in VCS"
+        if run['revision'] is None:
+            return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
                 diff = await vcs_managers[run['vcs_type']].get_diff(
                     run['package'],
                     base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
-                    revid.encode('utf-8') if revid is not None else NULL_REVISION)
+                    revid.encode('utf-8'))
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:

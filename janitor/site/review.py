@@ -142,12 +142,14 @@ async def generate_review(
         external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
         if vcs_type is None:
             return "no vcs known"
+        if revid is None:
+            return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
                 diff = (await vcs_managers[vcs_type].get_diff(
                     package,
                     base_revid.encode('utf-8') if base_revid else NULL_REVISION,
-                    revid.encode('utf-8') if revid else NULL_REVISION)
+                    revid.encode('utf-8'))
                 ).decode("utf-8", "replace")
                 if len(diff) > MAX_DIFF_SIZE:
                     return "Diff too large (%d). See it at %s" % (
@@ -171,13 +173,15 @@ async def generate_review(
         except KeyError:
             return []
 
-        old_revid = base_revid.encode('utf-8') if base_revid else None
-        new_revid = revid.encode('utf-8') if revid else None
-        if old_revid == new_revid:
+        if base_revid == revid:
             return []
         if vcs_type is None:
             logging.warning("No vcs known for run %s", run_id)
             return []
+        if revid is None:
+            return []
+        old_revid = base_revid.encode('utf-8') if base_revid else NULL_REVISION
+        new_revid = revid.encode('utf-8')
         try:
             return await vcs_managers[vcs_type].get_revision_info(package, old_revid, new_revid)
         except ClientResponseError as e:
