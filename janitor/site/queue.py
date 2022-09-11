@@ -23,10 +23,6 @@ import asyncpg
 from ..queue import Queue, QueueItem
 
 
-class RunnerProcessingUnavailable(Exception):
-    """Raised when unable to get processing data for runner."""
-
-
 def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
     for entry in answer["processing"]:
         entry = dict(entry.items())
