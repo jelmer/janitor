@@ -35,16 +35,9 @@ from breezy import (
 )
 from breezy.workingtree import WorkingTree
 
-# Timeout in seconds for uploads
-UPLOAD_TIMEOUT = 30 * 60
-
 
 class NoChangesFile(Exception):
     """No changes file found."""
-
-
-class UploadFailedError(Exception):
-    """Upload failed."""
 
 
 class InconsistentChangesFiles(Exception):

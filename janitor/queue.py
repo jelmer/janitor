@@ -76,19 +76,6 @@ class QueueItem(object):
     def codebase(self):
         return self.package
 
-    def _tuple(self):
-        return (
-            self.id,
-            self.package,
-            self.context,
-            self.command,
-            self.estimated_duration,
-            self.campaign,
-            self.refresh,
-            self.requestor,
-            self.change_set,
-        )
-
     def __eq__(self, other):
         if isinstance(other, QueueItem):
             return self.id == other.id

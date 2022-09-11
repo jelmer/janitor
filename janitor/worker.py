@@ -138,10 +138,6 @@ class EmptyQueue(Exception):
     """Queue was empty."""
 
 
-# Whether to trust packages enough to run code from them,
-# e.g. when guessing repo location.
-TRUST_PACKAGE = False
-
 MAX_BUILD_ITERATIONS = 50
 
 

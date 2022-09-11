@@ -54,7 +54,6 @@ def get_result_branch(result_branches, role):
 class Run(object):
 
     id: str
-    times: Tuple[datetime.datetime, datetime.datetime]
     command: str
     description: Optional[str]
     package: str
