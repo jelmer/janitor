@@ -46,6 +46,7 @@ from lintian_brush.vcs import (
     determine_browser_url,
     unsplit_vcs_url,
 )
+from dulwich.objects import ZERO_SHA
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
@@ -227,11 +228,12 @@ class VcsManager(object):
         raise NotImplementedError(self.list_repositories)
 
     async def get_diff(
-            self, codebase: str, old_revid: Optional[bytes],
-            new_revid: Optional[bytes]) -> bytes:
+            self, codebase: str, old_revid: bytes,
+            new_revid: bytes) -> bytes:
         raise NotImplementedError(self.get_diff)
 
-    async def get_revision_info(self, codebase, old_revid, new_revid):
+    async def get_revision_info(
+            self, codebase: str, old_revid: bytes, new_revid: bytes):
         raise NotImplementedError(self.get_revision_info)
 
 
@@ -408,11 +410,17 @@ class RemoteGitVcsManager(VcsManager):
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
+    def _lookup_revid(self, revid):
+        if revid == NULL_REVISION:
+            return ZERO_SHA
+        else:
+            return revid[len(b'git-v1:'):]
+
     async def get_revision_info(self, codebase, old_revid, new_revid):
         url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
             codebase,
-            old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-            new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
+            self._lookup_revid(old_revid).decode('utf-8'),
+            self._lookup_revid(new_revid).decode('utf-8')))
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
@@ -422,8 +430,8 @@ class RemoteGitVcsManager(VcsManager):
     def get_diff_url(self, codebase, old_revid, new_revid):
         return urllib.parse.urljoin(self.base_url, "%s/diff?old=%s&new=%s" % (
             codebase,
-            old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-            new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
+            self._lookup_revid(old_revid).decode('utf-8'),
+            self._lookup_revid(new_revid).decode('utf-8')))
 
     def get_branch(self, codebase, branch_name):
         url = self.get_branch_url(codebase, branch_name)
@@ -452,8 +460,8 @@ class RemoteBzrVcsManager(VcsManager):
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
-            codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-            new_revid.decode('utf-8') if new_revid else NULL_REVISION))
+            codebase, old_revid.decode('utf-8'),
+            new_revid.decode('utf-8')))
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
@@ -462,8 +470,8 @@ class RemoteBzrVcsManager(VcsManager):
 
     def get_diff_url(self, codebase, old_revid, new_revid):
         return urllib.parse.urljoin(self.base_url, "%s/diff?old=%s&new=%s" % (
-            codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-            new_revid.decode('utf-8') if new_revid else NULL_REVISION))
+            codebase, old_revid.decode('utf-8'),
+            new_revid.decode('utf-8')))
 
     def get_branch(self, codebase, branch_name):
         url = self.get_branch_url(codebase, branch_name)
