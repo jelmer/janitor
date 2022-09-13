@@ -1647,6 +1647,51 @@ async def handle_log(request):
     return response
 
 
+@routes.post("/candidates", name="upload-candidates")
+async def handle_candidates(request):
+    unknown_packages = []
+    unknown_campaigns = []
+    queue_processor = request.app['queue_processor']
+    async with queue_processor.database.acquire() as conn:
+        known_packages = set()
+        async for record in conn.fetch('SELECT name FROM package'):
+            known_packages.add(record[0])
+
+        known_campaign_names = [
+            campaign.name for campaign in queue_processor.config.campaign]
+
+        entries = []
+        for candidate in (await request.json()):
+            if candidate['package'] not in known_packages:
+                logging.warning(
+                    'ignoring candidate %s/%s; package unknown',
+                    candidate['package'], candidate['campaign'])
+                unknown_packages.append(candidate['package'])
+                continue
+            if candidate['campaign'] not in known_campaign_names:
+                logging.warning('unknown suite %r', candidate['campaign'])
+                unknown_campaigns.append(candidate['campaign'])
+                continue
+
+            entries.append((
+                candidate['package'], candidate['campaign'],
+                candidate.get('change_set'), candidate.get('context'),
+                candidate.get('value'), candidate.get('success_chance')))
+
+        await conn.executemany(
+            "INSERT INTO candidate "
+            "(package, suite, change_set, context, value, success_chance) "
+            "VALUES ($1, $2, $3, $4, $5, $6) "
+            "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+            "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+            "success_chance = EXCLUDED.success_chance",
+            entries,
+        )
+    return web.json_response({
+        'unknown_campaigns': unknown_campaigns,
+        'unknown_packages': unknown_packages})
+
+
 @routes.get("/active-runs", name="get-active-runs")
 async def handle_get_active_runs(request):
     queue_processor = request.app['queue_processor']
