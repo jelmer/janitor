@@ -221,7 +221,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
 
     SELECT package, suite INTO row FROM run WHERE id = run_id;
     IF FOUND THEN
-	perform refresh_last_run(row.package, row.suite);
+        perform refresh_last_run(row.package, row.suite);
     end if;
     END;
 $$;
@@ -234,15 +234,15 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
     BEGIN
 
     if (TG_OP = 'INSERT' AND NEW.absorbed) then
-	perform refresh_last_run(new.run_id);
+        perform refresh_last_run(new.run_id);
     end if;
 
     if (TG_OP = 'UPDATE' AND NEW.absorbed AND NOT OLD.absorbed) then
-	perform refresh_last_run(new.run_id);
+        perform refresh_last_run(new.run_id);
     end if;
 
     IF (TG_OP = 'DELETE' AND old.absorbed) THEN
-	perform refresh_last_run(old.run_id);
+        perform refresh_last_run(old.run_id);
     END IF;
 
     RETURN NEW;
@@ -263,7 +263,7 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   FROM last_run
   INNER JOIN run on last_run.last_unabsorbed_run_id = run.id;
 
-    
+
 CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
   RETURNS void
   LANGUAGE PLPGSQL
@@ -286,15 +286,15 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     END IF;
 
     IF (last_effective_run.result_code = 'nothing-to-do') THEN
-	 last_unabsorbed_run := NULL;
+        last_unabsorbed_run := NULL;
     ELSIF (last_effective_run.result_code != 'success') THEN
-	last_unabsorbed_run := last_effective_run;
+        last_unabsorbed_run := last_effective_run;
     ELSE
        SELECT COUNT(*) INTO row_count from new_result_branch WHERE run_id = last_effective_run.id and not absorbed;
        if row_count > 0 then
-	   last_unabsorbed_run := last_effective_run;
+           last_unabsorbed_run := last_effective_run;
        else
-	   last_unabsorbed_run := null;
+          last_unabsorbed_run := null;
        end if;
      END IF;
 
@@ -303,7 +303,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     if last_unabsorbed_run is not null then last_unabsorbed_run_id := last_unabsorbed_run.id; end if;
 
     INSERT INTO last_run (package, campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id) VALUES (
-	    _package, _campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id)
+          _package, _campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id)
          ON CONFLICT (package, campaign) DO UPDATE SET last_run_id = EXCLUDED.last_run_id, last_effective_run_id = EXCLUDED.last_effective_run_id, last_unabsorbed_run_id = EXCLUDED.last_unabsorbed_run_id;
     END;
 $$;
