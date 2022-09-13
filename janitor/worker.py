@@ -104,8 +104,6 @@ from breezy.controldir import ControlDir
 from breezy.transform import MalformedTransform, TransformRenameFailed
 from breezy.transport import Transport
 
-from silver_platter.proposal import enable_tag_pushing
-
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
     BranchOpenFailure,
@@ -1060,7 +1058,6 @@ def run_worker(
                 possible_transports=possible_transports,
                 force_build=force_build
             ) as (ws, result):
-                enable_tag_pushing(ws.local_tree.branch)
                 logging.info("Pushing result branch to %r", target_repo_url)
 
                 actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
