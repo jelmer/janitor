@@ -45,11 +45,6 @@
     name: '{{ janitor_user }}'
     groups: sbuild
     append: yes
-- name: sbuild configuration
-  file:
-    state: link
-    src: "{{ janitor_code_path }}/sbuildrc"
-    dest: "{{ janitor_home }}/.sbuildrc"
 - name: Runner systemd installed
   template:
     src: worker@.service
