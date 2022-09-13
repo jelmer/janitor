@@ -1619,42 +1619,6 @@ async def get_mp_status(mp):
         return "open"
 
 
-@routes.post("/check-proposal", name='check-proposal')
-async def check_mp_request(request):
-    post = await request.post()
-    url = post["url"]
-    try:
-        mp = await to_thread(get_proposal_by_url, url)
-    except UnsupportedForge:
-        raise web.HTTPNotFound()
-    status = await get_mp_status(mp)
-    async with request.app['db'].acquire() as conn:
-        try:
-            modified = await check_existing_mp(
-                conn,
-                request.app['redis'],
-                request.app['config'],
-                request.app['template_env_path'],
-                mp,
-                status,
-                vcs_managers=request.app['vcs_managers'],
-                dry_run=("dry_run" in post),
-                external_url=request.app['external_url'],
-                differ_url=request.app['differ_url'],
-                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
-            )
-        except NoRunForMergeProposal as e:
-            return web.Response(
-                status=500,
-                text="Unable to find stored metadata for %s (%r), skipping."
-                % (e.mp.url, e.revision),
-            )
-    if modified:
-        return web.Response(status=200, text="Merge proposal updated.")
-    else:
-        return web.Response(status=200, text="Merge proposal not updated.")
-
-
 @routes.post("/scan", name='scan')
 async def scan_request(request):
     async def scan():
@@ -1708,6 +1672,8 @@ async def refresh_proposal_status_request(request):
                 logger.warning(
                     "Unable to find stored metadata for %s, skipping.", e.mp.url
                 )
+            except BranchRateLimited:
+                logger.warning("Rate-limited accessing %s. ", mp.url)
     create_background_task(scan(), 'Refresh of proposal %s' % url)
     return web.Response(status=202, text="Refresh of proposal started.")
 
@@ -2691,7 +2657,7 @@ async def check_existing(
             if datetime.utcnow() < forge_rate_limiter[forge]:
                 del forge_rate_limiter[forge]
             else:
-                forge_rate_limited_count.inc(forge=str(forge))
+                forge_rate_limited_count.labels(forge=str(forge)).inc()
                 was_forge_ratelimited = True
                 continue
         try:
