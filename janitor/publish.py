@@ -1321,9 +1321,40 @@ async def handle_policy_get(request):
     if not row:
         return web.json_response({"reason": "Package or campaign not found"}, status=404)
     return web.json_response({
-        "per_branch": {p['role']: {'mode': p['mode']} for p in row['publish']},
+        "per_branch": {
+            p['role']: {
+                'mode': p['mode'],
+                'max_frequency_days': p['frequency_days'],
+            } for p in row['publish']},
         "qa_policy": row['qa_policy'],
+        "broken_notify": row["broken_notify"],
     })
+
+
+@routes.post("/{package}/{campaign}/policy", name="post-policy")
+async def handle_policy_post(request):
+    package = request.match_info["package"]
+    campaign = request.match_info["campaign"]
+
+    policy = await request.json()
+
+    async with request.app['db'].acquire() as conn:
+        await conn.execute(
+            "INSERT INTO policy "
+            "(package, suite, command, publish, qa_review, broken_notify) "
+            "VALUES ($1, $2, $3, $4, $5, $6) "
+            "ON CONFLICT (package, suite) DO UPDATE SET "
+            "command = EXCLUDED.command, "
+            "publish = EXCLUDED.publish, "
+            "qa_review = EXCLUDED.qa_review, "
+            "broken_notify = EXCLUDED.broken_notify",
+            package,
+            campaign,
+            policy.get('command'),
+            [(role, v.get('mode'), v.get('max_frequency_days')) for (role, v) in policy['per_branch'].items()],
+            policy.get('qa_policy'),
+            policy.get('broken_notify'))
+    return web.json_response({})
 
 
 @docs(
