@@ -189,7 +189,7 @@ async def generate_run_file(
             return ""
         if run['vcs_type'] is None:
             return "Run not in VCS"
-        if run['revision'] is None:
+        if revid is None:
             return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
