@@ -112,7 +112,7 @@ SELECT
   candidate.value AS value,
   candidate.success_chance AS success_chance,
   policy.publish AS publish,
-  policy.command AS command
+  coalesce(candidate.command, policy.command) AS command
 FROM candidate
 INNER JOIN package on package.name = candidate.package
 INNER JOIN policy ON

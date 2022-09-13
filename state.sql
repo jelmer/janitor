@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    context text,
    value integer,
    success_chance float,
+   command text,
    change_set text references change_set(id),
    foreign key (package) references package(name)
 );

@@ -30,9 +30,6 @@ from breezy.git.mapping import default_mapping
 from silver_platter.debian import (
     convert_debian_vcs_url,
 )
-from . import state
-from .config import read_config
-from .package_metadata_pb2 import PackageList, PackageMetadata, PackageRemoval
 from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
@@ -45,6 +42,10 @@ from lintian_brush.vcs import (
     canonicalize_vcs_url,
     determine_browser_url,
 )
+
+from . import state
+from .config import read_config
+from .package_metadata_pb2 import PackageList, PackageMetadata, PackageRemoval
 
 
 async def update_package_metadata(
