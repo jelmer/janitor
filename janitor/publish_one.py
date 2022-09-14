@@ -441,9 +441,10 @@ def publish_one(
                         existing_proposal = mp
                         break
                 else:
-                    logging.warning(
-                        'Unable to find back original merge proposal %r',
-                        existing_mp_url)
+                    if existing_mp_url:
+                        logging.warning(
+                            'Unable to find back original merge proposal %r',
+                            existing_mp_url)
                     existing_proposal = None
 
         debdiff: Optional[bytes]
