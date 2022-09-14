@@ -154,7 +154,6 @@ async def handle_webhook(request):
         return web.Response(
             content_type="text/html",
             text=text,
-            headers={"Cache-Control": "max-age=600"},
         )
     return await process_webhook(request, request.app['db'])
 
@@ -416,8 +415,7 @@ async def handle_queue(request):
     span = aiozipkin.request_span(request)
     with span.new_child('runner:queue'):
         async with request.app['http_client_session'].get(url, param=params) as resp:
-            return web.json_response(
-                await resp.json(), status=resp.status, headers={"Cache-Control": "max-age=60"})
+            return web.json_response(await resp.json(), status=resp.status)
 
 
 @docs()
@@ -538,19 +536,13 @@ async def handle_diff(request):
                 return web.Response(
                     body=diff,
                     content_type="text/x-diff",
-                    headers={
-                        "Cache-Control": "max-age=3600",
-                        "Vary": "Accept",
-                    },
+                    headers={"Vary": "Accept"},
                 )
             if accept == "text/html":
                 return web.Response(
                     text=highlight_diff(diff.decode("utf-8", "replace")),
                     content_type="text/html",
-                    headers={
-                        "Cache-Control": "max-age=3600",
-                        "Vary": "Accept",
-                    },
+                    headers={"Vary": "Accept"},
                 )
         raise web.HTTPNotAcceptable(
             text="Acceptable content types: " "text/html, text/x-diff"
@@ -632,7 +624,7 @@ async def handle_archive_diff(request):
     return web.Response(
         body=debdiff,
         content_type=content_type,
-        headers={"Cache-Control": "max-age=3600", "Vary": "Accept"},
+        headers={"Vary": "Accept"},
     )
 
 
@@ -739,7 +731,7 @@ async def handle_run_list(request):
     async with request.app['db'].acquire() as conn:
         for row in await conn.fetch(query, *args):
             response_obj.append({'run_id': row['id']})
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
+    return web.json_response(response_obj)
 
 
 @docs()
@@ -760,7 +752,7 @@ async def handle_run_success_list(request):
                 'result': row['result'],
                 'branches': row['branches'],
                 'review_status': row['review_status']})
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
+    return web.json_response(response_obj)
 
 
 @docs()
@@ -941,9 +933,7 @@ ORDER BY package, suite, start_time DESC
             if record['package'] in merge_proposal:
                 data["merge-proposal"] = merge_proposal[record['package']]
             report[record['package']] = data
-    return web.json_response(
-        report, headers={"Cache-Control": "max-age=600"}, status=200
-    )
+    return web.json_response(report)
 
 
 @docs()

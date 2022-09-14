@@ -83,7 +83,7 @@ async def handle_simple(templatename, request):
     return web.Response(
         content_type="text/html",
         text=await render_template_for_request(env, templatename, request, vs),
-        headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"},
+        headers={"Vary": "Cookie"},
     )
 
 
@@ -92,7 +92,7 @@ async def handle_generic_start(request):
     return {"suite": request.match_info["suite"]}
 
 
-@html_template(env, "generic/candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
+@html_template(env, "generic/candidates.html", headers={"Vary": "Cookie"})
 async def handle_generic_candidates(request):
     from .common import generate_candidates
 
@@ -101,7 +101,7 @@ async def handle_generic_candidates(request):
     )
 
 
-@html_template(env, "merge-proposals.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "merge-proposals.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
@@ -109,7 +109,7 @@ async def handle_merge_proposals(request):
     return await write_merge_proposals(request.app.database, suite)
 
 
-@html_template(env, "merge-proposal.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "merge-proposal.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
@@ -131,11 +131,11 @@ async def handle_apt_repo(request):
         return web.Response(
             content_type="text/html",
             text=text,
-            headers={"Cache-Control": "max-age=60", "Vary": "Cookie"},
+            headers={"Vary": "Cookie"},
         )
 
 
-@html_template(env, "credentials.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "credentials.html", headers={"Vary": "Cookie"})
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
@@ -250,7 +250,7 @@ async def handle_result_file(request):
         return web.Response(
             content_type="text/plain",
             text=text,
-            headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"},
+            headers={"Vary": "Cookie"},
         )
     else:
         try:
@@ -261,11 +261,11 @@ async def handle_result_file(request):
             raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
         with artifact as f:
             return web.Response(
-                body=f.read(), headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"}
+                body=f.read(), headers={"Vary": "Cookie"}
             )
 
 
-@html_template(env, "ready-list.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "ready-list.html", headers={"Vary": "Cookie"})
 async def handle_ready_proposals(request):
     from .pkg import generate_ready_list
 
@@ -274,7 +274,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
-@html_template(env, "generic/package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "generic/package.html", headers={"Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
 
