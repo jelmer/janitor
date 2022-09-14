@@ -83,7 +83,7 @@ async def generate_rejected(conn, config, campaign=None):
         campaigns = [campaign]
 
     runs = await conn.fetch(
-        "SELECT id, suite, package, review_comment FROM run "
+        "SELECT id, suite, package, review_comment FROM last_unabsorbed_runs "
         "WHERE review_status = 'rejected' AND suite = ANY($1::text[]) "
         "ORDER BY finish_time DESC",
         campaigns)
