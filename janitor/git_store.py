@@ -34,8 +34,8 @@ from http.client import parse_headers  # type: ignore
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.repository import Repository
-from dulwich.errors import HangupException
-from dulwich.objects import valid_hexsha
+from dulwich.errors import HangupException, MissingCommitError
+from dulwich.objects import valid_hexsha, ZERO_SHA
 from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
@@ -100,7 +100,6 @@ async def git_diff_request(request):
 
 
 async def git_revision_info_request(request):
-    from dulwich.errors import MissingCommitError
     package = request.match_info["package"]
     try:
         old_sha = request.query['old'].encode('utf-8')
@@ -117,7 +116,9 @@ async def git_revision_info_request(request):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
     try:
-        walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+        walker = repo._git.get_walker(
+            include=[new_sha],
+            exclude=([old_sha] if old_sha != ZERO_SHA else []))
     except MissingCommitError:
         return web.json_response({}, status=404)
     for entry in walker:

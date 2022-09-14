@@ -1161,12 +1161,15 @@ async def publish_and_store(
         allow_create_proposal = run_allow_proposal_creation(campaign_config, run)
 
     async with db.acquire() as conn:
-        unchanged_run_id = await conn.fetchval(
-            "SELECT id FROM run "
-            "WHERE revision = $2 AND package = $1 and result_code = 'success' "
-            "ORDER BY finish_time DESC LIMIT 1",
-            run.package, run.main_branch_revision.decode('utf-8')
-        )
+        if run.main_branch_revision:
+            unchanged_run_id = await conn.fetchval(
+                "SELECT id FROM run "
+                "WHERE revision = $2 AND package = $1 and result_code = 'success' "
+                "ORDER BY finish_time DESC LIMIT 1",
+                run.package, run.main_branch_revision.decode('utf-8')
+            )
+        else:
+            unchanged_run_id = None
 
         try:
             publish_result = await publish_one(

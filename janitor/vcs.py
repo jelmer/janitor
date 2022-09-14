@@ -22,7 +22,7 @@ import logging
 import os
 import ssl
 import sys
-from typing import Optional, List, Tuple, Iterable, Dict
+from typing import Optional, List, Iterable, Dict
 from yarl import URL
 
 import urllib.parse
@@ -48,13 +48,15 @@ from lintian_brush.vcs import (
 )
 from dulwich.objects import ZERO_SHA
 from silver_platter.utils import (
-    open_branch_containing,
     open_branch,
     BranchMissing,
     BranchUnavailable,
     BranchRateLimited,
     BranchUnsupported,
 )
+
+
+EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 
 class BranchOpenFailure(Exception):
@@ -268,8 +270,14 @@ class LocalGitVcsManager(VcsManager):
         if repo is None:
             raise KeyError
 
-        old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
-        new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
+        if old_revid == NULL_REVISION:
+            old_sha = EMPTY_GIT_TREE
+        else:
+            old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
+        if new_revid == NULL_REVISION:
+            new_sha = EMPTY_GIT_TREE
+        else:
+            new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
 
         args = [
             "git",
@@ -401,17 +409,17 @@ class RemoteGitVcsManager(VcsManager):
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
-    def _lookup_revid(self, revid):
+    def _lookup_revid(self, revid, default):
         if revid == NULL_REVISION:
-            return ZERO_SHA
+            return default
         else:
             return revid[len(b'git-v1:'):]
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
             codebase,
-            self._lookup_revid(old_revid).decode('utf-8'),
-            self._lookup_revid(new_revid).decode('utf-8')))
+            self._lookup_revid(old_revid, ZERO_SHA).decode('utf-8'),
+            self._lookup_revid(new_revid, ZERO_SHA).decode('utf-8')))
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
@@ -421,8 +429,8 @@ class RemoteGitVcsManager(VcsManager):
     def get_diff_url(self, codebase, old_revid, new_revid):
         return urllib.parse.urljoin(self.base_url, "%s/diff?old=%s&new=%s" % (
             codebase,
-            self._lookup_revid(old_revid).decode('utf-8'),
-            self._lookup_revid(new_revid).decode('utf-8')))
+            self._lookup_revid(old_revid, EMPTY_GIT_TREE).decode('utf-8'),
+            self._lookup_revid(new_revid, EMPTY_GIT_TREE).decode('utf-8')))
 
     def get_branch(self, codebase, branch_name):
         url = self.get_branch_url(codebase, branch_name)
