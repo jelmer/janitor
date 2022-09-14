@@ -37,7 +37,7 @@ async def handle_rejected(request):
         return await generate_rejected(conn, request.app['config'], campaign=campaign)
 
 
-@html_template(env, "cupboard/history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/history.html", headers={"Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
     offset = int(request.query.get("offset", "0"))
@@ -64,7 +64,7 @@ async def handle_reprocess_logs(request):
     return {}
 
 
-@html_template(env, "cupboard/workers.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/workers.html", headers={"Vary": "Cookie"})
 async def handle_workers(request):
     async with request.app.database.acquire() as conn:
         return {"workers": await conn.fetch(
@@ -73,7 +73,7 @@ async def handle_workers(request):
             'group by worker.name, worker.link')}
 
 
-@html_template(env, "cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/queue.html", headers={"Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
     from .queue import write_queue
@@ -86,7 +86,7 @@ async def handle_queue(request):
     )
 
 
-@html_template(env, "cupboard/never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/never-processed.html", headers={"Vary": "Cookie"})
 async def handle_never_processed(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -105,7 +105,7 @@ async def handle_never_processed(request):
         return {"never_processed": await conn.fetch(query, *args)}
 
 
-@html_template(env, "cupboard/result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
     from ..schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
@@ -140,7 +140,7 @@ async def handle_result_codes(request):
             "suite": suite, "all_suites": all_suites}
 
 
-@html_template(env, "cupboard/result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -166,7 +166,7 @@ async def handle_publish(request):
         return await write_publish(conn, id)
 
 
-@html_template(env, "cupboard/publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/publish-history.html", headers={"Vary": "Cookie"})
 async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
@@ -175,7 +175,7 @@ async def handle_publish_history(request):
         return await write_history(conn, limit=limit)
 
 
-@html_template(env, "cupboard/review-stats.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/review-stats.html", headers={"Vary": "Cookie"})
 async def handle_review_stats(request):
     from .review import generate_review_stats
     async with request.app.database.acquire() as conn:
@@ -252,7 +252,7 @@ async def handle_review(request):
     )
 
 
-@html_template(env, "cupboard/run.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
+@html_template(env, "cupboard/run.html", headers={"Vary": "Cookie"})
 async def handle_run(request):
     from .common import get_run
     from .pkg import generate_run_file
@@ -283,7 +283,7 @@ async def handle_run(request):
 
 
 @html_template(
-    env, "cupboard/broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
+    env, "cupboard/broken-merge-proposals.html", headers={"Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
     async with request.app.database.acquire() as conn:
@@ -321,7 +321,7 @@ async def handle_cupboard_start(request):
     return {'extra_cupboard_links': _extra_cupboard_links}
 
 
-@html_template(env, "cupboard/changeset.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "cupboard/changeset.html", headers={"Vary": "Cookie"})
 async def handle_changeset(request):
     span = aiozipkin.request_span(request)
     async with request.app.database.acquire() as conn:
@@ -332,7 +332,7 @@ async def handle_changeset(request):
     return {'changeset': cs, 'runs': runs}
 
 
-@html_template(env, "cupboard/changeset-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "cupboard/changeset-list.html", headers={"Vary": "Cookie"})
 async def handle_changeset_list(request):
     span = aiozipkin.request_span(request)
     async with request.app.database.acquire() as conn:
@@ -341,7 +341,7 @@ async def handle_changeset_list(request):
     return {'changesets': cs}
 
 
-@html_template(env, "cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})
 async def handle_pkg(request):
     from .pkg import generate_pkg_file
 
