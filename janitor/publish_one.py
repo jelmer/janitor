@@ -436,7 +436,7 @@ def publish_one(
                     code="permission-denied",
                 )
             else:
-                for mp in existing_proposals:
+                for mp in existing_proposals or []:
                     if mp.url == existing_mp_url:
                         existing_proposal = mp
                         break
