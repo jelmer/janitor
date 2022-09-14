@@ -1013,7 +1013,7 @@ def open_resume_branch(
                 (
                     resume_branch,
                     unused_overwrite,
-                    unused_existing_proposal,
+                    unused_existing_proposals,
                 ) = find_existing_proposed(
                     main_branch, forge, option,
                     preferred_schemes=['https', 'git', 'bzr'])
