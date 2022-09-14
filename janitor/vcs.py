@@ -314,7 +314,7 @@ class LocalGitVcsManager(VcsManager):
         for entry in walker:
             ret.append({
                 'commit-id': entry.commit.id.decode('ascii'),
-                'revision-id': repo.lookup_foreign_revision_id(entry.commit.id),
+                'revision-id': repo.lookup_foreign_revision_id(entry.commit.id).decode('utf-8'),
                 'message': entry.commit.message.decode('utf-8', 'replace')})
         return ret
 
