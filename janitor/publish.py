@@ -1716,8 +1716,7 @@ async def refresh_proposal_status_request(request):
 
 @routes.post("/autopublish", name='autopublish')
 async def autopublish_request(request):
-    reviewed_only = "unreviewed" not in request.query
-
+    reviewed_only = "reviewed_only" in request.query
     async def autopublish():
         await publish_pending_ready(
             request.app['db'],
@@ -1729,8 +1728,8 @@ async def autopublish_request(request):
             dry_run=request.app['dry_run'],
             external_url=request.app['external_url'],
             differ_url=request.app['differ_url'],
-            reviewed_only=reviewed_only,
             push_limit=request.app['push_limit'],
+            reviewed_only=reviewed_only,
             require_binary_diff=request.app['require_binary_diff'],
         )
 

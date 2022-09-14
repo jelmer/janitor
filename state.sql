@@ -435,7 +435,6 @@ CREATE OR REPLACE VIEW publishable AS
   run.result_tags AS result_tags,
   run.value AS value,
   package.maintainer_email AS maintainer_email,
-  package.uploader_emails AS uploader_emails,
   policy.command AS policy_command,
   policy.qa_review AS qa_review_policy,
   (policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
@@ -443,7 +442,7 @@ CREATE OR REPLACE VIEW publishable AS
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
-   WHERE rb.run_id = run.id AND not absorbed
+   WHERE rb.run_id = run.id AND not COALESCE(absorbed, False)
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches,
   target_branch_url,
