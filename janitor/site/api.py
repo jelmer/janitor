@@ -1159,7 +1159,8 @@ async def handle_run_reprocess_logs(request):
     reschedule = 'reschedule' in post
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
-            'SELECT package, suite AS campaign, command, duration, '
+            'SELECT package, suite AS campaign, command, '
+            'finish_time - start_time as duration, '
             'result_code, description, failure_details, change_set FROM run WHERE id = $1',
             run_id)
 
@@ -1214,7 +1215,7 @@ SELECT
   suite AS campaign,
   id,
   command,
-  duration,
+  finish_time - start_time as duration,
   result_code,
   description,
   failure_details
@@ -1237,7 +1238,7 @@ SELECT
   suite AS campaign,
   id,
   command,
-  duration,
+  finish_time - start_time as duration,
   result_code,
   description,
   failure_details,
@@ -1295,7 +1296,7 @@ async def handle_mass_reschedule(request):
 SELECT
   package,
   suite AS campaign,
-  duration
+  finish_time - start_time as duration
 FROM last_runs
 WHERE
     branch_url IS NOT NULL AND
