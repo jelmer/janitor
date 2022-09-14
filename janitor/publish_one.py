@@ -337,6 +337,7 @@ def publish_one(
     reviewers: Optional[List[str]] = None,
     result_tags: Optional[Dict[str, bytes]] = None,
     commit_message_template: Optional[str] = None,
+    existing_mp_url: Optional[str] = None,
 ) -> Tuple[PublishResult, str]:
 
     args = shlex.split(command)
@@ -412,7 +413,7 @@ def publish_one(
             forge = None
         else:
             try:
-                (resume_branch, overwrite, existing_proposal) = find_existing_proposed(
+                (resume_branch, overwrite, existing_proposals) = find_existing_proposed(
                     target_branch, forge, derived_branch_name, owner=derived_owner
                 )
             except NoSuchProject as e:
@@ -434,6 +435,16 @@ def publish_one(
                     ),
                     code="permission-denied",
                 )
+            else:
+                for mp in existing_proposals:
+                    if mp.url == existing_mp_url:
+                        existing_proposal = mp
+                        break
+                else:
+                    logging.warning(
+                        'Unable to find back original merge proposal %r',
+                        existing_mp_url)
+                    existing_proposal = None
 
         debdiff: Optional[bytes]
         try:
@@ -558,6 +569,7 @@ if __name__ == "__main__":
             revision=request["revision"].encode("utf-8"),
             result_tags=request.get("tags"),
             commit_message_template=request.get("commit_message_template"),
+            existing_mp_url=request.get('existing_mp_url'),
         )
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)

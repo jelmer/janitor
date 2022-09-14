@@ -401,6 +401,7 @@ async def publish_one(
     derived_owner: Optional[str] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     commit_message_template: Optional[str] = None,
+    existing_mp_url: Optional[str] = None,
 ) -> PublishResult:
     """Publish a single run in some form.
 
@@ -427,6 +428,7 @@ async def publish_one(
         "codemod_result": codemod_result,
         "target_branch_url": main_branch_url.rstrip("/"),
         "source_branch_url": full_branch_url(local_branch),
+        "existing_mp_url": existing_mp_url,
         "derived_branch_name": derived_branch_name,
         "mode": mode,
         "role": role,
@@ -2507,6 +2509,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 result_tags=last_run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
+                existing_mp_url=mp.url,
             )
         except PublishFailure as e:
             code, description = await handle_publish_failure(
