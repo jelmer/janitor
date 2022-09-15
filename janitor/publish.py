@@ -604,6 +604,7 @@ async def iter_publish_ready(
     limit: Optional[int] = None,
     needs_review: Optional[bool] = None,
     run_id: Optional[str] = None,
+    change_set_state: Optional[List[str]] = None,
 ) -> AsyncIterable[
     Tuple[
         state.Run,
@@ -626,13 +627,14 @@ SELECT * FROM publish_ready
     if review_status is not None:
         args.append(review_status)
         conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
+    if change_set_state is not None:
+        args.append(change_set_state)
+        conditions.append("change_set_state = ANY($%d::change_set_state[])" % (len(args),))
 
     publishable_condition = (
         "exists (select from unnest(unpublished_branches) where "
         "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
     )
-
-    order_by = []
 
     conditions.append(publishable_condition)
 
@@ -642,6 +644,8 @@ SELECT * FROM publish_ready
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
+
+    order_by = ["change_set_state = 'publishing' DESC", "change_set_id"]
 
     order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
 
@@ -691,6 +695,7 @@ async def publish_pending_ready(
         ) in iter_publish_ready(
             conn1, review_status=review_status,
             needs_review=False,
+            change_set_status=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
                 conn, config=config,
@@ -852,12 +857,13 @@ order by timestamp desc limit 1
 
 async def store_publish(
     conn: asyncpg.Connection,
-    package,
-    branch_name,
-    main_branch_revision,
-    revision,
-    role,
-    mode,
+    change_set_id: str,
+    package: str,
+    branch_name: str,
+    main_branch_revision: bytes,
+    revision: bytes,
+    role: str,
+    mode: str,
     result_code,
     description,
     merge_proposal_url=None,
@@ -909,6 +915,9 @@ async def store_publish(
             publish_id,
             requestor,
         )
+        await conn.execute(
+            "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
+            change_set_id)
 
 
 async def publish_from_policy(
@@ -1072,6 +1081,7 @@ async def publish_from_policy(
 
     await store_publish(
         conn,
+        run.change_set,
         run.package,
         publish_result.branch_name,
         base_revision,
@@ -1201,6 +1211,7 @@ async def publish_and_store(
         except PublishFailure as e:
             await store_publish(
                 conn,
+                run.change_set,
                 run.package,
                 campaign_config.branch_name,
                 run.main_branch_revision,
@@ -1235,6 +1246,7 @@ async def publish_and_store(
 
         await store_publish(
             conn,
+            run.change_set,
             run.package,
             publish_result.branch_name,
             run.main_branch_revision,
@@ -1423,7 +1435,8 @@ async def consider_request(request):
         async with request.app['db'].acquire() as conn:
             async for (run, maintainer_email, command, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
-                    needs_review=False, run_id=run_id):
+                    needs_review=False, run_id=run_id,
+                    change_set_state=['ready', 'publishing']):
                 break
             else:
                 return
@@ -2565,6 +2578,7 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
+                    last_run.change_set,
                     last_run.package,
                     campaign_config.branch_name,
                     last_run_base_revision,
@@ -2581,6 +2595,7 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
+                    last_run.change_set,
                     last_run.package,
                     publish_result.branch_name,
                     last_run_base_revision,

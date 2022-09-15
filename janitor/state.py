@@ -73,7 +73,7 @@ class Run(object):
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]]
     result_tags: Optional[List[Tuple[str, bytes]]]
     target_branch_url: Optional[str]
-    change_set: Optional[str]
+    change_set: str
 
     __slots__ = [
         "id",
