@@ -331,10 +331,10 @@ async def handle_changeset(request):
             runs = await conn.fetch(
                 'SELECT * FROM run WHERE change_set = $1 ORDER BY finish_time DESC',
                 request.match_info['id'])
-        with span.new_child('sql:candidates'):
-            candidates = await conn.fetch('SELECT * FROM candidate WHERE change_set = $1',
+        with span.new_child('sql:todo'):
+            candidates = await conn.fetch('SELECT * FROM change_set_todo WHERE change_set = $1',
                                           request.match_info['id'])
-    return {'changeset': cs, 'runs': runs, 'candidates': candidates}
+    return {'changeset': cs, 'runs': runs, 'todo': todo}
 
 
 @html_template(env, "cupboard/changeset-list.html", headers={"Vary": "Cookie"})
