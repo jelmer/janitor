@@ -901,8 +901,8 @@ async def store_publish(
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
-            "description, merge_proposal_url, id, requestor) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
+            "description, merge_proposal_url, id, requestor, change_set) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ",
             package,
             branch_name,
             main_branch_revision,
@@ -914,11 +914,14 @@ async def store_publish(
             merge_proposal_url,
             publish_id,
             requestor,
+            change_set_id,
         )
         if result_code == 'success':
             await conn.execute(
                 "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
                 change_set_id)
+            # TODO(jelmer): if there is nothing left to publish, then mark this
+            # change_set as done
 
 
 async def publish_from_policy(
