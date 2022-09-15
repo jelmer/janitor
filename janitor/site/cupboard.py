@@ -332,7 +332,7 @@ async def handle_changeset(request):
                 'SELECT * FROM run WHERE change_set = $1 ORDER BY finish_time DESC',
                 request.match_info['id'])
         with span.new_child('sql:todo'):
-            candidates = await conn.fetch('SELECT * FROM change_set_todo WHERE change_set = $1',
+            todo = await conn.fetch('SELECT * FROM change_set_todo WHERE change_set = $1',
                                           request.match_info['id'])
     return {'changeset': cs, 'runs': runs, 'todo': todo}
 
