@@ -342,7 +342,10 @@ async def handle_changeset_list(request):
     span = aiozipkin.request_span(request)
     async with request.app.database.acquire() as conn:
         with span.new_child('sql:changesets'):
-            cs = await conn.fetch('SELECT id FROM change_set')
+            cs = await conn.fetch("""\
+select * from change_set where exists (
+    select from candidate where change_set = change_set.id)
+""")
     return {'changesets': cs}
 
 

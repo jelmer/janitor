@@ -915,9 +915,10 @@ async def store_publish(
             publish_id,
             requestor,
         )
-        await conn.execute(
-            "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
-            change_set_id)
+        if result_code == 'success':
+            await conn.execute(
+                "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
+                change_set_id)
 
 
 async def publish_from_policy(
