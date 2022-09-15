@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS run (
    failure_details json,
    target_branch_url text,
    resume_from text references run (id),
-   change_set text references change_set(id),
+   change_set text not null references change_set(id),
    foreign key (package) references package(name),
    check(finish_time >= start_time),
    check(branch_url is null or vcs_type is not null)
@@ -415,7 +415,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.command AS command,
   run.start_time AS start_time,
   run.finish_time AS finish_time,
-  run.duration AS duration,
+  run.finish_time - run.start_time AS duration,
   run.description AS description,
   run.package AS package,
   run.result_code AS result_code,
@@ -446,12 +446,14 @@ CREATE OR REPLACE VIEW publishable AS
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches,
   target_branch_url,
-  run.change_set AS change_set
+  run.change_set AS change_set_id,
+  change_set.state AS change_set_state
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
 INNER JOIN policy ON
     policy.package = run.package AND policy.suite = run.suite
+INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
   result_code = 'success' AND NOT package.removed;
 
@@ -489,6 +491,14 @@ CREATE TABLE last_run (
    last_unabsorbed_run_id text references run (id),
    unique (package, campaign)
 );
+
+CREATE OR REPLACE VIEW change_set_todo AS
+  SELECT * FROM candidate WHERE change_set is not NULL AND NOT EXISTS (
+        SELECT FROM last_runs WHERE
+                change_set = candidate.change_set AND
+                package = candidate.package AND
+                suite = candidate.suite AND
+                result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'));
 
 -- TODO(jelmer): Move to Debian janitor
 CREATE EXTENSION IF NOT EXISTS debversion;

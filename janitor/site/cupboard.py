@@ -328,8 +328,13 @@ async def handle_changeset(request):
         with span.new_child('sql:changeset'):
             cs = await conn.fetchrow('SELECT * FROM change_set WHERE id = $1', request.match_info['id'])
         with span.new_child('sql:runs'):
-            runs = await conn.fetch('SELECT * FROM run WHERE change_set = $1', request.match_info['id'])
-    return {'changeset': cs, 'runs': runs}
+            runs = await conn.fetch(
+                'SELECT * FROM run WHERE change_set = $1 ORDER BY finish_time DESC',
+                request.match_info['id'])
+        with span.new_child('sql:candidates'):
+            candidates = await conn.fetch('SELECT * FROM candidate WHERE change_set = $1',
+                                          request.match_info['id'])
+    return {'changeset': cs, 'runs': runs, 'candidates': candidates}
 
 
 @html_template(env, "cupboard/changeset-list.html", headers={"Vary": "Cookie"})
