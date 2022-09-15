@@ -31,7 +31,6 @@ policy {
   # Fixing lintian issues
   campaign {
     name: "lintian-fixes"
-    command: "lintian-brush"
     publish { mode: propose }
     qa_review: required;
   }
