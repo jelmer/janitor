@@ -11,13 +11,13 @@ from typing import List, Optional, Any
 from breezy.revision import NULL_REVISION
 
 from janitor import state
-from . import (
+from .. import (
     env,
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
-from .common import (
+from ..common import (
     get_unchanged_run,
     render_template_for_request,
 )

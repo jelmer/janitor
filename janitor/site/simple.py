@@ -60,10 +60,10 @@ def create_background_task(fn, title):
     def log_result(future):
         try:
             future.result()
-        except BaseException:
-            logging.exception('%s failed', title)
         except asyncio.CancelledError:
             logging.debug('%s cancelled', title)
+        except BaseException:
+            logging.exception('%s failed', title)
         else:
             logging.debug('%s succeeded', title)
     task.add_done_callback(log_result)
@@ -115,24 +115,6 @@ async def handle_merge_proposal(request):
 
     url = request.query["url"]
     return await write_merge_proposal(request.app.database, url)
-
-
-async def handle_apt_repo(request):
-    suite = request.match_info["suite"]
-    from .apt_repo import get_published_packages
-
-    async with request.app.database.acquire() as conn:
-        vs = {
-            "packages": await get_published_packages(conn, suite),
-            "suite": suite,
-            "campaign_config": get_campaign_config(request.app['config'], suite),
-        }
-        text = await render_template_for_request(env, suite + ".html", request, vs)
-        return web.Response(
-            content_type="text/html",
-            text=text,
-            headers={"Vary": "Cookie"},
-        )
 
 
 @html_template(env, "credentials.html", headers={"Vary": "Cookie"})
@@ -451,7 +433,6 @@ async def create_app(
     )
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
-    app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
     app.router.add_get(
         "/cupboard/merge-proposals",
         handle_merge_proposals,

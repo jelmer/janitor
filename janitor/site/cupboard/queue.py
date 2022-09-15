@@ -20,7 +20,7 @@ import shlex
 from typing import AsyncIterator, Tuple, Dict, Any, Iterator
 
 import asyncpg
-from ..queue import Queue, QueueItem
+from ...queue import Queue, QueueItem
 
 
 def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
