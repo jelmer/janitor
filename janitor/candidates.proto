@@ -18,6 +18,8 @@ message Candidate {
     // optional string vcs_url = 5;
 
     optional string suite = 6;
+
+    optional string command = 7;
 };
 
 message CandidateList {
