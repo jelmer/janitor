@@ -228,6 +228,81 @@ CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
     END;
 $$;
 
+-- Triggered when:
+-- - New successful publish created
+-- - New run created
+-- - Result branch changed to 'absorbed'
+
+CREATE OR REPLACE FUNCTION refresh_change_set_state(change_set_id text)
+  RETURNS text
+  LANGUAGE PLPGSQL
+  AS $$
+    DECLARE row RECORD;
+    DECLARE _state change_set_state;
+    BEGIN
+    SELECT change_set.state INTO row FROM change_set WHERE id = change_set_id;
+    _state := row.state;
+    IF _state = 'created' THEN
+       PERFORM FROM run WHERE change_set = change_set_id;
+       IF FOUND THEN
+          _state := 'working';
+       END IF;
+    END IF;
+    IF _state = 'working' THEN
+       PERFORM FROM change_set_todo WHERE change_set = change_set_id;
+       IF NOT FOUND THEN
+           _state := 'ready';
+       END IF;
+    END IF;
+    IF _state = 'ready' THEN
+       PERFORM FROM publish WHERE result_code = 'success' AND change_set = change_set_id;
+       IF FOUND THEN
+           _state := 'publishing';
+       END IF;
+    END IF;
+    IF _state = 'publishing' THEN
+       PERFORM FROM change_set_unpublished WHERE change_set = change_set_id;
+       IF NOT FOUND THEN
+          _state := 'done';
+       END IF;
+    END IF;
+    IF row.state != _state THEN
+        UPDATE change_set SET state = _state WHERE id = change_set_id;
+    END IF;
+    RETURN _state;
+    END;
+$$;
+
+CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_change_set_state()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS $$
+    DECLARE change_set_id TEXT;
+    BEGIN
+
+    if (TG_OP = 'INSERT' AND NEW.absorbed) then
+        SELECT change_set INTO change_set_id FROM run WHERE id = OLD.run_id;
+        perform refresh_change_set_state(change_set_id);
+    end if;
+
+    if (TG_OP = 'UPDATE' AND NEW.absorbed != OLD.absorbed) then
+        SELECT change_set INTO change_set_id FROM run WHERE id = OLD.run_id;
+        perform refresh_change_set_state(change_set_id);
+        IF old.change_set != new.change_set THEN
+            SELECT change_set INTO change_set_id FROM run WHERE id = NEW.run_id;
+            perform refresh_change_set_state(change_set_id);
+        END IF;
+    end if;
+
+    RETURN NEW;
+    END;
+$$;
+
+CREATE TRIGGER new_result_branch_refresh_change_set_state
+  AFTER INSERT OR UPDATE OR DELETE
+  ON new_result_branch
+  FOR EACH ROW
+  EXECUTE PROCEDURE new_result_branch_trigger_refresh_change_set_state();
 
 CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
   RETURNS TRIGGER
@@ -281,15 +356,15 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     BEGIN
     SELECT id, result_code INTO last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
 
-    IF (last_run.result_code = 'nothing-new-to-do') THEN
+    IF last_run.result_code = 'nothing-new-to-do' THEN
         SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' ORDER BY start_time DESC limit 1;
     ELSE
         last_effective_run := last_run;
     END IF;
 
-    IF (last_effective_run.result_code = 'nothing-to-do') THEN
+    IF last_effective_run.result_code = 'nothing-to-do' THEN
         last_unabsorbed_run := NULL;
-    ELSIF (last_effective_run.result_code != 'success') THEN
+    ELSIF last_effective_run.result_code != 'success' THEN
         last_unabsorbed_run := last_effective_run;
     ELSE
        SELECT COUNT(*) INTO row_count from new_result_branch WHERE run_id = last_effective_run.id and not absorbed;
@@ -335,6 +410,32 @@ CREATE TRIGGER run_refresh_last_run
   FOR EACH ROW
   EXECUTE PROCEDURE run_trigger_refresh_last_run();
 
+CREATE OR REPLACE FUNCTION run_trigger_refresh_change_set_state()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS $$
+    BEGIN
+    IF TG_OP = 'DELETE' THEN
+      PERFORM refresh_change_set_state(OLD.change_set_id);
+    ELSIF TG_OP = 'UPDATE' THEN
+      PERFORM refresh_change_set_state(OLD.change_set_id);
+      IF OLD.change_set_id != NEW.change_set_id THEN
+         PERFORM refresh_change_set_state(NEW.change_set_id);
+      END IF;
+    ELSE
+      PERFORM refresh_change_set_state(NEW.change_set_id);
+    END IF;
+
+    RETURN NEW;
+    END;
+$$;
+
+CREATE TRIGGER run_refresh_change_set_state
+  AFTER INSERT OR UPDATE OR DELETE
+  ON run
+  FOR EACH ROW
+  EXECUTE PROCEDURE run_trigger_refresh_change_set_state();
+
 create or replace view campaigns as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW perpetual_candidates AS
@@ -357,6 +458,26 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION publish_trigger_refresh_change_set_state()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS $$
+    BEGIN
+
+    if new.result_code = 'success' then
+        perform refresh_change_set_state(new.change_set);
+    end if;
+
+    RETURN NEW;
+    END;
+$$;
+
+CREATE TRIGGER publish_refresh_change_set_state
+  AFTER INSERT OR UPDATE
+  ON publish
+  FOR EACH ROW
+  EXECUTE PROCEDURE publish_trigger_refresh_change_set_state();
 
 CREATE TRIGGER drop_candidates_when_removed
   AFTER UPDATE OF removed
@@ -475,13 +596,13 @@ CREATE TABLE IF NOT EXISTS review (
 CREATE INDEX ON review (run_id);
 CREATE UNIQUE INDEX ON review (run_id, reviewer);
 
-CREATE TYPE change_set_state AS ENUM ('working', 'ready', 'publishing', 'done');
+CREATE TYPE change_set_state AS ENUM ('created', 'working', 'ready', 'publishing', 'done');
 
 CREATE TABLE IF NOT EXISTS change_set (
   id text not null primary key,
   initial_run_id text references run(id)
   campaign campaign_name not null,
-  state change_set_state default 'working' not null
+  state change_set_state default 'created' not null
 );
 
 CREATE TABLE last_run (
@@ -500,6 +621,12 @@ CREATE OR REPLACE VIEW change_set_todo AS
                 package = candidate.package AND
                 suite = candidate.suite AND
                 result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'));
+
+CREATE OR REPLACE VIEW change_set_unpublished AS
+  SELECT change_set, last_unabsorbed_runs.id, new_result_branch.role FROM last_unabsorbed_runs
+  INNER JOIN new_result_branch ON new_result_branch.run_id = last_unabsorbed_runs.id
+  WHERE not coalesce(new_result_branch.absorbed, False) and result_code = 'success';
+
 
 -- TODO(jelmer): Move to Debian janitor
 CREATE EXTENSION IF NOT EXISTS debversion;
