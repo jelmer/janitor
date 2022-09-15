@@ -100,6 +100,7 @@ CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only'
 CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
+   change_set text not null references change_set(id),
    package text not null,
    target_branch_url text,
    branch_name text,
@@ -114,7 +115,7 @@ CREATE TABLE IF NOT EXISTS publish (
    timestamp timestamp default now(),
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url),
-   foreign key (target_branch_url) references codebase(branch_url)
+   foreign key (target_branch_url) references codebase(branch_url),
 );
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
