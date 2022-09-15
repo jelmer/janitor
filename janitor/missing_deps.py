@@ -26,7 +26,7 @@ from buildlog_consultant import problem_clses
 
 from janitor import state
 from janitor.candidates import store_candidates
-from janitor.config import read_config
+from janitor.config import read_config, get_campaign_config
 from janitor.debian.missing_deps import NewPackage, UpdatePackage, resolve_requirement
 from janitor.schedule import do_schedule, PolicyUnavailable
 from janitor.policy import sync_policy, read_policy
@@ -64,8 +64,9 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             yield row['package'], row['suite'], requirement
 
 
-async def schedule_new_package(conn, upstream_info, policy, change_set=None, requestor=None, origin=None):
+async def schedule_new_package(conn, upstream_info, config, policy, change_set=None, requestor=None, origin=None):
     from debmutate.vcs import unsplit_vcs_url
+    campaign = "debianize"
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
         "Creating new upstream %s => %s",
@@ -78,41 +79,45 @@ async def schedule_new_package(conn, upstream_info, policy, change_set=None, req
         'dummy@example.com', origin, vcs_url)
     await store_candidates(
         conn,
-        [(package, 'debianize', change_set, None, DEFAULT_NEW_PACKAGE_PRIORITY,
+        [(package, campaign, change_set, None, DEFAULT_NEW_PACKAGE_PRIORITY,
           DEFAULT_SUCCESS_CHANCE)])
     await sync_policy(conn, policy, selected_package=package)
     policy = await conn.fetchrow(
         "SELECT command "
         "FROM policy WHERE package = $1 AND suite = $2",
-        package, 'debianize')
-    command = policy['command']
+        package, campaign)
+    if policy:
+        command = policy['command']
+    else:
+        command = get_campaign_config(config, campaign).command
     if upstream_info['version']:
         command += ' --upstream-version=%s' % upstream_info['version']
     await do_schedule(
-        conn, package, "debianize", change_set=change_set,
+        conn, package, campaign, change_set=change_set,
         requestor=requestor, bucket='missing-deps', command=command)
 
 
 async def schedule_update_package(conn, policy, package, desired_version, change_set=None, requestor=None):
-    logging.info('Scheduling new run for %s/fresh-releases', package)
+    campaign = "fresh-releases"
+    logging.info('Scheduling new run for %s/%s', package, campaign)
     # TODO(jelmer): Do something with desired_version
     # TODO(jelmer): fresh-snapshots?
     await conn.execute(
         "INSERT INTO candidate "
         "(package, suite, context, value, success_chance) "
         "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
-        package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
+        package, campaign, None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE)
     await sync_policy(conn, policy, selected_package=package)
     try:
-        await do_schedule(conn, package, "fresh-releases", change_set=change_set, requestor=requestor, bucket='missing-deps')
+        await do_schedule(conn, package, campaign, change_set=change_set, requestor=requestor, bucket='missing-deps')
     except PolicyUnavailable as e:
         logging.warning(
-            'Unable to schedule %s/fresh-releases: %s',
-            package, e)
+            'Unable to schedule %s/%s: %s',
+            package, campaign, e)
 
 
-async def followup_missing_requirement(conn, apt_mgr, policy, requirement, needed_by=None):
+async def followup_missing_requirement(conn, apt_mgr, config, policy, requirement, needed_by=None):
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
         origin = 'dependency of %s' % needed_by
@@ -131,7 +136,7 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
         if needed_by:
             requestor += ' (needed by %s)' % needed_by
         await schedule_new_package(
-            conn, actions[0][0].upstream_info.json(), policy,
+            conn, actions[0][0].upstream_info.json(), config, policy,
             requestor=requestor, origin=origin)
     elif isinstance(actions[0][0], UpdatePackage):
         if needed_by:
@@ -182,7 +187,7 @@ async def main():
             async with pool.acquire() as conn:
                 for requirement, needed_by in requirements.items():
                     await followup_missing_requirement(
-                        conn, apt_mgr, policy, requirement,
+                        conn, apt_mgr, config, policy, requirement,
                         needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]))
 
 if __name__ == '__main__':

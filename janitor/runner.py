@@ -1309,6 +1309,7 @@ async def followup_run(
                     if action['action'] == 'new-package':
                         await schedule_new_package(
                             conn, action['upstream-info'],
+                            config,
                             policy,
                             requestor=requestor, change_set=result.change_set)
                     elif action['action'] == 'update-package':
