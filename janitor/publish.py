@@ -1717,6 +1717,7 @@ async def refresh_proposal_status_request(request):
 @routes.post("/autopublish", name='autopublish')
 async def autopublish_request(request):
     reviewed_only = "reviewed_only" in request.query
+
     async def autopublish():
         await publish_pending_ready(
             request.app['db'],
