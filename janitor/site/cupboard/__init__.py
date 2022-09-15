@@ -22,10 +22,10 @@ import aiozipkin
 
 from aiohttp import web
 
-from .. import state
+from ... import state
 
-from . import is_admin, env, check_logged_in, is_qa_reviewer
-from .common import html_template
+from .. import is_admin, env, check_logged_in, is_qa_reviewer
+from ..common import html_template
 
 
 @html_template(env, "cupboard/rejected.html")
@@ -107,7 +107,7 @@ async def handle_never_processed(request):
 
 @html_template(env, "cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
-    from ..schedule import TRANSIENT_ERROR_RESULT_CODES
+    from ...schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
     exclude_never_processed = "exclude_never_processed" in request.query
     exclude_transient = "exclude_transient" in request.query
@@ -200,7 +200,7 @@ async def handle_review_post(request):
                 'abstain': 'abstained'}[post["review_status"].lower()]
             if review_status == "rescheduled":
                 review_status = "rejected"
-                from ..schedule import do_schedule
+                from ...schedule import do_schedule
 
                 await do_schedule(
                     conn,
@@ -254,8 +254,8 @@ async def handle_review(request):
 
 @html_template(env, "cupboard/run.html", headers={"Vary": "Cookie"})
 async def handle_run(request):
-    from .common import get_run
-    from .pkg import generate_run_file
+    from ..common import get_run
+    from ..pkg import generate_run_file
 
     span = aiozipkin.request_span(request)
     run_id = request.match_info["run_id"]
@@ -351,7 +351,7 @@ select * from change_set where exists (
 
 @html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})
 async def handle_pkg(request):
-    from .pkg import generate_pkg_file
+    from ..pkg import generate_pkg_file
 
     span = aiozipkin.request_span(request)
 
