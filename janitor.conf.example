@@ -51,6 +51,7 @@ distribution {
 
 campaign {
   name: "lintian-fixes"
+  command: "lintian-brush"
   branch_name: "lintian-fixes"
   debian_build {
     archive_description: "Builds of lintian fixes"
@@ -68,6 +69,7 @@ campaign {
 
 campaign {
   name: "unchanged"
+  command: "true"
   branch_name: "master"
   debian_build {
     archive_description: "Builds without any changes"
@@ -81,6 +83,7 @@ campaign {
 campaign {
   name: "fresh-releases"
   branch_name: "new-upstream"
+  command: "deb-new-upstream"
   debian_build {
     archive_description: "Builds with new upstream versions merged"
     build_distribution: "fresh-releases"

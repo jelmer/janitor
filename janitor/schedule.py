@@ -30,7 +30,7 @@ from debian.changelog import Version
 import asyncpg
 
 from .compat import shlex_join
-from .config import read_config
+from .config import read_config, get_campaign_config
 from .queue import Queue
 
 FIRST_RUN_BONUS = 100.0
@@ -101,6 +101,7 @@ PUBLISH_MODE_VALUE = {
 
 async def iter_candidates_with_policy(
         conn: asyncpg.Connection,
+        default_command: str,
         packages: Optional[List[str]] = None,
         campaign: Optional[str] = None):
     query = """
@@ -135,12 +136,19 @@ WHERE
     return await conn.fetch(query, *args)
 
 
-def queue_item_from_candidate_and_policy(row):
+def queue_item_from_candidate_and_policy(row, config):
     value = row['value']
     for entry in row['publish']:
         value += PUBLISH_MODE_VALUE[entry['mode']]
 
-    return (row['package'], row['context'], row['command'], row['campaign'],
+    command = row['command']
+    if command is None:
+        campaign = get_campaign_config(config, row['campaign'])
+        if campaign is None:
+            raise ValueError('unknown campaign %s' % row['campaign'])
+        command = campaign.command
+
+    return (row['package'], row['context'], command, row['campaign'],
             value, row['success_chance'])
 
 
@@ -410,7 +418,7 @@ async def main():
         logging.info('Finding candidates with policy')
         logging.info('Determining schedule for candidates')
         todo = [
-            queue_item_from_candidate_and_policy(row)
+            queue_item_from_candidate_and_policy(row, config)
             for row in
             await iter_candidates_with_policy(
                 conn, packages=(args.packages or None), campaign=args.campaign)]

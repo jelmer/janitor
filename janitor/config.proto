@@ -105,6 +105,9 @@ message Campaign {
   optional bool webhook_trigger = 7 [default=false];
 
   repeated BugTracker bugtracker = 8;
+
+  // Default command, can be overridden on a per-package basis
+  optional string command = 9;
 }
 
 message GenericBuild {
