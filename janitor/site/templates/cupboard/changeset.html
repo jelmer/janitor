@@ -13,7 +13,7 @@
 
 <ul>
 {% for run in runs %}
-  <li><a href="{{ run.id }}/">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}</li>
+<li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}</li>
 {% endfor %}
 </ul>
 
