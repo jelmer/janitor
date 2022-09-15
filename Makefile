@@ -56,7 +56,7 @@ clean:
 
 SHA=$(shell git rev-parse HEAD)
 
-docker-%:
+docker-%: core
 	buildah build -t ghcr.io/jelmer/janitor/$*:latest -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
 	buildah push ghcr.io/jelmer/janitor/$*:latest
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
