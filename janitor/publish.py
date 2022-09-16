@@ -695,7 +695,7 @@ async def publish_pending_ready(
         ) in iter_publish_ready(
             conn1, review_status=review_status,
             needs_review=False,
-            change_set_status=['ready', 'publishing'],
+            change_set_state=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
                 conn, config=config,
