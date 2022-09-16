@@ -315,6 +315,8 @@ Tag: {{ tagname }}
   {% if r %}proposals not currently being rate-limited for maintainer {{ d.maintainer }}{% else %}merge proposals for the package maintainer {{ d.maintainer }} are currently being rate-limited (open: {{ d.open }}, max open: {{ d.max_open }}){% endif %}
 {% elif k == 'success' %}
   {% if r %}run was successful{% else %}run was not successful{% endif %}
+{% elif k == 'change_set' %}
+  {% if r %}change set is {{ d.change_set_state }}{% else %}change set is {{ d.change_set_state }}{% endif %}
 {% else %}
 {{ k }}
 {% endif %}
