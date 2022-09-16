@@ -101,7 +101,6 @@ PUBLISH_MODE_VALUE = {
 
 async def iter_candidates_with_policy(
         conn: asyncpg.Connection,
-        default_command: str,
         packages: Optional[List[str]] = None,
         campaign: Optional[str] = None):
     query = """

@@ -17,6 +17,8 @@
 
 """Serve the janitor cupboard site."""
 
+import re
+from typing import Optional
 
 import aiozipkin
 
@@ -388,6 +390,88 @@ ORDER BY merge_proposal.url, run.finish_time DESC
     )
 
 
+@html_template(env, "cupboard/merge-proposals.html", headers={"Vary": "Cookie"})
+async def handle_merge_proposals(request):
+    from .merge_proposals import write_merge_proposals
+
+    suite = request.match_info.get("suite")
+    return await write_merge_proposals(request.app.database, suite)
+
+
+@html_template(env, "cupboard/merge-proposal.html", headers={"Vary": "Cookie"})
+async def handle_merge_proposal(request):
+    from .merge_proposals import write_merge_proposal
+
+    url = request.query["url"]
+    return await write_merge_proposal(request.app.database, url)
+
+
+async def generate_ready_list(
+    db, review_status: Optional[str] = None
+):
+    async with db.acquire() as conn:
+        query = 'SELECT package, suite, id, command, result FROM publish_ready'
+
+        conditions = [
+            "EXISTS (SELECT * FROM unnest(unpublished_branches) "
+            "WHERE mode in "
+            "('propose', 'attempt-push', 'push-derived', 'push'))"]
+        args = []
+        if review_status:
+            args.append(review_status)
+            conditions.append('review_status = %d' % len(args))
+
+        query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY package ASC"
+
+        runs = await conn.fetch(query, *args)
+    return {"runs": runs}
+
+
+async def handle_result_file(request):
+    pkg = request.match_info["pkg"]
+    filename = request.match_info["filename"]
+    run_id = request.match_info["run_id"]
+    if not re.match("^[a-z0-9+-\\.]+$", pkg) or len(pkg) < 2:
+        raise web.HTTPNotFound(text="Invalid package %s for run %s" % (pkg, run_id))
+    if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
+        raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
+    if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
+        if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
+            raise web.HTTPNotFound(
+                text="No log file %s for run %s" % (filename, run_id)
+            )
+
+        try:
+            logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
+        except FileNotFoundError:
+            raise web.HTTPNotFound(
+                text="No log file %s for run %s" % (filename, run_id)
+            )
+        else:
+            with logfile as f:
+                text = f.read().decode("utf-8", "replace")
+        return web.Response(
+            content_type="text/plain",
+            text=text,
+        )
+    else:
+        try:
+            f = await request.app['artifact_manager'].get_artifact(
+                run_id, filename
+            )
+        except FileNotFoundError:
+            raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
+        return web.Response(body=f.read())
+
+
+@html_template(env, "cupboard/ready-list.html", headers={"Vary": "Cookie"})
+async def handle_ready_proposals(request):
+    review_status = request.query.get("review_status")
+    return await generate_ready_list(request.app.database, review_status)
+
+
 _extra_cupboard_links = []
 
 
@@ -432,4 +516,20 @@ def register_cupboard_endpoints(router):
     router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
+    )
+    router.add_get(
+        "/cupboard/merge-proposals",
+        handle_merge_proposals,
+        name="cupboard-merge-proposals",
+    )
+    router.add_get(
+        "/cupboard/merge-proposal",
+        handle_merge_proposal,
+        name="merge-proposal",
+    )
+    router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
+    router.add_get(
+        "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
+        handle_result_file,
+        name="cupboard-result-file",
     )
