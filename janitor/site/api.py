@@ -646,7 +646,7 @@ async def consider_publishing(session, publisher_url, run_id):
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
 @routes.post("/{camaign}/pkg/{package}", name="campaign-package-run-update")
 async def handle_run_post(request):
-    from .review import store_review
+    from ..review import store_review
     async with request.app['db'].acquire() as conn:
         try:
             run_id = request.match_info["run_id"]
@@ -940,7 +940,7 @@ ORDER BY package, suite, start_time DESC
 @routes.get("/needs-review", name="needs-review")
 @routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/needs-review", name="needs-review-campaign")
 async def handle_needs_review(request):
-    from .review import iter_needs_review
+    from ..review import iter_needs_review
     campaign = request.match_info.get("campaign")
     reviewer = request.query.get("reviewer")
     if reviewer is None and request.get('user'):
