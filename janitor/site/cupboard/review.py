@@ -21,59 +21,9 @@ from ..common import (
     get_unchanged_run,
     render_template_for_request,
 )
+from ..review import iter_needs_review
 
 MAX_DIFF_SIZE = 200 * 1024
-
-
-async def iter_needs_review(
-        conn: asyncpg.Connection,
-        campaigns: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        publishable_only: bool = False,
-        required_only: Optional[bool] = None,
-        reviewer: Optional[str] = None):
-    args: List[Any] = []
-    query = """
-SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
-"""
-    conditions = []
-    if campaigns is not None:
-        args.append(campaigns)
-        conditions.append("suite = ANY($%d::text[])" % len(args))
-
-    publishable_condition = (
-        "exists (select from unnest(unpublished_branches) where "
-        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
-    )
-
-    order_by = []
-
-    order_by.append("(SELECT COUNT(*) FROM review WHERE run_id = id) ASC")
-
-    if publishable_only:
-        conditions.append(publishable_condition)
-    else:
-        order_by.append(publishable_condition + " DESC")
-
-    if required_only is not None:
-        args.append(required_only)
-        conditions.append('needs_review = $%d' % (len(args)))
-
-    if reviewer is not None:
-        args.append(reviewer)
-        conditions.append('not exists (select from review where reviewer = $%d and run_id = id)' % (len(args)))
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-
-    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
-
-    if order_by:
-        query += " ORDER BY " + ", ".join(order_by) + " "
-
-    if limit is not None:
-        query += " LIMIT %d" % limit
-    return await conn.fetch(query, *args)
 
 
 async def generate_rejected(conn, config, campaign=None):
@@ -242,22 +192,6 @@ async def generate_review(
         ],
     }
     return await render_template_for_request(env, "cupboard/review.html", request, kwargs)
-
-
-async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
-    async with conn.transaction():
-        if status != 'abstained' and is_qa_reviewer:
-            await conn.execute(
-                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-                status,
-                comment,
-                run_id,
-            )
-        await conn.execute(
-            "INSERT INTO review (run_id, comment, reviewer, review_status) VALUES "
-            " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
-            "DO UPDATE SET review_status = EXCLUDED.review_status, comment = EXCLUDED.comment, "
-            "reviewed_at = NOW()", run_id, comment, reviewer, status)
 
 
 async def generate_review_stats(conn):
