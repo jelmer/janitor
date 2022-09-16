@@ -232,19 +232,15 @@ async def handle_result_file(request):
         return web.Response(
             content_type="text/plain",
             text=text,
-            headers={"Vary": "Cookie"},
         )
     else:
         try:
-            artifact = await request.app['artifact_manager'].get_artifact(
+            f = await request.app['artifact_manager'].get_artifact(
                 run_id, filename
             )
         except FileNotFoundError:
             raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
-        with artifact as f:
-            return web.Response(
-                body=f.read(), headers={"Vary": "Cookie"}
-            )
+        return web.Response(body=f.read())
 
 
 @html_template(env, "ready-list.html", headers={"Vary": "Cookie"})
@@ -433,22 +429,6 @@ async def create_app(
     )
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
-    app.router.add_get(
-        "/cupboard/merge-proposals",
-        handle_merge_proposals,
-        name="cupboard-merge-proposals",
-    )
-    app.router.add_get(
-        "/cupboard/merge-proposal",
-        handle_merge_proposal,
-        name="merge-proposal",
-    )
-    app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
-    app.router.add_get(
-        "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
-        handle_result_file,
-        name="cupboard-result-file",
-    )
     from .cupboard import register_cupboard_endpoints
     register_cupboard_endpoints(app.router)
     app.router.add_get(

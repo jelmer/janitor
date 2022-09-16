@@ -1650,7 +1650,7 @@ async def handle_candidates(request):
     unknown_packages = []
     unknown_campaigns = []
     queue_processor = request.app['queue_processor']
-    async with queue_processor.database.acquire() as conn:
+    async with queue_processor.database.acquire() as conn, conn.transaction():
         known_packages = set()
         async for record in conn.fetch('SELECT name FROM package'):
             known_packages.add(record[0])
@@ -1676,6 +1676,8 @@ async def handle_candidates(request):
                 candidate['command'],
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance')))
+        if 'replace' in request.query:
+            await conn.execute('DELETE FROM candidate')
 
         await conn.executemany(
             "INSERT INTO candidate "

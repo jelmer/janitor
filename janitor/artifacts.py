@@ -60,6 +60,9 @@ class ArtifactManager(object):
     async def get_artifact(self, run_id, filename, timeout=None):
         raise NotImplementedError(self.get_artifact)
 
+    def public_artifact_url(self, run_id, filename):
+        raise NotImplementedError(self.public_artifact_url)
+
     async def retrieve_artifacts(
         self, run_id, local_path, filter_fn=None, timeout=None
     ):
@@ -104,6 +107,9 @@ class LocalArtifactManager(ArtifactManager):
 
     async def get_artifact(self, run_id, filename, timeout=None):
         return open(os.path.join(self.path, run_id, filename), "rb")
+
+    def public_artifact_url(self, run_id, filename):
+        raise NotImplementedError(self.public_artifact_url)
 
     async def retrieve_artifacts(
         self, run_id, local_path, filter_fn=None, timeout=None
@@ -213,6 +219,13 @@ class GCSArtifactManager(ArtifactManager):
             if e.status == 404:
                 raise FileNotFoundError
             raise
+
+    def public_artifact_url(self, run_id, filename):
+        from gcloud.aio.storage.storage import API_ROOT
+        from urllib.parse import quote
+        return "%s/%s/o/%s" % (
+            API_ROOT, self.bucket_name,
+            quote("%s/%s" % (run_id, filename), safe=''))
 
 
 def get_artifact_manager(location, trace_configs=None):
