@@ -2,11 +2,9 @@
 
 import logging
 
-import asyncpg
 import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError, ClientResponseError
-from typing import List, Optional, Any
 
 from breezy.revision import NULL_REVISION
 

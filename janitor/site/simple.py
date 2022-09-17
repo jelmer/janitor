@@ -37,7 +37,6 @@ from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
 from .. import state
-from ..config import get_campaign_config
 from ..logs import get_log_manager
 from ..vcs import get_vcs_managers_from_config
 

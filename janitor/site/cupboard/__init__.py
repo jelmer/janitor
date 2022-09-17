@@ -335,7 +335,7 @@ async def handle_changeset(request):
                 request.match_info['id'])
         with span.new_child('sql:todo'):
             todo = await conn.fetch('SELECT * FROM change_set_todo WHERE change_set = $1',
-                                          request.match_info['id'])
+                                    request.match_info['id'])
     return {'changeset': cs, 'runs': runs, 'todo': todo}
 
 
