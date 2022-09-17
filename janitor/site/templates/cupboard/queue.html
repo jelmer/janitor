@@ -46,6 +46,7 @@ Rate limiting hosts:
     <td>{{ count }}</td>
 </tr>
 {% endfor %}
+</tbody>
 </table>
 </div>
 
@@ -86,6 +87,7 @@ Rate limiting hosts:
     <!-- TODO(jelmer): Link to logs -->
 </tr>
 {% endfor %}
+</tbody>
 </table>
 </div>
 
@@ -96,7 +98,7 @@ kill = function(run_id) {
 }
 </script>
 
-<div name="queue">
+<div name="coming-up">
 <h2>Coming up</h2>
 <table class="docutils" border="1">
 <thead valign="bottom">
@@ -163,5 +165,6 @@ registerHandler('queue', function(msg) {
 
 </script>
 
+</div>
 </div>
 {% endblock body %}

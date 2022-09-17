@@ -859,7 +859,7 @@ async def store_publish(
     conn: asyncpg.Connection,
     change_set_id: str,
     package: str,
-    branch_name: str,
+    branch_name: Optional[str],
     main_branch_revision: bytes,
     revision: bytes,
     role: str,
