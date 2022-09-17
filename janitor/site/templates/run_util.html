@@ -63,7 +63,7 @@ window.bugform.onsubmit = function(e) {
 {% elif bugtracker.kind == config_pb2.debian %}
 
 <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
-<form id="bugform" action="mailto:new@bugs.debian.org" method="GET" style="display: contents;">
+<form id="bugform" action="mailto:new@bugs.debian.org" method="get" style="display: contents;">
 <input type="hidden" name="subject" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
 <input type="hidden" name="body" value="{%- filter escape -%}
 See run [{{ run_id }}]({{ url }}).
@@ -293,7 +293,7 @@ Tag: {{ tagname }}
 {% macro display_publish_blockers(blockers) %}
 <ul>
 {% for k, v in blockers.items() %}
-<li>{% if v.result %}&#9745;{% else %}&#9746;{% endif %}
+<li>{% if v.result %}☑{% else %}☒{% endif %}
 
 {% set r = v.result %}
 {% set d = v.details %}
