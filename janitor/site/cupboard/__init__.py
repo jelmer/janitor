@@ -525,7 +525,7 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/merge-proposal",
         handle_merge_proposal,
-        name="merge-proposal",
+        name="cupboard-merge-proposal",
     )
     router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
     router.add_get(
