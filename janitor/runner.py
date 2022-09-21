@@ -1400,7 +1400,6 @@ async def change_set_ready(conn, change_set_id):
 
 class QueueProcessor(object):
 
-    rate_limit_hosts: Dict[str, datetime]
     avoid_hosts: Set[str]
 
     def __init__(
@@ -1437,24 +1436,21 @@ class QueueProcessor(object):
         self.active_runs: Dict[str, ActiveRun] = {}
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
-        self.rate_limit_hosts = {}
         self.run_timeout = run_timeout
         self.avoid_hosts = avoid_hosts or set()
 
-    def status_json(self) -> Any:
+    async def status_json(self) -> Any:
         return {
             "processing": [
                 active_run.json() for active_run in self.active_runs.values()
             ],
             "avoid_hosts": list(self.avoid_hosts),
-            "rate_limit_hosts": {
-                host: ts.isoformat()
-                for (host, ts) in self.rate_limit_hosts.items()}
+            "rate_limit_hosts": await self.redis.hgetall('rate-limit-hosts'),
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
-        await self.redis.publish_json('queue', self.status_json())
+        await self.redis.publish_json('queue', await self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
@@ -1541,22 +1537,24 @@ class QueueProcessor(object):
 
         await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
-        await self.redis.publish_json('queue', self.status_json())
+        await self.redis.publish_json('queue', await self.status_json())
         last_success_gauge.set_to_current_time()
 
-    def rate_limited(self, host, retry_after):
+    async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
-        self.rate_limit_hosts[host] = (
-            retry_after or (datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)))
+        if not retry_after:
+            retry_after = datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)
+        await self.redis.hset(
+            'rate-limit-hosts', host, retry_after.isoformat())
 
-    def can_process_url(self, url) -> bool:
+    async def can_process_url(self, url) -> bool:
         if url is None:
             return True
         host = urlutils.URL.from_string(url).host
         if host in self.avoid_hosts:
             return False
-        until = self.rate_limit_hosts.get(host)
-        if until and until > datetime.now():
+        until = await self.redis.hget('rate-limit-hosts', host)
+        if until and datetime.fromisoformat(until) > datetime.now():
             return False
         return True
 
@@ -1570,7 +1568,7 @@ class QueueProcessor(object):
             vcs_info = await conn.fetchrow(
                 'SELECT vcs_type, branch_url, subpath FROM package '
                 'WHERE name = $1', item.package)
-            if vcs_info and not self.can_process_url(vcs_info["branch_url"]):
+            if vcs_info and not (await self.can_process_url(vcs_info["branch_url"])):
                 continue
             return item, dict(vcs_info) if vcs_info else None
         return None, None
@@ -1586,7 +1584,7 @@ class QueueProcessor(object):
 @routes.get("/status", name="status")
 async def handle_status(request):
     queue_processor = request.app['queue_processor']
-    return web.json_response(queue_processor.status_json())
+    return web.json_response(await queue_processor.status_json())
 
 
 async def _find_active_run(request):
@@ -1696,7 +1694,7 @@ async def handle_candidates(request):
 @routes.get("/active-runs", name="get-active-runs")
 async def handle_get_active_runs(request):
     queue_processor = request.app['queue_processor']
-    return web.json_response(queue_processor.status_json()["processing"])
+    return web.json_response((await queue_processor.status_json())["processing"])
 
 
 @routes.post("/active-runs", name="assign")
@@ -1828,7 +1826,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         except BranchRateLimited as e:
             host = urlutils.URL.from_string(vcs_info['branch_url']).host
             logging.warning('Rate limiting for %s: %r', host, e)
-            queue_processor.rate_limited(host, e.retry_after)
+            await queue_processor.rate_limited(host, e.retry_after)
             await abort(active_run, 'pull-rate-limited', str(e))
             return web.json_response(
                 {'reason': str(e)}, status=429, headers={
@@ -1861,7 +1859,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     except BranchRateLimited as e:
                         host = urlutils.URL.from_string(e.url).host
                         logging.warning('Rate limiting for %s: %r', host, e)
-                        queue_processor.rate_limited(host, e.retry_after)
+                        await queue_processor.rate_limited(host, e.retry_after)
                         await abort(active_run, 'resume-rate-limited', str(e))
                         return web.json_response(
                             {'reason': str(e)}, status=429, headers={
