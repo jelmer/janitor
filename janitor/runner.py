@@ -691,6 +691,23 @@ class ActiveRunDisappeared(Exception):
         self.reason = reason
 
 
+class Backchannel(object):
+
+    async def kill(self) -> None:
+        raise NotImplementedError(self.kill)
+
+    async def list_log_files(self):
+        raise NotImplementedError(self.list_log_files)
+
+    async def get_log_file(self, name):
+        raise NotImplementedError(self.get_log_file)
+
+    def json(self):
+        return {}
+
+    is_mia = False
+
+
 class ActiveRun(object):
 
     worker_name: str
@@ -706,6 +723,7 @@ class ActiveRun(object):
     change_set: str
     last_keepalive: datetime
     command: str
+    backchannel: Backchannel
 
     KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
@@ -714,6 +732,7 @@ class ActiveRun(object):
         self,
         queue_item: QueueItem,
         vcs_info: Dict[str, str],
+        backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
     ):
@@ -728,6 +747,7 @@ class ActiveRun(object):
         self.log_id = str(uuid.uuid4())
         self.worker_name = worker_name
         self.vcs_info = vcs_info
+        self.backchannel = backchannel or Backchannel()
         self.resume_branch_name = None
         self.worker_link = worker_link
         self.resume_from = None
@@ -752,13 +772,13 @@ class ActiveRun(object):
             pass
         self._watch_dog = None
 
-    async def _ping(self):
+    async def ping(self):
         return True
 
     async def _watchdog(self, queue_processor):
         while True:
             try:
-                if await self._ping():
+                if await self.backchannel.ping():
                     self._reset_keepalive()
             except ActiveRunDisappeared as e:
                 try:
@@ -785,15 +805,6 @@ class ActiveRun(object):
     def current_duration(self):
         return datetime.utcnow() - self.start_time
 
-    async def kill(self) -> None:
-        raise NotImplementedError(self.kill)
-
-    async def list_log_files(self):
-        raise NotImplementedError(self.list_log_files)
-
-    async def get_log_file(self, name):
-        raise NotImplementedError(self.get_log_file)
-
     def create_result(self, **kwargs):
         return JanitorResult(
             pkg=self.package,
@@ -812,6 +823,8 @@ class ActiveRun(object):
 
     @property
     def is_mia(self):
+        if self.backchannel.is_mia:
+            return True
         return self.keepalive_age.total_seconds() > 60 * 60
 
     @property
@@ -843,15 +856,15 @@ class ActiveRun(object):
             "keepalive_age": self.keepalive_age.total_seconds(),
             "mia": self.is_mia,
             "vcs": self.vcs_info,
+            "backchannel": self.backchannel.json(),
         }
 
 
-class JenkinsRun(ActiveRun):
+class JenkinsBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL, *args, **kwargs):
-        super(JenkinsRun, self).__init__(*args, **kwargs)
+    def __init__(self, my_url: URL):
         self.my_url = my_url
         self._metadata = None
 
@@ -879,7 +892,7 @@ class JenkinsRun(ActiveRun):
                 timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
-    async def _ping(self):
+    async def ping(self):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
@@ -891,9 +904,7 @@ class JenkinsRun(ActiveRun):
                 return False
             except ClientResponseError as e:
                 if e.status == 404:
-                    logging.warning(
-                        "Jenkins job %s (worker %s) for run %s has disappeared.", self.my_url,
-                        self.worker_name, self.log_id)
+                    logging.warning("Jenkins job %s has disappeared.", self.my_url)
                     raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url)
                 else:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
@@ -902,19 +913,21 @@ class JenkinsRun(ActiveRun):
                 return True
 
     def json(self):
-        ret = super(JenkinsRun, self).json()
-        ret['jenkins'] = self._metadata
-        return ret
+        return {'jenkins': self._metadata}
 
 
-class PollingActiveRun(ActiveRun):
+class PollingBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL, *args, **kwargs):
-        super(PollingActiveRun, self).__init__(*args, **kwargs)
+    def __init__(self, my_url: URL, log_id: str,
+                 start_time: Optional[datetime] = None):
         self.my_url = my_url
+        if start_time is None:
+            start_time = datetime.utcnow()
+        self.start_time = start_time
         self._log_id_mismatch = None
+        self.log_id = log_id
 
     def __repr__(self):
         return "<%s(%r)>" % (type(self).__name__, self.my_url)
@@ -945,11 +958,11 @@ class PollingActiveRun(ActiveRun):
 
     @property
     def is_mia(self):
-        if super(PollingActiveRun, self).is_mia:
+        if super(PollingBackchannel, self).is_mia:
             return True
         return self._log_id_mismatch is not None
 
-    async def _ping(self):
+    async def ping(self):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
@@ -971,12 +984,11 @@ class PollingActiveRun(ActiveRun):
                 self._log_id_mismatch = None
 
             if (self._log_id_mismatch is not None
-                    and (datetime.now() - self.start_time).total_seconds() > 30):
+                    and (datetime.utcnow() - self.start_time).total_seconds() > 30):
                 logging.warning(
-                    "Worker %s is now processing new run %s (age: %s). Marking run as MIA.",
-                    self.worker_name,
+                    "Worker %s is now processing new run %s. Marking run as MIA.",
+                    self.my_url,
                     self.log_id,
-                    self.keepalive_age,
                 )
                 raise ActiveRunDisappeared(
                     'Worker started processing new run %s rather than %s' %
@@ -984,9 +996,10 @@ class PollingActiveRun(ActiveRun):
         return (self._log_id_mismatch is None)
 
     def json(self):
-        ret = super(PollingActiveRun, self).json()
-        ret['my_url'] = str(self.my_url)
-        return ret
+        return {
+            'my_url': str(self.my_url),
+            'start_time': self.start_time.isoformat(),
+        }
 
 
 def open_resume_branch(
@@ -1602,7 +1615,7 @@ async def _find_active_run(request):
 @routes.get("/log/{run_id}", name="log-index")
 async def handle_log_index(request):
     active_run = await _find_active_run(request)
-    log_filenames = await active_run.list_log_files()
+    log_filenames = await active_run.backchannel.list_log_files()
     return web.json_response(log_filenames)
 
 
@@ -1610,7 +1623,7 @@ async def handle_log_index(request):
 async def handle_kill(request):
     active_run = await _find_active_run(request)
     ret = active_run.json()
-    await active_run.kill()
+    await active_run.backchannel.kill()
     return web.json_response(ret)
 
 
@@ -1627,7 +1640,7 @@ async def handle_log(request):
     except KeyError:
         return web.Response(text="No such current run: %s" % run_id, status=404)
     try:
-        f = await active_run.get_log_file(filename)
+        f = await active_run.backchannel.get_log_file(filename)
     except FileNotFoundError:
         return web.Response(text="No such log file: %s" % filename, status=404)
 
@@ -1770,22 +1783,23 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 return web.json_response({'reason': 'queue empty'}, status=503)
 
             if backchannel and backchannel['kind'] == 'http':
-                active_run = PollingActiveRun(
-                    my_url=URL(backchannel['url']),
+                active_run = ActiveRun(
+                    backchannel=PollingBackchannel(my_url=URL(backchannel['url'])),
                     worker_name=worker,
                     queue_item=item,
                     vcs_info=vcs_info,
                     worker_link=worker_link
                 )
             elif backchannel and backchannel['kind'] == 'jenkins':
-                active_run = JenkinsRun(
-                    my_url=URL(backchannel['url']),
+                active_run = ActiveRun(
+                    backchannel=JenkinsBackchannel(my_url=URL(backchannel['url'])),
                     worker_name=worker,
                     queue_item=item,
                     vcs_info=vcs_info,
                     worker_link=worker_link)
             else:
                 active_run = ActiveRun(
+                    backchannel=None,
                     worker_name=worker,
                     queue_item=item,
                     vcs_info=vcs_info,
