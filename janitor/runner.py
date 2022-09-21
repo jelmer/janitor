@@ -788,6 +788,7 @@ class ActiveRun(object):
                 timespec='seconds'),
             "keepalive_age": self.keepalive_age.total_seconds(),
             "mia": self.is_mia,
+            "vcs": self.vcs_info,
         }
 
     def start_watchdog(self, queue_processor):
@@ -1000,6 +1001,11 @@ class PollingActiveRun(ActiveRun):
                         logging.warning('Watchdog was not stopped?')
                     break
                 await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+
+    def json(self):
+        ret = super(PollingActiveRun, self).json()
+        ret['my_url'] = str(self.my_url)
+        return ret
 
 
 def open_resume_branch(
