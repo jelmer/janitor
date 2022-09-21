@@ -19,7 +19,7 @@ from ..common import (
     get_unchanged_run,
     render_template_for_request,
 )
-from ..review import iter_needs_review
+from ...review import iter_needs_review
 
 MAX_DIFF_SIZE = 200 * 1024
 
