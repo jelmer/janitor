@@ -1450,6 +1450,8 @@ class QueueProcessor(object):
 
     async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
+        await self.redis.hset(
+            'assigned-queue-items', str(active_run.queue_item.id), active_run.log_id)
         await self.redis.publish_json('queue', await self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
@@ -1457,10 +1459,10 @@ class QueueProcessor(object):
     async def unclaim_run(self, log_id: str) -> None:
         active_run = self.active_runs.get(log_id)
         active_run_count.labels(worker=active_run.worker_name if active_run else None).dec()
-        try:
-            del self.active_runs[log_id]
-        except KeyError:
-            pass
+        if not active_run:
+            return
+        await self.redis.hdel('assigned-queue-items', str(active_run.queue_item.id))
+        del self.active_runs[log_id]
 
     async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
         return await self.abort_run(
@@ -1563,7 +1565,7 @@ class QueueProcessor(object):
         queue = Queue(conn)
         async for item in queue.iter_queue(
                 limit=limit, campaign=campaign, package=package):
-            if self.is_queue_item_assigned(item.id):
+            if await self.is_queue_item_assigned(item.id):
                 continue
             vcs_info = await conn.fetchrow(
                 'SELECT vcs_type, branch_url, subpath FROM package '
@@ -1573,12 +1575,9 @@ class QueueProcessor(object):
             return item, dict(vcs_info) if vcs_info else None
         return None, None
 
-    def is_queue_item_assigned(self, queue_item_id: int) -> bool:
+    async def is_queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
-        for active_run in self.active_runs.values():
-            if active_run.queue_item.id == queue_item_id:
-                return True
-        return False
+        return await self.redis.hexists('assigned-queue-items', str(queue_item_id))
 
 
 @routes.get("/status", name="status")
