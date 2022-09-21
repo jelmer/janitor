@@ -690,9 +690,16 @@ class ActiveRun(object):
     worker_name: str
     worker_link: Optional[str]
     queue_item: QueueItem
+    queue_id: int
     log_id: str
     start_time: datetime
+    finish_time: Optional[datetime]
+    estimated_duration: timedelta
+    campaign: str
+    package: str
+    change_set: str
     last_keepalive: datetime
+    command: str
 
     def __init__(
         self,
@@ -701,7 +708,13 @@ class ActiveRun(object):
         worker_name: str,
         worker_link: Optional[str] = None,
     ):
-        self.queue_item = queue_item
+        self.campaign = queue_item.campaign
+        self.package = queue_item.package
+        self.change_set = queue_item.change_set
+        self.command = queue_item.command
+        self.instigated_context = queue_item.context
+        self.estimated_duration = queue_item.estimated_duration
+        self.queue_id = queue_item.id
         self.start_time = datetime.utcnow()
         self.log_id = str(uuid.uuid4())
         self.worker_name = worker_name
@@ -729,14 +742,14 @@ class ActiveRun(object):
 
     def create_result(self, **kwargs):
         return JanitorResult(
-            pkg=self.queue_item.package,
-            campaign=self.queue_item.campaign,
+            pkg=self.package,
+            campaign=self.campaign,
             start_time=self.start_time,
             finish_time=datetime.utcnow(),
             log_id=self.log_id,
             worker_name=self.worker_name,
             resume_from=self.resume_from,
-            change_set=self.queue_item.change_set,
+            change_set=self.change_set,
             **kwargs)
 
     @property
@@ -758,13 +771,14 @@ class ActiveRun(object):
     def json(self) -> Any:
         """Return a JSON representation."""
         return {
-            "queue_id": self.queue_item.id,
+            "queue_id": self.queue_id,
             "id": self.log_id,
-            "package": self.queue_item.package,
-            "codebase": self.queue_item.codebase,
-            "campaign": self.queue_item.campaign,
-            "estimated_duration": self.queue_item.estimated_duration.total_seconds()
-            if self.queue_item.estimated_duration
+            "package": self.package,
+            "codebase": self.package,
+            "change_set": self.change_set,
+            "campaign": self.campaign,
+            "estimated_duration": self.estimated_duration.total_seconds()
+            if self.estimated_duration
             else None,
             "current_duration": self.current_duration.total_seconds(),
             "start_time": self.start_time.isoformat(),
@@ -1268,18 +1282,18 @@ def has_runtime_relation(c, pkg):
 
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
-        item: QueueItem, result: JanitorResult) -> None:
-    if result.code == "success" and item.campaign not in ("unchanged", "debianize"):
+        run: ActiveRun, result: JanitorResult) -> None:
+    if result.code == "success" and run.campaign not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
             run = await conn.fetchrow(
                 "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
                 result.package, result.main_branch_revision.decode('utf-8')
             )
             if run is None:
-                logging.info("Scheduling control run for %s.", item.package)
+                logging.info("Scheduling control run for %s.", run.package)
                 await do_schedule_control(
                     conn,
-                    item.package,
+                    run.package,
                     main_branch_revision=result.main_branch_revision,
                     estimated_duration=result.duration,
                     requestor="control",
@@ -1292,17 +1306,17 @@ async def followup_run(
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
                     "SELECT package, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
-                    item.package, dependent_suites)
+                    run.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
                         conn, run_to_retry['package'],
                         change_set=result.change_set,
-                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % item.package,
+                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % run.package,
                         campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package
-        requestor = 'schedule-missing-deps (needed by %s)' % item.package
+        requestor = 'schedule-missing-deps (needed by %s)' % run.package
         async with database.acquire() as conn:
             for scenario in result.followup_actions:
                 for action in scenario:
@@ -1327,7 +1341,7 @@ async def followup_run(
 
     # If there was a successful run, trigger builds for any
     # reverse dependencies in the same changeset.
-    if item.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
+    if run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
         from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
@@ -1343,7 +1357,7 @@ async def followup_run(
             new_build_version = debian_result.build_version   # noqa: F841
             # TODO(jelmer): Get old_build_version from base_distribution
 
-        campaign_config = get_campaign_config(config, item.campaign)
+        campaign_config = get_campaign_config(config, run.campaign)
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
         apt = RemoteApt(base_distribution.archive_mirror_uri)
 
@@ -1451,7 +1465,7 @@ class QueueProcessor(object):
     async def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         await self.redis.hset(
-            'assigned-queue-items', str(active_run.queue_item.id), active_run.log_id)
+            'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
         await self.redis.publish_json('queue', await self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
@@ -1461,7 +1475,7 @@ class QueueProcessor(object):
         active_run_count.labels(worker=active_run.worker_name if active_run else None).dec()
         if not active_run:
             return
-        await self.redis.hdel('assigned-queue-items', str(active_run.queue_item.id))
+        await self.redis.hdel('assigned-queue-items', str(active_run.queue_id))
         del self.active_runs[log_id]
 
     async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
@@ -1477,38 +1491,39 @@ class QueueProcessor(object):
             code=code,
             logfilenames=[],
         )
-        await self.finish_run(run.queue_item, result)
+        await self.finish_run(run, result)
 
-    async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
+    async def finish_run(self, active_run: ActiveRun, result: JanitorResult) -> None:
         run_result_count.labels(
-            campaign=item.campaign,
+            campaign=active_run.campaign,
             result_code=result.code).inc()
-        build_duration.labels(campaign=item.campaign).observe(
+        build_duration.labels(campaign=active_run.campaign).observe(
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
             if not self.dry_run:
                 if not result.change_set:
                     result.change_set = result.log_id
-                    await store_change_set(conn, result.change_set, campaign=result.campaign)
+                    await store_change_set(
+                        conn, result.change_set, campaign=result.campaign)
                 try:
                     await store_run(
                         conn,
                         run_id=result.log_id,
-                        name=item.package,
+                        name=active_run.package,
                         vcs_type=result.vcs_type,
                         branch_url=result.branch_url,
                         start_time=result.start_time,
                         finish_time=result.finish_time,
-                        command=item.command,
+                        command=active_run.command,
                         description=result.description,
-                        instigated_context=item.context,
+                        instigated_context=active_run.instigated_context,
                         context=result.context,
                         main_branch_revision=result.main_branch_revision,
                         result_code=result.code,
                         revision=result.revision,
                         codemod_result=result.codemod_result,
-                        campaign=item.campaign,
+                        campaign=active_run.campaign,
                         logfilenames=result.logfilenames,
                         value=result.value,
                         worker_name=result.worker_name,
@@ -1525,8 +1540,8 @@ class QueueProcessor(object):
                     raise RunExists(result.log_id)
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
-                await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
-        await followup_run(self.config, self.database, self.policy, item, result)
+                await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
+        await followup_run(self.config, self.database, self.policy, active_run, result)
 
         # If there is no more work to be done for this change set, mark it as ready.
         async with self.database.acquire() as conn, conn.transaction():
