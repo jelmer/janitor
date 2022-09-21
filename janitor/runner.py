@@ -685,6 +685,12 @@ async def import_logs(
             logfile_uploaded_count.inc()
 
 
+class ActiveRunDisappeared(Exception):
+
+    def __init__(self, reason):
+        self.reason = reason
+
+
 class ActiveRun(object):
 
     worker_name: str
@@ -700,6 +706,9 @@ class ActiveRun(object):
     change_set: str
     last_keepalive: datetime
     command: str
+
+    KEEPALIVE_INTERVAL = 10
+    KEEPALIVE_TIMEOUT = 60
 
     def __init__(
         self,
@@ -723,9 +732,54 @@ class ActiveRun(object):
         self.worker_link = worker_link
         self.resume_from = None
         self._reset_keepalive()
+        self._watch_dog = None
 
     def _reset_keepalive(self):
         self.last_keepalive = datetime.utcnow()
+
+    def start_watchdog(self, queue_processor):
+        if self._watch_dog is not None:
+            raise Exception("Watchdog already started")
+        self._watch_dog = create_background_task(
+            self._watchdog(queue_processor), 'watchdog for %r' % self)
+
+    def stop_watchdog(self):
+        if self._watch_dog is None:
+            return
+        try:
+            self._watch_dog.cancel()
+        except asyncio.CancelledError:
+            pass
+        self._watch_dog = None
+
+    async def _ping(self):
+        return True
+
+    async def _watchdog(self, queue_processor):
+        while True:
+            try:
+                if await self._ping():
+                    self._reset_keepalive()
+            except ActiveRunDisappeared as e:
+                try:
+                    await queue_processor.abort_run(
+                        self, 'run-disappeared', e.reason)
+                except RunExists:
+                    logging.warning('Watchdog was not stopped?')
+                    return False
+            if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
+                logging.warning(
+                    "No keepalives received from %s for %s in %s, aborting.",
+                    self.worker_name,
+                    self.log_id,
+                    self.keepalive_age,
+                )
+                try:
+                    await queue_processor.timeout_run(self, self.keepalive_age)
+                except RunExists:
+                    logging.warning('Watchdog was not stopped?')
+                break
+            await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     @property
     def current_duration(self):
@@ -791,22 +845,14 @@ class ActiveRun(object):
             "vcs": self.vcs_info,
         }
 
-    def start_watchdog(self, queue_processor):
-        pass
-
-    def stop_watchdog(self):
-        pass
-
 
 class JenkinsRun(ActiveRun):
 
-    KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(JenkinsRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
-        self._watch_dog = None
         self._metadata = None
 
     def __repr__(self):
@@ -827,63 +873,33 @@ class JenkinsRun(ActiveRun):
                     raise_for_status=True) as resp:
             return BytesIO(await resp.read())
 
-    def start_watchdog(self, queue_processor):
-        if self._watch_dog is not None:
-            raise Exception("Watchdog already started")
-        self._watch_dog = create_background_task(
-            self._watchdog(queue_processor), 'watchdog for %r' % self)
-
-    def stop_watchdog(self):
-        if self._watch_dog is None:
-            return
-        try:
-            self._watch_dog.cancel()
-        except asyncio.CancelledError:
-            pass
-        self._watch_dog = None
-
     async def _get_job(self, session):
         async with session.get(
                 self.my_url / 'api/json', raise_for_status=True,
                 timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
-    async def _watchdog(self, queue_processor):
+    async def _ping(self):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
-            while True:
-                try:
-                    await self._get_job(session)
-                except (ClientConnectorError, ServerDisconnectedError,
-                        asyncio.TimeoutError, ClientOSError) as e:
-                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
-                except ClientResponseError as e:
-                    if e.status == 404:
-                        logging.warning(
-                            "Jenkins job %s (worker %s) for run %s has disappeared.", self.my_url,
-                            self.worker_name, self.log_id)
-                        await queue_processor.abort_run(
-                            self, 'run-disappeared',
-                            'Jenkins job %s has disappeared' % self.my_url)
-                        break
-                    else:
-                        logging.warning('Failed to ping client %s: %s', self.my_url, e)
-                else:
-                    self._reset_keepalive()
-                if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
+            try:
+                await self._get_job(session)
+            except (ClientConnectorError, ServerDisconnectedError,
+                    asyncio.TimeoutError, ClientOSError) as e:
+                logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                return False
+            except ClientResponseError as e:
+                if e.status == 404:
                     logging.warning(
-                        "No keepalives received from %s for %s in %s, aborting.",
-                        self.worker_name,
-                        self.log_id,
-                        self.keepalive_age,
-                    )
-                    try:
-                        await queue_processor.timeout_run(self, self.keepalive_age)
-                    except RunExists:
-                        logging.warning('Watchdog was not stopped?')
-                    break
-                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+                        "Jenkins job %s (worker %s) for run %s has disappeared.", self.my_url,
+                        self.worker_name, self.log_id)
+                    raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url)
+                else:
+                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                    return False
+            else:
+                return True
 
     def json(self):
         ret = super(JenkinsRun, self).json()
@@ -893,13 +909,11 @@ class JenkinsRun(ActiveRun):
 
 class PollingActiveRun(ActiveRun):
 
-    KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
-        self._watch_dog = None
         self._log_id_mismatch = None
 
     def __repr__(self):
@@ -929,78 +943,45 @@ class PollingActiveRun(ActiveRun):
                     raise_for_status=True) as resp:
             return BytesIO(await resp.read())
 
-    def start_watchdog(self, queue_processor):
-        if self._watch_dog is not None:
-            raise Exception("Watchdog already started")
-        self._watch_dog = create_background_task(
-            self._watchdog(queue_processor), 'watchdog for %r' % self)
-
-    def stop_watchdog(self):
-        if self._watch_dog is None:
-            return
-        try:
-            self._watch_dog.cancel()
-        except asyncio.CancelledError:
-            pass
-        self._watch_dog = None
-
     @property
     def is_mia(self):
         if super(PollingActiveRun, self).is_mia:
             return True
         return self._log_id_mismatch is not None
 
-    async def _watchdog(self, queue_processor):
+    async def _ping(self):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
-            while True:
-                try:
-                    async with session.get(
-                            health_url, raise_for_status=True,
-                            timeout=ClientTimeout(queue_processor.run_timeout * 60)) as resp:
-                        log_id = (await resp.read()).decode()
-                except (ClientConnectorError, ClientResponseError,
-                        asyncio.TimeoutError, ClientOSError,
-                        ServerDisconnectedError) as e:
-                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
-                else:
-                    if log_id != self.log_id:
-                        logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
-                        self._log_id_mismatch = log_id
-                    else:
-                        self._reset_keepalive()
-                        self._log_id_mismatch = None
+            try:
+                async with session.get(
+                        health_url, raise_for_status=True,
+                        timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
+                    log_id = (await resp.read()).decode()
+            except (ClientConnectorError, ClientResponseError,
+                    asyncio.TimeoutError, ClientOSError,
+                    ServerDisconnectedError) as e:
+                logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                return False
 
-                if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
-                    logging.warning(
-                        "No health checks to %s succeeded for %s in %s, aborting.",
-                        self.worker_name,
-                        self.log_id,
-                        self.keepalive_age,
-                    )
-                    try:
-                        await queue_processor.timeout_run(self, self.keepalive_age)
-                    except RunExists:
-                        logging.warning('Watchdog was not stopped?')
-                    break
-                if (self._log_id_mismatch is not None
-                        and (datetime.now() - self.start_time).total_seconds() > 30):
-                    logging.warning(
-                        "Worker %s is now processing new run %s (age: %s). Marking run as MIA.",
-                        self.worker_name,
-                        self.log_id,
-                        self.keepalive_age,
-                    )
-                    try:
-                        await queue_processor.abort_run(
-                            self, 'run-disappeared',
-                            'Worker started processing new run %s rather than %s' %
-                            (self._log_id_mismatch, self.log_id))
-                    except RunExists:
-                        logging.warning('Watchdog was not stopped?')
-                    break
-                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+            if log_id != self.log_id:
+                logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+                self._log_id_mismatch = log_id
+            else:
+                self._log_id_mismatch = None
+
+            if (self._log_id_mismatch is not None
+                    and (datetime.now() - self.start_time).total_seconds() > 30):
+                logging.warning(
+                    "Worker %s is now processing new run %s (age: %s). Marking run as MIA.",
+                    self.worker_name,
+                    self.log_id,
+                    self.keepalive_age,
+                )
+                raise ActiveRunDisappeared(
+                    'Worker started processing new run %s rather than %s' %
+                    (self._log_id_mismatch, self.log_id))
+        return (self._log_id_mismatch is None)
 
     def json(self):
         ret = super(PollingActiveRun, self).json()
