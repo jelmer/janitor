@@ -705,8 +705,6 @@ class Backchannel(object):
     def json(self):
         return {}
 
-    is_mia = False
-
 
 class ActiveRun(object):
 
@@ -717,89 +715,93 @@ class ActiveRun(object):
     log_id: str
     start_time: datetime
     finish_time: Optional[datetime]
-    estimated_duration: timedelta
+    estimated_duration: Optional[timedelta]
     campaign: str
     package: str
-    change_set: str
-    last_keepalive: datetime
+    change_set: Optional[str]
     command: str
     backchannel: Backchannel
 
-    KEEPALIVE_INTERVAL = 10
-    KEEPALIVE_TIMEOUT = 60
-
     def __init__(
         self,
-        queue_item: QueueItem,
+        campaign: str,
+        package: str,
+        change_set: Optional[str],
+        command: str,
+        instigated_context: Any,
+        estimated_duration: Optional[timedelta],
+        queue_id: int,
+        log_id: str,
+        start_time: datetime,
         vcs_info: Dict[str, str],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
     ):
-        self.campaign = queue_item.campaign
-        self.package = queue_item.package
-        self.change_set = queue_item.change_set
-        self.command = queue_item.command
-        self.instigated_context = queue_item.context
-        self.estimated_duration = queue_item.estimated_duration
-        self.queue_id = queue_item.id
-        self.start_time = datetime.utcnow()
-        self.log_id = str(uuid.uuid4())
+        self.campaign = campaign
+        self.package = package
+        self.change_set = change_set
+        self.command = command
+        self.instigated_context = instigated_context
+        self.estimated_duration = estimated_duration
+        self.queue_id = queue_id
+        self.start_time = start_time
+        self.log_id = log_id
         self.worker_name = worker_name
         self.vcs_info = vcs_info
         self.backchannel = backchannel or Backchannel()
         self.resume_branch_name = None
         self.worker_link = worker_link
         self.resume_from = None
-        self._reset_keepalive()
         self._watch_dog = None
 
-    def _reset_keepalive(self):
-        self.last_keepalive = datetime.utcnow()
+    @classmethod
+    def from_queue_item(
+        cls,
+        queue_item: QueueItem,
+        vcs_info: Dict[str, str],
+        backchannel: Optional[Backchannel],
+        worker_name: str,
+        worker_link: Optional[str] = None,
+    ):
+        return cls(
+            campaign=queue_item.campaign,
+            package=queue_item.package,
+            change_set=queue_item.change_set,
+            command=queue_item.command,
+            instigated_context=queue_item.context,
+            estimated_duration=queue_item.estimated_duration,
+            queue_id=queue_item.id,
+            start_time=datetime.utcnow(),
+            log_id=str(uuid.uuid4()),
+            backchannel=backchannel,
+            vcs_info=vcs_info,
+            worker_name=worker_name,
+            worker_link=worker_link)
 
-    def start_watchdog(self, queue_processor):
-        if self._watch_dog is not None:
-            raise Exception("Watchdog already started")
-        self._watch_dog = create_background_task(
-            self._watchdog(queue_processor), 'watchdog for %r' % self)
-
-    def stop_watchdog(self):
-        if self._watch_dog is None:
-            return
-        try:
-            self._watch_dog.cancel()
-        except asyncio.CancelledError:
-            pass
-        self._watch_dog = None
-
-    async def ping(self):
-        return True
-
-    async def _watchdog(self, queue_processor):
-        while True:
-            try:
-                if await self.backchannel.ping():
-                    self._reset_keepalive()
-            except ActiveRunDisappeared as e:
-                try:
-                    await queue_processor.abort_run(
-                        self, 'run-disappeared', e.reason)
-                except RunExists:
-                    logging.warning('Watchdog was not stopped?')
-                    return False
-            if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
-                logging.warning(
-                    "No keepalives received from %s for %s in %s, aborting.",
-                    self.worker_name,
-                    self.log_id,
-                    self.keepalive_age,
-                )
-                try:
-                    await queue_processor.timeout_run(self, self.keepalive_age)
-                except RunExists:
-                    logging.warning('Watchdog was not stopped?')
-                break
-            await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+    @classmethod
+    def from_json(cls, js):
+        if 'jenkins' in js['backchannel']:
+            backchannel = JenkinsBackchannel.from_json(js['backchannel'])
+        else:
+            backchannel = PollingBackchannel.from_json(js['backchannel'])
+        return cls(
+            campaign=js['campaign'],
+            start_time=datetime.fromisoformat(js['start_time']),
+            package=js['package'],
+            change_set=js['change_set'],
+            command=js['command'],
+            instigated_context=js['instigated_context'],
+            estimated_duration=(
+                timedelta(seconds=js['estimated_duration'])
+                if js.get('estimated_duration') else None),
+            queue_id=js['queue_id'],
+            log_id=js['id'],
+            backchannel=backchannel,
+            vcs_info=js['vcs'],
+            worker_name=js['worker'],
+            worker_link=js['worker_link'],
+        )
 
     @property
     def current_duration(self):
@@ -817,15 +819,8 @@ class ActiveRun(object):
             change_set=self.change_set,
             **kwargs)
 
-    @property
-    def keepalive_age(self):
-        return datetime.utcnow() - self.last_keepalive
-
-    @property
-    def is_mia(self):
-        if self.backchannel.is_mia:
-            return True
-        return self.keepalive_age.total_seconds() > 60 * 60
+    async def ping(self):
+        return await self.backchannel.ping(self.log_id)
 
     @property
     def vcs_type(self):
@@ -844,6 +839,7 @@ class ActiveRun(object):
             "codebase": self.package,
             "change_set": self.change_set,
             "campaign": self.campaign,
+            "command": self.command,
             "estimated_duration": self.estimated_duration.total_seconds()
             if self.estimated_duration
             else None,
@@ -851,12 +847,9 @@ class ActiveRun(object):
             "start_time": self.start_time.isoformat(),
             "worker": self.worker_name,
             "worker_link": self.worker_link,
-            "last-keepalive": self.last_keepalive.isoformat(
-                timespec='seconds'),
-            "keepalive_age": self.keepalive_age.total_seconds(),
-            "mia": self.is_mia,
             "vcs": self.vcs_info,
             "backchannel": self.backchannel.json(),
+            "instigated_context": self.instigated_context,
         }
 
 
@@ -864,9 +857,16 @@ class JenkinsBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL):
+    def __init__(self, my_url: URL, metadata=None):
         self.my_url = my_url
-        self._metadata = None
+        self._metadata = metadata
+
+    @classmethod
+    def from_json(cls, js):
+        return cls(
+            my_url=URL(js['my_url']),
+            metadata=js['jenkins']
+        )
 
     def __repr__(self):
         return "<%s(%r)>" % (type(self).__name__, self.my_url)
@@ -892,7 +892,7 @@ class JenkinsBackchannel(Backchannel):
                 timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
-    async def ping(self):
+    async def ping(self, expected_log_id):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
@@ -904,7 +904,6 @@ class JenkinsBackchannel(Backchannel):
                 return False
             except ClientResponseError as e:
                 if e.status == 404:
-                    logging.warning("Jenkins job %s has disappeared.", self.my_url)
                     raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url)
                 else:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
@@ -913,21 +912,30 @@ class JenkinsBackchannel(Backchannel):
                 return True
 
     def json(self):
-        return {'jenkins': self._metadata}
+        return {
+            'my_url': str(self.my_url),
+            'jenkins': self._metadata,
+        }
 
 
 class PollingBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL, log_id: str,
+    def __init__(self, my_url: URL,
                  start_time: Optional[datetime] = None):
         self.my_url = my_url
         if start_time is None:
             start_time = datetime.utcnow()
         self.start_time = start_time
         self._log_id_mismatch = None
-        self.log_id = log_id
+
+    @classmethod
+    def from_json(cls, js):
+        return cls(
+            my_url=URL(js['my_url']),
+            start_time=datetime.fromisoformat(js['start_time']),
+        )
 
     def __repr__(self):
         return "<%s(%r)>" % (type(self).__name__, self.my_url)
@@ -956,13 +964,7 @@ class PollingBackchannel(Backchannel):
                     raise_for_status=True) as resp:
             return BytesIO(await resp.read())
 
-    @property
-    def is_mia(self):
-        if super(PollingBackchannel, self).is_mia:
-            return True
-        return self._log_id_mismatch is not None
-
-    async def ping(self):
+    async def ping(self, expected_log_id):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
@@ -977,22 +979,17 @@ class PollingBackchannel(Backchannel):
                 logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 return False
 
-            if log_id != self.log_id:
-                logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+            if log_id != expected_log_id:
+                logging.warning('Unexpected log id %s != %s', log_id, expected_log_id)
                 self._log_id_mismatch = log_id
             else:
                 self._log_id_mismatch = None
 
             if (self._log_id_mismatch is not None
                     and (datetime.utcnow() - self.start_time).total_seconds() > 30):
-                logging.warning(
-                    "Worker %s is now processing new run %s. Marking run as MIA.",
-                    self.my_url,
-                    self.log_id,
-                )
                 raise ActiveRunDisappeared(
                     'Worker started processing new run %s rather than %s' %
-                    (self._log_id_mismatch, self.log_id))
+                    (self._log_id_mismatch, expected_log_id))
         return (self._log_id_mismatch is None)
 
     def json(self):
@@ -1282,18 +1279,18 @@ def has_runtime_relation(c, pkg):
 
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
-        run: ActiveRun, result: JanitorResult) -> None:
-    if result.code == "success" and run.campaign not in ("unchanged", "debianize"):
+        active_run: ActiveRun, result: JanitorResult) -> None:
+    if result.code == "success" and active_run.campaign not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
             run = await conn.fetchrow(
                 "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
                 result.package, result.main_branch_revision.decode('utf-8')
             )
             if run is None:
-                logging.info("Scheduling control run for %s.", run.package)
+                logging.info("Scheduling control run for %s.", active_run.package)
                 await do_schedule_control(
                     conn,
-                    run.package,
+                    active_run.package,
                     main_branch_revision=result.main_branch_revision,
                     estimated_duration=result.duration,
                     requestor="control",
@@ -1306,17 +1303,17 @@ async def followup_run(
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
                     "SELECT package, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
-                    run.package, dependent_suites)
+                    active_run.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
                         conn, run_to_retry['package'],
                         change_set=result.change_set,
-                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % run.package,
+                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
                         campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package
-        requestor = 'schedule-missing-deps (needed by %s)' % run.package
+        requestor = 'schedule-missing-deps (needed by %s)' % active_run.package
         async with database.acquire() as conn:
             for scenario in result.followup_actions:
                 for action in scenario:
@@ -1341,7 +1338,7 @@ async def followup_run(
 
     # If there was a successful run, trigger builds for any
     # reverse dependencies in the same changeset.
-    if run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
+    if active_run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
         from breezy.plugins.debian.apt_repo import RemoteApt
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
@@ -1357,7 +1354,7 @@ async def followup_run(
             new_build_version = debian_result.build_version   # noqa: F841
             # TODO(jelmer): Get old_build_version from base_distribution
 
-        campaign_config = get_campaign_config(config, run.campaign)
+        campaign_config = get_campaign_config(config, active_run.campaign)
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
         apt = RemoteApt(base_distribution.archive_mirror_uri)
 
@@ -1447,36 +1444,122 @@ class QueueProcessor(object):
         self.public_vcs_managers = public_vcs_managers
         self.use_cached_only = use_cached_only
         self.committer = committer
-        self.active_runs: Dict[str, ActiveRun] = {}
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
         self.run_timeout = run_timeout
         self.avoid_hosts = avoid_hosts or set()
+        self._watch_dog = None
+
+    def start_watchdog(self):
+        if self._watch_dog is not None:
+            raise Exception("Watchdog already started")
+        self._watch_dog = create_background_task(
+            self._watchdog(), 'watchdog for %r' % self)
+
+    def stop_watchdog(self):
+        if self._watch_dog is None:
+            return
+        try:
+            self._watch_dog.cancel()
+        except asyncio.CancelledError:
+            pass
+        self._watch_dog = None
+
+    KEEPALIVE_INTERVAL = 10
+
+    async def _watchdog(self):
+        while True:
+            for serialized in (await self.redis.hgetall('active-runs')).values():
+                js = json.loads(serialized)
+                lk = await self.redis.hget('last-keepalive', js['id'])
+                if lk:
+                    last_keepalive = datetime.fromisoformat(lk.decode('utf-8')) if lk else None
+                    keepalive_age = datetime.utcnow() - last_keepalive
+                else:
+                    last_keepalive = None
+                    keepalive_age = None
+                active_run = ActiveRun.from_json(js)
+                if keepalive_age is not None and keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
+                    continue
+                try:
+                    if await active_run.ping():
+                        await self.redis.hset(
+                            'last-keepalive', active_run.log_id,
+                            datetime.utcnow().isoformat())
+                        keepalive_age = timedelta(seconds=0)
+                except ActiveRunDisappeared as e:
+                    try:
+                        await self.abort_run(active_run, 'run-disappeared', e.reason)
+                    except RunExists:
+                        logging.warning('Run not properly cleaned up?')
+                        continue
+                if keepalive_age > timedelta(minutes=self.run_timeout):
+                    logging.warning(
+                        "No keepalives received from %s for %s in %s, aborting.",
+                        active_run.worker_name,
+                        active_run.log_id,
+                        keepalive_age,
+                    )
+                    try:
+                        await self.timeout_run(active_run, keepalive_age)
+                    except RunExists:
+                        logging.warning('Run not properly cleaned up?')
+            await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     async def status_json(self) -> Any:
+        rate_limit_hosts = await self.redis.hgetall('rate-limit-hosts')
+        last_keepalives = {
+            r.decode('utf-8'): datetime.fromisoformat(v.decode('utf-8'))
+            for (r, v) in (await self.redis.hgetall('last-keepalive')).items()}
+        processing = []
+        for e in (await self.redis.hgetall('active-runs')).values():
+            js = json.loads(e)
+            last_keepalive = last_keepalives.get(js['id'])
+            if last_keepalive:
+                js['last-keepalive'] = last_keepalive.isoformat(timespec='seconds')
+                js['keepalive_age'] = (datetime.utcnow() - last_keepalive).total_seconds()
+                js['mia'] = js['keepalive_age'] > self.run_timeout * 60
+            else:
+                js['keepalive_age'] = None
+                js['last-keepalive'] = None
+                js['mia'] = None
+            processing.append(js)
         return {
-            "processing": [
-                active_run.json() for active_run in self.active_runs.values()
-            ],
+            "processing": processing,
             "avoid_hosts": list(self.avoid_hosts),
-            "rate_limit_hosts": await self.redis.hgetall('rate-limit-hosts'),
+            "rate_limit_hosts": rate_limit_hosts,
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
-        self.active_runs[active_run.log_id] = active_run
-        await self.redis.hset(
+        tr = self.redis.multi_exec()
+        tr.hset(
+            'active-runs', active_run.log_id, json.dumps(active_run.json()))
+        tr.hset(
             'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
+        tr.hset(
+            'last-keepalive', active_run.log_id, datetime.utcnow().isoformat())
+        await tr.execute()
         await self.redis.publish_json('queue', await self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
+    async def get_run(self, log_id: str) -> Optional[ActiveRun]:
+        serialized = await self.redis.hget('active-runs', log_id)
+        if not serialized:
+            return None
+        js = json.loads(serialized)
+        return ActiveRun.from_json(js)
+
     async def unclaim_run(self, log_id: str) -> None:
-        active_run = self.active_runs.get(log_id)
+        active_run = await self.get_run(log_id)
         active_run_count.labels(worker=active_run.worker_name if active_run else None).dec()
         if not active_run:
             return
-        await self.redis.hdel('assigned-queue-items', str(active_run.queue_id))
-        del self.active_runs[log_id]
+        tr = self.redis.multi_exec()
+        tr.hdel('assigned-queue-items', str(active_run.queue_id))
+        tr.hdel('active-runs', log_id)
+        tr.hdel('last-keepalive', log_id)
+        await tr.execute()
 
     async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
         return await self.abort_run(
@@ -1571,12 +1654,12 @@ class QueueProcessor(object):
         if host in self.avoid_hosts:
             return False
         until = await self.redis.hget('rate-limit-hosts', host)
-        if until and datetime.fromisoformat(until) > datetime.now():
+        if until and datetime.fromisoformat(until.decode('utf-8')) > datetime.now():
             return False
         return True
 
     async def next_queue_item(self, conn, package=None, campaign=None):
-        limit = len(self.active_runs) + 300
+        limit = (await self.redis.hlen('active-runs')) + 300
         queue = Queue(conn)
         async for item in queue.iter_queue(
                 limit=limit, campaign=campaign, package=package):
@@ -1606,9 +1689,8 @@ async def _find_active_run(request):
     run_id = request.match_info["run_id"]
     queue_id = request.query.get('queue_id')  # noqa: F841
     worker_name = request.query.get('worker_name')  # noqa: F841
-    try:
-        return queue_processor.active_runs[run_id]
-    except KeyError:
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
         raise web.HTTPNotFound(text="No such current run: %s" % run_id)
 
 
@@ -1635,9 +1717,8 @@ async def handle_log(request):
 
     if "/" in filename:
         return web.Response(text="Invalid filename %s" % filename, status=400)
-    try:
-        active_run = queue_processor.active_runs[run_id]
-    except KeyError:
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
         return web.Response(text="No such current run: %s" % run_id, status=404)
     try:
         f = await active_run.backchannel.get_log_file(filename)
@@ -1767,7 +1848,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             description=description
         )
         try:
-            await queue_processor.finish_run(active_run.queue_item, result)
+            await queue_processor.finish_run(active_run, result)
         except RunExists:
             pass
 
@@ -1783,28 +1864,19 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 return web.json_response({'reason': 'queue empty'}, status=503)
 
             if backchannel and backchannel['kind'] == 'http':
-                active_run = ActiveRun(
-                    backchannel=PollingBackchannel(my_url=URL(backchannel['url'])),
-                    worker_name=worker,
-                    queue_item=item,
-                    vcs_info=vcs_info,
-                    worker_link=worker_link
-                )
+                bc = PollingBackchannel(my_url=URL(backchannel['url']))
             elif backchannel and backchannel['kind'] == 'jenkins':
-                active_run = ActiveRun(
-                    backchannel=JenkinsBackchannel(my_url=URL(backchannel['url'])),
-                    worker_name=worker,
-                    queue_item=item,
-                    vcs_info=vcs_info,
-                    worker_link=worker_link)
+                bc = JenkinsBackchannel(my_url=URL(backchannel['url']))
             else:
-                active_run = ActiveRun(
-                    backchannel=None,
-                    worker_name=worker,
-                    queue_item=item,
-                    vcs_info=vcs_info,
-                    worker_link=worker_link
-                )
+                bc = None
+
+            active_run = ActiveRun.from_queue_item(
+                backchannel=bc,
+                worker_name=worker,
+                queue_item=item,
+                vcs_info=vcs_info,
+                worker_link=worker_link
+            )
 
             await queue_processor.register_run(active_run)
 
@@ -1973,8 +2045,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
     }
 
     if mode == 'assign':
-        with span.new_child('start-watchdog'):
-            active_run.start_watchdog(queue_processor)
+        pass
     else:
         await queue_processor.unclaim_run(active_run.log_id)
     return web.json_response(assignment, status=201)
@@ -1994,20 +2065,13 @@ async def handle_ready(request):
 async def handle_finish(request):
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
-    active_run = queue_processor.active_runs.get(run_id)
-    if active_run:
-        active_run.stop_watchdog()
-        queue_item = active_run.queue_item
-        worker_name = active_run.worker_name
-        main_branch_url = active_run.main_branch_url
-        vcs_type = active_run.vcs_type
-        resume_from = active_run.resume_from
-    else:
-        queue_item = None
-        worker_name = None
-        main_branch_url = None
-        vcs_type = None
-        resume_from = None
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+    worker_name = active_run.worker_name
+    main_branch_url = active_run.main_branch_url
+    vcs_type = active_run.vcs_type
+    resume_from = active_run.resume_from
 
     reader = await request.multipart()
     worker_result = None
@@ -2036,13 +2100,6 @@ async def handle_finish(request):
 
         logging.debug('worker result: %r', worker_result)
 
-        if queue_item is None:
-            async with queue_processor.database.acquire() as conn:
-                queue = Queue(conn)
-                queue_item = await queue.get_item(worker_result.queue_id)
-            if queue_item is None:
-                return web.json_response(
-                    {"reason": "Unable to find relevant queue item %r" % worker_result.queue_id}, status=404)
         if worker_name is None:
             worker_name = worker_result.worker_name
 
@@ -2051,8 +2108,8 @@ async def handle_finish(request):
         logfilenames = [entry.name for entry in logfiles]
 
         result = JanitorResult(
-            pkg=queue_item.package,
-            campaign=queue_item.campaign,
+            pkg=active_run.package,
+            campaign=active_run.campaign,
             log_id=run_id,
             code='success',
             worker_name=worker_name,
@@ -2061,14 +2118,14 @@ async def handle_finish(request):
             worker_result=worker_result,
             logfilenames=logfilenames,
             resume_from=resume_from,
-            change_set=queue_item.change_set,
+            change_set=active_run.change_set,
         )
 
         await import_logs(
             logfiles,
             queue_processor.logfile_manager,
             queue_processor.backup_logfile_manager,
-            queue_item.package,
+            active_run.package,
             run_id,
             mtime=result.finish_time.timestamp(),
         )
@@ -2095,7 +2152,7 @@ async def handle_finish(request):
             artifact_names = None
 
     try:
-        await queue_processor.finish_run(queue_item, result)
+        await queue_processor.finish_run(active_run, result)
     except RunExists as e:
         return web.json_response(
             {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
@@ -2172,7 +2229,7 @@ async def main(argv=None):
     parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
         "--run-timeout", type=int, help="Time before marking a run as having timed out (minutes)",
-        default=60 * 10)
+        default=60)
     parser.add_argument(
         "--avoid-host", type=str,
         help="Avoid processing runs on a host (e.g. 'salsa.debian.org')",
@@ -2260,6 +2317,8 @@ async def main(argv=None):
             backup_logfile_manager=backup_logfile_manager,
             avoid_hosts=set(args.avoid_host),
         )
+
+        queue_processor.start_watchdog()
 
         app = await create_app(queue_processor, tracer=tracer)
         runner = web.AppRunner(app)
