@@ -900,13 +900,13 @@ class JenkinsBackchannel(Backchannel):
                 await self._get_job(session)
             except (ClientConnectorError, ServerDisconnectedError,
                     asyncio.TimeoutError, ClientOSError) as e:
-                logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                logging.warning('Failed to ping client %s: %r', self.my_url, e)
                 return False
             except ClientResponseError as e:
                 if e.status == 404:
                     raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url)
                 else:
-                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                    logging.warning('Failed to ping client %s: %r', self.my_url, e)
                     return False
             else:
                 return True
@@ -922,19 +922,13 @@ class PollingBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL,
-                 start_time: Optional[datetime] = None):
+    def __init__(self, my_url: URL):
         self.my_url = my_url
-        if start_time is None:
-            start_time = datetime.utcnow()
-        self.start_time = start_time
-        self._log_id_mismatch = None
 
     @classmethod
     def from_json(cls, js):
         return cls(
             my_url=URL(js['my_url']),
-            start_time=datetime.fromisoformat(js['start_time']),
         )
 
     def __repr__(self):
@@ -975,27 +969,21 @@ class PollingBackchannel(Backchannel):
                     log_id = (await resp.read()).decode()
             except (ClientConnectorError, ClientResponseError,
                     asyncio.TimeoutError, ClientOSError,
-                    ServerDisconnectedError) as e:
-                logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                    ServerDisconnectedError) as err:
+                logging.warning(
+                    'Failed to ping client %s: %r', self.my_url, err)
                 return False
 
             if log_id != expected_log_id:
-                logging.warning('Unexpected log id %s != %s', log_id, expected_log_id)
-                self._log_id_mismatch = log_id
-            else:
-                self._log_id_mismatch = None
-
-            if (self._log_id_mismatch is not None
-                    and (datetime.utcnow() - self.start_time).total_seconds() > 30):
                 raise ActiveRunDisappeared(
                     'Worker started processing new run %s rather than %s' %
-                    (self._log_id_mismatch, expected_log_id))
-        return (self._log_id_mismatch is None)
+                    (log_id, expected_log_id))
+
+        return True
 
     def json(self):
         return {
             'my_url': str(self.my_url),
-            'start_time': self.start_time.isoformat(),
         }
 
 
@@ -1471,15 +1459,14 @@ class QueueProcessor(object):
         while True:
             for serialized in (await self.redis.hgetall('active-runs')).values():
                 js = json.loads(serialized)
+                active_run = ActiveRun.from_json(js)
                 lk = await self.redis.hget('last-keepalive', js['id'])
                 if lk:
-                    last_keepalive = datetime.fromisoformat(lk.decode('utf-8')) if lk else None
-                    keepalive_age = datetime.utcnow() - last_keepalive
+                    last_keepalive = datetime.fromisoformat(lk.decode('utf-8'))
                 else:
-                    last_keepalive = None
-                    keepalive_age = None
-                active_run = ActiveRun.from_json(js)
-                if keepalive_age is not None and keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
+                    last_keepalive = active_run.start_time
+                keepalive_age = datetime.utcnow() - last_keepalive
+                if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
                     continue
                 try:
                     if await active_run.ping():
@@ -1488,10 +1475,11 @@ class QueueProcessor(object):
                             datetime.utcnow().isoformat())
                         keepalive_age = timedelta(seconds=0)
                 except ActiveRunDisappeared as e:
-                    try:
-                        await self.abort_run(active_run, 'run-disappeared', e.reason)
-                    except RunExists:
-                        logging.warning('Run not properly cleaned up?')
+                    if keepalive_age > timedelta(minutes=self.run_timeout):
+                        try:
+                            await self.abort_run(active_run, 'run-disappeared', e.reason)
+                        except RunExists:
+                            logging.warning('Run not properly cleaned up?')
                         continue
                 if keepalive_age > timedelta(minutes=self.run_timeout):
                     logging.warning(
@@ -1501,9 +1489,12 @@ class QueueProcessor(object):
                         keepalive_age,
                     )
                     try:
-                        await self.timeout_run(active_run, keepalive_age)
+                        await self.abort_run(
+                            active_run, code='worker-timeout',
+                            description=("No keepalives received in %s." % keepalive_age))
                     except RunExists:
                         logging.warning('Run not properly cleaned up?')
+                    continue
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     async def status_json(self) -> Any:
@@ -1561,11 +1552,6 @@ class QueueProcessor(object):
         tr.hdel('last-keepalive', log_id)
         await tr.execute()
 
-    async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
-        return await self.abort_run(
-            run, code='worker-timeout',
-            description=("No keepalives received in %s." % duration))
-
     async def abort_run(self, run: ActiveRun, code: str, description: str) -> None:
         result = run.create_result(
             branch_url=run.main_branch_url,
@@ -1620,6 +1606,7 @@ class QueueProcessor(object):
                     )
                 except asyncpg.UniqueViolationError as e:
                     logging.info('Unique violation error creating run: %r', e)
+                    await self.unclaim_run(result.log_id)
                     raise RunExists(result.log_id)
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
@@ -1745,7 +1732,7 @@ async def handle_candidates(request):
     queue_processor = request.app['queue_processor']
     async with queue_processor.database.acquire() as conn, conn.transaction():
         known_packages = set()
-        async for record in conn.fetch('SELECT name FROM package'):
+        for record in (await conn.fetch('SELECT name FROM package')):
             known_packages.add(record[0])
 
         known_campaign_names = [

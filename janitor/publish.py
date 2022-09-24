@@ -1811,13 +1811,14 @@ SELECT
   policy.command AS policy_command,
   package.removed AS removed,
   run.result_code AS result_code,
-  change_set.state AS change_set_state
+  change_set.state AS change_set_state,
+  change_set.id AS change_set_id
 FROM run
 LEFT JOIN package ON package.name = run.package
 INNER JOIN policy ON policy.package = run.package
    AND policy.suite = run.suite
 INNER JOIN change_set ON change_set.id = run.change_set
-WHERE id = $1
+WHERE run.id = $1
 """, request.match_info['run_id'])
 
         if run is None:
@@ -1884,6 +1885,7 @@ WHERE id = $1
     ret['change_set'] = {
         'result': (run['change_set_state'] in ('publishing', 'ready')),
         'details': {
+            'change_set_id': run['change_set_id'],
             'change_set_state': run['change_set_state']}}
 
     return web.json_response(ret)
