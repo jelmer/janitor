@@ -316,7 +316,7 @@ Tag: {{ tagname }}
 {% elif k == 'success' %}
   {% if r %}run was successful{% else %}run was not successful{% endif %}
 {% elif k == 'change_set' %}
-  {% if r %}change set is {{ d.change_set_state }}{% else %}change set is {{ d.change_set_state }}{% endif %}
+  {% if r %}change set <a href="/cupboards/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}{% else %}change set <a href="/cupboards/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}{% endif %}
 {% else %}
 {{ k }}
 {% endif %}
