@@ -1367,10 +1367,9 @@ async def process_single_item(
 
         env = assignment["env"]
 
-        vendor = build_environment.get('DEB_VENDOR', 'debian')
+        env.update(build_environment)
 
-        os.environ.update(env)
-        os.environ.update(build_environment)
+        vendor = build_environment.get('DEB_VENDOR', 'debian')
 
         output_directory = es.enter_context(TemporaryDirectory(prefix='janitor'))
         workitem['directory'] = output_directory
@@ -1384,7 +1383,7 @@ async def process_single_item(
                 run_id,
                 subpath,
                 vcs_type,
-                os.environ,
+                env,
                 command,
                 output_directory,
                 metadata,
@@ -1560,6 +1559,7 @@ async def main(argv=None):
         auth = BasicAuth(
             login=os.environ["WORKER_NAME"],
             password=os.environ["WORKER_PASSWORD"])
+        del os.environ["WORKER_PASSWORD"]
     else:
         auth = BasicAuth.from_url(base_url)
 

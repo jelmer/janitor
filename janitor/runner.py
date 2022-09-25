@@ -2002,6 +2002,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         target_repository_url = None
 
     env = {}
+    env.update(build_env)
     env.update(queue_item_env(item))
     if queue_processor.committer:
         env.update(committer_env(queue_processor.committer))
