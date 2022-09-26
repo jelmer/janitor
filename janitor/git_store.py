@@ -36,7 +36,7 @@ from breezy.errors import NotBranchError
 from breezy.repository import Repository
 from dulwich.errors import HangupException, MissingCommitError
 from dulwich.objects import valid_hexsha, ZERO_SHA
-from dulwich.web import HTTPGitApplication
+from dulwich.web import HTTPGitApplication, NO_CACHE_HEADERS
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
@@ -385,15 +385,13 @@ async def dulwich_refs(request):
     _git_check_service(service, allow_writes)
 
     headers = {
-        "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache, max-age=0, must-revalidate",
+        "Content-Type": "application/x-%s-advertisement" % service,
     }
+    headers.update(NO_CACHE_HEADERS)
 
     handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
     response = web.StreamResponse(status=200, headers=headers)
-    response.content_type = "application/x-%s-advertisement" % service
 
     await response.prepare(request)
 
@@ -429,14 +427,12 @@ async def dulwich_service(request):
     _git_check_service(service, allow_writes)
 
     headers = {
-        "Expires": "Fri, 01 Jan 1980 00:00:00 GMT",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache, max-age=0, must-revalidate",
+        'Content-Type': "application/x-%s-result" % service
     }
+    headers.update(NO_CACHE_HEADERS)
     handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
     response = web.StreamResponse(status=200, headers=headers)
-    response.content_type = "application/x-%s-result" % service
 
     await response.prepare(request)
 
