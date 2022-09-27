@@ -38,7 +38,9 @@ async def main(args):
         logging.basicConfig(level=logging.INFO)
 
     matrix_client = AsyncClient(args.homeserver_url, args.user)
-    logging.info('%s', await matrix_client.login(args.password))
+    logging.info('%s', await matrix_client.login(
+        password=args.password, token=args.token))
+    logging.info('I am %s', await matrix_client.whoami())
     await matrix_client.join(args.room)
 
     async def message(msg):
@@ -107,10 +109,13 @@ if __name__ == "__main__":
         "--password", help="Matrix password", type=str,
         default=os.environ.get('MATRIX_PASSWORD'))
     parser.add_argument(
-        "--homeserver-url", type=str,
+        "--token", help="Matrix token", type=str,
+        default=os.environ.get('MATRIX_TOKEN'))
+    parser.add_argument(
+        "--homeserver-url", type=str, default=os.environ.get('HOMESERVER_URL'),
         help="Matrix homeserver URL")
     parser.add_argument(
-        "--user", type=str,
+        "--user", type=str, default=os.environ.get('MATRIX_USER'),
         help="Matrix user string")
     parser.add_argument(
         "--janitor-url",

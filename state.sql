@@ -416,14 +416,14 @@ CREATE OR REPLACE FUNCTION run_trigger_refresh_change_set_state()
   AS $$
     BEGIN
     IF TG_OP = 'DELETE' THEN
-      PERFORM refresh_change_set_state(OLD.change_set_id);
+      PERFORM refresh_change_set_state(OLD.change_set);
     ELSIF TG_OP = 'UPDATE' THEN
-      PERFORM refresh_change_set_state(OLD.change_set_id);
-      IF OLD.change_set_id != NEW.change_set_id THEN
-         PERFORM refresh_change_set_state(NEW.change_set_id);
+      PERFORM refresh_change_set_state(OLD.change_set);
+      IF OLD.change_set != NEW.change_set THEN
+         PERFORM refresh_change_set_state(NEW.change_set);
       END IF;
     ELSE
-      PERFORM refresh_change_set_state(NEW.change_set_id);
+      PERFORM refresh_change_set_state(NEW.change_set);
     END IF;
 
     RETURN NEW;
@@ -568,7 +568,7 @@ CREATE OR REPLACE VIEW publishable AS
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches,
   target_branch_url,
-  run.change_set AS change_set_id,
+  run.change_set AS change_set,
   change_set.state AS change_set_state
 FROM
   last_effective_runs AS run
