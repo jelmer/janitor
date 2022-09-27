@@ -553,6 +553,11 @@ def _drop_env(command):
     return ret
 
 
+@backoff.on_exception(
+    backoff.expo,
+    (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
+    max_tries=5,
+    on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
         branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
@@ -586,6 +591,11 @@ def import_branches_git(
     inter.fetch_refs(get_changed_refs, lossy=False, overwrite=True)
 
 
+@backoff.on_exception(
+    backoff.expo,
+    (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
+    max_tries=5,
+    on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches, tags
 ):
