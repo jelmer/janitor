@@ -288,12 +288,12 @@ class SlowStartRateLimiter(RateLimiter):
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
         self._open_mps_per_maintainer: Optional[Dict[str, int]] = None
-        self._merged_mps_per_maintainer: Optional[Dict[str, int]] = None
+        self._absorbed_mps_per_maintainer: Optional[Dict[str, int]] = None
 
     def check_allowed(self, email: str) -> None:
         if (
             self._open_mps_per_maintainer is None
-            or self._merged_mps_per_maintainer is None
+            or self._absorbed_mps_per_maintainer is None
         ):
             # Be conservative
             raise RateLimited("Open mps per maintainer not yet determined.")
@@ -306,7 +306,7 @@ class SlowStartRateLimiter(RateLimiter):
             raise MaintainerRateLimited(email, current, limit)
 
     def _get_limit(self, maintainer_email):
-        return self._merged_mps_per_maintainer.get(maintainer_email, 0) + 1
+        return self._absorbed_mps_per_maintainer.get(maintainer_email, 0) + 1
 
     def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
@@ -316,7 +316,12 @@ class SlowStartRateLimiter(RateLimiter):
 
     def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
         self._open_mps_per_maintainer = mps_per_maintainer["open"]
-        self._merged_mps_per_maintainer = mps_per_maintainer["merged"]
+        ms: Dict[str, int] = {}
+        for status in ['merged', 'applied']:
+            for m, c in mps_per_maintainer[status].items():
+                ms.setdefault(m, 0)
+                ms[m] += c
+        self._absorbed_mps_per_maintainer = ms
 
     def get_stats(self):
         if self._open_mps_per_maintainer is None:
@@ -498,10 +503,12 @@ async def publish_one(
 
 
 def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
+    if attempt_count == 0:
+        return finish_time
     try:
         return finish_time + (2 ** attempt_count * timedelta(hours=1))
     except OverflowError:
-        return datetime.utcnow() + timedelta(hours=(7 * 24))
+        return finish_time + timedelta(hours=(7 * 24))
 
 
 async def consider_publish_run(
@@ -645,7 +652,7 @@ SELECT * FROM publish_ready
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    order_by = ["change_set_state = 'publishing' DESC", "change_set_id"]
+    order_by = ["change_set_state = 'publishing' DESC", "change_set"]
 
     order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
 
@@ -1812,7 +1819,7 @@ SELECT
   package.removed AS removed,
   run.result_code AS result_code,
   change_set.state AS change_set_state,
-  change_set.id AS change_set_id
+  change_set.id AS change_set
 FROM run
 LEFT JOIN package ON package.name = run.package
 INNER JOIN policy ON policy.package = run.package
@@ -1885,7 +1892,7 @@ WHERE run.id = $1
     ret['change_set'] = {
         'result': (run['change_set_state'] in ('publishing', 'ready')),
         'details': {
-            'change_set_id': run['change_set_id'],
+            'change_set_id': run['change_set'],
             'change_set_state': run['change_set_state']}}
 
     return web.json_response(ret)
@@ -1974,7 +1981,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set
+    result_tags, target_branch_url, change_set AS change_set
 FROM
     run
 LEFT JOIN
@@ -2064,23 +2071,26 @@ SELECT
 FROM
   package
 WHERE
-  branch_url = ANY($1::text[])
+  TRIM(trailing '/' from branch_url) = ANY($1::text[])
 ORDER BY length(branch_url) DESC
 """
     options = [
         url.rstrip('/'),
-        url.rstrip('/') + '/',
         urlutils.split_segment_parameters(url.rstrip('/'))[0],
-        urlutils.split_segment_parameters(url.rstrip('/'))[0] + '/'
     ]
     result = await conn.fetchrow(query, options)
     if result is None:
         return None
 
+    if url.rstrip('/') == result['branch_url'].rstrip('/'):
+        return result
+
     source_branch = await to_thread(
         open_branch,
         result['branch_url'], possible_transports=possible_transports)
     if source_branch.user_url.rstrip('/') != url.rstrip('/'):
+        logging.info('Did not resolve branch URL to package: %r != %r',
+                     source_branch.user_url, url)
         return None
     return result
 
@@ -2806,7 +2816,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set
+    result_tags, target_branch_url, change_set as change_set
 FROM
     run
 WHERE id = $1
@@ -2915,6 +2925,21 @@ async def listen_to_runner(
                     await process_run(
                         conn, run, package['maintainer_email'],
                         package['branch_url'])
+
+
+async def refresh_maintainer_mp_counts(db, maintainer_rate_limiter):
+    per_maintainer = {}
+    async with db.acquire() as conn:
+        for row in await conn.fetch("""
+                SELECT maintainer_email, merge_proposal.status AS status,
+                count(*) as c
+                from merge_proposal
+                left join package on merge_proposal.package = package.name
+                group by 1, 2
+                """):
+            per_maintainer.setdefault(
+                row['status'], {})[row['maintainer_email']] = row['c']
+    maintainer_rate_limiter.set_mps_per_maintainer(per_maintainer)
 
 
 async def main(argv=None):
@@ -3030,6 +3055,8 @@ async def main(argv=None):
     async with AsyncExitStack() as stack:
         redis = await aioredis.create_redis(config.redis_location)
         stack.callback(redis.close)
+
+        loop.create_task(refresh_maintainer_mp_counts(db, maintainer_rate_limiter))
 
         if args.once:
             await publish_pending_ready(
