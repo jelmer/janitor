@@ -1322,7 +1322,7 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
         if min_age:
             params.append(datetime.utcnow() - timedelta(days=min_age))
             where.append("finish_time < $%d" % len(params))
-        query += " AND ".join(where)
+    query += " AND ".join(where)
 
     async with request.app['db'].acquire() as conn:
         runs = await conn.fetch(query, *params)

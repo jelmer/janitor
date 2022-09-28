@@ -3056,7 +3056,9 @@ async def main(argv=None):
         redis = await aioredis.create_redis(config.redis_location)
         stack.callback(redis.close)
 
-        loop.create_task(refresh_maintainer_mp_counts(db, maintainer_rate_limiter))
+        create_background_task(
+            refresh_maintainer_mp_counts(db, maintainer_rate_limiter),
+            'initialize rate limits')
 
         if args.once:
             await publish_pending_ready(
