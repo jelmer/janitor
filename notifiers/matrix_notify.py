@@ -40,16 +40,17 @@ async def main(args):
     matrix_client = AsyncClient(args.homeserver_url, args.user)
     logging.info('%s', await matrix_client.login(
         password=args.password, token=args.token))
-    logging.info('I am %s', await matrix_client.whoami())
     await matrix_client.join(args.room)
 
-    async def message(msg):
+    async def message(msg, formatted_msg):
         try:
             await matrix_client.room_send(
                 room_id=args.room,
                 message_type="m.room.message",
                 content={
                     "msgtype": "m.text",
+                    "formatted_body": formatted_msg,
+                    "format": "org.matrix.custom.html",
                     "body": msg
                 }
             )
@@ -72,28 +73,32 @@ async def main(args):
 
     async with JanitorClient(args.janitor_url) as janitor_client:
         async for msg in janitor_client._iter_notifications():
-            if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
-                await message(
-                    "Merge proposal %s (%s/%s) merged%s." % (
-                        msg[1]["url"], msg[1].get("package"), msg[1].get("campaign"),
-                        ((" by %s" % msg[1]["merged_by"]) if msg[1].get("merged_by") else "")),
-                )
+            k = msg[0]
+            d = msg[1]
+            if k == "merge-proposal" and d["status"] == "merged":
+                out = "Merge proposal %s (%s/%s) merged%s." % (
+                    d["url"], d.get("package"), d.get("campaign"),
+                    ((" by %s" % d["merged_by"]) if d.get("merged_by") else ""))
+                outhtml = f"<a href=\"{d['url']}\">Merge proposal</a> for <a href=\"{args.janitor_url}/{d['campaign']}\">{d['campaign']}</a>/{d.get('package')} merged%s." % ((" by %s" % d["merged_by"]) if d.get("merged_by") else "")
+                await message(out, outhtml)
             if (
-                msg[0] == "publish"
-                and msg[1]["mode"] == "push"
-                and msg[1]["result_code"] == "success"
+                k == "publish"
+                and d["mode"] == "push"
+                and d["result_code"] == "success"
             ):
-                url = (msg[1]["main_branch_browse_url"]
-                       or msg[1]["main_branch_url"])
+                url = (d["main_branch_browse_url"]
+                       or d["main_branch_url"])
                 out = "Pushed %s changes to %s (%s)" % (
-                    msg[1].get("campaign"), url, msg[1]["package"])
-                if msg[1].get("campaign") == "lintian-fixes":
+                    d.get("campaign"), url, d["package"])
+                outhtml = f"Pushed <a href=\"{args.janitor_url}/{d['campaign']}\">{d['campaign']}</a> changes to <a href=\"{url}\">{d['package']}</a>"
+                if d.get("campaign") == "lintian-fixes":
                     tags = set()
-                    for entry in msg[1]["result"]["applied"]:
+                    for entry in d["result"]["applied"]:
                         tags.update(entry["fixed_lintian_tags"])
                     if tags:
                         out += ", fixing: %s." % (", ".join(tags))
-                await message(out)
+                        outhtml += ", fixing: %s." % (", ".join([f"<a href=\"https://lintian.debian.org/tags/{tag}.html\">{tag}</a>" for tag in tags]))
+                await message(out, outhtml)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Result Codes{% if suite %} - for {{ suite }}{% endif %}{% endblock page_title %}
+{% block page_title %}Result Codes{% if campaign %} - for {{ campaign }}{% endif %}{% endblock page_title %}
 {% block body %}
 
 <div class="section" id="result-codes">
@@ -10,10 +10,10 @@
 Select campaign to display:
 
 <form method="get" id="filter">
-<select name="suite" onchange="$('#filter').submit()">
+<select name="campaign" onchange="$('#filter').submit()">
 <option name="_all" value="_all">All</option>
-{% for s in all_suites %}
-<option value="{{ s }}" name="{{ s }}"{% if s == suite %} selected{% endif %}>{{ s }}</option>
+{% for s in all_campaigns %}
+<option value="{{ s }}" name="{{ s }}"{% if s == campaign %} selected{% endif %}>{{ s }}</option>
 {% endfor %}
 </select>
 <input type="checkbox" name="exclude_never_processed" id="never-processed"{% if exclude_never_processed %} checked{% endif %} onchange="$('#filter').submit()"/>
@@ -56,7 +56,7 @@ document.getElementById("result-code-chart").onclick = function(e) {
    } else {
        url = '/cupboard/result-codes/' + code;
    }
-   window.open(url{% if suite %} + "?suite={{ suite }}"{% endif %}, "_self");
+   window.open(url{% if campaign %} + "?campaign={{ campaign }}"{% endif %}, "_self");
 }
 
 </script>
@@ -74,9 +74,9 @@ document.getElementById("result-code-chart").onclick = function(e) {
 <tbody valign="top">
 {% for code, count in result_codes %}
 {% if code == 'never-processed' %}
-<tr class="row-even"><td><a class="reference external" href="/cupboard/never-processed{% if suite %}?suite={{ suite }}{% endif %}">{{ code }}</a></td>
+<tr class="row-even"><td><a class="reference external" href="/cupboard/never-processed{% if campaign %}?campaign={{ campaign }}{% endif %}">{{ code }}</a></td>
 {% else %}
-<tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}{% if suite %}?suite={{ suite }}{% endif %}">{{ display_result_code(code)|safe }}</a></td>
+<tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}{% if campaign %}?campaign={{ campaign }}{% endif %}">{{ display_result_code(code)|safe }}</a></td>
 {% endif %}
 <td>{{ count }}</td>
 </tr>

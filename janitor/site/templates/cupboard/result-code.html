@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
 {% from "run_util.html" import result_code_explanation %}
-{% block page_title %}Result Code {{ code }}{% if suite %} - for {{ suite }}{% endif %}{% endblock page_title %}
+{% block page_title %}Result Code {{ code }}{% if campaign %} - for {{ campaign }}{% endif %}{% endblock page_title %}
 {% block body %}
 <div class="section" id="{{ code }}">
 <h1>{{ code }}</h1>
@@ -9,7 +9,7 @@
 {% if is_admin %}
 <form id="mass_reschedule" method="post" action="/api/mass-reschedule">
     Description regex: <input type="text" name="description_re"/>
-    {% if suite %}<input type="hidden" name="suite" value="{{ suite }}"/>{% endif %}
+    {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
     Min age (days): <select name="min_age">{% for i in range(90) %}<option>{{ i }}</option>{% endfor %}</select>
     Refresh: <input type="checkbox" name="refresh" value="1"/>
     <input type="hidden" name="result_code" value="{{ code }}"/>
@@ -36,7 +36,7 @@ $('form').submit(function(e){
 </colgroup>
 <thead valign="bottom">
 <tr><th class="head">Package</th>
-<th class="head">Suite</th>
+<th class="head">Campaign</th>
 <th class="head">Start Time</th>
 <th class="head">Duration</th>
 <th class="head">Description</th>

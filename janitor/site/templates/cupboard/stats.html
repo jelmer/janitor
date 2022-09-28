@@ -14,6 +14,7 @@
   <th class="head">Hoster</th>
   <th class="head">Open</th>
   <th class="head">Merged and applied</th>
+  <th class="head">Rejected</th>
   <th class="head">Closed</th>
 </tr>
 </thead>
@@ -23,6 +24,7 @@
     <td>{{ hoster }}</td>
     <td>{{ data.get('open', 0) }}</td>
     <td>{{ data.get('merged', 0) + data.get('applied', 0) }}</td>
+    <td>{{ data.get('rejected', 0) }}</td>
     <td>{{ data.get('closed', 0) }}</td>
 </tr>
 {% endfor %}
@@ -41,7 +43,7 @@ new Chart($("#hoster-status-chart"), {
     data: {
        labels: {{ by_hoster.keys()|list|sort|tojson }},
        datasets: [
-          {% for kind, color in [('closed', 'red'), ('merged', 'green'), ('open', 'grey')] %}
+          {% for kind, color in [('rejected', 'red'), ('closed', 'orange'), ('merged', 'green'), ('open', 'blue'), ('abandoned', 'grey')] %}
            {label: '{{ kind }}', data: [
                {% for hoster in by_hoster.keys()|list|sort %}
                   {{ by_hoster[hoster][kind] }},
