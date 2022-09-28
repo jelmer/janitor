@@ -90,10 +90,10 @@ async def handle_queue(request):
 
 @html_template(env, "cupboard/never-processed.html", headers={"Vary": "Cookie"})
 async def handle_never_processed(request):
-    suite = request.query.get("suite")
-    if suite is not None and suite.lower() == "_all":
-        suite = None
-    suites = [suite] if suite else None
+    campaign = request.query.get("campaign")
+    if campaign is not None and campaign.lower() == "_all":
+        campaign = None
+    campaigns = [campaign] if campaign else None
     async with request.app.database.acquire() as conn:
         query = """\
         select c.package, c.suite from candidate c
@@ -101,22 +101,25 @@ async def handle_never_processed(request):
             SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
         """
         args = []
-        if suites:
+        if campaigns:
             query += " AND suite = ANY($1::text[])"
-            args.append(suites)
-        return {"never_processed": await conn.fetch(query, *args)}
+            args.append(campaigns)
+        return {
+            "never_processed": await conn.fetch(query, *args),
+            "campaign": campaign,
+        }
 
 
 @html_template(env, "cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
     from ...schedule import TRANSIENT_ERROR_RESULT_CODES
-    suite = request.query.get("suite")
+    campaign = request.query.get("campaign")
     exclude_never_processed = "exclude_never_processed" in request.query
     exclude_transient = "exclude_transient" in request.query
-    if suite is not None and suite.lower() == "_all":
-        suite = None
-    all_suites = [c.name for c in request.app['config'].campaign]
-    args = [[suite] if suite else all_suites]
+    if campaign is not None and campaign.lower() == "_all":
+        campaign = None
+    all_campaigns = [c.name for c in request.app['config'].campaign]
+    args = [[campaign] if campaign else all_campaigns]
     async with request.app.database.acquire() as conn:
         query = """\
     select (
@@ -139,25 +142,25 @@ async def handle_result_codes(request):
             "exclude_never_processed": exclude_never_processed,
             "exclude_transient": exclude_transient,
             "result_codes": await conn.fetch(query, *args),
-            "suite": suite, "all_suites": all_suites}
+            "campaign": campaign, "all_campaigns": all_campaigns}
 
 
 @html_template(env, "cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
-    suite = request.query.get("suite")
-    if suite is not None and suite.lower() == "_all":
-        suite = None
+    campaign = request.query.get("campaign")
+    if campaign is not None and campaign.lower() == "_all":
+        campaign = None
     code = request.match_info.get("code")
     query = ('SELECT * FROM last_runs '
              'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
     codes = [code]
-    all_suites = [c.name for c in request.app['config'].campaign]
+    all_campaigns = [c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,
-            "runs": await conn.fetch(query, codes, [suite] if suite else all_suites),
-            "suite": suite,
-            "all_suites": all_suites}
+            "runs": await conn.fetch(query, codes, [campaign] if campaign else all_campaigns),
+            "campaign": campaign,
+            "all_campaigns": all_campaigns}
 
 
 @html_template(env, "cupboard/publish.html")

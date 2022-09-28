@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    last_scanned timestamp,
    -- vcs type, if known
    vcs_type vcs_type,
+   value int,
    unique(branch_url, subpath),
    unique(name)
 );

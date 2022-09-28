@@ -1281,16 +1281,27 @@ async def handle_mass_reschedule(request):
     refresh = 'refresh' in post
     config = request.app['config']
     all_campaigns = [c.name for c in config.campaign]
-    async with request.app['db'].acquire() as conn:
+    if result_code == 'never-processed':
+        query = "select c.package AS package, c.suite AS campaign from candidate c WHERE "
+        params = []
+        where = [
+            "not exists (SELECT FROM run WHERE run.package = c.package AND c.suite = suite)"]
+        if campaign:
+            params.append(campaign)
+            where.append("c.suite = $%d" % len(params))
+        else:
+            params.append(all_campaigns)
+            where.append("c.suite = ANY($%d::text[])" % len(params))
+    else:
         query = """
 SELECT
-  package,
-  suite AS campaign,
-  finish_time - start_time as duration
+package,
+suite AS campaign,
+finish_time - start_time as duration
 FROM last_runs
 WHERE
-    branch_url IS NOT NULL AND
-    package IN (SELECT name FROM package WHERE NOT removed) AND
+branch_url IS NOT NULL AND
+package IN (SELECT name FROM package WHERE NOT removed) AND
 """
         where = []
         params = []
@@ -1312,6 +1323,8 @@ WHERE
             params.append(datetime.utcnow() - timedelta(days=min_age))
             where.append("finish_time < $%d" % len(params))
         query += " AND ".join(where)
+
+    async with request.app['db'].acquire() as conn:
         runs = await conn.fetch(query, *params)
 
     async def do_reschedule():
@@ -1323,7 +1336,7 @@ WHERE
                         conn,
                         run['package'],
                         run['campaign'],
-                        estimated_duration=run['duration'],
+                        estimated_duration=run.get('duration'),
                         requestor="reschedule",
                         refresh=refresh,
                         offset=offset,
