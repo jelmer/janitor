@@ -1357,12 +1357,12 @@ async def followup_run(
         with apt:
             for source in apt.iter_sources():
                 if any([has_build_relation(source, p) for p in binary_packages]):
-                    need_control.add(source)
+                    need_control.add(source['Package'])
                     break
 
             for binary in apt.iter_binaries():
                 if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                    need_control.add(binary['Source'].split(' ')[0])
+                    need_control.add(binary['Source'])
                     break
 
         # TODO(jelmer): check test dependencies?
