@@ -27,7 +27,6 @@ import shutil
 import subprocess
 import tempfile
 import sys
-import traceback
 from typing import List, Dict
 from email.utils import formatdate
 from datetime import datetime
@@ -65,6 +64,9 @@ last_publish_success = Gauge(
 
 
 logger = logging.getLogger('janitor.debian.archive')
+
+
+routes = web.RouteTableDef()
 
 # TODO(jelmer): Generate contents file
 
@@ -268,6 +270,7 @@ async def write_suite_files(
 ARCHES: List[str] = ["amd64"]
 
 
+@routes.post("/publish", name="publish")
 async def handle_publish(request):
     post = await request.post()
     suite = post.get("suite")
@@ -277,29 +280,34 @@ async def handle_publish(request):
         build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
         if suite is not None and build_distribution != suite:
             continue
-        request.app.generator_manager.trigger(campaign_config)
+        request.app['generator_manager'].trigger(campaign_config)
 
     return web.json_response({})
 
 
+@routes.get("/last-publish", name="last-publish")
 async def handle_last_publish(request):
     return web.json_response(
         {suite: dt.isoformat() for (suite, dt) in last_publish_time.items()}
     )
 
 
+@routes.get("/health", name="health")
 async def handle_health(request):
     return web.Response(text='ok')
 
 
+@routes.get("/ready", name="ready")
 async def handle_ready(request):
     return web.Response(text='ok')
 
 
+@routes.get("/", name="index")
 async def handle_index(request):
     return web.Response(text='')
 
 
+@routes.get("/pgp_keys", name="pgp-keys")
 async def handle_pgp_keys(request):
     pgp_keys = []
     for entry in list(request.app['gpg'].keylist(secret=True)):
@@ -312,15 +320,10 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app = web.Application(middlewares=[trailing_slash_redirect])
     app['gpg'] = gpg.Context(armor=True)
     app.config = config
-    app.generator_manager = generator_manager
+    app['generator_manager'] = generator_manager
     setup_metrics(app)
-    app.router.add_get("/", handle_index, name="index")
+    app.router.add_routes(routes)
     app.router.add_static("/dists", dists_dir, show_index=True)
-    app.router.add_post("/publish", handle_publish, name="publish")
-    app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
-    app.router.add_get("/health", handle_health, name="health")
-    app.router.add_get("/ready", handle_ready, name="ready")
-    app.router.add_get("/pgp_keys", handle_pgp_keys, name="pgp-keys")
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -351,39 +354,36 @@ async def publish_suite(
     if not suite.HasField('debian_build'):
         logger.info("%s is not a Debian suite", suite.name)
         return
-    try:
-        start_time = datetime.utcnow()
-        logger.info("Publishing %s", suite.name)
-        distribution = get_distribution(config, suite.debian_build.base_distribution)
-        suite_path = os.path.join(dists_directory, suite.name)
-        with tempfile.TemporaryDirectory(dir=dists_directory) as td:
-            await write_suite_files(
-                td,
-                db,
-                package_info_provider,
-                suite.name,
-                suite.debian_build.archive_description,
-                components=distribution.component,
-                arches=ARCHES,
-                origin=config.origin,
-                gpg_context=gpg_context,
-            )
-            old_suite_path = suite_path + '.old'
-            if os.path.exists(old_suite_path):
-                shutil.rmtree(suite_path + '.old')
-            if os.path.exists(suite_path):
-                os.rename(suite_path, suite_path + '.old')
-            os.rename(td, suite_path)
+    start_time = datetime.utcnow()
+    logger.info("Publishing %s", suite.name)
+    distribution = get_distribution(config, suite.debian_build.base_distribution)
+    suite_path = os.path.join(dists_directory, suite.name)
+    with tempfile.TemporaryDirectory(dir=dists_directory) as td:
+        await write_suite_files(
+            td,
+            db,
+            package_info_provider,
+            suite.name,
+            suite.debian_build.archive_description,
+            components=distribution.component,
+            arches=ARCHES,
+            origin=config.origin,
+            gpg_context=gpg_context,
+        )
+        old_suite_path = suite_path + '.old'
         if os.path.exists(old_suite_path):
             shutil.rmtree(suite_path + '.old')
+        if os.path.exists(suite_path):
+            os.rename(suite_path, suite_path + '.old')
+        os.rename(td, suite_path)
+    if os.path.exists(old_suite_path):
+        shutil.rmtree(suite_path + '.old')
 
-        logger.info(
-            "Done publishing %s (took %s)", suite.name, datetime.utcnow() - start_time
-        )
-        last_publish_success.labels(suite=suite.name).set_to_current_time()
-        last_publish_time[suite.name] = datetime.utcnow()
-    except BaseException:
-        traceback.print_exc()
+    logger.info(
+        "Done publishing %s (took %s)", suite.name,
+        datetime.utcnow() - start_time)
+    last_publish_success.labels(suite=suite.name).set_to_current_time()
+    last_publish_time[suite.name] = datetime.utcnow()
 
 
 def create_background_task(fn, title):
@@ -395,6 +395,7 @@ def create_background_task(fn, title):
             future.result()
         except BaseException:
             logging.exception('%s failed', title)
+            raise
         else:
             logging.debug('%s succeeded', title)
     task.add_done_callback(log_result)
@@ -512,7 +513,8 @@ async def main(argv=None):
                 tracer,
             )
         ),
-        loop.create_task(loop_publish(config, generator_manager)),
+        create_background_task(
+            loop_publish(config, generator_manager), 'regenerate suites'),
     ]
 
     tasks.append(loop.create_task(
