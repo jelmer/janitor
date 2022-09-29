@@ -370,6 +370,8 @@ class DebianTarget(Target):
                     source_date_epoch = ws.local_tree.branch.repository.get_revision(
                         ws.main_branch.last_revision()
                     ).timestamp
+                    apt_repositories = env.get('REPOSITORIES')
+                    extra_repositories = env.get('EXTRA_REPOSITORIES', '').split(':')
                     try:
                         if not self.build_suffix:
                             (changes_names, cl_entry) = build_once(
@@ -379,6 +381,8 @@ class DebianTarget(Target):
                                 self.build_command,
                                 subpath=subpath,
                                 source_date_epoch=source_date_epoch,
+                                apt_repositories=apt_repositories,
+                                extra_repositories=extra_repositories,
                             )
                         else:
                             (changes_names, cl_entry) = build_incrementally(
@@ -393,7 +397,9 @@ class DebianTarget(Target):
                                 subpath=subpath,
                                 source_date_epoch=source_date_epoch,
                                 update_changelog=self.update_changelog,
-                                max_iterations=MAX_BUILD_ITERATIONS
+                                max_iterations=MAX_BUILD_ITERATIONS,
+                                apt_repositories=apt_repositories,
+                                extra_repositories=extra_repositories,
                             )
                     except MissingUpstreamTarball:
                         raise WorkerFailure(

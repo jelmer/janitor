@@ -1344,7 +1344,9 @@ async def followup_run(
 
         campaign_config = get_campaign_config(config, active_run.campaign)
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
-        apt = RemoteApt(base_distribution.archive_mirror_uri)
+        apt = RemoteApt(
+            base_distribution.archive_mirror_uri, base_distribution.name,
+            self.distro_config.component)
 
         # TODO(jelmer): in the future, we may want to do more than trigger
         # control builds here, e.g. trigger fresh-releases
@@ -1353,12 +1355,12 @@ async def followup_run(
         need_control = set()
 
         try:
-            for source in apt.iter_sources(base_distribution.name):
+            for source in apt.iter_sources():
                 if any([has_build_relation(source, p) for p in binary_packages]):
                     need_control.add(source)
                     break
 
-            for binary in apt.iter_binaries(base_distribution.name):
+            for binary in apt.iter_binaries():
                 if any([has_runtime_relation(binary, p) for p in binary_packages]):
                     need_control.add(binary['Source'].split(' ')[0])
                     break
@@ -2022,8 +2024,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         },
         "resume": resume.json() if resume else None,
         "build": {"target": builder.kind, "environment": build_env},
-        "env": env,
         "command": command,
+        "codemod": {"command": command, "environment": {}},
+        "env": env,
         "campaign": item.campaign,
         "force-build": campaign_config.force_build,
         "target_repository": {
