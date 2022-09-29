@@ -311,7 +311,7 @@ class DebianBuilder(Builder):
         env = {
             "EXTRA_REPOSITORIES": ":".join(
                 [
-                    "deb %s %s/ main" % (apt_location, suite)
+                    "deb %s %s main" % (apt_location, suite)
                     for suite in extra_janitor_distributions
                 ]
             )
@@ -325,7 +325,7 @@ class DebianBuilder(Builder):
         if self.distro_config.name:
             env["DISTRIBUTION"] = self.distro_config.name
 
-        env["REPOSITORIES"] = "%s %s/ %s" % (
+        env["REPOSITORIES"] = "%s %s %s" % (
             self.distro_config.archive_mirror_uri,
             self.distro_config.name,
             " ".join(self.distro_config.component),
