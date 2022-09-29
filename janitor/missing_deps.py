@@ -77,10 +77,6 @@ async def schedule_new_package(conn, upstream_info, config, policy, change_set=N
         "VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
         package, 'upstream', upstream_info['branch_url'], '',
         'dummy@example.com', origin, vcs_url)
-    await store_candidates(
-        conn,
-        [(package, campaign, change_set, None, DEFAULT_NEW_PACKAGE_PRIORITY,
-          DEFAULT_SUCCESS_CHANCE)])
     await sync_policy(conn, policy, selected_package=package)
     policy = await conn.fetchrow(
         "SELECT command "
@@ -92,6 +88,10 @@ async def schedule_new_package(conn, upstream_info, config, policy, change_set=N
         command = get_campaign_config(config, campaign).command
     if upstream_info['version']:
         command += ' --upstream-version=%s' % upstream_info['version']
+    await store_candidates(
+        conn,
+        [(package, campaign, command, change_set, None,
+          DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE)])
     await do_schedule(
         conn, package, campaign, change_set=change_set,
         requestor=requestor, bucket='missing-deps', command=command)
