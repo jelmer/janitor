@@ -28,6 +28,7 @@ import sys
 import time
 from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterator
 import uuid
+import warnings
 
 
 import aioredis
@@ -2240,6 +2241,9 @@ async def check_existing_mp(
             mp, status, revision, package_name, target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None)
     else:
+        await conn.execute(
+            'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
+            mp.url)
         mp_run = None
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
@@ -3015,6 +3019,7 @@ async def main(argv=None):
         type=str,
         help="External URL",
         default=None)
+    parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
@@ -3030,8 +3035,16 @@ async def main(argv=None):
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
+    elif args.debug:
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    loop = asyncio.get_event_loop()
+    if args.debug:
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     with open(args.config, "r") as f:
         config = read_config(f)
@@ -3049,16 +3062,11 @@ async def main(argv=None):
 
     forge_rate_limiter: Dict[Forge, datetime] = {}
 
-    loop = asyncio.get_event_loop()
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     async with AsyncExitStack() as stack:
         redis = await aioredis.create_redis(config.redis_location)
         stack.callback(redis.close)
-
-        create_background_task(
-            refresh_maintainer_mp_counts(db, maintainer_rate_limiter),
-            'initialize rate limits')
 
         if args.once:
             await publish_pending_ready(
@@ -3115,6 +3123,9 @@ async def main(argv=None):
                         modify_mp_limit=args.modify_mp_limit,
                         push_limit=args.push_limit,
                     )
+                ),
+                loop.create_task(
+                    refresh_maintainer_mp_counts(db, maintainer_rate_limiter),
                 ),
             ]
             if not args.reviewed_only and not args.no_auto_publish:
