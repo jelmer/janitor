@@ -1346,7 +1346,7 @@ async def followup_run(
         base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
         apt = RemoteApt(
             base_distribution.archive_mirror_uri, base_distribution.name,
-            self.distro_config.component)
+            base_distribution.component)
 
         # TODO(jelmer): in the future, we may want to do more than trigger
         # control builds here, e.g. trigger fresh-releases
@@ -1354,7 +1354,7 @@ async def followup_run(
 
         need_control = set()
 
-        try:
+        with apt:
             for source in apt.iter_sources():
                 if any([has_build_relation(source, p) for p in binary_packages]):
                     need_control.add(source)
@@ -1364,8 +1364,6 @@ async def followup_run(
                 if any([has_runtime_relation(binary, p) for p in binary_packages]):
                     need_control.add(binary['Source'].split(' ')[0])
                     break
-        except NotImplementedError:
-            pass
 
         # TODO(jelmer): check test dependencies?
 
