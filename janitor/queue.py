@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Set
 
 
 import asyncpg
@@ -123,7 +123,7 @@ WHERE queue.id = $1
             return QueueItem.from_row(row)
         return None
 
-    async def iter_queue(self, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None):
+    async def iter_queue(self, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, exclude_hosts: Optional[Set[str]] = None):
         query = """
 SELECT
     queue.package AS package,
