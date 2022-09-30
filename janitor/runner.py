@@ -1264,6 +1264,25 @@ def has_runtime_relation(c, pkg):
     return False
 
 
+def find_reverse_source_deps(apt, binary_packages):
+    # TODO(jelmer): in the future, we may want to do more than trigger
+    # control builds here, e.g. trigger fresh-releases
+    # (or maybe just if the control build fails?)
+
+    need_control = set()
+    with apt:
+        for source in apt.iter_sources():
+            if any([has_build_relation(source, p) for p in binary_packages]):
+                need_control.add(source['Package'])
+                break
+
+        for binary in apt.iter_binaries():
+            if any([has_runtime_relation(binary, p) for p in binary_packages]):
+                need_control.add(binary['Source'])
+                break
+
+    return need_control
+
 
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
@@ -1348,33 +1367,16 @@ async def followup_run(
             base_distribution.archive_mirror_uri, base_distribution.name,
             base_distribution.component)
 
-        # TODO(jelmer): in the future, we may want to do more than trigger
-        # control builds here, e.g. trigger fresh-releases
-        # (or maybe just if the control build fails?)
-
-        need_control = set()
-
-        with apt:
-            for source in apt.iter_sources():
-                if any([has_build_relation(source, p) for p in binary_packages]):
-                    need_control.add(source['Package'])
-                    break
-
-            for binary in apt.iter_binaries():
-                if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                    need_control.add(binary['Source'])
-                    break
+        need_control = await to_thread(
+            find_reverse_source_deps(apt, binary_packages))
 
         # TODO(jelmer): check test dependencies?
 
         for source in need_control:
             logging.info("Scheduling control run for %s.", source)
             await do_schedule_control(
-                conn,
-                source,
-                change_set=result.change_set,
-                requestor="control",
-            )
+                conn, source, change_set=result.change_set,
+                requestor="control")
 
 
 class RunExists(Exception):
