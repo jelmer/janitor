@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+!/usr/bin/python3
 # Copyright (C) 2018 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -135,6 +135,9 @@ primary_logfile_upload_failed_count = Counter(
     "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
 logfile_uploaded_count = Counter(
     "logfile_uploads", "Number of uploaded log files")
+queue_empty_count = Counter(
+    "queue_empty",
+    "Number of times the queue was empty when an assignment was requested")
 
 
 async def to_thread_timeout(timeout, func, *args, **kwargs):
@@ -1461,54 +1464,61 @@ class QueueProcessor(object):
 
     KEEPALIVE_INTERVAL = 10
 
+    async def _healthcheck_active_run(self, active_run):
+        lk = await self.redis.hget('last-keepalive', active_run.log_id)
+        if lk:
+            last_keepalive = datetime.fromisoformat(lk.decode('utf-8'))
+        else:
+            last_keepalive = active_run.start_time
+        keepalive_age = datetime.utcnow() - last_keepalive
+        if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
+            return
+        try:
+            if await active_run.ping():
+                await self.redis.hset(
+                    'last-keepalive', active_run.log_id,
+                    datetime.utcnow().isoformat())
+                keepalive_age = timedelta(seconds=0)
+        except NotImplementedError:
+            if keepalive_age > timedelta(days=1):
+                try:
+                    await self.abort_run(
+                        active_run, 'run-disappeared', "no support for ping")
+                except RunExists:
+                    logging.warning('Run not properly cleaned up?')
+                return
+        except ActiveRunDisappeared as e:
+            if keepalive_age > timedelta(minutes=self.run_timeout):
+                try:
+                    await self.abort_run(active_run, 'run-disappeared', e.reason)
+                except RunExists:
+                    logging.warning('Run not properly cleaned up?')
+                return
+        if keepalive_age > timedelta(minutes=self.run_timeout):
+            logging.warning(
+                "No keepalives received from %s for %s in %s, aborting.",
+                active_run.worker_name,
+                active_run.log_id,
+                keepalive_age,
+            )
+            try:
+                await self.abort_run(
+                    active_run, code='worker-timeout',
+                    description=("No keepalives received in %s." % keepalive_age))
+            except RunExists:
+                logging.warning('Run not properly cleaned up?')
+            return
+
     async def _watchdog(self):
         while True:
+            tasks = []
             for serialized in (await self.redis.hgetall('active-runs')).values():
                 js = json.loads(serialized)
                 active_run = ActiveRun.from_json(js)
-                lk = await self.redis.hget('last-keepalive', js['id'])
-                if lk:
-                    last_keepalive = datetime.fromisoformat(lk.decode('utf-8'))
-                else:
-                    last_keepalive = active_run.start_time
-                keepalive_age = datetime.utcnow() - last_keepalive
-                if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
-                    continue
-                try:
-                    if await active_run.ping():
-                        await self.redis.hset(
-                            'last-keepalive', active_run.log_id,
-                            datetime.utcnow().isoformat())
-                        keepalive_age = timedelta(seconds=0)
-                except NotImplementedError:
-                    if keepalive_age > timedelta(days=1):
-                        try:
-                            await self.abort_run(
-                                active_run, 'run-disappeared', "no support for ping")
-                        except RunExists:
-                            logging.warning('Run not properly cleaned up?')
-                        continue
-                except ActiveRunDisappeared as e:
-                    if keepalive_age > timedelta(minutes=self.run_timeout):
-                        try:
-                            await self.abort_run(active_run, 'run-disappeared', e.reason)
-                        except RunExists:
-                            logging.warning('Run not properly cleaned up?')
-                        continue
-                if keepalive_age > timedelta(minutes=self.run_timeout):
-                    logging.warning(
-                        "No keepalives received from %s for %s in %s, aborting.",
-                        active_run.worker_name,
-                        active_run.log_id,
-                        keepalive_age,
-                    )
-                    try:
-                        await self.abort_run(
-                            active_run, code='worker-timeout',
-                            description=("No keepalives received in %s." % keepalive_age))
-                    except RunExists:
-                        logging.warning('Run not properly cleaned up?')
-                    continue
+                tasks.append(self._healthcheck_active_run(active_run))
+            result = await asyncio.gather(*tasks, return_exceptions=True)
+            if result.exceptions:
+                logging.warning('Failed to healthcheck: %r', result.exceptions)
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     async def status_json(self) -> Any:
@@ -1639,7 +1649,7 @@ class QueueProcessor(object):
     async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
         if not retry_after:
-            retry_after = datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)
+            retry_after = datetime.utcnow() + timedelta(seconds=DEFAULT_RETRY_AFTER)
         await self.redis.hset(
             'rate-limit-hosts', host, retry_after.isoformat())
 
@@ -1650,15 +1660,23 @@ class QueueProcessor(object):
         if host in self.avoid_hosts:
             return False
         until = await self.redis.hget('rate-limit-hosts', host)
-        if until and datetime.fromisoformat(until.decode('utf-8')) > datetime.now():
+        if until and datetime.fromisoformat(until.decode('utf-8')) > datetime.utcnow():
             return False
         return True
 
     async def next_queue_item(self, conn, package=None, campaign=None):
         limit = (await self.redis.hlen('active-runs')) + 300
         queue = Queue(conn)
+        exclude_hosts = set(self.avoid_hosts)
+        rate_limit_hosts = {
+            h.decode('utf-8'): datetime.fromisoformat(t.decode('utf-8'))
+            for (h, t) in (await self.redis.hgetall('rate-limit-hosts')).items()}
+        for host, retry_after in rate_limit_hosts:
+            if retry_after > datetime.utcnow():
+                exclude_hosts.add(host)
         async for item in queue.iter_queue(
-                limit=limit, campaign=campaign, package=package):
+                limit=limit, campaign=campaign, package=package,
+                exclude_hosts=exclude_hosts):
             if await self.is_queue_item_assigned(item.id):
                 continue
             vcs_info = await conn.fetchrow(
@@ -1795,7 +1813,7 @@ async def handle_assign(request):
     return await next_item(
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
-        backchannel=json['backchannel'],
+        backchannel=json.get('backchannel'),
         package=json.get('package'),
         campaign=json.get('campaign')
     )
@@ -1857,6 +1875,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 item, vcs_info = await queue_processor.next_queue_item(
                     conn, package=package, campaign=campaign)
             if item is None:
+                queue_empty_count.inc()
                 return web.json_response({'reason': 'queue empty'}, status=503)
 
             if backchannel and backchannel['kind'] == 'http':
