@@ -168,6 +168,11 @@ class Builder(object):
 
     result_cls: Type[BuilderResult] = BuilderResult
 
+    async def config(
+            self, conn: asyncpg.Connection,
+            campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
+        raise NotImplementedError(self.config)
+
     async def build_env(
             self, conn: asyncpg.Connection,
             campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
@@ -206,12 +211,14 @@ class GenericBuilder(Builder):
     def __init__(self):
         pass
 
-    async def build_env(self, conn, campaign_config, queue_item):
-        env = {}
+    async def config(self, conn, campaign_config, queue_item):
+        config = {}
         if campaign_config.generic_build.chroot:
-            env["CHROOT"] = campaign_config.generic_build.chroot
+            config["chroot"] = campaign_config.generic_build.chroot
+        return config
 
-        return env
+    async def build_env(self, conn, campaign_config, queue_item):
+        return {}
 
 
 class DebianResult(BuilderResult):
@@ -299,28 +306,55 @@ class DebianBuilder(Builder):
         self.distro_config = distro_config
         self.apt_location = apt_location
 
-    async def build_env(self, conn, campaign_config, queue_item):
+    async def config(self, conn, campaign_config, queue_item):
+        config = {}
+        config['lintian'] = {'profile': self.distro_config.lintian_profile}
+        if self.distro_config.lintian_suppress_tag:
+            config['lintian']['suppress-tags'] = self.distro_config.lintian_suppress_tag
+
         if self.apt_location.startswith("gs://"):
             bucket_name = URL(self.apt_location).host
             apt_location = "https://storage.googleapis.com/%s/" % bucket_name
         else:
             apt_location = self.apt_location
+
         extra_janitor_distributions = list(campaign_config.debian_build.extra_build_distribution)
         if queue_item.change_set:
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
-        env = {
-            "EXTRA_REPOSITORIES": "|".join(
-                [
-                    "deb %s %s main" % (apt_location, suite)
-                    for suite in extra_janitor_distributions
-                ]
-            )
-        }
+
+        config['extra-repositories'] = [
+            "deb %s %s main" % (apt_location, suite)
+            for suite in extra_janitor_distributions
+        ]
+
+        config["build-distribution"] = campaign_config.debian_build.build_distribution or campaign_config.name
+
+        config["build-suffix"] = campaign_config.debian_build.build_suffix or ""
+
+        if campaign_config.debian_build.build_command:
+            config["build-command"] = campaign_config.debian_build.build_command
+        elif self.distro_config.build_command:
+            config["build-command"] = self.distro_config.build_command
+
+        last_build_version = await conn.fetchval(
+            "SELECT version FROM debian_build WHERE "
+            "version IS NOT NULL AND source = $1 AND "
+            "distribution = $2 ORDER BY version DESC LIMIT 1",
+            queue_item.package, config['build-distribution']
+        )
+
+        if last_build_version:
+            config["last-build-version"] = str(last_build_version)
 
         if campaign_config.debian_build.chroot:
-            env["CHROOT"] = campaign_config.debian_build.chroot
+            config["chroot"] = campaign_config.debian_build.chroot
         elif self.distro_config.chroot:
-            env["CHROOT"] = self.distro_config.chroot
+            config["chroot"] = self.distro_config.chroot
+
+        return config
+
+    async def build_env(self, conn, campaign_config, queue_item):
+        env = {}
 
         if self.distro_config.name:
             env["DISTRIBUTION"] = self.distro_config.name
@@ -330,30 +364,6 @@ class DebianBuilder(Builder):
             self.distro_config.name,
             " ".join(self.distro_config.component),
         )
-
-        env["BUILD_DISTRIBUTION"] = campaign_config.debian_build.build_distribution or campaign_config.name
-        env["BUILD_SUFFIX"] = campaign_config.debian_build.build_suffix or ""
-
-        if campaign_config.debian_build.build_command:
-            env["BUILD_COMMAND"] = campaign_config.debian_build.build_command
-        elif self.distro_config.build_command:
-            env["BUILD_COMMAND"] = self.distro_config.build_command
-
-        last_build_version = await conn.fetchval(
-            "SELECT version FROM debian_build WHERE "
-            "version IS NOT NULL AND source = $1 AND "
-            "distribution = $2 ORDER BY version DESC LIMIT 1",
-            queue_item.package, env['BUILD_DISTRIBUTION']
-        )
-
-        if last_build_version:
-            env["LAST_BUILD_VERSION"] = str(last_build_version)
-
-        env['LINTIAN_PROFILE'] = self.distro_config.lintian_profile
-        if self.distro_config.lintian_suppress_tag:
-            env['LINTIAN_SUPPRESS_TAGS'] = ','.join(self.distro_config.lintian_suppress_tag)
-
-        env.update([(env.key, env.value) for env in campaign_config.debian_build.sbuild_env])
 
         env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
 
@@ -1880,6 +1890,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         with span.new_child('build-env'):
             build_env = await builder.build_env(conn, campaign_config, item)
 
+        with span.new_child('config'):
+            build_config = await builder.config(conn, campaign_config, item)
+
         try:
             with span.new_child('branch:open'):
                 probers = select_preferred_probers(vcs_info['vcs_type'])
@@ -2014,7 +2027,11 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             "cached_url": cached_branch_url,
         },
         "resume": resume.json() if resume else None,
-        "build": {"target": builder.kind, "environment": build_env},
+        "build": {
+            "target": builder.kind,
+            "environment": build_env,
+            "config": build_config,
+        },
         "command": command,
         "codemod": {"command": command, "environment": {}},
         "env": env,

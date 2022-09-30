@@ -28,7 +28,7 @@ def run_lintian(output_directory, changes_names, profile=None, suppress_tags=Non
     logger.info('Running lintian')
     args = ['--exp-output=format=json', '--allow-root']
     if suppress_tags:
-        args.append('--suppress-tags=' + suppress_tags)
+        args.append('--suppress-tags=' + ','.join(suppress_tags))
     if profile:
         args.append('--profile=%s' % profile)
     try:
