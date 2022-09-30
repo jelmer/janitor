@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional, Set
+from typing import Optional, Set, List, Any
 
 
 import asyncpg
@@ -123,7 +123,71 @@ WHERE queue.id = $1
             return QueueItem.from_row(row)
         return None
 
-    async def iter_queue(self, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, exclude_hosts: Optional[Set[str]] = None):
+    async def next_queue_item(self, package: Optional[str] = None,
+                              campaign: Optional[str] = None,
+                              exclude_hosts: Optional[Set[str]] = None,
+                              assigned_queue_items: Optional[Set[int]] = None):
+        query = """
+SELECT
+    queue.package AS package,
+    queue.command AS command,
+    queue.context AS context,
+    queue.id AS id,
+    queue.estimated_duration AS estimated_duration,
+    queue.suite AS campaign,
+    queue.refresh AS refresh,
+    queue.requestor AS requestor,
+    queue.change_set AS change_set,
+    package.vcs_type AS vcs_type,
+    package.branch_url AS branch_url,
+    package.subpath AS subpath
+FROM
+    queue
+LEFT JOIN package ON package.name = queue.package
+"""
+        conditions = []
+        args: List[Any] = []
+        if assigned_queue_items:
+            args.append(assigned_queue_items)
+            conditions.append("queue.id != ANY($%d::int[])" % len(args))
+        if package:
+            args.append(package)
+            conditions.append("queue.package = $%d" % len(args))
+        if campaign:
+            args.append(campaign)
+            conditions.append("queue.suite = $%d" % len(args))
+        if exclude_hosts:
+            args.append(exclude_hosts)
+            # TODO(jelmer): Use package.hostname when kali upgrades to postgres 12+
+            conditions.append(
+                "(package.branch_url IS NULL OR "
+                "SUBSTRING(package.branch_url from '.*://(?:[^/@]*@)?([^/]*)') != ANY($%d::text[])")
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += """
+ORDER BY
+queue.bucket ASC,
+queue.priority ASC,
+queue.id ASC
+LIMIT 1
+"""
+        row = await self.conn.fetchrow(query, *args)
+        if row is None:
+            return None, None
+        if row['vcs_type']:
+            vcs_info = {
+                'vcs_type': row['vcs_type'],
+                'branch_url': row['branch_url'],
+                'subpath': row['subpath'],
+            }
+        else:
+            vcs_info = None
+        return QueueItem.from_row(row), vcs_info
+
+    async def iter_queue(self, limit: Optional[int] = None,
+                         package: Optional[str] = None, campaign: Optional[str] = None):
         query = """
 SELECT
     queue.package AS package,
@@ -139,7 +203,7 @@ FROM
     queue
 """
         conditions = []
-        args = []
+        args: List[Any] = []
         if package:
             args.append(package)
             conditions.append("queue.package = $%d" % len(args))

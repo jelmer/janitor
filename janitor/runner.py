@@ -1,4 +1,4 @@
-!/usr/bin/python3
+#!/usr/bin/python3
 # Copyright (C) 2018 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -1516,15 +1516,20 @@ class QueueProcessor(object):
                 js = json.loads(serialized)
                 active_run = ActiveRun.from_json(js)
                 tasks.append(self._healthcheck_active_run(active_run))
-            result = await asyncio.gather(*tasks, return_exceptions=True)
-            if result.exceptions:
-                logging.warning('Failed to healthcheck: %r', result.exceptions)
+            done, _ = await asyncio.wait(tasks)
+            for task in done:
+                try:
+                    await task
+                except Exception as e:
+                    logging.exception(
+                        'Failed to healthcheck %s: %r', active_run.log_id, e)
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
+    async def _rate_limit_hosts(self):
+        for h, t in (await self.redis.hgetall('rate-limit-hosts')).items():
+            yield h.decode('utf-8'), datetime.fromisoformat(t.decode('utf-8'))
+
     async def status_json(self) -> Any:
-        rate_limit_hosts = {
-            h.decode('utf-8'): datetime.fromisoformat(t.decode('utf-8'))
-            for (h, t) in (await self.redis.hgetall('rate-limit-hosts')).items()}
         last_keepalives = {
             r.decode('utf-8'): datetime.fromisoformat(v.decode('utf-8'))
             for (r, v) in (await self.redis.hgetall('last-keepalive')).items()}
@@ -1545,7 +1550,7 @@ class QueueProcessor(object):
             "processing": processing,
             "avoid_hosts": list(self.avoid_hosts),
             "rate_limit_hosts": {
-                h: t for (h, t) in rate_limit_hosts.items()
+                h: t async for (h, t) in self._rate_limit_hosts()
                 if t > datetime.utcnow()},
         }
 
@@ -1653,43 +1658,18 @@ class QueueProcessor(object):
         await self.redis.hset(
             'rate-limit-hosts', host, retry_after.isoformat())
 
-    async def can_process_url(self, url) -> bool:
-        if url is None:
-            return True
-        host = urlutils.URL.from_string(url).host
-        if host in self.avoid_hosts:
-            return False
-        until = await self.redis.hget('rate-limit-hosts', host)
-        if until and datetime.fromisoformat(until.decode('utf-8')) > datetime.utcnow():
-            return False
-        return True
-
     async def next_queue_item(self, conn, package=None, campaign=None):
-        limit = (await self.redis.hlen('active-runs')) + 300
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
-        rate_limit_hosts = {
-            h.decode('utf-8'): datetime.fromisoformat(t.decode('utf-8'))
-            for (h, t) in (await self.redis.hgetall('rate-limit-hosts')).items()}
-        for host, retry_after in rate_limit_hosts:
+        async for host, retry_after in self._rate_limit_hosts():
             if retry_after > datetime.utcnow():
                 exclude_hosts.add(host)
-        async for item in queue.iter_queue(
-                limit=limit, campaign=campaign, package=package,
-                exclude_hosts=exclude_hosts):
-            if await self.is_queue_item_assigned(item.id):
-                continue
-            vcs_info = await conn.fetchrow(
-                'SELECT vcs_type, branch_url, subpath FROM package '
-                'WHERE name = $1', item.package)
-            if vcs_info and not (await self.can_process_url(vcs_info["branch_url"])):
-                continue
-            return item, dict(vcs_info) if vcs_info else None
-        return None, None
-
-    async def is_queue_item_assigned(self, queue_item_id: int) -> bool:
-        """Check if a queue item has been assigned already."""
-        return await self.redis.hexists('assigned-queue-items', str(queue_item_id))
+        assigned_queue_items = set([
+            int(i.decode('utf-8'))
+            for i in await self.redis.hkeys('assigned-queue-items')])
+        return await queue.next_queue_item(
+            campaign=campaign, package=package,
+            assigned_queue_items=assigned_queue_items)
 
 
 @routes.get("/status", name="status")
