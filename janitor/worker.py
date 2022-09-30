@@ -281,8 +281,8 @@ class DebianTarget(Target):
         self.lintian_profile = env.get("LINTIAN_PROFILE")
         self.lintian_suppress_tags = env.get("LINTIAN_SUPPRESS_TAGS")
         self.committer = env.get("COMMITTER")
-        self.apt_repositories = env.get('REPOSITORIES')
-        self.extra_repositories = env.get('EXTRA_REPOSITORIES', '').split(':')
+        self.apt_repositories = env.pop('REPOSITORIES')
+        self.extra_repositories = env.pop('EXTRA_REPOSITORIES', '').split('|')
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
         if uc == "auto":
             self.update_changelog = None
@@ -1204,15 +1204,44 @@ INDEX_TEMPLATE = Template("""\
 <head><title>Job</title></head>
 <body>
 
-<h1>Build Details</h1>
+<h1>Run Details</h1>
 
 <ul>
-<li><b>Command</b>: {{ assignment['command'] }}</li>
+<li><a href="/assignment">Raw Assignment</a><li>
+<li><b>Campaign</b>: {{ metadata['campaign'] }}</li>
 {% if metadata and metadata.get('start_time') %}
 <li><b>Start Time</b>: {{ metadata['start_time'] }}
 <li><b>Current duration</b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
 {% endif %}
+<li><b>Environment</b>: <ul>
+{% for key, value in assignment['env'].items() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</li>
 </ul>
+
+<h2>Codemod</h2>
+
+<ul>
+<li><b>Command</b>: {{ assignment['codemod']['command'] }}</li>
+<li><b>Environment</b>: <ul>
+{% for key, value in assignment['codemod']['environment'].items() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</li>
+</li>
+
+<h2>Build</h2>
+
+<ul>
+<li><b>Target</b>: {{ assignment['build']['target'] }}</li>
+<li><b>Force Build</b>: {{ assignment.get('force-build', False) }}</li>
+<li><b>Environment</b>: <ul>
+{% for key, value in assignment['build']['environment'].items() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</li>
+</li>
 
 {% if lognames %}
 <h1>Logs</h1>
@@ -1362,7 +1391,7 @@ async def process_single_item(
             resume_branch_url = None
             resume_branches = None
         cached_branch_url = assignment["branch"].get("cached_url")
-        command = shlex.split(assignment["command"])
+        command = shlex.split(assignment["codemod"]["command"])
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
@@ -1384,6 +1413,8 @@ async def process_single_item(
         env = assignment["env"]
 
         env.update(build_environment)
+
+        logging.debug('Environment: %r', env)
 
         vendor = build_environment.get('DEB_VENDOR', 'debian')
 
