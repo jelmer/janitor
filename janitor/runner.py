@@ -1298,7 +1298,7 @@ def find_reverse_source_deps(apt, binary_packages):
 
         for binary in apt.iter_binaries():
             if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                need_control.add(binary['Source'])
+                need_control.add(binary['Source'].split(' ')[0])
                 break
 
     return need_control
@@ -1664,10 +1664,10 @@ class QueueProcessor(object):
         async for host, retry_after in self._rate_limit_hosts():
             if retry_after > datetime.utcnow():
                 exclude_hosts.add(host)
-        assigned_queue_items = set([
+        assigned_queue_items = [
             int(i.decode('utf-8'))
-            for i in await self.redis.hkeys('assigned-queue-items')])
-        return await queue.next_queue_item(
+            for i in await self.redis.hkeys('assigned-queue-items')]
+        return await queue.next_item(
             campaign=campaign, package=package,
             assigned_queue_items=assigned_queue_items)
 
@@ -1863,7 +1863,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             elif backchannel and backchannel['kind'] == 'jenkins':
                 bc = JenkinsBackchannel(my_url=URL(backchannel['url']))
             else:
-                bc = None
+                bc = Backchannel()
 
             active_run = ActiveRun.from_queue_item(
                 backchannel=bc,
