@@ -1700,9 +1700,17 @@ async def handle_log_index(request):
 @routes.post("/kill/{run_id}", name="kill")
 async def handle_kill(request):
     active_run = await _find_active_run(request)
+    if not active_run:
+        raise web.HTTPNotFound(
+            text='no active run %s' % request.match_info['run_id'])
     ret = active_run.json()
-    await active_run.backchannel.kill()
-    return web.json_response(ret)
+    try:
+        await active_run.backchannel.kill()
+    except NotImplementedError:
+        raise web.HTTPNotImplemented(
+            text='kill not supported for this type of run')
+    else:
+        return web.json_response(ret)
 
 
 @routes.get("/log/{run_id}/{filename}", name="log")
