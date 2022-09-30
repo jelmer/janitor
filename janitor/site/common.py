@@ -142,7 +142,8 @@ SELECT
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags,
-    resume_from
+    resume_from,
+    change_set
 FROM
     run
 LEFT JOIN worker ON worker.name = run.worker
@@ -164,7 +165,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set AS change_set_id
+    result_tags, target_branch_url, change_set AS change_set
 FROM
     last_runs
 LEFT JOIN
