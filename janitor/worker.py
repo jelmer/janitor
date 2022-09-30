@@ -270,19 +270,19 @@ class DebianTarget(Target):
 
     DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
-    def __init__(self, env, argv):
+    def __init__(self, config, env, argv):
         self.env = env
-        self.build_distribution = env.get("BUILD_DISTRIBUTION")
-        self.build_command = env.get("BUILD_COMMAND") or self.DEFAULT_BUILD_COMMAND
-        self.build_suffix = env.get("BUILD_SUFFIX")
-        self.last_build_version = env.get("LAST_BUILD_VERSION")
+        self.build_distribution = config.get("build-distribution")
+        self.build_command = config.get("build-command") or self.DEFAULT_BUILD_COMMAND
+        self.build_suffix = config.get("build-suffix")
+        self.last_build_version = config.get("last-build-version")
         self.package = env["PACKAGE"]
-        self.chroot = env.get("CHROOT")
-        self.lintian_profile = env.get("LINTIAN_PROFILE")
-        self.lintian_suppress_tags = env.get("LINTIAN_SUPPRESS_TAGS")
+        self.chroot = env.get("chroot")
+        self.lintian_profile = config.get('lintian', {}).get('profile')
+        self.lintian_suppress_tags = config.get("suppress-tags")
         self.committer = env.get("COMMITTER")
         self.apt_repositories = env.pop('REPOSITORIES')
-        self.extra_repositories = env.pop('EXTRA_REPOSITORIES', '').split('|')
+        self.extra_repositories = config.pop('extra-repositories', [])
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
         if uc == "auto":
             self.update_changelog = None
@@ -459,8 +459,9 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, env, argv):
-        self.chroot = env.get("CHROOT")
+    def __init__(self, config, env, argv):
+        self.chroot = config.get("chroot")
+        self.config = config
         self.env = env
         self.argv = argv
 
@@ -639,6 +640,7 @@ def process_package(
     vcs_type: str,
     vcs_url: str,
     subpath: str,
+    build_config: Any,
     env: Dict[str, str],
     command: List[str],
     output_directory: str,
@@ -655,9 +657,9 @@ def process_package(
 
     build_target: Target
     if target == "debian":
-        build_target = DebianTarget(env, command)
+        build_target = DebianTarget(config, env, command)
     elif target == "generic":
-        build_target = GenericTarget(env, command)
+        build_target = GenericTarget(config, env, command)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
@@ -1032,6 +1034,7 @@ def run_worker(
     run_id: str,
     subpath: str,
     vcs_type: str,
+    build_config: Any,
     env: Dict[str, str],
     command: List[str],
     output_directory: str,
@@ -1058,6 +1061,7 @@ def run_worker(
                 vcs_type,
                 branch_url,
                 subpath,
+                build_config,
                 env,
                 command,
                 output_directory,
@@ -1394,6 +1398,7 @@ async def process_single_item(
         command = shlex.split(assignment["codemod"]["command"])
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
+        build_config = assignment["build"].get("config", {})
 
         start_time = datetime.utcnow()
         metadata = {
@@ -1430,6 +1435,7 @@ async def process_single_item(
                 run_id,
                 subpath,
                 vcs_type,
+                build_config,
                 env,
                 command,
                 output_directory,
