@@ -310,7 +310,7 @@ class DebianBuilder(Builder):
         config = {}
         config['lintian'] = {'profile': self.distro_config.lintian_profile}
         if self.distro_config.lintian_suppress_tag:
-            config['lintian']['suppress-tags'] = self.distro_config.lintian_suppress_tag
+            config['lintian']['suppress-tags'] = list(self.distro_config.lintian_suppress_tag)
 
         if self.apt_location.startswith("gs://"):
             bucket_name = URL(self.apt_location).host
@@ -322,10 +322,11 @@ class DebianBuilder(Builder):
         if queue_item.change_set:
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
 
-        config['extra-repositories'] = [
+        config['build-extra-repositories'] = [
             "deb %s %s main" % (apt_location, suite)
             for suite in extra_janitor_distributions
         ]
+        # TODO(jelmer): Ship build-extra-repositories-keys
 
         config["build-distribution"] = campaign_config.debian_build.build_distribution or campaign_config.name
 
@@ -351,6 +352,13 @@ class DebianBuilder(Builder):
         elif self.distro_config.chroot:
             config["chroot"] = self.distro_config.chroot
 
+        config["base-apt-repository"] = "%s %s %s" % (
+            self.distro_config.archive_mirror_uri,
+            self.distro_config.name,
+            " ".join(self.distro_config.component),
+        )
+        config["base-apt-repository-signed-by"] = self.distro_config.signed_by
+
         return config
 
     async def build_env(self, conn, campaign_config, queue_item):
@@ -358,12 +366,6 @@ class DebianBuilder(Builder):
 
         if self.distro_config.name:
             env["DISTRIBUTION"] = self.distro_config.name
-
-        env["REPOSITORIES"] = "%s %s %s" % (
-            self.distro_config.archive_mirror_uri,
-            self.distro_config.name,
-            " ".join(self.distro_config.component),
-        )
 
         env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
 
@@ -1510,7 +1512,9 @@ class QueueProcessor(object):
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     async def status_json(self) -> Any:
-        rate_limit_hosts = await self.redis.hgetall('rate-limit-hosts')
+        rate_limit_hosts = {
+            h.decode('utf-8'): datetime.fromisoformat(t.decode('utf-8'))
+            for (h, t) in (await self.redis.hgetall('rate-limit-hosts')).items()}
         last_keepalives = {
             r.decode('utf-8'): datetime.fromisoformat(v.decode('utf-8'))
             for (r, v) in (await self.redis.hgetall('last-keepalive')).items()}
@@ -1530,7 +1534,9 @@ class QueueProcessor(object):
         return {
             "processing": processing,
             "avoid_hosts": list(self.avoid_hosts),
-            "rate_limit_hosts": rate_limit_hosts,
+            "rate_limit_hosts": {
+                h: t for (h, t) in rate_limit_hosts.items()
+                if t > datetime.utcnow()},
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:

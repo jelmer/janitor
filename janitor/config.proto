@@ -7,6 +7,8 @@ message Distribution {
 
   optional string archive_mirror_uri = 2;
 
+  optional string signed_by = 11;
+
   // This should eventually be distribution-specific
   optional string tracker_url = 3;
 
