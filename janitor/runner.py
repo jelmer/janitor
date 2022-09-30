@@ -1386,19 +1386,6 @@ class RunExists(Exception):
         self.run_id = run_id
 
 
-async def change_set_ready(conn, change_set_id):
-    missing = await conn.fetch(
-        "SELECT * FROM change_set_todo WHERE change_set = $1",
-        change_set_id)
-    if missing:
-        logging.info('More work to do for change set %s', change_set_id)
-        for row in missing:
-            logging.debug('  %s/%s', row['package'], row['suite'])
-        return False
-    logging.info('Change set %s ready', change_set_id)
-    return True
-
-
 class QueueProcessor(object):
 
     avoid_hosts: Set[str]
@@ -1614,15 +1601,6 @@ class QueueProcessor(object):
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
         await followup_run(self.config, self.database, self.policy, active_run, result)
-
-        # If there is no more work to be done for this change set, mark it as ready.
-        async with self.database.acquire() as conn, conn.transaction():
-            if await change_set_ready(conn, result.change_set):
-                if not self.dry_run:
-                    await conn.execute(
-                        "UPDATE change_set SET state = 'ready' "
-                        "WHERE id = $1 AND state = 'working'",
-                        result.change_set)
 
         await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
