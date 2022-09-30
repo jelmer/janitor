@@ -277,7 +277,7 @@ class DebianTarget(Target):
         self.build_suffix = config.get("build-suffix")
         self.last_build_version = config.get("last-build-version")
         self.package = env["PACKAGE"]
-        self.chroot = env.get("chroot")
+        self.chroot = config.get("chroot")
         self.lintian_profile = config.get('lintian', {}).get('profile')
         self.lintian_suppress_tags = config.get('lintian', {}).get("suppress-tags")
         self.committer = env.get("COMMITTER")
@@ -1239,7 +1239,7 @@ INDEX_TEMPLATE = Template("""\
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
 </li>
-</li>
+</ul>
 
 <h2>Build</h2>
 
@@ -1251,7 +1251,7 @@ INDEX_TEMPLATE = Template("""\
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
 </li>
-</li>
+</ul>
 
 {% if lognames %}
 <h1>Logs</h1>
