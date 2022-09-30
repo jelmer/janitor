@@ -1,5 +1,9 @@
-- name: Install sbuild
-  apt: package=sbuild state=present
+- name: Install sbuild and cronic
+  apt:
+    package:
+      - sbuild
+      - cronic
+    state: present
 - name: Install lintian-brush dependencies
   apt:
     package:
@@ -38,7 +42,7 @@
   cron:
     name: "update schroot for {{ item['name'] }}"
     special_time: daily
-    job: sbuild-update -udcar "{{ item['chroot'] }}"
+    job: cronic sbuild-update -udcar "{{ item['chroot'] }}"
   with_items: "{{ janitor_distributions }}"
 - name: janitor in sbuild group
   user:
