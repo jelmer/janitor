@@ -24,7 +24,7 @@ Manually avoiding hosts:
 {% if rate_limit_hosts %}
 Rate limiting hosts:
 <ul>
-	{% for host, until in rate_limit_hosts.items() %}	<li>{{ host }} until {{ until.isoformat() }}</li> {% endfor %}
+    {% for host, until in rate_limit_hosts.items() %}	<li>{{ host }} until {{ until.isoformat() }} ({{ format_duration(until - utcnow()) }} more)</li> {% endfor %}
 </ul>
 {% endif %}
 </div>

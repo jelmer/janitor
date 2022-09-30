@@ -273,16 +273,17 @@ class DebianTarget(Target):
     def __init__(self, config, env, argv):
         self.env = env
         self.build_distribution = config.get("build-distribution")
-        self.build_command = config.get("build-command") or self.DEFAULT_BUILD_COMMAND
+        self.build_command = config.get("build-command", self.DEFAULT_BUILD_COMMAND)
         self.build_suffix = config.get("build-suffix")
         self.last_build_version = config.get("last-build-version")
         self.package = env["PACKAGE"]
         self.chroot = env.get("chroot")
         self.lintian_profile = config.get('lintian', {}).get('profile')
-        self.lintian_suppress_tags = config.get("suppress-tags")
+        self.lintian_suppress_tags = config.get('lintian', {}).get("suppress-tags")
         self.committer = env.get("COMMITTER")
-        self.apt_repositories = env.pop('REPOSITORIES')
-        self.extra_repositories = config.pop('extra-repositories', [])
+        self.base_apt_repository = config['base-apt-repository']
+        self.base_apt_repository_key = config.get('base-apt-repository-signed-by')
+        self.extra_repositories = config.pop('build-extra-repositories', [])
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
         if uc == "auto":
             self.update_changelog = None
@@ -309,7 +310,10 @@ class DebianTarget(Target):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
 
-        extra_env = {'DIST': dist_command}
+        extra_env = {
+            'DIST': dist_command,
+            'APT_REPOSITORY': self.base_apt_repository,
+        }
         extra_env.update(self.env)
         try:
             return debian_script_runner(
@@ -381,7 +385,8 @@ class DebianTarget(Target):
                                 self.build_command,
                                 subpath=subpath,
                                 source_date_epoch=source_date_epoch,
-                                apt_repositories=self.apt_repositories,
+                                apt_repository=self.base_apt_repository,
+                                apt_repository_key=self.base_apt_repository_key,
                                 extra_repositories=self.extra_repositories,
                             )
                         else:
@@ -398,7 +403,8 @@ class DebianTarget(Target):
                                 source_date_epoch=source_date_epoch,
                                 update_changelog=self.update_changelog,
                                 max_iterations=MAX_BUILD_ITERATIONS,
-                                apt_repositories=self.apt_repositories,
+                                apt_repository=self.base_apt_repository,
+                                apt_repository_key=self.base_apt_repository_key,
                                 extra_repositories=self.extra_repositories,
                             )
                     except MissingUpstreamTarball:
@@ -657,9 +663,9 @@ def process_package(
 
     build_target: Target
     if target == "debian":
-        build_target = DebianTarget(config, env, command)
+        build_target = DebianTarget(build_config, env, command)
     elif target == "generic":
-        build_target = GenericTarget(config, env, command)
+        build_target = GenericTarget(build_config, env, command)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
@@ -1279,6 +1285,10 @@ async def handle_assignment(request):
     return web.json_response(request.app['workitem'].get('assignment'))
 
 
+async def handle_intermediate_result(request):
+    return web.json_response(request.app['workitem'].get('metadata'))
+
+
 ARTIFACT_INDEX_TEMPLATE = Template("""\
 <html>
 <head><title>Artifact Index</title><head>
@@ -1586,6 +1596,8 @@ async def main(argv=None):
     app['workitem'] = {}
     app.router.add_get('/', handle_index, name='index')
     app.router.add_get('/assignment', handle_assignment, name='assignment')
+    app.router.add_get('/intermediate-result',
+                       handle_intermediate_result, name='intermediate-result')
     app.router.add_get('/logs/', handle_log_index, name='log-index')
     app.router.add_get('/logs/{filename}', handle_log, name='log')
     app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')

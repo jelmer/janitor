@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import aiohttp
+from datetime import datetime
 from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
@@ -119,6 +120,7 @@ def classify_result_code(result_code):
     return "failure"
 
 
+env.globals.update(utcnow=datetime.utcnow)
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(enumerate=enumerate)
