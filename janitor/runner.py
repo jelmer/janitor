@@ -309,7 +309,7 @@ class DebianBuilder(Builder):
         if queue_item.change_set:
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
         env = {
-            "EXTRA_REPOSITORIES": ":".join(
+            "EXTRA_REPOSITORIES": "|".join(
                 [
                     "deb %s %s main" % (apt_location, suite)
                     for suite in extra_janitor_distributions
@@ -702,6 +702,9 @@ class Backchannel(object):
     async def get_log_file(self, name):
         raise NotImplementedError(self.get_log_file)
 
+    async def ping(self, log_id):
+        raise NotImplementedError(self.ping)
+
     def json(self):
         return {}
 
@@ -783,8 +786,10 @@ class ActiveRun(object):
     def from_json(cls, js):
         if 'jenkins' in js['backchannel']:
             backchannel = JenkinsBackchannel.from_json(js['backchannel'])
-        else:
+        elif 'my_url' in js['backchannel']:
             backchannel = PollingBackchannel.from_json(js['backchannel'])
+        else:
+            backchannel = Backchannel()
         return cls(
             campaign=js['campaign'],
             start_time=datetime.fromisoformat(js['start_time']),
@@ -1463,6 +1468,14 @@ class QueueProcessor(object):
                             'last-keepalive', active_run.log_id,
                             datetime.utcnow().isoformat())
                         keepalive_age = timedelta(seconds=0)
+                except NotImplementedError:
+                    if keepalive_age > timedelta(days=1):
+                        try:
+                            await self.abort_run(
+                                active_run, 'run-disappeared', "no support for ping")
+                        except RunExists:
+                            logging.warning('Run not properly cleaned up?')
+                        continue
                 except ActiveRunDisappeared as e:
                     if keepalive_age > timedelta(minutes=self.run_timeout):
                         try:
