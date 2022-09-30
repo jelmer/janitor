@@ -123,10 +123,10 @@ WHERE queue.id = $1
             return QueueItem.from_row(row)
         return None
 
-    async def next_queue_item(self, package: Optional[str] = None,
-                              campaign: Optional[str] = None,
-                              exclude_hosts: Optional[Set[str]] = None,
-                              assigned_queue_items: Optional[Set[int]] = None):
+    async def next_item(self, package: Optional[str] = None,
+                        campaign: Optional[str] = None,
+                        exclude_hosts: Optional[Set[str]] = None,
+                        assigned_queue_items: Optional[Set[int]] = None):
         query = """
 SELECT
     queue.package AS package,
@@ -149,7 +149,7 @@ LEFT JOIN package ON package.name = queue.package
         args: List[Any] = []
         if assigned_queue_items:
             args.append(assigned_queue_items)
-            conditions.append("queue.id != ANY($%d::int[])" % len(args))
+            conditions.append("NOT (queue.id = ANY($%d::int[]))" % len(args))
         if package:
             args.append(package)
             conditions.append("queue.package = $%d" % len(args))
@@ -160,8 +160,8 @@ LEFT JOIN package ON package.name = queue.package
             args.append(exclude_hosts)
             # TODO(jelmer): Use package.hostname when kali upgrades to postgres 12+
             conditions.append(
-                "(package.branch_url IS NULL OR "
-                "SUBSTRING(package.branch_url from '.*://(?:[^/@]*@)?([^/]*)') != ANY($%d::text[])")
+                "NOT (package.branch_url IS NOT NULL AND "
+                "SUBSTRING(package.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
