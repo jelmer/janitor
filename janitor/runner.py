@@ -1464,15 +1464,7 @@ class QueueProcessor(object):
 
     KEEPALIVE_INTERVAL = 10
 
-    async def _healthcheck_active_run(self, active_run):
-        lk = await self.redis.hget('last-keepalive', active_run.log_id)
-        if lk:
-            last_keepalive = datetime.fromisoformat(lk.decode('utf-8'))
-        else:
-            last_keepalive = active_run.start_time
-        keepalive_age = datetime.utcnow() - last_keepalive
-        if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
-            return
+    async def _healthcheck_active_run(self, active_run, keepalive_age):
         try:
             if await active_run.ping():
                 await self.redis.hset(
@@ -1515,14 +1507,24 @@ class QueueProcessor(object):
             for serialized in (await self.redis.hgetall('active-runs')).values():
                 js = json.loads(serialized)
                 active_run = ActiveRun.from_json(js)
-                tasks.append(self._healthcheck_active_run(active_run))
-            done, _ = await asyncio.wait(tasks)
-            for task in done:
-                try:
-                    await task
-                except Exception as e:
-                    logging.exception(
-                        'Failed to healthcheck %s: %r', active_run.log_id, e)
+                lk = await self.redis.hget('last-keepalive', active_run.log_id)
+                if lk:
+                    last_keepalive = datetime.fromisoformat(lk.decode('utf-8'))
+                else:
+                    last_keepalive = active_run.start_time
+                keepalive_age = datetime.utcnow() - last_keepalive
+                if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
+                    continue
+                tasks.append(self._healthcheck_active_run(
+                    active_run, keepalive_age))
+            if tasks:
+                done, _ = await asyncio.wait(tasks)
+                for task in done:
+                    try:
+                        await task
+                    except Exception as e:
+                        logging.exception(
+                            'Failed to healthcheck %s: %r', active_run.log_id, e)
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
     async def _rate_limit_hosts(self):
