@@ -215,13 +215,14 @@ class GenericBuilder(Builder):
 
     result_cls = GenericResult
 
-    def __init__(self):
-        pass
+    def __init__(self, dep_server_url):
+        self.dep_server_url = dep_server_url
 
     async def config(self, conn, campaign_config, queue_item):
         config = {}
         if campaign_config.generic_build.chroot:
             config["chroot"] = campaign_config.generic_build.chroot
+        config["dep_server_url"] = self.dep_server_url
         return config
 
     async def build_env(self, conn, campaign_config, queue_item):
@@ -312,9 +313,10 @@ class DebianBuilder(Builder):
 
     result_cls = DebianResult
 
-    def __init__(self, distro_config, apt_location):
+    def __init__(self, distro_config, apt_location, dep_server_url):
         self.distro_config = distro_config
         self.apt_location = apt_location
+        self.dep_server_url = dep_server_url
 
     async def config(self, conn, campaign_config, queue_item):
         config = {}
@@ -368,6 +370,7 @@ class DebianBuilder(Builder):
             " ".join(self.distro_config.component),
         )
         config["base-apt-repository-signed-by"] = self.distro_config.signed_by
+        config["dep_server_url"] = self.dep_server_url
 
         return config
 
@@ -395,16 +398,17 @@ BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
 RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 
-def get_builder(config, campaign_config):
+def get_builder(config, campaign_config, dep_server_url=None):
     if campaign_config.HasField('debian_build'):
         distribution = get_distribution(
             config, campaign_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
             config.apt_location
+            dep_server_url,
         )
     elif campaign_config.HasField('generic_build'):
-        return GenericBuilder()
+        return GenericBuilder(dep_server_url)
     else:
         raise NotImplementedError('no supported build type')
 
@@ -1436,7 +1440,8 @@ class QueueProcessor(object):
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
         backup_logfile_manager: Optional[LogFileManager] = None,
-        avoid_hosts: Optional[Set[str]] = None
+        avoid_hosts: Optional[Set[str]] = None,
+        dep_server_url: Optional[str] = None,
     ):
         """Create a queue processor.
         """
@@ -1454,6 +1459,7 @@ class QueueProcessor(object):
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
         self.run_timeout = run_timeout
+        self.dep_server_url = dep_server_url
         self.avoid_hosts = avoid_hosts or set()
         self._watch_dog = None
 
@@ -1910,7 +1916,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 continue
 
         # This is simple for now, since we only support one distribution.
-        builder = get_builder(queue_processor.config, campaign_config)
+        builder = get_builder(
+            queue_processor.config, campaign_config,
+            queue_processor.dep_server_url)
 
         with span.new_child('build-env'):
             build_env = await builder.build_env(conn, campaign_config, item)
@@ -2041,8 +2049,12 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
     extra_env, command = splitout_env(item.command)
     env.update(extra_env)
 
-    additional_colocated_branches = await to_thread(
-        builder.additional_colocated_branches, main_branch)
+    if main_branch is not None:
+        additional_colocated_branches = await to_thread(
+            builder.additional_colocated_branches, main_branch)
+    else:
+        # Maybe it's safer to just abort in this case?
+        additional_colocated_branches = None
 
     assignment = {
         "id": active_run.log_id,
@@ -2250,6 +2262,7 @@ async def main(argv=None):
         "--public-vcs-location", type=str, default="https://janitor.debian.net/",
         help="Public vcs location (used for URLs handed to worker)"
     )
+    parser.add_argument("--public-dep-server-url", type=str, None)
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
@@ -2344,6 +2357,7 @@ async def main(argv=None):
             backup_artifact_manager=backup_artifact_manager,
             backup_logfile_manager=backup_logfile_manager,
             avoid_hosts=set(args.avoid_host),
+            dep_server_url=args.public_dep_server_url,
         )
 
         queue_processor.start_watchdog()
