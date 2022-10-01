@@ -1,23 +1,25 @@
 {% extends "plain-layout.html" %}
-{% block page_title %}Contact{% endblock page_title %}
+{% block page_title %}
+    Contact
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="janitor">
-<h1>Janitor Instance</h1>
-<p>The janitor is a project to automatically make changes to Debian
-packages.</p>
-
-<p>This is a minimal website for a Janitor instance. </p>
-
-<h2>Campaigns</h2>
-
-<ul>
-  {% for campaign in suites %}
-  <li><a href="{{ campaign.name }}">{{ campaign.name }}</a></li>
-  {% endfor %}
-</ul>
-
-</div>
-
-<p>For janitor internal status details, see the <a href="cupboard">cupboard</a>.</p>
-
+    <div class="section" id="janitor">
+        <h1>Janitor Instance</h1>
+        <p>
+            The janitor is a project to automatically make changes to Debian
+            packages.
+        </p>
+        <p>This is a minimal website for a Janitor instance.</p>
+        <h2>Campaigns</h2>
+        <ul>
+            {% for campaign in suites %}
+                <li>
+                    <a href="{{ campaign.name }}">{{ campaign.name }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <p>
+        For janitor internal status details, see the <a href="cupboard">cupboard</a>.
+    </p>
 {% endblock body %}

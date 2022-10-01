@@ -1,38 +1,49 @@
 {% extends "layout.html" %}
-{% block page_title %}About{% endblock page_title %}
+{% block page_title %}
+    About
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="about">
-<h1>About</h1>
-<p>The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.</p>
-
-<p>The code for the Debian-specific instance has now been split out into a <a
-href="https://salsa.debian.org/jelmer/janitor.debian.net/">separate
-repository</a>.</p>
-
-<p>Many thanks to everybody who has provided feedback and helped make the Janitor better. </p>
-
-<h2>Source Code</h2>
-
-<p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
-
-<ul>
-    <li><a href="https://salsa.debian.org/python-debian-team/python-debian">python-debian</a> for parsing of Debian-related files</li>
-    <li>The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.</li>
-    <li><a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
- provides abstractions over the version control system (Git, Bazaar,
-Mercurial, Subversion) and the supported hosting platforms (GitHub,
-GitLab, Launchpad).</li>
-    <li><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
- ties this all together; it manages branches, invokes codemods and pushes back or creates
-merge proposals.</li>
-    <li><a class="reference external" href="https://www.diffoscope.org/">Diffoscope</a> is used to show the diff between binary packages.</li>
-</ul>
-
-<p>The source code is hosted <a href="https://github.com/jelmer/janitor">on GitHub</a>.</p>
-
-<h2>Bugs</h2>
-
-<p>Please report bugs in the <a href="https://github.com/jelmer/janitor/issues/new">bug tracker</a>.</p>
-
+    <div class="section" id="about">
+        <h1>About</h1>
+        <p>
+            The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.
+        </p>
+        <p>
+            The code for the Debian-specific instance has now been split out into a <a href="https://salsa.debian.org/jelmer/janitor.debian.net/">separate
+        repository</a>.
+    </p>
+    <p>Many thanks to everybody who has provided feedback and helped make the Janitor better.</p>
+    <h2>Source Code</h2>
+    <p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
+    <ul>
+        <li>
+            <a href="https://salsa.debian.org/python-debian-team/python-debian">python-debian</a> for parsing of Debian-related files
+        </li>
+        <li>
+            The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.
+        </li>
+        <li>
+            <a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
+            provides abstractions over the version control system (Git, Bazaar,
+            Mercurial, Subversion) and the supported hosting platforms (GitHub,
+            GitLab, Launchpad).
+        </li>
+        <li>
+            <a class="reference external"
+               href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
+            ties this all together; it manages branches, invokes codemods and pushes back or creates
+            merge proposals.
+        </li>
+        <li>
+            <a class="reference external" href="https://www.diffoscope.org/">Diffoscope</a> is used to show the diff between binary packages.
+        </li>
+    </ul>
+    <p>
+        The source code is hosted <a href="https://github.com/jelmer/janitor">on GitHub</a>.
+    </p>
+    <h2>Bugs</h2>
+    <p>
+        Please report bugs in the <a href="https://github.com/jelmer/janitor/issues/new">bug tracker</a>.
+    </p>
 </div>
 {% endblock body %}
