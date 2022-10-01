@@ -518,7 +518,7 @@ def process_package(
     roles = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
     roles[main_branch.name] = 'main'   # type: ignore
 
-    directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rsplit('/')[-1]
+    directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rstrip('/').rsplit('/')[-1]
 
     with ExitStack() as es:
         ws = Workspace(
