@@ -1,15 +1,16 @@
 {% extends "layout.html" %}
-{% block page_title %}Repository List - {{ vcs }}{% endblock page_title %}
+{% block page_title %}
+    Repository List - {{ vcs }}
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="repo-list">
-<h1>Repository List - {{ vcs }}</h1>
-
-<ul>
-{% for repo in repositories %}
-<li><a href="{{ repo }}">{{ repo }}</a></li>
-{% endfor %}
-</ul>
-
-</div>
-
+    <div class="section" id="repo-list">
+        <h1>Repository List - {{ vcs }}</h1>
+        <ul>
+            {% for repo in repositories %}
+                <li>
+                    <a href="{{ repo }}">{{ repo }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
 {% endblock body %}

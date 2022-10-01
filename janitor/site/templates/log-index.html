@@ -1,12 +1,16 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html lang="en">
-    <head><title>Log file index</title></head>
+    <head>
+        <title>Log file index</title>
+    </head>
     <body>
-
-<ul>
-    {% for entry in contents %}
-    <li><a href="{{ entry }}">{{ entry }}</a></li>
-    {% endfor %}
-</ul>
-
+        <ul>
+            {% for entry in contents %}
+                <li>
+                    <a href="{{ entry }}">{{ entry }}</a>
+                </li>
+            {% endfor %}
+        </ul>
     </body>
 </html>

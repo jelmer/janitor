@@ -1,326 +1,415 @@
 {% macro local_command(command, command_package, package, vcs, vcs_url) %}
-{% if command %}
-<p>Try this locally {% if command_package %}(using the <a href="https://packages.debian.org/{{ command_package }}">{{ command_package }}</a> {% endif %}package):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
+    {% if command %}
+        <p>
+            Try this locally
+            {% if command_package %}
+                (using the <a href="https://packages.debian.org/{{ command_package }}">{{ command_package }}</a>
+            {% endif %}
+            package):
+        </p>
+        <div class="highlight-default notranslate">
+            <div class="highlight">
+                <pre>
 debcheckout {{ package }}
 cd {{ package }}
 {{ command }}
 </pre>
-</div>
-</div>
-{% endif %}
+            </div>
+        </div>
+    {% endif %}
 {% endmacro %}
-
 {% macro merge_command(package, suite, result_branches, vcs) %}
-{% if vcs == 'git' %}
-<p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight">
-{% for role, remote_name, base_revision, revision in result_branches %}
-<pre>git pull <a href="{{ git_vcs_manager.get_repository_url(package) }}">{{ git_vcs_manager.get_repository_url(package) }}</a> {{ suite }}/{{ role }}</pre>
-{% endfor %}
-</div></div>
-{% elif vcs == 'bzr' %}
-<p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ bzr_vcs_manager.get_branch_url(package, suite) }}</pre></div></div>
-{% else %}
-<!-- Unknown vcs: {{ vcs }} -->
-{% endif %}
+    {% if vcs == 'git' %}
+        <p>Merge these changes:</p>
+        <div class="highlight-default notranslate">
+            <div class="highlight">
+                {% for role, remote_name, base_revision, revision in result_branches %}
+                    <pre>git pull <a href="{{ git_vcs_manager.get_repository_url(package) }}">{{ git_vcs_manager.get_repository_url(package) }}</a> {{ suite }}/{{ role }}</pre>
+                {% endfor %}
+            </div>
+        </div>
+    {% elif vcs == 'bzr' %}
+        <p>Merge these changes:</p>
+        <div class="highlight-default notranslate">
+            <div class="highlight">
+                <pre>brz merge {{ bzr_vcs_manager.get_branch_url(package, suite) }}</pre>
+            </div>
+        </div>
+    {% else %}
+        <!-- Unknown vcs: {{ vcs }} -->
+    {% endif %}
 {% endmacro %}
-
 {% macro file_bug_buttons(bugtrackers, run_id, result_code, verbatim_id=None, accesskey="b") %}
-{% for bugtracker in bugtrackers %}
-{{ file_bug_button(bugtracker, run_id, result_code, verbatim_id=verbatim_id, accesskey=accesskey) }}
-{% endfor %}
+    {% for bugtracker in bugtrackers %}
+        {{ file_bug_button(bugtracker, run_id, result_code, verbatim_id=verbatim_id, accesskey=accesskey) }}
+    {% endfor %}
 {% endmacro %}
-
 {% macro file_bug_button(bugtracker, run_id, result_code, verbatim_id=None, accesskey="b") %}
-{% if bugtracker.kind == config_pb2.gitlab %}
-<form id="bugform" action="{{ bugtracker.url }}/-/issues/new" method="get" style="display: contents;">
-<input type="hidden" name="issue[issue_type]" value="issue"/>
-<input type="hidden" name="issue[title]" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
-<input type="hidden" id="issue_description" name="issue[description]" value="{%- filter escape -%}
-See run [{{ run_id }}]({{ url }}).
-
-{%- endfilter -%}"/>
-<button id="filebug"{%- if accesskey -%} accesskey="{{ accesskey }}"{%- endif -%}>File a Bug against {{ bugtracker.name }}</button>
-</form>
-
-{% if verbatim_id %}
-<script>
-window.bugform.onsubmit = function(e) {
-    var contents = $("#issue_description").attr("value");
-    contents += "\n\n```\n";
-    $("{{ verbatim_id }}").children('span').each(function(i, l) {
-        contents += l.innerText + '\n';
-    });
-    contents += "```\n";
-    $("#issue_description").attr("value", contents);
-    return true;
-};
-</script>
-{% endif %}
-
-{% elif bugtracker.kind == config_pb2.debian %}
-
-<!-- TODO: nit: Extract domain from URL rather than hardcoding -->
-<form id="bugform" action="mailto:new@bugs.debian.org" method="get" style="display: contents;">
-<input type="hidden" name="subject" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
-<input type="hidden" name="body" value="{%- filter escape -%}
-See run [{{ run_id }}]({{ url }}).
-
-{%- endfilter -%}"/>
-<button {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
-</form>
-
-{% else %}
-<!-- unknown bugtracker kind {{ bugtracker.kind }} -->
-{% endif %}
-
+    {% if bugtracker.kind == config_pb2.gitlab %}
+        <form id="bugform"
+              action="{{ bugtracker.url }}/-/issues/new"
+              method="get"
+              style="display: contents;">
+            <input type="hidden" name="issue[issue_type]" value="issue"/>
+            <input type="hidden"
+                   name="issue[title]"
+                   value="{{ (result_code + ": " + (description or ''))|escape }}"/>
+            <input type="hidden"
+                   id="issue_description"
+                   name="issue[description]"
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
+            <button id="filebug"
+                    {%- if accesskey -%}
+                    accesskey="{{ accesskey }}"
+                    {%- endif -%}>
+                File a Bug against {{ bugtracker.name }}
+            </button>
+        </form>
+        {% if verbatim_id %}
+            <script>
+                window.bugform.onsubmit = function(e) {
+                    var contents = $("#issue_description").attr("value");
+                    contents += "\n\n```\n";
+                    $("{{ verbatim_id }}").children('span').each(function(i, l) {
+                        contents += l.innerText + '\n';
+                    });
+                    contents += "```\n";
+                    $("#issue_description").attr("value", contents);
+                    return true;
+                };
+            </script>
+        {% endif %}
+    {% elif bugtracker.kind == config_pb2.debian %}
+        <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
+        <form id="bugform"
+              action="mailto:new@bugs.debian.org"
+              method="get"
+              style="display: contents;">
+            <input type="hidden"
+                   name="subject"
+                   value="{{ (result_code + ": " + (description or ''))|escape }}"/>
+            <input type="hidden"
+                   name="body"
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
+            <button {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
+        </form>
+    {% else %}
+        <!-- unknown bugtracker kind {{ bugtracker.kind }} -->
+    {% endif %}
 {% endmacro %}
-
 {% macro reprocess_logs_button(run_id, title="Reprocess logs", id="reprocess-logs", accesskey="l") %}
-<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
-
-<script>
-$(function() {
-  $("#{{ id }}").click(function() {
-      $.post('/api/run/{{ run_id }}/reprocess-logs', {}, function(data) {
-      if (data['changed']) {
-          $("#{{ id }}").replaceWith("<span>Logs reprocessed and analysis updated.</span>");
-      } else {
-          $("#{{ id }}").replaceWith("<span>Logs reprocessed but no changes made.</span>");
-      }
-    }, 'json')
-    .fail(function(response) {
-      $("#{{ id }}").replaceWith("<span>Failed to reprocess logs: " + response.responseText + "</span>");
-    });
-  });
-});
-</script>
-
+    <button id="{{ id }}"
+            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+    <script>
+        $(function() {
+            $("#{{ id }}").click(function() {
+                $.post('/api/run/{{ run_id }}/reprocess-logs', {}, function(data) {
+                        if (data['changed']) {
+                            $("#{{ id }}").replaceWith("<span>Logs reprocessed and analysis updated.</span>");
+                        } else {
+                            $("#{{ id }}").replaceWith("<span>Logs reprocessed but no changes made.</span>");
+                        }
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ id }}").replaceWith("<span>Failed to reprocess logs: " + response.responseText + "</span>");
+                    });
+            });
+        });
+    </script>
 {% endmacro %}
-
 {% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}, accesskey="s") %}
-<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
-
-<script>
-$(function() {
-  $("#{{ id }}").click(function() {
-    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ data|tojson }}, function(data) {
-      console.log('Scheduled: ' + data.offset);
-      $("#{{ id }}").replaceWith("<span>Scheduled new run at position " + data.queue_position + ".</span>");
-      $('.queue-position.{{ package }}').replaceWith('<a href="/cupboard/queue">Queue</a> position: ' + data.queue_position);
-      $('.queue-position.{{ package }}').attr('style', '')
-    }, 'json')
-    .fail(function(response) {
-      $("#{{ id }}").replaceWith("<span>Failed to schedule new run: " + response.responseText + "</span>");
-    });
-  });
-});
-</script>
+    <button id="{{ id }}"
+            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+    <script>
+        $(function() {
+            $("#{{ id }}").click(function() {
+                $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {
+                        {
+                            data | tojson
+                        }
+                    }, function(data) {
+                        console.log('Scheduled: ' + data.offset);
+                        $("#{{ id }}").replaceWith("<span>Scheduled new run at position " + data.queue_position + ".</span>");
+                        $('.queue-position.{{ package }}').replaceWith('<a href="/cupboard/queue">Queue</a> position: ' + data.queue_position);
+                        $('.queue-position.{{ package }}').attr('style', '')
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ id }}").replaceWith("<span>Failed to schedule new run: " + response.responseText + "</span>");
+                    });
+            });
+        });
+    </script>
 {% endmacro %}
-
 {% macro schedule_control_button(run_id, title="Schedule control run", id='schedule-control', data={}, accesskey="c") %}
-<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
-
-<script>
-$(function() {
-  $("#{{ id }}").click(function() {
-    $.post('/api/run/{{ run_id }}/schedule-control', {{ data|tojson }}, function(data) {
-      console.log('Scheduled: ' + data.offset);
-      $("#{{ id }}").replaceWith("<span>Scheduled control run at position " + data.queue_position + ".</span>");
-    }, 'json')
-    .fail(function(response) {
-      $("#{{ id }}").replaceWith("<span>Failed to schedule control run: " + response.responseText + "</span>");
-    });
-  });
-});
-</script>
+    <button id="{{ id }}"
+            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+    <script>
+        $(function() {
+            $("#{{ id }}").click(function() {
+                $.post('/api/run/{{ run_id }}/schedule-control', {
+                        {
+                            data | tojson
+                        }
+                    }, function(data) {
+                        console.log('Scheduled: ' + data.offset);
+                        $("#{{ id }}").replaceWith("<span>Scheduled control run at position " + data.queue_position + ".</span>");
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ id }}").replaceWith("<span>Failed to schedule control run: " + response.responseText + "</span>");
+                    });
+            });
+        });
+    </script>
 {% endmacro %}
-
 {% macro publish_buttons(campaign, package, id_suffix='', accesskey='p') %}
-{% set propose_id="propose" + id_suffix %}
-{% set fork_id="push-derived" + id_suffix  %}
-{% set push_id="push" + id_suffix  %}
-{% set publish_id="publish" + id_suffix  %}
-<button id="{{ publish_id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>Publish now</button> {% if is_admin %} <button id="{{ fork_id }}">Create fork with changes</button><button id="{{ push_id }}">Push</button> <button id="{{ propose_id }}">Create merge proposal</button>{% endif %}
-
-<script>
-$(function() {
-$("#{{ publish_id }}").click(function() {
-    $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {}, function(data) {
-    if (data) {
-        $("#{{ publish_id }}").replaceWith("<span>Publishing...</span>");
-    }
-    }, 'json')
-    .fail(function(response) {
-       $("#{{ publish_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
-    });
-  });
-
-{% if is_admin %}
-$("#{{ propose_id }}").click(function() {
-    $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
-    if (data) {
-        $("#{{ propose_id }}").replaceWith("<span>Publishing merge proposal...</span>");
-    }
-    }, 'json')
-    .fail(function(response) {
-       $("#{{ propose_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
-    });
-  });
-
- $("#{{ fork_id }}").click(function() {
-    $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {'mode': 'push-derived'}, function(data) {
-        $("#{{ fork_id }}").replaceWith("<span>Creating fork.</span>");
-    }, 'json')
-    .fail(function(response) {
-       $("#{{ fork_id }}").replaceWith("<span>Failed: " + response.responseText + "</span>");
-    });
-  });
-
- $("#{{ push_id }}").click(function() {
-    $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {'mode': 'push'}, function(data) {
-        $("#{{ push_id }}").replaceWith("<span>Pushing.</span>");
-    }, 'json')
-    .fail(function(response) {
-       $("#{{ push_id }}").replaceWith("<span>Failed: " + response.responseText + "</span>");
-    });
-  });
-{% endif %}
-});
-</script>
+    {% set propose_id="propose" + id_suffix %}
+    {% set fork_id="push-derived" + id_suffix %}
+    {% set push_id="push" + id_suffix %}
+    {% set publish_id="publish" + id_suffix %}
+    <button id="{{ publish_id }}"
+            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>Publish now</button>
+    {% if is_admin %}
+        <button id="{{ fork_id }}">Create fork with changes</button>
+        <button id="{{ push_id }}">Push</button>
+        <button id="{{ propose_id }}">Create merge proposal</button>
+    {% endif %}
+    <script>
+        $(function() {
+            $("#{{ publish_id }}").click(function() {
+                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {}, function(data) {
+                        if (data) {
+                            $("#{{ publish_id }}").replaceWith("<span>Publishing...</span>");
+                        }
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ publish_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
+                    });
+            });
+        
+            {
+                %
+                if is_admin %
+            }
+            $("#{{ propose_id }}").click(function() {
+                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                        'mode': 'propose'
+                    }, function(data) {
+                        if (data) {
+                            $("#{{ propose_id }}").replaceWith("<span>Publishing merge proposal...</span>");
+                        }
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ propose_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
+                    });
+            });
+        
+            $("#{{ fork_id }}").click(function() {
+                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                        'mode': 'push-derived'
+                    }, function(data) {
+                        $("#{{ fork_id }}").replaceWith("<span>Creating fork.</span>");
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ fork_id }}").replaceWith("<span>Failed: " + response.responseText + "</span>");
+                    });
+            });
+        
+            $("#{{ push_id }}").click(function() {
+                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                        'mode': 'push'
+                    }, function(data) {
+                        $("#{{ push_id }}").replaceWith("<span>Pushing.</span>");
+                    }, 'json')
+                    .fail(function(response) {
+                        $("#{{ push_id }}").replaceWith("<span>Failed: " + response.responseText + "</span>");
+                    });
+            }); {
+                %
+                endif %
+            }
+        });
+    </script>
 {% endmacro %}
-
 {% macro install_commands(binary_packages, distribution) %}
-{% if binary_packages %}
-<p>The resulting binary packages can be installed (if you have the <a class="reference external" href="/{{ distribution }}">apt repository</a> enabled) by running one of:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-{% for binary_package in binary_packages %}apt install -t {{ distribution }} {{ binary_package }}
-{% endfor %}</pre></div></div>
-{% endif %}
+    {% if binary_packages %}
+        <p>
+            The resulting binary packages can be installed (if you have the <a class="reference external" href="/{{ distribution }}">apt repository</a> enabled) by running one of:
+        </p>
+        <div class="highlight-default notranslate">
+            <div class="highlight">
+                <pre>
+{% for binary_package in binary_packages %}apt install -t {{ distribution }} {{ binary_package }}{% endfor %}</pre>
+            </div>
+        </div>
+    {% endif %}
 {% endmacro %}
-
 {% macro display_result_code(result_code) %}
-<span class="result-code-{{ classify_result_code(result_code) }}">{{ result_code }}</span>
+    <span class="result-code-{{ classify_result_code(result_code) }}">{{ result_code }}</span>
 {%- endmacro -%}
-
 {% macro result_code_explanation(result_code, run=None) %}
-{% if result_code %}
-<blockquote class="result-code-explanation">
-{% include ("result-codes/" + result_code + ".html") ignore missing %}
-</blockquote>
-{% endif %}
+    {% if result_code %}
+        <blockquote class="result-code-explanation">
+            {% include ("result-codes/" + result_code + ".html") ignore missing %}
+        </blockquote>
+    {% endif %}
 {% endmacro %}
-
 {% macro display_branch_url(vcs_browse, vcs_url, vcswatch_version=None) %}
-{% if vcs_browse %}
-<a href="{{ vcs_browse }}">{{ vcs_url }}</a>
-{% else %}
-<a href="{{ vcs_url }}">{{ vcs_url }}</a>
-{% endif %}
-{% if vcswatch_version %}
-(taken from version <b>{{ vcswatch_version }}</b>)
-{% endif %}
+    {% if vcs_browse %}
+        <a href="{{ vcs_browse }}">{{ vcs_url }}</a>
+    {% else %}
+        <a href="{{ vcs_url }}">{{ vcs_url }}</a>
+    {% endif %}
+    {% if vcswatch_version %}(taken from version <b>{{ vcswatch_version }}</b>){% endif %}
 {% endmacro %}
-
 {% macro display_upstream_branch_url(result) %}
-{% if result.get('upstream_branch_browse') %}<a href="{{ result['upstream_branch_browse'] }}">{{ result['upstream_branch_url'] }}</a>{% else %}{{ result['upstream_branch_url'] }}{% endif %}
+    {% if result.get('upstream_branch_browse') %}
+        <a href="{{ result['upstream_branch_browse'] }}">{{ result['upstream_branch_url'] }}</a>
+    {% else %}
+        {{ result['upstream_branch_url'] }}
+    {% endif %}
 {% endmacro %}
-
 {% macro display_maintainer_email(maintainer_email) %}
-<a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
+    <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
 {% endmacro %}
-
 {% macro display_publish_result_code(code) %}
-{% if code == 'success' %}<span class="publish-success">{{ code }}</span>
-{% elif code == 'nothing-to-do' %}<span class="publish-nothing-to-do">{{ code }}</span>
-{% elif code in ('differ-unreachable') %}<span class="publish-transient">{{ code }}</span>
-{% elif code in ('missing-build-diff-control') %}<span class="publish-missing">{{ code }}</span>
-{% elif code in ('publisher-invalid-response') %}<span class="publish-bug">{{ code }}</span>
-{% else %}<span class="publish-failure">{{ code }}</span>
-{% endif %}
+    {% if code == 'success' %}
+        <span class="publish-success">{{ code }}</span>
+    {% elif code == 'nothing-to-do' %}
+        <span class="publish-nothing-to-do">{{ code }}</span>
+    {% elif code in ('differ-unreachable') %}
+        <span class="publish-transient">{{ code }}</span>
+    {% elif code in ('missing-build-diff-control') %}
+        <span class="publish-missing">{{ code }}</span>
+    {% elif code in ('publisher-invalid-response') %}
+        <span class="publish-bug">{{ code }}</span>
+    {% else %}
+        <span class="publish-failure">{{ code }}</span>
+    {% endif %}
 {% endmacro %}
-
 {% macro display_publish_result(mode, code, description, mp_url) %}
-{% if mode == 'push' %}
- {% if code == 'success' %}Successfully pushed
- {% else %}Failed to push: <span class="publish-failure">{{ code }}</span>
- {% endif %}
-{% elif mode == 'propose' %}
- {% if code == 'success' %}{% if mp_url %}<a href="{{ mp_url }}">Merge proposal</a> updated{% else %}Changes not significant enough for merge request.{% endif %}
- {% else %}Failed to create merge proposal: <span class="publish-failure">{{ code }}</span>
- {% endif %}
-{% endif %}
-({% if '\n' in description %}<pre>{{ description }}</pre>{% else %}{{ description }}{% endif %})
+    {% if mode == 'push' %}
+        {% if code == 'success' %}
+            Successfully pushed
+        {% else %}
+            Failed to push: <span class="publish-failure">{{ code }}</span>
+        {% endif %}
+    {% elif mode == 'propose' %}
+        {% if code == 'success' %}
+            {% if mp_url %}
+                <a href="{{ mp_url }}">Merge proposal</a> updated
+            {% else %}
+                Changes not significant enough for merge request.
+            {% endif %}
+        {% else %}
+            Failed to create merge proposal: <span class="publish-failure">{{ code }}</span>
+        {% endif %}
+    {% endif %}
+    (
+    {% if '\n' in description %}
+        <pre>{{ description }}</pre>
+    {% else %}
+        {{ description }}
+    {% endif %}
+    )
 {% endmacro %}
-
 {% macro describe_publish_policy(publish_policy) %}
-{% for pp in publish_policy %}{% if publish_policy|length > 1 %}{{ role }}: {% endif %}<b>{{ pp['mode'] }}{% if pp['frequency_days'] %} (every {{ pp['frequency_days'] }} days){% endif %}</b>{% if not loop.last %}, {% endif %}{% endfor %}
+    {% for pp in publish_policy %}
+        {% if publish_policy|length > 1 %}{{ role }}:{% endif %}
+        <b>{{ pp['mode'] }}
+            {% if pp['frequency_days'] %}(every {{ pp['frequency_days'] }} days){% endif %}
+        </b>
+        {% if not loop.last %},{% endif %}
+    {% endfor %}
 {% endmacro %}
-
 {% macro display_vcs_diffs(show_diff, branches, tags=None) %}
-{% if branches %}
-<h3>Diff</h3>
-
-{% for role, name, baserev, rev in branches %}
-{% if branches|length > 1 %}
-<h4>Branch: {{ role }}</h4>
-{% endif %}
-
-{% if tags %}
-{% for tagname, tagrev in tags %}
-{% if tagrev == rev %}
-Tag: {{ tagname }}
-{% endif %}
-{% endfor %}
-{% endif %}
-
-{% set diff = show_diff(role) %}
-
-{% if diff.split('\n')|length < 200 %}
-{{ highlight_diff(diff)|safe }}
-{% else %}
-<p>Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff?role={{ role }}">raw diff</a>.</p>
-{% endif %}
-
-{% endfor %}
-
-{% endif %}
-
+    {% if branches %}
+        <h3>
+            Diff
+        </h3>
+        {% for role, name, baserev, rev in branches %}
+            {% if branches|length > 1 %}
+                <h4>
+                    Branch: {{ role }}
+                </h4>
+            {% endif %}
+            {% if tags %}
+                {% for tagname, tagrev in tags %}
+                    {% if tagrev == rev %}Tag: {{ tagname }}{% endif %}
+                {% endfor %}
+            {% endif %}
+            {% set diff = show_diff(role) %}
+            {% if diff.split('\n')|length < 200 %}
+                {{ highlight_diff(diff)|safe }}
+            {% else %}
+                <p>
+                    Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff?role={{ role }}">raw diff</a>.
+                </p>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
 {% endmacro %}
-
 {% macro display_publish_blockers(blockers) %}
-<ul>
-{% for k, v in blockers.items() %}
-<li>{% if v.result %}☑{% else %}☒{% endif %}
-
-{% set r = v.result %}
-{% set d = v.details %}
-
-{% if k == 'removed' %}
-  {% if r %}package has not been removed from the archive{% else %}package has been removed from the archive{% endif %}
-{% elif k == 'qa_review' %}
-  {% if not d.needs_review and d.status == 'rejected' %}review not required but run was rejected
-  {% elif d.status == 'approved' %}run was approved
-  {% elif not d.needs_review %}review not required
-  {% else %}not yet reviewed, but review needed
-  {% endif %}
-{% elif k == 'backoff' %}
-  {{ d.attempt_count }} publish attempts so far.
-  {% if r %}not currently attempting to back off{% else %}next attempt after {{ d.next_try_time }}{% endif %}
-{% elif k == 'command' %}
-  {% if r %}command has not changed{% else %}command changed from <code>{{ d.actual }}</code> to <code>{{ d.correct }}</code>{% endif %}
-{% elif k == 'maintainer_propose_rate_limit' %}
-  {% if r %}proposals not currently being rate-limited for maintainer {{ d.maintainer }}{% else %}merge proposals for the package maintainer {{ d.maintainer }} are currently being rate-limited (open: {{ d.open }}, max open: {{ d.max_open }}){% endif %}
-{% elif k == 'success' %}
-  {% if r %}run was successful{% else %}run was not successful{% endif %}
-{% elif k == 'change_set' %}
-  {% if r %}change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}{% else %}change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}{% endif %}
-{% else %}
-{{ k }}
-{% endif %}
-</li>
-{% endfor %}
-</ul>
+    <ul>
+        {% for k, v in blockers.items() %}
+            <li>
+                {% if v.result %}
+                    ☑
+                {% else %}
+                    ☒
+                {% endif %}
+                {% set r = v.result %}
+                {% set d = v.details %}
+                {% if k == 'removed' %}
+                    {% if r %}
+                        package has not been removed from the archive
+                    {% else %}
+                        package has been removed from the archive
+                    {% endif %}
+                {% elif k == 'qa_review' %}
+                    {% if not d.needs_review and d.status == 'rejected' %}
+                        review not required but run was rejected
+                    {% elif d.status == 'approved' %}
+                        run was approved
+                    {% elif not d.needs_review %}
+                        review not required
+                    {% else %}
+                        not yet reviewed, but review needed
+                    {% endif %}
+                {% elif k == 'backoff' %}
+                    {{ d.attempt_count }} publish attempts so far.
+                    {% if r %}
+                        not currently attempting to back off
+                    {% else %}
+                        next attempt after {{ d.next_try_time }}
+                    {% endif %}
+                {% elif k == 'command' %}
+                    {% if r %}
+                        command has not changed
+                    {% else %}
+                        command changed from <code>{{ d.actual }}</code> to <code>{{ d.correct }}</code>
+                    {% endif %}
+                {% elif k == 'maintainer_propose_rate_limit' %}
+                    {% if r %}
+                        proposals not currently being rate-limited for maintainer {{ d.maintainer }}
+                    {% else %}
+                        merge proposals for the package maintainer {{ d.maintainer }} are currently being rate-limited (open: {{ d.open }}, max open: {{ d.max_open }})
+                    {% endif %}
+                {% elif k == 'success' %}
+                    {% if r %}
+                        run was successful
+                    {% else %}
+                        run was not successful
+                    {% endif %}
+                {% elif k == 'change_set' %}
+                    {% if r %}
+                        change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
+                    {% else %}
+                        change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
+                    {% endif %}
+                {% else %}
+                    {{ k }}
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
 {% endmacro %}

@@ -1,29 +1,32 @@
 {% extends "layout.html" %}
 {% from "run_util.html" import display_result_code %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
-{% block page_title %}Changeset List{% endblock page_title %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Changeset List
+{% endblock page_title %}
 {% block body %}
-<div class="section">
-
-<h1>Changeset {{ changeset.id }}</h1>
-
-<p>Status: <i>{{ changeset.state }}</i></p>
-
-<h2>Runs</h2>
-
-<ul>
-{% for run in runs %}
-<li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}</li>
-{% endfor %}
-</ul>
-
-<h2>Left to process</h2>
-
-<ul>
-{% for candidate in todo %}
-  <li><a class="/cupboard/pkg/{{ candidate.package }}">{{ candidate.package }}</a> / <a class="/{{ candidate.suite }}">{{ candidate.suite }}</a></li>
-{% endfor %}
-</ul>
-
-</div>
+    <div class="section">
+        <h1>Changeset {{ changeset.id }}</h1>
+        <p>
+            Status: <i>{{ changeset.state }}</i>
+        </p>
+        <h2>Runs</h2>
+        <ul>
+            {% for run in runs %}
+                <li>
+                    <a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}
+                </li>
+            {% endfor %}
+        </ul>
+        <h2>Left to process</h2>
+        <ul>
+            {% for candidate in todo %}
+                <li>
+                    <a class="/cupboard/pkg/{{ candidate.package }}">{{ candidate.package }}</a> / <a class="/{{ candidate.suite }}">{{ candidate.suite }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
 {% endblock body %}

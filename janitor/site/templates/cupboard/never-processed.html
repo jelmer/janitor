@@ -1,45 +1,63 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
-{% block page_title %}Never Processed packages{% if campaign %} - for {{ campaign }}{% endif %}{% endblock page_title %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Never Processed packages
+    {% if campaign %}- for {{ campaign }}{% endif %}
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="{{ code }}">
-<h1>never-processed</h1>
-{% if is_admin %}
-<form id="mass_reschedule" method="post" action="/api/mass-reschedule">
-    {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
-    <input type="hidden" name="result_code" value="never-processed"/>
-    <input type="submit" value="Reschedule Matching"/>
-</form>
-<script>
-window.mass_reschedule.onsubmit = function(e) {
-$('form').submit(function(e){
-    e.preventDefault();
-    $.post("/api/mass-reschedule", $('form').serializeArray(), function(receivedData){
-        alert('Rescheduled ' + receivedData);
-    });
-});
-};
-</script>
-{% endif %}
-
-<table id="never-processed-table" class="display docutils" border="1">
-<colgroup>
-<col width="21%"/>
-<col width="6%"/>
-</colgroup>
-<thead valign="bottom">
-<tr><th class="head">Package</th>
-<th class="head">campaign</th>
-</tr>
-</thead>
-<tbody valign="top">
-{% for package, campaign in never_processed %}
-<tr><td><a class="reference external" href="/cupboard/pkg/{{ package }}/">{{ package }}</a></td>
-<td><a href="/{{ campaign }}/pkg/{{ package }}">{{ campaign }}</a></td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-<script>$(document).ready(function() {$('#never-processed-table').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": []}); });</script>
-</div>
+    <div class="section" id="{{ code }}">
+        <h1>never-processed</h1>
+        {% if is_admin %}
+            <form id="mass_reschedule" method="post" action="/api/mass-reschedule">
+                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
+                <input type="hidden" name="result_code" value="never-processed"/>
+                <input type="submit" value="Reschedule Matching"/>
+            </form>
+            <script>
+                window.mass_reschedule.onsubmit = function(e) {
+                    $('form').submit(function(e) {
+                        e.preventDefault();
+                        $.post("/api/mass-reschedule", $('form').serializeArray(), function(receivedData) {
+                            alert('Rescheduled ' + receivedData);
+                        });
+                    });
+                };
+            </script>
+        {% endif %}
+        <table id="never-processed-table" class="display docutils" border="1">
+            <colgroup>
+                <col width="21%"/>
+                <col width="6%"/>
+            </colgroup>
+            <thead valign="bottom">
+                <tr>
+                    <th class="head">Package</th>
+                    <th class="head">campaign</th>
+                </tr>
+            </thead>
+            <tbody valign="top">
+                {% for package, campaign in never_processed %}
+                    <tr>
+                        <td>
+                            <a class="reference external" href="/cupboard/pkg/{{ package }}/">{{ package }}</a>
+                        </td>
+                        <td>
+                            <a href="/{{ campaign }}/pkg/{{ package }}">{{ campaign }}</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <script>
+            $(document).ready(function() {
+                $('#never-processed-table').DataTable({
+                    "pageLength": 200,
+                    "lengthMenu": [50, 200, 500, 1000, -1],
+                    "order": []
+                });
+            });
+        </script>
+    </div>
 {% endblock body %}
