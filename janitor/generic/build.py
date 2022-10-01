@@ -38,7 +38,7 @@ from ognibuild.buildsystem import (
 from ..worker import WorkerFailure
 
 
-def build(local_tree, subpath, output_directory, chroot=None):
+def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=None):
     if chroot:
         session = SchrootSession(chroot)
         logging.info('Using schroot %s', chroot)
@@ -46,7 +46,7 @@ def build(local_tree, subpath, output_directory, chroot=None):
         session = PlainSession()
     try:
         with session:
-            resolver = auto_resolver(session)
+            resolver = auto_resolver(session, dep_server_url=dep_server_url)
             fixers = [InstallFixer(resolver)]
             external_dir, internal_dir = session.setup_from_vcs(local_tree)
             bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
@@ -88,7 +88,10 @@ def build(local_tree, subpath, output_directory, chroot=None):
 
 def build_from_config(local_tree, subpath, output_directory, config, env):
     chroot = config.get("chroot")
-    return build(local_tree, subpath, output_directory, chroot=chroot)
+    dep_server_url = config.get("dep_server_url")
+    return build(
+        local_tree, subpath, output_directory, chroot=chroot,
+        dep_server_url=dep_server_url)
 
 
 def main():

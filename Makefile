@@ -52,7 +52,7 @@ djlint:
 	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
 
 typing:
-	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
+	mypy janitor
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
@@ -67,7 +67,7 @@ docker-%: core
 	buildah push ghcr.io/jelmer/janitor/$*:latest
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
-docker-all: docker-base docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-mastodon_notify docker-xmpp_notify docker-differ
+docker-all: docker-base docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-mastodon_notify docker-xmpp_notify docker-differ docker-ognibuild_dep
 
 reformat:: reformat-html
 
