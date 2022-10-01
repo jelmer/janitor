@@ -46,7 +46,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
           suffix=None, distribution=None, last_build_version=None,
           lintian_profile=None, lintian_suppress_tags=None, committer=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
-          update_changelog=None):
+          update_changelog=None, dep_server_url=None):
     if not local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
         raise WorkerFailure("not-debian-package", "Not a Debian package")
 
@@ -100,6 +100,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                             apt_repository=apt_repository,
                             apt_repository_key=apt_repository_key,
                             extra_repositories=extra_repositories,
+                            dep_server_url=dep_server_url,
                         )
                 except MissingUpstreamTarball:
                     raise WorkerFailure(
@@ -162,6 +163,7 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
     apt_repository = config.get('base-apt-repository')
     apt_repository_key = config.get('base-apt-repository-signed-by')
     extra_repositories = config.pop('build-extra-repositories', [])
+    dep_server_url = config.get('ognibuild-dep-server')
     committer = env.get("COMMITTER")
     uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
     if uc == "auto":
@@ -187,7 +189,8 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
         apt_repository=apt_repository,
         apt_repository_key=apt_repository_key,
         extra_repositories=extra_repositories,
-        update_changelog=update_changelog)
+        update_changelog=update_changelog,
+        dep_server_url=dep_server_url)
 
 
 def main():

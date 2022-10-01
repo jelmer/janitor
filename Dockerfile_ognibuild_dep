@@ -1,3 +1,9 @@
+FROM debian:sid-slim AS m4
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt -y update && apt -y --no-install-recommends install auto-apt-proxy aptitude apt-file && apt-file update && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
+
 FROM debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -59,19 +65,18 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	dpkg \
 	python3-semver \
 	gnome-pkg-tools \
-	python3-tr \
-	subversion \
 	python3-pcre \
 	&& apt clean \
 	&& pip3 install google-cloud-logging \
 	&& apt-file update
 
 RUN rm -rf /usr/share/aclocal
+COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 COPY --from=build /code /code
 
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate:/code/python-debian/lib
 ENV PATH="/code/breezy-debian/scripts:/code/lintian-brush/scripts:/code/debmutate/scripts:/code/breezy:${PATH}"
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ENV AUTOPKGTEST=/code/autopkgtest-wrapper
-EXPOSE 8080
-ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]
+EXPOSE 9934
+ENTRYPOINT ["python3", "-m", "ognibuild.dep_server", "--port=9934", "--listen-address=0.0.0.0"]

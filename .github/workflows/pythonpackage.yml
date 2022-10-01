@@ -41,7 +41,7 @@ jobs:
         make djlint
     - name: Typing checks
       run: |
-        python -m mypy janitor
+        make typing
     - name: Build
       run: |
         make all

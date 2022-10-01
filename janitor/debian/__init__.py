@@ -47,7 +47,7 @@ class InconsistentChangesFiles(Exception):
 
 def find_changes(path: str) -> Tuple[List[str], str, Version, str, List[str]]:
     names = []
-    source: str
+    source: Optional[str] = None
     version: Optional[Version] = None
     distribution: Optional[str] = None
     binary_packages: List[str] = []
@@ -75,6 +75,8 @@ def find_changes(path: str) -> Tuple[List[str], str, Version, str, List[str]]:
                  if entry['name'].endswith('.deb')])
     if not names:
         raise NoChangesFile(path)
+    if source is None:
+        raise InconsistentChangesFiles('Source not set')
     if version is None:
         raise InconsistentChangesFiles('Version not set')
     if distribution is None:
