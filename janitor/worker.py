@@ -515,7 +515,7 @@ def process_package(
     else:
         resume_branch = None
 
-    roles = {b: r for (r, b) in additional_colocated_branches.items()}
+    roles = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
     roles[main_branch.name] = 'main'   # type: ignore
 
     directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rsplit('/')[-1]
@@ -526,7 +526,7 @@ def process_package(
             resume_branch=resume_branch,
             cached_branch=cached_branch,
             path=os.path.join(output_directory, directory_name),
-            additional_colocated_branches=[b for (r, b) in additional_colocated_branches.items()],
+            additional_colocated_branches=[b for (r, b) in (additional_colocated_branches or {}).items()],
             resume_branch_additional_colocated_branches=(
                 [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
             ),
