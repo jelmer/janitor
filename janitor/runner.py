@@ -57,6 +57,7 @@ from breezy.transport import UnusableRedirect, UnsupportedProtocol
 
 from silver_platter.debian import (
     select_preferred_probers,
+    pick_additional_colocated_branches,
 )
 from silver_platter.proposal import (
     Forge,
@@ -181,6 +182,9 @@ class Builder(object):
             campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
         raise NotImplementedError(self.build_env)
 
+    def additional_colocated_branches(self, main_branch):
+        raise NotImplementedError(self.additional_colocated_branches)
+
 
 class GenericResult(BuilderResult):
     """Generic build result."""
@@ -221,6 +225,9 @@ class GenericBuilder(Builder):
         return config
 
     async def build_env(self, conn, campaign_config, queue_item):
+        return {}
+
+    def additional_colocated_branches(self, main_branch):
         return {}
 
 
@@ -379,6 +386,9 @@ class DebianBuilder(Builder):
             env["UPSTREAM_BRANCH_URL"] = upstream_branch_url
 
         return env
+
+    def additional_colocated_branches(self, main_branch):
+        return pick_additional_colocated_branches(main_branch)
 
 
 BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
@@ -2031,6 +2041,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
     extra_env, command = splitout_env(item.command)
     env.update(extra_env)
 
+    additional_colocated_branches = await to_thread(
+        builder.additional_colocated_branches, main_branch)
+
     assignment = {
         "id": active_run.log_id,
         "description": "%s on %s" % (item.campaign, item.package),
@@ -2040,6 +2053,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             "subpath": vcs_info['subpath'],
             "vcs_type": vcs_info['vcs_type'],
             "cached_url": cached_branch_url,
+            "additional_colocated_branches": additional_colocated_branches,
         },
         "resume": resume.json() if resume else None,
         "build": {
