@@ -41,8 +41,14 @@ suite-references:
 test:
 	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) python3 setup.py test
 
-style:
+style:: flake8
+
+flake8:
 	flake8
+
+style:: djlint
+
+djlint:
 	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
 
 typing:
@@ -63,5 +69,7 @@ docker-%: core
 
 docker-all: docker-base docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-mastodon_notify docker-xmpp_notify docker-differ
 
-reformat:
+reformat:: reformat-html
+
+reformat-html:
 	djlint --reformat --format-css --format-js janitor/site/templates/
