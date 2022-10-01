@@ -364,7 +364,7 @@ async def handle_run_redirect(request):
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
         raise web.HTTPermanentRedirect(
             location=request.app.router["cupboard-run"].url_for(
-                pkg=package, run_id=run_id)
+                pkg=package, run_id=run_id))
 
 
 @html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})

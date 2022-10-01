@@ -868,8 +868,8 @@ async def store_publish(
     change_set_id: str,
     package: str,
     branch_name: Optional[str],
-    main_branch_revision: bytes,
-    revision: bytes,
+    main_branch_revision: Optional[bytes],
+    revision: Optional[bytes],
     role: str,
     mode: str,
     result_code,
@@ -880,9 +880,9 @@ async def store_publish(
     requestor=None,
 ):
     if isinstance(revision, bytes):
-        revision = revision.decode("utf-8")
+        revision = revision.decode("utf-8")  # type: ignore
     if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode("utf-8")
+        main_branch_revision = main_branch_revision.decode("utf-8")  # type: ignore
     async with conn.transaction():
         if merge_proposal_url:
             await conn.execute(

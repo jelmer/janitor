@@ -404,7 +404,7 @@ def get_builder(config, campaign_config, dep_server_url=None):
             config, campaign_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
-            config.apt_location
+            config.apt_location,
             dep_server_url,
         )
     elif campaign_config.HasField('generic_build'):
@@ -2262,7 +2262,7 @@ async def main(argv=None):
         "--public-vcs-location", type=str, default="https://janitor.debian.net/",
         help="Public vcs location (used for URLs handed to worker)"
     )
-    parser.add_argument("--public-dep-server-url", type=str, None)
+    parser.add_argument("--public-dep-server-url", type=str, default=None)
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
