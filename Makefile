@@ -1,4 +1,5 @@
 export PYTHONPATH=$(shell pwd)/ognibuild:$(shell pwd)/buildlog-consultant:$(shell pwd):$(shell pwd)/breezy:$(shell pwd)/silver-platter:$(shell pwd)/lintian-brush:$(shell pwd)/python-debian/lib:$(shell pwd)/debmutate:$(shell pwd)/dulwich
+export BRZ_PLUGINS_AT=debian@$(shell pwd)/breezy-debian
 
 PB2_PY_OUTPUT = janitor/policy_pb2.py janitor/config_pb2.py janitor/candidates_pb2.py janitor/package_metadata_pb2.py
 
@@ -39,7 +40,7 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) python3 setup.py test
+	BRZ_PLUGINS_AT=$(BRZ_PLUGINS_AT) PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
 
 style:: flake8
 
