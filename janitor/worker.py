@@ -72,7 +72,6 @@ from silver_platter.debian.apply import (
     MissingChangelog,
 )
 from silver_platter.debian import (
-    MissingUpstreamTarball,
     pick_additional_colocated_branches,
 )
 
@@ -134,9 +133,6 @@ class RetriableResultUploadFailure(ResultUploadFailure):
 
 class EmptyQueue(Exception):
     """Queue was empty."""
-
-
-MAX_BUILD_ITERATIONS = 50
 
 
 logger = logging.getLogger(__name__)
@@ -214,7 +210,8 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
-    def __init__(self, code: str, description: str, details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+    def __init__(self, code: str, description: str,
+                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
@@ -250,7 +247,7 @@ class Target(object):
 
     name: str
 
-    def build(self, ws, subpath, output_directory, env):
+    def build(self, ws, subpath, output_directory):
         raise NotImplementedError(self.build)
 
     def additional_colocated_branches(self, main_branch):
@@ -276,7 +273,6 @@ class DebianTarget(Target):
         self.build_command = config.get("build-command", self.DEFAULT_BUILD_COMMAND)
         self.build_suffix = config.get("build-suffix")
         self.last_build_version = config.get("last-build-version")
-        self.package = env["PACKAGE"]
         self.chroot = config.get("chroot")
         self.lintian_profile = config.get('lintian', {}).get('profile')
         self.lintian_suppress_tags = config.get('lintian', {}).get("suppress-tags")
@@ -304,7 +300,8 @@ class DebianTarget(Target):
                 description='No change build', context=None, tags=[], value=0)
 
         logging.info('Running %r', self.argv)
-        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
+        # TODO(jelmer): This is only necessary for deb-new-upstream
+        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.debian.dist' % (
             self.chroot, ':'.join(sys.path), sys.executable)
         if local_tree.has_filename(os.path.join(subpath, 'debian')):
             dist_command += ' --packaging=%s' % local_tree.abspath(
@@ -340,124 +337,21 @@ class DebianTarget(Target):
         return pick_additional_colocated_branches(main_branch)
 
     def build(self, ws, subpath, output_directory, env):
-        from ognibuild.debian.apt import AptManager
-        from ognibuild.debian.fix_build import build_incrementally
-        from ognibuild.session import SessionSetupFailure
-        from ognibuild.session.plain import PlainSession
-        from ognibuild.session.schroot import SchrootSession
-        from ognibuild.debian.build import (
-            build_once,
-            MissingChangesFile,
-            DetailedDebianBuildFailure,
-            UnidentifiedDebianBuildError,
-        )
-
-        from .debian import tree_set_changelog_version
-
-        if not ws.local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
-            raise WorkerFailure("not-debian-package", "Not a Debian package")
-
-        if self.chroot:
-            session = SchrootSession(self.chroot)
-        else:
-            session = PlainSession()
-        try:
-            with session:
-                apt = AptManager(session)
-                if self.build_command:
-                    if self.last_build_version:
-                        # Update the changelog entry with the previous build version;
-                        # This allows us to upload incremented versions for subsequent
-                        # runs.
-                        tree_set_changelog_version(
-                            ws.local_tree, self.last_build_version, subpath
-                        )
-
-                    source_date_epoch = ws.local_tree.branch.repository.get_revision(
-                        ws.main_branch.last_revision()
-                    ).timestamp
-                    try:
-                        if not self.build_suffix:
-                            (changes_names, cl_entry) = build_once(
-                                ws.local_tree,
-                                self.build_distribution,
-                                output_directory,
-                                self.build_command,
-                                subpath=subpath,
-                                source_date_epoch=source_date_epoch,
-                                apt_repository=self.base_apt_repository,
-                                apt_repository_key=self.base_apt_repository_key,
-                                extra_repositories=self.extra_repositories,
-                            )
-                        else:
-                            (changes_names, cl_entry) = build_incrementally(
-                                ws.local_tree,
-                                apt,
-                                "~" + self.build_suffix,
-                                self.build_distribution,
-                                output_directory,
-                                build_command=self.build_command,
-                                build_changelog_entry="Build for debian-janitor apt repository.",
-                                committer=self.committer,
-                                subpath=subpath,
-                                source_date_epoch=source_date_epoch,
-                                update_changelog=self.update_changelog,
-                                max_iterations=MAX_BUILD_ITERATIONS,
-                                apt_repository=self.base_apt_repository,
-                                apt_repository_key=self.base_apt_repository_key,
-                                extra_repositories=self.extra_repositories,
-                            )
-                    except MissingUpstreamTarball:
-                        raise WorkerFailure(
-                            "build-missing-upstream-source", "unable to find upstream source"
-                        )
-                    except MissingChangesFile as e:
-                        raise WorkerFailure(
-                            "build-missing-changes",
-                            "Expected changes path %s does not exist." % e.filename,
-                            details={'filename': e.filename}
-                        )
-                    except DetailedDebianBuildFailure as e:
-                        if e.stage and not e.error.is_global:
-                            code = "%s-%s" % (e.stage, e.error.kind)
-                        else:
-                            code = e.error.kind
-                        try:
-                            details = e.error.json()
-                        except NotImplementedError:
-                            details = None
-                            actions = None
-                        else:
-                            from .debian.missing_deps import resolve_requirement
-                            from ognibuild.buildlog import problem_to_upstream_requirement
-                            # Maybe there's a follow-up action we can consider?
-                            req = problem_to_upstream_requirement(e.error)
-                            if req:
-                                actions = resolve_requirement(apt, req)
-                                if actions:
-                                    logging.info('Suggesting follow-up actions: %r', actions)
-                            else:
-                                actions = None
-                        raise WorkerFailure(code, e.description, details=details, followup_actions=actions)
-                    except UnidentifiedDebianBuildError as e:
-                        if e.stage is not None:
-                            code = "build-failed-stage-%s" % e.stage
-                        else:
-                            code = "build-failed"
-                        raise WorkerFailure(code, e.description)
-                    logger.info("Built %r.", changes_names)
-        except SessionSetupFailure as e:
-            if e.errlines:
-                sys.stderr.buffer.writelines(e.errlines)
-            raise WorkerFailure('session-setup-failure', str(e))
-        from .debian.lintian import run_lintian
-        lintian_result = run_lintian(
-            output_directory, changes_names, profile=self.lintian_profile,
-            suppress_tags=self.lintian_suppress_tags)
-        return {'lintian': lintian_result}
-
-    def directory_name(self):
-        return self.package
+        from janitor.debian.build import build
+        return build(
+            ws, subpath, output_directory, chroot=self.chroot,
+            lintian_profile=self.lintian_profile,
+            lintian_suppress_tags=self.lintian_suppress_tags,
+            build_command=self.build_command,
+            last_build_version=self.last_build_version,
+            suffix=self.build_suffix,
+            distribution=self.build_distribution,
+            command=self.build_command,
+            committer=self.committer,
+            apt_repository=self.apt_repository,
+            apt_repository_key=self.apt_repository_key,
+            extra_repositories=self.extra_repositories,
+            update_changelog=self.update_changelog)
 
 
 class GenericTarget(Target):
@@ -495,68 +389,10 @@ class GenericTarget(Target):
     def additional_colocated_branches(self, main_branch):
         return {}
 
-    def build(self, ws, subpath, output_directory, env):
-        from ognibuild.build import run_build
-        from ognibuild.test import run_test
-        from ognibuild.buildlog import InstallFixer
-        from ognibuild.session import SessionSetupFailure
-        from ognibuild.session.plain import PlainSession
-        from ognibuild.session.schroot import SchrootSession
-        from ognibuild.resolver import auto_resolver
-        from ognibuild import UnidentifiedError, DetailedFailure
-        from ognibuild.buildsystem import (
-            NoBuildToolsFound,
-            detect_buildsystems,
-        )
+    def build(self, ws, subpath, output_directory):
+        from janitor.generic.build import build
 
-        if self.chroot:
-            session = SchrootSession(self.chroot)
-            logger.info('Using schroot %s', self.chroot)
-        else:
-            session = PlainSession()
-        try:
-            with session:
-                resolver = auto_resolver(session)
-                fixers = [InstallFixer(resolver)]
-                external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
-                bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
-                session.chdir(os.path.join(internal_dir, subpath))
-                try:
-                    try:
-                        run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
-                    except NotImplementedError as e:
-                        traceback.print_exc()
-                        raise WorkerFailure('build-action-unknown', str(e))
-                    try:
-                        run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
-                    except NotImplementedError as e:
-                        traceback.print_exc()
-                        raise WorkerFailure('test-action-unknown', str(e))
-                except NoBuildToolsFound as e:
-                    raise WorkerFailure('no-build-tools-found', str(e))
-                except DetailedFailure as f:
-                    raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
-                except UnidentifiedError as e:
-                    lines = [line for line in e.lines if line]
-                    if e.secondary:
-                        raise WorkerFailure('build-failed', e.secondary.line)
-                    elif len(lines) == 1:
-                        raise WorkerFailure('build-failed', lines[0])
-                    else:
-                        raise WorkerFailure(
-                            'build-failed',
-                            "%r failed with unidentified error "
-                            "(return code %d)" % (e.argv, e.retcode)
-                        )
-        except SessionSetupFailure as e:
-            if e.errlines:
-                sys.stderr.buffer.writelines(e.errlines)
-            raise WorkerFailure('session-setup-failure', str(e))
-
-        return {}
-
-    def directory_name(self):
-        return "package"
+        return build(ws, subpath, output_directory)
 
 
 def _drop_env(command):
@@ -725,12 +561,14 @@ def process_package(
     roles = {b: r for (r, b) in additional_colocated_branches.items()}
     roles[main_branch.name] = 'main'   # type: ignore
 
+    directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rsplit('/')[-1]
+
     with ExitStack() as es:
         ws = Workspace(
             main_branch,
             resume_branch=resume_branch,
             cached_branch=cached_branch,
-            path=os.path.join(output_directory, build_target.directory_name()),
+            path=os.path.join(output_directory, directory_name),
             additional_colocated_branches=[b for (r, b) in additional_colocated_branches.items()],
             resume_branch_additional_colocated_branches=(
                 [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
@@ -824,7 +662,7 @@ def process_package(
 
         if should_build:
             build_target_details = build_target.build(
-                ws, subpath, output_directory, env)
+                ws, subpath, output_directory)
         else:
             build_target_details = None
 
