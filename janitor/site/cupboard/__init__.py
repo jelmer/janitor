@@ -354,6 +354,19 @@ select * from change_set where exists (
     return {'changesets': cs}
 
 
+async def handle_run_redirect(request):
+
+    run_id = request.match_info["run_id"]
+
+    async with request.app.database.acquire() as conn:
+        package = await conn.fetchone("SELECT package FROM run WHERE id = $1", run_id)
+        if package is None:
+            raise web.HTTPNotFound(text="No such run: %s" % run_id)
+        raise web.HTTPermanentRedirect(
+            location=request.app.router["cupboard-run"].url_for(
+                pkg=package, run_id=run_id)
+
+
 @html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})
 async def handle_pkg(request):
     from ..pkg import generate_pkg_file
@@ -512,6 +525,7 @@ def register_cupboard_endpoints(router):
         "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
     router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
+    router.add_get("/cupboard/run/{run_id}/", handle_run_redirect,  "cupboard-run-redirect")
     router.add_get(
         "/cupboard/cs/", handle_changeset_list, name="cupboard-changeset-list")
     router.add_get(
