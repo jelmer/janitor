@@ -1,8 +1,8 @@
 Adding a new campaign
-==================
+=====================
 
-Create a new mutators script
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Create a new codemod script
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 At the core of every campaign is a script that can make changes
 to a version controlled branch.
@@ -10,7 +10,7 @@ to a version controlled branch.
 This script will be executed in a version controlled checkout of
 a source package, and can make changes to the package as it sees fit.
 See `this blog post <https://www.jelmer.uk/silver-platter-intro.html>`_ for more
-information about creating mutator scripts.
+information about creating codemod scripts.
 
 You can test the script independently by running silver-platter, e.g.
 
@@ -38,7 +38,7 @@ In policy.conf, add a default stanza::
     policy {
       campaign {
        name: "some-name"  # This is the name of the campaign
-       command: "some-name"  # This is the mutator script to run
+       command: "some-name"  # This is the codemod script to run
        publish { mode: propose }  # Default publishing mode
       }
     }
@@ -47,13 +47,5 @@ Add script for finding candidates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Add a script that can gather candidates for the new campaign. This script should
-be run regularly to find new candidates to schedule, with its output fed into
-``python3 -m janitor.candidates``. The easiest way to do this is to add
-the script to ``schedule.sh``
-
-See janitor/candidates.proto for the textproto schema of the output.
-
-Add site (optional)
-~~~~~~~~~~~~~~~~~~~
-
-Add a website for the new campaign under ``janitor/site``
+be run regularly to find new candidates to schedule, with its JSON output
+uploaded to $RUNNER_URL/candidates.
