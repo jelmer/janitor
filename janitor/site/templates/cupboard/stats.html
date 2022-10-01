@@ -45,32 +45,19 @@
                             by_hoster.keys() | list | sort | tojson
                         }
                     },
-                    datasets: [{
-                        %
-                        for kind,
-                        color in [('rejected', 'red'), ('closed', 'orange'), ('merged', 'green'), ('open', 'blue'), ('abandoned', 'grey')] %
-                    } {
+                    datasets: [{% for kind, color in [('rejected', 'red'), ('closed', 'orange'), ('merged', 'green'), ('open', 'blue'), ('abandoned', 'grey')] %} {
                         label: '{{ kind }}',
-                        data: [{
-                            %
-                            for hoster in by_hoster.keys() | list | sort %
-                        } {
+                        data: [{% for hoster in by_hoster.keys() | list | sort %} {
                             {
                                 by_hoster[hoster][kind]
                             }
-                        }, {
-                            %
-                            endfor %
-                        }],
+                        }, {% endfor %}],
                         backgroundColor: Chart.helpers.color(window.chartColors. {
                             {
                                 color
                             }
                         }).alpha(0.5).rgbString()
-                    }, {
-                        %
-                        endfor %
-                    }],
+                    }, {% endfor %}],
                 },
                 options: {
                     title: {
@@ -220,17 +207,8 @@
                 new Chart($("#merges-over-time-chart"), {
                     type: 'line',
                     data: {
-                        datasets: [{
-                            %
-                            for key in ['merged', 'opened'] %
-                        } {
-                            {
-                                %
-                                set color = {
-                                    'opened': 'blue',
-                                    'merged': 'green'
-                                } [key] %
-                            }
+                        datasets: [{% for key in ['merged', 'opened'] %} {
+                            {% set color = { 'opened': 'blue', 'merged': 'green' } [key] %}
                             label: '{{ key }}',
                                 borderColor: window.chartColors. {
                                     {
@@ -248,10 +226,7 @@
                                         y: count
                                     };
                                 }),
-                        }, {
-                            %
-                            endfor %
-                        }],
+                        }, {% endfor %}],
                     },
                     options: {
                         title: {

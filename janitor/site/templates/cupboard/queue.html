@@ -191,14 +191,9 @@
                                 }
                             } else {
                                 tr.append('<td>N/A</td>');
-                            } {
-                                %
-                                if is_admin %
-                            }
-                            tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>'); {
-                                %
-                                endif %
-                            }
+                            } {% if is_admin %}
+                            tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>');
+			    {% endif %}
                             tr.show();
                             $('#queue-table').append(tr);
                         }

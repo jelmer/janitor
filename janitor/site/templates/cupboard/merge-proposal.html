@@ -48,11 +48,7 @@
                             console.log("Changing of merge proposal {{ proposal.url }} to " + status);
                             $.post('/api/merge-proposal', {
                                 'status': status,
-                                'url': {
-                                    {
-                                        proposal.url | tojson
-                                    }
-                                }
+                                'url': {{ proposal.url | tojson }}
                             });
                         }
                     </script>

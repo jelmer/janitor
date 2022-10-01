@@ -73,7 +73,7 @@ docker-all: docker-base docker-site docker-runner docker-publish docker-archive 
 reformat:: reformat-html
 
 reformat-html:
-	djlint --reformat --format-css --format-js janitor/site/templates/
+	djlint --reformat --format-css janitor/site/templates/
 
 
 coverage:
