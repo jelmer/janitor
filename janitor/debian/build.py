@@ -100,6 +100,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                             apt_repository=apt_repository,
                             apt_repository_key=apt_repository_key,
                             extra_repositories=extra_repositories,
+                            dep_server_url=config.get('ognibuild-dep-server'),
                         )
                 except MissingUpstreamTarball:
                     raise WorkerFailure(
