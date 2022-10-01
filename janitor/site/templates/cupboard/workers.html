@@ -1,21 +1,19 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Queue{% endblock page_title %}
+{% block page_title %}
+    Queue
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="workers">
-<h1>Workers</h1>
-
-{% for worker in workers %}
-<div class="subsection">
-<h2>{{ worker.name }}</h2>
-
-<p>
-Total runs: {{ worker.run_count }}
-</p>
-
-</div>
-{% endfor %}
-
-</div>
+    <div class="section" id="workers">
+        <h1>Workers</h1>
+        {% for worker in workers %}
+            <div class="subsection">
+                <h2>{{ worker.name }}</h2>
+                <p>Total runs: {{ worker.run_count }}</p>
+            </div>
+        {% endfor %}
+    </div>
 {% endblock body %}

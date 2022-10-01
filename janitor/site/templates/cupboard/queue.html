@@ -1,170 +1,216 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Queue{% endblock page_title %}
+{% block page_title %}
+    Queue
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="queue">
-<h1>Queue</h1>
-
-<style>
-tr.old-keepalive {
-   color: red;
-}
-</style>
-
-{% if avoid_hosts or rate_limit_hosts %}
-<div name="restrictions">
-<h2>Restrictions</h2>
-{% if avoid_hosts %}
-Manually avoiding hosts:
-<ul>
-{% for host in avoid_hosts %}	<li>{{ host }}</li> {% endfor %}
-</ul>
-{% endif %}
-{% if rate_limit_hosts %}
-Rate limiting hosts:
-<ul>
-    {% for host, until in rate_limit_hosts.items() %}	<li>{{ host }} until {{ until.isoformat() }} ({{ format_duration(until - utcnow()) }} more)</li> {% endfor %}
-</ul>
-{% endif %}
-</div>
-{% endif %}
-
-<div name="buckets">
-<h2>Entries per bucket</h2>
-<table class="docutils" border="1">
-<thead valign="bottom">
-    <tr class="row-odd">
-       <th class="head">Name</th>
-       <th class="head">Number of entries</th>
-    </tr>
-</thead>
-<tbody valign="top" id="bucket-table">
-{% for name, count in buckets %}
-<tr id="bucket-{{ name }}">
-    <td>{{ name }}</td>
-    <td>{{ count }}</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
-
-<div name="current">
-<h2>Currently processing</h2>
-<table class="docutils" border="1">
-<thead valign="bottom">
-<tr class="row-odd">
-  <th class="head">Package</th>
-  <th class="head">Campaign</th>
-  <th class="head">Estimated<br/>Duration</th>
-  <th class="head">Current<br/>Duration</th>
-  <th class="head">Worker</th>
-  <th class="head">Logs</th>
-  <th class="head">Last Ping</th>
-  {% if is_admin %}
-  <th class="head">Admin</th>
-  {% endif %}
-</tr>
-</thead>
-<tbody valign="top" id="queue-table">
-{% for entry in processing %}
-<tr id="active-{{ entry['id'] }}"{% if entry['mia'] %} class="old-keepalive"{% endif %}>
-    <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
-    <td>{{ entry['campaign'] }}</td>
-    <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
-    <td>{{ format_duration(entry['current_duration']) }}</td>
-    <td>{% if entry.get('worker_link') %}<a href="{{ entry['worker_link'] }}">{{ entry['worker'] or entry['worker_link'] }}</a>{% else %}{{ entry['worker'] }}{% endif %}</td>
-    <td>{% for name in entry['logfilenames'] %}<a href="/api/active-runs/{{ entry['id'] }}/log/{{ name }}">{{ name }}</a>{% if not loop.last %} {% endif %}{%endfor %}</td>
-    {% if entry.get('keepalive_age') %}
-    <td>{{ format_duration(entry['keepalive_age']) }}</td>
-    {% else %}
-    <td>N/A</td>
-    {% endif %}
-    {% if is_admin %}
-    <td><button id="kill-{{ entry['id'] }}" onclick="kill('{{ entry['id'] }}')">Kill</button></td>
-    {% endif %}
-    <!-- TODO(jelmer): Link to logs -->
-</tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
-
-<script>
-kill = function(run_id) {
-    console.log("Killing job " + run_id);
-    $.post("/api/active-runs/" + run_id + "/kill");
-}
-</script>
-
-<div name="coming-up">
-<h2>Coming up</h2>
-<table class="docutils" border="1">
-<thead valign="bottom">
-<tr class="row-odd">
-  <th class="head">Package</th>
-  <th class="head">Command</th>
-  <th class="head">Estimated duration</th>
-  <th class="head">Requestor</th>
-  <th class="head">Last Run</th>
-</tr>
-</thead>
-<tbody valign="top">
-{% for queue_item, last_run, description in queue %}
-<tr id="queue-{{ queue_item.id }}"{% if queue_item.id in active_queue_ids %} class="active"{% endif %}>
-  <td><a class="reference external" href="pkg/{{ queue_item.package }}">{{ queue_item.package }}</a></td>
-  <td>{{ description|safe }}</td>
-  <td>{{ format_duration(queue_item.estimated_duration) if queue_item.estimated_duration else 'unknown' }}</td>
-  <td>{{ queue_item.requestor }}</td>
-  <td>{% if last_run.id %}<a href="/cupboard/pkg/{{ last_run.package }}/{{ last_run.id }}">{{ display_result_code(last_run.result_code) }}</a>{% endif %}</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-
-<script>
-registerHandler('queue', function(msg) {
-   console.log('Refreshing queue items');
-   var seen_ids = [];
-   for (i in msg['processing']) {
-      var p = msg['processing'][i];
-      var existing = 'active-' + p['id'];
-      if (!$('#' + existing).length) {
-         tr = $('<tr id="active-' + p['id'] + '"/>');
-         tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
-         tr.append('<td>' + p['campaign'] + '</td>');
-         tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
-         tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
-         tr.append('<td>' + p['worker'] + '</td>');
-         tr.append('<td>' + $.map(p['logfilenames'], function(n, i) {
-                 return '<a href="/api/active-runs/' + p['id'] + '/log/' + n + '">' + n + '</a>';
-         }).join(' ') + '</td>');
-         if ('last-keepalive' in p) {
-             tr.append('<td>' + format_duration(p['keepalive_age']) + '</td>');
-             if (p['mia']) {
-                 tr.addClass('old-keepalive');
-             }
-         } else {
-             tr.append('<td>N/A</td>');
-         }
-{% if is_admin %}
-         tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>');
-{% endif %}
-         tr.show();
-         $('#queue-table').append(tr);
-      }
-      seen_ids.push(existing);
-   }
-   $('#queue-table').children().each(function(ch, el) {
-       if (!seen_ids.includes(el.id)) {
-          el.remove();
-       }
-   })
-});
-
-</script>
-
-</div>
-</div>
+    <div class="section" id="queue">
+        <h1>Queue</h1>
+        <style>
+            tr.old-keepalive {
+                color: red;
+            }
+        </style>
+        {% if avoid_hosts or rate_limit_hosts %}
+            <div name="restrictions">
+                <h2>Restrictions</h2>
+                {% if avoid_hosts %}
+                    Manually avoiding hosts:
+                    <ul>
+                        {% for host in avoid_hosts %}<li>{{ host }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+                {% if rate_limit_hosts %}
+                    Rate limiting hosts:
+                    <ul>
+                        {% for host, until in rate_limit_hosts.items() %}
+                            <li>{{ host }} until {{ until.isoformat() }} ({{ format_duration(until - utcnow()) }} more)</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        {% endif %}
+        <div name="buckets">
+            <h2>Entries per bucket</h2>
+            <table class="docutils" border="1">
+                <thead valign="bottom">
+                    <tr class="row-odd">
+                        <th class="head">Name</th>
+                        <th class="head">Number of entries</th>
+                    </tr>
+                </thead>
+                <tbody valign="top" id="bucket-table">
+                    {% for name, count in buckets %}
+                        <tr id="bucket-{{ name }}">
+                            <td>{{ name }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div name="current">
+            <h2>Currently processing</h2>
+            <table class="docutils" border="1">
+                <thead valign="bottom">
+                    <tr class="row-odd">
+                        <th class="head">Package</th>
+                        <th class="head">Campaign</th>
+                        <th class="head">
+                            Estimated
+                            <br/>
+                            Duration
+                        </th>
+                        <th class="head">
+                            Current
+                            <br/>
+                            Duration
+                        </th>
+                        <th class="head">Worker</th>
+                        <th class="head">Logs</th>
+                        <th class="head">Last Ping</th>
+                        {% if is_admin %}<th class="head">Admin</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody valign="top" id="queue-table">
+                    {% for entry in processing %}
+                        <tr id="active-{{ entry['id'] }}"
+                            {% if entry['mia'] %} class="old-keepalive"{% endif %}>
+                            <td>
+                                <a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a>
+                            </td>
+                            <td>{{ entry['campaign'] }}</td>
+                            <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
+                            <td>{{ format_duration(entry['current_duration']) }}</td>
+                            <td>
+                                {% if entry.get('worker_link') %}
+                                    <a href="{{ entry['worker_link'] }}">{{ entry['worker'] or entry['worker_link'] }}</a>
+                                {% else %}
+                                    {{ entry['worker'] }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for name in entry['logfilenames'] %}
+                                    <a href="/api/active-runs/{{ entry['id'] }}/log/{{ name }}">{{ name }}</a>
+                                    {% if not loop.last %}{% endif %}
+                                {% endfor %}
+                            </td>
+                            {% if entry.get('keepalive_age') %}
+                                <td>{{ format_duration(entry['keepalive_age']) }}</td>
+                            {% else %}
+                                <td>N/A</td>
+                            {% endif %}
+                            {% if is_admin %}
+                                <td>
+                                    <button id="kill-{{ entry['id'] }}" onclick="kill('{{ entry['id'] }}')">Kill</button>
+                                </td>
+                            {% endif %}
+                            <!-- TODO(jelmer): Link to logs -->
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <script>
+            kill = function(run_id) {
+                console.log("Killing job " + run_id);
+                $.post("/api/active-runs/" + run_id + "/kill");
+            }
+        </script>
+        <div name="coming-up">
+            <h2>Coming up</h2>
+            <table class="docutils" border="1">
+                <thead valign="bottom">
+                    <tr class="row-odd">
+                        <th class="head">
+                            Package
+                        </th>
+                        <th class="head">
+                            Command
+                        </th>
+                        <th class="head">
+                            Estimated duration
+                        </th>
+                        <th class="head">
+                            Requestor
+                        </th>
+                        <th class="head">
+                            Last Run
+                        </th>
+                    </tr>
+                </thead>
+                <tbody valign="top">
+                    {% for queue_item, last_run, description in queue %}
+                        <tr id="queue-{{ queue_item.id }}"
+                            {% if queue_item.id in active_queue_ids %} class="active"{% endif %}>
+                            <td>
+                                <a class="reference external" href="pkg/{{ queue_item.package }}">{{ queue_item.package }}</a>
+                            </td>
+                            <td>
+                                {{ description|safe }}
+                            </td>
+                            <td>
+                                {{ format_duration(queue_item.estimated_duration) if queue_item.estimated_duration else 'unknown' }}
+                            </td>
+                            <td>
+                                {{ queue_item.requestor }}
+                            </td>
+                            <td>
+                                {% if last_run.id %}
+                                    <a href="/cupboard/pkg/{{ last_run.package }}/{{ last_run.id }}">{{ display_result_code(last_run.result_code) }}</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <script>
+                registerHandler('queue', function(msg) {
+                    console.log('Refreshing queue items');
+                    var seen_ids = [];
+                    for (i in msg['processing']) {
+                        var p = msg['processing'][i];
+                        var existing = 'active-' + p['id'];
+                        if (!$('#' + existing).length) {
+                            tr = $('<tr id="active-' + p['id'] + '"/>');
+                            tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
+                            tr.append('<td>' + p['campaign'] + '</td>');
+                            tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
+                            tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
+                            tr.append('<td>' + p['worker'] + '</td>');
+                            tr.append('<td>' + $.map(p['logfilenames'], function(n, i) {
+                                return '<a href="/api/active-runs/' + p['id'] + '/log/' + n + '">' + n + '</a>';
+                            }).join(' ') + '</td>');
+                            if ('last-keepalive' in p) {
+                                tr.append('<td>' + format_duration(p['keepalive_age']) + '</td>');
+                                if (p['mia']) {
+                                    tr.addClass('old-keepalive');
+                                }
+                            } else {
+                                tr.append('<td>N/A</td>');
+                            } {
+                                %
+                                if is_admin %
+                            }
+                            tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>'); {
+                                %
+                                endif %
+                            }
+                            tr.show();
+                            $('#queue-table').append(tr);
+                        }
+                        seen_ids.push(existing);
+                    }
+                    $('#queue-table').children().each(function(ch, el) {
+                        if (!seen_ids.includes(el.id)) {
+                            el.remove();
+                        }
+                    })
+                });
+            </script>
+        </div>
+    </div>
 {% endblock body %}

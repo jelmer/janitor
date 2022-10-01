@@ -1,69 +1,83 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_result_code, display_branch_url %}
-{% block page_title %}Package Overview - {{ package }}{% endblock page_title %}
+{% block page_title %}
+    Package Overview - {{ package }}
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="{{ package }}">
-
-<h1>{{ package }}</h1>
-<ul class="simple">
-{% if tracker_url %}
-<li>{% for distribution in distributions %}<a class="reference external" href="{{ tracker_url(distribution.name, package) }}">QA Page ({{ distribution.name }})</a> {% endfor %}</li>
-{% endif %}
-<li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a> (<a href="https://qa.debian.org/developer.php?login={{ maintainer_email }}">QA Page</a>)</li>
-{% if vcs_url %}
-<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
-{% endif %}
-{% if removed %}
-<li class="not-in-archive">This package is not present in the archive.</li>
-{% endif %}
-{% if vcswatch_status == 'commits' %}
-<li class="vcswatch-commits">This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded commits</a>.</li>
-{% elif vcswatch_status == 'new' %}
-<li class="vcswatch-new">This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded versions</a>.</li>
-{% endif %}
-</ul>
-
-<div class="section" id="campaign">
-<h2>Per-campaign pages</h2>
-<ul>
-{% for suite in available_suites %}
-{% if suite not in ('unchanged', 'control') %}
-<li><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></li>
-{% endif %}
-{% endfor %}
-</ul>
-</div>
-
-{% if merge_proposals %}
-<div class="section" id="recent-merge-proposals">
-<h2>Recent merge proposals</h2>
-<ul>
-{% for merge_proposal in merge_proposals %}
-<li><a href="{{ merge_proposal.url }}">{{ merge_proposal.suite }}</a> ({{ merge_proposal.status }})</li>
-{% endfor %}
-</ul>
-</div>
-{% endif %}
-
-<div class="section" id="recent-package-builds">
-<h2>Recent package builds</h2>
-<ul class="simple">
-{% for run in runs %}
-{% if run.build_version %}
-<li>{{ run.build_version }} (for <a href="/{{ run.suite }}">{{ run.suite }}</a>)</li>
-{% endif %}
-{% endfor %}
-</ul>
-</div>
-<div class="section" id="recent-runs">
-<h2>Recent runs</h2>
-<ul class="simple">
-{% for run in runs %}
-<li><a class="reference external" href="{{ run.id }}/">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}</li>
-{% endfor %}
-</ul>
-</div>
-
-</div>
+    <div class="section" id="{{ package }}">
+        <h1>{{ package }}</h1>
+        <ul class="simple">
+            {% if tracker_url %}
+                <li>
+                    {% for distribution in distributions %}
+                        <a class="reference external"
+                           href="{{ tracker_url(distribution.name, package) }}">QA Page ({{ distribution.name }})</a>
+                    {% endfor %}
+                </li>
+            {% endif %}
+            <li>
+                Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a> (<a href="https://qa.debian.org/developer.php?login={{ maintainer_email }}">QA Page</a>)
+            </li>
+            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
+            {% if removed %}<li class="not-in-archive">This package is not present in the archive.</li>{% endif %}
+            {% if vcswatch_status == 'commits' %}
+                <li class="vcswatch-commits">
+                    This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded commits</a>.
+                </li>
+            {% elif vcswatch_status == 'new' %}
+                <li class="vcswatch-new">
+                    This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded versions</a>.
+                </li>
+            {% endif %}
+        </ul>
+        <div class="section" id="campaign">
+            <h2>Per-campaign pages</h2>
+            <ul>
+                {% for suite in available_suites %}
+                    {% if suite not in ('unchanged', 'control') %}
+                        <li>
+                            <a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% if merge_proposals %}
+            <div class="section" id="recent-merge-proposals">
+                <h2>Recent merge proposals</h2>
+                <ul>
+                    {% for merge_proposal in merge_proposals %}
+                        <li>
+                            <a href="{{ merge_proposal.url }}">{{ merge_proposal.suite }}</a> ({{ merge_proposal.status }})
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        <div class="section" id="recent-package-builds">
+            <h2>Recent package builds</h2>
+            <ul class="simple">
+                {% for run in runs %}
+                    {% if run.build_version %}
+                        <li>
+                            {{ run.build_version }} (for <a href="/{{ run.suite }}">{{ run.suite }}</a>)
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="section" id="recent-runs">
+            <h2>Recent runs</h2>
+            <ul class="simple">
+                {% for run in runs %}
+                    <li>
+                        <a class="reference external" href="{{ run.id }}/">{{ format_timestamp(run.finish_time) }} {{ run.suite }}</a>: {{ display_result_code(run.result_code) }}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
 {% endblock body %}

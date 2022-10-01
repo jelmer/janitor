@@ -1,16 +1,19 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
-{% block page_title %}Rejected in Review{% endblock page_title %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Rejected in Review
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="rejected">
-<h1>Rejected runs during review</h1>
-
-<ul>
-{% for run in runs %}
-	<li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a> (<i>{{ run.review_comment }}</i>)</li>
-{% endfor %}
-</ul>
-
-</div>
-
+    <div class="section" id="rejected">
+        <h1>Rejected runs during review</h1>
+        <ul>
+            {% for run in runs %}
+                <li>
+                    <a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a> (<i>{{ run.review_comment }}</i>)
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
 {% endblock body %}
