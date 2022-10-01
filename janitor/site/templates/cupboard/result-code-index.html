@@ -1,88 +1,147 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock sidebar %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_result_code %}
-{% block page_title %}Result Codes{% if campaign %} - for {{ campaign }}{% endif %}{% endblock page_title %}
+{% block page_title %}
+    Result Codes
+    {% if campaign %}- for {{ campaign }}{% endif %}
+{% endblock page_title %}
 {% block body %}
-
-<div class="section" id="result-codes">
-<h1>Result Codes</h1>
-
-Select campaign to display:
-
-<form method="get" id="filter">
-<select name="campaign" onchange="$('#filter').submit()">
-<option name="_all" value="_all">All</option>
-{% for s in all_campaigns %}
-<option value="{{ s }}" name="{{ s }}"{% if s == campaign %} selected{% endif %}>{{ s }}</option>
-{% endfor %}
-</select>
-<input type="checkbox" name="exclude_never_processed" id="never-processed"{% if exclude_never_processed %} checked{% endif %} onchange="$('#filter').submit()"/>
-<label for="never-processed">Exclude never processed</label>
-<input type="checkbox" name="exclude_transient" id="transient"{% if exclude_transient %} checked{% endif %} onchange="$('#filter').submit()"/>
-<label for="transient">Exclude transient</label>
-</form>
-
-{% macro random_colors(n) %}[ {% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
-
-<div style="width: 400px; height: 600px;">
-<canvas id="result-code-chart"/>
-</div>
-<script>
-var result_code_chart = new Chart($("#result-code-chart"), {
-    type: 'pie',
-    data: {
-      labels: {{ result_codes|map(attribute=0)|list|tojson }},
-      datasets: [{
-          data: {{ result_codes|map(attribute=1)|list|tojson }},
-          backgroundColor: {{ random_colors(result_codes|length) }},
-      }],
-    },
-    options: {
-      legend: { display: false },
-      responsive: true,
-      maintainAspectRatio: false,
-      title: { text: "Result Code Frequency", display: true },
-    },
-});
-
-
-document.getElementById("result-code-chart").onclick = function(e) {
-   var slice = result_code_chart.getElementAtEvent(e);
-   if (!slice.length) return;  // not a slice they clicked on
-   var code = slice[0]._model.label;
-   var url;
-   if (code == 'never-processed') {
-       url = '/cupboard/never-processed';
-   } else {
-       url = '/cupboard/result-codes/' + code;
-   }
-   window.open(url{% if campaign %} + "?campaign={{ campaign }}"{% endif %}, "_self");
-}
-
-</script>
-
-<table id="result-code-table" class="docutils display" border="1">
-<colgroup>
-<col width="95%"/>
-<col width="5%"/>
-</colgroup>
-<thead valign="bottom">
-<tr class="row-odd"><th class="head">Code</th>
-<th class="head">Count</th>
-</tr>
-</thead>
-<tbody valign="top">
-{% for code, count in result_codes %}
-{% if code == 'never-processed' %}
-<tr class="row-even"><td><a class="reference external" href="/cupboard/never-processed{% if campaign %}?campaign={{ campaign }}{% endif %}">{{ code }}</a></td>
-{% else %}
-<tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}{% if campaign %}?campaign={{ campaign }}{% endif %}">{{ display_result_code(code)|safe }}</a></td>
-{% endif %}
-<td>{{ count }}</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-	<script>$(function(){ $('#result-code-table').DataTable({"order": [[ 1, "desc" ]], "pageLength": 200, "lengthMenu": [50, 200]}); });</script>
-</div>
-{% endblock body %}
+    <div class="section" id="result-codes">
+        <h1>Result Codes</h1>
+        Select campaign to display:
+        <form method="get" id="filter">
+            <select name="campaign" onchange="$('#filter').submit()">
+                <option name="_all" value="_all">
+                    All
+                </option>
+                {% for s in all_campaigns %}
+                    <option value="{{ s }}"
+                            name="{{ s }}"
+                            {% if s == campaign %} selected{% endif %}>
+                        {{ s }}
+                    </option>
+                {% endfor %}
+            </select>
+            <input type="checkbox"
+                   name="exclude_never_processed"
+                   id="never-processed"
+                   {% if exclude_never_processed %} checked{% endif %}
+                   onchange="$('#filter').submit()"/>
+            <label for="never-processed">Exclude never processed</label>
+            <input type="checkbox"
+                   name="exclude_transient"
+                   id="transient"
+                   {% if exclude_transient %} checked{% endif %}
+                   onchange="$('#filter').submit()"/>
+            <label for="transient">Exclude transient</label>
+        </form>
+        {% macro random_colors(n) %}
+            [
+            {% for i in range(n) %}
+                'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
+                <div style="width: 400px; height: 600px;">
+                    <canvas id="result-code-chart"/>
+                </div>
+                <script>
+                    var result_code_chart = new Chart($("#result-code-chart"), {
+                        type: 'pie',
+                        data: {
+                            labels: {
+                                {
+                                    result_codes | map(attribute = 0) | list | tojson
+                                }
+                            },
+                            datasets: [{
+                                data: {
+                                    {
+                                        result_codes | map(attribute = 1) | list | tojson
+                                    }
+                                },
+                                backgroundColor: {
+                                    {
+                                        random_colors(result_codes | length)
+                                    }
+                                },
+                            }],
+                        },
+                        options: {
+                            legend: {
+                                display: false
+                            },
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            title: {
+                                text: "Result Code Frequency",
+                                display: true
+                            },
+                        },
+                    });
+                    
+                    
+                    document.getElementById("result-code-chart").onclick = function(e) {
+                        var slice = result_code_chart.getElementAtEvent(e);
+                        if (!slice.length) return; // not a slice they clicked on
+                        var code = slice[0]._model.label;
+                        var url;
+                        if (code == 'never-processed') {
+                            url = '/cupboard/never-processed';
+                        } else {
+                            url = '/cupboard/result-codes/' + code;
+                        }
+                        window.open(url {
+                            %
+                            if campaign %
+                        } + "?campaign={{ campaign }}" {
+                            %
+                            endif %
+                        }, "_self");
+                    }
+                </script>
+                <table id="result-code-table" class="docutils display" border="1">
+                    <colgroup>
+                        <col width="95%"/>
+                        <col width="5%"/>
+                    </colgroup>
+                    <thead valign="bottom">
+                        <tr class="row-odd">
+                            <th class="head">Code</th>
+                            <th class="head">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody valign="top">
+                        {% for code, count in result_codes %}
+                            {% if code == 'never-processed' %}
+                                <tr class="row-even">
+                                    <td>
+                                        <a class="reference external"
+                                           href="/cupboard/never-processed{%- if campaign -%}?campaign={{ campaign }}{%- endif -%}">{{ code }}</a>
+                                    </td>
+                                    <td>{{ count }}</td>
+                                </tr>
+                            {% else %}
+                                <tr class="row-even">
+                                    <td>
+                                        <a class="reference external"
+                                           href="/cupboard/result-codes/{{ code }}{%- if campaign -%}?campaign={{ campaign }}{%- endif -%}">{{ display_result_code(code)|safe }}</a>
+                                    </td>
+                                    <td>{{ count }}</td>
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <script>
+                    $(function() {
+                        $('#result-code-table').DataTable({
+                            "order": [
+                                [1, "desc"]
+                            ],
+                            "pageLength": 200,
+                            "lengthMenu": [50, 200]
+                        });
+                    });
+                </script>
+            </div>
+        {% endblock body %}
