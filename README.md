@@ -43,7 +43,9 @@ Several permanently running jobs:
 
 * the *publisher* proposes or pushes changes that have been successfully
   created and built previously, and which can provide VCS diffs
-* the *vcs store* manages and stores VCS repositories (git, bzr)
+* the *vcs store* manages and stores VCS repositories (git, bzr) [optional]
+* the [ognibuild](https://github.com/jelmer/ognibuild) dep server is used to
+  resolve missing dependencies
 * the *runner* processes the queue, kicks off workers for
   each package and stores the results.
 * one or more *workers* which are responsible for actual generating and
