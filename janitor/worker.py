@@ -66,15 +66,6 @@ from silver_platter.apply import (
 from silver_platter.debian import (
     select_probers,
 )
-from silver_platter.debian.apply import (
-    script_runner as debian_script_runner,
-    DetailedFailure as DebianDetailedFailure,
-    MissingChangelog,
-)
-from silver_platter.debian import (
-    pick_additional_colocated_branches,
-)
-
 from silver_platter.utils import (
     full_branch_url,
     open_branch,
@@ -247,14 +238,8 @@ class Target(object):
 
     name: str
 
-    def build(self, ws, subpath, output_directory):
+    def build(self, local_tree, subpath, output_directory, config):
         raise NotImplementedError(self.build)
-
-    def additional_colocated_branches(self, main_branch):
-        return {}
-
-    def directory_name(self) -> str:
-        raise NotImplementedError(self.directory_name)
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
         raise NotImplementedError(self.make_changes)
@@ -265,21 +250,9 @@ class DebianTarget(Target):
 
     name = "debian"
 
-    DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
-
-    def __init__(self, config, env, argv):
+    def __init__(self, env, argv):
         self.env = env
-        self.build_distribution = config.get("build-distribution")
-        self.build_command = config.get("build-command", self.DEFAULT_BUILD_COMMAND)
-        self.build_suffix = config.get("build-suffix")
-        self.last_build_version = config.get("last-build-version")
-        self.chroot = config.get("chroot")
-        self.lintian_profile = config.get('lintian', {}).get('profile')
-        self.lintian_suppress_tags = config.get('lintian', {}).get("suppress-tags")
         self.committer = env.get("COMMITTER")
-        self.base_apt_repository = config['base-apt-repository']
-        self.base_apt_repository_key = config.get('base-apt-repository-signed-by')
-        self.extra_repositories = config.pop('build-extra-repositories', [])
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
         if uc == "auto":
             self.update_changelog = None
@@ -295,6 +268,12 @@ class DebianTarget(Target):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
+        from silver_platter.debian.apply import (
+            script_runner as debian_script_runner,
+            DetailedFailure as DebianDetailedFailure,
+            MissingChangelog,
+        )
+
         if not self.argv:
             return GenericCommandResult(
                 description='No change build', context=None, tags=[], value=0)
@@ -333,25 +312,9 @@ class DebianTarget(Target):
         except MemoryError as e:
             raise WorkerFailure('out-of-memory', str(e))
 
-    def additional_colocated_branches(self, main_branch):
-        return pick_additional_colocated_branches(main_branch)
-
-    def build(self, ws, subpath, output_directory, env):
-        from janitor.debian.build import build
-        return build(
-            ws, subpath, output_directory, chroot=self.chroot,
-            lintian_profile=self.lintian_profile,
-            lintian_suppress_tags=self.lintian_suppress_tags,
-            build_command=self.build_command,
-            last_build_version=self.last_build_version,
-            suffix=self.build_suffix,
-            distribution=self.build_distribution,
-            command=self.build_command,
-            committer=self.committer,
-            apt_repository=self.apt_repository,
-            apt_repository_key=self.apt_repository_key,
-            extra_repositories=self.extra_repositories,
-            update_changelog=self.update_changelog)
+    def build(self, local_tree, subpath, output_directory, config):
+        from janitor.debian.build import build_from_config
+        return build_from_config(local_tree, subpath, output_directory, config, self.env)
 
 
 class GenericTarget(Target):
@@ -359,9 +322,7 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, config, env, argv):
-        self.chroot = config.get("chroot")
-        self.config = config
+    def __init__(self, env, argv):
         self.env = env
         self.argv = argv
 
@@ -386,13 +347,9 @@ class GenericTarget(Target):
         except ScriptFailed as e:
             raise _convert_script_failed(e)
 
-    def additional_colocated_branches(self, main_branch):
-        return {}
-
-    def build(self, ws, subpath, output_directory):
-        from janitor.generic.build import build
-
-        return build(ws, subpath, output_directory)
+    def build(self, local_tree, subpath, output_directory, config):
+        from janitor.generic.build import build_from_config
+        return build_from_config(local_tree, subpath, output_directory, config, self.env)
 
 
 def _drop_env(command):
@@ -493,15 +450,16 @@ def process_package(
     cached_branch_url: Optional[str] = None,
     extra_resume_branches: Optional[List[Tuple[str, str]]] = None,
     resume_codemod_result: Any = None,
-    force_build: bool = False
+    force_build: bool = False,
+    additional_colocated_branches: Optional[Dict[str, str]] = None,
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     metadata["command"] = command
 
     build_target: Target
     if target == "debian":
-        build_target = DebianTarget(build_config, env, command)
+        build_target = DebianTarget(env, command)
     elif target == "generic":
-        build_target = GenericTarget(build_config, env, command)
+        build_target = GenericTarget(env, command)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
@@ -557,7 +515,6 @@ def process_package(
     else:
         resume_branch = None
 
-    additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
     roles = {b: r for (r, b) in additional_colocated_branches.items()}
     roles[main_branch.name] = 'main'   # type: ignore
 
@@ -662,7 +619,7 @@ def process_package(
 
         if should_build:
             build_target_details = build_target.build(
-                ws, subpath, output_directory)
+                ws.local_tree, subpath, output_directory, build_config)
         else:
             build_target_details = None
 
@@ -895,6 +852,7 @@ def run_worker(
     possible_transports: Optional[List[Transport]] = None,
     force_build: bool = False,
     tee: bool = False,
+    additional_colocated_branches: Optional[Dict[str, str]] = None,
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -920,7 +878,8 @@ def run_worker(
                 if resume_branches
                 else None,
                 possible_transports=possible_transports,
-                force_build=force_build
+                force_build=force_build,
+                additional_colocated_branches=additional_colocated_branches
             ) as (ws, result):
                 logging.info("Pushing result branch to %r", target_repo_url)
 
@@ -1228,6 +1187,7 @@ async def process_single_item(
         campaign = assignment["campaign"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
+        additional_colocated_branches = assignment["branch"]["additional_colocated_branches"]
         force_build = assignment.get('force-build', False)
         subpath = assignment["branch"].get("subpath", "") or ""
         if assignment["resume"]:
@@ -1299,6 +1259,7 @@ async def process_single_item(
                 possible_transports=possible_transports,
                 force_build=force_build,
                 tee=tee,
+                additional_colocated_branches=additional_colocated_branches,
             ),
         )
         try:

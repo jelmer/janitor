@@ -38,7 +38,7 @@ from ognibuild.buildsystem import (
 from ..worker import WorkerFailure
 
 
-def build(ws, subpath, output_directory, chroot=None):
+def build(local_tree, subpath, output_directory, chroot=None):
     if chroot:
         session = SchrootSession(chroot)
         logging.info('Using schroot %s', chroot)
@@ -48,7 +48,7 @@ def build(ws, subpath, output_directory, chroot=None):
         with session:
             resolver = auto_resolver(session)
             fixers = [InstallFixer(resolver)]
-            external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
+            external_dir, internal_dir = session.setup_from_vcs(local_tree)
             bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
             session.chdir(os.path.join(internal_dir, subpath))
             try:
@@ -84,3 +84,44 @@ def build(ws, subpath, output_directory, chroot=None):
         raise WorkerFailure('session-setup-failure', str(e))
 
     return {}
+
+
+def build_from_config(local_tree, subpath, output_directory, config, env):
+    chroot = config.get("chroot")
+    return build(local_tree, subpath, output_directory, chroot=chroot)
+
+
+def main():
+    import argparse
+    import json
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, help="Path to configuration (JSON)")
+    parser.add_argument('output-directory', type=str, help="Output directory")
+    args = parser.parse_args()
+
+    import breezy.bzr  # noqa: F401
+    import breezy.git  # noqa: F401
+    from breezy.workingtree import WorkingTree
+
+    wt, subpath = WorkingTree.open_containing('.')
+
+    if args.config:
+        with open(args.config, 'r') as f:
+            config = json.load(f)
+    else:
+        config = {}
+
+    try:
+        result = build_from_config(
+            wt, subpath, args.output_directory, config=config,
+            env=os.environ)
+    except WorkerFailure as e:
+        json.dump(e.json())
+        return 1
+
+    json.dump(result, sys.stdout, indent=4)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
