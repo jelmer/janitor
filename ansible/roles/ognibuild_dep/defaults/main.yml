@@ -1,0 +1,3 @@
+---
+ognibuild_dep_port: 9934
+ognibuild_dep_address: "::1"
