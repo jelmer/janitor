@@ -30,7 +30,7 @@ jobs:
       run: |
         sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev python3-gpg libgpg-error-dev libgpgme-dev python3-sphinx subunit
         python -m pip install --upgrade pip
-        pip install -U pip setuptools setuptools-rust flake8 djlint mypy debmutate pyyaml testtools Paste aiohttp mypy-protobuf git+https://salsa.debian.org/apt-team/python-apt cython fastbencode tqdm gpg sphinx_epytext python-subunit git+https://salsa.debian.org/python-debian-team/python-debian
+        pip install -U -e .[dev]
         mkdir $HOME/.config/breezy/plugins -p
         ln -s `pwd`/breezy-debian ~/.config/breezy/plugins/debian
         python setup.py develop
@@ -41,7 +41,6 @@ jobs:
         python -m djlint --profile jinja janitor/site/templates
     - name: Typing checks
       run: |
-        python -m pip install mypy types-PyYAML types-protobuf
         python -m mypy janitor
     - name: Build
       run: |
