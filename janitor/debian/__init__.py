@@ -26,6 +26,7 @@ except ImportError:  # python < 3.9
 
 import os
 import subprocess
+from typing import Tuple, List, Optional
 
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
@@ -44,12 +45,12 @@ class InconsistentChangesFiles(Exception):
     """Inconsistent changes files."""
 
 
-def find_changes(path):
+def find_changes(path: str) -> Tuple[List[str], str, Version, str, List[str]]:
     names = []
-    source = None
-    version = None
-    distribution = None
-    binary_packages = []
+    source: str
+    version: Version
+    distribution: str
+    binary_packages: List[str] = []
     for entry in os.scandir(path):
         if not entry.name.endswith(".changes"):
             continue

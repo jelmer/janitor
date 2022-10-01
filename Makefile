@@ -73,3 +73,10 @@ reformat:: reformat-html
 
 reformat-html:
 	djlint --reformat --format-css --format-js janitor/site/templates/
+
+
+coverage:
+	python3 -m coverage run -m unittest janitor.tests.test_suite
+
+coverage-html:
+	python3 -m coverage html

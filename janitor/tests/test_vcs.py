@@ -15,7 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from ..vcs import bzr_to_browse_url, LocalBzrVcsManager, get_run_diff
+from ..vcs import (
+    bzr_to_browse_url,
+    LocalBzrVcsManager,
+    get_run_diff,
+    is_authenticated_url,
+)
 from . import TestCaseWithTransport
 
 from breezy import controldir
@@ -90,3 +95,18 @@ File b
         self.assertEqual(b" File a", lines[4])
         self.assertEqual(b"+File b", lines[5])
         self.assertEqual(b"", lines[6])
+
+
+class IsAuthenticatedUrlTests(unittest.TestCase):
+
+    def test_authenticated(self):
+        self.assertTrue(
+            is_authenticated_url("git+ssh://git@github.com/jelmer/janitor"))
+        self.assertTrue(
+            is_authenticated_url("bzr+ssh://git@github.com/jelmer/janitor"))
+
+    def test_not_authenticated(self):
+        self.assertFalse(
+            is_authenticated_url("https://github.com/jelmer/janitor"))
+        self.assertFalse(
+            is_authenticated_url("git://github.com/jelmer/janitor"))

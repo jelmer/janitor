@@ -15,9 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.debian import tree_set_changelog_version
+from janitor.debian import tree_set_changelog_version, dpkg_vendor
 
-from breezy.tests import TestCaseWithTransport
+from breezy.tests import TestCaseWithTransport, TestCase
 
 
 class TreeSetChangelogVersionTests(TestCaseWithTransport):
@@ -82,3 +82,10 @@ blah (0.40) UNRELEASED; urgency=medium
 """,
             "debian/changelog",
         )
+
+
+
+class DpkgVendorTests(TestCase):
+
+    def test_runs(self):
+        self.assertIsInstance(dpkg_vendor(), str)
