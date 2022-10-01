@@ -82,11 +82,7 @@
                 });
             }
             
-            var todo = {
-                {
-                    todo[1: ] | tojson
-                }
-            };
+            var todo = {{ todo[1: ] | tojson }};
             var queued = new Set();
             todo.forEach(function(entry) {
                 queued.add(entry[1]);
@@ -100,18 +96,11 @@
                 if ((newJob = todo.shift()) !== undefined) {
                     loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value);
                 } else {
-                    {
-                        %
-                        if not publishable_only %
-                    }
-                    $('.branch').replaceWith('All done!'); {
-                        %
-                        else %
-                    }
-                    $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>'); {
-                        %
-                        endif %
-                    }
+                    {% if not publishable_only %}
+                        $('.branch').replaceWith('All done!');
+		    {% else %}
+                        $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
+		    {% endif %}
                     $('#debdiff').replaceWith('');
                     $('#options').remove();
                     $('#full-run-link').remove();
@@ -123,10 +112,7 @@
             function refreshData(cb) {
                 console.log("Updating backlog of todo items");
                 $.ajax({
-                    url: '/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['
-                    email '] }}{% endif %}&publishable_only={{ '
-                    true ' if publishable_only else '
-                    false ' }}',
+                    url: '/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
                     dataType: 'json',
                     success: function(data) {
                         data.forEach(function(entry) {
@@ -155,22 +141,15 @@
                         'review-comment': comment
                     },
                     statusCode: {
-                        401: function() {
-                            {
-                                %
-                                if user %
-                            }
-                            alert('failed to submit review: not authorized'); {
-                                %
-                                else %
-                            }
-                            window.location.replace("/login?url=" + encodeURI(window.location.href)); {
-                                %
-                                endif %
-                            }
+    		    401: function() {
+    		    {% if user %}
+    			alert('failed to submit review: not authorized');
+    		    {% else %}
+    		    	window.location.replace("/login?url=" + encodeURI(window.location.href));
+    		    {% endif %}
                         },
                         200: function() {
-                            if (todo.length == 0) {
+                        	if (todo.length == 0) {
                                 refreshData(loadNewJob);
                             } else {
                                 loadNewJob();
@@ -178,7 +157,6 @@
                         }
                     }
                 });
-            
             }
         </script>
         <form action="/cupboard/review" method="post" id="options">

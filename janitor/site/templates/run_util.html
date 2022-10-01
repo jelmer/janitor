@@ -186,10 +186,7 @@ cd {{ package }}
                     });
             });
         
-            {
-                %
-                if is_admin %
-            }
+            {% if is_admin %}
             $("#{{ propose_id }}").click(function() {
                 $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
                         'mode': 'propose'
@@ -223,10 +220,7 @@ cd {{ package }}
                     .fail(function(response) {
                         $("#{{ push_id }}").replaceWith("<span>Failed: " + response.responseText + "</span>");
                     });
-            }); {
-                %
-                endif %
-            }
+            }); {% endif %}
         });
     </script>
 {% endmacro %}
