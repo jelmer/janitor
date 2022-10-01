@@ -51,7 +51,6 @@ setup(
             "janitor-apt=janitor.debian.archive:main",
         ],
     },
-    test_suite="janitor.tests.test_suite",
     extras_require={
         'dev': [
             "setuptools",
@@ -75,10 +74,13 @@ setup(
             "python-debian@git+https://salsa.debian.org/python-debian-team/python-debian",
             "types-PyYAML",
             "types-protobuf",
+            "brz-debian",
         ],
         'debian': [
             'python_debian', 'debmutate', 'silver-platter[debian]',
-            'ognibuild[debian]'],
+            'ognibuild[debian]',
+            'brz-debian',
+        ],
     },
     install_requires=[
         "aiohttp",
@@ -93,7 +95,6 @@ setup(
         "breezy",
         "jinja2",
         "ognibuild",
-        "prometheus-client",
         "buildlog-consultant",
         "upstream-ontologist",
         "silver-platter",
