@@ -1,9 +1,3 @@
-FROM debian:sid-slim AS m4
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-RUN apt -y update && apt -y --no-install-recommends install auto-apt-proxy aptitude apt-file && apt-file update && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
-
 FROM debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -73,7 +67,6 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	&& apt-file update
 
 RUN rm -rf /usr/share/aclocal
-COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 COPY --from=build /code /code
 
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate:/code/python-debian/lib

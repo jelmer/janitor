@@ -52,7 +52,7 @@ djlint:
 	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
 
 typing:
-	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
+	mypy janitor
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
