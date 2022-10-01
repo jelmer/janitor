@@ -12,6 +12,10 @@ from iniparse import RawConfigParser
 from janitor.config import read_config, get_distribution
 
 
+def sbuild_schroot_name(suite, arch):
+    return "%s-%s-sbuild" % (suite, arch)
+
+
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
                   eatmydata=True, make_sbuild_tarball=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
@@ -23,7 +27,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for suite in suites:
-        cmd.append("--alias=%s-%s-sbuild" % (suite, sbuild_arch))
+        cmd.append("--alias=%s" % sbuild_schroot_name(suite, sbuild_arch))
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     for name in distro.extra:
@@ -84,7 +88,7 @@ for distribution in args.distribution:
             cp.read([entry.path])
             if distro_config.chroot in cp.sections():
                 old_sbuild_path = cp.get(
-                    '%s-%s-sbuild' % (distro_config.name, sbuild_arch),
+                    sbuild_schroot_name(distro_config.name, sbuild_arch),
                     'directory')
                 if old_sbuild_path != sbuild_path:
                     raise AssertionError(
@@ -114,7 +118,7 @@ for distribution in args.distribution:
     if args.user:
         subprocess.check_call(
             ['schroot', '-c',
-             '%s-%s-sbuild' % (distro_config.name, sbuild_arch),
+             sbuild_schroot_name(distro_config.name, sbuild_arch),
              '--directory', '/', '--', 'install', '-d',
              '--owner=%s' % args.user,
              pwd.getpwnam(args.user).pw_dir])
