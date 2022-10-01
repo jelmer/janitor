@@ -68,8 +68,8 @@ that there are no more than X pull requests open per maintainer.
 
 Worker
 ======
-The actual changes are made by various worker scripts that implement
-the [silver-platter protocol](https://github.com/jelmer/silver-platter/blob/master/devnotes/mutators.rst).
+The actual changes are made by various codemod scripts that implement
+the [silver-platter protocol](https://github.com/jelmer/silver-platter/blob/master/codemod-protocol.rst).
 
 Web site
 ========
