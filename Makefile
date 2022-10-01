@@ -62,3 +62,6 @@ docker-%: core
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
 docker-all: docker-base docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-mastodon_notify docker-xmpp_notify docker-differ
+
+reformat:
+	djlint --reformat --format-css --format-js janitor/site/templates/

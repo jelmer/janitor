@@ -668,3 +668,8 @@ span.tinycomment {
 td.version {
     text-align: center;
 }
+
+/* Queue active lines */
+tr.active {
+    background-color: bisque;
+}
