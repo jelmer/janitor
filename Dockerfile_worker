@@ -67,7 +67,6 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	&& pip3 install google-cloud-logging \
 	&& apt-file update
 
-RUN rm -rf /usr/share/aclocal
 COPY --from=build /code /code
 
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate:/code/python-debian/lib
