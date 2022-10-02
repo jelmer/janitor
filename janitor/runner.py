@@ -398,13 +398,13 @@ BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
 RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 
-def get_builder(config, campaign_config, dep_server_url=None):
+def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=None):
     if campaign_config.HasField('debian_build'):
         distribution = get_distribution(
             config, campaign_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
-            config.apt_location,
+            apt_archive_url,
             dep_server_url,
         )
     elif campaign_config.HasField('generic_build'):
@@ -1442,6 +1442,7 @@ class QueueProcessor(object):
         backup_logfile_manager: Optional[LogFileManager] = None,
         avoid_hosts: Optional[Set[str]] = None,
         dep_server_url: Optional[str] = None,
+        apt_archive_url: Optional[str] = None,
     ):
         """Create a queue processor.
         """
@@ -1461,6 +1462,7 @@ class QueueProcessor(object):
         self.run_timeout = run_timeout
         self.dep_server_url = dep_server_url
         self.avoid_hosts = avoid_hosts or set()
+        self.apt_archive_url = apt_archive_url
         self._watch_dog = None
 
     def start_watchdog(self):
@@ -1918,6 +1920,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         # This is simple for now, since we only support one distribution.
         builder = get_builder(
             queue_processor.config, campaign_config,
+            queue_processor.apt_archive_url,
             queue_processor.dep_server_url)
 
         with span.new_child('build-env'):
@@ -2259,9 +2262,14 @@ async def main(argv=None):
         ),
     )
     parser.add_argument(
-        "--public-vcs-location", type=str, default="https://janitor.debian.net/",
+        "--public-vcs-location", type=str, default=None,
         help="Public vcs location (used for URLs handed to worker)"
     )
+    parser.add_argument(
+        "--public-apt-archive-location", 
+        type=str,
+        default=None,
+        help="Base location for our own APT archive"0
     parser.add_argument("--public-dep-server-url", type=str, default=None)
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
@@ -2358,6 +2366,7 @@ async def main(argv=None):
             backup_logfile_manager=backup_logfile_manager,
             avoid_hosts=set(args.avoid_host),
             dep_server_url=args.public_dep_server_url,
+            apt_archive_url=args.public_apt_archive_location,
         )
 
         queue_processor.start_watchdog()
