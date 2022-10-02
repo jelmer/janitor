@@ -33,8 +33,6 @@ message Config {
   // location, for use with GCS or S3.
   optional string logs_location = 2;
 
-  optional string apt_location = 3;
-
   // postgresql URL for database connection
   optional string database_location = 4;
 
