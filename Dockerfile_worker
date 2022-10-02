@@ -62,6 +62,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	python3-tr \
 	subversion \
 	python3-pcre \
+	ca-certificates \
 	&& apt clean \
 	&& pip3 install google-cloud-logging \
 	&& apt-file update
