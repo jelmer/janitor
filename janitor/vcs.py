@@ -51,6 +51,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchTemporarilyUnavailable,
     BranchRateLimited,
     BranchUnsupported,
 )
@@ -111,6 +112,8 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "unsupported-vcs-darcs"
         elif str(e).startswith("Fossil branches are not yet"):
             code = "unsupported-vcs-fossil"
+        elif isinstance(e, BranchTemporarilyUnavailable):
+            code = "branch-temporarily-unavailable"
         else:
             code = "branch-unavailable"
         msg = str(e)
