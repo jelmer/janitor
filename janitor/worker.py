@@ -201,36 +201,43 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
-    def __init__(self, code: str, description: str,
-                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+    def __init__(
+            self, code: str, description: str,
+            details: Optional[Any] = None, stage=None,
+            followup_actions: Optional[List[Any]] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
         self.followup_actions = followup_actions
+        self.stage = stage
 
     def json(self):
         ret = {
             "code": self.code,
             "description": self.description,
             'details': self.details,
+            'stage': "/".join(self.stage) if self.stage else None,
         }
         if self.followup_actions:
             ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 
-def _convert_script_failed(e: ScriptFailed) -> WorkerFailure:
+def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
     if e.args[1] == 127:
         return WorkerFailure(
             'codemod-command-not-found',
-            'Command %s not found' % e.args[0])
+            'Command %s not found' % e.args[0],
+            stage=("codemod", ))
     elif e.args[1] == 137:
         return WorkerFailure(
             'out-of-memory',
-            'Ran out of memory running command')
+            'Ran out of memory running command',
+            stage=("codemod", ))
     return WorkerFailure(
         'codemod-command-failed',
-        'Script %s failed to run with code %s' % e.args)
+        'Script %s failed to run with code %s' % e.args,
+        stage=("codemod", ))
 
 
 class Target(object):
@@ -305,18 +312,24 @@ class DebianTarget(Target):
                 extra_env=extra_env, committer=self.committer)
         except ResultFileFormatError as e:
             raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e)
+                'result-file-format', 'Result file was invalid: %s' % e,
+                stage=("codemod", ))
         except ScriptMadeNoChanges:
-            raise WorkerFailure('nothing-to-do', 'No changes made')
+            raise WorkerFailure(
+                'nothing-to-do', 'No changes made',
+                stage=("codemod", ))
         except MissingChangelog as e:
             raise WorkerFailure(
-                'missing-changelog', 'No changelog present: %s' % e.args[0])
+                'missing-changelog', 'No changelog present: %s' % e.args[0],
+                stage=("codemod", ))
         except DebianDetailedFailure as e:
-            raise WorkerFailure(e.result_code, e.description, e.details)
+            raise WorkerFailure(
+                e.result_code, e.description, e.details,
+                stage=("codemod", ))
         except ScriptFailed as e:
-            raise _convert_script_failed(e)
+            raise _convert_codemod_script_failed(e)
         except MemoryError as e:
-            raise WorkerFailure('out-of-memory', str(e))
+            raise WorkerFailure('out-of-memory', str(e), stage=("codemod", ))
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.debian.build import build_from_config, BuildFailure
@@ -325,7 +338,8 @@ class DebianTarget(Target):
                 local_tree, subpath, output_directory, config, self.env)
         except BuildFailure as e:
             raise WorkerFailure(
-                e.code, e.description, e.details, e.followup_actions)
+                e.code, e.description, stage=(("build", ) + (e.stage if e.stage else ())),
+                details=e.details, followup_actions=e.followup_actions)
 
 
 class GenericTarget(Target):
@@ -350,13 +364,16 @@ class GenericTarget(Target):
                 committer=self.env.get('COMMITTER'), extra_env=self.env)
         except ResultFileFormatError as e:
             raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e)
+                'result-file-format', 'Result file was invalid: %s' % e,
+                stage=("codemod", ))
         except ScriptMadeNoChanges:
-            raise WorkerFailure('nothing-to-do', 'No changes made')
+            raise WorkerFailure(
+                'nothing-to-do', 'No changes made', stage=("codemod", ))
         except GenericDetailedFailure as e:
-            raise WorkerFailure(e.result_code, e.description, e.details)
+            raise WorkerFailure(
+                e.result_code, e.description, e.details, stage=("codemod", ))
         except ScriptFailed as e:
-            raise _convert_script_failed(e)
+            raise _convert_codemod_script_failed(e)
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import build_from_config, BuildFailure
@@ -365,7 +382,8 @@ class GenericTarget(Target):
                 local_tree, subpath, output_directory, config, self.env)
         except BuildFailure as e:
             raise WorkerFailure(
-                e.code, e.description, e.details, e.followup_actions)
+                e.code, e.description, stage=("build", ), details=e.details,
+                followup_actions=e.followup_actions)
 
 
 def _drop_env(command):
@@ -478,13 +496,14 @@ def process_package(
         build_target = GenericTarget(env)
     else:
         raise WorkerFailure(
-            'target-unsupported', 'The target %r is not supported' % target)
+            'target-unsupported', 'The target %r is not supported' % target,
+            stage=("setup", ))
 
     logger.info("Opening branch at %s", vcs_url)
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
-        raise WorkerFailure(e.code, e.description, details={
+        raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
             'url': vcs_url,
             'retry_after': e.retry_after,
         })
@@ -523,10 +542,12 @@ def process_package(
             traceback.print_exc()
             raise WorkerFailure(
                 "worker-resume-branch-unavailable", str(e),
+                stage=("setup", ),
                 details={'url': e.url})
         except BranchMissing as e:
             raise WorkerFailure(
                 "worker-resume-branch-missing", str(e),
+                stage=("setup", ),
                 details={'url': e.url})
     else:
         resume_branch = None
@@ -552,22 +573,24 @@ def process_package(
             es.enter_context(ws)
         except IncompleteRead as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-incomplete-read", str(e))
+            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", ))
         except MalformedTransform as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-malformed-transform", str(e))
+            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", ))
         except TransformRenameFailed as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transform-rename-failed", str(e))
+            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", ))
         except UnexpectedHttpStatus as e:
             traceback.print_exc()
             if e.code == 502:
-                raise WorkerFailure("worker-clone-bad-gateway", str(e))
+                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", ))
             else:
-                raise WorkerFailure("worker-clone-http-%s" % e.code, str(e))
+                raise WorkerFailure(
+                    "worker-clone-http-%s" % e.code, str(e),
+                    stage=("setup", ), details={'status-code': e.code})
         except TransportError as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transport-error", str(e))
+            raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", ))
 
         logger.info('Workspace ready - starting.')
 
@@ -594,11 +617,12 @@ def process_package(
                 output_directory, resume_codemod_result
             )
             if not ws.any_branch_changes():
-                raise WorkerFailure("nothing-to-do", "Nothing to do.")
+                raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ))
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
                 if ws.changes_since_main():
-                    raise WorkerFailure("nothing-new-to-do", e.description)
+                    raise WorkerFailure(
+                        "nothing-new-to-do", e.description, stage=("codemod", ))
                 elif force_build:
                     changer_result = GenericCommandResult(
                         description='No change build',
@@ -816,26 +840,31 @@ def _push_error_to_worker_failure(e):
             return WorkerFailure(
                 "result-push-bad-gateway",
                 "Failed to push result branch: %s" % e,
+                stage=("result-push", )
             )
         return WorkerFailure(
-            "result-push-failed", "Failed to push result branch: %s" % e
+            "result-push-failed", "Failed to push result branch: %s" % e,
+            stage=("result-push", )
         )
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
                 ConnectionError, ConnectionReset)):
         return WorkerFailure(
-            "result-push-failed", "Failed to push result branch: %s" % e
+            "result-push-failed", "Failed to push result branch: %s" % e,
+            stage=("result-push", )
         )
     if isinstance(e, RemoteGitError):
         if str(e) == 'missing necessary objects':
             return WorkerFailure(
-                'result-push-git-missing-necessary-objects', str(e))
+                'result-push-git-missing-necessary-objects', str(e),
+                stage=("result-push", ))
         elif str(e) == 'failed to updated ref':
             return WorkerFailure(
                 'result-push-git-ref-update-failed',
-                str(e))
+                str(e), stage=("result-push", ))
         else:
-            return WorkerFailure("result-push-git-error", str(e))
+            return WorkerFailure(
+                "result-push-git-error", str(e), stage=("result-push", ))
     return e
 
 
@@ -907,7 +936,8 @@ def run_worker(
                 elif actual_vcs_type != vcs_type:
                     raise WorkerFailure(
                         'vcs-type-mismatch',
-                        'Expected VCS %s, got %s' % (vcs_type, actual_vcs_type))
+                        'Expected VCS %s, got %s' % (vcs_type, actual_vcs_type),
+                        stage=("result-push", ))
 
                 try:
                     if vcs_type.lower() == "git":
@@ -1283,7 +1313,8 @@ async def process_single_item(
             result = await main_task
         except WorkerFailure as e:
             metadata.update(e.json())
-            logging.info("Worker failed (%s): %s", e.code, e.description)
+            logging.info("Worker failed in %r (%s): %s",
+                         e.stage, e.code, e.description)
             # This is a failure for the worker, but returning 0 will cause
             # jenkins to mark the job having failed, which is not really
             # true.  We're happy if we get to successfully POST to /finish

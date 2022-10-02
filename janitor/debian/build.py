@@ -44,18 +44,20 @@ DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 class BuildFailure(Exception):
     """Building failed."""
 
-    def __init__(self, code: str, description: str,
+    def __init__(self, code: str, description: str, stage: Optional[str] = None,
                  details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
         self.followup_actions = followup_actions
+        self.stage = stage
 
     def json(self):
         ret = {
             "code": self.code,
             "description": self.description,
             'details': self.details,
+            'stage': self.stage,
         }
         if self.followup_actions:
             ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
@@ -68,7 +70,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
           update_changelog=None, dep_server_url=None):
     if not local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
-        raise BuildFailure("not-debian-package", "Not a Debian package")
+        raise BuildFailure("not-debian-package", "Not a Debian package", stage="pre-check")
 
     if chroot:
         session = SchrootSession(chroot)
@@ -124,13 +126,13 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                         )
                 except MissingUpstreamTarball:
                     raise BuildFailure(
-                        "build-missing-upstream-source", "unable to find upstream source"
+                        "build-missing-upstream-source", "unable to find upstream source",
                     )
                 except MissingChangesFile as e:
                     raise BuildFailure(
                         "build-missing-changes",
                         "Expected changes path %s does not exist." % e.filename,
-                        details={'filename': e.filename}
+                        details={'filename': e.filename},
                     )
                 except DetailedDebianBuildFailure as e:
                     if e.stage and not e.error.is_global:
@@ -153,18 +155,18 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                                 logging.info('Suggesting follow-up actions: %r', actions)
                         else:
                             actions = None
-                    raise BuildFailure(code, e.description, details=details, followup_actions=actions)
+                    raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions)
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
                     else:
                         code = "build-failed"
-                    raise BuildFailure(code, e.description)
+                    raise BuildFailure(code, e.description, stage=e.stage)
                 logging.info("Built %r.", changes_names)
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise BuildFailure('session-setup-failure', str(e))
+        raise BuildFailure('session-setup-failure', str(e), stage="session-setup",)
     from .lintian import run_lintian
     lintian_result = run_lintian(
         output_directory, changes_names, profile=lintian_profile,
