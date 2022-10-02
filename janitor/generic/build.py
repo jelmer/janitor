@@ -34,8 +34,25 @@ from ognibuild.buildsystem import (
 )
 
 
-# TODO(jelmer): Get rid of this circular import
-from ..worker import WorkerFailure
+class BuildFailure(Exception):
+    """Building failed."""
+
+    def __init__(self, code: str, description: str,
+                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+        self.code = code
+        self.description = description
+        self.details = details
+        self.followup_actions = followup_actions
+
+    def json(self):
+        ret = {
+            "code": self.code,
+            "description": self.description,
+            'details': self.details,
+        }
+        if self.followup_actions:
+            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
+        return ret
 
 
 def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=None):
@@ -56,24 +73,24 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
                     run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise WorkerFailure('build-action-unknown', str(e))
+                    raise BuildFailure('build-action-unknown', str(e))
                 try:
                     run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise WorkerFailure('test-action-unknown', str(e))
+                    raise BuildFailure('test-action-unknown', str(e))
             except NoBuildToolsFound as e:
-                raise WorkerFailure('no-build-tools-found', str(e))
+                raise BuildFailure('no-build-tools-found', str(e))
             except DetailedFailure as f:
-                raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
+                raise BuildFailure(f.error.kind, str(f.error), details={'command': f.argv})
             except UnidentifiedError as e:
                 lines = [line for line in e.lines if line]
                 if e.secondary:
-                    raise WorkerFailure('build-failed', e.secondary.line)
+                    raise BuildFailure('build-failed', e.secondary.line)
                 elif len(lines) == 1:
-                    raise WorkerFailure('build-failed', lines[0])
+                    raise BuildFailure('build-failed', lines[0])
                 else:
-                    raise WorkerFailure(
+                    raise BuildFailure(
                         'build-failed',
                         "%r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
@@ -81,7 +98,7 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise WorkerFailure('session-setup-failure', str(e))
+        raise BuildFailure('session-setup-failure', str(e))
 
     return {}
 
@@ -118,7 +135,7 @@ def main():
         result = build_from_config(
             wt, subpath, args.output_directory, config=config,
             env=os.environ)
-    except WorkerFailure as e:
+    except BuildFailure as e:
         json.dump(e.json())
         return 1
 
