@@ -117,7 +117,7 @@ cd {{ package }}
         });
     </script>
 {% endmacro %}
-{% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}, accesskey="s") %}
+{% macro reschedule_button(suite, package, title="Reschedule", id="reschedule", data={}, accesskey="s") %}
     <button id="{{ id }}"
             {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
@@ -140,7 +140,7 @@ cd {{ package }}
         });
     </script>
 {% endmacro %}
-{% macro schedule_control_button(run_id, title="Schedule control run", id='schedule-control', data={}, accesskey="c") %}
+{% macro schedule_control_button(run_id, title="Schedule control run", id="schedule-control", data={}, accesskey="c") %}
     <button id="{{ id }}"
             {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
@@ -161,7 +161,7 @@ cd {{ package }}
         });
     </script>
 {% endmacro %}
-{% macro publish_buttons(campaign, package, id_suffix='', accesskey='p') %}
+{% macro publish_buttons(campaign, package, id_suffix="", accesskey="p") %}
     {% set propose_id="propose" + id_suffix %}
     {% set fork_id="push-derived" + id_suffix %}
     {% set push_id="push" + id_suffix %}

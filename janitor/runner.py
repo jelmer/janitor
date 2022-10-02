@@ -1407,8 +1407,7 @@ async def followup_run(
             base_distribution.archive_mirror_uri, base_distribution.name,
             base_distribution.component)
 
-        need_control = await to_thread(
-            find_reverse_source_deps(apt, binary_packages))
+        need_control = await to_thread(find_reverse_source_deps, apt, binary_packages)
 
         # TODO(jelmer): check test dependencies?
 
