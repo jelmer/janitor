@@ -324,18 +324,12 @@ class DebianBuilder(Builder):
         if self.distro_config.lintian_suppress_tag:
             config['lintian']['suppress-tags'] = list(self.distro_config.lintian_suppress_tag)
 
-        if self.apt_location.startswith("gs://"):
-            bucket_name = URL(self.apt_location).host
-            apt_location = "https://storage.googleapis.com/%s/" % bucket_name
-        else:
-            apt_location = self.apt_location
-
         extra_janitor_distributions = list(campaign_config.debian_build.extra_build_distribution)
         if queue_item.change_set:
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
 
         config['build-extra-repositories'] = [
-            "deb %s %s main" % (apt_location, suite)
+            "deb %s %s main" % (self.apt_location, suite)
             for suite in extra_janitor_distributions
         ]
         # TODO(jelmer): Ship build-extra-repositories-keys
@@ -381,6 +375,18 @@ class DebianBuilder(Builder):
             env["DISTRIBUTION"] = self.distro_config.name
 
         env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
+
+        if campaign_config.debian_build.chroot:
+            env["CHROOT"] = campaign_config.debian_build.chroot
+        elif self.distro_config.chroot:
+            env["CHROOT"] = self.distro_config.chroot
+
+        env["APT_REPOSITORY"] = "%s %s %s" % (
+            self.distro_config.archive_mirror_uri,
+            self.distro_config.name,
+            " ".join(self.distro_config.component),
+        )
+        # TODO(jelmer): Set env["APT_REPOSITORY_KEY"]
 
         upstream_branch_url = await conn.fetchval(
             "SELECT upstream_branch_url FROM upstream WHERE name = $1",
