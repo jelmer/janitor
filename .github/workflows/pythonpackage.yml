@@ -28,7 +28,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev python3-gpg libgpg-error-dev libgpgme-dev python3-sphinx subunit
+        sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev python3-gpg libgpg-error-dev libgpgme-dev python3-sphinx subunit yamllint
         python -m pip install --upgrade pip
         pip install -U -e .[dev]
         mkdir $HOME/.config/breezy/plugins -p
@@ -39,6 +39,7 @@ jobs:
       run: |
         make flake8
         make djlint
+        make yamllint
     - name: Typing checks
       run: |
         make typing
