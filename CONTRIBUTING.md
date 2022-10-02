@@ -10,4 +10,4 @@ Mostly you can use pip to install Python-based dependencies. In addition to
 those, you'll also want to install various other bits of software. On Debian,
 run:
 
- $ sudo apt install libgpgme-dev rustc libapt-pkg-dev
+ $ sudo apt install libgpgme-dev rustc libapt-pkg-dev protobuf-compiler
