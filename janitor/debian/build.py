@@ -18,6 +18,7 @@
 import os
 import logging
 import sys
+from typing import Optional, List, Any
 
 from ognibuild.debian.apt import AptManager
 from ognibuild.debian.fix_build import build_incrementally

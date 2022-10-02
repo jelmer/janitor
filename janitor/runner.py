@@ -1958,15 +1958,19 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 'Error opening branch %s: %s', vcs_info['branch_url'],
                 e)
             resume_branch = None
+            additional_colocated_branches = None
             vcs_type = vcs_info['vcs_type']
         except asyncio.TimeoutError:
             logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
             resume_branch = None
+            additional_colocated_branches = None
             vcs_type = vcs_info['vcs_type']
         else:
             # We try the public branch first, since perhaps a maintainer
             # has made changes to the branch there.
             active_run.vcs_info["branch_url"] = full_branch_url(main_branch).rstrip('/')
+            additional_colocated_branches = await to_thread(
+                builder.additional_colocated_branches, main_branch)
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 with span.new_child('resume-branch:open'):
@@ -2057,13 +2061,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
     extra_env, command = splitout_env(item.command)
     env.update(extra_env)
-
-    if main_branch is not None:
-        additional_colocated_branches = await to_thread(
-            builder.additional_colocated_branches, main_branch)
-    else:
-        # Maybe it's safer to just abort in this case?
-        additional_colocated_branches = None
 
     assignment = {
         "id": active_run.log_id,
