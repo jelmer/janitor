@@ -49,9 +49,7 @@
                 <li>
                     Review Status:
                     {% if is_qa_reviewer %}
-                        <select id="review-status"
-                                name='review-status'
-                                onchange="submit_review(this.value)">
+                        <select id="review-status" name="review-status" onchange="submit_review(this.value)">
                             <option value="unreviewed"
                                     {% if run.review_status == 'unreviewed' %} selected="true"{% endif %}>
                                 Unreviewed
