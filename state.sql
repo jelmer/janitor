@@ -73,15 +73,19 @@ CREATE TABLE IF NOT EXISTS run (
    branch_url text,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
-   review_comment text,
+   review_comment text, -- DEPRECATED
    value integer,
    -- Name of the worker that executed this run.
    worker text references worker(name),
    worker_link text,
    result_tags result_tag[],
    subpath text,
+   -- Failure stage, if this run failed
+   failure_stage text,
+   -- Failure details, if this run failed
    failure_details json,
    target_branch_url text,
+   -- The run this one resumed from
    resume_from text references run (id),
    change_set text not null references change_set(id),
    foreign key (package) references package(name),

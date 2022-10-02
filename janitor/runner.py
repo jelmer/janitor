@@ -467,6 +467,7 @@ class JanitorResult(object):
             self.tags = worker_result.tags
             self.remotes = worker_result.remotes
             self.failure_details = worker_result.details
+            self.failure_stage = worker_result.stage
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
             self.followup_actions = worker_result.followup_actions
@@ -489,6 +490,7 @@ class JanitorResult(object):
             self.branches = None
             self.tags = None
             self.failure_details = None
+            self.failure_stage = None
             self.target_branch_url = None
             self.remotes = {}
             self.followup_actions = []
@@ -511,6 +513,7 @@ class JanitorResult(object):
             "description": self.description,
             "code": self.code,
             "failure_details": self.failure_details,
+            "failure_stage": self.failure_stage,
             "target": ({
                 "name": self.builder_result.kind,
                 "details": self.builder_result.json(),
@@ -577,6 +580,7 @@ class WorkerResult(object):
     tags: Optional[List[Tuple[str, Optional[bytes]]]] = None
     remotes: Optional[Dict[str, Dict[str, Any]]] = None
     details: Any = None
+    stage: Optional[str] = None
     builder_result: Any = None
     start_time: Optional[datetime] = None
     finish_time: Optional[datetime] = None
@@ -636,6 +640,7 @@ class WorkerResult(object):
             tags=tags,
             remotes=worker_result.get("remotes"),
             details=worker_result.get("details"),
+            stage=worker_result.get("stage"),
             builder_result=builder_result,
             start_time=datetime.fromisoformat(worker_result['start_time'])
             if 'start_time' in worker_result else None,
@@ -1193,6 +1198,7 @@ async def store_run(
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
     failure_details: Optional[Any] = None,
+    failure_stage: Optional[str] = None,
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
     followup_actions: Optional[Any] = None,
@@ -1222,6 +1228,7 @@ async def store_run(
       result_tags: Result tags
       resume_from: Run this one was resumed from
       failure_details: Result failure details
+      failure_stage: Failure stage
       target_branch_url: Branch URL to target
       change_set: Change set id
     """
@@ -1236,10 +1243,10 @@ async def store_run(
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, result_tags, "
-        "resume_from, failure_details, target_branch_url, change_set, "
+        "resume_from, failure_details, failure_stage, target_branch_url, change_set, "
         "followup_actions) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)",
         run_id,
         command,
         description,
@@ -1261,6 +1268,7 @@ async def store_run(
         result_tags_updated,
         resume_from,
         failure_details,
+        failure_stage,
         target_branch_url,
         change_set,
         followup_actions,
@@ -1658,6 +1666,7 @@ class QueueProcessor(object):
                         result_branches=result.branches,
                         result_tags=result.tags,
                         failure_details=result.failure_details,
+                        failure_stage=result.failure_stage,
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
                         change_set=result.change_set,
