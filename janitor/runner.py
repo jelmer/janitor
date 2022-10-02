@@ -2269,7 +2269,7 @@ async def main(argv=None):
         "--public-apt-archive-location", 
         type=str,
         default=None,
-        help="Base location for our own APT archive"0
+        help="Base location for our own APT archive")
     parser.add_argument("--public-dep-server-url", type=str, default=None)
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
