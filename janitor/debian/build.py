@@ -150,7 +150,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                         # Maybe there's a follow-up action we can consider?
                         req = problem_to_upstream_requirement(e.error)
                         if req:
-                            actions = asyncio.run(resolve_requirement(apt, req))
+                            actions = asyncio.run(resolve_requirement(apt, req, dep_server_url))
                             if actions:
                                 logging.info('Suggesting follow-up actions: %r', actions)
                         else:

@@ -123,13 +123,13 @@ async def schedule_update_package(conn, policy, package, desired_version, change
             package, campaign, e)
 
 
-async def followup_missing_requirement(conn, apt_mgr, config, policy, requirement, needed_by=None):
+async def followup_missing_requirement(conn, apt_mgr, config, policy, requirement, needed_by=None, dep_server_url=None):
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
         origin = 'dependency of %s' % needed_by
     else:
         origin = None
-    actions = await resolve_requirement(apt_mgr, requirement)
+    actions = await resolve_requirement(apt_mgr, requirement, dep_server_url=dep_server_url)
     logging.debug('%s: %r', requirement, actions)
     if actions == []:
         # We don't know what to do
@@ -167,7 +167,7 @@ async def main():
         "-r", dest="run_id", type=str, help="Run to process.", action="append"
     )
     parser.add_argument('--debug', action='store_true')
-
+    parser.add_argument('--dep-server-url', type=str, help="URL for ognibuild dep server")
 
     args = parser.parse_args()
     with open(args.config, "r") as f:
@@ -194,7 +194,8 @@ async def main():
                 for requirement, needed_by in requirements.items():
                     await followup_missing_requirement(
                         conn, apt_mgr, config, policy, requirement,
-                        needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]))
+                        needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]),
+                        dep_server_url=args.dep_server_url)
 
 if __name__ == '__main__':
     asyncio.run(main())
