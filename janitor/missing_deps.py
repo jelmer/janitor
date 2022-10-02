@@ -25,7 +25,6 @@ from ognibuild.session.plain import PlainSession
 from buildlog_consultant import problem_clses
 
 from janitor import state
-from janitor.candidates import store_candidates
 from janitor.config import read_config, get_campaign_config
 from janitor.debian.missing_deps import NewPackage, UpdatePackage, resolve_requirement
 from janitor.schedule import do_schedule, PolicyUnavailable
@@ -88,10 +87,17 @@ async def schedule_new_package(conn, upstream_info, config, policy, change_set=N
         command = get_campaign_config(config, campaign).command
     if upstream_info['version']:
         command += ' --upstream-version=%s' % upstream_info['version']
-    await store_candidates(
-        conn,
-        [(package, campaign, command, change_set, None,
-          DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE)])
+
+    await conn.execute(
+        "INSERT INTO candidate "
+        "(package, suite, command, change_set, value, success_chance) "
+        "VALUES ($1, $2, $3, $4, $5, $6) "
+        "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+        "success_chance = EXCLUDED.success_chance, command = EXCLUDED.command",
+        package, campaign, command, change_set,
+        DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE)
+
     await do_schedule(
         conn, package, campaign, change_set=change_set,
         requestor=requestor, bucket='missing-deps', command=command)
