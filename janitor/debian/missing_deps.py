@@ -24,6 +24,7 @@ from debian.changelog import Version
 
 from lintian_brush.debianize import find_upstream, UpstreamInfo
 from ognibuild.requirements import Requirement
+from ognibuild.resolver.dep_server import resolve_apt_requirement_dep_server
 from ognibuild.resolver.apt import resolve_requirement_apt
 
 
@@ -33,7 +34,10 @@ class NewPackage:
     upstream_info: UpstreamInfo
 
     def json(self):
-        return {'action': 'new-package', 'upstream-info': self.upstream_info.json()}
+        return {
+            'action': 'new-package',
+            'upstream-info': self.upstream_info.json(),
+        }
 
 
 @dataclass
@@ -50,8 +54,12 @@ class UpdatePackage:
         }
 
 
-async def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
-    apt_opts = await resolve_requirement_apt(apt_mgr, requirement)
+async def resolve_requirement(
+        apt_mgr, requirement: Requirement, dep_server_url=None) -> List[List[Union[NewPackage, UpdatePackage]]]:
+    if dep_server_url:
+        apt_opts = await resolve_apt_requirement_dep_server(dep_server_url, requirement)
+    else:
+        apt_opts = await resolve_requirement_apt(apt_mgr, requirement)
     options = []
     if apt_opts:
         for apt_req in apt_opts:
