@@ -339,7 +339,7 @@ class DebianTarget(Target):
                 local_tree, subpath, output_directory, config, self.env)
         except BuildFailure as e:
             raise WorkerFailure(
-                e.code, e.description, stage=(("build", ) + (e.stage if e.stage else ())),
+                e.code, e.description, stage=(("build", ) + (e.stage, ) if e.stage else ())),
                 details=e.details, followup_actions=e.followup_actions)
 
 
