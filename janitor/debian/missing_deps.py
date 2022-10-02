@@ -50,8 +50,8 @@ class UpdatePackage:
         }
 
 
-def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
-    apt_opts = resolve_requirement_apt(apt_mgr, requirement)
+async def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
+    apt_opts = await resolve_requirement_apt(apt_mgr, requirement)
     options = []
     if apt_opts:
         for apt_req in apt_opts:

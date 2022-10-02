@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
 import os
 import logging
 import sys
@@ -147,7 +148,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                         # Maybe there's a follow-up action we can consider?
                         req = problem_to_upstream_requirement(e.error)
                         if req:
-                            actions = resolve_requirement(apt, req)
+                            actions = asyncio.run(resolve_requirement(apt, req))
                             if actions:
                                 logging.info('Suggesting follow-up actions: %r', actions)
                         else:
