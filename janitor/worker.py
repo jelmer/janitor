@@ -280,15 +280,20 @@ class DebianTarget(Target):
 
         logging.info('Running %r', self.argv)
         # TODO(jelmer): This is only necessary for deb-new-upstream
-        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.debian.dist' % (
-            self.chroot, ':'.join(sys.path), sys.executable)
+        dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist' % (
+            ':'.join(sys.path), sys.executable)
+
+        try:
+            dist_command = "SCHROOT=%s %s" % (self.env["CHROOT"], dist_command)
+        except KeyError:
+            pass
+
         if local_tree.has_filename(os.path.join(subpath, 'debian')):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
 
         extra_env = {
             'DIST': dist_command,
-            'APT_REPOSITORY': self.base_apt_repository,
         }
         extra_env.update(self.env)
         try:
