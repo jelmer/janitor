@@ -597,6 +597,8 @@ def process_package(
                     "worker-clone-http-%s" % e.code, str(e),
                     stage=("setup", ), details={'status-code': e.code})
         except TransportError as e:
+            if "No space left on device" in e.msg:
+                raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", ))
             traceback.print_exc()
             raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", ))
 
