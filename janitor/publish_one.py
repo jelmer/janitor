@@ -38,6 +38,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchTemporarilyUnavailable,
     BranchRateLimited,
     full_branch_url,
 )
@@ -348,6 +349,8 @@ def publish_one(
             source_branch = open_branch(
                 source_branch_url, possible_transports=possible_transports
             )
+        except BranchTemporarilyUnavailable as e:
+            raise PublishFailure("local-branch-temporarily-unavailable", str(e))
         except BranchUnavailable as e:
             raise PublishFailure("local-branch-unavailable", str(e))
         except BranchMissing as e:
@@ -364,6 +367,8 @@ def publish_one(
             )
         except BranchRateLimited as e:
             raise PublishFailure('branch-rate-limited', str(e))
+        except BranchTemporarilyUnavailable as e:
+            raise PublishFailure("branch-temporarily-unavailable", str(e))
         except BranchUnavailable as e:
             raise PublishFailure("branch-unavailable", str(e))
         except BranchMissing as e:

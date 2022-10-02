@@ -71,6 +71,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchTemporarilyUnavailable,
 )
 
 from breezy import urlutils
@@ -537,6 +538,13 @@ def process_package(
                 resume_branch_url, possible_transports=possible_transports,
                 probers=select_probers(vcs_type)
             )
+        except BranchTemporarilyUnavailable as e:
+            logger.info('Resume branch URL %s temporarily unavailable: %s', e.url, e)
+            traceback.print_exc()
+            raise WorkerFailure(
+                "worker-resume-branch-temporarily-unavailable", str(e),
+                stage=("setup", ),
+                details={'url': e.url})
         except BranchUnavailable as e:
             logger.info('Resume branch URL %s unavailable: %s', e.url, e)
             traceback.print_exc()
