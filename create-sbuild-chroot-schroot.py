@@ -17,7 +17,8 @@ def sbuild_schroot_name(suite, arch):
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
-                  eatmydata=True, make_sbuild_tarball=None):
+                  eatmydata=True, make_sbuild_tarball=None,
+                  janitor_keyring=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
            distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
@@ -31,7 +32,9 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     for name in distro.extra:
-        cmd.append("--extra-repository=deb %s %s %s" % (
+        cmd.append("--extra-repository=deb %s%s %s %s" % (
+            ("[signed-by=%s] " % janitor_keyring)
+            if janitor_keyring else "[trusted=yes] ",
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
     print(shlex.join(cmd))
@@ -57,6 +60,9 @@ parser.add_argument(
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
+parser.add_argument(
+    "--janitor-keyring", type=str, default=None, help="Path to janitor keyring")
+
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
@@ -113,7 +119,7 @@ for distribution in args.distribution:
     create_chroot(
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
         make_sbuild_tarball=make_sbuild_tarball,
-        eatmydata=True)
+        eatmydata=True, janitor_keyring=args.janitor_keyring)
 
     if args.user:
         subprocess.check_call(
