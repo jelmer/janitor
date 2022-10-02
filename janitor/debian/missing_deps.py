@@ -34,7 +34,10 @@ class NewPackage:
     upstream_info: UpstreamInfo
 
     def json(self):
-        return {'action': 'new-package', 'upstream-info': self.upstream_info.json()}
+        return {
+            'action': 'new-package',
+            'upstream-info': self.upstream_info.json(),
+        }
 
 
 @dataclass
