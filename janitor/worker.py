@@ -241,7 +241,8 @@ class Target(object):
     def build(self, local_tree, subpath, output_directory, config):
         raise NotImplementedError(self.build)
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
+    def make_changes(self, local_tree, subpath, argv, log_directory,
+                     resume_metadata=None):
         raise NotImplementedError(self.make_changes)
 
 
@@ -250,7 +251,7 @@ class DebianTarget(Target):
 
     name = "debian"
 
-    def __init__(self, env, argv):
+    def __init__(self, env):
         self.env = env
         self.committer = env.get("COMMITTER")
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
@@ -265,20 +266,20 @@ class DebianTarget(Target):
                 'Invalid value for DEB_UPDATE_CHANGELOG: %s, '
                 'defaulting to auto.', uc)
             self.update_changelog = None
-        self.argv = argv
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
+    def make_changes(self, local_tree, subpath, argv, log_directory,
+                     resume_metadata=None):
         from silver_platter.debian.apply import (
             script_runner as debian_script_runner,
             DetailedFailure as DebianDetailedFailure,
             MissingChangelog,
         )
 
-        if not self.argv:
+        if not argv:
             return GenericCommandResult(
                 description='No change build', context=None, tags=[], value=0)
 
-        logging.info('Running %r', self.argv)
+        logging.info('Running %r', argv)
         # TODO(jelmer): This is only necessary for deb-new-upstream
         dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist' % (
             ':'.join(sys.path), sys.executable)
@@ -298,7 +299,7 @@ class DebianTarget(Target):
         extra_env.update(self.env)
         try:
             return debian_script_runner(
-                local_tree, script=self.argv, commit_pending=None,
+                local_tree, script=argv, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=self.update_changelog,
                 extra_env=extra_env, committer=self.committer)
@@ -318,8 +319,13 @@ class DebianTarget(Target):
             raise WorkerFailure('out-of-memory', str(e))
 
     def build(self, local_tree, subpath, output_directory, config):
-        from janitor.debian.build import build_from_config
-        return build_from_config(local_tree, subpath, output_directory, config, self.env)
+        from janitor.debian.build import build_from_config, BuildFailure
+        try:
+            return build_from_config(
+                local_tree, subpath, output_directory, config, self.env)
+        except BuildFailure as e:
+            raise WorkerFailure(
+                e.code, e.description, e.details, e.followup_actions)
 
 
 class GenericTarget(Target):
@@ -327,19 +333,19 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, env, argv):
+    def __init__(self, env):
         self.env = env
-        self.argv = argv
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
-        if not self.argv:
+    def make_changes(self, local_tree, subpath, argv, log_directory,
+                     resume_metadata=None):
+        if not argv:
             return GenericCommandResult(
                 description='No change build', context=None, tags=[], value=0)
 
-        logging.info('Running %r', self.argv)
+        logging.info('Running %r', argv)
         try:
             return generic_script_runner(
-                local_tree, script=self.argv, commit_pending=None,
+                local_tree, script=argv, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 committer=self.env.get('COMMITTER'), extra_env=self.env)
         except ResultFileFormatError as e:
@@ -353,8 +359,13 @@ class GenericTarget(Target):
             raise _convert_script_failed(e)
 
     def build(self, local_tree, subpath, output_directory, config):
-        from janitor.generic.build import build_from_config
-        return build_from_config(local_tree, subpath, output_directory, config, self.env)
+        from janitor.generic.build import build_from_config, BuildFailure
+        try:
+            return build_from_config(
+                local_tree, subpath, output_directory, config, self.env)
+        except BuildFailure as e:
+            raise WorkerFailure(
+                e.code, e.description, e.details, e.followup_actions)
 
 
 def _drop_env(command):
@@ -462,9 +473,9 @@ def process_package(
 
     build_target: Target
     if target == "debian":
-        build_target = DebianTarget(env, command)
+        build_target = DebianTarget(env)
     elif target == "generic":
-        build_target = GenericTarget(env, command)
+        build_target = GenericTarget(env)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
@@ -579,7 +590,8 @@ def process_package(
 
         try:
             changer_result = build_target.make_changes(
-                ws.local_tree, subpath, resume_codemod_result, output_directory,
+                ws.local_tree, subpath, command, 
+                output_directory, resume_codemod_result
             )
             if not ws.any_branch_changes():
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")

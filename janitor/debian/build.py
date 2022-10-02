@@ -34,12 +34,30 @@ from silver_platter.debian import MissingUpstreamTarball
 
 from . import tree_set_changelog_version
 
-# TODO(jelmer): Get rid of this circular import
-from ..worker import WorkerFailure
-
 
 MAX_BUILD_ITERATIONS = 50
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
+
+
+class BuildFailure(Exception):
+    """Building failed."""
+
+    def __init__(self, code: str, description: str,
+                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+        self.code = code
+        self.description = description
+        self.details = details
+        self.followup_actions = followup_actions
+
+    def json(self):
+        ret = {
+            "code": self.code,
+            "description": self.description,
+            'details': self.details,
+        }
+        if self.followup_actions:
+            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
+        return ret
 
 
 def build(local_tree, subpath, output_directory, chroot=None, command=None,
@@ -48,7 +66,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
           update_changelog=None, dep_server_url=None):
     if not local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
-        raise WorkerFailure("not-debian-package", "Not a Debian package")
+        raise BuildFailure("not-debian-package", "Not a Debian package")
 
     if chroot:
         session = SchrootSession(chroot)
@@ -103,11 +121,11 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                             dep_server_url=dep_server_url,
                         )
                 except MissingUpstreamTarball:
-                    raise WorkerFailure(
+                    raise BuildFailure(
                         "build-missing-upstream-source", "unable to find upstream source"
                     )
                 except MissingChangesFile as e:
-                    raise WorkerFailure(
+                    raise BuildFailure(
                         "build-missing-changes",
                         "Expected changes path %s does not exist." % e.filename,
                         details={'filename': e.filename}
@@ -133,18 +151,18 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                                 logging.info('Suggesting follow-up actions: %r', actions)
                         else:
                             actions = None
-                    raise WorkerFailure(code, e.description, details=details, followup_actions=actions)
+                    raise BuildFailure(code, e.description, details=details, followup_actions=actions)
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
                     else:
                         code = "build-failed"
-                    raise WorkerFailure(code, e.description)
+                    raise BuildFailure(code, e.description)
                 logging.info("Built %r.", changes_names)
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise WorkerFailure('session-setup-failure', str(e))
+        raise BuildFailure('session-setup-failure', str(e))
     from .lintian import run_lintian
     lintian_result = run_lintian(
         output_directory, changes_names, profile=lintian_profile,
@@ -217,7 +235,7 @@ def main():
         result = build_from_config(
             wt, subpath, args.output_directory, config=config,
             env=os.environ)
-    except WorkerFailure as e:
+    except BuildFailure as e:
         json.dump(e.json())
         return 1
 
