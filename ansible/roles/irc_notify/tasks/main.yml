@@ -6,11 +6,11 @@
    state: present
 - name: IRC notify systemd file
   template:
-    src: irc-notify.service
-    dest: /etc/systemd/system/janitor-irc-notify.service
+   src: irc-notify.service
+   dest: /etc/systemd/system/janitor-irc-notify.service
 - name: Enable IRC notify systemd
   systemd:
-    name: janitor-irc-notify.service
-    state: started
-    enabled: yes
-    daemon_reload: yes
+   name: janitor-irc-notify.service
+   state: started
+   enabled: "yes"
+   daemon_reload: "yes"

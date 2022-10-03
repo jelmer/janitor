@@ -1,8 +1,9 @@
+---
 - name: Install dependencies for Mastodon notify
   apt:
     package:
-     - python3-mastodon
-     - python3-prometheus-client
+      - python3-mastodon
+      - python3-prometheus-client
     state: present
 - name: Mastodon notify systemd file
   template:

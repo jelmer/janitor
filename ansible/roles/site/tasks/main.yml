@@ -1,3 +1,4 @@
+---
 - name: Dependencies for site
   apt:
    package:
@@ -12,10 +13,10 @@
    state: present
 - name: Install systemd file for janitor site
   template:
-    src: site.service
-    dest: /etc/systemd/system/janitor-site.service
+   src: site.service
+   dest: /etc/systemd/system/janitor-site.service
 - name: Enable systemd file for janitor site
   systemd:
-    name: janitor-site.service
-    state: started
-    enabled: yes
+   name: janitor-site.service
+   state: started
+   enabled: "yes"
