@@ -1774,6 +1774,35 @@ async def handle_log(request):
     return response
 
 
+@routes.post("/codebases", name="upload-codebases")
+async def handle_codebases(request):
+    queue_processor = request.app['queue_processor']
+
+    codebases = []
+    for entry in await request.json():
+        codebases.append((
+            entry.get('name'),
+            entry['branch_url'],
+            entry.get('subpath'),
+            entry.get('vcs_type'),
+            entry.get('vcs_last_revision')))
+
+    async with queue_processor.database.acquire() as conn:
+        # TODO(jelmer): When a codebase with a certain name already exists,
+        # steal its name
+        await conn.executemany(
+            "INSERT INTO codebase "
+            "(name, branch_url, subpath, vcs_type, vcs_last_revision) "
+            "VALUES ($1, $2, $3, $4, $5)"
+            "ON CONFLICT (name) DO UPDATE SET "
+            "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
+            "vcs_type = EXCLUDED.vcs_type, "
+            "vcs_last_revision = EXCLUDED.vcs_last_revision ",
+            codebases)
+
+    return web.json_response({})
+
+
 @routes.post("/candidates", name="upload-candidates")
 async def handle_candidates(request):
     unknown_packages = []
