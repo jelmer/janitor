@@ -81,6 +81,10 @@ setup(
             'ognibuild[debian]',
             'brz-debian',
         ],
+        'gcp': [
+            'gcloud-aio-storage',
+            'google-cloud-logging',
+        ],
     },
     install_requires=[
         "aiohttp",
