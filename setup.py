@@ -17,6 +17,17 @@
 
 from setuptools import setup
 
+
+debian_requires = [
+    "python-apt@git+https://salsa.debian.org/apt-team/python-apt",
+    "python_debian",
+    'debmutate@git+https://salsa.debian.org/jelmer/debmutate',
+    'silver-platter[debian]@git+https://github.com/jelmer/silver-platter',
+    'ognibuild[debian,dep-server]@git+https://github.com/jelmer/ognibuild',
+    "brz-debian@git+https://github.com/breezy-team/breezy-debian",
+    # "brz-debian@bzr+https://code.launchpad.net/brz-debian",
+]
+
 setup(
     name="janitor",
     author="Jelmer Vernooij",
@@ -53,40 +64,21 @@ setup(
     },
     extras_require={
         'dev': [
-            "setuptools",
-            "setuptools-rust",
             "flake8",
             "djlint",
             "mypy",
-            "debmutate",
-            "pyyaml",
             "testtools",
             "pytest",
             "pytest-cov",
-            "Paste",
-            "aiohttp",
             "mypy-protobuf",
-            "python-apt@git+https://salsa.debian.org/apt-team/python-apt",
-            "cython",
-            "fastbencode",
-            "tqdm",
-            "gpg",
-            "sphinx_epytext",
             "python-subunit",
-            "python-debian@git+https://salsa.debian.org/python-debian-team/python-debian",
             "types-PyYAML",
             "types-protobuf",
-            "brz-debian",
-        ],
-        'debian': [
-            'python_debian', 'debmutate', 'silver-platter[debian]',
-            'ognibuild[debian]',
-            'brz-debian',
-        ],
-        'gcp': [
-            'gcloud-aio-storage',
-            'google-cloud-logging',
-        ],
+        ] + debian_requires,
+        'debian': debian_requires,
+        'gcp': ['gcloud-aio-storage', 'google-cloud-logging'],
+        'git': ['klaus', 'aiohttp-wsgi'],
+        'bzr': ['loggerhead'],
     },
     install_requires=[
         "aiohttp",
@@ -95,15 +87,15 @@ setup(
         "aiozipkin",
         "asyncpg",
         "backoff",
-        "klaus",
-        "loggerhead",
-        "lintian-brush",
-        "breezy",
+        "pygments",
+        "lintian-brush@git+https://salsa.debian.org/jelmer/lintian-brush",
+        "breezy[cext,git,launchpad,workspace,pgp]@git+https://github.com/breezy-team/breezy",
+        # "breezy@bzr+https://code.launchpad.net/brz",
         "jinja2",
-        "ognibuild",
-        "buildlog-consultant",
-        "upstream-ontologist",
-        "silver-platter",
+        "ognibuild@git+https://github.com/jelmer/ognibuild",
+        "buildlog-consultant@git+https://github.com/jelmer/buildlog-consultant",
+        "upstream-ontologist@git+https://github.com/jelmer/upstream-ontologist",
+        "silver-platter@git+https://github.com/jelmer/silver-platter",
         "aiohttp-openmetrics",
     ],
 )
