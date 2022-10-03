@@ -328,11 +328,11 @@ class DebianBuilder(Builder):
         if queue_item.change_set:
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
 
+        # TODO(jelmer): Ship build-extra-repositories-keys, and specify [signed-by] here
         config['build-extra-repositories'] = [
-            "deb %s %s main" % (self.apt_location, suite)
+            "deb [trusted=yes] %s %s main" % (self.apt_location, suite)
             for suite in extra_janitor_distributions
         ]
-        # TODO(jelmer): Ship build-extra-repositories-keys
 
         config["build-distribution"] = campaign_config.debian_build.build_distribution or campaign_config.name
 
