@@ -25,7 +25,7 @@
   register: sbuild
   with_items: "{{ janitor_distributions }}"
 - name: Create schroot
-  command: "{{ janitor_code_path }}/create-sbuild-chroot.py --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['name'] }}"
+  command: "{{ janitor_code_path }}/create-sbuild-chroot-schroot.py --config={{ janitor_conf_path }} --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['name'] }}"
   when: not item.stat.exists
   with_items: "{{ sbuild.results }}"
 - name: Update schroot

@@ -47,6 +47,11 @@ style:: flake8
 flake8:
 	flake8
 
+style:: yamllint
+
+yamllint:
+	yamllint ansible/
+
 style:: djlint
 
 djlint:
