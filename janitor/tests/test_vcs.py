@@ -25,27 +25,23 @@ from . import TestCaseWithTransport
 
 from breezy import controldir
 
-import unittest
+
+def test_simple():
+    assert (
+        "https://github.com/jelmer/dulwich"
+        == bzr_to_browse_url("https://github.com/jelmer/dulwich")
+    )
 
 
-class BzrToBrowseUrlTests(unittest.TestCase):
-    def test_simple(self):
-        self.assertEqual(
-            "https://github.com/jelmer/dulwich",
-            bzr_to_browse_url("https://github.com/jelmer/dulwich"),
-        )
-
-    def test_branch(self):
-        self.assertEqual(
-            "https://github.com/jelmer/dulwich/tree/master",
-            bzr_to_browse_url("https://github.com/jelmer/dulwich,branch=master"),
-        )
-        self.assertEqual(
-            "https://github.com/jelmer/dulwich/tree/debian/master",
-            bzr_to_browse_url(
-                "https://github.com/jelmer/dulwich,branch=debian%2Fmaster"
-            ),
-        )
+def test_branch():
+    assert (
+        "https://github.com/jelmer/dulwich/tree/master"
+        == bzr_to_browse_url("https://github.com/jelmer/dulwich,branch=master")
+    )
+    assert (
+        "https://github.com/jelmer/dulwich/tree/debian/master"
+        == bzr_to_browse_url("https://github.com/jelmer/dulwich,branch=debian%2Fmaster")
+    )
 
 
 class GetRunDiffsTests(TestCaseWithTransport):
@@ -97,16 +93,11 @@ File b
         self.assertEqual(b"", lines[6])
 
 
-class IsAuthenticatedUrlTests(unittest.TestCase):
+def test_authenticated():
+    assert is_authenticated_url("git+ssh://git@github.com/jelmer/janitor")
+    assert is_authenticated_url("bzr+ssh://git@github.com/jelmer/janitor")
 
-    def test_authenticated(self):
-        self.assertTrue(
-            is_authenticated_url("git+ssh://git@github.com/jelmer/janitor"))
-        self.assertTrue(
-            is_authenticated_url("bzr+ssh://git@github.com/jelmer/janitor"))
 
-    def test_not_authenticated(self):
-        self.assertFalse(
-            is_authenticated_url("https://github.com/jelmer/janitor"))
-        self.assertFalse(
-            is_authenticated_url("git://github.com/jelmer/janitor"))
+def test_not_authenticated():
+    assert not is_authenticated_url("https://github.com/jelmer/janitor")
+    assert not is_authenticated_url("git://github.com/jelmer/janitor")
