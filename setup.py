@@ -61,6 +61,8 @@ setup(
             "debmutate",
             "pyyaml",
             "testtools",
+            "pytest",
+            "pytest-cov",
             "Paste",
             "aiohttp",
             "mypy-protobuf",

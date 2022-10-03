@@ -30,17 +30,17 @@ test-it-all::
 	$(MAKE) -C dulwich check
 	$(MAKE) -C breezy check PYTHONPATH=$(PYTHONPATH)
 	$(MAKE) -C lintian-brush check
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest silver_platter.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest ognibuild.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest buildlog_consultant.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest debmutate.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) pytest silver_platter
+	PYTHONPATH=$(PYTHONPATH) pytest ognibuild
+	PYTHONPATH=$(PYTHONPATH) pytest buildlog_consultant
+	PYTHONPATH=$(PYTHONPATH) pytest debmutate
+	PYTHONPATH=$(PYTHONPATH) pytest janitor
 
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	BRZ_PLUGINS_AT=$(BRZ_PLUGINS_AT) PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
+	BRZ_PLUGINS_AT=$(BRZ_PLUGINS_AT) PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) pytest janitor
 
 style:: flake8
 
@@ -74,10 +74,3 @@ reformat:: reformat-html
 
 reformat-html:
 	djlint --reformat --format-css janitor/site/templates/
-
-
-coverage:
-	python3 -m coverage run -m unittest janitor.tests.test_suite
-
-coverage-html:
-	python3 -m coverage html
