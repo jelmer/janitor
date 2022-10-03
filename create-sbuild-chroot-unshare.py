@@ -10,7 +10,7 @@ from janitor.config import read_config, get_distribution
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
-                  setup_hooks=[], janitor_keyring=None):
+                  setup_hooks=[]):
     cmd = ["mmdebstrap", "--variant=buildd", distro.name, sbuild_path,
            distro.archive_mirror_uri, '--mode=unshare',
            '--arch=%s' % sbuild_arch]
@@ -18,9 +18,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for name in distro.extra:
-        cmd.append("--extra-repository=deb %s%s %s %s" % (
-            ("[signed-by=%s] " % janitor_keyring)
-            if janitor_keyring else "[trusted=yes] ",
+        cmd.append("--extra-repository=deb %s %s %s" % (
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
     for setup_hook in setup_hooks:
@@ -55,9 +53,6 @@ parser.add_argument(
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
-parser.add_argument(
-    "--janitor-keyring", type=str, default=None,
-    help="Keyring for janitor apt repositories")
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
@@ -91,4 +86,4 @@ for distribution in args.distribution:
                 args.user, pwd.getpwname(args.user).pw_dir))
     create_chroot(
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
-        setup_hooks=setup_hooks, janitor_keyring=args.janitor_keyring)
+        setup_hooks=setup_hooks)
