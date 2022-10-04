@@ -1,3 +1,4 @@
+---
 - name: Backup directory exists
   file:
     state: directory

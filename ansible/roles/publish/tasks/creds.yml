@@ -1,3 +1,4 @@
+---
 - name: Set Launchpad username
   command: "{{ janitor_code_path }}/breezy/brz lp-login {{ item.username }}"
   when: "item.kind == 'launchpad'"

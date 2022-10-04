@@ -1,3 +1,4 @@
+---
 - name: Install sieve extprogram support
   apt: name=dovecot-sieve state=present
 - name: sieve extprograms configuration

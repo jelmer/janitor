@@ -1,3 +1,4 @@
+---
 - name: Install dependencies for IRC notify
   apt:
    package:

@@ -1,3 +1,4 @@
+---
 - name: Install systemd file for janitor auto upload
   template:
     src: auto-upload.service
