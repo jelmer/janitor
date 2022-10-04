@@ -17,7 +17,7 @@
 
 from janitor.debian import tree_set_changelog_version, dpkg_vendor
 
-from breezy.tests import TestCaseWithTransport, TestCase
+from breezy.tests import TestCaseWithTransport
 
 
 class TreeSetChangelogVersionTests(TestCaseWithTransport):
@@ -84,8 +84,5 @@ blah (0.40) UNRELEASED; urgency=medium
         )
 
 
-
-class DpkgVendorTests(TestCase):
-
-    def test_runs(self):
-        self.assertIsInstance(dpkg_vendor(), str)
+def test_runs():
+    assert isinstance(dpkg_vendor(), str)
