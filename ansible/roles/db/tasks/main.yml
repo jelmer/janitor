@@ -1,3 +1,4 @@
+---
 - name: Install sudo
   apt: package=sudo state=present
 - name: Install postgresl debversion

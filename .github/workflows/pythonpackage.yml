@@ -1,3 +1,4 @@
+---
 name: Python package
 
 on:
@@ -19,39 +20,39 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: recursive
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev python3-gpg libgpg-error-dev libgpgme-dev python3-sphinx subunit yamllint
-        python -m pip install --upgrade pip
-        pip install -U -e .[dev]
-        mkdir $HOME/.config/breezy/plugins -p
-        ln -s `pwd`/breezy-debian ~/.config/breezy/plugins/debian
-        python setup.py develop
-        make
-    - name: Style checks
-      run: |
-        make flake8
-        make djlint
-        make yamllint
-    - name: Typing checks
-      run: |
-        make typing
-    - name: Build
-      run: |
-        make all
-    - name: Test suite run
-      run: |
-        make check
-      env:
-        PYTHONHASHSEED: random
-    - name: Config compat test
-      run: |
-        git clone https://salsa.debian.org/jelmer/janitor.debian.net/ janitor.debian.net
-        PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint
+          python -m pip install --upgrade pip
+          pip install -U -e .[dev]
+          mkdir $HOME/.config/breezy/plugins -p
+          ln -s `pwd`/breezy-debian ~/.config/breezy/plugins/debian
+          python setup.py develop
+          make
+      - name: Style checks
+        run: |
+          make flake8
+          make djlint
+          make yamllint
+      - name: Typing checks
+        run: |
+          make typing
+      - name: Build
+        run: |
+          make all
+      - name: Test suite run
+        run: |
+          make check
+        env:
+          PYTHONHASHSEED: random
+      - name: Config compat test
+        run: |
+          git clone https://salsa.debian.org/jelmer/janitor.debian.net/ janitor.debian.net
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf

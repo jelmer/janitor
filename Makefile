@@ -50,7 +50,7 @@ flake8:
 style:: yamllint
 
 yamllint:
-	yamllint ansible/
+	yamllint .github/ ansible/
 
 style:: djlint
 

@@ -1,3 +1,4 @@
+---
 - name: Install systemd file for janitor archiver
   template:
     src: archive.service
