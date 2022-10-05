@@ -2,7 +2,7 @@ FROM docker.io/debian:sid-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y install --no-install-recommends auto-apt-proxy && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler python3-setuptools python3-setuptools-rust ca-certificates python3-pip libgpgme-dev
+RUN apt -y update && apt -y install --no-install-recommends auto-apt-proxy && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler python3-setuptools python3-setuptools-rust ca-certificates python3-pip libgpgme-dev swig
 
 COPY . /code
 RUN pip3 install --upgrade "/code[gcp]"
