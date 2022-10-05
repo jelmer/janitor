@@ -10,6 +10,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	pristine-tar \
 	devscripts \
 	libpython3.10 \
+	python3-pip \
 	quilt \
 	sbuild \
 	autopkgtest \
