@@ -23,6 +23,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	gnome-pkg-tools \
 	subversion \
 	ca-certificates \
+	libgpgme-dev \
 	make \
 	cython3 \
 	rustc \
