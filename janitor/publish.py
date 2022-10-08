@@ -1331,7 +1331,7 @@ class BranchPublishPolicySchema(Schema):
 
 class PolicySchema(Schema):
 
-    per_branch_policy = fields.Dict(
+    per_branch = fields.Dict(
         keys=fields.Str(),
         values=fields.Nested(BranchPublishPolicySchema))
 
@@ -1353,7 +1353,7 @@ async def handle_policy_get(request):
     if not row:
         return web.json_response({"reason": "Publish policy not found"}, status=404)
     return web.json_response({
-        "per_branch_policy": {
+        "per_branch": {
             p['role']: {
                 'mode': p['mode'],
                 'max_frequency_days': p['frequency_days'],
@@ -1367,11 +1367,11 @@ async def handle_full_policy_get(request):
     async with request.app['db'].acquire() as conn:
         rows = await conn.fetch("SELECT * FROM named_publish_policy")
     return web.json_response({row['name']: {
-        "per_branch_policy": {
+        "per_branch": {
             p['role']: {
                 'mode': p['mode'],
                 'max_frequency_days': p['frequency_days'],
-            } for p in row['publish']},
+            } for p in row['per_branch_policy']},
         "qa_review": row['qa_review'],
     } for row in rows})
 
