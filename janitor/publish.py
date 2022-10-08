@@ -1370,7 +1370,7 @@ async def handle_full_policy_get(request):
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
-                'max_frequency_days': p['frequency_days'],
+                'max_frequency_days': p['max_frequency_days'],
             } for p in row['per_branch_policy']},
         "qa_review": row['qa_review'],
     } for row in rows})
@@ -1394,7 +1394,7 @@ async def handle_policy_put(request):
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
             "per_branch_policy = EXCLUDED.per_branch_policy", name,
             policy['qa_review'],
-            [(r, v['mode'], v['frequency_days'])
+            [(r, v['mode'], v.get('max_frequency_days'))
              for (r, v) in policy['per_branch'].items()])
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
@@ -1407,7 +1407,7 @@ async def handle_full_policy_put(request):
         await conn.execute("DELETE FROM named_publish_policy")
         entries = [
             (name, v['qa_review'],
-             [(r, b['mode'], b['frequency_days'])
+             [(r, b['mode'], b.get('max_frequency_days'))
               for (r, b) in v['per_branch'].items()])
             for (name, v) in policy.items()]
         await conn.executemany(
@@ -2100,7 +2100,8 @@ ORDER BY length(branch_url) DESC
 
     source_branch = await to_thread(
         open_branch,
-        result['branch_url'], possible_transports=possible_transports)
+        result['branch_url'].rstrip('/'),
+        possible_transports=possible_transports)
     if source_branch.user_url.rstrip('/') != url.rstrip('/'):
         logging.info('Did not resolve branch URL to package: %r != %r',
                      source_branch.user_url, url)
