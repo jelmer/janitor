@@ -10,7 +10,7 @@ There are currently several instances of the Janitor running. For their configur
 
 * [Debian Janitor](https://janitor.debian.net/) - Setup at https://salsa.debian.org/jelmer/janitor.debian.net
 * [Kali Janitor](https://janitor.kali.org/) - Configuration repository is private
-* [Upstream Janitor aka ``Scruffy``](https://www.scruffy.dev/) - Setup at https://github.com/jelmer/janitor.jelmer.uk
+* [Upstream Janitor aka ``Scruffy``](https://www.scruffy.dev/) - Setup at https://github.com/scruffy-team/scruffy
 
 Philosophy
 ==========
