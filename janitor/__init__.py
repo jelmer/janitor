@@ -22,8 +22,8 @@ from breezy.transport.http import urllib as _mod_urllib
 import shlex
 from .compat import shlex_join
 
-version_info = (0, 1, 0)
-version_string = ".".join(map(str, version_info))
+__version__ = (0, 1, 0)
+version_string = ".".join(map(str, __version__))
 
 
 def user_agent() -> str:
