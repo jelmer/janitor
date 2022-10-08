@@ -2100,7 +2100,8 @@ ORDER BY length(branch_url) DESC
 
     source_branch = await to_thread(
         open_branch,
-        result['branch_url'], possible_transports=possible_transports)
+        result['branch_url'].rstrip('/'),
+        possible_transports=possible_transports)
     if source_branch.user_url.rstrip('/') != url.rstrip('/'):
         logging.info('Did not resolve branch URL to package: %r != %r',
                      source_branch.user_url, url)
