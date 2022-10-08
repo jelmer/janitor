@@ -47,23 +47,24 @@
             <li>Description: {{ description }}</li>
             {% if result_code == 'success' %}
                 <li>
-                    Review Status:
+                    Review Status: {{ run.review_status }}
+                    {% for review in reviews %}{% if review.reviewer == user %}{% set my_review = review %}{% endif %}{% endfor %}
                     {% if is_qa_reviewer %}
                         <select id="review-status" name="review-status" onchange="submit_review(this.value)">
                             <option value="unreviewed"
-                                    {% if run.review_status == 'unreviewed' %} selected="true"{% endif %}>
+                                    {% if my_review and my_review.review_status == 'unreviewed' %} selected="true"{% endif %}>
                                 Unreviewed
                             </option>
                             <option value="approved"
-                                    {% if run.review_status == 'approved' %} selected="true"{% endif %}>
+                                    {% if my_review and my_review.review_status == 'approved' %} selected="true"{% endif %}>
                                 Approved
                             </option>
                             <option value="abstained"
-                                    {% if run.review_status == 'abstained' %} selected="true"{% endif %}>
+                                    {% if my_review and my_review.review_status == 'abstained' %} selected="true"{% endif %}>
                                 Abstained
                             </option>
                             <option value="rejected"
-                                    {% if run.review_status == 'rejected' %} selected="true"{% endif %}>
+                                    {% if my_review and my_review.review_status == 'rejected' %} selected="true"{% endif %}>
                                 Rejected
                             </option>
                         </select>
@@ -80,10 +81,7 @@
                                 });
                             }
                         </script>
-                    {% else %}
-                        {{ run.review_status }}
                     {% endif %}
-                    {% if run.review_comment %}(<i>{{ run.review_comment }}</i>){% endif %}
                 </li>
             {% endif %}
             {% if queue_position %}

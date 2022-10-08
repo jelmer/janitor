@@ -106,7 +106,6 @@ SELECT
   branch_url,
   logfilenames,
   review_status,
-  review_comment,
   last_unabsorbed_runs.worker AS worker_name,
   worker.link AS worker_link,
   array(SELECT row(role, remote_name, base_revision,
@@ -136,7 +135,6 @@ SELECT
     result_code,
     main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
-    review_comment,
     run.worker AS worker_name,
     worker.link AS worker_link,
     array(SELECT row(role, remote_name, base_revision,
@@ -162,7 +160,7 @@ SELECT
     debian_build.distribution AS build_distribution, result_code, value,
     main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
-    review_comment, worker,
+    worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
     result_tags, target_branch_url, change_set AS change_set
