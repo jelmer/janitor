@@ -68,46 +68,28 @@ from .webhook import process_webhook
 from ..schedule import (
     do_schedule,
     do_schedule_control,
-    PolicyUnavailable,
+    CandidateUnavailable,
 )
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
 
 
-class PublishPolicySchema(Schema):
-
-    mode = fields.Str(description="publish mode")
-
-
-class PolicySchema(Schema):
-
-    publish_policy = fields.Dict(keys=fields.Str(), values=fields.Nested(PublishPolicySchema))
-    command = fields.Str(description='command to run')
-
-
-@docs(
-    responses={
-        404: {"description": "Package does not exist or does not have a policy"},
-        200: {"description": "Success response"}
-    }
-)
-@response_schema(PolicySchema())
-@routes.get("/pkg/{package}/policy", name="package-policy")
+@routes.get("/pkg/{package}/publish-policy", name="package-policy")
 async def handle_policy(request):
     package = request.match_info["package"]
     suite_policies = {}
     async with request.app['db'].acquire() as conn:
         rows = await conn.fetch(
-            "SELECT suite, publish, command "
-            "FROM policy WHERE package = $1", package)
+            "SELECT suite AS campaign, per_branch_policy "
+            "FROM candidate "
+            "LEFT JOIN named_publish_policy.name = candidate.publish_policy "
+            "WHERE package = $1", package)
     if not rows:
         return web.json_response({"reason": "Package not found"}, status=404)
     for row in rows:
-        suite_policies[row['suite']] = {
-            "publish_policy": {p['role']: {'mode': p['mode']} for p in row['publish']},
-            "command": row['command'],
-        }
+        suite_policies[row['campaign']] = {
+            p['role']: {'mode': p['mode']} for p in row['per_branch_policy']}
     return web.json_response({"by_campaign": suite_policies})
 
 
@@ -204,9 +186,9 @@ async def handle_schedule(request):
                 requestor=requestor,
                 bucket="manual",
             )
-        except PolicyUnavailable:
+        except CandidateUnavailable:
             return web.json_response(
-                {"reason": "Publish policy not yet available."}, status=503
+                {"reason": "Candidate not available."}, status=503
             )
         queue = Queue(conn)
         (queue_position, queue_wait_time) = await queue.get_position(
@@ -256,9 +238,9 @@ async def handle_run_reschedule(request):
                 requestor=requestor,
                 bucket="manual",
             )
-        except PolicyUnavailable:
+        except CandidateUnavailable:
             return web.json_response(
-                {"reason": "Publish policy not yet available."}, status=503
+                {"reason": "Candidate not available."}, status=503
             )
         queue = Queue(conn)
         (queue_position, queue_wait_time) = await queue.get_position(
@@ -1342,9 +1324,9 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
                         offset=offset,
                         bucket="reschedule",
                     )
-                except PolicyUnavailable:
+                except CandidateUnavailable:
                     logging.debug(
-                        'Not rescheduling %s/%s: policy unavailable',
+                        'Not rescheduling %s/%s: candidate unavailable',
                         run['package'], run['campaign'])
 
     create_background_task(do_reschedule(), 'mass-reschedule')

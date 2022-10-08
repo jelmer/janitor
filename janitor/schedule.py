@@ -28,7 +28,7 @@ from debian.changelog import Version
 import asyncpg
 
 from .compat import shlex_join
-from .config import read_config, get_campaign_config
+from .config import read_config
 from .queue import Queue
 
 FIRST_RUN_BONUS = 100.0
@@ -97,7 +97,7 @@ PUBLISH_MODE_VALUE = {
 }
 
 
-async def iter_candidates_with_policy(
+async def iter_candidates_with_publish_policy(
         conn: asyncpg.Connection,
         packages: Optional[List[str]] = None,
         campaign: Optional[str] = None):
@@ -109,13 +109,12 @@ SELECT
   candidate.context AS context,
   candidate.value AS value,
   candidate.success_chance AS success_chance,
-  policy.publish AS publish,
-  coalesce(candidate.command, policy.command) AS command
+  named_publish_policy.per_branch_policy AS publish,
+  candidate.command AS command
 FROM candidate
 INNER JOIN package on package.name = candidate.package
-INNER JOIN policy ON
-    policy.package = package.name AND
-    policy.suite = candidate.suite
+INNER JOIN named_publish_policy ON
+    named_publish_policy.name = candidate.publish_policy
 WHERE
   NOT package.removed AND
   package.branch_url IS NOT NULL
@@ -133,17 +132,12 @@ WHERE
     return await conn.fetch(query, *args)
 
 
-def queue_item_from_candidate_and_policy(row, config):
+def queue_item_from_candidate_and_publish_policy(row):
     value = row['value']
     for entry in row['publish']:
         value += PUBLISH_MODE_VALUE[entry['mode']]
 
     command = row['command']
-    if command is None:
-        campaign = get_campaign_config(config, row['campaign'])
-        if campaign is None:
-            raise ValueError('unknown campaign %s' % row['campaign'])
-        command = campaign.command
 
     return (row['package'], row['context'], command, row['campaign'],
             value, row['success_chance'])
@@ -415,9 +409,9 @@ async def main():
         logging.info('Finding candidates with policy')
         logging.info('Determining schedule for candidates')
         todo = [
-            queue_item_from_candidate_and_policy(row, config)
+            queue_item_from_candidate_and_publish_policy(row)
             for row in
-            await iter_candidates_with_policy(
+            await iter_candidates_with_publish_policy(
                 conn, packages=(args.packages or None), campaign=args.campaign)]
         logging.info('Adding %d items to queue', len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
@@ -454,7 +448,7 @@ async def do_schedule_control(
     )
 
 
-class PolicyUnavailable(Exception):
+class CandidateUnavailable(Exception):
     def __init__(self, campaign: str, package: str):
         self.campaign = campaign
         self.package = package
@@ -475,13 +469,13 @@ async def do_schedule(
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
-        policy = await conn.fetchrow(
+        candidate = await conn.fetchrow(
             "SELECT command "
-            "FROM policy WHERE package = $1 AND suite = $2",
+            "FROM candidate WHERE package = $1 AND suite = $2",
             package, campaign)
-        if not policy:
-            raise PolicyUnavailable(campaign, package)
-        command = policy['command']
+        if not candidate:
+            raise CandidateUnavailable(campaign, package)
+        command = candidate['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, campaign)
     queue = Queue(conn)

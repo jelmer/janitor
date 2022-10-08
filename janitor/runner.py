@@ -97,7 +97,6 @@ from .logs import (
     LogFileManager,
     FileSystemLogFileManager,
 )
-from .policy import read_policy, PolicyConfig
 from .queue import QueueItem, Queue
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (
@@ -1333,7 +1332,7 @@ def find_reverse_source_deps(apt, binary_packages):
 
 
 async def followup_run(
-        config: Config, database: asyncpg.pool.Pool, policy: PolicyConfig,
+        config: Config, database: asyncpg.pool.Pool,
         active_run: ActiveRun, result: JanitorResult) -> None:
     if result.code == "success" and active_run.campaign not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
@@ -1376,11 +1375,10 @@ async def followup_run(
                         await schedule_new_package(
                             conn, action['upstream-info'],
                             config,
-                            policy,
                             requestor=requestor, change_set=result.change_set)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
-                            conn, policy, action['package'], action['desired-version'],
+                            conn, action['package'], action['desired-version'],
                             requestor=requestor, change_set=result.change_set)
         from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
         problem = reconstruct_problem(result.code, result.failure_details)
@@ -1441,7 +1439,6 @@ class QueueProcessor(object):
         self,
         database: asyncpg.pool.Pool,
         redis,
-        policy: PolicyConfig,
         config: Config,
         run_timeout: int,
         dry_run: bool = False,
@@ -1461,7 +1458,6 @@ class QueueProcessor(object):
         """
         self.database = database
         self.redis = redis
-        self.policy = policy
         self.config = config
         self.dry_run = dry_run
         self.logfile_manager = logfile_manager
@@ -1678,7 +1674,7 @@ class QueueProcessor(object):
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
-        await followup_run(self.config, self.database, self.policy, active_run, result)
+        await followup_run(self.config, self.database, active_run, result)
 
         await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
@@ -2311,9 +2307,6 @@ async def main(argv=None):
         default=None,
         help="Base location for our own APT archive")
     parser.add_argument("--public-dep-server-url", type=str, default=None)
-    parser.add_argument(
-        "--policy", type=str, default="policy.conf", help="Path to policy."
-    )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
@@ -2387,12 +2380,9 @@ async def main(argv=None):
         db = await state.create_pool(config.database_location)
         redis = await aioredis.create_redis(config.redis_location)
         stack.callback(redis.close)
-        with open(args.policy, 'r') as f:
-            policy = read_policy(f)
         queue_processor = QueueProcessor(
             db,
             redis,
-            policy,
             config,
             run_timeout=args.run_timeout,
             dry_run=args.dry_run,
