@@ -33,16 +33,6 @@ In janitor.conf, add a section for the campaign. E.g.::
       }
     }
 
-In policy.conf, add a default stanza::
-
-    policy {
-      campaign {
-       name: "some-name"  # This is the name of the campaign
-       command: "some-name"  # This is the codemod script to run
-       publish { mode: propose }  # Default publishing mode
-      }
-    }
-
 Add script for finding candidates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

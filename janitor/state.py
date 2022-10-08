@@ -15,6 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = [
+    'iter_publishable_suites',
+]
+
 import datetime
 from debian.changelog import Version
 import json
@@ -218,23 +222,13 @@ class Run(object):
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
     package: str
-) -> List[
-    Tuple[
-        str,
-    ]
-]:
+) -> List[str]:
     query = """
 SELECT DISTINCT candidate.suite
-FROM candidate
-INNER JOIN package on package.name = candidate.package
-LEFT JOIN policy ON
-    policy.package = package.name AND
-    policy.suite = candidate.suite
-WHERE NOT package.removed AND package.name = $1
+FROM publish_ready
+WHERE package = $1
 """
-    return [
-        row[0] for row in await conn.fetch(query, package)
-    ]
+    return [row[0] for row in await conn.fetch(query, package)]
 
 
 async def has_cotenants(
