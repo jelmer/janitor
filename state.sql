@@ -73,7 +73,6 @@ CREATE TABLE IF NOT EXISTS run (
    branch_url text,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
-   review_comment text, -- DEPRECATED
    value integer,
    -- Name of the worker that executed this run.
    worker text references worker(name),
@@ -546,7 +545,6 @@ CREATE OR REPLACE VIEW publishable AS
   run.branch_url AS branch_url,
   run.logfilenames AS logfilenames,
   run.review_status AS review_status,
-  run.review_comment AS review_comment,
   run.worker AS worker,
   array(SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE new_result_branch.run_id = run.id) as result_branches,
   run.result_tags AS result_tags,
