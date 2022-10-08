@@ -1362,6 +1362,15 @@ async def handle_policy_get(request):
     })
 
 
+@routes.delete("/policy/{name}", name="delete-policy")
+async def handle_policy_delete(request):
+    async with request.app['db'].acquire() as conn:
+        await conn.execute(
+            "DELETE FROM named_publish_policy WHERE name = $1",
+            request.match_info['name'])
+    return web.json_response({})
+
+
 @routes.get("/policy", name="get-full-policy")
 async def handle_full_policy_get(request):
     async with request.app['db'].acquire() as conn:
