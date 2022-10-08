@@ -1835,17 +1835,21 @@ async def handle_candidates(request):
                 candidate['package'], candidate['campaign'],
                 command,
                 candidate.get('change_set'), candidate.get('context'),
-                candidate.get('value'), candidate.get('success_chance')))
+                candidate.get('value'), candidate.get('success_chance'),
+                candidate.get('publish-policy')))
         if 'replace' in request.query:
             await conn.execute('DELETE FROM candidate')
 
         await conn.executemany(
             "INSERT INTO candidate "
-            "(package, suite, command, change_set, context, value, success_chance) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+            "(package, suite, command, change_set, context, value, "
+            "success_chance, publish_policy) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
             "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
-            "success_chance = EXCLUDED.success_chance, command = EXCLUDED.command",
+            "success_chance = EXCLUDED.success_chance, "
+            "command = EXCLUDED.command, "
+            "publish_policy = EXCLUDED.publish_policy",
             entries,
         )
     return web.json_response({
