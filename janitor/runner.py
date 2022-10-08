@@ -1825,9 +1825,15 @@ async def handle_candidates(request):
                 unknown_campaigns.append(candidate['campaign'])
                 continue
 
+            command = candidate.get('command')
+            if command is None:
+                campaign_config = get_campaign_config(
+                    queue_processor.config, candidate['campaign'])
+                command = campaign_config.command
+
             entries.append((
                 candidate['package'], candidate['campaign'],
-                candidate['command'],
+                command,
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance')))
         if 'replace' in request.query:
