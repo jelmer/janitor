@@ -1393,7 +1393,9 @@ async def handle_policy_put(request):
             "VALUES ($1, $2, $3) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
             "per_branch_policy = EXCLUDED.per_branch_policy", name,
-            policy['qa_review'], policy['per_branch'])
+            policy['qa_review'],
+            [(r, v['mode'], v['frequency_days'])
+             for (r, v) in policy['per_branch'].items()])
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1404,7 +1406,9 @@ async def handle_full_policy_put(request):
     async with request.app['db'].acquire() as conn, conn.transaction():
         await conn.execute("DELETE FROM named_publish_policy")
         entries = [
-            (name, v['qa_review'], v['per_branch'])
+            (name, v['qa_review'],
+             [(r, b['mode'], b['frequency_days'])
+              for (r, b) in v['per_branch'].items()])
             for (name, v) in policy.items()]
         await conn.executemany(
             "INSERT INTO named_publish_policy (name, qa_review, per_branch_policy) "

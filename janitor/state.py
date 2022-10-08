@@ -224,7 +224,7 @@ async def iter_publishable_suites(
     package: str
 ) -> List[str]:
     query = """
-SELECT DISTINCT candidate.suite
+SELECT DISTINCT suite
 FROM publish_ready
 WHERE package = $1
 """
