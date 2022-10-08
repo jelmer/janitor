@@ -1803,6 +1803,7 @@ async def handle_codebases(request):
 async def handle_candidates(request):
     unknown_packages = []
     unknown_campaigns = []
+    unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
     async with queue_processor.database.acquire() as conn, conn.transaction():
         known_packages = set()
@@ -1811,6 +1812,11 @@ async def handle_candidates(request):
 
         known_campaign_names = [
             campaign.name for campaign in queue_processor.config.campaign]
+
+        known_publish_policies = set()
+        for record in (await conn.fetch(
+                'SELECT name FROM named_publish_policy')):
+            known_publish_policies.add(record[0])
 
         entries = []
         for candidate in (await request.json()):
@@ -1831,12 +1837,19 @@ async def handle_candidates(request):
                     queue_processor.config, candidate['campaign'])
                 command = campaign_config.command
 
+            publish_policy = candidate.get('publish-policy')
+            if (publish_policy is not None
+                    and publish_policy not in known_publish_policies):
+                logging.warning('unknown publish policy %s', publish_policy)
+                unknown_publish_policies.add(publish_policy)
+                continue
+
             entries.append((
                 candidate['package'], candidate['campaign'],
                 command,
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance'),
-                candidate.get('publish-policy')))
+                publish_policy))
         if 'replace' in request.query:
             await conn.execute('DELETE FROM candidate')
 
@@ -1854,6 +1867,7 @@ async def handle_candidates(request):
         )
     return web.json_response({
         'unknown_campaigns': unknown_campaigns,
+        'unknown_publish_policies': unknown_publish_policies,
         'unknown_packages': unknown_packages})
 
 
