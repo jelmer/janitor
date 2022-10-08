@@ -189,7 +189,7 @@ async def handle_review_stats(request):
 
 async def handle_review_post(request):
     from .review import generate_review
-    from .. import store_review
+    from ..review import store_review
     check_logged_in(request)
 
     post = await request.post()

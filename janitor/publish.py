@@ -1821,10 +1821,10 @@ async def blockers_request(request):
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow("""\
 SELECT
+  run.id AS id,
   run.finish_time AS finish_time,
   run.review_status AS review_status,
   run.command AS run_command,
-  review_comment AS review_comment,
   named_publish_policy.qa_review AS qa_review_policy,
   package.maintainer_email AS maintainer_email,
   run.revision AS revision,
@@ -1845,6 +1845,9 @@ WHERE run.id = $1
             return web.json_response({
                 'reason': 'No such publish-ready run',
                 'run_id': request.match_info['run_id']}, status=404)
+
+        reviews = await conn.fetch(
+            "SELECT * FROM review WHERE run_id = $1", run['id'])
 
         if run['revision'] is not None:
             attempt_count = await get_publish_attempt_count(
@@ -1871,7 +1874,10 @@ WHERE run.id = $1
                      and run['review_status'] == 'unreviewed')),
         'details': {
             'status': run['review_status'],
-            'comment': run['review_comment'],
+            'reviews': {review['reviewer']: {
+                'timestamp': review['reviewed_at'],
+                'comment': review['comment'],
+                'status': review['review_status']} for review in reviews},
             'needs_review': (
                 run['qa_review_policy'] == 'required'
                 and run['review_status'] == 'unreviewed'),
@@ -1991,7 +1997,7 @@ SELECT
     result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
-    review_comment, worker,
+    worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags, target_branch_url, change_set AS change_set
@@ -2830,7 +2836,7 @@ SELECT
     result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
-    review_comment, worker,
+    worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags, target_branch_url, change_set as change_set
@@ -2864,7 +2870,6 @@ SELECT
   branch_url,
   logfilenames,
   review_status,
-  review_comment,
   worker,
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
