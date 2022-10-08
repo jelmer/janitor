@@ -1841,7 +1841,7 @@ async def handle_candidates(request):
             if (publish_policy is not None
                     and publish_policy not in known_publish_policies):
                 logging.warning('unknown publish policy %s', publish_policy)
-                unknown_publish_policies.add(publish_policy)
+                unknown_publish_policies.append(publish_policy)
                 continue
 
             entries.append((
