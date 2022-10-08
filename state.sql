@@ -154,7 +154,8 @@ CREATE TABLE IF NOT EXISTS candidate (
    context text,
    value integer,
    success_chance float,
-   command text,
+   command text not null,
+   publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
    foreign key (package) references package(name)
 );
@@ -165,23 +166,12 @@ CREATE TABLE IF NOT EXISTS branch_publish_policy (
    frequency_days int,
    unique(role)
 );
-CREATE TABLE IF NOT EXISTS publish_policy (
-   package text not null,
-   campaign campaign_name not null,
-   per_branch_policy branch_publish_policy[]
-   qa_review review_policy,
-   foreign key (package) references package(name),
-   unique(package, campaign)
+CREATE TABLE IF NOT EXISTS named_publish_policy (
+   name text not null primary key,
+   per_branch_policy branch_publish_policy[],
+   qa_review review_policy
 );
-CREATE TYPE notify_mode AS ENUM('no_notification', 'email', 'bts');
-CREATE TABLE IF NOT EXISTS policy (
-   package text not null,
-   suite suite_name not null,
-   command text,
-   broken_notify notify_mode,
-   foreign key (package) references package(name),
-   unique(package, suite)
-);
+
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 CREATE TABLE IF NOT EXISTS worker (
@@ -562,13 +552,13 @@ CREATE OR REPLACE VIEW publishable AS
   run.result_tags AS result_tags,
   run.value AS value,
   package.maintainer_email AS maintainer_email,
-  policy.command AS policy_command,
-  policy.qa_review AS qa_review_policy,
-  (policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
+  candidate.command AS policy_command,
+  named_publish_policy.qa_review AS qa_review_policy,
+  (named_publish_policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
-    LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
+    LEFT JOIN UNNEST(named_publish_policy.per_branch_policy) pp ON pp.role = rb.role
    WHERE rb.run_id = run.id AND not COALESCE(absorbed, False)
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches,
@@ -578,8 +568,10 @@ CREATE OR REPLACE VIEW publishable AS
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
-INNER JOIN policy ON
-    policy.package = run.package AND policy.suite = run.suite
+INNER JOIN candidate ON
+    candidate.package = run.package AND candidate.suite = run.suite
+INNER JOIN named_publish_policy ON
+    candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
   result_code = 'success' AND NOT package.removed;

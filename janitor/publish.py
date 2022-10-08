@@ -90,7 +90,7 @@ from .config import read_config, get_campaign_config, Campaign
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
-    PolicyUnavailable,
+    CandidateUnavailable,
 )
 from .vcs import (
     VcsManager,
@@ -1360,29 +1360,24 @@ async def handle_policy_get(request):
     })
 
 
-@routes.post("/{package}/{campaign}/policy", name="post-policy")
+@routes.post("/policy/{name}", name="post-policy")
 async def handle_policy_post(request):
-    package = request.match_info["package"]
-    campaign = request.match_info["campaign"]
+    name = request.match_info["name"]
 
     policy = await request.json()
 
     async with request.app['db'].acquire() as conn:
         await conn.execute(
-            "INSERT INTO policy "
-            "(package, suite, command, publish, qa_review, broken_notify) "
-            "VALUES ($1, $2, $3, $4, $5, $6) "
-            "ON CONFLICT (package, suite) DO UPDATE SET "
-            "command = EXCLUDED.command, "
-            "publish = EXCLUDED.publish, "
-            "qa_review = EXCLUDED.qa_review, "
-            "broken_notify = EXCLUDED.broken_notify",
-            package,
-            campaign,
-            policy.get('command'),
-            [(role, v.get('mode'), v.get('max_frequency_days')) for (role, v) in policy['per_branch'].items()],
-            policy.get('qa_policy'),
-            policy.get('broken_notify'))
+            "INSERT INTO named_publish_policy "
+            "(name, per_branch_policy, qa_review, broken_notify) "
+            "VALUES ($1, $2, $3) "
+            "ON CONFLICT (name) DO UPDATE SET "
+            "per_branch_policy = EXCLUDED.per_branch_policy, "
+            "qa_review = EXCLUDED.qa_review",
+            name,
+            [(role, v.get('mode'), v.get('max_frequency_days'))
+             for (role, v) in policy['per_branch'].items()],
+            policy.get('qa_policy'))
     return web.json_response({})
 
 
@@ -1393,17 +1388,16 @@ async def handle_policy_post(request):
     }
 )
 @response_schema(PolicySchema())
-@routes.put("/{package}/{campaign}/policy", name="put-policy")
+@routes.put("/policy/{name}", name="put-policy")
 async def handle_policy_put(request):
-    package = request.match_info["package"]
-    campaign = request.match_info["campaign"]
+    name = request.match_info["name"]
     policy = await request.json()
     async with request.app['db'].acquire() as conn:
         await conn.execute(
-            "INSERT INTO publish_policy (package, campaign, qa_review, per_branch_policy) "
-            "VALUES ($1, $2, $3, $4) ON CONFLICT (package, campaign) "
+            "INSERT INTO named_publish_policy (name, qa_review, per_branch_policy) "
+            "VALUES ($1, $2, $3) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
-            "per_branch_policy = EXCLUDED.per_branch_policy", package, campaign,
+            "per_branch_policy = EXCLUDED.per_branch_policy", name,
             policy['qa_review'], policy['per_branch'])
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
@@ -1473,17 +1467,20 @@ async def consider_request(request):
 
 async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: str):
     row = await conn.fetchrow(
-        "SELECT publish, command "
-        "FROM policy WHERE package = $1 AND suite = $2",
+        "SELECT per_branch_policy, command "
+        "FROM candidate "
+        "LEFT JOIN named_publish_policy "
+        "ON named_publish_policy.name = candidate.publish_policy "
+        "WHERE package = $1 AND suite = $2",
         package,
         campaign,
     )
     if row:
         return (
-            {v['role']: (v['mode'], v['frequency_days']) for v in row['publish']},
-            row['command']
-        )
-    return None, None, None
+            {v['role']: (v['mode'], v['frequency_days'])
+             for v in row['per_branch_policy']},
+            row['command'])
+    return None, None
 
 
 @routes.post("/{campaign}/{package}/publish", name='publish')
@@ -1813,18 +1810,18 @@ SELECT
   run.review_status AS review_status,
   run.command AS run_command,
   review_comment AS review_comment,
-  policy.qa_review AS qa_review_policy,
+  named_publish_policy.qa_review AS qa_review_policy,
   package.maintainer_email AS maintainer_email,
   run.revision AS revision,
-  policy.command AS policy_command,
+  candidate.command AS policy_command,
   package.removed AS removed,
   run.result_code AS result_code,
   change_set.state AS change_set_state,
   change_set.id AS change_set
 FROM run
 LEFT JOIN package ON package.name = run.package
-INNER JOIN policy ON policy.package = run.package
-   AND policy.suite = run.suite
+INNER JOIN candidate ON candidate.package = run.package AND candidate.suite = run.suite
+INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE run.id = $1
 """, request.match_info['run_id'])
@@ -2359,9 +2356,9 @@ applied independently.
                     refresh=False,
                     requestor="publisher (transient error)",
                 )
-            except PolicyUnavailable as e:
+            except CandidateUnavailable as e:
                 logging.warning(
-                    'Policy unavailable while attempting to reschedule %s/%s: %s',
+                    'Candidate unavailable while attempting to reschedule %s/%s: %s',
                     last_run.package, last_run.suite, e)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
@@ -2661,9 +2658,9 @@ applied independently.
                         refresh=True,
                         requestor="publisher (merge conflict)",
                     )
-                except PolicyUnavailable:
+                except CandidateUnavailable:
                     logging.warning(
-                        'Policy unavailable while attempting to reschedule '
+                        'Candidate unavailable while attempting to reschedule '
                         'conflicted %s/%s',
                         mp_run['package'], mp_run['campaign'])
         return False
