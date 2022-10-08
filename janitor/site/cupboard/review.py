@@ -36,7 +36,14 @@ async def generate_rejected(conn, config, campaign=None):
         "ORDER BY finish_time DESC",
         campaigns)
 
-    return {"runs": runs, "suite": campaign}
+    reviews = {}
+
+    for row in await conn.fetch(
+            'SELECT * FROM review WHERE id = ANY($1:text[])',
+            [run.id for run in runs]):
+        reviews.setdefault(row['run_id'], []).append(row)
+
+    return {"runs": runs, "suite": campaign, "reviews": reviews}
 
 
 async def generate_review(
