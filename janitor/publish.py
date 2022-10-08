@@ -1325,11 +1325,15 @@ async def get_publish_attempt_count(
 class BranchPublishPolicySchema(Schema):
 
     mode = fields.Str(description="publish mode")
+    max_frequency_days = fields.Integer(
+        description="maximum frequency for publishing")
 
 
 class PolicySchema(Schema):
 
-    per_branch_policy = fields.Dict(keys=fields.Str(), values=fields.Nested(BranchPublishPolicySchema))
+    per_branch_policy = fields.Dict(
+        keys=fields.Str(),
+        values=fields.Nested(BranchPublishPolicySchema))
 
 
 @docs(
@@ -1339,46 +1343,46 @@ class PolicySchema(Schema):
     }
 )
 @response_schema(PolicySchema())
-@routes.get("/{package}/{campaign}/policy", name="get-policy")
+@routes.get("/policy/{name}", name="get-policy")
 async def handle_policy_get(request):
-    package = request.match_info["package"]
-    campaign = request.match_info["campaign"]
+    name = request.match_info["name"]
     async with request.app['db'].acquire() as conn:
         row = await conn.fetchrow(
             "SELECT * "
-            "FROM publish_policy WHERE package = $1 AND campaign = $2", package, campaign)
+            "FROM named_publish_policy WHERE name = $1", name)
     if not row:
-        return web.json_response({"reason": "Package or campaign not found"}, status=404)
+        return web.json_response({"reason": "Publish policy not found"}, status=404)
     return web.json_response({
-        "per_branch": {
+        "per_branch_policy": {
             p['role']: {
                 'mode': p['mode'],
                 'max_frequency_days': p['frequency_days'],
             } for p in row['publish']},
-        "qa_policy": row['qa_policy'],
-        "broken_notify": row["broken_notify"],
+        "qa_review": row['qa_review'],
     })
 
 
-@routes.post("/policy/{name}", name="post-policy")
-async def handle_policy_post(request):
-    name = request.match_info["name"]
-
-    policy = await request.json()
-
+@routes.delete("/policy/{name}", name="delete-policy")
+async def handle_policy_delete(request):
     async with request.app['db'].acquire() as conn:
         await conn.execute(
-            "INSERT INTO named_publish_policy "
-            "(name, per_branch_policy, qa_review, broken_notify) "
-            "VALUES ($1, $2, $3) "
-            "ON CONFLICT (name) DO UPDATE SET "
-            "per_branch_policy = EXCLUDED.per_branch_policy, "
-            "qa_review = EXCLUDED.qa_review",
-            name,
-            [(role, v.get('mode'), v.get('max_frequency_days'))
-             for (role, v) in policy['per_branch'].items()],
-            policy.get('qa_policy'))
+            "DELETE FROM named_publish_policy WHERE name = $1",
+            request.match_info['name'])
     return web.json_response({})
+
+
+@routes.get("/policy", name="get-full-policy")
+async def handle_full_policy_get(request):
+    async with request.app['db'].acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM named_publish_policy")
+    return web.json_response({row['name']: {
+        "per_branch_policy": {
+            p['role']: {
+                'mode': p['mode'],
+                'max_frequency_days': p['frequency_days'],
+            } for p in row['publish']},
+        "qa_review": row['qa_review'],
+    } for row in rows})
 
 
 @docs(
@@ -1410,14 +1414,13 @@ async def handle_policy_put(request):
     }
 )
 @response_schema(PolicySchema())
-@routes.delete("/{package}/{campaign}/policy", name="delete-policy")
+@routes.delete("/policy/{name}", name="delete-policy")
 async def handle_policy_del(request):
-    package = request.match_info["package"]
-    campaign = request.match_info["campaign"]
+    name = request.match_info["name"]
     async with request.app['db'].acquire() as conn:
         await conn.execute(
-            "DELETE FROM publish_policy WHERE package = $1 AND campaign = $2",
-            package, campaign)
+            "DELETE FROM named_publish_policy WHERE name = $1",
+            name)
     return web.json_response({})
 
 
