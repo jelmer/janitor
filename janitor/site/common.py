@@ -191,13 +191,13 @@ async def generate_pkg_context(
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
             package = await conn.fetchrow("""\
-SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_type,
+SELECT package.name AS name, maintainer_email, uploader_emails, removed, branch_url, vcs_type,
     vcs_url, vcs_browse, vcswatch_version,
     named_publish_policy.per_branch_policy AS publish_policy
 FROM package
-LEFT JOIN candidate ON name = candidate.package AND candidate.suite = $2
+LEFT JOIN candidate ON package.name = candidate.package AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE name = $1""", package, suite)
+WHERE package.name = $1""", package, suite)
         if package is None:
             raise web.HTTPNotFound(text='no such package: %s' % package)
         if run_id is not None:
