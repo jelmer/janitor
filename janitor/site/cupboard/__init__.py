@@ -196,26 +196,11 @@ async def handle_review_post(request):
     publishable_only = post.get("publishable_only", "true") == "true"
     async with request.app.database.acquire() as conn:
         if "review_status" in post:
-            run = await conn.fetchrow(
-                'SELECT package, suite FROM run WHERE id = $1',
-                post["run_id"])
             review_status = {
                 'approve': 'approved',
                 'reject': 'rejected',
                 'reschedule': 'rescheduled',
                 'abstain': 'abstained'}[post["review_status"].lower()]
-            if review_status == "rescheduled":
-                review_status = "rejected"
-                from ...schedule import do_schedule
-
-                await do_schedule(
-                    conn,
-                    run['package'],
-                    run['suite'],
-                    refresh=True,
-                    requestor="reviewer",
-                    bucket="default",
-                )
             review_comment = post.get("review_comment")
             await store_review(
                 conn, post["run_id"], status=review_status,

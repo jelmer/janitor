@@ -1370,7 +1370,7 @@ async def handle_full_policy_get(request):
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
-                'max_frequency_days': p['max_frequency_days'],
+                'max_frequency_days': p['frequency_days'],
             } for p in row['per_branch_policy']},
         "qa_review": row['qa_review'],
     } for row in rows})
