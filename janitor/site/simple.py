@@ -346,7 +346,7 @@ async def create_app(
         app.on_cleanup.append(cleanup_gpg)
 
     async def connect_redis(app):
-        app['redis'] = await aioredis.create_redis(config.redis_location)
+        app['redis'] = await aioredis.create_redis_pool(config.redis_location)
 
     async def disconnect_redis(app):
         app['redis'].close()

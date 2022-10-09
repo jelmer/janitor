@@ -592,7 +592,7 @@ async def run_web_server(app, listen_addr, port, tracer):
 async def listen_to_runner(redis_location, app):
     import aioredis
 
-    redis = await aioredis.create_redis(redis_location)
+    redis = await aioredis.create_redis_pool(redis_location)
     channel = (await redis.subscribe('result'))[0]
     try:
         while (await channel.wait_message()):
