@@ -1498,6 +1498,38 @@ async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: s
     return None, None
 
 
+@routes.get("/publish/{publish_id}", name="publish-details")
+async def handle_publish_id(request):
+    publish_id = request.match_info["publish_id"]
+    async with request.app['db'].acquire() as conn:
+        row = await conn.fetchrow("""
+SELECT
+  package,
+  branch_name,
+  main_branch_revision,
+  revision,
+  mode,
+  merge_proposal_url,
+  result_code,
+  description
+FROM publish WHERE id = $1
+""", publish_id)
+        if row:
+            raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
+    return web.json_response(
+        {
+            "package": row['package'],
+            "branch": row['branch_name'],
+            "main_branch_revision": row['main_branch_revision'],
+            "revision": row['revision'],
+            "mode": row['mode'],
+            "merge_proposal_url": row['merge_proposal_url'],
+            "result_code": row['result_code'],
+            "description": row['description'],
+        }
+    )
+
+
 @routes.post("/{campaign}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
@@ -1875,7 +1907,7 @@ WHERE run.id = $1
         'details': {
             'status': run['review_status'],
             'reviews': {review['reviewer']: {
-                'timestamp': review['reviewed_at'],
+                'timestamp': review['reviewed_at'].isoformat(),
                 'comment': review['comment'],
                 'status': review['review_status']} for review in reviews},
             'needs_review': (
