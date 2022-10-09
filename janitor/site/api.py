@@ -33,7 +33,6 @@ import logging
 from typing import Optional
 
 from aiohttp.web_middlewares import normalize_path_middleware
-import asyncpg
 from aiohttp_apispec import (
     docs,
     response_schema,
@@ -47,7 +46,6 @@ from yarl import URL
 
 from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
-from janitor.queue import Queue
 from . import (
     check_admin,
     is_qa_reviewer,
@@ -1249,7 +1247,7 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
                             'estimated_duration': (
                                 run['duration'].total_seconds()
                                 if run.get('duration') else None),
-                            }, raise_for_status=True):
+                    }, raise_for_status=True):
                         pass
                 except ClientResponseError as e:
                     if e.status == 503:
