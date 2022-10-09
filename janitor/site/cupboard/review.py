@@ -40,7 +40,7 @@ async def generate_rejected(conn, config, campaign=None):
 
     for row in await conn.fetch(
             'SELECT * FROM review WHERE id = ANY($1:text[])',
-            [run.id for run in runs]):
+            [run['id'] for run in runs]):
         reviews.setdefault(row['run_id'], []).append(row)
 
     return {"runs": runs, "suite": campaign, "reviews": reviews}
