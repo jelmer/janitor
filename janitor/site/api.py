@@ -65,11 +65,6 @@ from .common import (
 )
 from janitor.logs import get_log_manager
 from .webhook import process_webhook
-from ..schedule import (
-    do_schedule,
-    do_schedule_control,
-    CandidateUnavailable,
-)
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
@@ -162,47 +157,32 @@ async def handle_schedule(request):
         refresh = bool(int(post.get("refresh", "0")))
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
-    async with request.app['db'].acquire() as conn:
-        package = await conn.fetchrow(
-            'SELECT name, branch_url FROM package WHERE name = $1', package)
-        if package is None:
-            return web.json_response({"reason": "Package not found"}, status=404)
-        if request['user']:
-            try:
-                requestor = request['user']["email"]
-            except KeyError:
-                requestor = request['user']["name"]
-        else:
-            requestor = "user from web UI"
-        if package['branch_url'] is None:
-            return web.json_response({"reason": "No branch URL defined."}, status=400)
+    if request['user']:
         try:
-            offset, estimated_duration = await do_schedule(
-                conn,
-                package['name'],
-                campaign,
-                offset,
-                refresh=refresh,
-                requestor=requestor,
-                bucket="manual",
-            )
-        except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            campaign, package['name']
-        )
-    response_obj = {
-        "package": package['name'],
+            requestor = request['user']["email"]
+        except KeyError:
+            requestor = request['user']["name"]
+    else:
+        requestor = "user from web UI"
+    schedule_url = URL(request.app['runner_url']) / "schedule"
+    async with ClientSession() as session:
+        async with session.post(schedule_url, json={
+            'package': package,
+            'campaign': campaign,
+            'refresh': refresh,
+            'offset': offset,
+            'requestor': requestor,
+            'bucket': "manual"
+        }, raise_for_status=True) as resp:
+            ret = await resp.json()
+    return web.json_response({
+        "package": package,
         "campaign": campaign,
         "offset": offset,
-        "estimated_duration_seconds": estimated_duration.total_seconds(),
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time.total_seconds(),
-    }
-    return web.json_response(response_obj)
+        "estimated_duration_seconds": ret['estimated_duration'],
+        "queue_position": ret['queue_position'],
+        "queue_wait_time": ret['queue_wait_time'],
+    })
 
 
 @response_schema(ScheduleResultSchema())
@@ -228,33 +208,25 @@ async def handle_run_reschedule(request):
             run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
-        try:
-            offset, estimated_duration = await do_schedule(
-                conn,
-                run['package'],
-                run['campaign'],
-                offset,
-                refresh=refresh,
-                requestor=requestor,
-                bucket="manual",
-            )
-        except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            run['campaign'], run['package']
-        )
-    response_obj = {
-        "package": run['package'],
-        "campaign": run['campaign'],
-        "offset": offset,
-        "estimated_duration_seconds": estimated_duration.total_seconds(),
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time.total_seconds(),
+    json = {
+        'package': run['package'],
+        'campaign': run['campaign'],
+        'refresh': refresh,
+        'requestor': requestor,
+        'bucket': 'manual',
+        'offset': offset,
     }
-    return web.json_response(response_obj)
+    url = URL(request.app['runner_url']) / "schedule"
+    try:
+        async with request.app['http_client_session'].post(
+                url, json=json, raise_for_status=True) as resp:
+            return web.json_response(await resp.json())
+    except ContentTypeError as e:
+        return web.json_response(
+            {"error": "runner returned error %d" % e.code}, status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            {"error": "unable to contact runner"}, status=502)
 
 
 @response_schema(ScheduleResultSchema())
@@ -267,41 +239,32 @@ async def handle_schedule_control(request):
         refresh = bool(int(post.get("refresh", "0")))
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
-    async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            "SELECT main_branch_revision, package, branch_url FROM run "
-            "WHERE id = $1",
-            run_id)
-        if run is None:
-            return web.json_response({"reason": "Run not found"}, status=404)
-        if request['user']:
-            try:
-                requestor = request['user']["email"]
-            except KeyError:
-                requestor = request['user']['name']
-        else:
-            requestor = "user from web UI"
-        if run['branch_url'] is None:
-            return web.json_response({"reason": "No branch URL defined."}, status=400)
-        offset, estimated_duration = await do_schedule_control(
-            conn, run['package'],
-            offset=offset,
-            refresh=refresh,
-            requestor=requestor,
-            main_branch_revision=run['main_branch_revision'].encode('utf-8'),
-        )
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            "unchanged", run['package'])
-    response_obj = {
-        "package": run['package'],
-        "campaign": "unchanged",
-        "offset": offset,
-        "estimated_duration_seconds": estimated_duration.total_seconds(),
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time.total_seconds(),
+    if request['user']:
+        try:
+            requestor = request['user']["email"]
+        except KeyError:
+            requestor = request['user']['name']
+    else:
+        requestor = "user from web UI"
+
+    json = {
+        'run_id': run_id,
+        'offset': offset,
+        'refresh': refresh,
+        'requestor': requestor,
     }
-    return web.json_response(response_obj)
+
+    url = URL(request.app['runner_url']) / "schedule-control"
+    try:
+        async with request.app['http_client_session'].post(
+                url, json=json, raise_for_status=True) as resp:
+            return web.json_response(await resp.json())
+    except ContentTypeError as e:
+        return web.json_response(
+            {"error": "runner returned error %d" % e.code}, status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            {"error": "unable to contact runner"}, status=502)
 
 
 class MergeProposalSchema(Schema):
@@ -624,18 +587,10 @@ async def consider_publishing(session, publisher_url, run_id):
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
-@routes.post("/{camaign}/pkg/{package}", name="campaign-package-run-update")
 async def handle_run_post(request):
     from ..review import store_review
     async with request.app['db'].acquire() as conn:
-        try:
-            run_id = request.match_info["run_id"]
-        except KeyError:
-            package = request.match_info["package"]
-            campaign = request.match_info["campaign"]
-            run_id = await conn.fetchval(
-                'SELECT id FROM run WHERE package = $1 AND suite = $2',
-                package, campaign)
+        run_id = request.match_info["run_id"]
 
         check_logged_in(request)
         span = aiozipkin.request_span(request)
@@ -644,21 +599,6 @@ async def handle_run_post(request):
         review_comment = post.get("review-comment")
         if review_status:
             review_status = review_status.lower()
-            if review_status == "reschedule":
-                with span.new_child('sql:run'):
-                    run = await conn.fetchrow(
-                        'SELECT package, suite AS campaign FROM run WHERE id = $1',
-                        run_id)
-                with span.new_child('schedule'):
-                    await do_schedule(
-                        conn,
-                        run['package'],
-                        run['campaign'],
-                        refresh=True,
-                        requestor="reviewer",
-                        bucket="default",
-                    )
-                review_status = "rejected"
             with span.new_child('sql:update-run'):
                 try:
                     user = request['user']['email']
@@ -1293,24 +1233,31 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
         runs = await conn.fetch(query, *params)
 
     async def do_reschedule():
-        async with request.app['db'].acquire() as conn:
+        schedule_url = URL(request.app['runner_url']) / "schedule"
+        async with ClientSession() as session:
             for run in runs:
-                logging.info("Rescheduling %s, %s" % (run['package'], run['campaign']))
+                logging.info(
+                    "Rescheduling %s, %s", run['package'], run['campaign'])
                 try:
-                    await do_schedule(
-                        conn,
-                        run['package'],
-                        run['campaign'],
-                        estimated_duration=run.get('duration'),
-                        requestor="reschedule",
-                        refresh=refresh,
-                        offset=offset,
-                        bucket="reschedule",
-                    )
-                except CandidateUnavailable:
-                    logging.debug(
-                        'Not rescheduling %s/%s: candidate unavailable',
-                        run['package'], run['campaign'])
+                    async with session.post(schedule_url, json={
+                            'package': run['package'],
+                            'campaign': run['campaign'],
+                            'requestor': "reschedule",
+                            'refresh': refresh,
+                            'offset': offset,
+                            'bucket': "reschedule",
+                            'estimated_duration': (
+                                run['duration'].total_seconds()
+                                if run.get('duration') else None),
+                            }, raise_for_status=True):
+                        pass
+                except ClientResponseError as e:
+                    if e.status == 503:
+                        logging.debug(
+                            'Not rescheduling %s/%s: candidate unavailable',
+                            run['package'], run['campaign'])
+                    else:
+                        raise
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([

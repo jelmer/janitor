@@ -19,9 +19,25 @@ import asyncpg
 
 from typing import Optional, List, Any
 
+from .schedule import do_schedule
+
 
 async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
     async with conn.transaction():
+        if status == "rescheduled":
+            status = "rejected"
+
+            run = await conn.fetchrow(
+                'SELECT package, suite FROM run WHERE id = $1', run_id)
+            await do_schedule(
+                conn,
+                run['package'],
+                run['suite'],
+                refresh=True,
+                requestor="reviewer (%s)" % reviewer,
+                bucket="default",
+            )
+
         if status != 'abstained' and is_qa_reviewer:
             await conn.execute(
                 "UPDATE run SET review_status = $1 WHERE id = $2",
