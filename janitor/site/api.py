@@ -304,31 +304,6 @@ async def handle_schedule_control(request):
     return web.json_response(response_obj)
 
 
-async def get_proposals(conn: asyncpg.Connection, package=None, campaign=None):
-    args = []
-    query = """
-SELECT
-    DISTINCT ON (merge_proposal.url)
-    merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
-    run.suite
-FROM
-    merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-"""
-    if package is not None:
-        args.append(package)
-        query += " WHERE run.package = $1"
-        if campaign:
-            query += " AND run.suite = $2"
-            args.append(campaign)
-    elif campaign:
-        args.append(campaign)
-        query += " WHERE run.suite = $1"
-    query += " ORDER BY merge_proposal.url, run.finish_time DESC"
-    return await conn.fetch(query, *args)
-
-
 class MergeProposalSchema(Schema):
 
     package = fields.Str(description='package name')
@@ -342,8 +317,31 @@ class MergeProposalSchema(Schema):
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
+    package = request.match_info.get("package")
+    campaign = request.match_info.get("campaign")
     async with request.app['db'].acquire() as conn:
-        for row in await get_proposals(conn, request.match_info.get("package"), campaign=request.match_info.get("campaign")):
+        args = []
+        query = """
+    SELECT
+        DISTINCT ON (merge_proposal.url)
+        merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
+        run.suite
+    FROM
+        merge_proposal
+    LEFT JOIN run
+    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+    """
+        if package is not None:
+            args.append(package)
+            query += " WHERE run.package = $1"
+            if campaign:
+                query += " AND run.suite = $2"
+                args.append(campaign)
+        elif campaign:
+            args.append(campaign)
+            query += " WHERE run.suite = $1"
+        query += " ORDER BY merge_proposal.url, run.finish_time DESC"
+        for row in await conn.fetch(query, *args):
             response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
     return web.json_response(response_obj)
 
