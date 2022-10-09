@@ -1907,7 +1907,7 @@ WHERE run.id = $1
         'details': {
             'status': run['review_status'],
             'reviews': {review['reviewer']: {
-                'timestamp': review['reviewed_at'],
+                'timestamp': review['reviewed_at'].isoformat(),
                 'comment': review['comment'],
                 'status': review['review_status']} for review in reviews},
             'needs_review': (
