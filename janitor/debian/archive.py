@@ -333,7 +333,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
 
 async def listen_to_runner(redis_location, generator_manager):
     import aioredis
-    redis = await aioredis.create_redis(redis_location)
+    redis = await aioredis.create_redis_pool(redis_location)
 
     ch = (await redis.subscribe('result'))[0]
     try:

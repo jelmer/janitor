@@ -155,7 +155,7 @@ async def listen_to_runner(
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
     import aioredis
-    redis = await aioredis.create_redis(redis_location)
+    redis = await aioredis.create_redis_pool(redis_location)
 
     ch = await (redis.subscribe('result'))[0]
     try:
