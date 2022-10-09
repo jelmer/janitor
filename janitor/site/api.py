@@ -846,33 +846,18 @@ async def handle_runner_log(request):
 @routes.get("/publish/{publish_id}", name="publish-details")
 async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
-    async with request.app['db'].acquire() as conn:
-        row = await conn.fetchrow("""
-SELECT
-  package,
-  branch_name,
-  main_branch_revision,
-  revision,
-  mode,
-  merge_proposal_url,
-  result_code,
-  description
-FROM publish WHERE id = $1
-""", publish_id)
-        if row:
-            raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
-    return web.json_response(
-        {
-            "package": row['package'],
-            "branch": row['branch_name'],
-            "main_branch_revision": row['main_branch_revision'],
-            "revision": row['revision'],
-            "mode": row['mode'],
-            "merge_proposal_url": row['merge_proposal_url'],
-            "result_code": row['result_code'],
-            "description": row['description'],
-        }
-    )
+    span = aiozipkin.request_span(request)
+    with span.new_child('publisher:publish'):
+        url = URL(request.app['publisher_url']) / "publish" / publish_id
+        try:
+            async with request.app['http_client_session'].get(url) as resp:
+                return web.json_response(await resp.json())
+        except ContentTypeError as e:
+            return web.Response(text="runner returned error %s" % e, status=400)
+        except ClientConnectorError:
+            return web.Response(text="unable to contact runner", status=502)
+        except asyncio.TimeoutError:
+            return web.Response(text="timeout contacting runner", status=502)
 
 
 @docs()
