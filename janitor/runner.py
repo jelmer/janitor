@@ -98,7 +98,7 @@ from .logs import (
     FileSystemLogFileManager,
 )
 from .queue import QueueItem, Queue
-from .schedule import do_schedule_control, do_schedule
+from .schedule import do_schedule_control, do_schedule, CandidateUnavailable
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -1700,6 +1700,107 @@ class QueueProcessor(object):
         return await queue.next_item(
             campaign=campaign, package=package,
             assigned_queue_items=assigned_queue_items)
+
+
+@routes.post("/schedule-control", name="schedule-control")
+async def handle_schedule_control(request):
+    json = await request.json()
+    if 'run_id' in json:
+        run_id = json['run_id']
+        async with request.app['db'].acquire() as conn:
+            run = await conn.fetchrow(
+                "SELECT main_branch_revision, package FROM run "
+                "WHERE id = $1",
+                run_id)
+            if run is None:
+                return web.json_response({"reason": "Run not found"}, status=404)
+        package = run['package']
+        main_branch_revision = run['main_branch_revision'].encode('utf-8')
+    else:
+        package = json['package']
+        main_branch_revision = json['main_branch_revision'].encode('utf-8')
+    change_set = json.get('change_set')
+    offset = json.get('offset')
+    requestor = json['requestor']
+    refresh = json.get('refresh', False)
+    bucket = json.get('bucket')
+    estimated_duration = (
+        timedelta(seconds=json['estimated_duration'])
+        if json.get('estimated_duration') else None)
+    async with request.app['db'].acquire() as conn:
+        try:
+            offset, estimated_duration = await do_schedule_control(
+                conn,
+                package=package,
+                change_set=change_set,
+                main_branch_revision=main_branch_revision,
+                offset=offset,
+                refresh=refresh,
+                bucket=bucket,
+                requestor=requestor,
+                estimated_duration=estimated_duration)
+        except CandidateUnavailable:
+            return web.json_response(
+                {"reason": "Candidate not available."}, status=503
+            )
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_position(
+            "control", package)
+
+    response_obj = {
+        "package": package,
+        "campaign": "control",
+        "offset": offset,
+        "estimated_duration_seconds": estimated_duration.total_seconds(),
+        "queue_position": queue_position,
+        "queue_wait_time": queue_wait_time.total_seconds(),
+    }
+    return web.json_response(response_obj)
+
+
+
+@routes.post("/schedule", name="schedule")
+async def handle_schedule(request):
+    json = await request.json()
+    package = json['package']
+    campaign = json['campaign']
+    refresh = json.get('refresh', False)
+    change_set = json.get('change_set')
+    requestor = json.get('requestor')
+    bucket = json.get('bucket')
+    offset = json.get('offset')
+    estimated_duration = (
+        timedelta(seconds=json['estimated_duration'])
+        if json.get('estimated_duration') else None)
+    async with request.app['db'].acquire() as conn:
+        try:
+            offset, estimated_duration = await do_schedule(
+                conn,
+                package,
+                campaign,
+                offset=offset,
+                change_set=change_set,
+                refresh=refresh,
+                requestor=requestor,
+                estimated_duration=estimated_duration,
+                bucket=bucket)
+        except CandidateUnavailable:
+            return web.json_response(
+                {"reason": "Candidate not available."}, status=503
+            )
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_position(
+            campaign, package)
+
+    response_obj = {
+        "package": package,
+        "campaign": campaign,
+        "offset": offset,
+        "estimated_duration_seconds": estimated_duration.total_seconds(),
+        "queue_position": queue_position,
+        "queue_wait_time": queue_wait_time.total_seconds(),
+    }
+    return web.json_response(response_obj)
 
 
 @routes.get("/status", name="status")
