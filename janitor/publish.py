@@ -3115,7 +3115,7 @@ async def main(argv=None):
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     async with AsyncExitStack() as stack:
-        redis = await aioredis.create_redis(config.redis_location)
+        redis = await aioredis.create_redis_pool(config.redis_location)
         stack.callback(redis.close)
 
         if args.once:
