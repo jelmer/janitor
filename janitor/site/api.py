@@ -871,6 +871,7 @@ async def handle_needs_review(request):
                 result_branches,
                 main_branch_revision,
                 value,
+                finish_time
             ) in await iter_needs_review(
                 conn,
                 campaigns=([campaign] if campaign else None),
@@ -884,7 +885,9 @@ async def handle_needs_review(request):
                     'command': command,
                     'id': run_id,
                     'branches': [rb[0] for rb in result_branches],
-                    'value': value})
+                    'value': value,
+                    'finish_time': finish_time,
+                })
     return web.json_response(ret, status=200)
 
 
