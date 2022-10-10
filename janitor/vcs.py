@@ -551,7 +551,7 @@ def get_vcs_managers_from_config(config) -> Dict[str, VcsManager]:
     return ret
 
 
-def bzr_to_browse_url(url: str) -> str:
+def bzr_to_browse_url(url: str) -> Optional[str]:
     # TODO(jelmer): Use browse_url_from_repo_url from upstream_ontologist.vcs ?
     (url, params) = urlutils.split_segment_parameters(url)
     branch = params.get("branch")
