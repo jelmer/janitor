@@ -87,6 +87,7 @@ async def generate_review(
         result_branches,
         main_branch_revision,
         value,
+        finish_time,
     ) = entries.pop(0)
 
     async def show_diff(role):
@@ -184,6 +185,7 @@ async def generate_review(
         "suite": suite,
         "suites": suites,
         "value": value,
+        'finish_time': finish_time,
         "publishable_only": publishable_only,
         "MAX_DIFF_SIZE": MAX_DIFF_SIZE,
         "todo": [
@@ -192,7 +194,8 @@ async def generate_review(
                 'command': entry['command'],
                 'id': entry['id'],
                 'branches': [rb[0] for rb in entry['result_branches']],
-                'value': entry['value']
+                'value': entry['value'],
+                'finish_time': entry['finish_time'].isoformat(),
             } for entry in entries
         ],
     }
