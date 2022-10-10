@@ -249,6 +249,9 @@ class Target(object):
     def build(self, local_tree, subpath, output_directory, config):
         raise NotImplementedError(self.build)
 
+    def validate(self, local_tree, subpath, config):
+        pass
+
     def make_changes(self, local_tree, subpath, argv, log_directory,
                      resume_metadata=None):
         raise NotImplementedError(self.make_changes)
@@ -301,9 +304,7 @@ class DebianTarget(Target):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
 
-        extra_env = {
-            'DIST': dist_command,
-        }
+        extra_env = {'DIST': dist_command}
         extra_env.update(self.env)
         try:
             return debian_script_runner(
@@ -342,6 +343,36 @@ class DebianTarget(Target):
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
                 details=e.details, followup_actions=e.followup_actions)
+
+    def validate(self, local_tree, subpath, config):
+        from breezy.plugins.debian.vcs_up_to_date import (
+            check_up_to_date,
+            PackageMissingInArchive,
+            MissingChangelogError,
+            TreeVersionNotInArchive,
+            NewArchiveVersion,
+        )
+        from breezy.plugins.debian.apt_repo import RemoteApt
+        if config.get('base-apt-repository'):
+            apt = RemoteApt.from_string(
+                config['base-apt-repository'],
+                config.get('base-apt-repository-signed-by'))
+            try:
+                check_up_to_date(local_tree, subpath, apt)
+            except MissingChangelogError as exc:
+                raise WorkerFailure(
+                    'missing-changelog',
+                    str(exc), stage=(("validate", )))
+            except PackageMissingInArchive as exc:
+                raise WorkerFailure(
+                    'package-missing-in-archive', str(exc), stage=(("validate", )))
+            except TreeVersionNotInArchive as exc:
+                logging.warning(
+                    'Last tree version %s not present in the archive',
+                    exc.tree_version)
+            except NewArchiveVersion as exc:
+                raise WorkerFailure(
+                    'new-archive-version', str(exc), stage=(("validate", )))
 
 
 class GenericTarget(Target):
@@ -608,6 +639,8 @@ def process_package(
         if ws.local_tree.has_changes():
             raise AssertionError
 
+        build_target.validate(ws.local_tree, subpath, build_config)
+
         metadata["revision"] = metadata[
             "main_branch_revision"
         ] = ws.main_branch.last_revision().decode('utf-8')
@@ -624,7 +657,7 @@ def process_package(
 
         try:
             changer_result = build_target.make_changes(
-                ws.local_tree, subpath, command, 
+                ws.local_tree, subpath, command,
                 output_directory, resume_codemod_result
             )
             if not ws.any_branch_changes():

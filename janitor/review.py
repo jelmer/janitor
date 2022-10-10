@@ -58,7 +58,7 @@ async def iter_needs_review(
         reviewer: Optional[str] = None):
     args: List[Any] = []
     query = """
-SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
+SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value, finish_time FROM publish_ready
 """
     conditions = []
     if campaigns is not None:
