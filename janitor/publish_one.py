@@ -65,7 +65,7 @@ from breezy.forge import (
     ForgeLoginRequired,
     UnsupportedForge,
 )
-from breezy.git.remote import RemoteGitBranch
+from breezy.git.remote import RemoteGitBranch, RemoteGitError
 from breezy.transport import Transport
 from breezy.plugins.gitlab.forge import (
     ForkingDisabled,
@@ -264,6 +264,8 @@ def publish(
             description="Forking the project (to %s) timed out (%ds)"
             % (e.project, e.timeout),
         )
+    except RemoteGitError as exc:
+        raise PublishFailure("remote git error: %s" % exc)
     except InsufficientChangesForNewProposal:
         raise PublishNothingToDo('not enough changes for a new merge proposal')
 
