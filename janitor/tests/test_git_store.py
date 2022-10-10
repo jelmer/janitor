@@ -16,22 +16,29 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-import aiozipkin
-from janitor.runner import (
-    create_app,
-    is_log_filename,
-    committer_env,
+from janitor import config_pb2
+from janitor.git_store import (
+    create_web_app,
 )
 
 
-async def create_client(aiohttp_client):
-    endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4='127.0.0.1', port=80)
-    tracer = await aiozipkin.create_custom(endpoint)
-    return await aiohttp_client(await create_app(None, tracer))
+async def create_client(aiohttp_client, dulwich_server=False):
+    config = config_pb2.Config()
+    app, public_app = await create_web_app(
+        '127.0.0.1',
+        80,
+        '/tmp',
+        None,
+        config,
+        dulwich_server=dulwich_server,
+    )
+    return (
+        await aiohttp_client(app),
+        await aiohttp_client(public_app))
 
 
 async def test_health(aiohttp_client):
-    client = await create_client(aiohttp_client)
+    client, public_client = await create_client(aiohttp_client)
 
     resp = await client.get("/health")
     assert resp.status == 200
@@ -40,28 +47,9 @@ async def test_health(aiohttp_client):
 
 
 async def test_ready(aiohttp_client):
-    client = await create_client(aiohttp_client)
+    client, public_client = await create_client(aiohttp_client)
 
     resp = await client.get("/ready")
     assert resp.status == 200
     text = await resp.text()
     assert text == "ok"
-
-
-def test_committer_env():
-    assert committer_env("Joe Example <joe@example.com>") == {
-        "DEBFULLNAME": "Joe Example",
-        "DEBEMAIL": "joe@example.com",
-        "COMMITTER": "Joe Example <joe@example.com>",
-        "BRZ_EMAIL": "Joe Example <joe@example.com>",
-        "GIT_COMMITTER_NAME": "Joe Example",
-        "GIT_COMMITTER_EMAIL": "joe@example.com",
-        "GIT_AUTHOR_NAME": "Joe Example",
-        "GIT_AUTHOR_EMAIL": "joe@example.com",
-        "EMAIL": "joe@example.com"}
-
-
-def test_is_log_filename():
-    assert is_log_filename("foo.log")
-    assert is_log_filename("foo.log.1")
-    assert not is_log_filename("foo.deb")

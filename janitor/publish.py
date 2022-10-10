@@ -1649,9 +1649,7 @@ async def credentials_request(request):
     )
 
 
-async def run_web_server(
-    listen_addr: str,
-    port: int,
+async def create_app(
     template_env_path: Optional[str],
     maintainer_rate_limiter: RateLimiter,
     forge_rate_limiter: Dict[str, datetime],
@@ -1684,11 +1682,6 @@ async def run_web_server(
     app['push_limit'] = push_limit
     app['require_binary_diff'] = require_binary_diff
     setup_metrics(app)
-    endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
-    if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-    else:
-        tracer = await aiozipkin.create_custom(endpoint)
     setup_aiohttp_apispec(
         app=app,
         title="Publish Documentation",
@@ -1696,8 +1689,20 @@ async def run_web_server(
         url="/swagger.json",
         swagger_path="/docs",
     )
+    return app
+
+
+async def run_web_server(listen_addr, port, **kwargs):
+    app = await create_app(**kwargs)
+    config = kwargs['config']
+    endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
+    if config.zipkin_address:
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+    else:
+        tracer = await aiozipkin.create_custom(endpoint)
 
     aiozipkin.setup(app, tracer)
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
