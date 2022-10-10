@@ -674,6 +674,12 @@ def create_background_task(fn, title):
     return task
 
 
+def is_log_filename(name):
+    parts = name.split(".")
+    return parts[-1] == "log" or (
+        len(parts) == 3 and parts[-2] == "log" and parts[-1].isdigit())
+
+
 def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
     """Scan a directory for log files.
 
@@ -685,10 +691,7 @@ def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
     for entry in os.scandir(output_directory):
         if entry.is_dir():
             continue
-        parts = entry.name.split(".")
-        if parts[-1] == "log" or (
-            len(parts) == 3 and parts[-2] == "log" and parts[-1].isdigit()
-        ):
+        if is_log_filename(entry.name):
             yield entry
 
 
@@ -2257,12 +2260,12 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 @routes.post("/active-runs/{run_id}/finish", name="finish")
