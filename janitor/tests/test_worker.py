@@ -15,8 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.worker import bundle_results
+from janitor.worker import (
+    bundle_results,
+    create_app,
+    _convert_codemod_script_failed,
+    _drop_env,
+    WorkerFailure,
+)
 from aiohttp.multipart import MultipartReader
+from silver_platter.apply import ScriptFailed
 
 from io import BytesIO
 
@@ -89,3 +96,33 @@ class BundleResultsTests(unittest.TestCase):
             self.assertEqual("a", part.filename)
             self.assertEqual(b"some data\n", bytes(loop.run_until_complete(part.read())))
             self.assertTrue(part.at_eof())
+
+
+async def create_client(aiohttp_client):
+    return await aiohttp_client(await create_app())
+
+
+async def test_health(aiohttp_client):
+    client = await create_client(aiohttp_client)
+
+    resp = await client.get("/health")
+    assert resp.status == 200
+    text = await resp.text()
+    assert text == "ok"
+
+
+def test_convert_codemod_script_failed():
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)) == WorkerFailure(
+        'codemod-command-not-found',
+        'Command foobar not found',
+        stage=("codemod", ))
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)) == WorkerFailure(
+        'out-of-memory', 'Ran out of memory running command', stage=('codemod', ))
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
+        'codemod-command-failed', 'Script foobar failed to run with code 1',
+        stage=('codemod', ))
+
+
+def test_drop_env():
+    assert _drop_env(['PATH=foo', 'BAR=foo', 'ls', 'bar']) == ['ls', 'bar']
+    assert _drop_env(['ls', 'bar']) == ['ls', 'bar']

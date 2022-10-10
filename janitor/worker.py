@@ -212,6 +212,9 @@ class WorkerFailure(Exception):
         self.followup_actions = followup_actions
         self.stage = stage
 
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.json() == other.json()
+
     def json(self):
         ret = {
             "code": self.code,
@@ -1408,6 +1411,23 @@ async def process_single_item(
             workitem.clear()
 
 
+async def create_app():
+    app = web.Application()
+    app['workitem'] = {}
+    app.router.add_get('/', handle_index, name='index')
+    app.router.add_get('/assignment', handle_assignment, name='assignment')
+    app.router.add_get('/intermediate-result',
+                       handle_intermediate_result, name='intermediate-result')
+    app.router.add_get('/logs/', handle_log_index, name='log-index')
+    app.router.add_get('/logs/{filename}', handle_log, name='log')
+    app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')
+    app.router.add_get('/artifacts/{filename}', handle_artifact, name='artifact')
+    app.router.add_get('/health', handle_health, name='health')
+    app.router.add_get('/log-id', handle_log_id, name='log_id')
+    setup_metrics(app)
+    return app
+
+
 async def main(argv=None):
     import os
     parser = argparse.ArgumentParser(
@@ -1483,19 +1503,8 @@ async def main(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
 
-    app = web.Application()
-    app['workitem'] = {}
-    app.router.add_get('/', handle_index, name='index')
-    app.router.add_get('/assignment', handle_assignment, name='assignment')
-    app.router.add_get('/intermediate-result',
-                       handle_intermediate_result, name='intermediate-result')
-    app.router.add_get('/logs/', handle_log_index, name='log-index')
-    app.router.add_get('/logs/{filename}', handle_log, name='log')
-    app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')
-    app.router.add_get('/artifacts/{filename}', handle_artifact, name='artifact')
-    app.router.add_get('/health', handle_health, name='health')
-    app.router.add_get('/log-id', handle_log_id, name='log_id')
-    setup_metrics(app)
+    app = await create_app()
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, args.listen_address, args.port)
