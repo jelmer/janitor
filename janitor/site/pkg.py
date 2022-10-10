@@ -29,6 +29,7 @@ from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
     ClientSession,
+    ClientTimeout,
 )
 import asyncpg
 
@@ -168,7 +169,8 @@ async def generate_run_file(
         url = URL(publisher_url) / "blockers" / run['id']
         try:
             async with ClientSession() as session, \
-                    session.get(url, raise_for_status=True) as resp:
+                    session.get(url, raise_for_status=True,
+                                timeout=ClientTimeout(30)) as resp:
                 return await resp.json()
         except (ClientResponseError, ClientConnectorError) as e:
             logging.warning(
