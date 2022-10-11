@@ -29,7 +29,7 @@ import subprocess
 import tempfile
 import sys
 from typing import List, Dict
-from email.utils import formatdate, parsedate
+from email.utils import formatdate, parsedate_to_datetime
 from datetime import datetime
 from time import mktime
 from typing import Optional
@@ -363,6 +363,8 @@ async def serve_dists_release_file(request):
         request.app['generator_manager'].dists_dir,
         request.match_info['release'],
         request.match_info['file'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
     return web.FileResponse(path)
 
 
@@ -373,6 +375,8 @@ async def serve_dists_component_file(request):
         request.match_info['component'],
         request.match_info['arch'],
         request.match_info['file'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
     return web.FileResponse(path)
 
 
@@ -386,7 +390,7 @@ async def refresh_on_demand_dists(
     except FileNotFoundError:
         stamp = None
     else:
-        stamp = parsedate(release["Date"])
+        stamp = parsedate_to_datetime(release["Date"])
     async with db.acquire() as conn:
         if kind == 'run':
             campaign, max_finish_time = await conn.fetchrow(
@@ -437,9 +441,11 @@ async def serve_on_demand_dists_release_file(request):
 
     path = os.path.join(
         request.app['generator_manager'].dists_dir,
+        request.match_info['kind'],
         request.match_info['id'],
-        request.match_info['release'],
         request.match_info['file'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
     return web.FileResponse(path)
 
 
@@ -460,6 +466,8 @@ async def serve_on_demand_dists_component_file(request):
         request.match_info['component'],
         request.match_info['arch'],
         request.match_info['file'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
     return web.FileResponse(path)
 
 
