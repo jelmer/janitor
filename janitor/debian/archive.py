@@ -18,6 +18,7 @@
 import aiozipkin
 import asyncio
 from contextlib import ExitStack
+from functools import partial
 import hashlib
 import logging
 import gzip
@@ -28,9 +29,10 @@ import subprocess
 import tempfile
 import sys
 from typing import List, Dict
-from email.utils import formatdate
+from email.utils import formatdate, parsedate
 from datetime import datetime
 from time import mktime
+from typing import Optional
 
 
 from aiohttp import web
@@ -115,7 +117,7 @@ class PackageInfoProvider(object):
         await asyncio.sleep(0)
 
 
-class CachingPackageInfoProvider(object):
+class DiskCachingPackageInfoProvider(object):
     def __init__(self, primary_info_provider, cache_directory):
         self.primary_info_provider = primary_info_provider
         self.cache_directory = cache_directory
@@ -147,7 +149,20 @@ class CachingPackageInfoProvider(object):
                 yield chunk
 
 
-async def get_packages(db, info_provider, suite_name, component, arch):
+async def retrieve_packages(info_provider, suite_name, component, arch, rows):
+    logger.debug('Need to process %d rows for %s/%s/%s',
+                 len(rows), suite_name, component, arch)
+    for package, run_id, build_distribution, build_version in rows:
+        try:
+            async for chunk in info_provider.info_for_run(run_id, build_distribution, package):
+                yield chunk
+                await asyncio.sleep(0)
+        except ArtifactsMissing:
+            logger.warning("Artifacts missing for %s (%s), skipping", package, run_id)
+            continue
+
+
+async def get_packages_for_suite(db, info_provider, suite_name, component, arch):
     # TODO(jelmer): Actually query component/arch
     async with db.acquire() as conn:
         rows = await conn.fetch(
@@ -160,16 +175,42 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             suite_name,
         )
 
-    logger.debug('Need to process %d rows for %s/%s/%s',
-                 len(rows), suite_name, component, arch)
-    for package, run_id, build_distribution, build_version in rows:
-        try:
-            async for chunk in info_provider.info_for_run(run_id, suite_name, package):
-                yield chunk
-                await asyncio.sleep(0)
-        except ArtifactsMissing:
-            logger.warning("Artifacts missing for %s (%s), skipping", package, run_id)
-            continue
+    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
+        yield chunk
+
+
+async def get_packages_for_changeset(db, info_provider, cs_id, suite_name, component, arch):
+    # TODO(jelmer): Actually query component/arch
+    async with db.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT ON (source) "
+            "debian_build.source, debian_build.run_id, debian_build.distribution, "
+            "debian_build.version FROM debian_build "
+            "INNER JOIN run ON run.id = debian_build.run_id "
+            "WHERE run.change_set = $1 AND run.review_status != 'rejected' "
+            "ORDER BY debian_build.source, debian_build.version DESC",
+            cs_id,
+        )
+
+    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
+        yield chunk
+
+
+async def get_packages_for_run(db, info_provider, run_id, suite_name, component, arch):
+    # TODO(jelmer): Actually query component/arch
+    async with db.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT ON (source) "
+            "debian_build.source, debian_build.run_id, debian_build.distribution, "
+            "debian_build.version FROM debian_build "
+            "INNER JOIN run ON run.id = debian_build.run_id "
+            "WHERE run.id = $1 AND run.review_status != 'rejected' "
+            "ORDER BY debian_build.source, debian_build.version DESC",
+            run_id,
+        )
+
+    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
+        yield chunk
 
 
 def add_file_info(r, base, p):
@@ -190,11 +231,14 @@ def add_file_info(r, base, p):
 
 
 async def write_suite_files(
-    base_path, db, package_info_provider, suite_name, archive_description,
-    components, arches, origin, gpg_context
+    base_path, get_packages, package_info_provider, suite_name, archive_description,
+    components, arches, origin, gpg_context,
+    timestamp: Optional[datetime] = None
 ):
 
-    stamp = mktime(datetime.utcnow().timetuple())
+    if timestamp is None:
+        timestamp = datetime.utcnow()
+    stamp = mktime(timestamp.timetuple())
 
     r = Release()
     r["Origin"] = origin
@@ -226,7 +270,7 @@ async def write_suite_files(
                 r.dump(f)
             add_file_info(r, base_path, bp)
 
-            packages_path = os.path.join(component, "binary-%s" % arch, "Packages")
+            packages_path = os.path.join(component, f"binary-{arch}", "Packages")
             SUFFIXES = {
                 "": open,
                 ".gz": gzip.GzipFile,
@@ -240,8 +284,7 @@ async def write_suite_files(
                             fn(os.path.join(base_path, packages_path + suffix), "wb")
                         )
                     )
-                async for chunk in get_packages(
-                        db, package_info_provider, suite_name, component, arch):
+                async for chunk in get_packages(suite_name, component, arch):
                     for f in fs:
                         f.write(chunk)
             for suffix in SUFFIXES:
@@ -315,6 +358,111 @@ async def handle_pgp_keys(request):
     return web.json_response(pgp_keys)
 
 
+async def serve_dists_release_file(request):
+    path = os.path.join(
+        request.app['generator_manager'].dists_dir,
+        request.match_info['release'],
+        request.match_info['file'])
+    return web.FileResponse(path)
+
+
+async def serve_dists_component_file(request):
+    path = os.path.join(
+        request.app['generator_manager'].dists_dir,
+        request.match_info['release'],
+        request.match_info['component'],
+        request.match_info['arch'],
+        request.match_info['file'])
+    return web.FileResponse(path)
+
+
+async def refresh_on_demand_dists(
+        dists_dir, db, config, package_info_provider, gpg_context, kind, id):
+    os.makedirs(os.path.join(dists_dir, kind, id), exist_ok=True)
+    release_path = os.path.join(dists_dir, kind, id, 'Release')
+    try:
+        with open(release_path, 'r') as f:
+            release = Release(f)
+    except FileNotFoundError:
+        stamp = None
+    else:
+        stamp = parsedate(release["Date"])
+    async with db.acquire() as conn:
+        if kind == 'run':
+            campaign, max_finish_time = await conn.fetchrow(
+                'SELECT suite, max(finish_time) FROM run WHERE id = $1', id)
+            get_packages = partial(
+                get_packages_for_run, db, package_info_provider, id)
+            description = f"Run {id}"
+            name = f"run/{id}"
+        elif kind == 'cs':
+            campaign = await conn.fetchval(
+                'SELECT campaign FROM change_set WHERE id = $1', id)
+            max_finish_time = await conn.fetchrow(
+                'SELECT max(finish_time) FROM run WHERE change_set = $1', id)
+            get_packages = partial(
+                get_packages_for_changeset, db, package_info_provider, id)
+            description = f"Change set {id}"
+            name = f"cs/{id}"
+        else:
+            raise AssertionError
+    if stamp is not None and max_finish_time < stamp:
+        return
+    logging.info("Generating metadata for %s/%s", kind, id)
+    suite = get_campaign_config(config, campaign)
+    distribution = get_distribution(config, suite.debian_build.base_distribution)
+    await write_suite_files_atomic(
+        os.path.join(dists_dir, kind, id),
+        get_packages,
+        package_info_provider,
+        suite_name=name,
+        archive_description=description,
+        components=distribution.component,
+        arches=ARCHES,
+        origin=config.origin,
+        gpg_context=gpg_context,
+        tempdir_base=dists_dir,
+    )
+
+
+async def serve_on_demand_dists_release_file(request):
+    await refresh_on_demand_dists(
+        request.app['generator_manager'].dists_dir,
+        request.app['generator_manager'].db,
+        request.app['generator_manager'].config,
+        request.app['generator_manager'].package_info_provider,
+        request.app['gpg'],
+        request.match_info['kind'],
+        request.match_info['id'])
+
+    path = os.path.join(
+        request.app['generator_manager'].dists_dir,
+        request.match_info['id'],
+        request.match_info['release'],
+        request.match_info['file'])
+    return web.FileResponse(path)
+
+
+async def serve_on_demand_dists_component_file(request):
+    await refresh_on_demand_dists(
+        request.app['generator_manager'].dists_dir,
+        request.app['generator_manager'].db,
+        request.app['generator_manager'].config,
+        request.app['generator_manager'].package_info_provider,
+        request.app['gpg'],
+        request.match_info['kind'],
+        request.match_info['id'])
+
+    path = os.path.join(
+        request.app['generator_manager'].dists_dir,
+        request.match_info['kind'],
+        request.match_info['id'],
+        request.match_info['component'],
+        request.match_info['arch'],
+        request.match_info['file'])
+    return web.FileResponse(path)
+
+
 async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, tracer):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -323,7 +471,20 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app['generator_manager'] = generator_manager
     setup_metrics(app)
     app.router.add_routes(routes)
-    app.router.add_static("/dists", dists_dir, show_index=True)
+    app.router.add_get(
+        "/dists/{release}/{file:InRelease|Release.gpg|Release}",
+        serve_dists_release_file)
+    app.router.add_get(
+        "/dists/{release}/{component}/{arch}/"
+        r"{file:Packages(|\..*)}",
+        serve_dists_component_file)
+    app.router.add_get(
+        "/dists/{kind:cs|run}/{id}/{file:InRelease|Release.gpg|Release}",
+        serve_on_demand_dists_release_file)
+    app.router.add_get(
+        "/dists/{kind:cs|run}/{id}/{component}/{arch}/"
+        r"{file:Packages(|\..*)}",
+        serve_on_demand_dists_component_file)
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -348,6 +509,20 @@ async def listen_to_runner(redis_location, generator_manager):
         redis.close()
 
 
+async def write_suite_files_atomic(target_path, *args, **kwargs):
+    tempdir_base = kwargs.pop('tempdir_base', None)
+    with tempfile.TemporaryDirectory(dir=tempdir_base) as td:
+        await write_suite_files(td, *args, **kwargs)
+        old_target_path = target_path + '.old'
+        if os.path.exists(old_target_path):
+            shutil.rmtree(target_path + '.old')
+        if os.path.exists(target_path):
+            os.rename(target_path, target_path + '.old')
+        os.rename(td, target_path)
+    if os.path.exists(old_target_path):
+        shutil.rmtree(target_path + '.old')
+
+
 async def publish_suite(
     dists_directory, db, package_info_provider, config, suite, gpg_context
 ):
@@ -358,26 +533,17 @@ async def publish_suite(
     logger.info("Publishing %s", suite.name)
     distribution = get_distribution(config, suite.debian_build.base_distribution)
     suite_path = os.path.join(dists_directory, suite.name)
-    with tempfile.TemporaryDirectory(dir=dists_directory) as td:
-        await write_suite_files(
-            td,
-            db,
-            package_info_provider,
-            suite.name,
-            suite.debian_build.archive_description,
-            components=distribution.component,
-            arches=ARCHES,
-            origin=config.origin,
-            gpg_context=gpg_context,
-        )
-        old_suite_path = suite_path + '.old'
-        if os.path.exists(old_suite_path):
-            shutil.rmtree(suite_path + '.old')
-        if os.path.exists(suite_path):
-            os.rename(suite_path, suite_path + '.old')
-        os.rename(td, suite_path)
-    if os.path.exists(old_suite_path):
-        shutil.rmtree(suite_path + '.old')
+    await write_suite_files_atomic(
+        suite_path,
+        partial(get_packages_for_suite, db, package_info_provider),
+        package_info_provider,
+        suite_name=suite.name,
+        archive_description=suite.debian_build.archive_description,
+        components=distribution.component,
+        arches=ARCHES,
+        origin=config.origin,
+        gpg_context=gpg_context,
+        tempdir_base=dists_directory)
 
     logger.info(
         "Done publishing %s (took %s)", suite.name,
@@ -479,21 +645,24 @@ async def main(argv=None):
 
     db = await state.create_pool(config.database_location)
 
-    endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=args.listen_address, port=args.port)
+    endpoint = aiozipkin.create_endpoint(
+        "janitor.debian.archive", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(
+            config.zipkin_address, endpoint, sample_rate=1.0)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
+    artifact_manager = get_artifact_manager(
+        config.artifact_location, trace_configs=trace_configs)
 
     gpg_context = gpg.Context()
 
     package_info_provider = PackageInfoProvider(artifact_manager)
     if args.cache_directory:
         os.makedirs(args.cache_directory, exist_ok=True)
-        package_info_provider = CachingPackageInfoProvider(
+        package_info_provider = DiskCachingPackageInfoProvider(
             package_info_provider, args.cache_directory
         )
 
