@@ -159,6 +159,7 @@ if __name__ == '__main__':
 
         try:
             if version:
+                # TODO(jelmer): Shouldn't include backend-specific code here
                 os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
             if args.log_directory:
