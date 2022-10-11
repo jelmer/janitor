@@ -401,7 +401,7 @@ async def refresh_on_demand_dists(
         elif kind == 'cs':
             campaign = await conn.fetchval(
                 'SELECT campaign FROM change_set WHERE id = $1', id)
-            max_finish_time = await conn.fetchrow(
+            max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', id)
             get_packages = partial(
                 get_packages_for_changeset, db, package_info_provider, id)
