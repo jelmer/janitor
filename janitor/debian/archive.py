@@ -395,7 +395,7 @@ async def refresh_on_demand_dists(
     except FileNotFoundError:
         stamp = None
     else:
-        stamp = datetime.fromisofmrat(release["Date"])
+        stamp = parsedate_to_datetime(release["Date"])
     async with db.acquire() as conn:
         if kind == 'run':
             campaign, max_finish_time = await conn.fetchrow(
