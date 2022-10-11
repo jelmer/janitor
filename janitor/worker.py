@@ -543,6 +543,7 @@ def process_package(
 
     metadata["branch_url"] = main_branch.user_url
     metadata["vcs_type"] = get_branch_vcs_type(main_branch)
+    metadata["subpath"] = subpath
 
     if cached_branch_url:
         try:
