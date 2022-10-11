@@ -341,6 +341,12 @@ async def handle_health(request):
 
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
+    missing = []
+    for suite in request.app['generator_manager'].config.campaign:
+        if suite not in last_publish_time:
+            missing.append(suite)
+    if missing:
+        return web.Response(text='missing: %s' % ', '.join(missing), status=500)
     return web.Response(text='ok')
 
 
@@ -389,7 +395,7 @@ async def refresh_on_demand_dists(
     except FileNotFoundError:
         stamp = None
     else:
-        stamp = parsedate_to_datetime(release["Date"])
+        stamp = datetime.fromisofmrat(release["Date"])
     async with db.acquire() as conn:
         if kind == 'run':
             campaign, max_finish_time = await conn.fetchrow(
@@ -409,7 +415,7 @@ async def refresh_on_demand_dists(
             name = f"cs/{id}"
         else:
             raise AssertionError
-    if stamp is not None and max_finish_time < stamp:
+    if stamp is not None and max_finish_time.astimezone() < stamp:
         return
     logging.info("Generating metadata for %s/%s", kind, id)
     suite = get_campaign_config(config, campaign)
