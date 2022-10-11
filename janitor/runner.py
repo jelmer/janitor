@@ -423,6 +423,7 @@ class JanitorResult(object):
     package: str
     log_id: str
     branch_url: str
+    subpath: str
     code: str
 
     def __init__(
@@ -439,6 +440,7 @@ class JanitorResult(object):
         finish_time=None,
         worker_name=None,
         vcs_type=None,
+        subpath=None,
         resume_from=None,
         change_set=None,
     ):
@@ -451,6 +453,7 @@ class JanitorResult(object):
         self.logfilenames = logfilenames or []
         self.worker_name = worker_name
         self.vcs_type = vcs_type
+        self.subpath = subpath
         self.change_set = change_set
         if worker_result is not None:
             self.context = worker_result.context
@@ -477,6 +480,7 @@ class JanitorResult(object):
             self.target_branch_url = worker_result.target_branch_url
             self.branch_url = worker_result.branch_url
             self.vcs_type = worker_result.vcs_type
+            self.subpath = worker_result.subpath
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -590,6 +594,7 @@ class WorkerResult(object):
     target_branch_url: Optional[str] = None
     branch_url: Optional[str] = None
     vcs_type: Optional[str] = None
+    subpath: Optional[str] = None
 
     @classmethod
     def from_file(cls, path):
@@ -653,6 +658,7 @@ class WorkerResult(object):
             refreshed=worker_result.get("refreshed", False),
             target_branch_url=worker_result.get("target_branch_url", None),
             branch_url=worker_result.get("branch_url"),
+            subpath=worker_result.get("subpath"),
             vcs_type=worker_result.get("vcs_type"),
         )
 
@@ -766,6 +772,7 @@ class ActiveRun(object):
     change_set: Optional[str]
     command: str
     backchannel: Backchannel
+    vcs_info: Optional[Dict[str, str]]
 
     def __init__(
         self,
@@ -778,7 +785,7 @@ class ActiveRun(object):
         queue_id: int,
         log_id: str,
         start_time: datetime,
-        vcs_info: Dict[str, str],
+        vcs_info: Optional[Dict[str, str]],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -804,7 +811,7 @@ class ActiveRun(object):
     def from_queue_item(
         cls,
         queue_item: QueueItem,
-        vcs_info: Dict[str, str],
+        vcs_info: Optional[Dict[str, str]],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -871,11 +878,21 @@ class ActiveRun(object):
 
     @property
     def vcs_type(self):
+        if self.vcs_type is None:
+            return None
         return self.vcs_info["vcs_type"]
 
     @property
     def main_branch_url(self):
+        if self.vcs_type is None:
+            return None
         return self.vcs_info["branch_url"]
+
+    @property
+    def subpath(self):
+        if self.vcs_type is None:
+            return None
+        return self.vcs_info["subpath"]
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -1182,6 +1199,7 @@ async def store_run(
     name: str,
     vcs_type: Optional[str],
     branch_url: Optional[str],
+    subpath: Optional[str],
     start_time: datetime,
     finish_time: datetime,
     command: str,
@@ -1243,12 +1261,12 @@ async def store_run(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "main_branch_revision, "
-        "revision, result, suite, vcs_type, branch_url, logfilenames, "
+        "revision, result, suite, vcs_type, branch_url, subpath, logfilenames, "
         "value, worker, result_tags, "
         "resume_from, failure_details, failure_stage, target_branch_url, change_set, "
         "followup_actions) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
         run_id,
         command,
         description,
@@ -1264,6 +1282,7 @@ async def store_run(
         campaign,
         vcs_type,
         branch_url,
+        subpath,
         logfilenames,
         value,
         worker_name,
@@ -1646,6 +1665,7 @@ class QueueProcessor(object):
                         run_id=result.log_id,
                         name=active_run.package,
                         vcs_type=result.vcs_type,
+                        subpath=result.subpath,
                         branch_url=result.branch_url,
                         start_time=result.start_time,
                         finish_time=result.finish_time,
@@ -2070,7 +2090,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
             await queue_processor.register_run(active_run)
 
-            if vcs_info["branch_url"] is None:
+            if vcs_info is None or vcs_info["branch_url"] is None:
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
@@ -2278,6 +2298,7 @@ async def handle_finish(request):
     worker_name = active_run.worker_name
     main_branch_url = active_run.main_branch_url
     vcs_type = active_run.vcs_type
+    subpath = active_run.subpath
     resume_from = active_run.resume_from
 
     reader = await request.multipart()
@@ -2322,6 +2343,7 @@ async def handle_finish(request):
             worker_name=worker_name,
             branch_url=main_branch_url,
             vcs_type=vcs_type,
+            subpath=subpath,
             worker_result=worker_result,
             logfilenames=logfilenames,
             resume_from=resume_from,
