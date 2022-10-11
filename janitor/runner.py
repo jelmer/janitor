@@ -480,6 +480,7 @@ class JanitorResult(object):
             self.target_branch_url = worker_result.target_branch_url
             self.branch_url = worker_result.branch_url
             self.vcs_type = worker_result.vcs_type
+            self.subpath = worker_result.subpath
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -593,6 +594,7 @@ class WorkerResult(object):
     target_branch_url: Optional[str] = None
     branch_url: Optional[str] = None
     vcs_type: Optional[str] = None
+    subpath: Optional[str] = None
 
     @classmethod
     def from_file(cls, path):
@@ -656,6 +658,7 @@ class WorkerResult(object):
             refreshed=worker_result.get("refreshed", False),
             target_branch_url=worker_result.get("target_branch_url", None),
             branch_url=worker_result.get("branch_url"),
+            subpath=worker_result.get("subpath"),
             vcs_type=worker_result.get("vcs_type"),
         )
 
