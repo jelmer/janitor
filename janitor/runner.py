@@ -878,19 +878,19 @@ class ActiveRun(object):
 
     @property
     def vcs_type(self):
-        if self.vcs_type is None:
+        if self.vcs_info is None:
             return None
         return self.vcs_info["vcs_type"]
 
     @property
     def main_branch_url(self):
-        if self.vcs_type is None:
+        if self.vcs_info is None:
             return None
         return self.vcs_info["branch_url"]
 
     @property
     def subpath(self):
-        if self.vcs_type is None:
+        if self.vcs_info is None:
             return None
         return self.vcs_info["subpath"]
 
