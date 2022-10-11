@@ -28,11 +28,10 @@ import shutil
 import subprocess
 import tempfile
 import sys
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 from email.utils import formatdate, parsedate_to_datetime
 from datetime import datetime
 from time import mktime
-from typing import Optional
 
 
 from aiohttp import web
@@ -271,7 +270,7 @@ async def write_suite_files(
             add_file_info(r, base_path, bp)
 
             packages_path = os.path.join(component, f"binary-{arch}", "Packages")
-            SUFFIXES = {
+            SUFFIXES: Dict[str, Any] = {
                 "": open,
                 ".gz": gzip.GzipFile,
                 ".bz2": bz2.BZ2File,
