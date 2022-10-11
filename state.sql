@@ -234,7 +234,7 @@ CREATE OR REPLACE FUNCTION refresh_change_set_state(change_set_id text)
     DECLARE row RECORD;
     DECLARE _state change_set_state;
     BEGIN
-    SELECT change_set.state INTO row FROM change_set WHERE id = change_set_id;
+    SELECT change_set.state INTO STRICT row FROM change_set WHERE id = change_set_id;
     _state := row.state;
     IF _state = 'created' THEN
        PERFORM FROM run WHERE change_set = change_set_id;
@@ -275,15 +275,15 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_change_set_state()
     BEGIN
 
     if (TG_OP = 'INSERT' AND NEW.absorbed) then
-        SELECT change_set INTO change_set_id FROM run WHERE id = OLD.run_id;
+        SELECT change_set INTO STRICT change_set_id FROM run WHERE id = OLD.run_id;
         perform refresh_change_set_state(change_set_id);
     end if;
 
     if (TG_OP = 'UPDATE' AND NEW.absorbed != OLD.absorbed) then
-        SELECT change_set INTO change_set_id FROM run WHERE id = OLD.run_id;
+        SELECT change_set INTO STRICT change_set_id FROM run WHERE id = OLD.run_id;
         perform refresh_change_set_state(change_set_id);
         IF old.change_set != new.change_set THEN
-            SELECT change_set INTO change_set_id FROM run WHERE id = NEW.run_id;
+            SELECT change_set INTO STRICT change_set_id FROM run WHERE id = NEW.run_id;
             perform refresh_change_set_state(change_set_id);
         END IF;
     end if;
@@ -296,7 +296,7 @@ CREATE TRIGGER new_result_branch_refresh_change_set_state
   AFTER INSERT OR UPDATE OR DELETE
   ON new_result_branch
   FOR EACH ROW
-  EXECUTE PROCEDURE new_result_branch_trigger_refresh_change_set_state();
+  EXECUTE FUNCTION new_result_branch_trigger_refresh_change_set_state();
 
 CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
   RETURNS TRIGGER
@@ -324,7 +324,7 @@ CREATE TRIGGER new_result_branch_refresh_last_run
   AFTER INSERT OR UPDATE OR DELETE
   ON new_result_branch
   FOR EACH ROW
-  EXECUTE PROCEDURE new_result_branch_trigger_refresh_last_run();
+  EXECUTE FUNCTION new_result_branch_trigger_refresh_last_run();
 
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
@@ -348,10 +348,10 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     DECLARE row_count int;
 
     BEGIN
-    SELECT id, result_code INTO last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    SELECT id, result_code INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
 
     IF last_run.result_code = 'nothing-new-to-do' THEN
-        SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' ORDER BY start_time DESC limit 1;
+        SELECT id, result_code INTO STRICT last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' ORDER BY start_time DESC limit 1;
     ELSE
         last_effective_run := last_run;
     END IF;
@@ -362,7 +362,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
         last_unabsorbed_run := last_effective_run;
     ELSE
        SELECT COUNT(*) INTO row_count from new_result_branch WHERE run_id = last_effective_run.id and not absorbed;
-       if row_count > 0 then
+       if FOUND then
            last_unabsorbed_run := last_effective_run;
        else
           last_unabsorbed_run := null;
@@ -402,7 +402,7 @@ CREATE TRIGGER run_refresh_last_run
   AFTER INSERT OR UPDATE OR DELETE
   ON run
   FOR EACH ROW
-  EXECUTE PROCEDURE run_trigger_refresh_last_run();
+  EXECUTE FUNCTION run_trigger_refresh_last_run();
 
 CREATE OR REPLACE FUNCTION run_trigger_refresh_change_set_state()
   RETURNS TRIGGER
@@ -428,7 +428,7 @@ CREATE TRIGGER run_refresh_change_set_state
   AFTER INSERT OR UPDATE OR DELETE
   ON run
   FOR EACH ROW
-  EXECUTE PROCEDURE run_trigger_refresh_change_set_state();
+  EXECUTE FUNCTION run_trigger_refresh_change_set_state();
 
 create or replace view campaigns as select distinct suite as name from run;
 
@@ -471,13 +471,13 @@ CREATE TRIGGER publish_refresh_change_set_state
   AFTER INSERT OR UPDATE
   ON publish
   FOR EACH ROW
-  EXECUTE PROCEDURE publish_trigger_refresh_change_set_state();
+  EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
 
 CREATE TRIGGER drop_candidates_when_removed
   AFTER UPDATE OF removed
   ON package
   FOR EACH ROW
-  EXECUTE PROCEDURE drop_candidates_for_deleted_packages();
+  EXECUTE FUNCTION drop_candidates_for_deleted_packages();
 
 CREATE TABLE site_session (
   id text primary key,
@@ -498,7 +498,7 @@ $$;
 
 CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
-   EXECUTE PROCEDURE expire_site_session_delete_old_rows();
+   EXECUTE FUNCTION expire_site_session_delete_old_rows();
 
 CREATE OR REPLACE VIEW queue_positions AS SELECT
     package,
