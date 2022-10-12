@@ -1737,7 +1737,7 @@ async def handle_schedule_control(request):
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
 
-    async with request.app.queue_processor.database.acquire() as conn:
+    async with request.app['queue_processor'].database.acquire() as conn:
         if 'run_id' in json:
             run_id = json['run_id']
             run = await conn.fetchrow(
@@ -1794,7 +1794,7 @@ async def handle_schedule(request):
     estimated_duration = (
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
-    async with request.app.queue_processor.database.acquire() as conn:
+    async with request.app['queue_processor'].database.acquire() as conn:
         try:
             offset, estimated_duration = await do_schedule(
                 conn,
