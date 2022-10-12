@@ -1728,20 +1728,6 @@ class QueueProcessor(object):
 @routes.post("/schedule-control", name="schedule-control")
 async def handle_schedule_control(request):
     json = await request.json()
-    if 'run_id' in json:
-        run_id = json['run_id']
-        async with request.app['db'].acquire() as conn:
-            run = await conn.fetchrow(
-                "SELECT main_branch_revision, package FROM run "
-                "WHERE id = $1",
-                run_id)
-            if run is None:
-                return web.json_response({"reason": "Run not found"}, status=404)
-        package = run['package']
-        main_branch_revision = run['main_branch_revision'].encode('utf-8')
-    else:
-        package = json['package']
-        main_branch_revision = json['main_branch_revision'].encode('utf-8')
     change_set = json.get('change_set')
     offset = json.get('offset')
     requestor = json['requestor']
@@ -1750,7 +1736,21 @@ async def handle_schedule_control(request):
     estimated_duration = (
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
-    async with request.app['db'].acquire() as conn:
+
+    async with request.app.queue_processor.database.acquire() as conn:
+        if 'run_id' in json:
+            run_id = json['run_id']
+            run = await conn.fetchrow(
+                "SELECT main_branch_revision, package FROM run "
+                "WHERE id = $1",
+                run_id)
+            if run is None:
+                return web.json_response({"reason": "Run not found"}, status=404)
+            package = run['package']
+            main_branch_revision = run['main_branch_revision'].encode('utf-8')
+        else:
+            package = json['package']
+            main_branch_revision = json['main_branch_revision'].encode('utf-8')
         try:
             offset, estimated_duration = await do_schedule_control(
                 conn,
@@ -1781,7 +1781,6 @@ async def handle_schedule_control(request):
     return web.json_response(response_obj)
 
 
-
 @routes.post("/schedule", name="schedule")
 async def handle_schedule(request):
     json = await request.json()
@@ -1795,7 +1794,7 @@ async def handle_schedule(request):
     estimated_duration = (
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
-    async with request.app['db'].acquire() as conn:
+    async with request.app.queue_processor.database.acquire() as conn:
         try:
             offset, estimated_duration = await do_schedule(
                 conn,
