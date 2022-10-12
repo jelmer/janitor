@@ -886,7 +886,7 @@ async def handle_needs_review(request):
                     'id': run_id,
                     'branches': [rb[0] for rb in result_branches],
                     'value': value,
-                    'finish_time': finish_time,
+                    'finish_time': finish_time.isoformat(),
                 })
     return web.json_response(ret, status=200)
 
