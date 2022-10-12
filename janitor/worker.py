@@ -27,6 +27,7 @@ import os
 import shlex
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -851,7 +852,7 @@ def copy_output(output_log: str, tee: bool = False):
 @backoff.on_exception(
     backoff.expo,
     (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
-     ConnectionError, ConnectionReset),
+     ConnectionError, ConnectionReset, ssl.SSLEOFError),
     max_tries=5,
     on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
