@@ -243,10 +243,13 @@ CREATE OR REPLACE FUNCTION refresh_change_set_state(change_set_id text)
        END IF;
     END IF;
     IF _state = 'working' THEN
-       PERFORM FROM change_set_todo WHERE change_set = change_set_id;
-       IF NOT FOUND THEN
-           _state := 'ready';
-       END IF;
+       PERFORM FROM run WHERE change_set = change_set_id AND result_code = 'success';
+       IF FOUND THEN
+           PERFORM FROM change_set_todo WHERE change_set = change_set_id;
+           IF NOT FOUND THEN
+               _state := 'ready';
+           END IF;
+        END IF;
     END IF;
     IF _state = 'ready' THEN
        PERFORM FROM publish WHERE result_code = 'success' AND change_set = change_set_id;
