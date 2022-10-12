@@ -398,23 +398,39 @@ async def refresh_on_demand_dists(
         stamp = parsedate_to_datetime(release["Date"])
     async with db.acquire() as conn:
         if kind == 'run':
-            campaign, max_finish_time = await conn.fetchrow(
+            row = await conn.fetchrow(
                 'SELECT suite, max(finish_time) FROM run WHERE id = $1', id)
+            if row is None:
+                raise web.HTTPNotFound(text=f"no such run: {id}")
+            campaign, max_finish_time = row
             get_packages = partial(
                 get_packages_for_run, db, package_info_provider, id)
-            description = f"Run {id}"
-            name = f"run/{id}"
         elif kind == 'cs':
             campaign = await conn.fetchval(
                 'SELECT campaign FROM change_set WHERE id = $1', id)
+            if campaign is None:
+                raise web.HTTPNotFound(text=f"no such changeset: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', id)
             get_packages = partial(
                 get_packages_for_changeset, db, package_info_provider, id)
             description = f"Change set {id}"
-            name = f"cs/{id}"
         else:
-            raise AssertionError
+            try:
+                campaign_config = get_campaign_config(config, kind)
+            except KeyError:
+                raise web.HTTPNotFound(text=f"No such campaign: {kind}")
+            cs_id = await conn.fetchval(
+                "SELECT change_set FROM last_effective_runs "
+                "WHERE campaign = $1 AND package = $2", kind, id)
+            if cs_id is None:
+                if not (await conn.fetchrow("SELECT FROM package WHERE name = $1", id)):
+                    raise web.HTTPNotFoundError(text=f"No such package: {id}")
+            max_finish_time = await conn.fetchval(
+                'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
+            get_packages = partial(
+                get_packages_for_changeset, db, package_info_provider, cs_id)
+            description = f"Campaign {kind} for {id}"
     if stamp is not None and max_finish_time.astimezone() < stamp:
         return
     logging.info("Generating metadata for %s/%s", kind, id)
@@ -424,7 +440,7 @@ async def refresh_on_demand_dists(
         os.path.join(dists_dir, kind, id),
         get_packages,
         package_info_provider,
-        suite_name=name,
+        suite_name=f"{kind}/{id}",
         archive_description=description,
         components=distribution.component,
         arches=ARCHES,
@@ -491,11 +507,12 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
         "/dists/{release}/{component}/{arch}/"
         r"{file:Packages(|\..*)}",
         serve_dists_component_file)
+    CAMPAIGNS_REGEX = "|".join(re.escape(c.name) for c in config.campaign)
     app.router.add_get(
-        "/dists/{kind:cs|run}/{id}/{file:InRelease|Release.gpg|Release}",
+        "/dists/{kind:cs|run|" + CAMPAIGNS_REGEX + "}/{id}/{file:InRelease|Release.gpg|Release}",
         serve_on_demand_dists_release_file)
     app.router.add_get(
-        "/dists/{kind:cs|run}/{id}/{component}/{arch}/"
+        "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
         r"{file:Packages(|\..*)}",
         serve_on_demand_dists_component_file)
     aiozipkin.setup(app, tracer)
