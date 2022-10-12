@@ -177,7 +177,7 @@ async def handle_schedule(request):
         "package": package,
         "campaign": campaign,
         "offset": offset,
-        "estimated_duration_seconds": ret['estimated_duration'],
+        "estimated_duration_seconds": ret['estimated_duration_seconds'],
         "queue_position": ret['queue_position'],
         "queue_wait_time": ret['queue_wait_time'],
     })
