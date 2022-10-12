@@ -618,26 +618,28 @@ def process_package(
             es.enter_context(ws)
         except IncompleteRead as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", ))
+            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", "clone"))
         except MalformedTransform as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", ))
+            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"))
         except TransformRenameFailed as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", ))
+            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"))
         except UnexpectedHttpStatus as e:
             traceback.print_exc()
             if e.code == 502:
-                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", ))
+                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"))
             else:
                 raise WorkerFailure(
                     "worker-clone-http-%s" % e.code, str(e),
-                    stage=("setup", ), details={'status-code': e.code})
+                    stage=("setup", "clone"), details={'status-code': e.code})
         except TransportError as e:
             if "No space left on device" in e.msg:
-                raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", ))
+                raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"))
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", ))
+            raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone"))
+        except RemoteGitError as e:
+            raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone"))
 
         logger.info('Workspace ready - starting.')
 
