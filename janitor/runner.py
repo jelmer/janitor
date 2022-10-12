@@ -55,9 +55,8 @@ from breezy.branch import Branch
 from breezy.errors import ConnectionError, UnexpectedHttpStatus, PermissionDenied
 from breezy.transport import UnusableRedirect, UnsupportedProtocol
 
-from silver_platter.debian import (
+from silver_platter.probers import (
     select_preferred_probers,
-    pick_additional_colocated_branches,
 )
 from silver_platter.proposal import (
     Forge,
@@ -396,6 +395,7 @@ class DebianBuilder(Builder):
         return env
 
     def additional_colocated_branches(self, main_branch):
+        from silver_platter.debian import pick_additional_colocated_branches
         return pick_additional_colocated_branches(main_branch)
 
 
