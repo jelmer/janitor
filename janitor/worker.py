@@ -897,7 +897,7 @@ def _push_error_to_worker_failure(e):
         )
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
-                ConnectionError, ConnectionReset)):
+                ConnectionError, ConnectionReset, ssl.SSLEOFError)):
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e,
             stage=("result-push", )
