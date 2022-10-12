@@ -64,7 +64,7 @@ from silver_platter.apply import (
     ScriptMadeNoChanges,
     ResultFileFormatError,
 )
-from silver_platter.debian import (
+from silver_platter.probers import (
     select_probers,
 )
 from silver_platter.utils import (
