@@ -36,7 +36,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	ca-certificates \
 	&& apt clean \
 	&& make -C /code \
-	&& pip3 install "/code[gcp]" \
+	&& pip3 install "/code[gcp,debian]" \
 	&& apt-file update
 
 ENV AUTOPKGTEST=/code/autopkgtest-wrapper
