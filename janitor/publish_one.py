@@ -265,7 +265,8 @@ def publish(
             % (e.project, e.timeout),
         )
     except RemoteGitError as exc:
-        raise PublishFailure("remote git error: %s" % exc)
+        raise PublishFailure(
+            code='remote-git-error', description="remote git error: %s" % exc)
     except InsufficientChangesForNewProposal:
         raise PublishNothingToDo('not enough changes for a new merge proposal')
 
