@@ -336,6 +336,7 @@ WHERE run.package = $1 AND run.suite = $2
         "queue_wait_time": queue_wait_time,
         "publish_policy": package['publish_policy'],
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
+        "config": config,
     })
     if campaign.HasField('debian_build'):
         kwargs["tracker_url"] = partial(tracker_url, config, campaign.debian_build.base_distribution)
