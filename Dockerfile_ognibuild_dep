@@ -17,8 +17,8 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	python3-pip \
 	ca-certificates \
 	gnome-pkg-tools \
+	cargo \
 	&& apt clean \
-	&& pip3 install google-cloud-logging \
 	&& apt-file update
 
 RUN rm -rf /usr/share/aclocal

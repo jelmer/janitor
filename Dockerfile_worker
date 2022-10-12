@@ -29,11 +29,13 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	cython3 \
 	rustc \
 	libpython3-dev \
+	build-essential \
 	cargo \
 	debcargo \
 	mypy-protobuf \
 	protobuf-compiler \
 	ca-certificates \
+	libapt-pkg-dev \
 	&& apt clean \
 	&& make -C /code \
 	&& pip3 install "/code[gcp,debian]" \
