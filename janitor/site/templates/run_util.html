@@ -79,6 +79,18 @@ cd {{ package }}
                 };
             </script>
         {% endif %}
+    {% elif bugtracker.kind == config_pb2.github %}
+    <form id="bugform" method="get" action="{{ bugtracker.url }}/issues/new" style="display: contents;">
+	    <input type="hidden" name="title" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
+            <input type="hidden" name="body"
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
+            <button id="filebug"
+                    {%- if accesskey -%}
+                    accesskey="{{ accesskey }}"
+                    {%- endif -%}>
+                File a Bug against {{ bugtracker.name }}
+            </button>
+    </form>
     {% elif bugtracker.kind == config_pb2.debian %}
         <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
         <form id="bugform"
