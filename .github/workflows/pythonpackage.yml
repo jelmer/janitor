@@ -37,15 +37,23 @@ jobs:
           python setup.py develop
           pip install setuptools-rust cython configobj pyyaml
           make
-      - name: Style checks
+      - name: Style checks (flake8)
         run: |
           make flake8
+      - name: Style checks (djlint)
+        if: always()
+        run: |
           make djlint
+      - name: Style checks (yamllint)
+        if: always()
+        run: |
           make yamllint
       - name: Typing checks
+        if: always()
         run: |
           make typing
       - name: Build
+        if: always()
         run: |
           make all
       - name: Test suite run
@@ -54,6 +62,7 @@ jobs:
         env:
           PYTHONHASHSEED: random
       - name: Config compat test
+        if: always()
         run: |
           git clone https://salsa.debian.org/jelmer/janitor.debian.net/ janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
