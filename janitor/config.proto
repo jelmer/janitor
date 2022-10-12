@@ -154,6 +154,7 @@ message OAuth2Provider {
 enum BugTrackerKind {
    gitlab = 1;
    debian = 2;
+   github = 3;
 };
 
 message BugTracker {
