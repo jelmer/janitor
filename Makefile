@@ -11,7 +11,9 @@ all: core
 
 PROTOC_ARGS = --python_out=.
 
+ifneq (,$(shell which protoc-gen-mypy))
 PROTOC_ARGS += --mypy_out=.
+endif
 
 janitor/%_pb2.py: janitor/%.proto
 	protoc $(PROTOC_ARGS) $<
