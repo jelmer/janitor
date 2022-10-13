@@ -214,6 +214,16 @@ async def get_packages_for_run(db, info_provider, run_id, suite_name, component,
         yield chunk
 
 
+DEFAULT_MAX_BY_HASH_AGE = 3600
+
+
+def cleanup_by_hash_files(base, max_age=DEFAULT_MAX_BY_HASH_AGE):
+    for entry in os.scandir(os.path.join(base, "by-hash", h)):
+        age = time.time() - entry.stat().st_mtime
+        if age > MAX_BY_HASH_AGE:
+            os.unlink(entry.path)
+
+
 class HashedFileWriter(object):
 
     def __init__(self, release, base, path, open=open):
@@ -316,6 +326,7 @@ async def write_suite_files(
                 f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
                 r.dump(f)
                 f.done()
+                cleanup_by_hash_files(os.path.join(base_path, arch_dir))
 
                 packages_path = os.path.join(component, f"binary-{arch}", "Packages")
                 SUFFIXES: Dict[str, Any] = {
@@ -333,6 +344,8 @@ async def write_suite_files(
                         f.write(chunk)
                 for f in fs:
                     f.done()
+                cleanup_by_hash_files(
+                    os.path.join(base_path, os.path.dirname(packages_path)))
                 await asyncio.sleep(0)
             await asyncio.sleep(0)
 

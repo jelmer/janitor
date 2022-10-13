@@ -659,3 +659,5 @@ CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
+
+create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
