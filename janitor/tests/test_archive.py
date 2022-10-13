@@ -16,10 +16,18 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-import aiozipkin
+import hashlib
+import os
+from tempfile import TemporaryDirectory
+
+
+from debian.deb822 import Release
+
+
 from janitor.config import Config
 from janitor.debian.archive import (
     create_app,
+    HashedFileWriter,
 )
 
 
@@ -35,3 +43,29 @@ async def test_health(aiohttp_client):
     assert resp.status == 200
     text = await resp.text()
     assert text == "ok"
+
+
+async def test_ready(aiohttp_client):
+    client = await create_client(aiohttp_client)
+
+    resp = await client.get("/ready")
+    assert resp.status == 200
+    text = await resp.text()
+    assert text == "ok"
+
+
+def test_hash_file_writer():
+    with TemporaryDirectory() as td:
+        r = Release()
+        with HashedFileWriter(r, td, "foo/bar") as w:
+            w.write(b'chunk1')
+            w.write(b'chunk2')
+            w.done()
+        md5hex = hashlib.md5(b'chunk1chunk2').hexdigest()
+        with open(os.path.join(
+                td, "foo", "by-hash", "MD5Sum", md5hex), 'rb') as f:
+            assert f.read() == b'chunk1chunk2'
+        with open(os.path.join(td, "foo", "bar"), 'rb') as f:
+            assert f.read() == b'chunk1chunk2'
+        assert r['MD5Sum'] == [
+            {'md5sum': md5hex, 'name': 'foo/bar', 'size': 12}]
