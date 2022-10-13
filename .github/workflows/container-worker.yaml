@@ -1,7 +1,7 @@
 ---
 name: Build and Publish Worker Docker Images
 
-on:
+"on":
   # run it on push to the default repository branch
   push:
   pull_request:

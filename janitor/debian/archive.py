@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import List, Dict, Optional, Any
 from email.utils import formatdate, parsedate_to_datetime
 from datetime import datetime
@@ -214,6 +215,26 @@ async def get_packages_for_run(db, info_provider, run_id, suite_name, component,
         yield chunk
 
 
+HASHES = {
+    "MD5Sum": hashlib.md5,
+    "SHA1": hashlib.sha1,
+    "SHA256": hashlib.sha256,
+    "SHA512": hashlib.sha512,
+}
+
+
+def cleanup_by_hash_files(base, number_to_keep):
+    for h in HASHES:
+        ages = []
+        for entry in os.scandir(os.path.join(base, "by-hash", h)):
+            ages.append((entry, time.time() - entry.stat().st_mtime))
+
+        ages.sort(key=lambda k: k[1], reverse=True)
+
+        for entry, age in ages[number_to_keep:]:
+            os.unlink(entry.path)
+
+
 class HashedFileWriter(object):
 
     def __init__(self, release, base, path, open=open):
@@ -234,12 +255,7 @@ class HashedFileWriter(object):
         self._tmpf.flush()
         self._tmpf.close()
 
-        hashes = {
-            "MD5Sum": hashlib.md5(),
-            "SHA1": hashlib.sha1(),
-            "SHA256": hashlib.sha256(),
-            "SHA512": hashlib.sha512(),
-        }
+        hashes = {n: kls() for (n, kls) in HASHES.items()}
 
         size = 0
         with open(self._tmpf_path, 'rb') as f:
@@ -316,6 +332,7 @@ async def write_suite_files(
                 f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
                 r.dump(f)
                 f.done()
+                cleanup_by_hash_files(os.path.join(base_path, arch_dir), 3)
 
                 packages_path = os.path.join(component, f"binary-{arch}", "Packages")
                 SUFFIXES: Dict[str, Any] = {
@@ -333,6 +350,9 @@ async def write_suite_files(
                         f.write(chunk)
                 for f in fs:
                     f.done()
+                cleanup_by_hash_files(
+                    os.path.join(base_path, os.path.dirname(packages_path)),
+                    3 * len(SUFFIXES))
                 await asyncio.sleep(0)
             await asyncio.sleep(0)
 
@@ -468,16 +488,20 @@ async def refresh_on_demand_dists(
             except KeyError:
                 raise web.HTTPNotFound(text=f"No such campaign: {kind}")
             cs_id = await conn.fetchval(
-                "SELECT change_set FROM last_effective_runs "
-                "WHERE suite = $1 AND package = $2", kind, id)
+                "SELECT run.change_set FROM run "
+                "INNER JOIN change_set ON change_set.id = run.change_set "
+                "WHERE run.suite = $1 AND run.package = $2 "
+                "AND change_set.state in ('working', 'ready', 'publishing', 'done') AND "
+                "run.result_code = 'success' "
+                "ORDER BY run.finish_time DESC", kind, id)
             if cs_id is None:
-                if not (await conn.fetchrow("SELECT FROM package WHERE name = $1", id)):
-                    raise web.HTTPNotFoundError(text=f"No such package: {id}")
+                if not (await conn.fetchrow("SELECT name FROM package WHERE name = $1", id)):
+                    raise web.HTTPNotFound(text=f"No such package: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
             get_packages = partial(
                 get_packages_for_changeset, db, package_info_provider, cs_id)
-            description = f"Campaign {kind} for {id}"
+            description = f"Campaign {kind} for {id} (change set {cs_id})"
     if stamp is not None and max_finish_time.astimezone() < stamp:
         return
     logging.info("Generating metadata for %s/%s", kind, id)

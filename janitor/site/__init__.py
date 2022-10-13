@@ -29,6 +29,7 @@ from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
+    'worker-exception',
     'worker-clone-incomplete-read',
     'worker-clone-malformed-transform',
     'autopkgtest-chroot-not-found',
@@ -62,6 +63,12 @@ def update_vars_from_request(vs, request):
     vs["suites"] = [c for c in request.app['config'].campaign]
     vs["site_name"] = request.app['config'].instance_name or "Debian Janitor"
     vs["openid_configured"] = "openid_config" in request.app
+
+    def url_for(name, **kwargs):
+        return request.app.router[name].url_for(**kwargs)
+
+    vs['url_for'] = url_for
+
     if request.app['external_url'] is not None:
         vs["url"] = request.app['external_url'].join(request.rel_url)
         vcs_base_url = request.app['external_url']
@@ -70,6 +77,7 @@ def update_vars_from_request(vs, request):
         vcs_base_url = request.url.with_path("/")
     vs['git_vcs_manager'] = RemoteGitVcsManager(str(vcs_base_url / "git"))
     vs['bzr_vcs_manager'] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
+    vs['config'] = request.app['config']
 
 
 def format_duration(duration):

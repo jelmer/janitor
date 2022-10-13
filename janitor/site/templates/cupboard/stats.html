@@ -40,23 +40,11 @@
             new Chart($("#hoster-status-chart"), {
                 type: 'bar',
                 data: {
-                    labels: {
-                        {
-                            by_hoster.keys() | list | sort | tojson
-                        }
-                    },
+                    labels: {{ by_hoster.keys() | list | sort | tojson }},
                     datasets: [{% for kind, color in [('rejected', 'red'), ('closed', 'orange'), ('merged', 'green'), ('open', 'blue'), ('abandoned', 'grey')] %} {
                         label: '{{ kind }}',
-                        data: [{% for hoster in by_hoster.keys() | list | sort %} {
-                            {
-                                by_hoster[hoster][kind]
-                            }
-                        }, {% endfor %}],
-                        backgroundColor: Chart.helpers.color(window.chartColors. {
-                            {
-                                color
-                            }
-                        }).alpha(0.5).rgbString()
+                        data: [{% for hoster in by_hoster.keys() | list | sort %} {{ by_hoster[hoster][kind] }}, {% endfor %}],
+                        backgroundColor: Chart.helpers.color(window.chartColors. {{ color }}).alpha(0.5).rgbString()
                     }, {% endfor %}],
                 },
                 options: {
@@ -210,16 +198,8 @@
                         datasets: [{% for key in ['merged', 'opened'] %} {
                             {% set color = { 'opened': 'blue', 'merged': 'green' } [key] %}
                             label: '{{ key }}',
-                                borderColor: window.chartColors. {
-                                    {
-                                        color
-                                    }
-                                },
-                                backgroundColor: Chart.helpers.color(window.chartColors. {
-                                    {
-                                        color
-                                    }
-                                }).alpha(0.5).rgbString(),
+                                borderColor: window.chartColors. {{ color }},
+                                backgroundColor: Chart.helpers.color(window.chartColors. {{ color }}).alpha(0.5).rgbString(),
                                 data: $.map(json['{{ key }}'], function(count, ts) {
                                     return {
                                         x: moment(ts).toDate(),
