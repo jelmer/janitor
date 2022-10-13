@@ -244,9 +244,10 @@ class HashedFileWriter(object):
         self.path = path
 
     def __enter__(self):
+        dir = os.path.join(self.base, os.path.dirname(self.path))
+        os.makedirs(dir, exist_ok=True)
         fd, self._tmpf_path = tempfile.mkstemp(
-            dir=os.path.join(self.base, os.path.dirname(self.path)),
-            prefix=os.path.basename(self.path))
+            dir=dir, prefix=os.path.basename(self.path))
         self._tmpf = self.open(self._tmpf_path, 'wb')
         os.close(fd)
         return self
