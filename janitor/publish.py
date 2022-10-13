@@ -1871,7 +1871,7 @@ SELECT
   run.review_status AS review_status,
   run.command AS run_command,
   named_publish_policy.qa_review AS qa_review_policy,
-  package.maintainer_email AS maintainer_email,
+  package.maintainer_email AS rate_limiting_bucket,
   run.revision AS revision,
   candidate.command AS policy_command,
   package.removed AS removed,
@@ -1938,20 +1938,20 @@ WHERE run.id = $1
 
     # TODO(jelmer): include forge rate limits?
 
-    ret['maintainer_propose_rate_limit'] = {
+    ret['propose_rate_limit'] = {
         'details': {
-            'maintainer': run['maintainer_email']}}
+            'bucket': run['rate_limiting_bucket']}}
     try:
-        request.app['maintainer_rate_limiter'].check_allowed(run['maintainer_email'])
+        request.app['maintainer_rate_limiter'].check_allowed(run['rate_limiting_bucket'])
     except MaintainerRateLimited as e:
-        ret['maintainer_propose_rate_limit']['result'] = False
-        ret['maintainer_propose_rate_limit']['details'] = {
+        ret['propose_rate_limit']['result'] = False
+        ret['propose_rate_limit']['details'] = {
             'open': e.open_mps,
             'max_open': e.max_open_mps}
     except RateLimited:
-        ret['maintainer_propose_rate_limit']['result'] = False
+        ret['propose_rate_limit']['result'] = False
     else:
-        ret['maintainer_propose_rate_limit']['result'] = True
+        ret['propose_rate_limit']['result'] = True
 
     ret['change_set'] = {
         'result': (run['change_set_state'] in ('publishing', 'ready')),
