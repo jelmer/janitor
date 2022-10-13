@@ -1353,6 +1353,7 @@ async def handle_policy_get(request):
     if not row:
         return web.json_response({"reason": "Publish policy not found"}, status=404)
     return web.json_response({
+        "rate_limiting_bucket": row["rate_limiting_bucket"],
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
@@ -1367,6 +1368,7 @@ async def handle_full_policy_get(request):
     async with request.app['db'].acquire() as conn:
         rows = await conn.fetch("SELECT * FROM named_publish_policy")
     return web.json_response({row['name']: {
+        "rate_limiting_bucket": row["rate_limiting_bucket"],
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
@@ -1389,13 +1391,16 @@ async def handle_policy_put(request):
     policy = await request.json()
     async with request.app['db'].acquire() as conn:
         await conn.execute(
-            "INSERT INTO named_publish_policy (name, qa_review, per_branch_policy) "
-            "VALUES ($1, $2, $3) ON CONFLICT (name) "
+            "INSERT INTO named_publish_policy "
+            "(name, qa_review, per_branch_policy, rate_limiting_bucket) "
+            "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
-            "per_branch_policy = EXCLUDED.per_branch_policy", name,
-            policy['qa_review'],
+            "per_branch_policy = EXCLUDED.per_branch_policy, "
+            "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket",
+            name, policy['qa_review'],
             [(r, v['mode'], v.get('max_frequency_days'))
-             for (r, v) in policy['per_branch'].items()])
+             for (r, v) in policy['per_branch'].items()],
+            policy.get('rate_limiting_bucket'))
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1408,13 +1413,16 @@ async def handle_full_policy_put(request):
         entries = [
             (name, v['qa_review'],
              [(r, b['mode'], b.get('max_frequency_days'))
-              for (r, b) in v['per_branch'].items()])
+              for (r, b) in v['per_branch'].items()],
+             v.get('rate_limiting_bucket'))
             for (name, v) in policy.items()]
         await conn.executemany(
-            "INSERT INTO named_publish_policy (name, qa_review, per_branch_policy) "
-            "VALUES ($1, $2, $3) ON CONFLICT (name) "
+            "INSERT INTO named_publish_policy "
+            "(name, qa_review, per_branch_policy, rate_limiting_bucket) "
+            "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
-            "per_branch_policy = EXCLUDED.per_branch_policy", entries)
+            "per_branch_policy = EXCLUDED.per_branch_policy, "
+            "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket", entries)
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1863,7 +1871,7 @@ SELECT
   run.review_status AS review_status,
   run.command AS run_command,
   named_publish_policy.qa_review AS qa_review_policy,
-  package.maintainer_email AS maintainer_email,
+  package.maintainer_email AS rate_limiting_bucket,
   run.revision AS revision,
   candidate.command AS policy_command,
   package.removed AS removed,
@@ -1930,20 +1938,20 @@ WHERE run.id = $1
 
     # TODO(jelmer): include forge rate limits?
 
-    ret['maintainer_propose_rate_limit'] = {
+    ret['propose_rate_limit'] = {
         'details': {
-            'maintainer': run['maintainer_email']}}
+            'bucket': run['rate_limiting_bucket']}}
     try:
-        request.app['maintainer_rate_limiter'].check_allowed(run['maintainer_email'])
+        request.app['maintainer_rate_limiter'].check_allowed(run['rate_limiting_bucket'])
     except MaintainerRateLimited as e:
-        ret['maintainer_propose_rate_limit']['result'] = False
-        ret['maintainer_propose_rate_limit']['details'] = {
+        ret['propose_rate_limit']['result'] = False
+        ret['propose_rate_limit']['details'] = {
             'open': e.open_mps,
             'max_open': e.max_open_mps}
     except RateLimited:
-        ret['maintainer_propose_rate_limit']['result'] = False
+        ret['propose_rate_limit']['result'] = False
     else:
-        ret['maintainer_propose_rate_limit']['result'] = True
+        ret['propose_rate_limit']['result'] = True
 
     ret['change_set'] = {
         'result': (run['change_set_state'] in ('publishing', 'ready')),
