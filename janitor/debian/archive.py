@@ -265,7 +265,7 @@ class HashedFileWriter(object):
                     break
                 for h in hashes.values():
                     h.update(chunk)
-                size += 0
+                size += len(chunk)
 
         d, n = os.path.split(self.path)
         for h, v in hashes.items():
