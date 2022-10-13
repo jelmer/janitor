@@ -1307,52 +1307,6 @@ async def store_run(
         )
 
 
-def has_relation(v, pkg):
-    from debian.deb822 import PkgRelation
-    for r in PkgRelation.parse_relations(v):
-        for o in r:
-            if o['name'] == pkg:
-                return True
-    return False
-
-
-def has_build_relation(c, pkg):
-    for f in ["Build-Depends", "Build-Depends-Indep", "Build-Depends-Arch",
-              "Build-Conflicts", "Build-Conflicts-Indep",
-              "Build-Conflicts-Arch"]:
-        if has_relation(c.get(f, ""), pkg):
-            return True
-    return False
-
-
-def has_runtime_relation(c, pkg):
-    for f in ["Depends", "Recommends", "Suggests",
-              "Breaks", "Replaces"]:
-        if has_relation(c.get(f, ""), pkg):
-            return True
-    return False
-
-
-def find_reverse_source_deps(apt, binary_packages):
-    # TODO(jelmer): in the future, we may want to do more than trigger
-    # control builds here, e.g. trigger fresh-releases
-    # (or maybe just if the control build fails?)
-
-    need_control = set()
-    with apt:
-        for source in apt.iter_sources():
-            if any([has_build_relation(source, p) for p in binary_packages]):
-                need_control.add(source['Package'])
-                break
-
-        for binary in apt.iter_binaries():
-            if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                need_control.add(binary['Source'].split(' ')[0])
-                break
-
-    return need_control
-
-
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool,
         active_run: ActiveRun, result: JanitorResult) -> None:
@@ -1415,6 +1369,7 @@ async def followup_run(
     # reverse dependencies in the same changeset.
     if active_run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
         from breezy.plugins.debian.apt_repo import RemoteApt
+        from .debian.followup import find_reverse_source_deps
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
         if result.builder_result is None:
