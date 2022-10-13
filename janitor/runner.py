@@ -595,6 +595,7 @@ class WorkerResult(object):
     branch_url: Optional[str] = None
     vcs_type: Optional[str] = None
     subpath: Optional[str] = None
+    transient: Optional[bool] = None
 
     @classmethod
     def from_file(cls, path):
@@ -660,6 +661,7 @@ class WorkerResult(object):
             branch_url=worker_result.get("branch_url"),
             subpath=worker_result.get("subpath"),
             vcs_type=worker_result.get("vcs_type"),
+            transient=worker_result.get("transient"),
         )
 
 
@@ -1394,11 +1396,12 @@ async def followup_run(
 
         # TODO(jelmer): check test dependencies?
 
-        for source in need_control:
-            logging.info("Scheduling control run for %s.", source)
-            await do_schedule_control(
-                conn, source, change_set=result.change_set,
-                requestor="control")
+        async with database.acquire() as conn:
+            for source in need_control:
+                logging.info("Scheduling control run for %s.", source)
+                await do_schedule_control(
+                    conn, source, change_set=result.change_set,
+                    requestor="control")
 
 
 class RunExists(Exception):
@@ -1955,6 +1958,16 @@ async def handle_get_active_runs(request):
     return web.json_response((await queue_processor.status_json())["processing"])
 
 
+@routes.get("/active-runs/{run_id}", name="get-active-run")
+async def handle_get_active_run(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info['run_id']
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+    return web.json_response(active_run.json())
+
+
 @routes.post("/active-runs", name="assign")
 async def handle_assign(request):
     json = await request.json()
@@ -2219,6 +2232,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "env": env,
         "campaign": item.campaign,
         "force-build": campaign_config.force_build,
+        "skip-setup-validation": campaign_config.skip_setup_validation,
         "target_repository": {
             "url": target_repository_url,
             "vcs_type": vcs_info['vcs_type'],
@@ -2229,7 +2243,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         pass
     else:
         await queue_processor.unclaim_run(active_run.log_id)
-    return web.json_response(assignment, status=201)
+    return web.json_response(
+        assignment, status=201, headers={
+        'Location': request.app.router['get-active-run'].url_for(run_id=active_run.log_id)})
 
 
 @routes.get("/health", name="health")
@@ -2344,6 +2360,7 @@ async def handle_finish(request):
             status=409,
         )
 
+    # TODO(jelmer): Set Location header to something; /runs/{run_id}= ?
     return web.json_response(
         {"id": run_id, "filenames": filenames,
          "logs": logfilenames,
