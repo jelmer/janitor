@@ -381,7 +381,7 @@ ARCHES: List[str] = ["amd64"]
 async def handle_publish(request):
     post = await request.post()
     suite = post.get("suite")
-    for campaign_config in request.app.config.campaign:
+    for campaign_config in request.app['config'].campaign:
         if not campaign_config.HasField('debian_build'):
             continue
         build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
@@ -407,7 +407,7 @@ async def handle_health(request):
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
     missing = []
-    for suite in request.app['generator_manager'].config.campaign:
+    for suite in request.app['config'].campaign:
         if suite not in last_publish_time:
             missing.append(suite)
     if missing:
@@ -430,7 +430,7 @@ async def handle_pgp_keys(request):
 
 async def serve_dists_release_file(request):
     path = os.path.join(
-        request.app['generator_manager'].dists_dir,
+        request.app['dists_dir'],
         request.match_info['release'],
         request.match_info['file'])
     if not os.path.exists(path):
@@ -440,7 +440,7 @@ async def serve_dists_release_file(request):
 
 async def serve_dists_component_file(request):
     path = os.path.join(
-        request.app['generator_manager'].dists_dir,
+        request.app['dists_dir'],
         request.match_info['release'],
         request.match_info['component'],
         request.match_info['arch'],
@@ -501,8 +501,8 @@ async def refresh_on_demand_dists(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
             get_packages = partial(
                 get_packages_for_changeset, db, package_info_provider, cs_id)
-            description = f"Campaign {kind} for {id} (change set {cs_id})"
-    if stamp is not None and max_finish_time.astimezone() < stamp:
+            description = f"Campaign {kind} for {id}"
+    if stamp is not None and max_finish_time and max_finish_time.astimezone() < stamp:
         return
     logging.info("Generating metadata for %s/%s", kind, id)
     distribution = get_distribution(
@@ -522,16 +522,16 @@ async def refresh_on_demand_dists(
 
 async def serve_on_demand_dists_release_file(request):
     await refresh_on_demand_dists(
-        request.app['generator_manager'].dists_dir,
-        request.app['generator_manager'].db,
-        request.app['generator_manager'].config,
+        request.app['dists_dir'],
+        request.app['db'],
+        request.app['config'],
         request.app['generator_manager'].package_info_provider,
         request.app['gpg'],
         request.match_info['kind'],
         request.match_info['id'])
 
     path = os.path.join(
-        request.app['generator_manager'].dists_dir,
+        request.app['dists_dir'],
         request.match_info['kind'],
         request.match_info['id'],
         request.match_info['file'])
@@ -542,16 +542,16 @@ async def serve_on_demand_dists_release_file(request):
 
 async def serve_on_demand_dists_component_file(request):
     await refresh_on_demand_dists(
-        request.app['generator_manager'].dists_dir,
-        request.app['generator_manager'].db,
-        request.app['generator_manager'].config,
+        request.app['dists_dir'],
+        request.app['db'],
+        request.app['config'],
         request.app['generator_manager'].package_info_provider,
         request.app['gpg'],
         request.match_info['kind'],
         request.match_info['id'])
 
     path = os.path.join(
-        request.app['generator_manager'].dists_dir,
+        request.app['dists_dir'],
         request.match_info['kind'],
         request.match_info['id'],
         request.match_info['component'],
@@ -562,12 +562,14 @@ async def serve_on_demand_dists_component_file(request):
     return web.FileResponse(path)
 
 
-async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, tracer):
+async def create_app(generator_manager, config, dists_dir, db):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app['gpg'] = gpg.Context(armor=True)
-    app.config = config
+    app['dists_dir'] = dists_dir
+    app['config'] = config
     app['generator_manager'] = generator_manager
+    app['db'] = db
     setup_metrics(app)
     app.router.add_routes(routes)
     app.router.add_get(
@@ -585,6 +587,11 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
         "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
         r"{file:Packages(|\..*)}",
         serve_on_demand_dists_component_file)
+    return app
+
+
+async def run_web_server(listen_addr, port, dists_dir, config, db, generator_manager, tracer):
+    app = await create_app(generator_manager, config, dists_dir, db)
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -763,6 +770,7 @@ async def main(argv=None):
                 args.port,
                 args.dists_directory,
                 config,
+                db,
                 generator_manager,
                 tracer,
             )
