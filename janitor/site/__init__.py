@@ -29,6 +29,7 @@ from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
+    'worker-exception',
     'worker-clone-incomplete-read',
     'worker-clone-malformed-transform',
     'autopkgtest-chroot-not-found',

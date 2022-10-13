@@ -71,6 +71,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "pull-rate-limited",
     "session-setup-failure",
     "run-disappeared",
+    "branch-temporarily-unavailable",
 ]
 
 # In some cases, we want to ignore certain results when guessing
