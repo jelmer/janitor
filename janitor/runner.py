@@ -2245,7 +2245,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         await queue_processor.unclaim_run(active_run.log_id)
     return web.json_response(
         assignment, status=201, headers={
-        'Location': request.app.router['get-active-run'].url_for(run_id=active_run.log_id)})
+            'Location': request.app.router['get-active-run'].url_for(
+                run_id=active_run.log_id)
+        })
 
 
 @routes.get("/health", name="health")
