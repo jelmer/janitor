@@ -368,8 +368,8 @@ class DebianTarget(Target):
                     'missing-changelog',
                     str(exc), stage=(("validate", )))
             except PackageMissingInArchive as exc:
-                raise WorkerFailure(
-                    'package-missing-in-archive', str(exc), stage=(("validate", )))
+                logging.warning(
+                    'Package %s is not present in archive', exc.package)
             except TreeVersionNotInArchive as exc:
                 logging.warning(
                     'Last tree version %s not present in the archive',
