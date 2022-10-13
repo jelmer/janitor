@@ -172,7 +172,13 @@ async def generate_run_file(
                     session.get(url, raise_for_status=True,
                                 timeout=ClientTimeout(30)) as resp:
                 return await resp.json()
-        except (ClientResponseError, ClientConnectorError) as e:
+        except ClientResponseError as e:
+            if e.status == 404:
+                return {}
+            logging.warning(
+                "Unable to retrieve publish blockers for %s: %r",
+                run['id'], e)
+        except ClientConnectorError as e:
             logging.warning(
                 "Unable to retrieve publish blockers for %s: %r",
                 run['id'], e)

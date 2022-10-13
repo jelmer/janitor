@@ -595,6 +595,7 @@ class WorkerResult(object):
     branch_url: Optional[str] = None
     vcs_type: Optional[str] = None
     subpath: Optional[str] = None
+    transient: Optional[bool] = None
 
     @classmethod
     def from_file(cls, path):
@@ -660,6 +661,7 @@ class WorkerResult(object):
             branch_url=worker_result.get("branch_url"),
             subpath=worker_result.get("subpath"),
             vcs_type=worker_result.get("vcs_type"),
+            transient=worker_result.get("transient"),
         )
 
 
@@ -1307,52 +1309,6 @@ async def store_run(
         )
 
 
-def has_relation(v, pkg):
-    from debian.deb822 import PkgRelation
-    for r in PkgRelation.parse_relations(v):
-        for o in r:
-            if o['name'] == pkg:
-                return True
-    return False
-
-
-def has_build_relation(c, pkg):
-    for f in ["Build-Depends", "Build-Depends-Indep", "Build-Depends-Arch",
-              "Build-Conflicts", "Build-Conflicts-Indep",
-              "Build-Conflicts-Arch"]:
-        if has_relation(c.get(f, ""), pkg):
-            return True
-    return False
-
-
-def has_runtime_relation(c, pkg):
-    for f in ["Depends", "Recommends", "Suggests",
-              "Breaks", "Replaces"]:
-        if has_relation(c.get(f, ""), pkg):
-            return True
-    return False
-
-
-def find_reverse_source_deps(apt, binary_packages):
-    # TODO(jelmer): in the future, we may want to do more than trigger
-    # control builds here, e.g. trigger fresh-releases
-    # (or maybe just if the control build fails?)
-
-    need_control = set()
-    with apt:
-        for source in apt.iter_sources():
-            if any([has_build_relation(source, p) for p in binary_packages]):
-                need_control.add(source['Package'])
-                break
-
-        for binary in apt.iter_binaries():
-            if any([has_runtime_relation(binary, p) for p in binary_packages]):
-                need_control.add(binary['Source'].split(' ')[0])
-                break
-
-    return need_control
-
-
 async def followup_run(
         config: Config, database: asyncpg.pool.Pool,
         active_run: ActiveRun, result: JanitorResult) -> None:
@@ -1415,6 +1371,7 @@ async def followup_run(
     # reverse dependencies in the same changeset.
     if active_run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
         from breezy.plugins.debian.apt_repo import RemoteApt
+        from .debian.followup import find_reverse_source_deps
         # Find all binaries that have changed in this run
         debian_result = result.builder_result
         if result.builder_result is None:
@@ -1439,11 +1396,12 @@ async def followup_run(
 
         # TODO(jelmer): check test dependencies?
 
-        for source in need_control:
-            logging.info("Scheduling control run for %s.", source)
-            await do_schedule_control(
-                conn, source, change_set=result.change_set,
-                requestor="control")
+        async with database.acquire() as conn:
+            for source in need_control:
+                logging.info("Scheduling control run for %s.", source)
+                await do_schedule_control(
+                    conn, source, change_set=result.change_set,
+                    requestor="control")
 
 
 class RunExists(Exception):
@@ -1737,7 +1695,7 @@ async def handle_schedule_control(request):
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
 
-    async with request.app.queue_processor.database.acquire() as conn:
+    async with request.app['queue_processor'].database.acquire() as conn:
         if 'run_id' in json:
             run_id = json['run_id']
             run = await conn.fetchrow(
@@ -1794,7 +1752,7 @@ async def handle_schedule(request):
     estimated_duration = (
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
-    async with request.app.queue_processor.database.acquire() as conn:
+    async with request.app['queue_processor'].database.acquire() as conn:
         try:
             offset, estimated_duration = await do_schedule(
                 conn,
@@ -1998,6 +1956,16 @@ async def handle_candidates(request):
 async def handle_get_active_runs(request):
     queue_processor = request.app['queue_processor']
     return web.json_response((await queue_processor.status_json())["processing"])
+
+
+@routes.get("/active-runs/{run_id}", name="get-active-run")
+async def handle_get_active_run(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info['run_id']
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+    return web.json_response(active_run.json())
 
 
 @routes.post("/active-runs", name="assign")
@@ -2264,6 +2232,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "env": env,
         "campaign": item.campaign,
         "force-build": campaign_config.force_build,
+        "skip-setup-validation": campaign_config.skip_setup_validation,
         "target_repository": {
             "url": target_repository_url,
             "vcs_type": vcs_info['vcs_type'],
@@ -2274,7 +2243,11 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         pass
     else:
         await queue_processor.unclaim_run(active_run.log_id)
-    return web.json_response(assignment, status=201)
+    return web.json_response(
+        assignment, status=201, headers={
+            'Location': request.app.router['get-active-run'].url_for(
+                run_id=active_run.log_id)
+        })
 
 
 @routes.get("/health", name="health")
@@ -2389,6 +2362,7 @@ async def handle_finish(request):
             status=409,
         )
 
+    # TODO(jelmer): Set Location header to something; /runs/{run_id}= ?
     return web.json_response(
         {"id": run_id, "filenames": filenames,
          "logs": logfilenames,

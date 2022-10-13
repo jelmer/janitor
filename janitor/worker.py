@@ -206,12 +206,14 @@ class WorkerFailure(Exception):
     def __init__(
             self, code: str, description: str,
             details: Optional[Any] = None, stage=None,
-            followup_actions: Optional[List[Any]] = None) -> None:
+            followup_actions: Optional[List[Any]] = None,
+            transient: bool = None) -> None:
         self.code = code
         self.description = description
         self.details = details
         self.followup_actions = followup_actions
         self.stage = stage
+        self.transient = transient
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and self.json() == other.json()
@@ -221,6 +223,7 @@ class WorkerFailure(Exception):
             "code": self.code,
             "description": self.description,
             'details': self.details,
+            'transient': self.transient,
             'stage': "/".join(self.stage) if self.stage else None,
         }
         if self.followup_actions:
@@ -319,14 +322,17 @@ class DebianTarget(Target):
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e,
+                transient=False,
                 stage=("codemod", ))
         except ScriptMadeNoChanges:
             raise WorkerFailure(
                 'nothing-to-do', 'No changes made',
+                transient=False,
                 stage=("codemod", ))
         except MissingChangelog as e:
             raise WorkerFailure(
                 'missing-changelog', 'No changelog present: %s' % e.args[0],
+                transient=False,
                 stage=("codemod", ))
         except DebianDetailedFailure as e:
             raise WorkerFailure(
@@ -349,34 +355,14 @@ class DebianTarget(Target):
                 details=e.details, followup_actions=e.followup_actions)
 
     def validate(self, local_tree, subpath, config):
-        from breezy.plugins.debian.vcs_up_to_date import (
-            check_up_to_date,
-            PackageMissingInArchive,
-            MissingChangelogError,
-            TreeVersionNotInArchive,
-            NewArchiveVersion,
-        )
-        from breezy.plugins.debian.apt_repo import RemoteApt
-        if config.get('base-apt-repository'):
-            apt = RemoteApt.from_string(
-                config['base-apt-repository'],
-                config.get('base-apt-repository-signed-by'))
-            try:
-                check_up_to_date(local_tree, subpath, apt)
-            except MissingChangelogError as exc:
-                raise WorkerFailure(
-                    'missing-changelog',
-                    str(exc), stage=(("validate", )))
-            except PackageMissingInArchive as exc:
-                raise WorkerFailure(
-                    'package-missing-in-archive', str(exc), stage=(("validate", )))
-            except TreeVersionNotInArchive as exc:
-                logging.warning(
-                    'Last tree version %s not present in the archive',
-                    exc.tree_version)
-            except NewArchiveVersion as exc:
-                raise WorkerFailure(
-                    'new-archive-version', str(exc), stage=(("validate", )))
+        from .debian.validate import validate_from_config, ValidateError
+        try:
+            return validate_from_config(local_tree, subpath, config)
+        except ValidateError as e:
+            raise WorkerFailure(
+                e.code, e.description,
+                transient=False,
+                stage=("validate", ))
 
 
 class GenericTarget(Target):
@@ -402,10 +388,12 @@ class GenericTarget(Target):
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e,
+                transient=False,
                 stage=("codemod", ))
         except ScriptMadeNoChanges:
             raise WorkerFailure(
-                'nothing-to-do', 'No changes made', stage=("codemod", ))
+                'nothing-to-do', 'No changes made', stage=("codemod", ),
+                transient=False)
         except GenericDetailedFailure as e:
             raise WorkerFailure(
                 e.result_code, e.description, e.details, stage=("codemod", ))
@@ -523,6 +511,7 @@ def process_package(
     resume_codemod_result: Any = None,
     force_build: bool = False,
     additional_colocated_branches: Optional[Dict[str, str]] = None,
+    skip_setup_validation: bool = False,
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     metadata["command"] = command
 
@@ -534,7 +523,7 @@ def process_package(
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target,
-            stage=("setup", ))
+            transient=False, stage=("setup", ))
 
     logger.info("Opening branch at %s", vcs_url)
     try:
@@ -581,6 +570,7 @@ def process_package(
             raise WorkerFailure(
                 "worker-resume-branch-temporarily-unavailable", str(e),
                 stage=("setup", ),
+                transient=True,
                 details={'url': e.url})
         except BranchUnavailable as e:
             logger.info('Resume branch URL %s unavailable: %s', e.url, e)
@@ -588,11 +578,13 @@ def process_package(
             raise WorkerFailure(
                 "worker-resume-branch-unavailable", str(e),
                 stage=("setup", ),
+                transient=False,
                 details={'url': e.url})
         except BranchMissing as e:
             raise WorkerFailure(
                 "worker-resume-branch-missing", str(e),
                 stage=("setup", ),
+                transient=False,
                 details={'url': e.url})
     else:
         resume_branch = None
@@ -618,17 +610,17 @@ def process_package(
             es.enter_context(ws)
         except IncompleteRead as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", "clone"), transient=True)
         except MalformedTransform as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"), transient=False)
         except TransformRenameFailed as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"), transient=False)
         except UnexpectedHttpStatus as e:
             traceback.print_exc()
             if e.code == 502:
-                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"))
+                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"), transient=True)
             else:
                 raise WorkerFailure(
                     "worker-clone-http-%s" % e.code, str(e),
@@ -646,7 +638,8 @@ def process_package(
         if ws.local_tree.has_changes():
             raise AssertionError
 
-        build_target.validate(ws.local_tree, subpath, build_config)
+        if not skip_setup_validation:
+            build_target.validate(ws.local_tree, subpath, build_config)
 
         metadata["revision"] = metadata[
             "main_branch_revision"
@@ -668,12 +661,12 @@ def process_package(
                 output_directory, resume_codemod_result
             )
             if not ws.any_branch_changes():
-                raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ))
+                raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ), transient=False)
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
                 if ws.changes_since_main():
                     raise WorkerFailure(
-                        "nothing-new-to-do", e.description, stage=("codemod", ))
+                        "nothing-new-to-do", e.description, stage=("codemod", ), transient=False)
                 elif force_build:
                     changer_result = GenericCommandResult(
                         description='No change build',
@@ -891,7 +884,8 @@ def _push_error_to_worker_failure(e):
             return WorkerFailure(
                 "result-push-bad-gateway",
                 "Failed to push result branch: %s" % e,
-                stage=("result-push", )
+                stage=("result-push", ),
+                transient=True
             )
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e,
@@ -950,6 +944,7 @@ def run_worker(
     force_build: bool = False,
     tee: bool = False,
     additional_colocated_branches: Optional[Dict[str, str]] = None,
+    skip_setup_validation: bool = False,
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -976,7 +971,8 @@ def run_worker(
                 else None,
                 possible_transports=possible_transports,
                 force_build=force_build,
-                additional_colocated_branches=additional_colocated_branches
+                additional_colocated_branches=additional_colocated_branches,
+                skip_setup_validation=skip_setup_validation,
             ) as (ws, result):
                 logging.info("Pushing result branch to %r", target_repo_url)
 
@@ -988,7 +984,8 @@ def run_worker(
                     raise WorkerFailure(
                         'vcs-type-mismatch',
                         'Expected VCS %s, got %s' % (vcs_type, actual_vcs_type),
-                        stage=("result-push", ))
+                        stage=("result-push", ),
+                        transient=False)
 
                 try:
                     if vcs_type.lower() == "git":
@@ -1323,6 +1320,8 @@ async def process_single_item(
 
         env = assignment["env"]
 
+        skip_setup_validation = assignment.get("skip-setup-validation", False)
+
         env.update(build_environment)
 
         logging.debug('Environment: %r', env)
@@ -1358,6 +1357,7 @@ async def process_single_item(
                 force_build=force_build,
                 tee=tee,
                 additional_colocated_branches=additional_colocated_branches,
+                skip_setup_validation=skip_setup_validation,
             ),
         )
         try:

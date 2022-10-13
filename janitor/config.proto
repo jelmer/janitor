@@ -95,6 +95,8 @@ message Campaign {
   // Force building even if the command did not make any changes.
   optional bool force_build = 6 [default=false];
 
+  optional bool skip_setup_validation = 10 [default=false];
+
   oneof build {
     DebianBuild debian_build = 3;
     GenericBuild generic_build = 4;
