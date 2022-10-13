@@ -501,7 +501,7 @@ async def refresh_on_demand_dists(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
             get_packages = partial(
                 get_packages_for_changeset, db, package_info_provider, cs_id)
-            description = f"Campaign {kind} for {id}"
+            description = f"Campaign {kind} for {id} (change set {cs_id})"
     if stamp is not None and max_finish_time.astimezone() < stamp:
         return
     logging.info("Generating metadata for %s/%s", kind, id)
