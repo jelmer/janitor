@@ -229,7 +229,7 @@ def cleanup_by_hash_files(base, number_to_keep):
         for entry in os.scandir(os.path.join(base, "by-hash", h)):
             ages.append((entry, time.time() - entry.stat().st_mtime))
 
-        ages.sort(key=lambda k: k[1], reverse=True)
+        ages.sort(key=lambda k: k[1])
 
         for entry, age in ages[number_to_keep:]:
             os.unlink(entry.path)
@@ -258,7 +258,7 @@ class HashedFileWriter(object):
 
         hashes = {n: kls() for (n, kls) in HASHES.items()}
 
-        size = 0
+        self.size = 0
         with open(self._tmpf_path, 'rb') as f:
             while True:
                 chunk = f.read(io.DEFAULT_BUFFER_SIZE)
@@ -266,19 +266,19 @@ class HashedFileWriter(object):
                     break
                 for h in hashes.values():
                     h.update(chunk)
-                size += len(chunk)
+                self.size += len(chunk)
 
         d, n = os.path.split(self.path)
         for h, v in hashes.items():
             os.makedirs(os.path.join(self.base, d, "by-hash", h), exist_ok=True)
-            shutil.copy(
-                self._tmpf_path,
-                os.path.join(self.base, d, "by-hash", h, v.hexdigest()))
+            hash_path = os.path.join(self.base, d, "by-hash", h, v.hexdigest())
+            shutil.copy(self._tmpf_path, hash_path)
             self.release.setdefault(h, []).append({
                 h.lower(): v.hexdigest(),
-                "size": size,
+                "size": self.size,
                 "name": self.path
             })
+            assert self.size == os.path.getsize(hash_path)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
@@ -286,6 +286,7 @@ class HashedFileWriter(object):
         os.rename(
             self._tmpf_path,
             os.path.join(self.base, self.path))
+        assert self.size == os.path.getsize(os.path.join(self.base, self.path))
         return False
 
     def write(self, chunk):

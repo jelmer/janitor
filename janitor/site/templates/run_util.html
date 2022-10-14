@@ -266,9 +266,6 @@ cd {{ package }}
         {{ result['upstream_branch_url'] }}
     {% endif %}
 {% endmacro %}
-{% macro display_maintainer_email(maintainer_email) %}
-    <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
-{% endmacro %}
 {% macro display_publish_result_code(code) %}
     {% if code == 'success' %}
         <span class="publish-success">{{ code }}</span>
