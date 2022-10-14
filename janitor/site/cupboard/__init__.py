@@ -81,7 +81,6 @@ async def handle_queue(request):
     from .queue import write_queue
 
     return await write_queue(
-        request.app.http_client_session,
         request.app.database,
         queue_status=request.app['runner_status'],
         limit=limit,
@@ -189,7 +188,7 @@ async def handle_review_stats(request):
 
 async def handle_review_post(request):
     from .review import generate_review
-    from ..review import store_review
+    from ...review import store_review
     check_logged_in(request)
 
     post = await request.post()
@@ -210,7 +209,7 @@ async def handle_review_post(request):
         text = await generate_review(
             conn,
             request,
-            request.app.http_client_session,
+            request.app['http_client_session'],
             request.app['differ_url'],
             request.app['vcs_managers'],
             suites=post.getall("suite", None),
@@ -232,7 +231,7 @@ async def handle_review(request):
         text = await generate_review(
             conn,
             request,
-            request.app.http_client_session,
+            request.app['http_client_session'],
             request.app['differ_url'],
             request.app['vcs_managers'],
             suites=suites,
@@ -261,7 +260,7 @@ async def handle_run(request):
             raise web.HTTPNotFound(text="No run with id %r" % run_id)
     return await generate_run_file(
         request.app.database,
-        request.app.http_client_session,
+        request.app['http_client_session'],
         request.app['config'],
         request.app['differ_url'],
         request.app['publisher_url'],

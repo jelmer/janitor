@@ -28,7 +28,6 @@ from yarl import URL
 from aiohttp import (
     ClientConnectorError,
     ClientResponseError,
-    ClientSession,
     ClientTimeout,
 )
 import asyncpg
@@ -168,9 +167,8 @@ async def generate_run_file(
     async def publish_blockers():
         url = URL(publisher_url) / "blockers" / run['id']
         try:
-            async with ClientSession() as session, \
-                    session.get(url, raise_for_status=True,
-                                timeout=ClientTimeout(30)) as resp:
+            async with client.get(url, raise_for_status=True,
+                                  timeout=ClientTimeout(30)) as resp:
                 return await resp.json()
         except ClientResponseError as e:
             if e.status == 404:

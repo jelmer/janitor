@@ -22,7 +22,7 @@ import os
 from typing import Optional
 import uuid
 
-from aiohttp import web, ClientSession
+from aiohttp import web
 from yarl import URL
 
 
@@ -64,7 +64,7 @@ async def handle_oauth_callback(request):
         "grant_type": "authorization_code",
         "redirect_uri": str(redirect_uri),
     }
-    async with ClientSession() as session, session.post(
+    async with request.app['http_client_session'].post(
         token_url, params=params
     ) as resp:
         if resp.status != 200:
@@ -86,7 +86,7 @@ async def handle_oauth_callback(request):
     except KeyError:
         back_url = "/"
 
-    async with request.app.http_client_session.get(
+    async with request.app['http_client_session'].get(
         request.app['openid_config']["userinfo_endpoint"],
         headers={"Authorization": "Bearer %s" % access_token},
     ) as resp:
@@ -117,7 +117,7 @@ async def discover_openid_config(app, oauth2_provider_base_url):
     url = URL(oauth2_provider_base_url).join(
         URL("/.well-known/openid-configuration")
     )
-    async with ClientSession() as session, session.get(url) as resp:
+    async with app['http_client_session'].get(url) as resp:
         if resp.status != 200:
             # TODO(jelmer): Fail? Set flag?
             logging.warning(
