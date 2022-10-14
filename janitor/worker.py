@@ -636,7 +636,10 @@ def process_package(
         logger.info('Workspace ready - starting.')
 
         if ws.local_tree.has_changes():
-            raise AssertionError
+            raise WorkerFailure(
+                "worker-unexpected-changes-in-tree",
+                description="The working tree has unexpected changes after initial clone",
+                stage=("setup", "clone"))
 
         if not skip_setup_validation:
             build_target.validate(ws.local_tree, subpath, build_config)
@@ -1022,7 +1025,8 @@ def run_worker(
                         )
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                            TransportNotPossible, ConnectionReset) as e:
+                            TransportNotPossible, ConnectionReset,
+                            ssl.SSLEOFError) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",
                             cached_branch_url, e)
