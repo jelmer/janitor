@@ -20,6 +20,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
+from functools import partial
 import json
 from io import BytesIO
 import logging
@@ -103,7 +104,6 @@ from .vcs import (
     is_authenticated_url,
     open_branch_ext,
     BranchOpenFailure,
-    get_vcs_managers_from_config,
     get_vcs_managers,
     UnsupportedVcs,
     VcsManager,
@@ -1419,12 +1419,10 @@ class QueueProcessor(object):
         self,
         database: asyncpg.pool.Pool,
         redis,
-        config: Config,
         run_timeout: int,
-        dry_run: bool = False,
+        followup_run = None,
         logfile_manager: Optional[LogFileManager] = None,
         artifact_manager: Optional[ArtifactManager] = None,
-        vcs_managers: Optional[Dict[str, VcsManager]] = None,
         public_vcs_managers: Optional[Dict[str, VcsManager]] = None,
         use_cached_only: bool = False,
         committer: Optional[str] = None,
@@ -1438,11 +1436,9 @@ class QueueProcessor(object):
         """
         self.database = database
         self.redis = redis
-        self.config = config
-        self.dry_run = dry_run
+        self.followup_run = followup_run
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
-        self.vcs_managers = vcs_managers
         self.public_vcs_managers = public_vcs_managers
         self.use_cached_only = use_cached_only
         self.committer = committer
@@ -1534,9 +1530,11 @@ class QueueProcessor(object):
                             'Failed to healthcheck %s: %r', active_run.log_id, e)
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
-    async def _rate_limit_hosts(self):
+    async def rate_limited_hosts(self):
         for h, t in (await self.redis.hgetall('rate-limit-hosts')).items():
-            yield h.decode('utf-8'), datetime.fromisoformat(t.decode('utf-8'))
+            dt = datetime.fromisoformat(t.decode('utf-8'))
+            if dt > datetime.utcnow():
+                yield h.decode('utf-8'), dt
 
     async def status_json(self) -> Any:
         last_keepalives = {
@@ -1559,8 +1557,7 @@ class QueueProcessor(object):
             "processing": processing,
             "avoid_hosts": list(self.avoid_hosts),
             "rate_limit_hosts": {
-                h: t async for (h, t) in self._rate_limit_hosts()
-                if t > datetime.utcnow()},
+                h: t async for (h, t) in self.rate_limited_hosts()},
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
@@ -1612,50 +1609,50 @@ class QueueProcessor(object):
             result.duration.total_seconds()
         )
         async with self.database.acquire() as conn, conn.transaction():
-            if not self.dry_run:
-                if not result.change_set:
-                    result.change_set = result.log_id
-                    await store_change_set(
-                        conn, result.change_set, campaign=result.campaign)
-                try:
-                    await store_run(
-                        conn,
-                        run_id=result.log_id,
-                        name=active_run.package,
-                        vcs_type=result.vcs_type,
-                        subpath=result.subpath,
-                        branch_url=result.branch_url,
-                        start_time=result.start_time,
-                        finish_time=result.finish_time,
-                        command=active_run.command,
-                        description=result.description,
-                        instigated_context=active_run.instigated_context,
-                        context=result.context,
-                        main_branch_revision=result.main_branch_revision,
-                        result_code=result.code,
-                        revision=result.revision,
-                        codemod_result=result.codemod_result,
-                        campaign=active_run.campaign,
-                        logfilenames=result.logfilenames,
-                        value=result.value,
-                        worker_name=result.worker_name,
-                        result_branches=result.branches,
-                        result_tags=result.tags,
-                        failure_details=result.failure_details,
-                        failure_stage=result.failure_stage,
-                        resume_from=result.resume_from,
-                        target_branch_url=result.target_branch_url,
-                        change_set=result.change_set,
-                        followup_actions=result.followup_actions,
-                    )
-                except asyncpg.UniqueViolationError as e:
-                    logging.info('Unique violation error creating run: %r', e)
-                    await self.unclaim_run(result.log_id)
-                    raise RunExists(result.log_id)
-                if result.builder_result:
-                    await result.builder_result.store(conn, result.log_id)
-                await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
-        await followup_run(self.config, self.database, active_run, result)
+            if not result.change_set:
+                result.change_set = result.log_id
+                await store_change_set(
+                    conn, result.change_set, campaign=result.campaign)
+            try:
+                await store_run(
+                    conn,
+                    run_id=result.log_id,
+                    name=active_run.package,
+                    vcs_type=result.vcs_type,
+                    subpath=result.subpath,
+                    branch_url=result.branch_url,
+                    start_time=result.start_time,
+                    finish_time=result.finish_time,
+                    command=active_run.command,
+                    description=result.description,
+                    instigated_context=active_run.instigated_context,
+                    context=result.context,
+                    main_branch_revision=result.main_branch_revision,
+                    result_code=result.code,
+                    revision=result.revision,
+                    codemod_result=result.codemod_result,
+                    campaign=active_run.campaign,
+                    logfilenames=result.logfilenames,
+                    value=result.value,
+                    worker_name=result.worker_name,
+                    result_branches=result.branches,
+                    result_tags=result.tags,
+                    failure_details=result.failure_details,
+                    failure_stage=result.failure_stage,
+                    resume_from=result.resume_from,
+                    target_branch_url=result.target_branch_url,
+                    change_set=result.change_set,
+                    followup_actions=result.followup_actions,
+                )
+            except asyncpg.UniqueViolationError as e:
+                logging.info('Unique violation error creating run: %r', e)
+                await self.unclaim_run(result.log_id)
+                raise RunExists(result.log_id)
+            if result.builder_result:
+                await result.builder_result.store(conn, result.log_id)
+            await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
+        if self.followup_run:
+            await self.followup_run(active_run, result)
 
         await self.redis.publish_json('result', result.json())
         await self.unclaim_run(result.log_id)
@@ -1672,9 +1669,8 @@ class QueueProcessor(object):
     async def next_queue_item(self, conn, package=None, campaign=None):
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
-        async for host, retry_after in self._rate_limit_hosts():
-            if retry_after > datetime.utcnow():
-                exclude_hosts.add(host)
+        async for host, retry_after in self.rate_limited_hosts():
+            exclude_hosts.add(host)
         assigned_queue_items = [
             int(i.decode('utf-8'))
             for i in await self.redis.hkeys('assigned-queue-items')]
@@ -1696,8 +1692,12 @@ async def handle_schedule_control(request):
         if json.get('estimated_duration') else None)
 
     async with request.app['queue_processor'].database.acquire() as conn:
-        if 'run_id' in json:
+        try:
             run_id = json['run_id']
+        except KeyError:
+            package = json['package']
+            main_branch_revision = json['main_branch_revision'].encode('utf-8')
+        else:
             run = await conn.fetchrow(
                 "SELECT main_branch_revision, package FROM run "
                 "WHERE id = $1",
@@ -1706,9 +1706,6 @@ async def handle_schedule_control(request):
                 return web.json_response({"reason": "Run not found"}, status=404)
             package = run['package']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
-        else:
-            package = json['package']
-            main_branch_revision = json['main_branch_revision'].encode('utf-8')
         try:
             offset, estimated_duration = await do_schedule_control(
                 conn,
@@ -1742,17 +1739,28 @@ async def handle_schedule_control(request):
 @routes.post("/schedule", name="schedule")
 async def handle_schedule(request):
     json = await request.json()
-    package = json['package']
-    campaign = json['campaign']
-    refresh = json.get('refresh', False)
-    change_set = json.get('change_set')
-    requestor = json.get('requestor')
-    bucket = json.get('bucket')
-    offset = json.get('offset')
-    estimated_duration = (
-        timedelta(seconds=json['estimated_duration'])
-        if json.get('estimated_duration') else None)
     async with request.app['queue_processor'].database.acquire() as conn:
+        try:
+            run_id = json['run_id']
+        except KeyError:
+            package = json['package']
+            campaign = json['campaign']
+        else:
+            run = await conn.fetchrow(
+                "SELECT suite AS campaign, package FROM run WHERE id = $1",
+                run_id)
+            if run is None:
+                return web.json_response({"reason": "Run not found"}, status=404)
+            package = run['package']
+            campaign = run['campaign']
+        refresh = json.get('refresh', False)
+        change_set = json.get('change_set')
+        requestor = json.get('requestor')
+        bucket = json.get('bucket')
+        offset = json.get('offset')
+        estimated_duration = (
+            timedelta(seconds=json['estimated_duration'])
+            if json.get('estimated_duration') else None)
         try:
             offset, estimated_duration = await do_schedule(
                 conn,
@@ -1972,18 +1980,32 @@ async def handle_get_active_run(request):
 async def handle_assign(request):
     json = await request.json()
     assignment_count.labels(worker=json.get("worker")).inc()
-    return await next_item(
-        request, 'assign', worker=json.get("worker"),
+    span = aiozipkin.request_span(request)
+    queue_processor = request.app['queue_processor']
+    assignment = await next_item(
+        queue_processor, span, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
         backchannel=json.get('backchannel'),
         package=json.get('package'),
         campaign=json.get('campaign')
     )
+    return web.json_response(
+        assignment, status=201, headers={
+            'Location': str(request.app.router['get-active-run'].url_for(
+                run_id=assignment['id']))
+        })
 
 
 @routes.get("/active-runs/+peek", name="peek")
 async def handle_peek(request):
-    return await next_item(request, 'peek')
+    span = aiozipkin.request_span(request)
+    queue_processor = request.app['queue_processor']
+    assignment = await next_item(request, queue_processor, span, 'peek')
+    return web.json_response(
+        assignment, status=201, headers={
+            'Location': str(request.app.router['get-active-run'].url_for(
+                run_id=assignment['id']))
+        })
 
 
 @routes.get("/queue", name="queue")
@@ -2010,11 +2032,9 @@ async def handle_queue(request):
     return web.json_response(response_obj)
 
 
-async def next_item(request, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
+async def next_item(queue_processor, span, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
     possible_transports = []
     possible_forges = []
-
-    span = aiozipkin.request_span(request)
 
     async def abort(active_run, code, description):
         result = active_run.create_result(
@@ -2027,8 +2047,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             await queue_processor.finish_run(active_run, result)
         except RunExists:
             pass
-
-    queue_processor = request.app['queue_processor']
 
     async with queue_processor.database.acquire() as conn:
         item = None
@@ -2201,7 +2219,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         cached_branch_url = None
         target_repository_url = None
 
-    env = {}
+    env: Dict[str, str] = {}
     env.update(build_env)
     env.update(queue_item_env(item))
     if queue_processor.committer:
@@ -2243,11 +2261,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         pass
     else:
         await queue_processor.unclaim_run(active_run.log_id)
-    return web.json_response(
-        assignment, status=201, headers={
-            'Location': request.app.router['get-active-run'].url_for(
-                run_id=active_run.log_id)
-        })
+    return assignment
 
 
 @routes.get("/health", name="health")
@@ -2400,12 +2414,6 @@ async def main(argv=None):
         "--post-check", help="Command to run to check package before pushing.", type=str
     )
     parser.add_argument(
-        "--dry-run",
-        help="Create branches but don't push or propose anything.",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
         "--use-cached-only", action="store_true", help="Use cached branches only."
     )
     parser.add_argument(
@@ -2462,7 +2470,6 @@ async def main(argv=None):
     except UnsupportedProtocol as e:
         parser.error(
             'Unsupported protocol in --public-vcs-location: %s' % e.url)
-    vcs_managers = get_vcs_managers_from_config(config)
 
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
@@ -2504,14 +2511,11 @@ async def main(argv=None):
         redis = await aioredis.create_redis_pool(config.redis_location)
         stack.callback(redis.close)
         queue_processor = QueueProcessor(
-            db,
-            redis,
-            config,
+            db, redis,
+            followup_run=partial(followup_run, config, db),
             run_timeout=args.run_timeout,
-            dry_run=args.dry_run,
             logfile_manager=logfile_manager,
             artifact_manager=artifact_manager,
-            vcs_managers=vcs_managers,
             public_vcs_managers=public_vcs_managers,
             use_cached_only=args.use_cached_only,
             committer=config.committer,
