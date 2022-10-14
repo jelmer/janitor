@@ -93,7 +93,11 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
-from breezy.transform import MalformedTransform, TransformRenameFailed
+from breezy.transform import (
+    MalformedTransform,
+    TransformRenameFailed,
+    ImmortalLimbo,
+)
 from breezy.transport import Transport
 
 from aiohttp_openmetrics import setup_metrics, REGISTRY
@@ -617,6 +621,9 @@ def process_package(
         except TransformRenameFailed as e:
             traceback.print_exc()
             raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"), transient=False)
+        except ImmortalLimbo as e:
+            traceback.print_exc()
+            raise WorkerFailure("worker-clone-transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False)
         except UnexpectedHttpStatus as e:
             traceback.print_exc()
             if e.code == 502:
@@ -632,6 +639,8 @@ def process_package(
             raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone"))
         except RemoteGitError as e:
             raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone"))
+        except TimeoutError as e:
+            raise WorkerFailure("worker-clone-timeout", str(e), stage=("setup", "clone"))
 
         logger.info('Workspace ready - starting.')
 
@@ -916,12 +925,15 @@ def _push_error_to_worker_failure(e):
     return e
 
 
-def get_branch_vcs_type(branch):
-    vcs = getattr(branch.repository, "vcs", None)
-    if vcs:
-        return vcs.abbreviation
-    else:
-        return "bzr"
+try:
+    from silver_platter.utils import get_branch_vcs_type
+except ImportError:  # old silver-platter
+    def get_branch_vcs_type(branch):
+        vcs = getattr(branch.repository, "vcs", None)
+        if vcs:
+            return vcs.abbreviation
+        else:
+            return "bzr"
 
 
 def run_worker(
@@ -1110,6 +1122,7 @@ INDEX_TEMPLATE = Template("""\
 <head><title>Job</title></head>
 <body>
 
+{% if assignment %}
 <h1>Run Details</h1>
 
 <ul>
@@ -1156,6 +1169,12 @@ INDEX_TEMPLATE = Template("""\
   <li><a href="/logs/{{ name }}">{{ name }}</a></li>
 {% endfor %}
 </ul>
+{% endif %}
+
+{% else %}
+
+<p>No current assignment.</p>
+
 {% endif %}
 
 </body>
