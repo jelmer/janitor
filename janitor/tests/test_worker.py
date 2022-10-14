@@ -99,16 +99,59 @@ class BundleResultsTests(unittest.TestCase):
 
 
 async def create_client(aiohttp_client):
-    return await aiohttp_client(await create_app())
+    app = await create_app()
+    client = await aiohttp_client(app)
+    return app, client
 
 
 async def test_health(aiohttp_client):
-    client = await create_client(aiohttp_client)
+    app, client = await create_client(aiohttp_client)
 
     resp = await client.get("/health")
     assert resp.status == 200
     text = await resp.text()
     assert text == "ok"
+
+
+async def test_index(aiohttp_client):
+    app, client = await create_client(aiohttp_client)
+
+    resp = await client.get("/")
+    assert resp.status == 200
+    text = await resp.text()
+    assert "No current assignment." in text
+
+
+async def test_log_id(aiohttp_client):
+    app, client = await create_client(aiohttp_client)
+
+    resp = await client.get("/log-id")
+    assert resp.status == 200
+    text = await resp.text()
+    assert text == ""
+
+    app['workitem']['assignment'] = {'id': 'my-id'}
+
+    resp = await client.get("/log-id")
+    assert resp.status == 200
+    text = await resp.text()
+    assert text == "my-id"
+
+
+async def test_assignment(aiohttp_client):
+    app, client = await create_client(aiohttp_client)
+
+    resp = await client.get("/assignment")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data is None
+
+    app['workitem']['assignment'] = {'id': 'my-id'}
+
+    resp = await client.get("/assignment")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data == app['workitem']['assignment']
 
 
 def test_convert_codemod_script_failed():
