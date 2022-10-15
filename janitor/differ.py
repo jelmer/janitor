@@ -537,18 +537,19 @@ where
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 class DifferWebApp(web.Application):
     def __init__(self, pool, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-        super(DifferWebApp, self).__init__(middlewares=[trailing_slash_redirect])
+        super(DifferWebApp, self).__init__(middlewares=[
+            trailing_slash_redirect, state.asyncpg_error_middleware])
         self.router.add_routes(routes)
         self['pool'] = pool
         self.cache_path = cache_path
