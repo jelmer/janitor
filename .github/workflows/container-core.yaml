@@ -57,7 +57,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/runner
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Build archive image
         id: build-image-archive
@@ -67,7 +67,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/archive
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Build publish image
         id: build-image-publish
@@ -77,7 +77,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/publish
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Build git_store image
         id: build-image-git-store
@@ -87,7 +87,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/git_store
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Build bzr_store image
         id: build-image-bzr-store
@@ -97,7 +97,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/bzr_store
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Build differ image
         id: build-image-differ
@@ -107,7 +107,7 @@ jobs:
           image: ghcr.io/jelmer/janitor/differ
           tags: ${{ env.TAGS }}
           build-args: |
-            BASE_TAG: ${{ github.sha }}
+            BASE_TAG=${{ github.sha }}
 
       - name: Push base image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
