@@ -1674,7 +1674,7 @@ async def create_app(
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[
-        trailing_slash_redirect, state.asyncpg_error_middlewares])
+        trailing_slash_redirect, state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['gpg'] = gpg.Context(armor=True)
     app['template_env_path'] = template_env_path

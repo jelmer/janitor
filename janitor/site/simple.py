@@ -296,11 +296,11 @@ async def create_app(
         minified_prefix = "min."
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[trailing_slash_redirect])
-    private_app = web.Application(middlewares=[trailing_slash_redirect])
+    app = web.Application(middlewares=[
+        metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    private_app = web.Application(middlewares=[
+        metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
 
-    app.middlewares.insert(0, metrics_middleware)
-    private_app.middlewares.insert(0, metrics_middleware)
     private_app.router.add_get("/metrics", metrics, name="metrics")
     private_app.router.add_get("/health", handle_health, name="health")
 

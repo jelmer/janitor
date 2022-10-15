@@ -566,7 +566,8 @@ async def serve_on_demand_dists_component_file(request):
 
 async def create_app(generator_manager, config, dists_dir, db):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[trailing_slash_redirect])
+    app = web.Application(middlewares=[
+        trailing_slash_redirect, state.asyncpg_error_middleware])
     app['gpg'] = gpg.Context(armor=True)
     app['dists_dir'] = dists_dir
     app['config'] = config

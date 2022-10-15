@@ -31,6 +31,12 @@ from typing import Optional, Tuple, List, Any
 from aiohttp.web import middleware, HTTPServiceUnavailable
 from breezy import urlutils
 
+from aiohttp_openmetrics import Counter
+
+insufficient_resources_counter = Counter(
+    "postgres_insufficient_resources",
+    "Database refused query due to resource issues")
+
 
 async def init_types(conn):
     await conn.set_type_codec(
@@ -54,6 +60,7 @@ def get_result_branch(result_branches, role):
         if role == entry[0]:
             return entry[1:]
     raise KeyError
+
 
 class Run(object):
 
@@ -250,8 +257,9 @@ async def has_cotenants(
 @middleware
 async def asyncpg_error_middleware(request, handler):
     try:
-        resp = await handle(request)
+        resp = await handler(request)
     except asyncpg.InsufficientResourcesError as e:
+        insufficient_resources_counter.inc()
         traceback.print_exc()
         raise HTTPServiceUnavailable(text=str(e)) from e
     return resp
