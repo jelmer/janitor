@@ -28,7 +28,18 @@ import os
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, Dict, Tuple, Type, Set, Iterator
+from typing import (
+    Awaitable,
+    List,
+    Any,
+    Optional,
+    Dict,
+    Tuple,
+    Type,
+    Set,
+    Iterator,
+    Callable,
+)
 import uuid
 import warnings
 
@@ -1420,7 +1431,8 @@ class QueueProcessor(object):
         database: asyncpg.pool.Pool,
         redis,
         run_timeout: int,
-        followup_run = None,
+        followup_run: Optional[
+            Callable[[ActiveRun, JanitorResult], Awaitable[None]]] = None,
         logfile_manager: Optional[LogFileManager] = None,
         artifact_manager: Optional[ArtifactManager] = None,
         public_vcs_managers: Optional[Dict[str, VcsManager]] = None,

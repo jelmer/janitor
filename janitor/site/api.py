@@ -1306,10 +1306,11 @@ def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.router.add_routes(routes)
+
     async def persistent_session(app):
-       app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
-       yield
-       await session.close()
+        app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
+        yield
+        await session.close()
 
     app.cleanup_ctx.append(persistent_session)
     app['config'] = config
