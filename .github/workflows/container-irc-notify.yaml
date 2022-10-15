@@ -29,7 +29,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build runner image
+      - name: Build irc-notify image
         id: build-image-irc-notify
         uses: redhat-actions/buildah-build@v2
         with:
