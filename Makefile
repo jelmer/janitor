@@ -6,14 +6,14 @@ PB2_PY_OUTPUT = janitor/config_pb2.py janitor/package_metadata_pb2.py
 core: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
 
 all: core
-	$(MAKE) -C breezy
-	$(MAKE) -C dulwich
 
 .PHONY: all check
 
 PROTOC_ARGS = --python_out=.
 
+ifneq (,$(shell which protoc-gen-mypy))
 PROTOC_ARGS += --mypy_out=.
+endif
 
 janitor/%_pb2.py: janitor/%.proto
 	protoc $(PROTOC_ARGS) $<
@@ -23,18 +23,6 @@ check:: typing
 check:: test
 
 check:: style
-
-check-it-all:: test-it-all
-
-test-it-all::
-	$(MAKE) -C dulwich check
-	$(MAKE) -C breezy check PYTHONPATH=$(PYTHONPATH)
-	$(MAKE) -C lintian-brush check
-	PYTHONPATH=$(PYTHONPATH) pytest silver_platter
-	PYTHONPATH=$(PYTHONPATH) pytest ognibuild
-	PYTHONPATH=$(PYTHONPATH) pytest buildlog_consultant
-	PYTHONPATH=$(PYTHONPATH) pytest debmutate
-	PYTHONPATH=$(PYTHONPATH) pytest janitor
 
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
