@@ -2398,7 +2398,9 @@ async def handle_finish(request):
 
 
 async def create_app(queue_processor, tracer=None):
-    app = web.Application()
+    app = web.Application(middlewares=[
+        state.asyncpg_error_middleware,
+        state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
