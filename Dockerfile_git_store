@@ -3,5 +3,5 @@ FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 VOLUME /git
 EXPOSE 9923
-RUN apt update && apt install --no-install-recommends -y libjs-sphinxdoc cargo rustc libpython3.10 libpython3-dev && pip3 install "/code[git]"
+RUN apt update && apt install --no-install-recommends -y libjs-sphinxdoc cargo rustc libpython3.10 libpython3-dev && pip3 install "/code[git_web]"
 ENTRYPOINT ["python3", "-m", "janitor.git_store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]
