@@ -1,5 +1,5 @@
 ---
-name: Build and Publish Most Containers
+name: Build and Publish Most Container Images
 
 on:
   # run it on push to the default repository branch
@@ -11,9 +11,9 @@ on:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 jobs:
-  # define job to build and publish docker image
-  build-and-push-docker-image:
-    name: Build Docker image and push to repositories
+  # define job to build and publish container image
+  build-and-push-container-image:
+    name: Build container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
 
@@ -21,6 +21,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Determine tags to set (pull_request)
+        run: |
+          echo "TAGS=${{ github.sha }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'pull_request' }}
+
+      - name: Determine tags to set (push)
+        run: |
+          echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'push' }}
 
       - name: Login to Github Packages
         uses: redhat-actions/podman-login@v1
@@ -35,7 +45,7 @@ jobs:
         with:
           image: ghcr.io/jelmer/janitor/base
           containerfiles: "Dockerfile_base"
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
 
       - name: Build runner image
         id: build-image-runner
@@ -43,7 +53,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_runner"
           image: ghcr.io/jelmer/janitor/runner
-          tags: ${{ github.sha }} ${{ github.ref_name }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
@@ -53,7 +63,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_archive"
           image: ghcr.io/jelmer/janitor/archive
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
@@ -63,7 +73,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_publish"
           image: ghcr.io/jelmer/janitor/publish
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
@@ -73,7 +83,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_git_store"
           image: ghcr.io/jelmer/janitor/git_store
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
@@ -83,7 +93,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_bzr_store"
           image: ghcr.io/jelmer/janitor/bzr_store
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
@@ -93,7 +103,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_differ"
           image: ghcr.io/jelmer/janitor/differ
-          tags: ${{ github.ref_name }} ${{ github.sha }}
+          tags: ${{ env.TAGS }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 

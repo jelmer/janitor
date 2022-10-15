@@ -11,9 +11,9 @@ on:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 jobs:
-  # define job to build and publish docker image
-  build-and-push-docker-image:
-    name: Build Docker image and push to repositories
+  # define job to build and publish container image
+  build-and-push-container-image:
+    name: Build Container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
 
