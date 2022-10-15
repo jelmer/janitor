@@ -1,5 +1,5 @@
 ---
-name: Build and Publish Worker Docker Images
+name: Build and Publish Worker Container Images
 
 "on":
   # run it on push to the default repository branch
@@ -9,9 +9,9 @@ name: Build and Publish Worker Docker Images
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 jobs:
-  # define job to build and publish docker image
-  build-and-push-docker-image:
-    name: Build Docker image and push to repositories
+  # define job to build and publish container image
+  build-and-push-container-image:
+    name: Build Container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
 
@@ -19,25 +19,40 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          submodules: 'true'
 
-      # setup Docker buld action
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v1
+      - name: Determine tags to set (pull_request)
+        run: |
+          echo "TAGS=${{ github.sha }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'pull_request' }}
+
+      - name: Determine tags to set (push)
+        run: |
+          echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'push' }}
 
       - name: Login to Github Packages
-        uses: docker/login-action@v1
+        uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build worker image
-        uses: docker/build-push-action@v2
+        id: build-image-worker
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_worker"
-          tags: |
-            ghcr.io/jelmer/janitor/worker:latest
-            ghcr.io/jelmer/janitor/worker:${{ github.sha }}
-          # build on feature branches, push only on main branch
-          push: ${{ github.ref == 'refs/heads/main' }}
+          containerfiles: "Dockerfile_worker"
+          image: ghcr.io/jelmer/janitor/worker
+          tags: ${{ env.TAGS }}
+
+      - name: Push worker image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-worker.outputs.image }}
+          tags: ${{ steps.build-image-worker.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}

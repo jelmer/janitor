@@ -1,4 +1,4 @@
-FROM debian:sid-slim AS build
+FROM docker.io/debian:sid-slim AS build
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt -y update && apt -y install --no-install-recommends auto-apt-proxy && apt -y upgrade && apt satisfy --no-install-recommends -y cargo cython3 rustc libpython3-dev make protobuf-compiler mypy-protobuf python3-setuptools python3-setuptools-rust ca-certificates
@@ -6,7 +6,7 @@ RUN apt -y update && apt -y install --no-install-recommends auto-apt-proxy && ap
 ADD . /code
 RUN make -C /code && make -C /code/breezy
 
-FROM debian:sid-slim
+FROM docker.io/debian:sid-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 ARG DEBIAN_FRONTEND=noninteractive
 

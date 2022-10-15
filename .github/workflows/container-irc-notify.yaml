@@ -1,9 +1,11 @@
 ---
-name: Build and Publish Ognibuild Dep Server Container Images
+name: Build and Publish IRC Notify Container
 
 on:
   # run it on push to the default repository branch
   push:
+    branches:
+      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
@@ -11,7 +13,7 @@ on:
 jobs:
   # define job to build and publish container image
   build-and-push-container-image:
-    name: Build Docker image and push to repositories
+    name: Build Container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
 
@@ -19,8 +21,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        with:
-          submodules: 'true'
 
       - name: Determine tags to set (pull_request)
         run: |
@@ -39,20 +39,20 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build ognibuild-dep image
-        id: build-image-ognibuild-dep-notify
+      - name: Build irc-notify image
+        id: build-image-irc-notify
         uses: redhat-actions/buildah-build@v2
         with:
-          containerfiles: "Dockerfile_ognibuild_dep"
-          image: ghcr.io/jelmer/janitor/ognibuild_dep
+          containerfiles: "Dockerfile_irc_notify"
+          image: ghcr.io/jelmer/janitor/irc_notify
           tags: ${{ env.TAGS }}
 
-      - name: Push ognibuild-dep image to ghcr.io
+      - name: Push irc-notify image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
         uses: redhat-actions/push-to-registry@v2
         with:
-          image: ${{ steps.build-image-ognibuild-dep.outputs.image }}
-          tags: ${{ steps.build-image-ognibuild-dep.outputs.tags }}
+          image: ${{ steps.build-image-irc-notify.outputs.image }}
+          tags: ${{ steps.build-image-irc-notify.outputs.tags }}
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
