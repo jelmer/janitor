@@ -28,85 +28,146 @@ jobs:
         uses: docker/setup-buildx-action@v1
 
       - name: Login to Github Packages
-        uses: docker/login-action@v2
+        uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build base image
-        uses: docker/build-push-action@v2
+        id: build-image-base
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_base"
-          tags: |
-            ghcr.io/jelmer/janitor/base:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/base:${{ github.sha }}
-          # build on feature branches, push only on main branch
-          push: ${{ github.event_name != 'pull_request' }}
+          image: ghcr.io/jelmer/janitor/base
+          containerfiles: "Dockerfile_base"
+          tags: ${{ github.ref_name }} ${{ github.sha }}
 
       - name: Build runner image
-        uses: docker/build-push-action@v3
+        id: build-image-runner
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_runner"
-          tags: |
-            ghcr.io/jelmer/janitor/runner:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/runner:${{ github.sha }}
-          # build on feature branches, push only on main branch
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_runner"
+          image: ghcr.io/jelmer/janitor/runner
+          tags: ${{ github.sha }} ${{ github.ref_name }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
       - name: Build archive image
-        uses: docker/build-push-action@v2
+        id: build-image-archive
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_archive"
-          tags: |
-            ghcr.io/jelmer/janitor/archive:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/archive:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_archive"
+          image: ghcr.io/jelmer/janitor/archive
+          tags: ${{ github.ref_name }} ${{ github.sha }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
       - name: Build publish image
-        uses: docker/build-push-action@v2
+        id: build-image-publish
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_publish"
-          tags: |
-            ghcr.io/jelmer/janitor/publish:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/publish:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_publish"
+          image: ghcr.io/jelmer/janitor/publish
+          tags: ${{ github.ref_name }} ${{ github.sha }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
       - name: Build git_store image
-        uses: docker/build-push-action@v2
+        id: build-image-git-store
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_git_store"
-          tags: |
-            ghcr.io/jelmer/janitor/git_store:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/git_store:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_git_store"
+          image: ghcr.io/jelmer/janitor/git_store
+          tags: ${{ github.ref_name }} ${{ github.sha }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
       - name: Build bzr_store image
-        uses: docker/build-push-action@v2
+        id: build-image-bzr-store
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_bzr_store"
-          tags: |
-            ghcr.io/jelmer/janitor/bzr_store:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/bzr_store:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_bzr_store"
+          image: ghcr.io/jelmer/janitor/bzr_store
+          tags: ${{ github.ref_name }} ${{ github.sha }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
 
       - name: Build differ image
-        uses: docker/build-push-action@v2
+        id: build-image-differ
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_differ"
-          tags: |
-            ghcr.io/jelmer/janitor/differ:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/differ:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_differ"
+          image: ghcr.io/jelmer/janitor/differ
+          tags: ${{ github.ref_name }} ${{ github.sha }}
           build-args: |
             BASE_TAG: ${{ github.sha }}
+
+      - name: Push base image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-base.outputs.image }}
+          tags: ${{ steps.build-image-base.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push runner image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-runner.outputs.image }}
+          tags: ${{ steps.build-image-runner.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push differ image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-differ.outputs.image }}
+          tags: ${{ steps.build-image-differ.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push bzr-store image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-bzr-store.outputs.image }}
+          tags: ${{ steps.build-image-bzr-store.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push git-store image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-git-store.outputs.image }}
+          tags: ${{ steps.build-image-git-store.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push archive image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-archive.outputs.image }}
+          tags: ${{ steps.build-image-archive.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push publish image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-publish.outputs.image }}
+          tags: ${{ steps.build-image-publish.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
