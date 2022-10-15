@@ -20,6 +20,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Determine tags to set (pull_request)
+        run: |
+          echo "TAGS=${{ github.sha }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'pull_request' }}
+
+      - name: Determine tags to set (push)
+        run: |
+          echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'push' }}
+
       - name: Login to Github Packages
         uses: redhat-actions/podman-login@v1
         with:
@@ -33,7 +43,7 @@ jobs:
         with:
           containerfiles: "Dockerfile_worker"
           image: ghcr.io/jelmer/janitor/worker
-          tags: ${{ github.sha }} ${{ github.ref_name }}
+          tags: ${{ env.TAGS }}
 
       - name: Push worker image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
