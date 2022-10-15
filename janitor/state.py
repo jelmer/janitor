@@ -25,8 +25,10 @@ import json
 import asyncpg
 import asyncpg.pool
 import logging
+import traceback
 from typing import Optional, Tuple, List, Any
 
+from aiohttp.web import middleware, HTTPServiceUnavailable
 from breezy import urlutils
 
 
@@ -52,8 +54,6 @@ def get_result_branch(result_branches, role):
         if role == entry[0]:
             return entry[1:]
     raise KeyError
-
-
 
 class Run(object):
 
@@ -245,3 +245,13 @@ async def has_cotenants(
         # Uhm, we actually don't really know
         logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
         return None
+
+
+@middleware
+async def asyncpg_error_middleware(request, handler):
+    try:
+        resp = await handle(request)
+    except asyncpg.InsufficientResourcesError as e:
+        traceback.print_exc()
+        raise HTTPServiceUnavailable(text=str(e)) from e
+    return resp
