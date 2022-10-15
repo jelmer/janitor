@@ -42,9 +42,7 @@ def validate_from_config(local_tree, subpath, config):
         try:
             check_up_to_date(local_tree, subpath, apt)
         except MissingChangelogError as exc:
-            raise ValidateError(
-                'missing-changelog',
-                str(exc), stage=(("validate", )))
+            raise ValidateError('missing-changelog', str(exc))
         except PackageMissingInArchive as exc:
             logging.warning(
                 'Package %s is not present in archive', exc.package)
@@ -53,5 +51,4 @@ def validate_from_config(local_tree, subpath, config):
                 'Last tree version %s not present in the archive',
                 exc.tree_version)
         except NewArchiveVersion as exc:
-            raise ValidateError(
-                'new-archive-version', str(exc), stage=(("validate", )))
+            raise ValidateError('new-archive-version', str(exc))

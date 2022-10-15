@@ -120,7 +120,7 @@ async def handle_merge_proposal(request):
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
-            request.app.http_client_session, request.app['publisher_url']
+            request.app['http_client_session'], request.app['publisher_url']
         )
     except ClientConnectorError:
         return web.Response(status=500, text='Unable to retrieve credentials')
@@ -150,7 +150,7 @@ async def handle_credentials(request):
 
 async def handle_ssh_keys(request):
     credentials = await get_credentials(
-        request.app.http_client_session, request.app['publisher_url']
+        request.app['http_client_session'], request.app['publisher_url']
     )
     return web.Response(
         text="\n".join(credentials["ssh_keys"]), content_type="text/plain"
@@ -159,7 +159,7 @@ async def handle_ssh_keys(request):
 
 async def handle_pgp_keys(request):
     credentials = await get_credentials(
-        request.app.http_client_session, request.app['publisher_url']
+        request.app['http_client_session'], request.app['publisher_url']
     )
     armored = request.match_info["extension"] == ".asc"
     if armored:
@@ -180,7 +180,7 @@ async def handle_pgp_keys(request):
 
 async def handle_archive_keyring(request):
     url = URL(request.app['archiver_url']) / "pgp_keys"
-    async with request.app.http_client_session.get(url=url) as resp:
+    async with request.app['http_client_session'].get(url=url) as resp:
         if resp.status != 200:
             raise Exception("unexpected response")
         pgp_keys = await resp.json()
@@ -262,7 +262,7 @@ async def handle_generic_pkg(request):
         request.app.database,
         request.app['config'],
         request.match_info["suite"],
-        request.app.http_client_session,
+        request.app['http_client_session'],
         request.app['differ_url'],
         request.app['vcs_managers'],
         pkg,
@@ -275,7 +275,7 @@ async def handle_generic_pkg(request):
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     url = request.app['vcs_managers'][vcs].base_url
-    async with request.app.http_client_session.get(url) as resp:
+    async with request.app['http_client_session'].get(url) as resp:
         return {"vcs": vcs, "repositories": await resp.json()}
 
 
@@ -325,14 +325,12 @@ async def create_app(
         app.router['ws-notifications'],
     ])
 
-    async def setup_client_session(app):
-        app.http_client_session = ClientSession(trace_configs=trace_configs)
+    async def persistent_session(app):
+        app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
+        yield
+        await session.close()
 
-    async def close_client_session(app):
-        await app.http_client_session.close()
-
-    app.on_startup.append(setup_client_session)
-    app.on_cleanup.append(close_client_session)
+    app.cleanup_ctx.append(persistent_session)
 
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()

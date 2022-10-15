@@ -8,6 +8,10 @@
 {% block body %}
     <div class="section" id="review">
         <h1>Review</h1>
+        <p>
+            <a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}"
+               id="full-run-link">Full Run</a>
+        </p>
         <div class="score">
             Score: <span id="score">{{ value }}</span>
         </div>
@@ -205,9 +209,5 @@
                    onchange="$('#options').submit()"/>
             <label for="publishable_only">Publishable only</label>
         </form>
-        <p>
-            <a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}"
-               id="full-run-link">Full Run</a>
-        </p>
     </div>
 {% endblock body %}

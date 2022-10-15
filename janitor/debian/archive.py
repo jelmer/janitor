@@ -322,7 +322,7 @@ async def write_suite_files(
             component_dir = component
             os.makedirs(os.path.join(base_path, component_dir), exist_ok=True)
             for arch in arches:
-                arch_dir = os.path.join(component_dir, "binary-%s" % arch)
+                arch_dir = os.path.join(component_dir, f"binary-%{arch}")
                 os.makedirs(os.path.join(base_path, arch_dir), exist_ok=True)
                 br = Release()
                 br["Origin"] = origin
@@ -334,9 +334,8 @@ async def write_suite_files(
                 f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
                 r.dump(f)
                 f.done()
-                cleanup_by_hash_files(os.path.join(base_path, arch_dir), 3)
 
-                packages_path = os.path.join(component, f"binary-{arch}", "Packages")
+                packages_path = os.path.join(arch_dir, "Packages")
                 SUFFIXES: Dict[str, Any] = {
                     "": open,
                     ".gz": gzip.GzipFile,
@@ -353,8 +352,8 @@ async def write_suite_files(
                 for f in fs:
                     f.done()
                 cleanup_by_hash_files(
-                    os.path.join(base_path, os.path.dirname(packages_path)),
-                    3 * len(SUFFIXES))
+                    os.path.join(base_path, arch_dir),
+                    4 * len(SUFFIXES))
                 await asyncio.sleep(0)
             await asyncio.sleep(0)
 
@@ -447,6 +446,20 @@ async def serve_dists_component_file(request):
         request.match_info['component'],
         request.match_info['arch'],
         request.match_info['file'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
+    return web.FileResponse(path)
+
+
+async def serve_dists_component_hash_file(request):
+    path = os.path.join(
+        request.app['dists_dir'],
+        request.match_info['release'],
+        request.match_info['component'],
+        request.match_info['arch'],
+        "by-hash",
+        request.match_info['hash_type'],
+        request.match_info['hash'])
     if not os.path.exists(path):
         raise web.HTTPNotFound()
     return web.FileResponse(path)
@@ -564,6 +577,30 @@ async def serve_on_demand_dists_component_file(request):
     return web.FileResponse(path)
 
 
+async def serve_on_demand_dists_component_hash_file(request):
+    await refresh_on_demand_dists(
+        request.app['dists_dir'],
+        request.app['db'],
+        request.app['config'],
+        request.app['generator_manager'].package_info_provider,
+        request.app['gpg'],
+        request.match_info['kind'],
+        request.match_info['id'])
+
+    path = os.path.join(
+        request.app['dists_dir'],
+        request.match_info['kind'],
+        request.match_info['id'],
+        request.match_info['component'],
+        request.match_info['arch'],
+        'by-type',
+        request.match_info['hash_type'],
+        request.match_info['hash'])
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
+    return web.FileResponse(path)
+
+
 async def create_app(generator_manager, config, dists_dir, db):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -581,6 +618,11 @@ async def create_app(generator_manager, config, dists_dir, db):
         "/dists/{release}/{component}/{arch}/"
         r"{file:Packages(|\..*)}",
         serve_dists_component_file)
+    app.router.add_get(
+        "/dists/{release}/{component}/{arch}/"
+        r"by-hash/{hash_type}/{hash}",
+        serve_dists_component_hash_file)
+
     CAMPAIGNS_REGEX = "|".join(re.escape(c.name) for c in config.campaign)
     app.router.add_get(
         "/dists/{kind:cs|run|" + CAMPAIGNS_REGEX + "}/{id}/{file:InRelease|Release.gpg|Release}",
@@ -589,6 +631,10 @@ async def create_app(generator_manager, config, dists_dir, db):
         "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
         r"{file:Packages(|\..*)}",
         serve_on_demand_dists_component_file)
+    app.router.add_get(
+        "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
+        r"by-hash/{hash_type}/{hash}",
+        serve_on_demand_dists_component_hash_file)
     return app
 
 
