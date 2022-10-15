@@ -253,14 +253,16 @@ async def create_web_app(
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
-        middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
+        middlewares=[trailing_slash_redirect, state.asyncpg_error_middlewares],
+        client_max_size=(client_max_size or 0)
     )
     app.local_path = local_path
     app.db = db
     app.allow_writes = True
     app.config = config
     public_app = web.Application(
-        middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
+        middlewares=[trailing_slash_redirect, state.asyncpg_error_middlewares],
+        client_max_size=(client_max_size or 0)
     )
     public_app.local_path = local_path
     public_app.db = db
