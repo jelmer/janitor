@@ -1,4 +1,5 @@
-FROM ghcr.io/jelmer/janitor/base:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 8082
 # TODO: config

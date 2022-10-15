@@ -1,4 +1,5 @@
-FROM ghcr.io/jelmer/janitor/base:latest
+ARG BASE_TAG=latest
+FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9912
 RUN apt update && apt install --no-install-recommends -y python3-launchpadlib openssh-client gnupg
