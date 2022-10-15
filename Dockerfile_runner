@@ -2,6 +2,6 @@ ARG BASE_TAG=latest
 FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9911
-RUN apt -y update && apt -y install protobuf-compiler rustc build-essential
+RUN apt -y update && apt -y install protobuf-compiler rustc build-essential libpython3-dev
 RUN pip3 install --upgrade /code[debian,gcp]
 ENTRYPOINT ["python3", "-m", "janitor.runner", "--port=9911", "--listen-address=0.0.0.0"]
