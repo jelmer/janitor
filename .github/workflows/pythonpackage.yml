@@ -29,8 +29,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint
-          python -m pip install --upgrade pip
+          sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel
+          python -m pip install --upgrade pip setuptools setuptools-protobuf wheel mypy-protobuf
           pip install -U -e .[dev]
           mkdir $HOME/.config/breezy/plugins -p
           ln -s `pwd`/breezy-debian ~/.config/breezy/plugins/debian
