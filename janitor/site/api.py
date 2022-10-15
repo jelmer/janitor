@@ -68,24 +68,6 @@ from ..vcs import VcsManager
 routes = web.RouteTableDef()
 
 
-@routes.get("/pkg/{package}/publish-policy", name="package-policy")
-async def handle_policy(request):
-    package = request.match_info["package"]
-    suite_policies = {}
-    async with request.app['db'].acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT suite AS campaign, per_branch_policy "
-            "FROM candidate "
-            "LEFT JOIN named_publish_policy.name = candidate.publish_policy "
-            "WHERE package = $1", package)
-    if not rows:
-        return web.json_response({"reason": "Package not found"}, status=404)
-    for row in rows:
-        suite_policies[row['campaign']] = {
-            p['role']: {'mode': p['mode']} for p in row['per_branch_policy']}
-    return web.json_response({"by_campaign": suite_policies})
-
-
 @docs()
 @routes.post("/{campaign}/pkg/{package}/publish", name="package-publish")
 async def handle_publish(request):
@@ -200,15 +182,8 @@ async def handle_run_reschedule(request):
             requestor = request['user']["name"]
     else:
         requestor = "user from web UI"
-    async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow(
-            "SELECT suite AS campaign, package FROM run WHERE id = $1",
-            run_id)
-        if run is None:
-            return web.json_response({"reason": "Run not found"}, status=404)
     json = {
-        'package': run['package'],
-        'campaign': run['campaign'],
+        'run_id': run_id,
         'refresh': refresh,
         'requestor': requestor,
         'bucket': 'manual',
@@ -577,9 +552,12 @@ async def consider_publishing(session, publisher_url, run_id):
                 logging.warning(
                     'Failed to submit run %s for publish consideration: %s',
                     run_id, await resp.read())
+                return False
+            return True
     except ClientConnectorError:
         logging.warning(
             'Failed to submit %s for publish consideration', run_id)
+        return False
 
 
 @docs()
@@ -1233,32 +1211,33 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
     async with request.app['db'].acquire() as conn:
         runs = await conn.fetch(query, *params)
 
+    session = request.app['http_client_session']
+
     async def do_reschedule():
         schedule_url = URL(request.app['runner_url']) / "schedule"
-        async with ClientSession() as session:
-            for run in runs:
-                logging.info(
-                    "Rescheduling %s, %s", run['package'], run['campaign'])
-                try:
-                    async with session.post(schedule_url, json={
-                            'package': run['package'],
-                            'campaign': run['campaign'],
-                            'requestor': "reschedule",
-                            'refresh': refresh,
-                            'offset': offset,
-                            'bucket': "reschedule",
-                            'estimated_duration': (
-                                run['duration'].total_seconds()
-                                if run.get('duration') else None),
-                    }, raise_for_status=True):
-                        pass
-                except ClientResponseError as e:
-                    if e.status == 503:
-                        logging.debug(
-                            'Not rescheduling %s/%s: candidate unavailable',
-                            run['package'], run['campaign'])
-                    else:
-                        raise
+        for run in runs:
+            logging.info(
+                "Rescheduling %s, %s", run['package'], run['campaign'])
+            try:
+                async with session.post(schedule_url, json={
+                        'package': run['package'],
+                        'campaign': run['campaign'],
+                        'requestor': "reschedule",
+                        'refresh': refresh,
+                        'offset': offset,
+                        'bucket': "reschedule",
+                        'estimated_duration': (
+                            run['duration'].total_seconds()
+                            if run.get('duration') else None),
+                }, raise_for_status=True):
+                    pass
+            except ClientResponseError as e:
+                if e.status == 503:
+                    logging.debug(
+                        'Not rescheduling %s/%s: candidate unavailable',
+                        run['package'], run['campaign'])
+                else:
+                    raise
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([
@@ -1327,7 +1306,13 @@ def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.router.add_routes(routes)
-    app['http_client_session'] = ClientSession(trace_configs=trace_configs)
+
+    async def persistent_session(app):
+        app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
+        yield
+        await session.close()
+
+    app.cleanup_ctx.append(persistent_session)
     app['config'] = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
     app['db'] = db

@@ -83,7 +83,6 @@ async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIte
 
 
 async def write_queue(
-    client,
     db: asyncpg.pool.Pool,
     limit=None,
     queue_status=None,

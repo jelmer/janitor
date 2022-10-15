@@ -17,10 +17,13 @@
 
 
 import aiozipkin
+from datetime import datetime, timedelta
+import mockaioredis
 from janitor.runner import (
     create_app,
     is_log_filename,
     committer_env,
+    QueueProcessor,
 )
 
 
@@ -65,3 +68,36 @@ def test_is_log_filename():
     assert is_log_filename("foo.log")
     assert is_log_filename("foo.log.1")
     assert not is_log_filename("foo.deb")
+
+
+async def create_queue_processor():
+    redis = await mockaioredis.create_redis_pool('redis://localhost')
+    return QueueProcessor(None, redis, run_timeout=30)
+
+
+async def test_watch_dog():
+    qp = await create_queue_processor()
+    qp.start_watchdog()
+    assert qp._watch_dog is not None
+    qp.stop_watchdog()
+    assert qp._watch_dog is None
+
+
+async def test_rate_limit_hosts():
+    qp = await create_queue_processor()
+    assert [x async for x in qp.rate_limited_hosts()] == []
+
+    retry_after = datetime.utcnow() - timedelta(seconds=30)
+    await qp.rate_limited("expired.com", retry_after)
+    assert [x async for x in qp.rate_limited_hosts()] == []
+
+    retry_after = datetime.utcnow() + timedelta(seconds=30)
+    await qp.rate_limited("github.com", retry_after)
+
+    assert [x async for x in qp.rate_limited_hosts()] == [('github.com', retry_after)]
+
+
+async def test_status_json():
+    qp = await create_queue_processor()
+    data = await qp.status_json()
+    assert data == {'avoid_hosts': [], 'processing': [], 'rate_limit_hosts': {}}
