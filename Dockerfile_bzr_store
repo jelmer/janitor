@@ -3,5 +3,5 @@ FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 VOLUME /bzr
 EXPOSE 9929
-RUN apt update && apt install -y --no-install-recommends python3-chardet libjs-sphinxdoc python3-chameleon
+RUN apt update && apt install -y --no-install-recommends libjs-sphinxdoc && pip install "/code[bzr_web]"
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]

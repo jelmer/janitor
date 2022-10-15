@@ -40,7 +40,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build ognibuild-dep image
-        id: build-image-ognibuild-dep-notify
+        id: build-image-ognibuild-dep
         uses: redhat-actions/buildah-build@v2
         with:
           containerfiles: "Dockerfile_ognibuild_dep"

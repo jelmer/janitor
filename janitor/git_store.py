@@ -39,7 +39,7 @@ from dulwich.objects import valid_hexsha, ZERO_SHA
 from dulwich.web import HTTPGitApplication
 
 try:
-    from dulwich.web import NO_CACHE_HEADERS
+    from dulwich.web import NO_CACHE_HEADERS  # type: ignore
 except ImportError:  # dulwich < 0.20.47
     NO_CACHE_HEADERS = [
         ("Expires", "Fri, 01 Jan 1980 00:00:00 GMT"),
