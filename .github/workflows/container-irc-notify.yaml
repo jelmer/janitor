@@ -22,23 +22,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # setup Docker buld action
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v1
-
       - name: Login to Github Packages
-        uses: docker/login-action@v2
+        uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build irc-notify image
-        uses: docker/build-push-action@v2
+      - name: Build runner image
+        id: build-image-irc-notify
+        uses: redhat-actions/buildah-build@v2
         with:
-          file: "Dockerfile_irc_notify"
-          tags: |
-            ghcr.io/jelmer/janitor/irc_notify:${{ github.ref_name }}
-            ghcr.io/jelmer/janitor/irc_notify:${{ github.sha }}
-          push: ${{ github.event_name != 'pull_request' }}
+          containerfiles: "Dockerfile_irc_notify"
+          image: ghcr.io/jelmer/janitor/irc_notify
+          tags: ${{ github.sha }} ${{ github.ref_name }}
+
+      - name: Push irc-notify image to ghcr.io
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image-irc-notify.outputs.image }}
+          tags: ${{ steps.build-image-irc-notify.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
