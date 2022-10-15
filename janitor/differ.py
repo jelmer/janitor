@@ -549,7 +549,7 @@ class DifferWebApp(web.Application):
     def __init__(self, pool, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)
         super(DifferWebApp, self).__init__(middlewares=[
-            trailing_slash_redirect, state.asyncpg_error_middlewares])
+            trailing_slash_redirect, state.asyncpg_error_middleware])
         self.router.add_routes(routes)
         self['pool'] = pool
         self.cache_path = cache_path
