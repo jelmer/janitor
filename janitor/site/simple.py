@@ -326,9 +326,9 @@ async def create_app(
     ])
 
     async def persistent_session(app):
-       app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
-       yield
-       await session.close()
+        app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
+        yield
+        await session.close()
 
     app.cleanup_ctx.append(persistent_session)
 
