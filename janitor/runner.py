@@ -436,6 +436,7 @@ class JanitorResult(object):
     branch_url: str
     subpath: str
     code: str
+    transient: Optional[bool]
 
     def __init__(
         self,
@@ -492,6 +493,7 @@ class JanitorResult(object):
             self.branch_url = worker_result.branch_url
             self.vcs_type = worker_result.vcs_type
             self.subpath = worker_result.subpath
+            self.transient = worker_result.transient
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -509,6 +511,7 @@ class JanitorResult(object):
             self.remotes = {}
             self.followup_actions = []
             self.resume_from = None
+            self.transient = None
 
     @property
     def duration(self):
@@ -528,6 +531,7 @@ class JanitorResult(object):
             "code": self.code,
             "failure_details": self.failure_details,
             "failure_stage": self.failure_stage,
+            "transient": self.transient,
             "target": ({
                 "name": self.builder_result.kind,
                 "details": self.builder_result.json(),
@@ -1235,36 +1239,9 @@ async def store_run(
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
     followup_actions: Optional[Any] = None,
+    failure_transient: Optional[bool] = None,
 ):
-    """Store a run.
-
-    Args:
-      run_id: Run id
-      name: Package name
-      vcs_type: VCS type
-      vcs_url: Upstream branch URL
-      start_time: Start time
-      finish_time: Finish time
-      command: Command
-      description: A human-readable description
-      instigated_context: Context that instigated this run
-      context: Subworker-specific context
-      main_branch_revision: Main branch revision
-      result_code: Result code (as constant string)
-      revision: Resulting revision id
-      codemod_result: Subworker-specific result data (as json)
-      campaign: The campaign
-      logfilenames: List of log filenames
-      value: Value of the run (as int)
-      worker_name: Name of the worker
-      result_branches: Result branches
-      result_tags: Result tags
-      resume_from: Run this one was resumed from
-      failure_details: Result failure details
-      failure_stage: Failure stage
-      target_branch_url: Branch URL to target
-      change_set: Change set id
-    """
+    """Store a run in the database."""
     if result_tags is None:
         result_tags_updated = None
     else:
@@ -1277,9 +1254,10 @@ async def store_run(
         "revision, result, suite, vcs_type, branch_url, subpath, logfilenames, "
         "value, worker, result_tags, "
         "resume_from, failure_details, failure_stage, target_branch_url, change_set, "
-        "followup_actions) "
+        "followup_actions, failure_transient) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, "
+        "$24, $25, $26, $27)",
         run_id,
         command,
         description,
@@ -1306,6 +1284,7 @@ async def store_run(
         target_branch_url,
         change_set,
         followup_actions,
+        failure_transient,
     )
 
     if result_branches:
@@ -1655,6 +1634,7 @@ class QueueProcessor(object):
                     target_branch_url=result.target_branch_url,
                     change_set=result.change_set,
                     followup_actions=result.followup_actions,
+                    failure_transient=result.transient,
                 )
             except asyncpg.UniqueViolationError as e:
                 logging.info('Unique violation error creating run: %r', e)

@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS run (
    -- Failure details, if this run failed
    failure_details json,
    target_branch_url text,
+   failure_transient boolean,
    -- The run this one resumed from
    resume_from text references run (id),
    change_set text not null references change_set(id),
