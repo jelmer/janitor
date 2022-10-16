@@ -635,6 +635,10 @@ def process_package(
         except TransportError as e:
             if "No space left on device" in e.msg:
                 raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"))
+            if "Temporary failure in name resolution" in e.msg:
+                raise WorkerFailure(
+                    "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
+                    transient=True)
             traceback.print_exc()
             raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone"))
         except RemoteGitError as e:
@@ -901,8 +905,18 @@ def _push_error_to_worker_failure(e):
             )
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e,
+            stage=("result-push", ))
+    if isinstance(e, ConnectionError):
+        if "Temporary failure in name resolution" in e.msg:
+            return WorkerFailure(
+                "result-push-failed-temporarily",
+                "Failed to push result branch: %s" % e,
+                stage=("result-push", ), transient=True)
+        return WorkerFailure(
+            "result-push-failed", "Failed to push result branch: %s" % e,
             stage=("result-push", )
         )
+
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
                 ConnectionError, ConnectionReset, ssl.SSLEOFError)):
