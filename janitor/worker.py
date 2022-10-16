@@ -637,7 +637,7 @@ def process_package(
                 raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"))
             if "Temporary failure in name resolution" in e.msg:
                 raise WorkerFailure(
-                    "worker-clone-temporary-transport-error", stage=("setup", "clone"),
+                    "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
                     transient=True)
             traceback.print_exc()
             raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone"))
