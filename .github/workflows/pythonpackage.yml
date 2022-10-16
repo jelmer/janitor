@@ -55,7 +55,7 @@ jobs:
           make all
       - name: Test suite run
         run: |
-          make check
+          make test
         env:
           PYTHONHASHSEED: random
       - name: Config compat test
