@@ -65,7 +65,7 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
 from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import ConnectionError, UnexpectedHttpStatus, PermissionDenied
-from breezy.transport import UnusableRedirect, UnsupportedProtocol
+from breezy.transport import UnusableRedirect, UnsupportedProtocol, Transport
 
 from silver_platter.probers import (
     select_preferred_probers,
@@ -846,6 +846,7 @@ class ActiveRun(object):
 
     @classmethod
     def from_json(cls, js):
+        backchannel: Backchannel
         if 'jenkins' in js['backchannel']:
             backchannel = JenkinsBackchannel.from_json(js['backchannel'])
         elif 'my_url' in js['backchannel']:
@@ -2051,8 +2052,8 @@ async def next_item(
         worker_link: Optional[str] = None,
         backchannel: Optional[Dict[str, str]] = None,
         package: Optional[str] = None, campaign: Optional[str] = None):
-    possible_transports = []
-    possible_forges = []
+    possible_transports: List[Transport] = []
+    possible_forges: List[Forge] = []
 
     async def abort(active_run, code, description):
         result = active_run.create_result(
@@ -2549,7 +2550,7 @@ async def main(argv=None):
 
         queue_processor.start_watchdog()
 
-        app = await create_app(queue_processor, tracer=tracer)
+        app = await create_app(queue_processor, config, tracer=tracer)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, args.listen_address, port=args.port)
