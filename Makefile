@@ -1,6 +1,3 @@
-export PYTHONPATH=$(shell pwd)/ognibuild:$(shell pwd)/buildlog-consultant:$(shell pwd):$(shell pwd)/breezy:$(shell pwd)/silver-platter:$(shell pwd)/lintian-brush:$(shell pwd)/python-debian/lib:$(shell pwd)/debmutate:$(shell pwd)/dulwich
-export BRZ_PLUGINS_AT=debian@$(shell pwd)/breezy-debian
-
 PB2_PY_OUTPUT = janitor/config_pb2.py janitor/package_metadata_pb2.py
 
 core: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
@@ -28,7 +25,7 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	BRZ_PLUGINS_AT=$(BRZ_PLUGINS_AT) PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=$(PYTHONPATH) pytest janitor
+	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python pytest -m pytest janitor
 
 style:: flake8
 
