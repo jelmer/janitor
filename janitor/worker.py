@@ -905,8 +905,18 @@ def _push_error_to_worker_failure(e):
             )
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e,
+            stage=("result-push", ))
+    if isinstance(e, ConnectionError):
+        if "Temporary failure in name resolution" in e.msg:
+            return WorkerFailure(
+                "result-push-failed-temporarily",
+                "Failed to push result branch: %s" % e,
+                stage=("result-push", ), transient=True)
+        return WorkerFailure(
+            "result-push-failed", "Failed to push result branch: %s" % e,
             stage=("result-push", )
         )
+
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
                 ConnectionError, ConnectionReset, ssl.SSLEOFError)):
