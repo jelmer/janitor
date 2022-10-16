@@ -20,3 +20,9 @@ janitor/*_pb2.py
 env
 .eggs
 janitor.egg-info
+pyvenv.cfg
+lib
+lib64
+bin
+man
+share
