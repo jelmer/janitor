@@ -2077,6 +2077,7 @@ async def next_item(
                 queue_empty_count.inc()
                 return web.json_response({'reason': 'queue empty'}, status=503)
 
+            bc: Backchannel
             if backchannel and backchannel['kind'] == 'http':
                 bc = PollingBackchannel(my_url=URL(backchannel['url']))
             elif backchannel and backchannel['kind'] == 'jenkins':
