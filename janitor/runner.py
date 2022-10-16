@@ -1912,7 +1912,7 @@ async def handle_candidates(request):
             known_packages.add(record[0])
 
         known_campaign_names = [
-            campaign.name for campaign in queue_processor.config.campaign]
+            campaign.name for campaign in request.app['config'].campaign]
 
         known_publish_policies = set()
         for record in (await conn.fetch(
@@ -1935,7 +1935,7 @@ async def handle_candidates(request):
             command = candidate.get('command')
             if command is None:
                 campaign_config = get_campaign_config(
-                    queue_processor.config, candidate['campaign'])
+                    request.app['config'], candidate['campaign'])
                 command = campaign_config.command
 
             publish_policy = candidate.get('publish-policy')
@@ -1995,7 +1995,8 @@ async def handle_assign(request):
     span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
     assignment = await next_item(
-        queue_processor, span, 'assign', worker=json.get("worker"),
+        queue_processor, request.app['config'],
+        span, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
         backchannel=json.get('backchannel'),
         package=json.get('package'),
@@ -2012,7 +2013,8 @@ async def handle_assign(request):
 async def handle_peek(request):
     span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
-    assignment = await next_item(request, queue_processor, span, 'peek')
+    assignment = await next_item(
+        queue_processor, request.app['config'], span, 'peek')
     return web.json_response(
         assignment, status=201, headers={
             'Location': str(request.app.router['get-active-run'].url_for(
@@ -2044,7 +2046,11 @@ async def handle_queue(request):
     return web.json_response(response_obj)
 
 
-async def next_item(queue_processor, span, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
+async def next_item(
+        queue_processor, config, span, mode, *, worker=None,
+        worker_link: Optional[str] = None,
+        backchannel: Optional[Dict[str, str]] = None,
+        package: Optional[str] = None, campaign: Optional[str] = None):
     possible_transports = []
     possible_forges = []
 
@@ -2093,7 +2099,7 @@ async def next_item(queue_processor, span, mode, worker=None, worker_link=None, 
                 continue
 
             try:
-                campaign_config = get_campaign_config(queue_processor.config, item.campaign)
+                campaign_config = get_campaign_config(config, item.campaign)
             except KeyError:
                 logging.warning(
                     'Unable to find details for campaign %r', item.campaign)
@@ -2103,7 +2109,7 @@ async def next_item(queue_processor, span, mode, worker=None, worker_link=None, 
 
         # This is simple for now, since we only support one distribution.
         builder = get_builder(
-            queue_processor.config, campaign_config,
+            config, campaign_config,
             queue_processor.apt_archive_url,
             queue_processor.dep_server_url)
 
@@ -2213,7 +2219,7 @@ async def next_item(queue_processor, span, mode, worker=None, worker_link=None, 
         with span.new_child('cache-branch:check'):
             if campaign_config.HasField('debian_build'):
                 distribution = get_distribution(
-                    queue_processor.config,
+                    config,
                     campaign_config.debian_build.base_distribution)
                 branch_name = cache_branch_name(distribution, "main")
             else:
@@ -2397,11 +2403,12 @@ async def handle_finish(request):
     )
 
 
-async def create_app(queue_processor, tracer=None):
+async def create_app(queue_processor, config, tracer=None):
     app = web.Application(middlewares=[
         state.asyncpg_error_middleware,
         state.asyncpg_error_middleware])
     app.router.add_routes(routes)
+    app['config'] = config
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     setup_metrics(app)
