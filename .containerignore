@@ -2,3 +2,8 @@
 .pytest_cache
 .mypy_cache
 __pycache__
+lib
+lib64/
+share/
+bin/
+man/
