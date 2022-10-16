@@ -4,7 +4,7 @@ top of [silver-platter](https://github.com/jelmer/silver-platter).
 
 Any code that is not related to the platform but to actually making changes
 should probably live in either ``silver-platter``, ``breezy`` or a
-specific codemod (such as [lintian-brush](https://salsa.debian.org/jelmer/lintian-brush).
+specific codemod (such as [lintian-brush](https://salsa.debian.org/jelmer/lintian-brush)).
 
 There are currently several instances of the Janitor running. For their configuration, see:
 

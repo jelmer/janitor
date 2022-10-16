@@ -25,7 +25,7 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python python -m pytest tests
+	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python py.test tests
 
 style:: flake8
 
