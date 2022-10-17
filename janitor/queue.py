@@ -236,8 +236,8 @@ queue.id ASC
             context: Optional[str] = None,
             estimated_duration: Optional[timedelta] = None,
             refresh: bool = False,
-            requestor: Optional[str] = None) -> None:
-        await self.conn.execute(
+            requestor: Optional[str] = None) -> int:
+        return await self.conn.fetchval(
             "INSERT INTO queue "
             "(package, command, priority, bucket, context, "
             "estimated_duration, suite, refresh, requestor, change_set) "
@@ -254,7 +254,7 @@ queue.id ASC
             "command = EXCLUDED.command "
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
-            "queue.priority >= EXCLUDED.priority)",
+            "queue.priority >= EXCLUDED.priority) RETURNING id",
             package,
             command,
             offset,
