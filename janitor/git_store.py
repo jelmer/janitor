@@ -569,7 +569,7 @@ async def create_web_app(
     app.router.add_post("/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     endpoint = aiozipkin.create_endpoint("janitor.git_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     aiozipkin.setup(app, tracer)

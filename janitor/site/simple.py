@@ -313,7 +313,7 @@ async def create_app(
 
     endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
