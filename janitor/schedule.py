@@ -432,7 +432,7 @@ async def do_schedule_control(
     bucket: str = "control",
     requestor: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None
-) -> Tuple[float, Optional[timedelta]]:
+) -> Tuple[float, Optional[timedelta], int]:
     command = ["brz", "up"]
     if main_branch_revision is not None:
         command.append("--revision=%s" % main_branch_revision.decode("utf-8"))
@@ -466,7 +466,7 @@ async def do_schedule(
     requestor: Optional[str] = None,
     estimated_duration=None,
     command: Optional[str] = None,
-) -> Tuple[float, Optional[timedelta]]:
+) -> Tuple[float, Optional[timedelta], int]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
@@ -480,7 +480,7 @@ async def do_schedule(
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, campaign)
     queue = Queue(conn)
-    await queue.add(
+    queue_id = await queue.add(
         package=package,
         command=command,
         campaign=campaign,
@@ -491,7 +491,7 @@ async def do_schedule(
         refresh=refresh,
         requestor=requestor,
     )
-    return offset, estimated_duration
+    return offset, estimated_duration, queue_id
 
 
 if __name__ == "__main__":
