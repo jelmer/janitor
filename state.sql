@@ -505,10 +505,11 @@ CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    EXECUTE FUNCTION expire_site_session_delete_old_rows();
 
 CREATE OR REPLACE VIEW queue_positions AS SELECT
+    id,
     package,
     suite,
     row_number() OVER (ORDER BY bucket ASC, priority ASC, id ASC) AS position,
-    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
+    SUM(estimated_duration) OVER (ORDER BY bucket ASC, priority ASC, id ASC)
         - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
     queue
