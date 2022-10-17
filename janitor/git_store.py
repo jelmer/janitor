@@ -65,6 +65,7 @@ GIT_BACKEND_CHUNK_SIZE = 4096
 
 
 async def git_diff_request(request):
+    span = aiozipkin.request_span(request)
     package = request.match_info["package"]
     try:
         old_sha = request.query['old'].encode('utf-8')
@@ -73,7 +74,8 @@ async def git_diff_request(request):
         raise web.HTTPBadRequest(text='need both old and new')
     path = request.query.get('path')
     try:
-        repo = Repository.open(os.path.join(request.app['local_path'], package))
+        with span.new_child('open-repo')
+            repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
@@ -99,7 +101,8 @@ async def git_diff_request(request):
 
     # TODO(jelmer): Stream this
     try:
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        with span.new_child('subprocess:communicate')
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
     except asyncio.TimeoutError:
         raise web.HTTPRequestTimeout(text='diff generation timed out')
 
@@ -117,7 +120,8 @@ async def git_revision_info_request(request):
     except KeyError:
         raise web.HTTPBadRequest(text='need both old and new')
     try:
-        repo = Repository.open(os.path.join(request.app['local_path'], package))
+        with span.new_child('open-repo')
+            repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
@@ -126,9 +130,10 @@ async def git_revision_info_request(request):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
     try:
-        walker = repo._git.get_walker(
-            include=[new_sha],
-            exclude=([old_sha] if old_sha != ZERO_SHA else []))
+        with span.new_child('get-walker')
+            walker = repo._git.get_walker(
+                include=[new_sha],
+                exclude=([old_sha] if old_sha != ZERO_SHA else []))
     except MissingCommitError:
         return web.json_response({}, status=404)
     for entry in walker:
@@ -137,6 +142,7 @@ async def git_revision_info_request(request):
             'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
             'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
             'message': entry.commit.message.decode('utf-8', 'replace')})
+        await asyncio.sleep(0)
     return web.json_response(ret)
 
 
@@ -239,6 +245,8 @@ async def handle_klaus(request):
 
     wsgi_handler = WSGIHandler(app)
 
+    await asyncio.sleep(0)
+
     return await wsgi_handler(request)
 
 
@@ -272,7 +280,8 @@ async def cgit_backend(request):
 
     allow_writes = request.app['allow_writes']
     if allow_writes is None:
-        allow_writes = await is_worker(request.app['db'], request)
+        with span.new_child('is-worker'):
+            allow_writes = await is_worker(request.app['db'], request)
     service = request.query.get("service")
     if service is not None:
         _git_check_service(service, allow_writes)
@@ -485,7 +494,8 @@ async def handle_repo_list(request):
                 content_type='text/plain')
         elif accept in ('text/html', ):
             template = site_env.get_template('repo-list.html')
-            text = await template.render_async(vcs="git", repositories=names)
+            with span.new_child('render-html'):
+                text = await template.render_async(vcs="git", repositories=names)
             return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
