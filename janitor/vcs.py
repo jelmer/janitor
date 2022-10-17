@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientSession, ClientTimeout
+from aiozipkin.helpers import TraceContext
 import asyncio
 from io import BytesIO
 import logging
@@ -187,7 +188,7 @@ def open_cached_branch(
     # TODO(jelmer): Somehow pass in trace context headers
     try:
         transport = get_transport_from_url(url)
-        return Branch.open_from_transport(url)
+        return Branch.open_from_transport(transport)
     except NotBranchError:
         return None
     except RemoteGitError:

@@ -74,7 +74,7 @@ async def git_diff_request(request):
         raise web.HTTPBadRequest(text='need both old and new')
     path = request.query.get('path')
     try:
-        with span.new_child('open-repo')
+        with span.new_child('open-repo'):
             repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
         raise web.HTTPServiceUnavailable(
@@ -101,7 +101,7 @@ async def git_diff_request(request):
 
     # TODO(jelmer): Stream this
     try:
-        with span.new_child('subprocess:communicate')
+        with span.new_child('subprocess:communicate'):
             (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
     except asyncio.TimeoutError:
         raise web.HTTPRequestTimeout(text='diff generation timed out')
@@ -113,6 +113,7 @@ async def git_diff_request(request):
 
 
 async def git_revision_info_request(request):
+    span = aiozipkin.request_span(request)
     package = request.match_info["package"]
     try:
         old_sha = request.query['old'].encode('utf-8')
@@ -120,7 +121,7 @@ async def git_revision_info_request(request):
     except KeyError:
         raise web.HTTPBadRequest(text='need both old and new')
     try:
-        with span.new_child('open-repo')
+        with span.new_child('open-repo'):
             repo = Repository.open(os.path.join(request.app['local_path'], package))
     except NotBranchError:
         raise web.HTTPServiceUnavailable(
@@ -130,7 +131,7 @@ async def git_revision_info_request(request):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
     try:
-        with span.new_child('get-walker')
+        with span.new_child('get-walker'):
             walker = repo._git.get_walker(
                 include=[new_sha],
                 exclude=([old_sha] if old_sha != ZERO_SHA else []))
