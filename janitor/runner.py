@@ -2209,7 +2209,8 @@ async def next_item(
                         resume_branch = await to_thread_timeout(
                             VCS_STORE_BRANCH_OPEN_TIMEOUT,
                             vcs_manager.get_branch,
-                            item.package, '%s/%s' % (campaign_config.name, 'main'))
+                            item.package, '%s/%s' % (campaign_config.name, 'main'),
+                            trace_context=span.context)
                     except asyncio.TimeoutError:
                         logging.warning('Timeout opening resume branch')
 
