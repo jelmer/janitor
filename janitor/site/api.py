@@ -242,9 +242,9 @@ async def handle_schedule_control(request):
         async with request.app['http_client_session'].post(
                 schedule_url, json=json, raise_for_status=True) as resp:
             ret = await resp.json()
-        async with session.get(queue_position_url, params={
-                'campaign': campaign,
-                'package': package}, raise_for_status=True) as resp:
+        async with request.app['http_client_session'].get(queue_position_url, params={
+                'campaign': ret['campaign'],
+                'package': ret['package']}, raise_for_status=True) as resp:
             queue_position = await resp.json()
     except ContentTypeError as e:
         return web.json_response(

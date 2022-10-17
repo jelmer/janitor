@@ -1697,14 +1697,15 @@ async def handle_queue_position(request):
     span = aiozipkin.request_span(request)
     package = request.match_info['package']
     campaign = request.match_info['campaign']
-    with span.new_child('sql:queue-position'):
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            campaign, package)
+    async with request.app['queue_processor'].database.acquire() as conn:
+        with span.new_child('sql:queue-position'):
+            queue = Queue(conn)
+            (queue_position, queue_wait_time) = await queue.get_position(
+                campaign, package)
     return web.json_response({
         "position": queue_position,
         "wait_time": queue_wait_time.total_seconds(),
-        })
+    })
 
 
 @routes.post("/schedule-control", name="schedule-control")
@@ -1727,25 +1728,27 @@ async def handle_schedule_control(request):
             package = json['package']
             main_branch_revision = json['main_branch_revision'].encode('utf-8')
         else:
-            run = await conn.fetchrow(
-                "SELECT main_branch_revision, package FROM run "
-                "WHERE id = $1",
-                run_id)
+            with span.new_child('sql:find-run'):
+                run = await conn.fetchrow(
+                    "SELECT main_branch_revision, package FROM run "
+                    "WHERE id = $1",
+                    run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
             package = run['package']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         try:
-            offset, estimated_duration, queue_id = await do_schedule_control(
-                conn,
-                package=package,
-                change_set=change_set,
-                main_branch_revision=main_branch_revision,
-                offset=offset,
-                refresh=refresh,
-                bucket=bucket,
-                requestor=requestor,
-                estimated_duration=estimated_duration)
+            with span.new_child('do-schedule-control'):
+                offset, estimated_duration, queue_id = await do_schedule_control(
+                    conn,
+                    package=package,
+                    change_set=change_set,
+                    main_branch_revision=main_branch_revision,
+                    offset=offset,
+                    refresh=refresh,
+                    bucket=bucket,
+                    requestor=requestor,
+                    estimated_duration=estimated_duration)
         except CandidateUnavailable:
             return web.json_response(
                 {"reason": "Candidate not available."}, status=503
@@ -1764,6 +1767,7 @@ async def handle_schedule_control(request):
 
 @routes.post("/schedule", name="schedule")
 async def handle_schedule(request):
+    span = aiozipkin.request_span(request)
     json = await request.json()
     async with request.app['queue_processor'].database.acquire() as conn:
         try:
@@ -1788,16 +1792,17 @@ async def handle_schedule(request):
             timedelta(seconds=json['estimated_duration'])
             if json.get('estimated_duration') else None)
         try:
-            offset, estimated_duration, queue_id, = await do_schedule(
-                conn,
-                package,
-                campaign,
-                offset=offset,
-                change_set=change_set,
-                refresh=refresh,
-                requestor=requestor,
-                estimated_duration=estimated_duration,
-                bucket=bucket)
+            with span.new_child('do-schedule'):
+                offset, estimated_duration, queue_id, = await do_schedule(
+                    conn,
+                    package,
+                    campaign,
+                    offset=offset,
+                    change_set=change_set,
+                    refresh=refresh,
+                    requestor=requestor,
+                    estimated_duration=estimated_duration,
+                    bucket=bucket)
         except CandidateUnavailable:
             return web.json_response(
                 {"reason": "Candidate not available."}, status=503

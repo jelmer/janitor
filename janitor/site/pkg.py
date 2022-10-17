@@ -177,7 +177,7 @@ async def generate_run_file(
                 if e.status == 404:
                     return {}
                 logging.warning(
-                   "Unable to retrieve publish blockers for %s: %r",
+                    "Unable to retrieve publish blockers for %s: %r",
                     run['id'], e)
                 return {}
             except ClientConnectorError as e:
