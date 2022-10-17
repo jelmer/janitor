@@ -790,7 +790,7 @@ async def main(argv=None):
         "janitor.debian.archive", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(
-            config.zipkin_address, endpoint, sample_rate=1.0)
+            config.zipkin_address, endpoint, sample_rate=0.1)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
