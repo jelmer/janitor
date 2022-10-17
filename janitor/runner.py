@@ -1692,8 +1692,24 @@ class QueueProcessor(object):
             assigned_queue_items=assigned_queue_items)
 
 
+@routes.get("/queue/position", name="queue-position")
+async def handle_queue_position(request):
+    span = aiozipkin.request_span(request)
+    package = request.match_info['package']
+    campaign = request.match_info['campaign']
+    with span.new_child('sql:queue-position'):
+        queue = Queue(conn)
+        (queue_position, queue_wait_time) = await queue.get_position(
+            campaign, package)
+    return web.json_response({
+        "position": queue_position,
+        "wait_time": queue_wait_time.total_seconds(),
+        })
+
+
 @routes.post("/schedule-control", name="schedule-control")
 async def handle_schedule_control(request):
+    span = aiozipkin.request_span(request)
     json = await request.json()
     change_set = json.get('change_set')
     offset = json.get('offset')
@@ -1720,7 +1736,7 @@ async def handle_schedule_control(request):
             package = run['package']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         try:
-            offset, estimated_duration = await do_schedule_control(
+            offset, estimated_duration, queue_id = await do_schedule_control(
                 conn,
                 package=package,
                 change_set=change_set,
@@ -1734,17 +1750,14 @@ async def handle_schedule_control(request):
             return web.json_response(
                 {"reason": "Candidate not available."}, status=503
             )
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            "control", package)
 
     response_obj = {
         "package": package,
         "campaign": "control",
         "offset": offset,
+        "bucket": bucket,
+        "queue_id": queue_id,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time.total_seconds(),
     }
     return web.json_response(response_obj)
 
@@ -1775,7 +1788,7 @@ async def handle_schedule(request):
             timedelta(seconds=json['estimated_duration'])
             if json.get('estimated_duration') else None)
         try:
-            offset, estimated_duration = await do_schedule(
+            offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
                 campaign,
@@ -1789,17 +1802,14 @@ async def handle_schedule(request):
             return web.json_response(
                 {"reason": "Candidate not available."}, status=503
             )
-        queue = Queue(conn)
-        (queue_position, queue_wait_time) = await queue.get_position(
-            campaign, package)
 
     response_obj = {
         "package": package,
         "campaign": campaign,
         "offset": offset,
+        "bucket": bucket,
+        "queue_id": queue_id,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time.total_seconds(),
     }
     return web.json_response(response_obj)
 
