@@ -34,6 +34,9 @@ import asyncpg
 
 from breezy.revision import NULL_REVISION
 
+from ognibuild.debian.fix_build import BUILD_LOG_FILENAME
+from ognibuild.dist import DIST_LOG_FILENAME
+
 from janitor.queue import Queue
 from janitor import state
 from buildlog_consultant.sbuild import (
@@ -52,11 +55,10 @@ from janitor.site import (
 from .common import iter_candidates, get_unchanged_run
 from ..config import get_campaign_config
 
+
 FAIL_BUILD_LOG_LEN = 15
 
-BUILD_LOG_NAME = "build.log"
-WORKER_LOG_NAME = "worker.log"
-DIST_LOG_NAME = "dist.log"
+WORKER_LOG_FILENAME = "worker.log"
 
 
 def find_build_log_failure(logf, length):
@@ -277,27 +279,27 @@ async def generate_run_file(
             return BytesIO(b"Log file missing.")
         return BytesIO(log)
 
-    if has_log(BUILD_LOG_NAME):
-        kwargs["build_log_name"] = BUILD_LOG_NAME
+    if has_log(BUILD_LOG_FILENAME):
+        kwargs["build_log_name"] = BUILD_LOG_FILENAME
 
-    if has_log(WORKER_LOG_NAME):
-        kwargs["worker_log_name"] = WORKER_LOG_NAME
+    if has_log(WORKER_LOG_FILENAME):
+        kwargs["worker_log_name"] = WORKER_LOG_FILENAME
 
-    if has_log(DIST_LOG_NAME):
-        kwargs["dist_log_name"] = DIST_LOG_NAME
+    if has_log(DIST_LOG_FILENAME):
+        kwargs["dist_log_name"] = DIST_LOG_FILENAME
 
     kwargs["get_log"] = get_log
     if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
         kwargs["primary_log"] = "worker"
-    elif has_log(BUILD_LOG_NAME):
+    elif has_log(BUILD_LOG_FILENAME):
         kwargs["earlier_build_log_names"] = []
         i = 1
-        while has_log(BUILD_LOG_NAME + ".%d" % i):
-            log_name = "%s.%d" % (BUILD_LOG_NAME, i)
+        while has_log(BUILD_LOG_FILENAME + ".%d" % i):
+            log_name = "%s.%d" % (BUILD_LOG_FILENAME, i)
             kwargs["earlier_build_log_names"].append((i, log_name))
             i += 1
 
-        logf = await get_log(BUILD_LOG_NAME)
+        logf = await get_log(BUILD_LOG_FILENAME)
         line_count, include_lines, highlight_lines = find_build_log_failure(
             logf, FAIL_BUILD_LOG_LEN
         )
@@ -305,16 +307,16 @@ async def generate_run_file(
         kwargs["build_log_include_lines"] = include_lines
         kwargs["build_log_highlight_lines"] = highlight_lines
         kwargs["primary_log"] = "build"
-    elif has_log(DIST_LOG_NAME) and run['result_code'].startswith('dist-'):
+    elif has_log(DIST_LOG_FILENAME) and run['result_code'].startswith('dist-'):
         kwargs["primary_log"] = "dist"
-        logf = await get_log(DIST_LOG_NAME)
+        logf = await get_log(DIST_LOG_FILENAME)
         line_count, include_lines, highlight_lines = find_dist_log_failure(
             logf, FAIL_BUILD_LOG_LEN
         )
         kwargs["dist_log_line_count"] = line_count
         kwargs["dist_log_include_lines"] = include_lines
         kwargs["dist_log_highlight_lines"] = highlight_lines
-    elif has_log(WORKER_LOG_NAME):
+    elif has_log(WORKER_LOG_FILENAME):
         kwargs["primary_log"] = "worker"
 
     return kwargs

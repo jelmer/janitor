@@ -44,6 +44,9 @@ from breezy.revision import NULL_REVISION
 from marshmallow import Schema, fields
 from yarl import URL
 
+from ognibuild.debian.build import BUILD_LOG_FILENAME
+from ognibuild.dist import DIST_LOG_FILENAME
+
 from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
 from . import (
@@ -1044,8 +1047,8 @@ async def handle_run_reprocess_logs(request):
         run['package'], run['campaign'], run_id,
         run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
-        [('dist-', 'dist.log', process_dist_log),
-         ('build-', 'build.log', process_sbuild_log)],
+        [('dist-', DIST_LOG_FILENAME, process_dist_log),
+         ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
         dry_run=dry_run, reschedule=reschedule)
 
     if result:
@@ -1132,8 +1135,8 @@ WHERE
                 row['package'], row['campaign'], row['id'],
                 row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
-                [('dist-', 'dist.log', process_dist_log),
-                 ('build-', 'build.log', process_sbuild_log)],
+                [('dist-', DIST_LOG_FILENAME, process_dist_log),
+                 ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]
         for i in range(0, len(todo), 100):
