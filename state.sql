@@ -507,7 +507,7 @@ CREATE OR REPLACE VIEW queue_positions AS SELECT
     package,
     suite,
     row_number() OVER (ORDER BY bucket ASC, priority ASC, id ASC) AS position,
-    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
+    SUM(estimated_duration) OVER (ORDER BY bucket ASC, priority ASC, id ASC)
         - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
     queue
