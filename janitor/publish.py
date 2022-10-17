@@ -1864,8 +1864,10 @@ async def rate_limits_request(request):
 
 @routes.get("/blockers/{run_id}", name='blockers')
 async def blockers_request(request):
+    span = aiozipkin.request_span(request)
     async with request.app['db'].acquire() as conn:
-        run = await conn.fetchrow("""\
+        with span.new_child('sql:publish-status'):
+            run = await conn.fetchrow("""\
 SELECT
   run.id AS id,
   run.finish_time AS finish_time,
@@ -1892,13 +1894,15 @@ WHERE run.id = $1
                 'reason': 'No such publish-ready run',
                 'run_id': request.match_info['run_id']}, status=404)
 
-        reviews = await conn.fetch(
-            "SELECT * FROM review WHERE run_id = $1", run['id'])
+        with span.new_child('sql:reviews'):
+            reviews = await conn.fetch(
+                "SELECT * FROM review WHERE run_id = $1", run['id'])
 
         if run['revision'] is not None:
-            attempt_count = await get_publish_attempt_count(
-                conn, run['revision'].encode('utf-8'),
-                {"differ-unreachable"})
+            with span.new_child('sql:publish-attempt-count'):
+                attempt_count = await get_publish_attempt_count(
+                    conn, run['revision'].encode('utf-8'),
+                    {"differ-unreachable"})
         else:
             attempt_count = 0
     ret = {}
