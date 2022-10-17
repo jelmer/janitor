@@ -182,9 +182,12 @@ class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
 
-def open_cached_branch(url) -> Optional[Branch]:
+def open_cached_branch(
+        url, trace_context: Optional[TraceContext] = None) -> Optional[Branch]:
+    # TODO(jelmer): Somehow pass in trace context headers
     try:
-        return Branch.open(url)
+        transport = get_transport_from_url(url)
+        return Branch.open_from_transport(url)
     except NotBranchError:
         return None
     except RemoteGitError:
@@ -203,7 +206,8 @@ def open_cached_branch(url) -> Optional[Branch]:
 
 class VcsManager(object):
     def get_branch(
-        self, codebase: str, branch_name: str
+            self, codebase: str, branch_name: str,
+            *, trace_context: Optional[TraceContext] = None
     ) -> Branch:
         raise NotImplementedError(self.get_branch)
 
@@ -240,7 +244,7 @@ class LocalGitVcsManager(VcsManager):
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
-    def get_branch(self, codebase, branch_name):
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
         try:
             return open_branch(url)
@@ -329,7 +333,7 @@ class LocalBzrVcsManager(VcsManager):
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.base_path)
 
-    def get_branch(self, codebase, branch_name):
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
         try:
             return open_branch(url)
@@ -435,9 +439,9 @@ class RemoteGitVcsManager(VcsManager):
             self._lookup_revid(old_revid, EMPTY_GIT_TREE).decode('utf-8'),
             self._lookup_revid(new_revid, EMPTY_GIT_TREE).decode('utf-8')))
 
-    def get_branch(self, codebase, branch_name):
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
-        return open_cached_branch(url)
+        return open_cached_branch(url, trace_context=trace_context)
 
     def get_branch_url(self, codebase, branch_name) -> str:
         return urlutils.join_segment_parameters("%s/%s" % (
@@ -475,9 +479,9 @@ class RemoteBzrVcsManager(VcsManager):
             codebase, old_revid.decode('utf-8'),
             new_revid.decode('utf-8')))
 
-    def get_branch(self, codebase, branch_name):
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
-        return open_cached_branch(url)
+        return open_cached_branch(url, trace_context=trace_context)
 
     def get_branch_url(self, codebase, branch_name) -> str:
         return "%s/%s/%s" % (self.base_url.rstrip("/"), codebase, branch_name)
