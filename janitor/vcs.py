@@ -323,6 +323,7 @@ class LocalGitVcsManager(VcsManager):
                 'commit-id': entry.commit.id.decode('ascii'),
                 'revision-id': repo.lookup_foreign_revision_id(entry.commit.id).decode('utf-8'),
                 'message': entry.commit.message.decode('utf-8', 'replace')})
+            await asyncio.sleep(0)
         return ret
 
 
@@ -400,12 +401,12 @@ class LocalBzrVcsManager(VcsManager):
                     'revision-id': rev.revision_id.decode('utf-8'),
                     'link': None,
                     'message': rev.description})
+                await asyncio.sleep(0)
         return ret
 
 
 class RemoteGitVcsManager(VcsManager):
     def __init__(self, base_url: str):
-        get_transport_from_url(base_url)
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
@@ -454,7 +455,6 @@ class RemoteGitVcsManager(VcsManager):
 
 class RemoteBzrVcsManager(VcsManager):
     def __init__(self, base_url: str):
-        get_transport_from_url(base_url)
         self.base_url = base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
