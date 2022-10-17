@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from contextlib import contextmanager, ExitStack
+from contextlib import ExitStack
 import errno
 import logging
 import os
@@ -23,6 +23,7 @@ import sys
 
 from ognibuild.session import SessionSetupFailure
 from ognibuild.dist import (
+    DIST_LOG_FILENAME,
     dist,
     DistNoTarball,
 )
@@ -33,26 +34,13 @@ from ognibuild import (
 from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
+from ognibuild.logs import (
+    DirectoryLogManager,
+    NoLogManager,
+)
 
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def redirect_output(to_file):
-    sys.stdout.flush()
-    sys.stderr.flush()
-    old_stdout = os.dup(sys.stdout.fileno())
-    old_stderr = os.dup(sys.stderr.fileno())
-    os.dup2(to_file.fileno(), sys.stdout.fileno())  # type: ignore
-    os.dup2(to_file.fileno(), sys.stderr.fileno())  # type: ignore
-    try:
-        yield
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        os.dup2(old_stdout, sys.stdout.fileno())
-        os.dup2(old_stderr, sys.stderr.fileno())
 
 
 def report_failure(kind, description, original):
@@ -125,11 +113,14 @@ if __name__ == '__main__':
             raise
 
         if args.packaging:
-            packaging_tree, packaging_debian_path = WorkingTree.open_containing(args.packaging)
+            (packaging_tree,
+             packaging_debian_path) = WorkingTree.open_containing(
+                args.packaging)
             from ognibuild.debian import satisfy_build_deps
 
             try:
-                satisfy_build_deps(session, packaging_tree, packaging_debian_path)
+                satisfy_build_deps(
+                    session, packaging_tree, packaging_debian_path)
             except DetailedFailure as e:
                 logging.warning(
                     'Ignoring error installing declared build dependencies '
@@ -140,16 +131,19 @@ if __name__ == '__main__':
                 lines = [line for line in e.lines if line]
                 if e.secondary:
                     logging.warning(
-                        'Ignoring error installing declared build dependencies (%r): %s',
+                        'Ignoring error installing '
+                        'declared build dependencies (%r): %s',
                         e.argv, e.secondary.line)
                     report_failure('dist-command-failed', e.secondary.line, e)
                 elif len(lines) == 1:
                     logging.warning(
-                        'Ignoring error installing declared build dependencies (%r): %s',
+                        'Ignoring error installing declared '
+                        'build dependencies (%r): %s',
                         e.argv, lines[0])
                 else:
                     logging.warning(
-                        'Ignoring error installing declared build dependencies (%r): %r',
+                        'Ignoring error installing declared '
+                        'build dependencies (%r): %r',
                         e.argv, lines)
                 if args.require_declared:
                     sys.exit(1)
@@ -162,18 +156,24 @@ if __name__ == '__main__':
                 # TODO(jelmer): Shouldn't include backend-specific code here
                 os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
-            if args.log_directory:
-                distf = es.enter_context(open(os.path.join(args.log_directory, 'dist.log'), 'wb'))
-                es.enter_context(redirect_output(distf))
+            target_dir = os.path.abspath(
+                os.path.join(args.directory, args.target_dir))
 
-            target_dir = os.path.abspath(os.path.join(args.directory, args.target_dir))
+            if args.log_directory:
+                log_manager = DirectoryLogManager(
+                    os.path.join(args.log_directory, DIST_LOG_FILENAME),
+                    mode='copy')
+            else:
+                log_manager = NoLogManager()
 
             try:
-                dist(session, export_directory, reldir, target_dir)
+                dist(session, export_directory, reldir, target_dir,
+                     log_manager=log_manager)
             except NotImplementedError:
                 sys.exit(2)
             except NoBuildToolsFound:
-                logger.info("No build tools found, falling back to simple export.")
+                logger.info(
+                    "No build tools found, falling back to simple export.")
                 sys.exit(2)
         except UnidentifiedError as e:
             lines = [line for line in e.lines if line]

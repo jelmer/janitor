@@ -8,6 +8,8 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from ognibuild.debian.build import BUILD_LOG_FILENAME
+
 import silver_platter  # noqa: E402, F401
 from janitor import state  # noqa: E402
 from janitor.config import read_config  # noqa: E402
@@ -36,11 +38,12 @@ async def reprocess_run(pool, package, log_id, logfilenames):
         logfilenames = []
         if await from_manager.has_log(package, log_id, 'worker.log'):
             logfilenames.append('worker.log')
-        if await from_manager.has_log(package, log_id, 'build.log'):
-            logfilenames.append('build.log')
+        if await from_manager.has_log(package, log_id, BUILD_LOG_FILENAME):
+            logfilenames.append(BUILD_LOG_FILENAME)
         i = 1
-        while await from_manager.has_log(package, log_id, 'build.log.%d' % i):
-            log_name = 'build.log.%d' % (i, )
+        while await from_manager.has_log(
+                package, log_id, '%s.%d' % (BUILD_LOG_FILENAME, i)):
+            log_name = '%s.%d' % (BUILD_LOG_FILENAME, i)
             logfilenames.append(log_name)
             i += 1
 

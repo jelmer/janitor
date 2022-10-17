@@ -44,6 +44,9 @@ from breezy.revision import NULL_REVISION
 from marshmallow import Schema, fields
 from yarl import URL
 
+from ognibuild.debian.build import BUILD_LOG_FILENAME
+from ognibuild.dist import DIST_LOG_FILENAME
+
 from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
 from . import (
@@ -145,6 +148,7 @@ async def handle_schedule(request):
     else:
         requestor = "user from web UI"
     schedule_url = URL(request.app['runner_url']) / "schedule"
+    queue_position_url = URL(request.app['runner_url']) / "queue" / "position"
     async with ClientSession() as session:
         async with session.post(schedule_url, json={
             'package': package,
@@ -155,13 +159,18 @@ async def handle_schedule(request):
             'bucket': "manual"
         }, raise_for_status=True) as resp:
             ret = await resp.json()
+        async with session.get(queue_position_url, params={
+                'campaign': campaign,
+                'package': package}, raise_for_status=True) as resp:
+            queue_position = await resp.json()
     return web.json_response({
-        "package": package,
-        "campaign": campaign,
-        "offset": offset,
+        "package": ret['package'],
+        "campaign": ret['campaign'],
+        "bucket": ret['bucket'],
+        "offset": ret['offset'],
         "estimated_duration_seconds": ret['estimated_duration_seconds'],
-        "queue_position": ret['queue_position'],
-        "queue_wait_time": ret['queue_wait_time'],
+        "queue_position": queue_position['position'],
+        "queue_wait_time": queue_position['wait_time'],
     })
 
 
@@ -227,17 +236,25 @@ async def handle_schedule_control(request):
         'requestor': requestor,
     }
 
-    url = URL(request.app['runner_url']) / "schedule-control"
+    schedule_url = URL(request.app['runner_url']) / "schedule-control"
+    queue_position_url = URL(request.app['runner_url']) / "queue" / "position"
     try:
         async with request.app['http_client_session'].post(
-                url, json=json, raise_for_status=True) as resp:
-            return web.json_response(await resp.json())
+                schedule_url, json=json, raise_for_status=True) as resp:
+            ret = await resp.json()
+        async with request.app['http_client_session'].get(queue_position_url, params={
+                'campaign': ret['campaign'],
+                'package': ret['package']}, raise_for_status=True) as resp:
+            queue_position = await resp.json()
     except ContentTypeError as e:
         return web.json_response(
             {"error": "runner returned error %d" % e.code}, status=400)
     except ClientConnectorError:
         return web.json_response(
             {"error": "unable to contact runner"}, status=502)
+    ret['queue_position'] = queue_position['position']
+    ret['queue_wait_time'] = queue_position['wait_time']
+    return web.json_response(ret)
 
 
 class MergeProposalSchema(Schema):
@@ -1044,8 +1061,8 @@ async def handle_run_reprocess_logs(request):
         run['package'], run['campaign'], run_id,
         run['command'], run['change_set'], run['duration'], run['result_code'],
         run['description'], run['failure_details'],
-        [('dist-', 'dist.log', process_dist_log),
-         ('build-', 'build.log', process_sbuild_log)],
+        [('dist-', DIST_LOG_FILENAME, process_dist_log),
+         ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
         dry_run=dry_run, reschedule=reschedule)
 
     if result:
@@ -1132,8 +1149,8 @@ WHERE
                 row['package'], row['campaign'], row['id'],
                 row['command'], row['change_set'], row['duration'], row['result_code'],
                 row['description'], row['failure_details'],
-                [('dist-', 'dist.log', process_dist_log),
-                 ('build-', 'build.log', process_sbuild_log)],
+                [('dist-', DIST_LOG_FILENAME, process_dist_log),
+                 ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]
         for i in range(0, len(todo), 100):

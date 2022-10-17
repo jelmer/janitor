@@ -28,6 +28,7 @@ from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
 from ognibuild.debian.build import (
     build_once,
+    ChangelogNotEditable,
     MissingChangesFile,
     DetailedDebianBuildFailure,
     UnidentifiedDebianBuildError,
@@ -124,6 +125,9 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                             extra_repositories=extra_repositories,
                             dep_server_url=dep_server_url,
                         )
+                except ChangelogNotEditable as e:
+                    raise BuildFailure(
+                        "build-changelog-not-editable", str(e))
                 except MissingUpstreamTarball:
                     raise BuildFailure(
                         "build-missing-upstream-source", "unable to find upstream source",

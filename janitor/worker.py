@@ -303,8 +303,8 @@ class DebianTarget(Target):
 
         logging.info('Running %r', argv)
         # TODO(jelmer): This is only necessary for deb-new-upstream
-        dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist' % (
-            ':'.join(sys.path), sys.executable)
+        dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist --log-directory=%s ' % (
+            ':'.join(sys.path), sys.executable, log_directory)
 
         try:
             dist_command = "SCHROOT=%s %s" % (self.env["CHROOT"], dist_command)
