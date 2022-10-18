@@ -8,8 +8,7 @@ StartLimitBurst=3
 User={{ janitor_user }}
 Type=simple
 WorkingDirectory={{ janitor_code_path }}
-EnvironmentFile={{ janitor_home }}/env
-ExecStart=python3 -m ognibuild.dep_server --listen-address={{ ognibuild_dep_address }} --port={{ ognibuild_dep_port }}
+ExecStart={{ janitor_venv }}/bin/python -m ognibuild.dep_server --listen-address={{ ognibuild_dep_address }} --port={{ ognibuild_dep_port }}
 
 Restart=on-failure
 RestartSec=600s
