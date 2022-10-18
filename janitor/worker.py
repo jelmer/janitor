@@ -495,7 +495,7 @@ def import_branches_bzr(
         if update_current:
             local_branch.push(target_branch, overwrite=True)
         else:
-            target_branch.repository.fetch(revision_id=local_branch.last_revision()))
+            target_branch.repository.fetch(revision_id=local_branch.last_revision())
 
         target_branch.tags.set_tag(log_id, local_branch.last_revision())
 
@@ -1031,7 +1031,7 @@ def run_worker(
                     if vcs_type.lower() == "git":
                         import_branches_git(
                             target_repo_url, ws.local_tree.branch,
-                            campaign, run_id, result.branches, result.tags
+                            campaign, run_id, result.branches, result.tags,
                             update_current=True
                         )
                     elif vcs_type.lower() == "bzr":

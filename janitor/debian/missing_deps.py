@@ -22,7 +22,7 @@ from typing import Optional, List, Union
 import apt_pkg
 from debian.changelog import Version
 
-from lintian_brush.debianize import find_upstream, UpstreamInfo
+from ognibuild.upstream import find_upstream, UpstreamInfo
 from ognibuild.requirements import Requirement
 from ognibuild.resolver.dep_server import resolve_apt_requirement_dep_server
 from ognibuild.resolver.apt import resolve_requirement_apt

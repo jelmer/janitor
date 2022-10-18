@@ -34,7 +34,10 @@ import asyncpg
 
 from breezy.revision import NULL_REVISION
 
-from ognibuild.debian.fix_build import BUILD_LOG_FILENAME
+try:
+    from ognibuild.build import BUILD_LOG_FILENAME
+except ImportError:
+    BUILD_LOG_FILENAME = 'build.log'
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor.queue import Queue
