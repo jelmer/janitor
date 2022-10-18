@@ -6,39 +6,21 @@
       - sudo
       - git
       - make
-      - python3-aiohttp
-      - python3-aiodns
-      - python3-aioredis
-      - python3-configobj
-      - python3-debian
-      - python3-protobuf
-      - python3-iso8601
       - protobuf-compiler
       - python3-gpg
       - gnupg2
       - python3-pip
-      - python3-yaml
-      - python3-tqdm
-      - python3-launchpadlib
-      - python3-distro-info
-      - python3-patiencediff
       - java-propose-classpath
       - cython3
       - python3-all-dev
-      - python3-asyncpg
-      - python3-marshmallow
+      - python3-wheel
       - rustc
       - cargo
-- name: Install required dependencies (pip)
-  pip:
-    name:
-      - mypy-protobuf
-      - aiohttp-openmetrics
-      - git+https://github.com/maximdanilchenko/aiohttp-apispec
-      - git+https://salsa.debian.org/python-debian-team/python-debian
-      - aiozipkin
-      - setuptools-rust
-      - fastbencode
+      - python3-venv
+      - python3-levenshtein
+      - swig
+      - libssl-dev
+      - cmake
 - name: Create janitor user
   user:
     name: "{{ janitor_user }}"
@@ -53,23 +35,21 @@
     force: yes
   become: yes
   become_user: "{{ janitor_static_owner }}"
-- name: Build protobuf
-  make:
-    chdir: "{{ janitor_code_path }}"
-  become: yes
-  become_user: "{{ janitor_static_owner }}"
-- name: Build C extensions for Breezy
-  make:
-    chdir: "{{ janitor_code_path }}/breezy"
-    params:
-      # libgit2 has an unstable API, and that leads to segfaults.
-      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-  become: yes
-  become_user: "{{ janitor_static_owner }}"
-- name: Build C extensions for Dulwich
-  make:
-    chdir: "{{ janitor_code_path }}/dulwich"
-  become: yes
+- name: Install prerequisites (pip)
+  pip:
+    name:
+      - setuptools-rust
+      - breezy@git+https://github.com/breezy-team/breezy
+      - wheel
+    virtualenv_command: python3 -m venv --system-site-packages
+    virtualenv: "{{ janitor_venv }}"
+- name: Install required dependencies (pip)
+  pip:
+    name:
+      - "{{ janitor_code_path }}"
+    virtualenv_command: python3 -m venv --system-site-packages
+    virtualenv: "{{ janitor_venv }}"
+  become: "yes"
   become_user: "{{ janitor_static_owner }}"
 - name: janitor.conf configuration
   template:
@@ -80,11 +60,6 @@
   copy:
     src: "{{ janitor_local_proposal_template_path }}"
     dest: "{{ janitor_home }}/proposal-templates"
-- name: env file
-  template:
-    src: env
-    dest: "{{ janitor_home }}/env"
-    owner: "{{ janitor_static_owner }}"
 - name: postgresql credentials
   template:
     src: pgpass
@@ -99,13 +74,6 @@
   with_items:
     - .config
     - .config/breezy
-    - .config/breezy/plugins
-- name: Breezy Debian installation
-  file:
-    src: "{{ janitor_code_path }}/breezy-debian"
-    dest: "{{ janitor_home }}/.config/breezy/plugins/debian"
-    owner: "{{ janitor_user }}"
-    state: link
 - name: Breezy Identity
   command: "{{ janitor_code_path }}/breezy/brz whoami '{{ janitor_fullname }} <{{ janitor_email }}>'"
   become: yes
