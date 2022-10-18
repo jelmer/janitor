@@ -7,8 +7,7 @@ StartLimitBurst=3
 User={{ janitor_user }}
 Type=simple
 WorkingDirectory={{ janitor_code_path }}
-EnvironmentFile={{ janitor_home }}/env
-ExecStart=python3 -m janitor.publish \
+ExecStart={{ janitor_venv }}/bin/python -m janitor.publish \
 	{% if janitor_publish_require_binary_diff %}--require-binary-diff {% endif %} \
 	--listen-address={{ janitor_publish_address }} \
 	--port={{ janitor_publish_port }} \

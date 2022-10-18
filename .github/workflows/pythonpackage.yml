@@ -29,7 +29,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
-          sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel
+          sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel libpcre3-dev
           python -m pip install --upgrade pip setuptools setuptools-protobuf wheel mypy-protobuf
           pip install -U -e .[dev]
           python setup.py develop

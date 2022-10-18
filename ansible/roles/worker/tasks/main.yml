@@ -8,19 +8,11 @@
 - name: Install lintian-brush dependencies
   apt:
     package:
-      - python3-ruamel.yaml
-      - python3-iniparse
-      - python3-toml
-      - python3-docutils
-      - python3-markdown
-      - python3-lxml
-      - python3-semver
       - devscripts
       - quilt
       - gnome-pkg-tools
       - schroot
-      - python3-bs4
-    state: present
+      - libpcre3-dev
 - stat:
     path: "{{ janitor_chroot_base }}/{{ item['chroot'] }}"
   register: sbuild
@@ -33,12 +25,6 @@
   command: sbuild-update -udcar "{{ item.item['chroot'] }}"
   with_items: "{{ sbuild.results }}"
   when: item.stat.exists
-- name: Install requirement-parser
-  pip:
-    name: requirements-parser
-- name: Install python-pcre
-  pip:
-    name: python-pcre
 - name: Update schroot from cron job
   cron:
     name: "update schroot for {{ item['name'] }}"
