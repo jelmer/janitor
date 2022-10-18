@@ -316,10 +316,10 @@ class SlowStartRateLimiter(RateLimiter):
         self._open_mps_per_maintainer[maintainer_email] += 1
 
     def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
-        self._open_mps_per_maintainer = mps_per_maintainer.get("open")
+        self._open_mps_per_maintainer = mps_per_maintainer.get("open", {})
         ms: Dict[str, int] = {}
         for status in ['merged', 'applied']:
-            for m, c in mps_per_maintainer.get(status).items():
+            for m, c in mps_per_maintainer.get(status, {}).items():
                 ms.setdefault(m, 0)
                 ms[m] += c
         self._absorbed_mps_per_maintainer = ms
