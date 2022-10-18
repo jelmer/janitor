@@ -43,10 +43,6 @@ from breezy.git.remote import RemoteGitError
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
 from breezy.transport import Transport, get_transport_from_url
-from lintian_brush.vcs import (
-    determine_browser_url,
-    unsplit_vcs_url,
-)
 from dulwich.objects import ZERO_SHA
 from silver_platter.utils import (
     open_branch,
@@ -557,13 +553,12 @@ def get_vcs_managers_from_config(config) -> Dict[str, VcsManager]:
 
 
 def bzr_to_browse_url(url: str) -> Optional[str]:
-    # TODO(jelmer): Use browse_url_from_repo_url from upstream_ontologist.vcs ?
+    from upstream_ontologist.vcs import browse_url_from_repo_url
     (url, params) = urlutils.split_segment_parameters(url)
     branch = params.get("branch")
     if branch:
         branch = urllib.parse.unquote(branch)
-    deb_vcs_url = unsplit_vcs_url(url, branch)
-    return determine_browser_url(None, deb_vcs_url)
+    return browse_url_from_repo_url(url, branch=branch)
 
 
 def is_authenticated_url(url: str):
