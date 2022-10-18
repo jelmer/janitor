@@ -1675,8 +1675,8 @@ class QueueProcessor(object):
 @routes.get("/queue/position", name="queue-position")
 async def handle_queue_position(request):
     span = aiozipkin.request_span(request)
-    package = request.match_info['package']
-    campaign = request.match_info['campaign']
+    package = request.query['package']
+    campaign = request.query['campaign']
     async with request.app['queue_processor'].database.acquire() as conn:
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
