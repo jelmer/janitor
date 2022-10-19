@@ -21,9 +21,10 @@ import sys
 import traceback
 from typing import Optional, List, Any
 
-from ognibuild.build import run_build
+from ognibuild.build import run_build, BUILD_LOG_FILENAME
 from ognibuild.test import run_test
 from ognibuild.buildlog import InstallFixer
+from ognibuild.logs import DirectoryLogManager
 from ognibuild.session import SessionSetupFailure
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
@@ -71,12 +72,18 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
             session.chdir(os.path.join(internal_dir, subpath))
             try:
                 try:
-                    run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                    run_build(session, buildsystems=bss, resolver=resolver,
+                              fixers=fixers, log_manager=DirectoryLogManager(
+                                  os.path.join(output_directory, BUILD_LOG_FILENAME),
+                                  'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
                     raise BuildFailure('build-action-unknown', str(e))
                 try:
-                    run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                    run_test(session, buildsystems=bss, resolver=resolver,
+                             fixers=fixers, log_manager=DirectoryLogManager(
+                                 os.path.join(output_directory, 'test.log'),
+                                 'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
                     raise BuildFailure('test-action-unknown', str(e))

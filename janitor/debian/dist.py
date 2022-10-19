@@ -152,23 +152,19 @@ if __name__ == '__main__':
             packaging_debian_path = None
 
         try:
-            if version:
-                # TODO(jelmer): Shouldn't include backend-specific code here
-                os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
-
             target_dir = os.path.abspath(
                 os.path.join(args.directory, args.target_dir))
 
             if args.log_directory:
                 log_manager = DirectoryLogManager(
                     os.path.join(args.log_directory, DIST_LOG_FILENAME),
-                    mode='copy')
+                    mode='redirect')
             else:
                 log_manager = NoLogManager()
 
             try:
                 dist(session, export_directory, reldir, target_dir,
-                     log_manager=log_manager)
+                     version=version, log_manager=log_manager)
             except NotImplementedError:
                 sys.exit(2)
             except NoBuildToolsFound:
