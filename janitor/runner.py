@@ -1873,9 +1873,23 @@ async def handle_codebases(request):
 
     codebases = []
     for entry in await request.json():
+        if 'branch_url' in entry:
+            entry['url'], params = urlutils.split_segment_parameters(
+                entry['branch_url'])
+            if 'branch' in params:
+                entry['branch'] = urlutils.unescape(params['branch'])
+        else:
+            if 'branch' in entry:
+                entry['branch_url'] = urlutils.join_segment_parameters(
+                    entry['url'], {'branch': urlutils.escape(entry['branch'])})
+            else:
+                entry['branch_url'] = entry['url']
+
         codebases.append((
             entry.get('name'),
             entry['branch_url'],
+            entry['url'],
+            entry.get('branch'),
             entry.get('subpath'),
             entry.get('vcs_type'),
             entry.get('vcs_last_revision'),
@@ -1886,13 +1900,15 @@ async def handle_codebases(request):
         # steal its name
         await conn.executemany(
             "INSERT INTO codebase "
-            "(name, branch_url, subpath, vcs_type, vcs_last_revision, value) "
-            "VALUES ($1, $2, $3, $4, $5, $6)"
+            "(name, branch_url, url, branch, subpath, vcs_type, "
+            "vcs_last_revision, value) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
             "ON CONFLICT (name) DO UPDATE SET "
             "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
             "vcs_type = EXCLUDED.vcs_type, "
             "vcs_last_revision = EXCLUDED.vcs_last_revision, "
-            "value = EXCLUDED.value",
+            "value = EXCLUDED.value, url = EXCLUDED.url, "
+            "branch = EXCLUDED.branch",
             codebases)
 
     return web.json_response({})
