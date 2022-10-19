@@ -9,7 +9,9 @@ CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]
 CREATE TABLE IF NOT EXISTS codebase (
    -- Name is intentionally optional
    name codebase_name,
-   branch_url text not null,
+   branch_url text not null, -- DEPRECATED
+   url text not null,
+   branch text,
    -- the subpath may be unknown; it should be an empty string if it's the root
    -- path.
    subpath text,

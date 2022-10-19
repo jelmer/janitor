@@ -25,16 +25,6 @@ from google.protobuf import text_format  # type: ignore
 
 from breezy.git.mapping import default_mapping
 
-from silver_platter.debian import (
-    convert_debian_vcs_url,
-)
-from debmutate.vcs import (
-    split_vcs_url,
-    unsplit_vcs_url,
-)
-from upstream_ontologist.vcs import (
-    find_public_repo_url,
-)
 from breezy import urlutils
 
 from . import state
@@ -67,7 +57,7 @@ async def update_package_metadata(
                 package.name,
                 distribution,
                 branch_url if branch_url else None,
-                subpath if subpath else None,
+                package.subpath if package.subpath else None,
                 package.maintainer_email if package.maintainer_email else None,
                 package.uploader_email if package.uploader_email else [],
                 package.archive_version if package.archive_version else None,
@@ -85,19 +75,22 @@ async def update_package_metadata(
             codebases.append((
                 package.name,
                 branch_url,
-                subpath if subpath else None,
+                package.repository_url,
+                package.branch,
+                package.subpath,
                 package.vcs_type.lower() if package.vcs_type else None,
                 vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
                 package.insts))
     await conn.executemany(
         "INSERT INTO codebase "
-        "(name, branch_url, subpath, vcs_type, vcs_last_revision, value) "
-        "VALUES ($1, $2, $3, $4, $5, $6)"
+        "(name, branch_url, url, branch, subpath, vcs_type, "
+        "vcs_last_revision, value) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
         "vcs_type = EXCLUDED.vcs_type, "
         "vcs_last_revision = EXCLUDED.vcs_last_revision, "
-        "value = EXCLUDED.value",
+        "value = EXCLUDED.value, url = EXCLUDED.url, branch = EXCLUDED.branch",
         codebases
     )
     await conn.executemany(
