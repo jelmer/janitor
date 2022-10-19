@@ -86,7 +86,7 @@ from . import (
     state,
 )
 from .compat import to_thread
-from .config import read_config, get_campaign_config, Campaign
+from .config import read_config, get_campaign_config, Campaign, Config
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
@@ -513,8 +513,8 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 
 async def consider_publish_run(
-        conn, config, template_env_path,
-        vcs_managers, maintainer_rate_limiter, external_url, differ_url,
+        conn: asyncpg.Connection, config: Config, template_env_path: str,
+        vcs_managers, maintainer_rate_limiter, external_url: str, differ_url: str,
         redis,
         run, maintainer_email,
         unpublished_branches, command,
@@ -559,7 +559,7 @@ async def consider_publish_run(
             run.id)
         missing_branch_url_count.inc()
         return {}
-    actual_modes = {}
+    actual_modes: Dict[str, Optional[str]] = {}
     for (
         role,
         remote_name,
@@ -581,22 +581,10 @@ async def consider_publish_run(
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
-            conn,
-            campaign_config,
-            template_env_path,
-            maintainer_rate_limiter,
-            vcs_managers,
-            run,
-            role,
-            maintainer_email,
-            run.branch_url,
-            redis,
-            publish_mode,
-            max_frequency_days,
-            command,
-            dry_run=dry_run,
-            external_url=external_url,
-            differ_url=differ_url,
+            conn, campaign_config, template_env_path, maintainer_rate_limiter,
+            vcs_managers, run, role, maintainer_email, run.branch_url,
+            redis, publish_mode, max_frequency_days, command, dry_run=dry_run,
+            external_url=external_url, differ_url=differ_url,
             require_binary_diff=require_binary_diff,
             force=False,
             requestor="publisher (publish pending)",
@@ -933,11 +921,11 @@ async def store_publish(
 
 
 async def publish_from_policy(
-    conn,
+    conn: asyncpg.Connection,
     campaign_config: Campaign,
-    template_env_path,
-    maintainer_rate_limiter,
-    vcs_managers,
+    template_env_path: str,
+    maintainer_rate_limiter: RateLimiter,
+    vcs_managers: Dict[str, VcsManager],
     run: state.Run,
     role: str,
     maintainer_email: str,
@@ -1157,7 +1145,7 @@ def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bo
 
 
 async def publish_and_store(
-    db,
+    db: asyncpg.Connection,
     redis,
     campaign_config: Campaign,
     template_env_path: str,

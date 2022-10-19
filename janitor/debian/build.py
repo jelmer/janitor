@@ -158,6 +158,9 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                             if actions:
                                 logging.info('Suggesting follow-up actions: %r', actions)
                         else:
+                            logging.info(
+                                'Unable to convert error to upstream requirement: %r',
+                                e.error)
                             actions = None
                     raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions)
                 except UnidentifiedDebianBuildError as e:
