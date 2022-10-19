@@ -41,6 +41,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	gpg \
 	debhelper \
 	decopy \
+	postgresql-common \
 	&& apt clean \
 	&& make -C /code \
 	&& pip3 install "/code[gcp,debian]" \
