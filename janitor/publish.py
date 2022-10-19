@@ -86,7 +86,7 @@ from . import (
     state,
 )
 from .compat import to_thread
-from .config import read_config, get_campaign_config, Campaign
+from .config import read_config, get_campaign_config, Campaign, Config
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
@@ -559,7 +559,7 @@ async def consider_publish_run(
             run.id)
         missing_branch_url_count.inc()
         return {}
-    actual_modes = {}
+    actual_modes: Dict[str, Optional[str]] = {}
     for (
         role,
         remote_name,
