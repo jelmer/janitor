@@ -124,8 +124,10 @@ async def update_package_metadata(
         "(name, distribution, branch_url, subpath, maintainer_email, "
         "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
         "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
-        "removed, in_base, origin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15, $16, $17) ON CONFLICT (name, distribution) DO UPDATE SET "
+        "removed, in_base, origin) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+        "$13, $14, $15, $16, $17) "
+        "ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
         "maintainer_email = EXCLUDED.maintainer_email, "
@@ -154,7 +156,8 @@ async def update_package_metadata(
     )
 
 
-async def mark_removed_packages(conn, distribution: str, removals: List[PackageRemoval]):
+async def mark_removed_packages(
+        conn, distribution: str, removals: List[PackageRemoval]):
     existing_packages = set([
         row['name'] for row in await conn.fetch(
             "SELECT name FROM package WHERE NOT removed")])
@@ -165,12 +168,14 @@ WHERE name = $1 AND distribution = $2 AND archive_version <= $3
 """
     await conn.executemany(
         query, [
-            (removal.name, distribution, Version(removal.version) if removal.version else None)
+            (removal.name, distribution, Version(removal.version)
+                if removal.version else None)
             for removal in removals
             if removal.name in existing_packages])
 
 
-def iter_packages_from_script(stdin) -> Tuple[Sequence[PackageMetadata], Sequence[PackageRemoval]]:
+def iter_packages_from_script(stdin) -> Tuple[
+        Sequence[PackageMetadata], Sequence[PackageRemoval]]:
     package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
@@ -199,7 +204,8 @@ async def main():
         help="Distribution to import metadata for.",
     )
 
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
     if args.gcp_logging:
