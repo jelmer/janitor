@@ -9,7 +9,9 @@ CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]
 CREATE TABLE IF NOT EXISTS codebase (
    -- Name is intentionally optional
    name codebase_name,
-   branch_url text not null,
+   branch_url text not null, -- DEPRECATED
+   url text not null,
+   branch text,
    -- the subpath may be unknown; it should be an empty string if it's the root
    -- path.
    subpath text,
@@ -636,8 +638,9 @@ CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
    distribution distribution_name not null,
 
-   -- TODO(jelmer): Move these to codebase
    codebase text references codebase(name),
+
+   -- TODO(jelmer): Move these to codebase
    vcs_type vcs_type,
    branch_url text,
    subpath text,
