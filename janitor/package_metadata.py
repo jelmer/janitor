@@ -106,7 +106,8 @@ async def update_package_metadata(
                 package.insts,
                 package.removed,
                 package.in_base,
-                package.origin
+                package.origin,
+                package.name
             )
         )
         if branch_url is not None:
@@ -117,16 +118,28 @@ async def update_package_metadata(
                     subpath if subpath else None,
                     package.vcs_type.lower() if package.vcs_type else None,
                     vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
+                    package.insts,
                 )
             )
+    await conn.executemany(
+        "INSERT INTO codebase "
+        "(name, branch_url, subpath, vcs_type, vcs_last_revision, value) "
+        "VALUES ($1, $2, $3, $4, $5, $6)"
+        "ON CONFLICT (name) DO UPDATE SET "
+        "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
+        "vcs_type = EXCLUDED.vcs_type, "
+        "vcs_last_revision = EXCLUDED.vcs_last_revision, "
+        "value = EXCLUDED.value",
+        codebases
+    )
     await conn.executemany(
         "INSERT INTO package "
         "(name, distribution, branch_url, subpath, maintainer_email, "
         "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
         "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
-        "removed, in_base, origin) "
+        "removed, in_base, origin, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15, $16, $17) "
+        "$13, $14, $15, $16, $17, #18) "
         "ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
@@ -141,18 +154,9 @@ async def update_package_metadata(
         "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
         "removed = EXCLUDED.removed, "
-        "in_base = EXCLUDED.in_base",
+        "in_base = EXCLUDED.in_base, "
+        "codebase = EXCLUDED.codebase",
         packages,
-    )
-    await conn.executemany(
-        "INSERT INTO codebase "
-        "(name, branch_url, subpath, vcs_type, vcs_last_revision) "
-        "VALUES ($1, $2, $3, $4, $5)"
-        "ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
-        "vcs_type = EXCLUDED.vcs_type, "
-        "vcs_last_revision = EXCLUDED.vcs_last_revision ",
-        codebases
     )
 
 
