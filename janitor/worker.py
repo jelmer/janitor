@@ -339,9 +339,9 @@ class DebianTarget(Target):
                 transient=False,
                 stage=("codemod", ))
         except DebianDetailedFailure as e:
+            stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
-                e.result_code, e.description, e.details,
-                stage=("codemod", ))
+                e.result_code, e.description, e.details, stage=stage)
         except ScriptFailed as e:
             raise _convert_codemod_script_failed(e)
         except MemoryError as e:
@@ -399,8 +399,9 @@ class GenericTarget(Target):
                 'nothing-to-do', 'No changes made', stage=("codemod", ),
                 transient=False)
         except GenericDetailedFailure as e:
+            stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=("codemod", ))
+                e.result_code, e.description, e.details, stage=stage)
         except ScriptFailed as e:
             raise _convert_codemod_script_failed(e)
 
