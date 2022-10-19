@@ -1873,24 +1873,42 @@ async def handle_codebases(request):
 
     codebases = []
     for entry in await request.json():
+        if 'branch_url' in entry:
+            entry['url'], params = urlutils.split_segment_parameters(
+                entry['branch_url'])
+            if 'branch' in params:
+                entry['branch'] = urlutils.unescape(params['branch'])
+        else:
+            if 'branch' in entry:
+                entry['branch_url'] = urlutils.join_segment_parameters(
+                    entry['url'], {'branch': urlutils.escape(entry['branch'])})
+            else:
+                entry['branch_url'] = entry['url']
+
         codebases.append((
             entry.get('name'),
             entry['branch_url'],
+            entry['url'],
+            entry.get('branch'),
             entry.get('subpath'),
             entry.get('vcs_type'),
-            entry.get('vcs_last_revision')))
+            entry.get('vcs_last_revision'),
+            entry.get('value')))
 
     async with queue_processor.database.acquire() as conn:
         # TODO(jelmer): When a codebase with a certain name already exists,
         # steal its name
         await conn.executemany(
             "INSERT INTO codebase "
-            "(name, branch_url, subpath, vcs_type, vcs_last_revision) "
-            "VALUES ($1, $2, $3, $4, $5)"
+            "(name, branch_url, url, branch, subpath, vcs_type, "
+            "vcs_last_revision, value) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
             "ON CONFLICT (name) DO UPDATE SET "
             "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
             "vcs_type = EXCLUDED.vcs_type, "
-            "vcs_last_revision = EXCLUDED.vcs_last_revision ",
+            "vcs_last_revision = EXCLUDED.vcs_last_revision, "
+            "value = EXCLUDED.value, url = EXCLUDED.url, "
+            "branch = EXCLUDED.branch",
             codebases)
 
     return web.json_response({})
@@ -2292,6 +2310,7 @@ async def handle_ready(request):
 
 @routes.post("/active-runs/{run_id}/finish", name="finish")
 async def handle_finish(request):
+    span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
@@ -2308,22 +2327,23 @@ async def handle_finish(request):
 
     filenames = []
     with tempfile.TemporaryDirectory() as output_directory:
-        while True:
-            part = await reader.next()
-            if part is None:
-                break
-            if part.filename == "result.json":
-                worker_result = WorkerResult.from_json(await part.json())
-            elif part.filename is None:
-                return web.json_response(
-                    {"reason": "Part without filename", "headers": dict(part.headers)},
-                    status=400,
-                )
-            else:
-                filenames.append(part.filename)
-                output_path = os.path.join(output_directory, part.filename)
-                with open(output_path, "wb") as f:
-                    f.write(await part.read())
+        with span.new_child('read-files'):
+            while True:
+                part = await reader.next()
+                if part is None:
+                    break
+                if part.filename == "result.json":
+                    worker_result = WorkerResult.from_json(await part.json())
+                elif part.filename is None:
+                    return web.json_response(
+                        {"reason": "Part without filename", "headers": dict(part.headers)},
+                        status=400,
+                    )
+                else:
+                    filenames.append(part.filename)
+                    output_path = os.path.join(output_directory, part.filename)
+                    with open(output_path, "wb") as f:
+                        f.write(await part.read())
 
         if worker_result is None:
             return web.json_response({"reason": "Missing result JSON"}, status=400)
@@ -2333,7 +2353,8 @@ async def handle_finish(request):
         if worker_name is None:
             worker_name = worker_result.worker_name
 
-        logfiles = list(gather_logs(output_directory))
+        with span.new_child('gather-logs'):
+            logfiles = list(gather_logs(output_directory))
 
         logfilenames = [entry.name for entry in logfiles]
 
@@ -2352,45 +2373,48 @@ async def handle_finish(request):
             change_set=active_run.change_set,
         )
 
-        await import_logs(
-            logfiles,
-            queue_processor.logfile_manager,
-            queue_processor.backup_logfile_manager,
-            active_run.package,
-            run_id,
-            mtime=result.finish_time.timestamp(),
-        )
+        with span.new_child('import-logs'):
+            await import_logs(
+                logfiles,
+                queue_processor.logfile_manager,
+                queue_processor.backup_logfile_manager,
+                active_run.package,
+                run_id,
+                mtime=result.finish_time.timestamp(),
+            )
 
         if result.builder_result is not None:
             result.builder_result.from_directory(output_directory)
 
             artifact_names = result.builder_result.artifact_filenames()
-            try:
-                await store_artifacts_with_backup(
-                    queue_processor.artifact_manager,
-                    queue_processor.backup_artifact_manager,
-                    output_directory,
-                    run_id,
-                    artifact_names,
-                )
-            except BaseException as e:
-                result.code = "artifact-upload-failed"
-                result.description = str(e)
-                artifact_upload_failed_count.inc()
-                # TODO(jelmer): Mark ourselves as unhealthy?
-                artifact_names = None
+            with span.new_child('upload-artifacts-with-backup'):
+                try:
+                    await store_artifacts_with_backup(
+                        queue_processor.artifact_manager,
+                        queue_processor.backup_artifact_manager,
+                        output_directory,
+                        run_id,
+                        artifact_names,
+                    )
+                except BaseException as e:
+                    result.code = "artifact-upload-failed"
+                    result.description = str(e)
+                    artifact_upload_failed_count.inc()
+                    # TODO(jelmer): Mark ourselves as unhealthy?
+                    artifact_names = None
         else:
             artifact_names = None
 
-    try:
-        await queue_processor.finish_run(active_run, result)
-    except RunExists as e:
-        return web.json_response(
-            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
-             "logs": logfilenames,
-             "result": result.json(), 'reason': str(e)},
-            status=409,
-        )
+    with span.new_child('finish-run'):
+        try:
+            await queue_processor.finish_run(active_run, result)
+        except RunExists as e:
+            return web.json_response(
+                {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
+                 "logs": logfilenames,
+                 "result": result.json(), 'reason': str(e)},
+                status=409,
+            )
 
     # TODO(jelmer): Set Location header to something; /runs/{run_id}= ?
     return web.json_response(

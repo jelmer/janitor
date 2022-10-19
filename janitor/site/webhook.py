@@ -150,37 +150,39 @@ async def process_webhook(request, db):
         return web.Response(
             status=415, text="Invalid content type %s" % request.content_type
         )
-    async with db.acquire() as conn:
-        if "X-Gitlab-Event" in request.headers:
-            if request.headers["X-Gitlab-Event"] != "Push Hook":
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_gitlab_webhook(body)
-            # TODO(jelmer: If nothing found, then maybe fall back to
-            # urlutils.basename(body['project']['path_with_namespace'])?
-        elif "X-GitHub-Event" in request.headers:
-            if request.headers["X-GitHub-Event"] not in ("push", ):
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_github_webhook(body)
-        elif "X-Gitea-Event" in request.headers:
-            if request.headers["X-Gitea-Event"] not in ("push", ):
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_github_webhook(body)
-        elif "X-Gogs-Event" in request.headers:
-            if request.headers["X-Gogs-Event"] not in ("push", ):
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_github_webhook(body)
-        elif "X-Launchpad-Event-Type" in request.headers:
-            if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
-                return web.json_response({}, status=200)
-            if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
-                urls = get_bzr_branch_urls_from_launchpad_webhook(body)
-            elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
-                urls = get_git_branch_urls_from_launchpad_webhook(body)
-            else:
-                return web.json_response({}, status=200)
+    if "X-Gitlab-Event" in request.headers:
+        if request.headers["X-Gitlab-Event"] != "Push Hook":
+            return web.json_response({}, status=200)
+        urls = get_branch_urls_from_gitlab_webhook(body)
+        # TODO(jelmer: If nothing found, then maybe fall back to
+        # urlutils.basename(body['project']['path_with_namespace'])?
+    elif "X-GitHub-Event" in request.headers:
+        if request.headers["X-GitHub-Event"] not in ("push", ):
+            return web.json_response({}, status=200)
+        urls = get_branch_urls_from_github_webhook(body)
+    elif "X-Gitea-Event" in request.headers:
+        if request.headers["X-Gitea-Event"] not in ("push", ):
+            return web.json_response({}, status=200)
+        urls = get_branch_urls_from_github_webhook(body)
+    elif "X-Gogs-Event" in request.headers:
+        if request.headers["X-Gogs-Event"] not in ("push", ):
+            return web.json_response({}, status=200)
+        urls = get_branch_urls_from_github_webhook(body)
+    elif "X-Launchpad-Event-Type" in request.headers:
+        if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
+            return web.json_response({}, status=200)
+        if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
+            urls = get_bzr_branch_urls_from_launchpad_webhook(body)
+        elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
+            urls = get_git_branch_urls_from_launchpad_webhook(body)
         else:
-            return web.Response(status=400, text="Unrecognized webhook")
+            return web.json_response({}, status=200)
+    else:
+        return web.Response(status=400, text="Unrecognized webhook")
 
+    # TODO(jelmer): Update codebases to new git sha
+
+    async with db.acquire() as conn:
         rescheduled = {}
         package = await get_package_by_branch_url(conn, urls)
         if package is not None:

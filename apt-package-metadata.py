@@ -23,7 +23,7 @@ import gzip
 from janitor.package_metadata_pb2 import PackageList
 from typing import List, Optional
 from email.utils import parseaddr
-from breezy.plugins.debian.directory import source_package_vcs
+from debmutate.vcs import source_package_vcs, split_vcs_url
 
 
 def extract_uploader_emails(uploaders: Optional[str]) -> List[str]:
@@ -69,12 +69,12 @@ async def main():
         "--override-vcs-type", type=str, help="Override VCS Type.")
     parser.add_argument("--package", type=str, action='append')
     parser.add_argument(
-        "--override-vcs-url",
+        "--override-repository-url",
         type=str,
         help="Override VCS URL; replace $PACKAGE variable.",
     )
     parser.add_argument(
-        "--override-vcs-browser",
+        "--override-browse-url",
         type=str,
         help="Override VCS Browser URL; replace $PACKAGE variable.",
     )
@@ -100,27 +100,25 @@ async def main():
                     and package.maintainer_email not in args.maintainer):
                 continue
             package.uploader_email.extend(
-                extract_uploader_emails(source.get("Uploaders"))
-            )
+                extract_uploader_emails(source.get("Uploaders")))
             try:
                 (vcs_type, vcs_url) = source_package_vcs(source)
             except KeyError:
                 pass
             else:
                 package.vcs_type = vcs_type
-                package.vcs_url = vcs_url
+                (package.repository_url, package.branch,
+                 package.subpath) = split_vcs_url(vcs_url)
             if "Vcs-Browser" in source:
-                package.vcs_browser = source["Vcs-Browser"]
+                package.browse_url = source["Vcs-Browser"]
             if args.override_vcs_type:
                 package.vcs_type = args.override_vcs_type
-            if args.override_vcs_url:
-                package.vcs_url = args.override_vcs_url.replace(
-                    "$PACKAGE", source["Package"]
-                )
-            if args.override_vcs_browser:
-                package.vcs_browser = args.override_vcs_browser.replace(
-                    "$PACKAGE", source["Package"]
-                )
+            if args.override_repository_url:
+                package.repository_url = args.override_repository_url.replace(
+                    "$PACKAGE", source["Package"])
+            if args.override_browse_url:
+                package.browse_url = args.override_browse_url.replace(
+                    "$PACKAGE", source["Package"])
             package.in_base = ('Original-Maintainer' in source)
             package.archive_version = source["Version"]
             package.removed = False
