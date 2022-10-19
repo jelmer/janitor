@@ -39,11 +39,14 @@ from ognibuild.buildsystem import (
 class BuildFailure(Exception):
     """Building failed."""
 
-    def __init__(self, code: str, description: str,
-                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+    def __init__(self, code: str, description: str, *,
+                 details: Optional[Any] = None,
+                 stage=None,
+                 followup_actions: Optional[List[Any]] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
+        self.stage = stage
         self.followup_actions = followup_actions
 
     def json(self):
@@ -51,6 +54,7 @@ class BuildFailure(Exception):
             "code": self.code,
             "description": self.description,
             'details': self.details,
+            'stage': self.stage,
         }
         if self.followup_actions:
             ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
@@ -78,7 +82,7 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
                                   'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('build-action-unknown', str(e))
+                    raise BuildFailure('build-action-unknown', str(e), stage=('build', ))
                 try:
                     run_test(session, buildsystems=bss, resolver=resolver,
                              fixers=fixers, log_manager=DirectoryLogManager(
@@ -86,7 +90,7 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
                                  'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('test-action-unknown', str(e))
+                    raise BuildFailure('test-action-unknown', str(e), stage=('test', ))
             except NoBuildToolsFound as e:
                 raise BuildFailure('no-build-tools-found', str(e))
             except DetailedFailure as f:
