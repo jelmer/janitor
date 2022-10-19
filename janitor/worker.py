@@ -430,7 +430,8 @@ def _drop_env(command):
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
         branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
-        tags: Optional[Dict[str, bytes]]):
+        tags: Optional[Dict[str, bytes]],
+        update_current: bool = True):
     from breezy.repository import InterRepository
     from dulwich.objects import ZERO_SHA
 
@@ -448,12 +449,16 @@ def import_branches_git(
                 changed_refs[tagname] = (ZERO_SHA, r)
             else:
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
-            branchname = ("refs/heads/%s/%s" % (campaign, fn)).encode("utf-8")
-            # TODO(jelmer): Ideally this would be a symref:
-            changed_refs[branchname] = changed_refs[tagname]
+            if update_current:
+                branchname = ("refs/heads/%s/%s" % (campaign, fn)).encode("utf-8")
+                # TODO(jelmer): Ideally this would be a symref:
+                changed_refs[branchname] = changed_refs[tagname]
         for n, r in (tags or {}).items():
-            tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
+            tagname = ("refs/tas/%s/%s" % (log_id, n)).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+            if update_current:
+                tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
+                changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
 
     inter = InterRepository.get(local_branch.repository, repo)
@@ -466,7 +471,8 @@ def import_branches_git(
     max_tries=5,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_bzr(
-        repo_url: str, local_branch, campaign: str, log_id: str, branches, tags
+        repo_url: str, local_branch, campaign: str, log_id: str, branches, tags,
+        update_current: bool = True
 ):
     from breezy.transport import NoSuchFile, get_transport
     for fn, n, br, r in branches:
@@ -486,7 +492,10 @@ def import_branches_bzr(
         except NotBranchError:
             target_branch = ControlDir.create_branch_convenience(
                 target_branch_path, possible_transports=[transport])
-        local_branch.push(target_branch, overwrite=True)
+        if update_current:
+            local_branch.push(target_branch, overwrite=True)
+        else:
+            target_branch.repository.fetch(revision_id=local_branch.last_revision())
 
         target_branch.tags.set_tag(log_id, local_branch.last_revision())
 
@@ -494,7 +503,9 @@ def import_branches_bzr(
         for name, revision in tags:
             # Only set tags on those branches where the revisions exist
             if graph.is_ancestor(revision, target_branch.last_revision()):
-                target_branch.tags.set_tag(name, revision)
+                target_branch.tags.set_tag('%s/%s' % (log_id, name), revision)
+                if update_current:
+                    target_branch.tags.set_tag(name, revision)
 
 
 @contextmanager
@@ -1020,12 +1031,14 @@ def run_worker(
                     if vcs_type.lower() == "git":
                         import_branches_git(
                             target_repo_url, ws.local_tree.branch,
-                            campaign, run_id, result.branches, result.tags
+                            campaign, run_id, result.branches, result.tags,
+                            update_current=True
                         )
                     elif vcs_type.lower() == "bzr":
                         import_branches_bzr(
                             target_repo_url, ws.local_tree.branch,
-                            campaign, run_id, result.branches, result.tags
+                            campaign, run_id, result.branches, result.tags,
+                            update_current=True
                         )
                     else:
                         raise NotImplementedError
