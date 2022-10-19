@@ -1878,19 +1878,21 @@ async def handle_codebases(request):
             entry['branch_url'],
             entry.get('subpath'),
             entry.get('vcs_type'),
-            entry.get('vcs_last_revision')))
+            entry.get('vcs_last_revision'),
+            entry.get('value')))
 
     async with queue_processor.database.acquire() as conn:
         # TODO(jelmer): When a codebase with a certain name already exists,
         # steal its name
         await conn.executemany(
             "INSERT INTO codebase "
-            "(name, branch_url, subpath, vcs_type, vcs_last_revision) "
-            "VALUES ($1, $2, $3, $4, $5)"
+            "(name, branch_url, subpath, vcs_type, vcs_last_revision, value) "
+            "VALUES ($1, $2, $3, $4, $5, $6)"
             "ON CONFLICT (name) DO UPDATE SET "
             "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
             "vcs_type = EXCLUDED.vcs_type, "
-            "vcs_last_revision = EXCLUDED.vcs_last_revision ",
+            "vcs_last_revision = EXCLUDED.vcs_last_revision, "
+            "value = EXCLUDED.value",
             codebases)
 
     return web.json_response({})
