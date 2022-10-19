@@ -64,7 +64,7 @@ async def update_package_metadata(
                 package.vcs_type.lower() if package.vcs_type else None,
                 package.browse_url,
                 vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
-                package.insts,
+                package.value,
                 package.removed,
                 package.in_base,
                 package.origin,
@@ -80,7 +80,7 @@ async def update_package_metadata(
                 package.subpath,
                 package.vcs_type.lower() if package.vcs_type else None,
                 vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
-                package.insts))
+                package.value))
     await conn.executemany(
         "INSERT INTO codebase "
         "(name, branch_url, url, branch, subpath, vcs_type, "

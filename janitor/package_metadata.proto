@@ -25,6 +25,8 @@ message PackageMetadata {
    optional bool removed = 12 [default=false];
 
    optional string origin = 14;
+
+   optional int32 value = 15;
 };
 
 message PackageRemoval {
