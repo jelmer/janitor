@@ -35,11 +35,7 @@ from debmutate.vcs import (
 from upstream_ontologist.vcs import (
     find_public_repo_url,
 )
-from lintian_brush.vcs import (
-    fixup_broken_git_url,
-    canonicalize_vcs_url,
-    determine_browser_url,
-)
+from breezy import urlutils
 
 from . import state
 from .config import read_config
@@ -54,39 +50,17 @@ async def update_package_metadata(
     codebases = []
     for package in provided_packages:
         vcs_last_revision = None
-        vcs_url = package.vcs_url
-        if package.vcs_type and package.vcs_type.capitalize() == "Git":
-            new_vcs_url = fixup_broken_git_url(vcs_url)
-            if new_vcs_url != vcs_url:
-                logging.info("Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
-                vcs_url = new_vcs_url
+        if package.vcs_type and package.vcs_type.lower() == "git":
             if package.commit_id:
                 vcs_last_revision = default_mapping.revision_id_foreign_to_bzr(
                     package.commit_id.encode("ascii")
                 )
-
-        if package.vcs_type:
-            # Drop the subpath, we're storing it separately.
-            (url, branch, subpath) = split_vcs_url(vcs_url)
-            url = unsplit_vcs_url(url, branch)
-            url = canonicalize_vcs_url(package.vcs_type, url)
-            try:
-                branch_url = convert_debian_vcs_url(package.vcs_type.capitalize(), url)
-            except ValueError as e:
-                logging.info("%s: %s", package.name, e)
-                branch_url = None
-            url = find_public_repo_url(url) or url
+        if package.repository_url and package.branch:
+            branch_url = urlutils.join_segments_parameters(
+                package.repository_url.rstrip('/'),
+                {'branch': urlutils.escape(package.branch)})
         else:
-            subpath = None
-            branch_url = None
-
-        if vcs_url:
-            vcs_browser = determine_browser_url(package.vcs_type, vcs_url)
-        else:
-            vcs_browser = None
-
-        if vcs_browser is None and package.vcs_browser:
-            vcs_browser = package.vcs_browser
+            branch_url = package.repository_url
 
         packages.append(
             (
@@ -98,11 +72,8 @@ async def update_package_metadata(
                 package.uploader_email if package.uploader_email else [],
                 package.archive_version if package.archive_version else None,
                 package.vcs_type.lower() if package.vcs_type else None,
-                vcs_url,
-                vcs_browser,
+                package.browse_url,
                 vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
-                package.vcswatch_status.lower() if package.vcswatch_status else None,
-                package.vcswatch_version if package.vcswatch_version else None,
                 package.insts,
                 package.removed,
                 package.in_base,
@@ -111,16 +82,13 @@ async def update_package_metadata(
             )
         )
         if branch_url is not None:
-            codebases.append(
-                (
-                    package.name,
-                    branch_url,
-                    subpath if subpath else None,
-                    package.vcs_type.lower() if package.vcs_type else None,
-                    vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
-                    package.insts,
-                )
-            )
+            codebases.append((
+                package.name,
+                branch_url,
+                subpath if subpath else None,
+                package.vcs_type.lower() if package.vcs_type else None,
+                vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
+                package.insts))
     await conn.executemany(
         "INSERT INTO codebase "
         "(name, branch_url, subpath, vcs_type, vcs_last_revision, value) "
@@ -135,11 +103,11 @@ async def update_package_metadata(
     await conn.executemany(
         "INSERT INTO package "
         "(name, distribution, branch_url, subpath, maintainer_email, "
-        "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
-        "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
+        "uploader_emails, archive_version, vcs_type, vcs_browse, "
+        "vcs_last_revision, popcon_inst, "
         "removed, in_base, origin, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15, $16, $17, #18) "
+        "$13, $14, $15) "
         "ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
@@ -147,11 +115,8 @@ async def update_package_metadata(
         "uploader_emails = EXCLUDED.uploader_emails, "
         "archive_version = EXCLUDED.archive_version, "
         "vcs_type = EXCLUDED.vcs_type, "
-        "vcs_url = EXCLUDED.vcs_url, "
         "vcs_last_revision = EXCLUDED.vcs_last_revision, "
         "vcs_browse = EXCLUDED.vcs_browse, "
-        "vcswatch_status = EXCLUDED.vcswatch_status, "
-        "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
         "removed = EXCLUDED.removed, "
         "in_base = EXCLUDED.in_base, "
