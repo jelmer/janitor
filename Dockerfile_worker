@@ -36,6 +36,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	protobuf-compiler \
 	ca-certificates \
 	libapt-pkg-dev \
+	libpcre3-dev \
 	&& apt clean \
 	&& make -C /code \
 	&& pip3 install "/code[gcp,debian]" \
