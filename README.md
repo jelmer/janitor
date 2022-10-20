@@ -92,7 +92,7 @@ Docker
 
 Several docker images are provided
 
- * ghcr.io/jelmer/janitor/base - base image, essentially debian:sid-slim with some additional packages installed
+ * ghcr.io/jelmer/janitor/base - base image, essentially debian:testing-slim with some additional packages installed
  * ghcr.io/jelmer/janitor/archive - APT archive generator
  * ghcr.io/jelmer/janitor/differ - diffoscope/debdiff generator
  * ghcr.io/jelmer/janitor/publish - VCS publisher
