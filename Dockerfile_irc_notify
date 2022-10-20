@@ -1,8 +1,8 @@
-FROM docker.io/debian:sid-slim
+FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9918
-RUN apt -y update && apt --no-install-recommends -y install python3.9 python3-pydle python3-aiohttp python3-aiohttp-openmetrics python3-pip && pip3 install google-cloud-logging
+RUN apt -y update && apt --no-install-recommends -y install python3-pip && pip3 install google-cloud-logging pydle aiohttp aiohttp-openmetrics
 ADD notifiers /code/notifiers
 ADD janitor_client /code/janitor_client
 ENV PYTHONPATH=/code
-ENTRYPOINT ["python3.9", "/code/notifiers/irc_notify.py", "--prometheus-port=9918", "--prometheus-listen-address=0.0.0.0"]
+ENTRYPOINT ["python3.10", "/code/notifiers/irc_notify.py", "--prometheus-port=9918", "--prometheus-listen-address=0.0.0.0"]

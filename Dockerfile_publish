@@ -3,4 +3,5 @@ FROM ghcr.io/jelmer/janitor/base:${BASE_TAG}
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9912
 RUN apt update && apt install --no-install-recommends -y openssh-client gnupg
+
 ENTRYPOINT ["python3", "-m", "janitor.publish", "--port=9912", "--listen-address=0.0.0.0"]
