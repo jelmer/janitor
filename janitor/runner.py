@@ -97,9 +97,6 @@ from .artifacts import (
 from .compat import to_thread
 from .config import read_config, get_campaign_config, get_distribution, Config, Campaign
 from .debian import (
-    changes_filenames,
-    find_changes,
-    NoChangesFile,
     dpkg_vendor,
 )
 from .logs import (
@@ -257,6 +254,10 @@ class DebianResult(BuilderResult):
         self.lintian_result = lintian_result
 
     def from_directory(self, path):
+        from .debian import (
+            find_changes,
+            NoChangesFile,
+        )
         try:
             self.output_directory = path
             (
@@ -279,6 +280,7 @@ class DebianResult(BuilderResult):
     def artifact_filenames(self):
         if not self.changes_filenames:
             return []
+        from .debian import changes_filenames
         ret = []
         for changes_filename in self.changes_filenames:
             changes_path = os.path.join(self.output_directory, changes_filename)
