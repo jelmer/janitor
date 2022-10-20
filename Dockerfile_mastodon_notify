@@ -1,4 +1,4 @@
-FROM docker.io/debian:sid-slim
+FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9919
 RUN apt -y update && apt --no-install-recommends -y install python3-mastodon python3-aiohttp python3-aiohttp-openmetrics python3-pip && pip3 install google-cloud-logging
