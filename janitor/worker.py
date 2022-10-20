@@ -646,9 +646,9 @@ def process_package(
                     "worker-clone-http-%s" % e.code, str(e),
                     stage=("setup", "clone"), details={'status-code': e.code})
         except TransportError as e:
-            if "No space left on device" in e.msg:
+            if "No space left on device" in str(e):
                 raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"))
-            if "Temporary failure in name resolution" in e.msg:
+            if "Temporary failure in name resolution" in str(e):
                 raise WorkerFailure(
                     "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
                     transient=True)
