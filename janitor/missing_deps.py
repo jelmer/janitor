@@ -19,6 +19,8 @@ import argparse
 import asyncio
 import logging
 
+from breezy import urlutils
+
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
 from ognibuild.session.plain import PlainSession
@@ -70,11 +72,20 @@ async def schedule_new_package(conn, upstream_info, config, change_set=None, req
         "Creating new upstream %s => %s",
         package, upstream_info['branch_url'])
     vcs_url = unsplit_vcs_url(upstream_info['branch_url'], None, upstream_info.get('subpath'))
+    repo_url, params = urlutils.split_segment_parameters(upstream_info['branch_url'])
+    try:
+        branch = urlutils.unescape(params['branch'])
+    except KeyError:
+        branch = None
+    codebase = await conn.fetchval(
+        "INSERT INTO codebase (name, branch_url, url, branch, subpath) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING name",
+        package, upstream_info['branch_url'], repo_url, branch, upstream_info.get('subpath'))
     await conn.execute(
-        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email, origin, vcs_url) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
+        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email, origin, vcs_url, codebase) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING",
         package, 'upstream', upstream_info['branch_url'], '',
-        'dummy@example.com', origin, vcs_url)
+        'dummy@example.com', origin, vcs_url, codebase)
     # TODO(jelmer): Determine publish policy
     publish_policy = None
     command = get_campaign_config(config, campaign).command
