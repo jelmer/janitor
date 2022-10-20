@@ -20,6 +20,7 @@ import errno
 import logging
 import os
 import sys
+import traceback
 
 from ognibuild.session import SessionSetupFailure
 from ognibuild.dist import (
@@ -196,6 +197,10 @@ if __name__ == '__main__':
             sys.exit(1)
         except DistNoTarball as e:
             report_failure('dist-no-tarball', str(e), e)
+            sys.exit(1)
+        except BaseException as e:
+            traceback.print_exc()
+            report_failure('dist-exception', str(e), e)
             sys.exit(1)
 
     sys.exit(0)
