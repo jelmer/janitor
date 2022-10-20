@@ -68,7 +68,7 @@ async def update_package_metadata(
                 package.removed,
                 package.in_base,
                 package.origin,
-                package.name
+                package.name if branch_url is not None else None,
             )
         )
         if branch_url is not None:
