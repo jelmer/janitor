@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel libpcre3-dev
-          python -m pip install --upgrade pip setuptools setuptools-protobuf wheel mypy-protobuf
+          python -m pip install --upgrade pip setuptools setuptools-protobuf wheel mypy-protobuf \
+            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
           pip install -U -e .[dev]
           python setup.py develop
           make
