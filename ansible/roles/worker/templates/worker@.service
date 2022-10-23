@@ -9,7 +9,8 @@ User={{ janitor_user }}
 Type=simple
 Environment=TMPDIR=/home/janitor/tmp
 Environment=AUTOPKGTEST={{ janitor_code_path }}/autopkgtest-wrapper
-ExecStart={{ janitor_venv }}/bin/python -m janitor.worker --credentials={{ janitor_home }}/credentials.json{% if janitor_site_external_url %} --loop --base-url={{ janitor_site_external_url }}api/ --listen-address={{ janitor_worker_address }}{%+ endif %}
+ExecStart={{ janitor_venv }}/bin/python -m janitor.worker --credentials={{ janitor_home }}/credentials.json{% if janitor_site_external_url %} --loop --base-url={{ janitor_site_external_url }}api/ --listen-address={{ janitor_worker_address }}{%+ endif +%}
+
 Restart=always
 MemoryAccounting=yes
 MemoryHigh=10G
