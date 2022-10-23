@@ -198,6 +198,8 @@ if __name__ == '__main__':
         except DistNoTarball as e:
             report_failure('dist-no-tarball', str(e), e)
             sys.exit(1)
+        except SystemExit:
+            raise
         except BaseException as e:
             traceback.print_exc()
             report_failure('dist-exception', str(e), e)
