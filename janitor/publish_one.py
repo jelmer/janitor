@@ -134,6 +134,7 @@ def publish(
     campaign: str,
     pkg: str,
     commit_message_template: Optional[str],
+    title_template: Optional[str],
     codemod_result: Any,
     mode: str,
     role: str,
@@ -181,6 +182,13 @@ def publish(
         else:
             return None
 
+    def get_proposal_title(existing_proposal):
+        if title_template:
+            template = Template(title_template)
+            return template.render(codemod_result or {})
+        else:
+            return None
+
     with target_branch.lock_read(), source_branch.lock_read():
         try:
             if merge_conflicts(target_branch, source_branch, stop_revision):
@@ -204,7 +212,9 @@ def publish(
             mode,
             derived_branch_name,
             get_proposal_description=get_proposal_description,
-            get_proposal_commit_message=(get_proposal_commit_message),
+            get_proposal_commit_message=get_proposal_commit_message,
+            # TODO(jelmer): Enable this once silver-platter/breezy support it
+            # get_proposal_title=get_proposal_title,
             dry_run=dry_run,
             forge=forge,
             allow_create_proposal=allow_create_proposal,
@@ -341,6 +351,7 @@ def publish_one(
     reviewers: Optional[List[str]] = None,
     result_tags: Optional[Dict[str, bytes]] = None,
     commit_message_template: Optional[str] = None,
+    title_template: Optional[str] = None,
     existing_mp_url: Optional[str] = None,
 ) -> Tuple[PublishResult, str]:
 
@@ -494,6 +505,7 @@ def publish_one(
                 campaign,
                 pkg,
                 commit_message_template,
+                title_template,
                 codemod_result,
                 mode,
                 role,
@@ -578,6 +590,7 @@ if __name__ == "__main__":
             revision=request["revision"].encode("utf-8"),
             result_tags=request.get("tags"),
             commit_message_template=request.get("commit_message_template"),
+            title_template=request.get("title_template"),
             existing_mp_url=request.get('existing_mp_url'),
         )
     except PublishFailure as e:
