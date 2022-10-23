@@ -35,7 +35,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	mypy-protobuf \
 	protobuf-compiler \
 	ca-certificates \
-	libapt-pkg-dev \
+	python3-apt \
 	libpcre3-dev \
 	&& apt clean \
 	&& make -C /code \
