@@ -1461,7 +1461,7 @@ async def process_single_item(
                     prometheus, job="janitor.worker",
                     grouping_key={
                         'run_id': assignment['id'],
-                        'campaign': campaign,
+                        'campaign': campaign,  # type: ignore
                     },
                     registry=REGISTRY)
             workitem.clear()
