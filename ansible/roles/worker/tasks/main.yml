@@ -13,23 +13,28 @@
       - gnome-pkg-tools
       - schroot
       - libpcre3-dev
-- stat:
+- name: Chroot base directory exists
+  file:
+    path: "{{ janitor_chroot_base }}"
+    state: directory
+- name: Check whether chroots exist
+  stat:
     path: "{{ janitor_chroot_base }}/{{ item['chroot'] }}"
   register: sbuild
   with_items: "{{ janitor_distributions }}"
-- name: Create schroot
-  command: "{{ janitor_code_path }}/create-sbuild-chroot-schroot.py --config={{ janitor_conf_path }} --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['name'] }}"
+- name: "Create schroot ({{item.item.name }})"
+  command: "{{ janitor_venv }}/bin/python {{ janitor_code_path }}/create-sbuild-chroot-schroot.py --config={{ janitor_conf_path }} --user={{ janitor_user }} --base-directory={{ janitor_chroot_base }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item.name }}"
   when: not item.stat.exists
   with_items: "{{ sbuild.results }}"
-- name: Update schroot
-  command: sbuild-update -udcar "{{ item.item['chroot'] }}"
+- name: "Update schroot ( {{ item.item.chroot }})"
+  command: sbuild-update -udcar "{{ item.item.chroot }}"
   with_items: "{{ sbuild.results }}"
   when: item.stat.exists
 - name: Update schroot from cron job
   cron:
-    name: "update schroot for {{ item['name'] }}"
+    name: "update schroot for {{ item.name }}"
     special_time: daily
-    job: cronic sbuild-update -udcar "{{ item['chroot'] }}"
+    job: cronic sbuild-update -udcar "{{ item.chroot }}"
   with_items: "{{ janitor_distributions }}"
 - name: janitor in sbuild group
   user:
