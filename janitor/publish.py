@@ -1435,9 +1435,14 @@ async def handle_full_policy_put(request):
 async def handle_policy_del(request):
     name = request.match_info["name"]
     async with request.app['db'].acquire() as conn:
-        await conn.execute(
-            "DELETE FROM named_publish_policy WHERE name = $1",
-            name)
+        try:
+            await conn.execute(
+                "DELETE FROM named_publish_policy WHERE name = $1",
+                name)
+        except asyncpg.ForeignKeyViolationError:
+            # There's a candidate that still references this
+            # publish policy
+            return web.json_response({}, status=412)
     return web.json_response({})
 
 
