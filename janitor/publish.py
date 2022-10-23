@@ -407,6 +407,7 @@ async def publish_one(
     derived_owner: Optional[str] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     commit_message_template: Optional[str] = None,
+    title_template: Optional[str] = None,
     existing_mp_url: Optional[str] = None,
 ) -> PublishResult:
     """Publish a single run in some form.
@@ -448,6 +449,7 @@ async def publish_one(
         "revision": revision.decode("utf-8"),
         "reviewers": reviewers,
         "commit_message_template": commit_message_template,
+        "title_template": title_template,
     }
 
     if result_tags:
@@ -1059,6 +1061,9 @@ async def publish_from_policy(
             commit_message_template=(
                 campaign_config.merge_proposal.commit_message
                 if campaign_config.merge_proposal else None),
+            title_template=(
+                campaign_config.merge_proposal.title
+                if campaign_config.merge_proposal else None),
         )
     except PublishFailure as e:
         code, description = await handle_publish_failure(
@@ -1206,7 +1211,11 @@ async def publish_and_store(
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
-                    campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
+                    campaign_config.merge_proposal.commit_message
+                    if campaign_config.merge_proposal else None),
+                title_template=(
+                    campaign_config.merge_proposal.title
+                    if campaign_config.merge_proposal else None),
             )
         except PublishFailure as e:
             await store_publish(
@@ -2609,7 +2618,11 @@ This merge proposal will be closed, since the branch has moved to %s.
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
-                    campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
+                    campaign_config.merge_proposal.commit_message
+                    if campaign_config.merge_proposal else None),
+                title_template=(
+                    campaign_config.merge_proposal.title
+                    if campaign_config.merge_proposal else None),
                 existing_mp_url=mp.url,
             )
         except PublishFailure as e:
