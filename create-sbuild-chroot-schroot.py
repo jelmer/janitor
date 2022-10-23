@@ -3,7 +3,6 @@
 import argparse
 import os
 import pwd
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -34,7 +33,6 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
         cmd.append("--extra-repository=deb %s %s %s" % (
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
-    print(shlex.join(cmd))
     subprocess.check_call(cmd)
 
 
