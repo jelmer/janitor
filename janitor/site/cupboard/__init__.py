@@ -111,7 +111,6 @@ async def handle_never_processed(request):
 
 @html_template(env, "cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
-    from ...schedule import TRANSIENT_ERROR_RESULT_CODES
     campaign = request.query.get("campaign")
     exclude_never_processed = "exclude_never_processed" in request.query
     exclude_transient = "exclude_transient" in request.query
@@ -127,8 +126,7 @@ async def handle_result_codes(request):
         where suite = ANY($1::text[])
     """
         if exclude_transient:
-            query += " AND result_code != ALL($2::text[])"
-            args.append(TRANSIENT_ERROR_RESULT_CODES)
+            query += " AND NOT failure_transient"
         query += " group by 1"
         if not exclude_never_processed:
             query = """(%s) union

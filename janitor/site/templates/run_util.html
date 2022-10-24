@@ -241,8 +241,8 @@ cd {{ package }}
         </div>
     {% endif %}
 {% endmacro %}
-{% macro display_result_code(result_code) %}
-    <span class="result-code-{{ classify_result_code(result_code) }}">{{ result_code }}</span>
+{% macro display_result_code(result_code, transient=None) %}
+    <span class="result-code-{{ classify_result_code(result_code, transient) }}">{{ result_code }}</span>
 {%- endmacro -%}
 {% macro result_code_explanation(result_code, run=None) %}
     {% if result_code %}
