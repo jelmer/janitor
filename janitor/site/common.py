@@ -163,7 +163,8 @@ SELECT
     worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set AS change_set
+    result_tags, target_branch_url, change_set AS change_set,
+    failure_transient AS failure_transient
 FROM
     last_runs
 LEFT JOIN

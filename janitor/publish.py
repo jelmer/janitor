@@ -2052,7 +2052,8 @@ SELECT
     worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set AS change_set
+    result_tags, target_branch_url, change_set AS change_set,
+    failure_transient
 FROM
     run
 LEFT JOIN
@@ -2414,7 +2415,8 @@ applied independently.
 
     if last_run.result_code != "success":
         last_run_age = datetime.utcnow() - last_run.finish_time
-        if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
+        if (last_run.failure_transient
+                or last_run.result_code in TRANSIENT_ERROR_RESULT_CODES):
             logger.info(
                 "%s: Last run failed with transient error (%s). " "Rescheduling.",
                 mp.url,
@@ -2895,7 +2897,8 @@ SELECT
     worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags, target_branch_url, change_set as change_set
+    result_tags, target_branch_url, change_set as change_set,
+    failure_transient AS failure_transient
 FROM
     run
 WHERE id = $1

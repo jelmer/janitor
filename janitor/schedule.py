@@ -62,6 +62,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "explain-bd-uninstallable-apt-file-fetch-failure",
     "worker-timeout",
     "worker-clone-bad-gateway",
+    "worker-clone-temporary-transport-error",
     "result-push-failed",
     "result-push-bad-gateway",
     "dist-apt-file-fetch-failure",
@@ -155,7 +156,9 @@ async def estimate_success_probability(
     else:
         same_context_multiplier = 1.0
     for run in await conn.fetch("""
-SELECT result_code, instigated_context, context, failure_details, start_time
+SELECT
+  result_code, instigated_context, context, failure_details, failure_transient,
+  start_time
 FROM run
 WHERE package = $1 AND suite = $2
 ORDER BY start_time DESC
@@ -163,10 +166,11 @@ ORDER BY start_time DESC
         try:
             ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
         except KeyError:
-            pass
-        else:
-            if ignore_checker(run):
-                continue
+            def ignore_checker(run):
+                return run['failure_transient']
+
+        if ignore_checker(run):
+            continue
         total += 1
         if run['result_code'] == "success":
             success += 1

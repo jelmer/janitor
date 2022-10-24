@@ -569,7 +569,8 @@ CREATE OR REPLACE VIEW publishable AS
   ) AS unpublished_branches,
   target_branch_url,
   run.change_set AS change_set,
-  change_set.state AS change_set_state
+  change_set.state AS change_set_state,
+  run.failure_transient AS failure_transient
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
