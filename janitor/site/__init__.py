@@ -118,12 +118,12 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def classify_result_code(result_code):
+def classify_result_code(result_code, transient):
     if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
     if result_code in BUG_ERROR_RESULT_CODES:
         return "bug"
-    if result_code in TRANSIENT_ERROR_RESULT_CODES:
+    if result_code in TRANSIENT_ERROR_RESULT_CODES or transient:
         return "transient-failure"
     return "failure"
 
