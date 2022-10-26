@@ -1333,6 +1333,73 @@ class PolicySchema(Schema):
         values=fields.Nested(BranchPublishPolicySchema))
 
 
+@routes.get("/absorbed")
+async def handle_absorbed(request):
+    try:
+        since = datetime.fromisoformat(request.query['since'])
+    except KeyError:
+        extra = ""
+        args = []
+    else:
+        args = [since]
+        extra = " AND timestamp >= $%d" % len(args)
+
+    ret = []
+    async with request.app['db'].acquire() as conn:
+        query = """\
+SELECT
+   run.change_set,
+   merge_proposal.merged_at - run.finish_time as delay,
+   run.suite AS campaign,
+   run.result,
+   run.id,
+   merged_at AS timestamp,
+   merged_by
+FROM merge_proposal
+INNER JOIN run ON merge_proposal.revision = run.revision
+WHERE run.result_code = 'success'
+AND run.suite not in ('unchanged', 'control')
+"""
+        for row in await conn.fetch(query + extra, *args):
+            ret.append({
+                'mode': 'propose',
+                'change_set': row['change_set'],
+                'delay': row['delay'].total_seconds,
+                'campaign': row['campaign'],
+                'merged-by': row['merged_by'],
+                'timestamp': row['timestamp'],
+                'id': row['id'],
+                'result': row['result'],
+            })
+        query = """\
+SELECT
+    run.change_set,
+    publish.timestamp AS timestamp,
+    publish.timestamp - run.finish_time AS delay,
+    run.suite AS campaign,
+    run.result AS result,
+    run.id, merged_at,
+    merged_by
+FROM publish
+INNER JOIN run ON publish.revision = run.revision
+WHERE mode = 'push'
+AND run.result_code = 'success'
+AND publish.result_code = 'success'
+AND run.suite not in ('unchanged', 'control')
+"""
+        for row in await conn.fetch(query + extra, *args):
+            ret.append({
+                'mode': 'push',
+                'id': row['id'],
+                'change_set': row['change_set'],
+                'delay': row['delay'].total_seconds,
+                'campaign': row['campaign'],
+                'timestamp': row['timestamp'],
+                'result': row['result'],
+            })
+    return web.json_response(ret)
+
+
 @docs(
     responses={
         404: {"description": "Package does not exist or does not have a policy"},
