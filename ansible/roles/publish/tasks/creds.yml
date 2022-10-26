@@ -1,13 +1,11 @@
 ---
 - name: Set Launchpad username
-  command: "{{ janitor_code_path }}/breezy/brz lp-login {{ item.username }}"
+  command: "{{ janitor_venv }}/brz lp-login {{ item.username }}"
   when: "item.kind == 'launchpad'"
   with_items: "{{ janitor_hoster_credentials }}"
 - name: Launchpad consumer key
-  command: python3 -c "from breezy.plugins.launchpad.lp_api import get_auth_engine; print(get_auth_engine('https://api.launchpad.net/').unique_consumer_id)"
+  command: "{{ janitor_venv }}/bin/python -c \"from breezy.plugins.launchpad.lp_api import get_auth_engine; print(get_auth_engine('https://api.launchpad.net/').unique_consumer_id)\""
   register: lp_consumer_key
-  environment:
-    PYTHONPATH: "{{ janitor_code_path }}/breezy"
   # TODO(jelmer): actually set launchpad credentials
 - name: Set GitLab credentials
   template:
