@@ -135,7 +135,8 @@ async def generate_run_file(
         if run['main_branch_revision']:
             with span.new_child('sql:unchanged-run'):
                 kwargs["unchanged_run"] = await get_unchanged_run(
-                    conn, run['package'], run['main_branch_revision']
+                    conn, run['package'],
+                    run['main_branch_revision'].encode('utf-8')
                 )
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
@@ -224,7 +225,7 @@ async def generate_run_file(
         if run['result_code'] != 'success':
             return ""
         unchanged_run = kwargs.get("unchanged_run")
-        if not unchanged_run or unchanged_run.result_code != 'success':
+        if not unchanged_run or unchanged_run['result_code'] != 'success':
             return ""
         try:
             with span.new_child('archive-diff'):
@@ -232,7 +233,7 @@ async def generate_run_file(
                     client,
                     differ_url,
                     run['id'],
-                    unchanged_run.id,
+                    unchanged_run['id'],
                     kind="debdiff",
                     filter_boring=True,
                     accept="text/html",
