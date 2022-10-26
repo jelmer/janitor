@@ -152,7 +152,8 @@ WHERE id = $1
     return await conn.fetchrow(query, run_id)
 
 
-async def get_unchanged_run(conn: asyncpg.Connection, package, main_branch_revision):
+async def get_unchanged_run(
+        conn: asyncpg.Connection, package: str, main_branch_revision: bytes):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -164,7 +165,7 @@ SELECT
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
     result_tags, target_branch_url, change_set AS change_set,
-    failure_transient AS failure_transient
+    failure_transient AS failure_transient, failure_stage
 FROM
     last_runs
 LEFT JOIN
@@ -176,12 +177,8 @@ WHERE
     change_set IS NULL
 ORDER BY finish_time DESC
 """
-    if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode("utf-8")
-    row = await conn.fetchrow(query, main_branch_revision, package)
-    if row is not None:
-        return state.Run.from_row(row)
-    return None
+    return await conn.fetchrow(
+        query, main_branch_revision.decode('utf-8'), package)
 
 
 async def generate_pkg_context(
@@ -228,7 +225,8 @@ WHERE run.package = $1 AND run.suite = $2
             if run['main_branch_revision']:
                 with span.new_child('sql:unchanged-run'):
                     unchanged_run = await get_unchanged_run(
-                        conn, run['package'], run['main_branch_revision'])
+                        conn, run['package'],
+                        run['main_branch_revision'].encode('utf-8'))
             else:
                 unchanged_run = None
 
@@ -281,7 +279,7 @@ WHERE run.package = $1 AND run.suite = $2
     async def show_debdiff():
         if not run['build_version']:
             return ""
-        if not unchanged_run or not unchanged_run.build_version:
+        if not unchanged_run or not unchanged_run['build_version']:
             return ""
         try:
             with span.new_child('archive-diff'):
@@ -289,7 +287,7 @@ WHERE run.package = $1 AND run.suite = $2
                     client,
                     differ_url,
                     run['id'],
-                    unchanged_run.id,
+                    unchanged_run['id'],
                     kind="debdiff",
                     filter_boring=True,
                     accept="text/html",

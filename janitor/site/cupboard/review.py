@@ -163,7 +163,7 @@ async def generate_review(
                     client,
                     differ_url,
                     run_id,
-                    unchanged_run.id,
+                    unchanged_run['id'],
                     kind="debdiff",
                     filter_boring=True,
                     accept="text/html",
