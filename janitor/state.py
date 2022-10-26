@@ -84,6 +84,8 @@ class Run(object):
     result_tags: Optional[List[Tuple[str, bytes]]]
     target_branch_url: Optional[str]
     change_set: str
+    failure_transient: Optional[bool]
+    failure_stage: Optional[str]
 
     __slots__ = [
         "id",
@@ -109,6 +111,8 @@ class Run(object):
         "result_tags",
         "target_branch_url",
         "change_set",
+        "failure_transient",
+        "failure_stage",
     ]
 
     def __init__(
@@ -136,6 +140,8 @@ class Run(object):
         result_tags,
         target_branch_url,
         change_set,
+        failure_transient,
+        failure_stage,
     ):
         self.id = run_id
         self.start_time = start_time
@@ -174,6 +180,8 @@ class Run(object):
             self.result_tags = [(name, r.encode("utf-8")) for (name, r) in result_tags]
         self.target_branch_url = target_branch_url
         self.change_set = change_set
+        self.failure_transient = failure_transient
+        self.failure_stage = failure_stage
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -208,6 +216,8 @@ class Run(object):
             result_tags=row['result_tags'],
             target_branch_url=row['target_branch_url'],
             change_set=row['change_set'],
+            failure_transient=row['failure_transient'],
+            failure_stage=row['failure_stage'],
         )
 
     def __eq__(self, other) -> bool:
