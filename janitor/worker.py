@@ -93,6 +93,7 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
+from breezy.revision import NULL_REVISION
 from breezy.transform import (
     MalformedTransform,
     TransformRenameFailed,
@@ -529,6 +530,7 @@ def process_package(
     force_build: bool = False,
     additional_colocated_branches: Optional[Dict[str, str]] = None,
     skip_setup_validation: bool = False,
+    default_empty: bool = False,
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     metadata["command"] = command
 
@@ -543,17 +545,22 @@ def process_package(
             transient=False, stage=("setup", ))
 
     logger.info("Opening branch at %s", vcs_url)
-    try:
-        main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
-    except BranchOpenFailure as e:
-        raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
-            'url': vcs_url,
-            'retry_after': e.retry_after,
-        })
-
-    metadata["branch_url"] = main_branch.user_url
-    metadata["vcs_type"] = get_branch_vcs_type(main_branch)
-    metadata["subpath"] = subpath
+    if vcs_url:
+        try:
+            main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
+        except BranchOpenFailure as e:
+            raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
+                'url': vcs_url,
+                'retry_after': e.retry_after,
+            })
+        metadata["branch_url"] = main_branch.user_url
+        metadata["vcs_type"] = get_branch_vcs_type(main_branch)
+        metadata["subpath"] = subpath
+    else:
+        main_branch = None
+        metadata["branch_url"] = None
+        metadata["vcs_type"] = None
+        metadata["subpath"] = None
 
     if cached_branch_url:
         try:
@@ -607,9 +614,12 @@ def process_package(
         resume_branch = None
 
     roles = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
-    roles[main_branch.name] = 'main'   # type: ignore
 
-    directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rstrip('/').rsplit('/')[-1]
+    if main_branch:
+        roles[main_branch.name] = 'main'
+        directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rstrip('/').rsplit('/')[-1]
+    else:
+        directory_name = 'work'
 
     with ExitStack() as es:
         ws = Workspace(
@@ -670,9 +680,12 @@ def process_package(
         if not skip_setup_validation:
             build_target.validate(ws.local_tree, subpath, build_config)
 
-        metadata["revision"] = metadata[
-            "main_branch_revision"
-        ] = ws.main_branch.last_revision().decode('utf-8')
+        if ws.main_branch:
+            metadata["revision"] = metadata[
+                "main_branch_revision"
+            ] = ws.main_branch.last_revision().decode('utf-8')
+        else:
+            metadata["revision"] = metadata["main_branch_revision"] = NULL_REVISION
 
         metadata["codemod"] = {}
         metadata["remotes"] = {}
@@ -682,7 +695,8 @@ def process_package(
             # don't need to pass in the codemod result.
             resume_codemod_result = None
 
-        metadata["remotes"]["origin"] = {"url": main_branch.user_url}
+        if main_branch:
+            metadata["remotes"]["origin"] = {"url": main_branch.user_url}
 
         try:
             changer_result = build_target.make_changes(
@@ -964,6 +978,7 @@ except ImportError:  # old silver-platter
 
 
 def run_worker(
+    *,
     branch_url: str,
     run_id: str,
     subpath: str,
@@ -987,6 +1002,7 @@ def run_worker(
     tee: bool = False,
     additional_colocated_branches: Optional[Dict[str, str]] = None,
     skip_setup_validation: bool = False,
+    default_empty: bool = False,
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -994,13 +1010,13 @@ def run_worker(
         es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
         try:
             with process_package(
-                vcs_type,
-                branch_url,
-                subpath,
-                build_config,
-                env,
-                command,
-                output_directory,
+                vcs_type=vcs_type,
+                vcs_url=branch_url,
+                subpath=subpath,
+                build_config=build_config,
+                env=env,
+                command=command,
+                output_directory=output_directory,
                 metadata=metadata,
                 target=target,
                 resume_branch_url=resume_branch_url,
@@ -1015,6 +1031,7 @@ def run_worker(
                 force_build=force_build,
                 additional_colocated_branches=additional_colocated_branches,
                 skip_setup_validation=skip_setup_validation,
+                default_empty=default_empty,
             ) as (ws, result):
                 logging.info("Pushing result branch to %r", target_repo_url)
 
@@ -1054,23 +1071,24 @@ def run_worker(
                     def tag_selector(tag_name):
                         return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
 
-                    try:
-                        push_branch(
-                            ws.local_tree.branch,
-                            cached_branch_url,
-                            vcs_type=vcs_type.lower() if vcs_type is not None else None,
-                            possible_transports=possible_transports,
-                            stop_revision=ws.main_branch.last_revision(),
-                            tag_selector=tag_selector,
-                            overwrite=True,
-                        )
-                    except (InvalidHttpResponse, IncompleteRead,
-                            ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                            TransportNotPossible, ConnectionReset,
-                            ssl.SSLEOFError) as e:
-                        logging.warning(
-                            "unable to push to cache URL %s: %s",
-                            cached_branch_url, e)
+                    if ws.main_branch:
+                        try:
+                            push_branch(
+                                ws.local_tree.branch,
+                                cached_branch_url,
+                                vcs_type=vcs_type.lower() if vcs_type is not None else None,
+                                possible_transports=possible_transports,
+                                stop_revision=ws.main_branch.last_revision(),
+                                tag_selector=tag_selector,
+                                overwrite=True,
+                            )
+                        except (InvalidHttpResponse, IncompleteRead,
+                                ConnectionError, UnexpectedHttpStatus, RemoteGitError,
+                                TransportNotPossible, ConnectionReset,
+                                ssl.SSLEOFError) as e:
+                            logging.warning(
+                                "unable to push to cache URL %s: %s",
+                                cached_branch_url, e)
 
                 logging.info("All done.")
                 return result
@@ -1374,6 +1392,8 @@ async def process_single_item(
 
         skip_setup_validation = assignment.get("skip-setup-validation", False)
 
+        default_empty = assignment["branch"].get('default-empty', False)
+
         env.update(build_environment)
 
         logging.debug('Environment: %r', env)
@@ -1388,18 +1408,18 @@ async def process_single_item(
             None,
             partial(
                 run_worker,
-                branch_url,
-                run_id,
-                subpath,
-                vcs_type,
-                build_config,
-                env,
-                command,
-                output_directory,
-                metadata,
-                target_repo_url,
-                vendor,
-                campaign,
+                branch_url=branch_url,
+                run_id=run_id,
+                subpath=subpath,
+                vcs_type=vcs_type,
+                build_config=build_config,
+                env=env,
+                command=command,
+                output_directory=output_directory,
+                metadata=metadata,
+                target_repo_url=target_repo_url,
+                vendor=vendor,
+                campaign=campaign,
                 target=target,
                 resume_branch_url=resume_branch_url,
                 resume_branches=resume_branches,
@@ -1410,6 +1430,7 @@ async def process_single_item(
                 tee=tee,
                 additional_colocated_branches=additional_colocated_branches,
                 skip_setup_validation=skip_setup_validation,
+                default_empty=default_empty,
             ),
         )
         try:
