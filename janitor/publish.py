@@ -400,7 +400,7 @@ async def publish_one(
     maintainer_rate_limiter: RateLimiter,
     dry_run: bool,
     differ_url: str,
-    external_url: str,
+    external_url: Optional[str] = None,
     require_binary_diff: bool = False,
     allow_create_proposal: bool = False,
     reviewers: Optional[List[str]] = None,
@@ -516,7 +516,7 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 async def consider_publish_run(
         conn: asyncpg.Connection, config: Config, template_env_path: str,
-        vcs_managers, maintainer_rate_limiter, external_url: str, differ_url: str,
+        vcs_managers, maintainer_rate_limiter, external_url: Optional[str], differ_url: str,
         redis,
         run, maintainer_email,
         unpublished_branches, command,
@@ -670,7 +670,7 @@ async def publish_pending_ready(
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     reviewed_only: bool = False,
     push_limit: Optional[int] = None,
@@ -937,7 +937,7 @@ async def publish_from_policy(
     max_frequency_days: Optional[int],
     command: str,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     require_binary_diff: bool = False,
     force: bool = False,
@@ -1162,7 +1162,7 @@ async def publish_and_store(
     vcs_managers: Dict[str, VcsManager],
     maintainer_rate_limiter: RateLimiter,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     allow_create_proposal: bool = True,
     require_binary_diff: bool = False,
@@ -1727,16 +1727,17 @@ async def credentials_request(request):
 
 
 async def create_app(
-    template_env_path: Optional[str],
-    maintainer_rate_limiter: RateLimiter,
-    forge_rate_limiter: Dict[str, datetime],
     vcs_managers: Dict[str, VcsManager],
     db: asyncpg.pool.Pool,
     redis,
     config,
-    dry_run: bool,
-    external_url: str,
     differ_url: str,
+    *,
+    template_env_path: Optional[str] = None,
+    dry_run: bool = False,
+    external_url: Optional[str] = None,
+    forge_rate_limiter: Optional[Dict[str, datetime]] = None,
+    maintainer_rate_limiter: Optional[RateLimiter] = None,
     require_binary_diff: bool = False,
     push_limit: Optional[int] = None,
     modify_mp_limit: Optional[int] = None,
@@ -1753,7 +1754,11 @@ async def create_app(
     app['config'] = config
     app['external_url'] = external_url
     app['differ_url'] = differ_url
+    if maintainer_rate_limiter is None:
+        maintainer_rate_limiter = NonRateLimiter()
     app['maintainer_rate_limiter'] = maintainer_rate_limiter
+    if forge_rate_limiter is None:
+        forge_rate_limiter = {}
     app['forge_rate_limiter'] = forge_rate_limiter
     app['modify_mp_limit'] = modify_mp_limit
     app['dry_run'] = dry_run
@@ -1790,12 +1795,12 @@ async def run_web_server(listen_addr, port, **kwargs):
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
-    return web.Response(text="OK")
+    return web.Response(text="ok")
 
 
 async def get_mp_status(mp):
@@ -2046,7 +2051,7 @@ async def process_queue_loop(
     dry_run,
     vcs_managers,
     interval,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     auto_publish: bool = True,
     reviewed_only: bool = False,
@@ -2245,7 +2250,7 @@ async def check_existing_mp(
     vcs_managers,
     maintainer_rate_limiter,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     mps_per_maintainer=None,
     possible_transports: Optional[List[Transport]] = None,
@@ -2847,7 +2852,7 @@ async def check_existing(
     forge_rate_limiter: Dict[Forge, datetime],
     vcs_managers,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     modify_limit=None,
     unexpected_limit: int = 5,
@@ -3017,7 +3022,7 @@ async def listen_to_runner(
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
-    external_url: str,
+    external_url: Optional[str],
     differ_url: str,
     require_binary_diff: bool = False,
 ):
