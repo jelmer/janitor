@@ -2110,17 +2110,19 @@ async def next_item(
 
             await queue_processor.register_run(active_run)
 
-            if vcs_info is None or vcs_info["branch_url"] is None:
-                await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
-                item = None
-                continue
-
             try:
                 campaign_config = get_campaign_config(config, item.campaign)
             except KeyError:
                 logging.warning(
                     'Unable to find details for campaign %r', item.campaign)
-                await abort(active_run, 'unknown-campaign', "Campaign %s unknown" % item.campaign)
+                await abort(active_run, 'unknown-campaign',
+                            "Campaign %s unknown" % item.campaign)
+                item = None
+                continue
+
+            if vcs_info is None or (
+                    vcs_info["branch_url"] is None and not campaign_config.default_empty):
+                await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
 
@@ -2136,66 +2138,69 @@ async def next_item(
         with span.new_child('config'):
             build_config = await builder.config(conn, campaign_config, item)
 
-        try:
-            with span.new_child('branch:open'):
-                probers = select_preferred_probers(vcs_info['vcs_type'])
-                logging.info(
-                    'Opening branch %s with %r', vcs_info['branch_url'],
-                    [p.__name__ for p in probers])
-                main_branch = await to_thread_timeout(
-                    REMOTE_BRANCH_OPEN_TIMEOUT, open_branch_ext,
-                    vcs_info['branch_url'],
-                    possible_transports=possible_transports, probers=probers)
-        except BranchRateLimited as e:
-            host = urlutils.URL.from_string(vcs_info['branch_url']).host
-            logging.warning('Rate limiting for %s: %r', host, e)
-            await queue_processor.rate_limited(host, e.retry_after)
-            await abort(active_run, 'pull-rate-limited', str(e))
-            return web.json_response(
-                {'reason': str(e)}, status=429, headers={
-                    'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
-        except BranchOpenFailure as e:
-            logging.debug(
-                'Error opening branch %s: %s', vcs_info['branch_url'],
-                e)
-            resume_branch = None
-            additional_colocated_branches = None
-            vcs_type = vcs_info['vcs_type']
-        except asyncio.TimeoutError:
-            logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
-            resume_branch = None
-            additional_colocated_branches = None
-            vcs_type = vcs_info['vcs_type']
-        else:
-            # We try the public branch first, since perhaps a maintainer
-            # has made changes to the branch there.
-            active_run.vcs_info["branch_url"] = full_branch_url(main_branch).rstrip('/')
-            additional_colocated_branches = await to_thread(
-                builder.additional_colocated_branches, main_branch)
-            vcs_type = get_vcs_abbreviation(main_branch.repository)
-            if not item.refresh:
-                with span.new_child('resume-branch:open'):
-                    try:
-                        resume_branch = await to_thread_timeout(
-                            REMOTE_BRANCH_OPEN_TIMEOUT,
-                            open_resume_branch,
-                            main_branch,
-                            campaign_config.branch_name,
-                            item.package,
-                            possible_forges=possible_forges)
-                    except BranchRateLimited as e:
-                        host = urlutils.URL.from_string(e.url).host
-                        logging.warning('Rate limiting for %s: %r', host, e)
-                        await queue_processor.rate_limited(host, e.retry_after)
-                        await abort(active_run, 'resume-rate-limited', str(e))
-                        return web.json_response(
-                            {'reason': str(e)}, status=429, headers={
-                                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
-                    except asyncio.TimeoutError:
-                        logging.debug('Timeout opening resume branch')
-                        resume_branch = None
-            else:
+        if vcs_info["branch_url"] is not None:
+            try:
+                with span.new_child('branch:open'):
+                    probers = select_preferred_probers(vcs_info['vcs_type'])
+                    logging.info(
+                        'Opening branch %s with %r', vcs_info['branch_url'],
+                        [p.__name__ for p in probers])
+                    main_branch = await to_thread_timeout(
+                        REMOTE_BRANCH_OPEN_TIMEOUT, open_branch_ext,
+                        vcs_info['branch_url'],
+                        possible_transports=possible_transports, probers=probers)
+            except BranchRateLimited as e:
+                host = urlutils.URL.from_string(vcs_info['branch_url']).host
+                logging.warning('Rate limiting for %s: %r', host, e)
+                await queue_processor.rate_limited(host, e.retry_after)
+                await abort(active_run, 'pull-rate-limited', str(e))
+                return web.json_response(
+                    {'reason': str(e)}, status=429, headers={
+                        'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+            except BranchOpenFailure as e:
+                logging.debug(
+                    'Error opening branch %s: %s', vcs_info['branch_url'],
+                    e)
                 resume_branch = None
+                additional_colocated_branches = None
+                vcs_type = vcs_info['vcs_type']
+            except asyncio.TimeoutError:
+                logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
+                resume_branch = None
+                additional_colocated_branches = None
+                vcs_type = vcs_info['vcs_type']
+            else:
+                # We try the public branch first, since perhaps a maintainer
+                # has made changes to the branch there.
+                active_run.vcs_info["branch_url"] = full_branch_url(main_branch).rstrip('/')
+                additional_colocated_branches = await to_thread(
+                    builder.additional_colocated_branches, main_branch)
+                vcs_type = get_vcs_abbreviation(main_branch.repository)
+                if not item.refresh:
+                    with span.new_child('resume-branch:open'):
+                        try:
+                            resume_branch = await to_thread_timeout(
+                                REMOTE_BRANCH_OPEN_TIMEOUT,
+                                open_resume_branch,
+                                main_branch,
+                                campaign_config.branch_name,
+                                item.package,
+                                possible_forges=possible_forges)
+                        except BranchRateLimited as e:
+                            host = urlutils.URL.from_string(e.url).host
+                            logging.warning('Rate limiting for %s: %r', host, e)
+                            await queue_processor.rate_limited(host, e.retry_after)
+                            await abort(active_run, 'resume-rate-limited', str(e))
+                            return web.json_response(
+                                {'reason': str(e)}, status=429, headers={
+                                    'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                        except asyncio.TimeoutError:
+                            logging.debug('Timeout opening resume branch')
+                            resume_branch = None
+                else:
+                    resume_branch = None
+        else:
+            active_run.vcs_info = None
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
@@ -2269,7 +2274,8 @@ async def next_item(
         "description": "%s on %s" % (item.campaign, item.package),
         "queue_id": item.id,
         "branch": {
-            "url": active_run.main_branch_url,
+            "default-empty": campaign_config.default_empty,
+            "url": vcs_info['branch_url'],
             "subpath": vcs_info['subpath'],
             "vcs_type": vcs_info['vcs_type'],
             "cached_url": cached_branch_url,
@@ -2319,7 +2325,7 @@ async def handle_finish(request):
     if not active_run:
         raise web.HTTPNotFound(text=' no such run %s' % run_id)
     worker_name = active_run.worker_name
-    main_branch_url = active_run.main_branch_url
+    main_branch_url = active_run.vcs_info.get('branch_url')
     vcs_type = active_run.vcs_type
     subpath = active_run.subpath
     resume_from = active_run.resume_from

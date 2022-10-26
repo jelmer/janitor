@@ -76,8 +76,6 @@
     - .config
     - .config/breezy
 - name: Breezy Identity
-  command: "{{ janitor_venv }}/bin/python -m breezy whoami '{{ janitor_fullname }} <{{ janitor_email }}>'"
+  command: "{{ janitor_venv }}/bin/brz whoami '{{ janitor_fullname }} <{{ janitor_email }}>'"
   become: yes
   become_user: "{{ janitor_user }}"
-  environment:
-    PYTHONPATH: "{{ janitor_code_path }}/breezy"

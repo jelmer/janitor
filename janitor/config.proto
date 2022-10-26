@@ -97,6 +97,8 @@ message Campaign {
 
   optional bool skip_setup_validation = 10 [default=false];
 
+  optional bool default_empty = 11 [default=false];
+
   oneof build {
     DebianBuild debian_build = 3;
     GenericBuild generic_build = 4;
