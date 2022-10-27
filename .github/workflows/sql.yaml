@@ -1,0 +1,26 @@
+---
+name: SQL
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'  # Daily 6AM UTC build
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo apt install postgresql-12 postgresql-common postgresql-12-debversion
+      - name: Load SQL
+        run: |
+          pg_virtualenv -v14 psql < state.sql
