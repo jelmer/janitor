@@ -321,8 +321,8 @@ async def handle_refresh_proposal_status(request):
     post = await request.post()
     try:
         mp_url = post["url"]
-    except KeyError:
-        raise web.HTTPBadRequest(text="No URL specified")
+    except KeyError as e:
+        raise web.HTTPBadRequest(text="No URL specified") from e
 
     data = {"url": mp_url}
     url = URL(request.app['publisher_url']) / "refresh-status"
@@ -456,8 +456,8 @@ async def handle_diff(request):
                     run['revision'].encode('utf-8'))
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
-        except NotImplementedError:
-            raise web.HTTPBadRequest(text="unsupported vcs %s" % run['vcs_type'])
+        except NotImplementedError as e:
+            raise web.HTTPBadRequest(text="unsupported vcs %s" % run['vcs_type']) from e
         if max_diff_size is not None and len(diff) > max_diff_size:
             return web.Response(
                 status=413,
@@ -1176,8 +1176,8 @@ async def handle_mass_reschedule(request):
     post = await request.post()
     try:
         result_code = post['result_code']
-    except KeyError:
-        raise web.HTTPBadRequest(text='result_code not specified')
+    except KeyError as e:
+        raise web.HTTPBadRequest(text='result_code not specified') from e
     campaign = post.get('campaign')
     description_re = post.get('description_re')
     min_age = int(post.get('min_age', '0'))

@@ -197,7 +197,7 @@ def publish(
         except NoSuchRevision as e:
             raise PublishFailure(
                 description="Revision missing: %s" % e.revision,  # type: ignore
-                code="revision-missing")
+                code="revision-missing") from e
 
     labels: Optional[List[str]]
 
@@ -228,58 +228,60 @@ def publish(
             reviewers=reviewers,
             stop_revision=stop_revision,
         )
-    except DivergedBranches:
+    except DivergedBranches as e:
         raise PublishFailure(
             description="Upstream branch has diverged from local changes.",
             code="diverged-branches",
-        )
-    except UnsupportedForge:
+        ) from e
+    except UnsupportedForge as e:
         raise PublishFailure(
             description="Forge unsupported: %s." % (target_branch.repository.user_url),
             code="hoster-unsupported",
-        )
+        ) from e
     except NoSuchProject as e:
         raise PublishFailure(
             description="project %s was not found" % e.project, code="project-not-found"
-        )
-    except ForkingDisabled:
+        ) from e
+    except ForkingDisabled as e:
         raise PublishFailure(
             description="Forking disabled: %s" % (target_branch.repository.user_url),
             code="forking-disabled",
-        )
+        ) from e
     except PermissionDenied as e:
-        raise PublishFailure(description=str(e), code="permission-denied")
+        raise PublishFailure(description=str(e), code="permission-denied") from e
     except TemplateNotFound as e:
-        raise PublishFailure(description=str(e), code="template-not-found")
+        raise PublishFailure(description=str(e), code="template-not-found") from e
     except TemplateSyntaxError as e:
-        raise PublishFailure(description=str(e), code="template-syntax-error")
+        raise PublishFailure(description=str(e), code="template-syntax-error") from e
     except MergeProposalExists as e:
-        raise PublishFailure(description=str(e), code="merge-proposal-exists")
-    except GitLabConflict:
+        raise PublishFailure(description=str(e), code="merge-proposal-exists") from e
+    except GitLabConflict as e:
         raise PublishFailure(
             code="gitlab-conflict",
             description=(
                 "Conflict during GitLab operation. " "Reached repository limit?"
             ),
-        )
-    except SourceNotDerivedFromTarget:
+        ) from e
+    except SourceNotDerivedFromTarget as e:
         raise PublishFailure(
             code="source-not-derived-from-target",
             description=(
                 "The source repository is not a fork of the " "target repository."
             ),
-        )
+        ) from e
     except ProjectCreationTimeout as e:
         raise PublishFailure(
             code="project-creation-timeout",
             description="Forking the project (to %s) timed out (%ds)"
             % (e.project, e.timeout),
-        )
+        ) from e
     except RemoteGitError as exc:
         raise PublishFailure(
-            code='remote-git-error', description="remote git error: %s" % exc)
-    except InsufficientChangesForNewProposal:
-        raise PublishNothingToDo('not enough changes for a new merge proposal')
+            code='remote-git-error',
+            description="remote git error: %s" % exc) from exc
+    except InsufficientChangesForNewProposal as e:
+        raise PublishNothingToDo(
+            'not enough changes for a new merge proposal') from e
 
 
 class DebdiffMissingRun(Exception):
@@ -309,17 +311,17 @@ def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             if "unavailable_run_id" in e.headers:
-                raise DebdiffMissingRun(e.headers["unavailable_run_id"])
+                raise DebdiffMissingRun(e.headers["unavailable_run_id"]) from e
             raise
         elif e.code in (400, 500, 502, 503, 504):
             raise DebdiffRetrievalError(
-                'Error %d: %s' % (e.code, e.file.read().decode("utf-8", "replace")))  # type: ignore
+                'Error %d: %s' % (e.code, e.file.read().decode("utf-8", "replace"))) from e  # type: ignore
         else:
             raise
     except ConnectionResetError as e:
-        raise DifferUnavailable(str(e))
+        raise DifferUnavailable(str(e)) from e
     except urllib.error.URLError as e:
-        raise DebdiffRetrievalError(str(e))
+        raise DebdiffRetrievalError(str(e)) from e
 
 
 def _drop_env(args):
@@ -365,11 +367,12 @@ def publish_one(
                 source_branch_url, possible_transports=possible_transports
             )
         except BranchTemporarilyUnavailable as e:
-            raise PublishFailure("local-branch-temporarily-unavailable", str(e))
+            raise PublishFailure(
+                "local-branch-temporarily-unavailable", str(e)) from e
         except BranchUnavailable as e:
-            raise PublishFailure("local-branch-unavailable", str(e))
+            raise PublishFailure("local-branch-unavailable", str(e)) from e
         except BranchMissing as e:
-            raise PublishFailure("local-branch-missing", str(e))
+            raise PublishFailure("local-branch-missing", str(e)) from e
 
         if isinstance(source_branch, RemoteGitBranch):
             local_tree, destroy = create_temp_sprout(source_branch)
@@ -381,13 +384,13 @@ def publish_one(
                 target_branch_url, possible_transports=possible_transports
             )
         except BranchRateLimited as e:
-            raise PublishFailure('branch-rate-limited', str(e))
+            raise PublishFailure('branch-rate-limited', str(e)) from e
         except BranchTemporarilyUnavailable as e:
-            raise PublishFailure("branch-temporarily-unavailable", str(e))
+            raise PublishFailure("branch-temporarily-unavailable", str(e)) from e
         except BranchUnavailable as e:
-            raise PublishFailure("branch-unavailable", str(e))
+            raise PublishFailure("branch-unavailable", str(e)) from e
         except BranchMissing as e:
-            raise PublishFailure("branch-missing", str(e))
+            raise PublishFailure("branch-missing", str(e)) from e
 
         try:
             if mode == MODE_BTS:
@@ -403,7 +406,7 @@ def publish_one(
                 raise PublishFailure(
                     description="Forge unsupported: %s." % netloc,
                     code="hoster-unsupported",
-                )
+                ) from e
             # We can't figure out what branch to resume from when there's no forge
             # that can tell us.
             resume_branch = None
@@ -420,7 +423,7 @@ def publish_one(
                 netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
                     description="Forge %s supported but not login known." % netloc,
-                    code="hoster-no-login")
+                    code="hoster-no-login") from e
             # We can't figure out what branch to resume from when there's no forge
             # that can tell us.
             resume_branch = None
@@ -441,20 +444,20 @@ def publish_one(
                     raise PublishFailure(
                         description="Project %s not found." % e.project,
                         code="project-not-found",
-                    )
+                    ) from e
                 resume_branch = None
                 existing_proposal = None
-            except ForgeLoginRequired:
+            except ForgeLoginRequired as e:
                 raise PublishFailure(
                     description="Forge %s supported but not login known." % forge,
-                    code="hoster-no-login")
+                    code="hoster-no-login") from e
             except PermissionDenied as e:
                 raise PublishFailure(
                     description=(
                         "Permission denied while finding existing proposal: %s" % e.extra
                     ),
                     code="permission-denied",
-                )
+                ) from e
             else:
                 for mp in existing_proposals or []:
                     if mp.url == existing_mp_url:
@@ -474,12 +477,12 @@ def publish_one(
             raise PublishFailure(
                 description="Error from differ for build diff: %s" % e.reason,
                 code="differ-error",
-            )
+            ) from e
         except DifferUnavailable as e:
             raise PublishFailure(
                 description="Unable to contact differ for build diff: %s" % e.reason,
                 code="differ-unreachable",
-            )
+            ) from e
         except DebdiffMissingRun as e:
             if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
                 if e.missing_run_id == log_id:
@@ -489,7 +492,7 @@ def publish_one(
                             "Run (%s) not yet published?" % log_id
                         ),
                         code="missing-build-diff-self",
-                    )
+                    ) from e
                 else:
                     raise PublishFailure(
                         description=(
@@ -497,7 +500,7 @@ def publish_one(
                             "Control run (%s) not published?" % e.missing_run_id
                         ),
                         code="missing-build-diff-control",
-                    )
+                    ) from e
             debdiff = None
 
         try:
@@ -526,18 +529,18 @@ def publish_one(
                 result_tags=result_tags,
                 stop_revision=revision,
             )
-        except EmptyMergeProposal:
+        except EmptyMergeProposal as e:
             raise PublishFailure(
                 code="empty-merge-proposal",
                 description=(
                     "No changes to propose; " "changes made independently upstream?"
                 ),
-            )
-        except MergeConflict:
+            ) from e
+        except MergeConflict as e:
             raise PublishFailure(
                 code="merge-conflict",
                 description="merge would conflict (upstream changes?)",
-            )
+            ) from e
 
     return publish_result, derived_branch_name
 

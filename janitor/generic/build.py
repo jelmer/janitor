@@ -82,7 +82,7 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
                                   'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('build-action-unknown', str(e), stage=('build', ))
+                    raise BuildFailure('build-action-unknown', str(e), stage=('build', )) from e
                 try:
                     run_test(session, buildsystems=bss, resolver=resolver,
                              fixers=fixers, log_manager=DirectoryLogManager(
@@ -90,27 +90,27 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
                                  'redirect'))
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('test-action-unknown', str(e), stage=('test', ))
+                    raise BuildFailure('test-action-unknown', str(e), stage=('test', )) from e
             except NoBuildToolsFound as e:
-                raise BuildFailure('no-build-tools-found', str(e))
+                raise BuildFailure('no-build-tools-found', str(e)) from e
             except DetailedFailure as f:
-                raise BuildFailure(f.error.kind, str(f.error), details={'command': f.argv})
+                raise BuildFailure(f.error.kind, str(f.error), details={'command': f.argv}) from f
             except UnidentifiedError as e:
                 lines = [line for line in e.lines if line]
                 if e.secondary:
-                    raise BuildFailure('build-failed', e.secondary.line)
+                    raise BuildFailure('build-failed', e.secondary.line) from e
                 elif len(lines) == 1:
-                    raise BuildFailure('build-failed', lines[0])
+                    raise BuildFailure('build-failed', lines[0]) from e
                 else:
                     raise BuildFailure(
                         'build-failed',
                         "%r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
-                    )
+                    ) from e
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise BuildFailure('session-setup-failure', str(e))
+        raise BuildFailure('session-setup-failure', str(e)) from e
 
     return {}
 

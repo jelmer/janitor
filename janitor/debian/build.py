@@ -127,17 +127,17 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                         )
                 except ChangelogNotEditable as e:
                     raise BuildFailure(
-                        "build-changelog-not-editable", str(e))
-                except MissingUpstreamTarball:
+                        "build-changelog-not-editable", str(e)) from e
+                except MissingUpstreamTarball as e:
                     raise BuildFailure(
                         "build-missing-upstream-source", "unable to find upstream source",
-                    )
+                    ) from e
                 except MissingChangesFile as e:
                     raise BuildFailure(
                         "build-missing-changes",
                         "Expected changes path %s does not exist." % e.filename,
                         details={'filename': e.filename},
-                    )
+                    ) from e
                 except DetailedDebianBuildFailure as e:
                     if e.stage and not e.error.is_global:
                         code = "%s-%s" % (e.stage, e.error.kind)
@@ -162,18 +162,18 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                                 'Unable to convert error to upstream requirement: %r',
                                 e.error)
                             actions = None
-                    raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions)
+                    raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions) from e
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
                     else:
                         code = "build-failed"
-                    raise BuildFailure(code, e.description, stage=e.stage)
+                    raise BuildFailure(code, e.description, stage=e.stage) from e
                 logging.info("Built %r.", changes_names)
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise BuildFailure('session-setup-failure', str(e), stage="session-setup",)
+        raise BuildFailure('session-setup-failure', str(e), stage="session-setup",) from e
     from .lintian import run_lintian
     lintian_result = run_lintian(
         output_directory, changes_names, profile=lintian_profile,

@@ -988,7 +988,7 @@ class JenkinsBackchannel(Backchannel):
                 return False
             except ClientResponseError as e:
                 if e.status == 404:
-                    raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url)
+                    raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url) from e
                 else:
                     logging.warning('Failed to ping client %s: %r', self.my_url, e)
                     return False
@@ -1122,7 +1122,7 @@ def open_resume_branch(
                     retry_after = None
                 else:
                     retry_after = None
-                raise BranchRateLimited(e.path, str(e), retry_after=retry_after)
+                raise BranchRateLimited(e.path, str(e), retry_after=retry_after) from e
             logging.warning(
                 'Unexpected HTTP status for %s: %s %s', e.path,
                 e.code, e.extra)
@@ -1640,9 +1640,11 @@ class QueueProcessor(object):
                     failure_transient=result.transient,
                 )
             except asyncpg.UniqueViolationError as e:
-                logging.info('Unique violation error creating run: %r', e)
-                await self.unclaim_run(result.log_id)
-                raise RunExists(result.log_id)
+                if e.table_name == 'run' and e.column_name == 'id':
+                    logging.info('Unique violation error creating run: %r', e)
+                    await self.unclaim_run(result.log_id)
+                    raise RunExists(result.log_id) from e
+                raise
             if result.builder_result:
                 await result.builder_result.store(conn, result.log_id)
             await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
@@ -1833,9 +1835,9 @@ async def handle_kill(request):
     ret = active_run.json()
     try:
         await active_run.backchannel.kill()
-    except NotImplementedError:
+    except NotImplementedError as e:
         raise web.HTTPNotImplemented(
-            text='kill not supported for this type of run')
+            text='kill not supported for this type of run') from e
     else:
         return web.json_response(ret)
 
