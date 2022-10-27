@@ -23,4 +23,4 @@ jobs:
           sudo apt install postgresql-12 postgresql-common postgresql-12-debversion
       - name: Load SQL
         run: |
-          pg_virtualenv -v12 psql < state.sql
+          pg_virtualenv -v12 psql -v ON_ERROR_STOP=1 < state.sql
