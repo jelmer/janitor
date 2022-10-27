@@ -675,3 +675,33 @@ CREATE OR REPLACE VIEW change_set_unpublished AS
 
 create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
 COMMIT;
+
+CREATE VIEW absorbed_runs AS
+    SELECT
+       'propose' AS mode,
+       run.change_set,
+       merge_proposal.merged_at - run.finish_time as delay,
+       run.suite AS campaign,
+       run.result::jsonb AS result,
+       run.id,
+       merge_proposal.merged_at AS absorbed_at,
+       merge_proposal.merged_by
+    FROM merge_proposal
+    INNER JOIN run ON merge_proposal.revision = run.revision
+    WHERE run.result_code = 'success'
+    AND run.suite not in ('unchanged', 'control')
+ UNION
+    SELECT
+        'push' AS mode,
+        run.change_set,
+        publish.timestamp - run.finish_time AS delay,
+        run.suite AS campaign,
+        run.result::jsonb AS result,
+        run.id, timestamp AS absorbed_at,
+        NULL AS merged_by
+    FROM publish
+    INNER JOIN run ON publish.revision = run.revision
+    WHERE mode = 'push'
+    AND run.result_code = 'success'
+    AND publish.result_code = 'success'
+    AND run.suite not in ('unchanged', 'control');
