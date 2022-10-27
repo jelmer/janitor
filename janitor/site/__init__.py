@@ -174,7 +174,7 @@ async def get_archive_diff(
                     "Unable to get debdiff: %s" % await resp.text()
                 )
     except ClientConnectorError as e:
-        raise DebdiffRetrievalError(str(e))
+        raise DebdiffRetrievalError(str(e)) from e
 
 
 def is_admin(request: web.Request) -> bool:

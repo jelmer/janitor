@@ -70,16 +70,16 @@ async def git_diff_request(request):
     try:
         old_sha = request.query['old'].encode('utf-8')
         new_sha = request.query['new'].encode('utf-8')
-    except KeyError:
-        raise web.HTTPBadRequest(text='need both old and new')
+    except KeyError as e:
+        raise web.HTTPBadRequest(text='need both old and new') from e
     path = request.query.get('path')
     try:
         with span.new_child('open-repo'):
             repo = Repository.open(os.path.join(request.app['local_path'], package))
-    except NotBranchError:
+    except NotBranchError as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package)
+            package) from e
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
 
@@ -103,8 +103,8 @@ async def git_diff_request(request):
     try:
         with span.new_child('subprocess:communicate'):
             (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
+    except asyncio.TimeoutError as e:
+        raise web.HTTPRequestTimeout(text='diff generation timed out') from e
 
     if p.returncode == 0:
         return web.Response(body=stdout, content_type="text/x-diff")
@@ -118,15 +118,15 @@ async def git_revision_info_request(request):
     try:
         old_sha = request.query['old'].encode('utf-8')
         new_sha = request.query['new'].encode('utf-8')
-    except KeyError:
-        raise web.HTTPBadRequest(text='need both old and new')
+    except KeyError as e:
+        raise web.HTTPBadRequest(text='need both old and new') from e
     try:
         with span.new_child('open-repo'):
             repo = Repository.open(os.path.join(request.app['local_path'], package))
-    except NotBranchError:
+    except NotBranchError as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package)
+            package) from e
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
@@ -151,10 +151,10 @@ async def _git_open_repo(local_path: str, db, package: str) -> Repository:
     repo_path = os.path.join(local_path, package)
     try:
         repo = Repository.open(repo_path)
-    except NotBranchError:
+    except NotBranchError as e:
         async with db.acquire() as conn:
             if not await package_exists(conn, package):
-                raise web.HTTPNotFound(text='no such package: %s' % package)
+                raise web.HTTPNotFound(text='no such package: %s' % package) from e
         controldir = ControlDir.create(repo_path, format=format_registry.get("git-bare")())
         logging.info(
             "Created missing git repository for %s at %s", package, controldir.user_url
