@@ -70,8 +70,8 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
     # TODO(jelmer): Stream this
     try:
         (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
+    except asyncio.TimeoutError as e:
+        raise web.HTTPRequestTimeout(text='diff generation timed out') from e
 
     if p.returncode != 3:
         return web.Response(body=stdout, content_type="text/x-diff")
@@ -133,8 +133,8 @@ async def handle_set_bzr_remote(request):
 
     try:
         local_branch = Branch.open(os.path.join(request.app.local_path, package, remote))
-    except NotBranchError:
-        raise web.HTTPNotFound()
+    except NotBranchError as e:
+        raise web.HTTPNotFound() from e
     local_branch.set_parent(post["url"])
 
     # TODO(jelmer): Run 'bzr pull'?
@@ -166,8 +166,8 @@ async def bzr_backend(request):
     if branch_name:
         try:
             get_campaign_config(request.app.config, branch_name)
-        except KeyError:
-            raise web.HTTPNotFound(text='no such suite: %s' % branch_name)
+        except KeyError as e:
+            raise web.HTTPNotFound(text='no such suite: %s' % branch_name) from e
         transport = repo.user_transport.clone(branch_name)
     else:
         transport = repo.user_transport

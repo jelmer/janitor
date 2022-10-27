@@ -192,10 +192,10 @@ class GCSLogFilemanager(LogFileManager):
             blob = await self.bucket.get_blob(object_name, self.session)
         except ClientResponseError as e:
             if e.status == 404:
-                raise FileNotFoundError(name)
-            raise ServiceUnavailable()
-        except ServerDisconnectedError:
-            raise ServiceUnavailable()
+                raise FileNotFoundError(name) from e
+            raise ServiceUnavailable() from e
+        except ServerDisconnectedError as e:
+            raise ServiceUnavailable() from e
         return parse_date(blob.timeCreated)
 
     async def get_log(self, pkg, run_id, name, timeout=30):
@@ -207,10 +207,10 @@ class GCSLogFilemanager(LogFileManager):
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
             if e.status == 404:
-                raise FileNotFoundError(name)
-            raise ServiceUnavailable()
-        except ServerDisconnectedError:
-            raise ServiceUnavailable()
+                raise FileNotFoundError(name) from e
+            raise ServiceUnavailable() from e
+        except ServerDisconnectedError as e:
+            raise ServiceUnavailable() from e
 
     async def import_log(self, pkg, run_id, orig_path, timeout=360, mtime=None):
         object_name = self._get_object_name(pkg, run_id, os.path.basename(orig_path))
@@ -222,9 +222,9 @@ class GCSLogFilemanager(LogFileManager):
             )
         except ClientResponseError as e:
             if e.status == 503:
-                raise ServiceUnavailable()
+                raise ServiceUnavailable() from e
             if e.status == 403:
-                raise PermissionError(e.message)
+                raise PermissionError(e.message) from e
             raise
 
 

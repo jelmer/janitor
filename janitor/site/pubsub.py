@@ -73,7 +73,7 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
             msg = await queue.get()
             try:
                 await ws.send_str(json.dumps(msg))
-            except TypeError:
-                raise TypeError("not jsonable: %r" % msg)
+            except TypeError as e:
+                raise TypeError("not jsonable: %r" % msg) from e
 
     return ws

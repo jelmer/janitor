@@ -328,25 +328,26 @@ class DebianTarget(Target):
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e,
                 transient=False,
-                stage=("codemod", ))
-        except ScriptMadeNoChanges:
+                stage=("codemod", )) from e
+        except ScriptMadeNoChanges as e:
             raise WorkerFailure(
                 'nothing-to-do', 'No changes made',
                 transient=False,
-                stage=("codemod", ))
+                stage=("codemod", )) from e
         except MissingChangelog as e:
             raise WorkerFailure(
                 'missing-changelog', 'No changelog present: %s' % e.args[0],
                 transient=False,
-                stage=("codemod", ))
+                stage=("codemod", )) from e
         except DebianDetailedFailure as e:
             stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=stage)
+                e.result_code, e.description, e.details, stage=stage) from e
         except ScriptFailed as e:
-            raise _convert_codemod_script_failed(e)
+            raise _convert_codemod_script_failed(e) from e
         except MemoryError as e:
-            raise WorkerFailure('out-of-memory', str(e), stage=("codemod", ))
+            raise WorkerFailure(
+                'out-of-memory', str(e), stage=("codemod", )) from e
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.debian.build import build_from_config, BuildFailure
@@ -357,7 +358,7 @@ class DebianTarget(Target):
             raise WorkerFailure(
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details, followup_actions=e.followup_actions)
+                details=e.details, followup_actions=e.followup_actions) from e
 
     def validate(self, local_tree, subpath, config):
         from .debian.validate import validate_from_config, ValidateError
@@ -367,7 +368,7 @@ class DebianTarget(Target):
             raise WorkerFailure(
                 e.code, e.description,
                 transient=False,
-                stage=("validate", ))
+                stage=("validate", )) from e
 
 
 class GenericTarget(Target):
@@ -394,17 +395,17 @@ class GenericTarget(Target):
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e,
                 transient=False,
-                stage=("codemod", ))
-        except ScriptMadeNoChanges:
+                stage=("codemod", )) from e
+        except ScriptMadeNoChanges as e:
             raise WorkerFailure(
                 'nothing-to-do', 'No changes made', stage=("codemod", ),
-                transient=False)
+                transient=False) from e
         except GenericDetailedFailure as e:
             stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=stage)
+                e.result_code, e.description, e.details, stage=stage) from e
         except ScriptFailed as e:
-            raise _convert_codemod_script_failed(e)
+            raise _convert_codemod_script_failed(e) from e
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import build_from_config, BuildFailure
@@ -415,7 +416,7 @@ class GenericTarget(Target):
             raise WorkerFailure(
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details, followup_actions=e.followup_actions)
+                details=e.details, followup_actions=e.followup_actions) from e
 
 
 def _drop_env(command):
@@ -552,7 +553,7 @@ def process_package(
             raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
                 'url': vcs_url,
                 'retry_after': e.retry_after,
-            })
+            }) from e
         metadata["branch_url"] = main_branch.user_url
         metadata["vcs_type"] = get_branch_vcs_type(main_branch)
         metadata["subpath"] = subpath
@@ -595,7 +596,7 @@ def process_package(
                 "worker-resume-branch-temporarily-unavailable", str(e),
                 stage=("setup", ),
                 transient=True,
-                details={'url': e.url})
+                details={'url': e.url}) from e
         except BranchUnavailable as e:
             logger.info('Resume branch URL %s unavailable: %s', e.url, e)
             traceback.print_exc()
@@ -603,13 +604,13 @@ def process_package(
                 "worker-resume-branch-unavailable", str(e),
                 stage=("setup", ),
                 transient=False,
-                details={'url': e.url})
+                details={'url': e.url}) from e
         except BranchMissing as e:
             raise WorkerFailure(
                 "worker-resume-branch-missing", str(e),
                 stage=("setup", ),
                 transient=False,
-                details={'url': e.url})
+                details={'url': e.url}) from e
     else:
         resume_branch = None
 
@@ -637,37 +638,38 @@ def process_package(
             es.enter_context(ws)
         except IncompleteRead as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-incomplete-read", str(e), stage=("setup", "clone"), transient=True)
+            raise WorkerFailure(
+                "worker-clone-incomplete-read", str(e), stage=("setup", "clone"), transient=True) from e
         except MalformedTransform as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"), transient=False)
+            raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"), transient=False) from e
         except TransformRenameFailed as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"), transient=False)
+            raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"), transient=False) from e
         except ImmortalLimbo as e:
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False)
+            raise WorkerFailure("worker-clone-transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False) from e
         except UnexpectedHttpStatus as e:
             traceback.print_exc()
             if e.code == 502:
-                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"), transient=True)
+                raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"), transient=True) from e
             else:
                 raise WorkerFailure(
                     "worker-clone-http-%s" % e.code, str(e),
-                    stage=("setup", "clone"), details={'status-code': e.code})
+                    stage=("setup", "clone"), details={'status-code': e.code}) from e
         except TransportError as e:
             if "No space left on device" in str(e):
-                raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"))
+                raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone")) from e
             if "Temporary failure in name resolution" in str(e):
                 raise WorkerFailure(
                     "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
-                    transient=True)
+                    transient=True) from e
             traceback.print_exc()
-            raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone")) from e
         except RemoteGitError as e:
-            raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone")) from e
         except TimeoutError as e:
-            raise WorkerFailure("worker-clone-timeout", str(e), stage=("setup", "clone"))
+            raise WorkerFailure("worker-clone-timeout", str(e), stage=("setup", "clone")) from e
 
         logger.info('Workspace ready - starting.')
 
@@ -709,7 +711,7 @@ def process_package(
             if e.code == "nothing-to-do":
                 if ws.changes_since_main():
                     raise WorkerFailure(
-                        "nothing-new-to-do", e.description, stage=("codemod", ), transient=False)
+                        "nothing-new-to-do", e.description, stage=("codemod", ), transient=False) from e
                 elif force_build:
                     changer_result = GenericCommandResult(
                         description='No change build',
@@ -1062,7 +1064,7 @@ def run_worker(
                     else:
                         raise NotImplementedError
                 except Exception as e:
-                    raise _push_error_to_worker_failure(e)
+                    raise _push_error_to_worker_failure(e) from e
 
                 if cached_branch_url:
                     # TODO(jelmer): integrate into import_branches_git / import_branches_bzr
@@ -1149,9 +1151,9 @@ async def get_assignment(
             if resp.status != 201:
                 try:
                     data = await resp.json()
-                except ContentTypeError:
+                except ContentTypeError as e:
                     data = await resp.text()
-                    raise AssignmentFailure(data)
+                    raise AssignmentFailure(data) from e
                 else:
                     if 'reason' in data:
                         if resp.status == 503 and data['reason'] == 'queue empty':
@@ -1161,7 +1163,7 @@ async def get_assignment(
                         raise AssignmentFailure(data)
             return await resp.json()
     except asyncio.TimeoutError as e:
-        raise AssignmentFailure("timeout while retrieving assignment: %s" % e)
+        raise AssignmentFailure("timeout while retrieving assignment: %s" % e) from e
 
 
 INDEX_TEMPLATE = Template("""\

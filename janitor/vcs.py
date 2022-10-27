@@ -164,7 +164,7 @@ def open_branch_ext(
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
     except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
-        raise _convert_branch_exception(vcs_url, e)
+        raise _convert_branch_exception(vcs_url, e) from e
 
 
 class MirrorFailure(Exception):
