@@ -129,7 +129,9 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             msg = "%s (%s)" % (msg, e.url)
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
-        if str(e).startswith("Unsupported protocol for url "):
+        if getattr(e, 'vcs', None):
+            code = "unsupported-vcs-%s" % e.vcs
+        elif str(e).startswith("Unsupported protocol for url "):
             if "anonscm.debian.org" in str(e) or "svn.debian.org" in str(e):
                 code = "hosted-on-alioth"
             else:
