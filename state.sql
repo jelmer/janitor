@@ -1,10 +1,8 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE TABLE IF NOT EXISTS upstream (
-   name text,
-   upstream_branch_url text,
-   primary key(name)
-);
+BEGIN;
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+
 CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS codebase (
    -- Name is intentionally optional
@@ -27,7 +25,47 @@ CREATE TABLE IF NOT EXISTS codebase (
 CREATE INDEX ON codebase (branch_url);
 CREATE INDEX ON codebase (name);
 
-CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+-- TODO(jelmer): Move to Debian janitor
+CREATE EXTENSION IF NOT EXISTS debversion;
+CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
+CREATE TABLE IF NOT EXISTS package (
+   name debian_package_name not null primary key,
+   distribution distribution_name not null,
+
+   codebase text references codebase(name),
+
+   -- TODO(jelmer): Move these to codebase
+   vcs_type vcs_type,
+   branch_url text,
+   subpath text,
+   vcs_last_revision text,
+
+   maintainer_email text,
+   uploader_emails text[],
+   archive_version debversion,
+   vcs_url text,
+   vcs_browse text,
+   popcon_inst integer,
+   removed boolean default false,
+   vcswatch_status vcswatch_status,
+   vcswatch_version debversion,
+   in_base boolean,
+   origin text,
+   unique(distribution, name)
+);
+CREATE INDEX ON package (removed);
+CREATE INDEX ON package (vcs_url);
+CREATE INDEX ON package (branch_url);
+CREATE INDEX ON package (maintainer_email);
+CREATE INDEX ON package (uploader_emails);
+
+CREATE TABLE IF NOT EXISTS upstream (
+   name text,
+   upstream_branch_url text,
+   primary key(name)
+);
+
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text, -- TO BE REMOVED
@@ -39,8 +77,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    merged_at timestamp,
    last_scanned timestamp,
    foreign key (package) references package(name),
-   primary key(url),
-   foreign key (target_branch_url)
+   primary key(url)
 );
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
@@ -50,6 +87,20 @@ CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'abstain
 CREATE TABLE result_tag (
  actual_name text,
  revision text not null
+);
+
+CREATE TABLE IF NOT EXISTS worker (
+   name text not null unique,
+   password text not null,
+   link text
+);
+
+CREATE TYPE change_set_state AS ENUM ('created', 'working', 'ready', 'publishing', 'done');
+
+CREATE TABLE IF NOT EXISTS change_set (
+  id text not null primary key,
+  campaign campaign_name not null,
+  state change_set_state default 'created' not null
 );
 
 CREATE INDEX ON result_tag (revision);
@@ -110,6 +161,7 @@ CREATE TABLE IF NOT EXISTS publish (
    change_set text not null references change_set(id),
    package text not null,
    target_branch_url text,
+   subpath text,
    branch_name text,
    main_branch_revision text,
    revision text,
@@ -122,7 +174,7 @@ CREATE TABLE IF NOT EXISTS publish (
    timestamp timestamp default now(),
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url),
-   foreign key (target_branch_url) references codebase(branch_url),
+   foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
 );
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
@@ -133,6 +185,7 @@ CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
    package text not null,
+   codebase text,
    branch_url text,
    suite suite_name not null,
    command text,
@@ -144,24 +197,12 @@ CREATE TABLE IF NOT EXISTS queue (
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   foreign key (branch_url) references codebase(branch_url)
+   foreign key (codebase) references codebase(name)
 );
 CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));
 CREATE INDEX ON queue (change_set);
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
-CREATE TABLE IF NOT EXISTS candidate (
-   package text not null,
-   suite suite_name not null,
-   context text,
-   value integer,
-   success_chance float,
-   command text not null,
-   publish_policy text references named_publish_policy (name),
-   change_set text references change_set(id),
-   foreign key (package) references package(name)
-);
-CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));
 CREATE TABLE IF NOT EXISTS branch_publish_policy (
    role text not null,
    mode publish_mode default 'build-only',
@@ -174,13 +215,32 @@ CREATE TABLE IF NOT EXISTS named_publish_policy (
    qa_review review_policy
 );
 
+
+CREATE TABLE IF NOT EXISTS candidate (
+   package text not null,
+   suite suite_name not null,
+   context text,
+   value integer,
+   success_chance float,
+   command text not null,
+   publish_policy text references named_publish_policy (name),
+   change_set text references change_set(id),
+   foreign key (package) references package(name)
+);
+CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
-CREATE TABLE IF NOT EXISTS worker (
-   name text not null unique,
-   password text not null,
-   link text
+
+CREATE TABLE last_run (
+   package text not null references package (name),
+   campaign campaign_name not null,
+   last_run_id text references run (id),
+   last_effective_run_id text references run (id),
+   last_unabsorbed_run_id text references run (id),
+   unique (package, campaign)
 );
+
+
 
 -- The last run per package/suite
 CREATE OR REPLACE VIEW last_runs AS
@@ -599,24 +659,6 @@ CREATE TABLE IF NOT EXISTS review (
 CREATE INDEX ON review (run_id);
 CREATE UNIQUE INDEX ON review (run_id, reviewer);
 
-CREATE TYPE change_set_state AS ENUM ('created', 'working', 'ready', 'publishing', 'done');
-
-CREATE TABLE IF NOT EXISTS change_set (
-  id text not null primary key,
-  initial_run_id text references run(id)
-  campaign campaign_name not null,
-  state change_set_state default 'created' not null
-);
-
-CREATE TABLE last_run (
-   package text not null references package (name),
-   campaign campaign_name not null,
-   last_run_id text references run (id),
-   last_effective_run_id text references run (id),
-   last_unabsorbed_run_id text references run (id),
-   unique (package, campaign)
-);
-
 CREATE OR REPLACE VIEW change_set_todo AS
   SELECT * FROM candidate WHERE change_set is not NULL AND NOT EXISTS (
         SELECT FROM last_runs WHERE
@@ -631,39 +673,5 @@ CREATE OR REPLACE VIEW change_set_unpublished AS
   WHERE not coalesce(new_result_branch.absorbed, False) and result_code = 'success';
 
 
--- TODO(jelmer): Move to Debian janitor
-CREATE EXTENSION IF NOT EXISTS debversion;
-CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
-CREATE TABLE IF NOT EXISTS package (
-   name debian_package_name not null primary key,
-   distribution distribution_name not null,
-
-   codebase text references codebase(name),
-
-   -- TODO(jelmer): Move these to codebase
-   vcs_type vcs_type,
-   branch_url text,
-   subpath text,
-   vcs_last_revision text,
-
-   maintainer_email text,
-   uploader_emails text[],
-   archive_version debversion,
-   vcs_url text,
-   vcs_browse text,
-   popcon_inst integer,
-   removed boolean default false,
-   vcswatch_status vcswatch_status,
-   vcswatch_version debversion,
-   in_base boolean,
-   origin text,
-   unique(distribution, name)
-);
-CREATE INDEX ON package (removed);
-CREATE INDEX ON package (vcs_url);
-CREATE INDEX ON package (branch_url);
-CREATE INDEX ON package (maintainer_email);
-CREATE INDEX ON package (uploader_emails);
-
 create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
+COMMIT;
