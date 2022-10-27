@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
    package text not null,
-   codebase text,
+   codebase text references codebase(name),
    branch_url text,
    suite suite_name not null,
    command text,

@@ -21,7 +21,7 @@ __all__ = [
 
 from datetime import datetime, timedelta
 import logging
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 from debian.changelog import Version
 
@@ -67,6 +67,7 @@ SELECT
   package.name AS package,
   package.codebase AS codebase,
   package.branch_url AS branch_url,
+  candidate.codebase AS codebase,
   candidate.suite AS campaign,
   candidate.context AS context,
   candidate.value AS value,
@@ -198,6 +199,42 @@ async def estimate_duration(
         return estimated_duration
 
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
+
+
+async def bulk_queue_refresh(
+    conn: asyncpg.Connection,
+    todo: List[str],
+    *,
+    dry_run: bool = False
+):
+    if not todo:
+        return
+    query = """
+SELECT
+  package.name AS package,
+  package.branch_url AS branch_url,
+  candidate.codebase AS codebase,
+  candidate.suite AS campaign,
+  candidate.context AS context,
+  candidate.value AS value,
+  candidate.success_chance AS success_chance,
+  named_publish_policy.per_branch_policy AS publish,
+  candidate.command AS command
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+INNER JOIN named_publish_policy ON
+    named_publish_policy.name = candidate.publish_policy
+WHERE
+  NOT package.removed AND
+  package.branch_url IS NOT NULL AND
+  candidate.package = ANY($1::text)
+"""
+    q = [
+        queue_item_from_candidate_and_publish_policy(row)
+        for row in
+        await conn.fetch(query, todo)]
+    logging.info('Adding %d items to queue', len(todo))
+    return await bulk_add_to_queue(conn, q, dry_run=dry_run)
 
 
 async def bulk_add_to_queue(
