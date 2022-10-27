@@ -89,12 +89,8 @@ async def handle_oauth_callback(request):
     async with request.app['http_client_session'].get(
         request.app['openid_config']["userinfo_endpoint"],
         headers={"Authorization": "Bearer %s" % access_token},
+        raise_for_status=True
     ) as resp:
-        if resp.status != 200:
-            raise Exception(
-                "unable to get user info (%s): %s"
-                % (resp.status, await resp.read())
-            )
         userinfo = await resp.json()
     session_id = str(uuid.uuid4())
     async with request.app.database.acquire() as conn:
@@ -150,9 +146,9 @@ async def handle_login(request):
     if "url" in request.query:
         try:
             response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
-        except ValueError:
+        except ValueError as e:
             # 'url' is not a URL
-            raise web.HTTPBadRequest(text='invalid url')
+            raise web.HTTPBadRequest(text='invalid url') from e
     return response
 
 

@@ -474,8 +474,9 @@ async def publish_one(
     if p.returncode == 1:
         try:
             response = json.loads(stdout.decode())
-        except json.JSONDecodeError:
-            raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
+        except json.JSONDecodeError as e:
+            raise PublishFailure(
+                mode, "publisher-invalid-response", stderr.decode()) from e
         sys.stderr.write(stderr.decode())
         raise PublishFailure(mode, response["code"], response["description"])
 
@@ -1810,8 +1811,8 @@ async def refresh_proposal_status_request(request):
     post = await request.post()
     try:
         url = post["url"]
-    except KeyError:
-        raise web.HTTPBadRequest(body="missing url parameter")
+    except KeyError as e:
+        raise web.HTTPBadRequest(body="missing url parameter") from e
     logger.info("Request to refresh proposal status for %s", url)
 
     async def scan():

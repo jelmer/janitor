@@ -175,8 +175,8 @@ async def handle_package_hosters(request, conn):
             host = urlparse(url)[1]
             try:
                 host = host.split(":")[0]
-            except TypeError:
-                raise TypeError(url)
+            except TypeError as e:
+                raise TypeError(url) from e
             if "@" in host:
                 host = host.split("@")[1]
             name = HOST_RENAMES.get(host, host)

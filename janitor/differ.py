@@ -133,9 +133,10 @@ async def handle_debdiff(request):
                 raise web.HTTPNotFound(
                     text="No artifacts for run id: %r" % e,
                     headers={"unavailable_run_id": e.args[0]},
-                )
-            except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts")
+                ) from e
+            except asyncio.TimeoutError as e:
+                raise web.HTTPGatewayTimeout(
+                    text="Timeout retrieving artifacts") from e
 
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
@@ -157,8 +158,9 @@ async def handle_debdiff(request):
                 )
             except DebdiffError as e:
                 return web.Response(status=400, text=e.args[0])
-            except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text="Timeout running debdiff")
+            except asyncio.TimeoutError as e:
+                raise web.HTTPGatewayTimeout(
+                    text="Timeout running debdiff") from e
 
         if cache_path:
             with open(cache_path, "wb") as f:
@@ -306,9 +308,10 @@ async def handle_diffoscope(request):
                 raise web.HTTPNotFound(
                     text="No artifacts for run id: %r" % e,
                     headers={"unavailable_run_id": e.args[0]},
-                )
-            except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts")
+                ) from e
+            except asyncio.TimeoutError as e:
+                raise web.HTTPGatewayTimeout(
+                    text="Timeout retrieving artifacts") from e
 
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
@@ -331,12 +334,15 @@ async def handle_diffoscope(request):
                         lambda: _set_limits(request.app.task_memory_limit)),
                     request.app.task_timeout
                 )
-            except MemoryError:
-                raise web.HTTPServiceUnavailable(text="diffoscope used too much memory")
-            except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text="diffoscope timed out")
+            except MemoryError as e:
+                raise web.HTTPServiceUnavailable(
+                    text="diffoscope used too much memory") from e
+            except asyncio.TimeoutError as e:
+                raise web.HTTPGatewayTimeout(
+                    text="diffoscope timed out") from e
             except DiffoscopeError as e:
-                raise web.HTTPInternalServerError(reason='diffoscope error', text=e.args[0])
+                raise web.HTTPInternalServerError(
+                    reason='diffoscope error', text=e.args[0]) from e
 
         if cache_path is not None:
             with open(cache_path, "w") as f:
@@ -431,18 +437,20 @@ async def precache(app, old_id, new_id):
                         old_binaries, new_binaries,
                         lambda: _set_limits(app.task_memory_limit)), app.task_timeout
                 )
-            except MemoryError:
-                raise DiffCommandMemoryError("diffoscope", app.task_memory_limit)
-            except asyncio.TimeoutError:
-                raise DiffCommandTimeout("diffoscope", app.task_timeout)
+            except MemoryError as e:
+                raise DiffCommandMemoryError(
+                    "diffoscope", app.task_memory_limit) from e
+            except asyncio.TimeoutError as e:
+                raise DiffCommandTimeout(
+                    "diffoscope", app.task_timeout) from e
             except DiffoscopeError as e:
-                raise DiffCommandError("diffoscope", e.args[0])
+                raise DiffCommandError("diffoscope", e.args[0]) from e
 
             try:
                 with open(diffoscope_cache_path, "w") as f:
                     json.dump(diffoscope_diff, f)
             except json.JSONDecodeError as e:
-                raise web.HTTPServerError(text=str(e))
+                raise web.HTTPServerError(text=str(e)) from e
             logging.info("Precached diffoscope result for %s/%s", old_id, new_id)
 
 
@@ -475,16 +483,19 @@ async def handle_precache(request):
             raise web.HTTPNotFound(
                 text="No artifacts for run id: %r" % e,
                 headers={"unavailable_run_id": e.args[0]},
-            )
-        except ArtifactRetrievalTimeout:
-            raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts")
-        except DiffCommandTimeout:
-            raise web.HTTPGatewayTimeout(text="Timeout diffing artifacts")
-        except DiffCommandMemoryError:
-            raise web.HTTPServiceUnavailable(text="diffing used too much memory")
+            ) from e
+        except ArtifactRetrievalTimeout as e:
+            raise web.HTTPGatewayTimeout(
+                text="Timeout retrieving artifacts") from e
+        except DiffCommandTimeout as e:
+            raise web.HTTPGatewayTimeout(
+                text="Timeout diffing artifacts") from e
+        except DiffCommandMemoryError as e:
+            raise web.HTTPServiceUnavailable(
+                text="diffing used too much memory") from e
         except DiffCommandError as e:
             raise web.HTTPInternalServerError(
-                reason='diff command error', text=e.args[0])
+                reason='diff command error', text=e.args[0]) from e
 
     create_background_task(_precache(), 'precaching')
 

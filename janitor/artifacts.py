@@ -165,7 +165,7 @@ class GCSArtifactManager(ArtifactManager):
             await asyncio.gather(*todo)
         except ClientResponseError as e:
             if e.status == 503:
-                raise ServiceUnavailable()
+                raise ServiceUnavailable() from e
             raise
         logging.info(
             "Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name
@@ -215,9 +215,9 @@ class GCSArtifactManager(ArtifactManager):
             )
         except ClientResponseError as e:
             if e.status == 503:
-                raise ServiceUnavailable()
+                raise ServiceUnavailable() from e
             if e.status == 404:
-                raise FileNotFoundError
+                raise FileNotFoundError(filename) from e
             raise
 
     def public_artifact_url(self, run_id, filename):

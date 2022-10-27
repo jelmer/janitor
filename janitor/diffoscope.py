@@ -176,7 +176,7 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     try:
         return json.loads(stdout.decode("utf-8"))
     except json.JSONDecodeError as e:
-        raise DiffoscopeError("Error parsing JSON: %s" % e)
+        raise DiffoscopeError("Error parsing JSON: %s" % e) from e
 
 
 async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
