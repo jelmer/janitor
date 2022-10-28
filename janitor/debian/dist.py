@@ -35,7 +35,8 @@ from ognibuild import (
 from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
-from ognibuild.debian import satisfy_build_deps, run_apt
+from ognibuild.debian import satisfy_build_deps
+from ognibuild.debian.apt import run_apt
 from ognibuild.logs import (
     DirectoryLogManager,
     NoLogManager,
