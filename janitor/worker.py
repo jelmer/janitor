@@ -240,7 +240,7 @@ class WorkerFailure(Exception):
 def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
     if e.args[1] == 127:
         return WorkerFailure(
-            'codemod-command-not-found',
+            'command-not-found',
             'Command %s not found' % e.args[0],
             stage=("codemod", ))
     elif e.args[1] == 137:
@@ -249,7 +249,7 @@ def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
             'Ran out of memory running command',
             stage=("codemod", ))
     return WorkerFailure(
-        'codemod-command-failed',
+        'command-failed',
         'Script %s failed to run with code %s' % e.args,
         stage=("codemod", ))
 
@@ -682,26 +682,25 @@ def push_branch(
 
 
 def _push_error_to_worker_failure(e, stage):
-    prefix = stage[0]
     if isinstance(e, UnexpectedHttpStatus):
         if e.code == 502:
             return WorkerFailure(
-                f"{prefix}-bad-gateway",
+                "bad-gateway",
                 "Failed to push result branch: %s" % e,
                 stage=stage,
                 transient=True
             )
         return WorkerFailure(
-            f"{prefix}-failed", "Failed to push result branch: %s" % e,
+            "push-failed", "Failed to push result branch: %s" % e,
             stage=stage)
     if isinstance(e, ConnectionError):
         if "Temporary failure in name resolution" in e.msg:
             return WorkerFailure(
-                f"{prefix}-failed-temporarily",
+                "failed-temporarily",
                 "Failed to push result branch: %s" % e,
                 stage=stage, transient=True)
         return WorkerFailure(
-            f"{prefix}-failed", "Failed to push result branch: %s" % e,
+            "push-failed", "Failed to push result branch: %s" % e,
             stage=stage)
 
     if isinstance(
@@ -709,20 +708,20 @@ def _push_error_to_worker_failure(e, stage):
                 ConnectionError, ConnectionReset, ssl.SSLEOFError,
                 ssl.SSLError)):
         return WorkerFailure(
-            f"{prefix}-failed", "Failed to push result branch: %s" % e,
+            "push-failed", "Failed to push result branch: %s" % e,
             stage=stage)
     if isinstance(e, RemoteGitError):
         if str(e) == 'missing necessary objects':
             return WorkerFailure(
-                'result-push-git-missing-necessary-objects', str(e),
+                'git-missing-necessary-objects', str(e),
                 stage=stage)
         elif str(e) == 'failed to updated ref':
             return WorkerFailure(
-                'result-push-git-ref-update-failed',
+                'git-ref-update-failed',
                 str(e), stage=stage)
         else:
             return WorkerFailure(
-                f"{prefix}-git-error", str(e), stage=stage)
+                "git-error", str(e), stage=stage)
     return e
 
 
@@ -865,37 +864,37 @@ def run_worker(
             except IncompleteRead as e:
                 traceback.print_exc()
                 raise WorkerFailure(
-                    "worker-clone-incomplete-read", str(e), stage=("setup", "clone"), transient=True) from e
+                    "incomplete-read", str(e), stage=("setup", "clone"), transient=True) from e
             except MalformedTransform as e:
                 traceback.print_exc()
-                raise WorkerFailure("worker-clone-malformed-transform", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure("malformed-transform", str(e), stage=("setup", "clone"), transient=False) from e
             except TransformRenameFailed as e:
                 traceback.print_exc()
-                raise WorkerFailure("worker-clone-transform-rename-failed", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure("transform-rename-failed", str(e), stage=("setup", "clone"), transient=False) from e
             except ImmortalLimbo as e:
                 traceback.print_exc()
-                raise WorkerFailure("worker-clone-transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure("transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False) from e
             except UnexpectedHttpStatus as e:
                 traceback.print_exc()
                 if e.code == 502:
-                    raise WorkerFailure("worker-clone-bad-gateway", str(e), stage=("setup", "clone"), transient=True) from e
+                    raise WorkerFailure("bad-gateway", str(e), stage=("setup", "clone"), transient=True) from e
                 else:
                     raise WorkerFailure(
-                        "worker-clone-http-%s" % e.code, str(e),
+                        "http-%s" % e.code, str(e),
                         stage=("setup", "clone"), details={'status-code': e.code}) from e
             except TransportError as e:
                 if "No space left on device" in str(e):
                     raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone")) from e
                 if "Temporary failure in name resolution" in str(e):
                     raise WorkerFailure(
-                        "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
+                        "temporary-transport-error", str(e), stage=("setup", "clone"),
                         transient=True) from e
                 traceback.print_exc()
-                raise WorkerFailure("worker-clone-transport-error", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure("transport-error", str(e), stage=("setup", "clone")) from e
             except RemoteGitError as e:
-                raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure("git-error", str(e), stage=("setup", "clone")) from e
             except TimeoutError as e:
-                raise WorkerFailure("worker-clone-timeout", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure("timeout", str(e), stage=("setup", "clone")) from e
             except MissingNestedTree as e:
                 raise WorkerFailure("requires-nested-tree-support", str(e), stage=("setup", "clone")) from e
 
@@ -903,7 +902,7 @@ def run_worker(
 
             if ws.local_tree.has_changes():
                 raise WorkerFailure(
-                    "worker-unexpected-changes-in-tree",
+                    "unexpected-changes-in-tree",
                     description="The working tree has unexpected changes after initial clone",
                     stage=("setup", "clone"))
 
