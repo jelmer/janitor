@@ -35,6 +35,7 @@ from ognibuild import (
 from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
+from ognibuild.debian import satisfy_build_deps, run_apt
 from ognibuild.logs import (
     DirectoryLogManager,
     NoLogManager,
@@ -77,6 +78,10 @@ if __name__ == '__main__':
         '--require-declared',
         action='store_true',
         help='Fail if declared dependencies can not be installed')
+    parser.add_argument(
+        '--apt-update', action='store_true')
+    parser.add_argument(
+        '--apt-dist-upgrade', action='store_true')
     args = parser.parse_args()
 
     from ognibuild.session.schroot import SchrootSession
@@ -95,6 +100,10 @@ if __name__ == '__main__':
         subdir = package or "package"
 
         session = es.enter_context(SchrootSession(args.schroot))
+        if args.apt_update:
+            run_apt(session, ['update'])
+        if args.apt_dist_upgrade:
+            run_apt(session, ['dist-upgrade'])
         try:
             try:
                 tree = WorkingTree.open(args.directory)
@@ -117,7 +126,6 @@ if __name__ == '__main__':
             (packaging_tree,
              packaging_debian_path) = WorkingTree.open_containing(
                 args.packaging)
-            from ognibuild.debian import satisfy_build_deps
 
             try:
                 satisfy_build_deps(
