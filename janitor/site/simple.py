@@ -53,6 +53,10 @@ from .openid import setup_openid
 from .pubsub import pubsub_handler, Topic
 
 
+routes = web.RouteTableDef()
+private_routes = web.RouteTableDef()
+
+
 def create_background_task(fn, title):
     loop = asyncio.get_event_loop()
     task = loop.create_task(fn)
@@ -117,6 +121,7 @@ async def handle_merge_proposal(request):
     return await write_merge_proposal(request.app.database, url)
 
 
+@routes.get("/credentials", name="credentials")
 @html_template(env, "credentials.html", headers={"Vary": "Cookie"})
 async def handle_credentials(request):
     try:
@@ -149,6 +154,7 @@ async def handle_credentials(request):
     }
 
 
+@routes.get("/ssh_keys", name="ssh-keys")
 async def handle_ssh_keys(request):
     credentials = await get_credentials(
         request.app['http_client_session'], request.app['publisher_url']
@@ -158,6 +164,7 @@ async def handle_ssh_keys(request):
     )
 
 
+@routes.get(r"/pgp_keys{extension:(\.asc)?}", name="pgp-keys")
 async def handle_pgp_keys(request):
     credentials = await get_credentials(
         request.app['http_client_session'], request.app['publisher_url']
@@ -179,6 +186,9 @@ async def handle_pgp_keys(request):
         )
 
 
+@routes.get(
+    r"/archive-keyring{extension:(\.asc|\.gpg)}",
+    name="archive-keyring")
 async def handle_archive_keyring(request):
     url = URL(request.app['archiver_url']) / "pgp_keys"
     async with request.app['http_client_session'].get(url=url) as resp:
@@ -289,6 +299,7 @@ async def handle_generic_pkg(request):
     )
 
 
+@routes.get("/{vcs:git|bzr}/", name="repo-list")
 @html_template(env, "repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
@@ -297,6 +308,7 @@ async def handle_repo_list(request):
         return {"vcs": vcs, "repositories": await resp.json()}
 
 
+@private_routes.get("/health", name="health")
 async def handle_health(request):
     return web.Response(text='ok')
 
@@ -316,11 +328,12 @@ async def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    app.router.add_routes(routes)
     private_app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    private_app.router.add_routes(private_routes)
 
     private_app.router.add_get("/metrics", metrics, name="metrics")
-    private_app.router.add_get("/health", handle_health, name="health")
 
     app.topic_notifications = Topic("notifications")
     app.router.add_get(
@@ -419,15 +432,6 @@ async def create_app(
             functools.partial(handle_simple, templatename + ".html"),
             name=templatename,
         )
-    app.router.add_get("/credentials", handle_credentials, name="credentials")
-    app.router.add_get("/ssh_keys", handle_ssh_keys, name="ssh-keys")
-    app.router.add_get(
-        r"/pgp_keys{extension:(\.asc)?}", handle_pgp_keys, name="pgp-keys"
-    )
-    app.router.add_get(
-        r"/archive-keyring{extension:(\.asc|\.gpg)}", handle_archive_keyring,
-        name="archive-keyring"
-    )
     CAMPAIGN_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % CAMPAIGN_REGEX,
@@ -446,8 +450,6 @@ async def create_app(
         "/{suite:%s}/done" % CAMPAIGN_REGEX, handle_done_proposals, name="campaign-done"
     )
 
-    app.router.add_get(
-        "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     from .cupboard import register_cupboard_endpoints
     register_cupboard_endpoints(app.router)
     app.router.add_get(
