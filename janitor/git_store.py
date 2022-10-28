@@ -34,7 +34,8 @@ from http.client import parse_headers  # type: ignore
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.repository import Repository
-from dulwich.errors import HangupException, MissingCommitError
+from dulwich.aiohttp import service_request, refs_request
+from dulwich.errors import MissingCommitError
 from dulwich.objects import valid_hexsha, ZERO_SHA
 from dulwich.web import HTTPGitApplication
 
@@ -47,16 +48,10 @@ except ImportError:  # dulwich < 0.20.47
         ("Cache-Control", "no-cache, max-age=0, must-revalidate"),
     ]
 
-from dulwich.protocol import ReceivableProtocol
-from dulwich.server import (
-    DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
-    DictBackend,
-)
 from . import (
     state,
 )
 
-from .compat import to_thread
 from .config import read_config
 from .site import is_worker, iter_accept, env as site_env
 
@@ -399,37 +394,11 @@ async def dulwich_refs(request):
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
-    r = repo._git
 
     service = request.query.get("service")
     _git_check_service(service, allow_writes)
 
-    headers = {
-        "Content-Type": "application/x-%s-advertisement" % service,
-    }
-    headers.update(NO_CACHE_HEADERS)
-
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
-
-    response = web.StreamResponse(status=200, headers=headers)
-
-    await response.prepare(request)
-
-    out = BytesIO()
-    proto = ReceivableProtocol(BytesIO().read, out.write)
-    handler = handler_cls(
-        DictBackend({".": r}), ["."], proto, stateless_rpc=True, advertise_refs=True
-    )
-    handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
-    handler.proto.write_pkt_line(None)
-
-    await to_thread(handler.handle)
-
-    await response.write(out.getvalue())
-
-    await response.write_eof()
-
-    return response
+    return await refs_request(repo._git, request)
 
 
 async def dulwich_service(request):
@@ -446,34 +415,7 @@ async def dulwich_service(request):
 
     _git_check_service(service, allow_writes)
 
-    headers = {
-        'Content-Type': "application/x-%s-result" % service
-    }
-    headers.update(NO_CACHE_HEADERS)
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
-
-    response = web.StreamResponse(status=200, headers=headers)
-
-    await response.prepare(request)
-
-    inf = BytesIO(await request.read())
-    outf = BytesIO()
-
-    def handle():
-        r = repo._git
-        proto = ReceivableProtocol(inf.read, outf.write)
-        handler = handler_cls(DictBackend({".": r}), ["."], proto, stateless_rpc=True)
-        try:
-            handler.handle()
-        except HangupException:
-            response.force_close()
-
-    await to_thread(handle)
-
-    await response.write(outf.getvalue())
-
-    await response.write_eof()
-    return response
+    return await service_request(repo._git, request)
 
 
 async def package_exists(conn, package):
