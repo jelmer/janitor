@@ -316,6 +316,9 @@ class DebianTarget(Target):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
 
+        # Prevent 404s because files have gone away:
+        dist_command += ' --apt-update --apt-dist-upgrade'
+
         extra_env = {'DIST': dist_command}
         extra_env.update(self.env)
         try:
