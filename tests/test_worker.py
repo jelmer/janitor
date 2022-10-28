@@ -176,13 +176,13 @@ async def test_artifact_index(aiohttp_client):
 
 def test_convert_codemod_script_failed():
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)) == WorkerFailure(
-        'codemod-command-not-found',
+        'command-not-found',
         'Command foobar not found',
         stage=("codemod", ))
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)) == WorkerFailure(
         'out-of-memory', 'Ran out of memory running command', stage=('codemod', ))
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
-        'codemod-command-failed', 'Script foobar failed to run with code 1',
+        'command-failed', 'Script foobar failed to run with code 1',
         stage=('codemod', ))
 
 

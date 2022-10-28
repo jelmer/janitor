@@ -148,7 +148,7 @@ if __name__ == '__main__':
                         'Ignoring error installing '
                         'declared build dependencies (%r): %s',
                         e.argv, e.secondary.line)
-                    report_failure('dist-command-failed', e.secondary.line, e)
+                    report_failure('command-failed', e.secondary.line, e)
                 elif len(lines) == 1:
                     logging.warning(
                         'Ignoring error installing declared '
@@ -189,12 +189,12 @@ if __name__ == '__main__':
         except UnidentifiedError as e:
             lines = [line for line in e.lines if line]
             if e.secondary:
-                report_failure('dist-command-failed', e.secondary.line, e)
+                report_failure('command-failed', e.secondary.line, e)
             elif len(lines) == 1:
-                report_failure('dist-command-failed', lines[0], e)
+                report_failure('command-failed', lines[0], e)
             else:
                 report_failure(
-                    'dist-command-failed',
+                    'command-failed',
                     "%r failed with unidentified error "
                     "(return code %d)" % (e.argv, e.retcode), e)
             sys.exit(1)
@@ -202,21 +202,17 @@ if __name__ == '__main__':
             report_failure('session-setup-failure', str(e), e)
             sys.exit(1)
         except DetailedFailure as e:
-            if e.error.is_global:
-                error_code = e.error.kind
-            else:
-                error_code = "dist-" + e.error.kind
             error_description = str(e.error)
-            report_failure(error_code, error_description, e)
+            report_failure(e.error.kind, error_description, e)
             sys.exit(1)
         except DistNoTarball as e:
-            report_failure('dist-no-tarball', str(e), e)
+            report_failure('no-tarball', str(e), e)
             sys.exit(1)
         except SystemExit:
             raise
         except BaseException as e:
             traceback.print_exc()
-            report_failure('dist-exception', str(e), e)
+            report_failure('exception', str(e), e)
             sys.exit(1)
 
     sys.exit(0)
