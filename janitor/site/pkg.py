@@ -352,6 +352,21 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     return kwargs
 
 
+async def generate_done_list(
+        db, campaign: Optional[str], since: Optional[datetime] = None):
+
+    async with db.acquire() as conn:
+        oldest = await conn.fetchval("SELECT MIN(absorbed_at) FROM absorbed_runs")
+
+        if since:
+            runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1", since)
+        else:
+            runs = await conn.fetch("SELECT * FROM absorbed_runs")
+
+    return {"oldest": oldest, "runs": runs, "campaign": campaign, "since": since}
+
+
 async def generate_ready_list(
     db, suite: Optional[str], review_status: Optional[str] = None
 ):

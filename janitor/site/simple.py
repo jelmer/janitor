@@ -18,6 +18,7 @@
 """Serve the janitor site."""
 
 import asyncio
+from datetime import datetime
 import functools
 import logging
 import os
@@ -252,6 +253,22 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
+@html_template(env, "done-list.html", headers={"Vary": "Cookie"})
+async def handle_done_proposals(request):
+    from .pkg import generate_done_list
+
+    campaign = request.match_info.get("campaign")
+
+    try:
+        since = datetime.fromisoformat(request.query["since"])
+    except ValueError as e:
+        raise web.HTTPBadRequest(text="invalid since") from e
+    except KeyError:
+        since = None
+
+    return await generate_done_list(request.app.database, campaign, since)
+
+
 @html_template(env, "generic/package.html", headers={"Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
@@ -423,8 +440,12 @@ async def create_app(
         name="suite-merge-proposal",
     )
     app.router.add_get(
-        "/{suite:%s}/ready" % CAMPAIGN_REGEX, handle_ready_proposals, name="suite-ready"
+        "/{suite:%s}/ready" % CAMPAIGN_REGEX, handle_ready_proposals, name="campaign-ready"
     )
+    app.router.add_get(
+        "/{suite:%s}/done" % CAMPAIGN_REGEX, handle_done_proposals, name="campaign-done"
+    )
+
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     from .cupboard import register_cupboard_endpoints

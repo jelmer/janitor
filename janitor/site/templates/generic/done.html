@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block sidebar %}
+    {% if not campaign %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
+    {% endif %}
+{% endblock sidebar %}
+{% block page_title %}
+    Changes that have been merged or pushed
+    {% if campaign %}- {{ campaign }}{% endif %}
+{% endblock page_title %}
+{% block body %}
+    <div class="section" id="history">
+        <h1>Changes to have been merged or pushed</h1>
+
+	<label for="start">Start date:</label>
+
+	<input type="date" id="since" name="since"
+	       {% if since %}
+	       value="{{ since.date.isoformat() }}"
+	       {% else %}
+	       value="{{ oldest.date.isoformat() }}"
+	       {% endif %}
+	       min="{{ oldest.date.isoformat() }}" max="{{ utcnow().date.isoformat() }}"/>
+
+        <ul>
+            {% for run in runs %}
+                <li>
+                    <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
+		    {% if run.merged_by %}
+		    (merged by {{ run.merged_by }})
+		    {% endif %}
+                    {% set command = run.command -%}
+                    {% set result = run.result -%}
+                    {% include [run.suite + "/summary.html", "generic/summary.html"] %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock body %}
