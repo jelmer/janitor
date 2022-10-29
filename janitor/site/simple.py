@@ -263,7 +263,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
-@html_template(env, "done-list.html", headers={"Vary": "Cookie"})
+@html_template(env, "generic/done.html", headers={"Vary": "Cookie"})
 async def handle_done_proposals(request):
     from .pkg import generate_done_list
 
