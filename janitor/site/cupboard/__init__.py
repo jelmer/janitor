@@ -439,9 +439,11 @@ async def generate_done_list(db, since: Optional[datetime] = None):
 
         if since:
             runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1", since)
+                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
+                "ORDER BY absorbed_at", since)
         else:
-            runs = await conn.fetch("SELECT * FROM absorbed_runs")
+            runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs ORDER BY absorbed_at")
 
     return {"oldest": oldest, "runs": runs, "since": since}
 
