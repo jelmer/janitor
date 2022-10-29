@@ -73,6 +73,7 @@ from silver_platter.utils import (
     BranchMissing,
     BranchUnavailable,
     BranchTemporarilyUnavailable,
+    get_branch_vcs_type,
 )
 
 from breezy import urlutils
@@ -99,7 +100,7 @@ from breezy.transform import (
     TransformRenameFailed,
     ImmortalLimbo,
 )
-from breezy.transport import Transport
+from breezy.transport import NoSuchFile, get_transport, Transport
 
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
@@ -481,7 +482,6 @@ def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches, tags,
         update_current: bool = True
 ):
-    from breezy.transport import NoSuchFile, get_transport
     for fn, n, br, r in branches:
         target_branch_path = urlutils.join(repo_url, campaign)
         if fn is not None:
@@ -969,17 +969,6 @@ def _push_error_to_worker_failure(e):
             return WorkerFailure(
                 "result-push-git-error", str(e), stage=("result-push", ))
     return e
-
-
-try:
-    from silver_platter.utils import get_branch_vcs_type
-except ImportError:  # old silver-platter
-    def get_branch_vcs_type(branch):
-        vcs = getattr(branch.repository, "vcs", None)
-        if vcs:
-            return vcs.abbreviation
-        else:
-            return "bzr"
 
 
 def run_worker(

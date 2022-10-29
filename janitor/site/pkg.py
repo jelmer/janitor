@@ -34,10 +34,7 @@ import asyncpg
 
 from breezy.revision import NULL_REVISION
 
-try:
-    from ognibuild.build import BUILD_LOG_FILENAME
-except ImportError:
-    BUILD_LOG_FILENAME = 'build.log'
+from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor.queue import Queue
