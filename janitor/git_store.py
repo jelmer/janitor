@@ -66,7 +66,7 @@ GIT_BACKEND_CHUNK_SIZE = 4096
 
 async def git_diff_request(request):
     span = aiozipkin.request_span(request)
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     try:
         old_sha = request.query['old'].encode('utf-8')
         new_sha = request.query['new'].encode('utf-8')
@@ -75,11 +75,11 @@ async def git_diff_request(request):
     path = request.query.get('path')
     try:
         with span.new_child('open-repo'):
-            repo = Repository.open(os.path.join(request.app['local_path'], package))
+            repo = Repository.open(os.path.join(request.app['local_path'], codebase))
     except NotBranchError as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package) from e
+            codebase) from e
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
 
@@ -114,7 +114,7 @@ async def git_diff_request(request):
 
 async def git_revision_info_request(request):
     span = aiozipkin.request_span(request)
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     try:
         old_sha = request.query['old'].encode('utf-8')
         new_sha = request.query['new'].encode('utf-8')
@@ -122,11 +122,11 @@ async def git_revision_info_request(request):
         raise web.HTTPBadRequest(text='need both old and new') from e
     try:
         with span.new_child('open-repo'):
-            repo = Repository.open(os.path.join(request.app['local_path'], package))
+            repo = Repository.open(os.path.join(request.app['local_path'], codebase))
     except NotBranchError as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package) from e
+            codebase) from e
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
@@ -141,23 +141,23 @@ async def git_revision_info_request(request):
         ret.append({
             'commit-id': entry.commit.id.decode('ascii'),
             'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-            'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
+            'link': '/git/%s/commit/%s/' % (codebase, entry.commit.id.decode('ascii')),
             'message': entry.commit.message.decode('utf-8', 'replace')})
         await asyncio.sleep(0)
     return web.json_response(ret)
 
 
-async def _git_open_repo(local_path: str, db, package: str) -> Repository:
-    repo_path = os.path.join(local_path, package)
+async def _git_open_repo(local_path: str, db, codebase: str) -> Repository:
+    repo_path = os.path.join(local_path, codebase)
     try:
         repo = Repository.open(repo_path)
     except NotBranchError as e:
         async with db.acquire() as conn:
-            if not await package_exists(conn, package):
-                raise web.HTTPNotFound(text='no such package: %s' % package) from e
+            if not await codebase_exists(conn, codebase):
+                raise web.HTTPNotFound(text='no such codebase: %s' % codebase) from e
         controldir = ControlDir.create(repo_path, format=format_registry.get("git-bare")())
         logging.info(
-            "Created missing git repository for %s at %s", package, controldir.user_url
+            "Created missing git repository for %s at %s", codebase, controldir.user_url
         )
         return controldir.open_repository()
     else:
@@ -180,21 +180,21 @@ def _git_check_service(service: str, allow_writes: bool = False) -> None:
 
 
 async def handle_klaus(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
     from klaus.repo import FancyRepo
 
     class Klaus(Flask):
-        def __init__(self, package, repo):
+        def __init__(self, codebase, repo):
             super(Klaus, self).__init__("klaus")
-            self.package = package
-            self.valid_repos = {package: FancyRepo(repo._transport.local_abspath("."), namespace=None)}
+            self.codebase = codebase
+            self.valid_repos = {codebase: FancyRepo(repo._transport.local_abspath("."), namespace=None)}
 
         def should_use_ctags(self, git_repo, git_commit):
             return False
@@ -214,10 +214,10 @@ async def handle_klaus(request):
 
             env.globals["KLAUS_VERSION"] = KLAUS_VERSION
             env.globals["USE_SMARTHTTP"] = False
-            env.globals["SITE_NAME"] = "Package list"
+            env.globals["SITE_NAME"] = "Codebase list"
             return env
 
-    app = Klaus(package, repo)
+    app = Klaus(codebase, repo)
 
     for endpoint, rule in [
         ("blob", "/blob/"),
@@ -239,7 +239,7 @@ async def handle_klaus(request):
         ("repo_list", "/.."),
     ]:
         app.add_url_rule(
-            rule, view_func=getattr(views, endpoint), defaults={"repo": package}
+            rule, view_func=getattr(views, endpoint), defaults={"repo": codebase}
         )
 
     from aiohttp_wsgi import WSGIHandler
@@ -252,12 +252,12 @@ async def handle_klaus(request):
 
 
 async def handle_set_git_remote(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     remote = request.match_info["remote"]
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
     post = await request.post()
     r = repo._git
@@ -275,7 +275,7 @@ async def handle_set_git_remote(request):
 
 
 async def cgit_backend(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     subpath = request.match_info["subpath"]
     span = aiozipkin.request_span(request)
 
@@ -288,7 +288,7 @@ async def cgit_backend(request):
         _git_check_service(service, allow_writes)
 
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
     args = ["/usr/bin/git"]
     if allow_writes:
@@ -390,7 +390,7 @@ async def cgit_backend(request):
 
 
 async def dulwich_refs(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
 
     allow_writes = request.app['allow_writes']
     if allow_writes is None:
@@ -398,7 +398,7 @@ async def dulwich_refs(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
     r = repo._git
 
     service = request.query.get("service")
@@ -433,7 +433,7 @@ async def dulwich_refs(request):
 
 
 async def dulwich_service(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     service = request.match_info["service"]
 
     allow_writes = request.app['allow_writes']
@@ -442,7 +442,7 @@ async def dulwich_service(request):
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], package)
+        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
     _git_check_service(service, allow_writes)
 
@@ -476,8 +476,8 @@ async def dulwich_service(request):
     return response
 
 
-async def package_exists(conn, package):
-    return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
+async def codebase_exists(conn, codebase):
+    return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
 
 
 async def handle_repo_list(request):
@@ -542,29 +542,29 @@ async def create_web_app(
     app.router.add_get("/metrics", metrics, name="metrics")
     if dulwich_server:
         app.router.add_post(
-            "/{package}/{service:git-receive-pack|git-upload-pack}",
+            "/{codebase}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
             name='dulwich-service'
         )
         public_app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            "/git/{codebase}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
             name='dulwich-service-public'
         )
         app.router.add_get(
-            "/{package}/info/refs",
+            "/{codebase}/info/refs",
             dulwich_refs, name='dulwich-refs')
         public_app.router.add_get(
-            "/git/{package}/info/refs",
+            "/git/{codebase}/info/refs",
             dulwich_refs, name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/{package}{subpath:" + regex.pattern + "}",
+                method, "/{codebase}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
             public_app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}",
+                method, "/git/{codebase}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
 
@@ -574,10 +574,10 @@ async def create_web_app(
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/ready", handle_ready, name='ready')
-    app.router.add_get("/{package}/diff", git_diff_request, name='git-diff')
-    app.router.add_get("/{package}/revision-info", git_revision_info_request, name='git-revision-info')
-    public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
-    app.router.add_post("/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
+    app.router.add_get("/{codebase}/diff", git_diff_request, name='git-diff')
+    app.router.add_get("/{codebase}/revision-info", git_revision_info_request, name='git-revision-info')
+    public_app.router.add_get("/git/{codebase}/{path_info:.*}", handle_klaus, name='klaus')
+    app.router.add_post("/{codebase}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     endpoint = aiozipkin.create_endpoint("janitor.git_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)

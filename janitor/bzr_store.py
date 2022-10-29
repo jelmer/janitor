@@ -80,7 +80,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
 
 
 async def bzr_diff_request(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     old_revid = request.query.get('old')
     path = request.query.get('path')
     if old_revid is not None:
@@ -89,18 +89,18 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, package))
+        repo = Repository.open(os.path.join(request.app.local_path, codebase))
     except NotBranchError:
         repo = None
     if repo is None:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package)
+            codebase)
     return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
 
 async def bzr_revision_info_request(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     old_revid = request.query.get('old')
     if old_revid is not None:
         old_revid = old_revid.encode('utf-8')
@@ -108,13 +108,13 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, package))
+        repo = Repository.open(os.path.join(request.app.local_path, codebase))
     except NotBranchError:
         repo = None
     if repo is None:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            package)
+            codebase)
     ret = []
     with repo.lock_read():
         graph = repo.get_graph()
@@ -127,12 +127,12 @@ async def bzr_revision_info_request(request):
 
 
 async def handle_set_bzr_remote(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     remote = request.match_info["remote"]
     post = await request.post()
 
     try:
-        local_branch = Branch.open(os.path.join(request.app.local_path, package, remote))
+        local_branch = Branch.open(os.path.join(request.app.local_path, codebase, remote))
     except NotBranchError as e:
         raise web.HTTPNotFound() from e
     local_branch.set_parent(post["url"])
@@ -142,15 +142,15 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def package_exists(conn, package):
-    return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
+async def codebase_exists(conn, codebase):
+    return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
 
 
-async def _bzr_open_repo(local_path, db, package):
+async def _bzr_open_repo(local_path, db, codebase):
     async with db.acquire() as conn:
-        if not await package_exists(conn, package):
-            raise web.HTTPNotFound(text='no such package: %s' % package)
-    repo_path = os.path.join(local_path, package)
+        if not await codebase_exists(conn, codebase):
+            raise web.HTTPNotFound(text='no such codebase: %s' % codebase)
+    repo_path = os.path.join(local_path, codebase)
     try:
         repo = Repository.open(repo_path)
     except NotBranchError:
@@ -160,9 +160,9 @@ async def _bzr_open_repo(local_path, db, package):
 
 
 async def bzr_backend(request):
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app.local_path, request.app.db, package)
+    repo = await _bzr_open_repo(request.app.local_path, request.app.db, codebase)
     if branch_name:
         try:
             get_campaign_config(request.app.config, branch_name)
@@ -276,13 +276,13 @@ async def create_web_app(
     app.router.add_get("/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/ready", handle_ready, name='ready')
-    app.router.add_get("/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_get("/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
-    public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
-    public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
-    app.router.add_post("/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
-    app.router.add_post("/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
-    app.router.add_post("/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
+    app.router.add_get("/{codebase}/diff", bzr_diff_request, name='bzr-diff')
+    app.router.add_get("/{codebase}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
+    public_app.router.add_post("/bzr/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
+    public_app.router.add_post("/bzr/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo-public')
+    app.router.add_post("/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo')
+    app.router.add_post("/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/{codebase}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     endpoint = aiozipkin.create_endpoint("janitor.bzr_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
