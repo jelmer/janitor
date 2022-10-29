@@ -12,7 +12,7 @@
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="history">
-        <h1>Changes to have been merged or pushed</h1>
+        <h1>Changes that have been merged or pushed</h1>
 
         <form method="get" action="/{{ campaign }}/done">
         <label for="start">Start date:</label>
@@ -30,14 +30,14 @@
         <input type="submit" value="Refresh"/>
         </form>
 
-        {% set last_date = None %}
+        {% set ns = namespace(last_date=None, run_date=None) %}
         <ul>
         {% for run in runs %}
-            {% if run.absorbed_at %}{% set run_date = run.absorbed_at.date().isoformat() %}{% else %}{% set run_date = 'unknown' %}{% endif %}
-            {% if run_date != last_date %}
-                {% if last_date %}</ul>{% endif %}
-                {% set last_date = run_date %}
-                <h2>{{ last_date }}</h2>
+            {% if run.absorbed_at %}{% set ns.run_date = run.absorbed_at.date().isoformat() %}{% else %}{% set ns.run_date = 'unknown' %}{% endif %}
+            {% if ns.run_date != ns.last_date %}
+                {% if ns.last_date %}</ul>{% endif %}
+                {% set ns.last_date = ns.run_date %}
+                <h2>{{ ns.last_date }}</h2>
                 <ul>
             {% endif %}
                 <li>

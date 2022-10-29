@@ -493,11 +493,13 @@ async def handle_ready_proposals(request):
 
 @html_template(env, "cupboard/done-list.html", headers={"Vary": "Cookie"})
 async def handle_done_proposals(request):
-    try:
-        since = datetime.fromisoformat(request.query["since"])
-    except ValueError as e:
-        raise web.HTTPBadRequest(text="invalid since") from e
-    except KeyError:
+    since_str = request.query.get("since")
+    if since_str:
+        try:
+            since = datetime.fromisoformat(since_str)
+        except ValueError as e:
+            raise web.HTTPBadRequest(text="invalid since") from e
+    else:
         since = None
 
     return await generate_done_list(request.app.database, since)
