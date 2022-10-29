@@ -11,10 +11,11 @@ those, you'll also want to install various other bits of software. On Debian,
 run:
 
  $ sudo apt install libgpgme-dev rustc libapt-pkg-dev protobuf-compiler \
-     python3-venv python3-pip rustc
+     python3-venv python3-pip rustc libpcre3-dev libgpg-error-dev
 
 For example, to create a dev enviroment:
 
  $ python3 -m venv
  $ . ./bin/activate
+ $ pip3 install python_apt@git+https://salsa.debian.org/apt-team/python-apt
  $ pip3 install -e .[dev,debian]
