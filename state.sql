@@ -681,6 +681,7 @@ CREATE VIEW absorbed_runs AS
     SELECT
        'propose' AS mode,
        run.change_set,
+       run.package,
        merge_proposal.merged_at - run.finish_time as delay,
        run.suite AS campaign,
        run.result::jsonb AS result,
@@ -695,6 +696,7 @@ CREATE VIEW absorbed_runs AS
     SELECT
         'push' AS mode,
         run.change_set,
+	run.package,
         publish.timestamp - run.finish_time AS delay,
         run.suite AS campaign,
         run.result::jsonb AS result,

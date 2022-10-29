@@ -37,7 +37,7 @@ parser.add_argument(
 parser.add_argument(
     "--rejected", action="store_true", help="Process rejected runs only."
 )
-parser.add_argument("--suite", type=str, help="Suite to process.")
+parser.add_argument("--campaign", type=str, help="Campaign to process.")
 parser.add_argument(
     "--min-age", type=int, default=0,
     help="Only reschedule runs older than N days."
@@ -51,11 +51,11 @@ logging.basicConfig()
 
 
 async def main(
-        base_url, result_code, suite, description_re, rejected, min_age=0):
+        base_url, result_code, campaign, description_re, rejected, min_age=0):
     params = {
         'result_code': result_code}
-    if suite:
-        params['suite'] = suite
+    if campaign:
+        params['suite'] = campaign
     if description_re:
         params['description_re'] = description_re
     if rejected:
@@ -73,5 +73,5 @@ async def main(
 
 
 sys.exit(asyncio.run(main(
-    args.base_url, args.result_code, args.suite,
+    args.base_url, args.result_code, args.campaign,
     args.description_re, args.rejected, args.min_age)))
