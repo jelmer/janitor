@@ -559,7 +559,7 @@ def register_cupboard_endpoints(router):
         name="cupboard-merge-proposal",
     )
     router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
-    router.add_get("/cupboard/done", handle_ready_proposals, name="cupboard-done")
+    router.add_get("/cupboard/done", handle_done_proposals, name="cupboard-done")
     router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
