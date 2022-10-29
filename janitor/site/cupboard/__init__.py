@@ -439,9 +439,11 @@ async def generate_done_list(db, since: Optional[datetime] = None):
 
         if since:
             runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1", since)
+                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
+                "ORDER BY absorbed_at DESC", since)
         else:
-            runs = await conn.fetch("SELECT * FROM absorbed_runs")
+            runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs ORDER BY absorbed_at DESC")
 
     return {"oldest": oldest, "runs": runs, "since": since}
 
@@ -491,11 +493,13 @@ async def handle_ready_proposals(request):
 
 @html_template(env, "cupboard/done-list.html", headers={"Vary": "Cookie"})
 async def handle_done_proposals(request):
-    try:
-        since = datetime.fromisoformat(request.query["since"])
-    except ValueError as e:
-        raise web.HTTPBadRequest(text="invalid since") from e
-    except KeyError:
+    since_str = request.query.get("since")
+    if since_str:
+        try:
+            since = datetime.fromisoformat(since_str)
+        except ValueError as e:
+            raise web.HTTPBadRequest(text="invalid since") from e
+    else:
         since = None
 
     return await generate_done_list(request.app.database, since)
@@ -559,7 +563,7 @@ def register_cupboard_endpoints(router):
         name="cupboard-merge-proposal",
     )
     router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
-    router.add_get("/cupboard/done", handle_ready_proposals, name="cupboard-done")
+    router.add_get("/cupboard/done", handle_done_proposals, name="cupboard-done")
     router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
