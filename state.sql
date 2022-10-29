@@ -687,7 +687,8 @@ CREATE VIEW absorbed_runs AS
        run.result::jsonb AS result,
        run.id,
        merge_proposal.merged_at AS absorbed_at,
-       merge_proposal.merged_by
+       merge_proposal.merged_by,
+       run.revision
     FROM merge_proposal
     INNER JOIN run ON merge_proposal.revision = run.revision
     WHERE run.result_code = 'success'
@@ -696,12 +697,13 @@ CREATE VIEW absorbed_runs AS
     SELECT
         'push' AS mode,
         run.change_set,
-	run.package,
+        run.package,
         publish.timestamp - run.finish_time AS delay,
         run.suite AS campaign,
         run.result::jsonb AS result,
         run.id, timestamp AS absorbed_at,
-        NULL AS merged_by
+        NULL AS merged_by,
+        run.revision
     FROM publish
     INNER JOIN run ON publish.revision = run.revision
     WHERE mode = 'push'
