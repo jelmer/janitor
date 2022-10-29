@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    command text not null,
    publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
+   codebase text references codebase(name),
    foreign key (package) references package(name)
 );
 CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));

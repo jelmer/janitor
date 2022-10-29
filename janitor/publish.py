@@ -736,6 +736,9 @@ async def handle_publish_failure(e, conn, run, bucket):
         run.package, run.main_branch_revision.decode('utf-8')
     )
 
+    # TODO(jelmer): Set codebase
+    codebase = None
+
     code = e.code
     description = e.description
     if e.code == "merge-conflict":
@@ -746,7 +749,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (pre-creation merge conflict)",
-            bucket=bucket,
+            bucket=bucket, codebase=codebase,
         )
     elif e.code == "diverged-branches":
         logger.info("Branches have diverged; restarting.")
@@ -756,7 +759,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             campaign=run.suite,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
-            bucket=bucket,
+            bucket=bucket, codebase=codebase,
         )
     elif e.code == "missing-build-diff-self":
         if run.result_code != "success":
@@ -770,7 +773,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
-                bucket=bucket,
+                bucket=bucket, codebase=codebase,
             )
     elif e.code == "missing-build-diff-control":
         if unchanged_run and unchanged_run['result_code'] != "success":
@@ -789,7 +792,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                 main_branch_revision=unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
-                bucket=bucket,
+                bucket=bucket, codebase=codebase,
             )
         else:
             description = "Missing binary diff; requesting control run."
@@ -799,7 +802,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                     package=run.package,
                     main_branch_revision=run.main_branch_revision,
                     requestor="publisher (missing control run for diff)",
-                    bucket=bucket,
+                    bucket=bucket, codebase=codebase,
                 )
             else:
                 logger.warning(
@@ -957,6 +960,8 @@ async def publish_from_policy(
             run.command,
             command,
         )
+        # TODO(jelmer): Determine codebase
+        codebase = None
         await do_schedule(
             conn,
             run.package,
@@ -967,6 +972,7 @@ async def publish_from_policy(
             refresh=True,
             requestor="publisher (changed policy: %r => %r)" % (
                 run.command, command),
+            codebase=codebase,
         )
         return
 
