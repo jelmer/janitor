@@ -9,38 +9,39 @@
     <div class="section" id="history">
         <h1>Changes to have been merged or pushed</h1>
 
-	<form method="get" action="/{{ campaign }}/done">
-	<label for="start">Start date:</label>
+        <form method="get" action="/{{ campaign }}/done">
+        <label for="start">Start date:</label>
 
-	<input type="date" id="since" name="since"
-	       {% if since %}
-	       value="{{ since.date().isoformat() }}"
-	       {% elif oldest %}
-	       value="{{ oldest.date().isoformat() }}"
-	       {% endif %}
-	       {% if oldest %}
-	       min="{{ oldest.date().isoformat() }}"
-	       {% endif %}
-	       max="{{ utcnow().date().isoformat() }}"/>
-	</form>
+        <input type="date" id="since" name="since"
+               {% if since %}
+               value="{{ since.date().isoformat() }}"
+               {% elif oldest %}
+               value="{{ oldest.date().isoformat() }}"
+               {% endif %}
+               {% if oldest %}
+               min="{{ oldest.date().isoformat() }}"
+               {% endif %}
+               max="{{ utcnow().date().isoformat() }}"/>
+        <input type="submit" value="Refresh"/>
+        </form>
 
-	{% set last_date = None %}
-	<ul>
+        {% set last_date = None %}
+        <ul>
         {% for run in runs %}
-	    {% if run.absorbed_at.date().isoformat() != last_date %}
-		{% if last_date %}</ul><ul>{% endif %}
-		{% set last_date = run.absorbed_at.date().isoformat() %}
-		<h2>{{ last_date }}</h2>
-	    {% endif %}
-	    <ul>
+            {% if run.absorbed_at.date().isoformat() != last_date %}
+                {% if last_date %}</ul><ul>{% endif %}
+                {% set last_date = run.absorbed_at.date().isoformat() %}
+                <h2>{{ last_date }}</h2>
+            {% endif %}
+            <ul>
                 <li>
                     <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
-		    {% if run.merged_by %}
-		    (merged by {{ run.merged_by }})
-		    {% else %}
-		    (pushed)
-		    {% endif %}
-		    </br>
+                    {% if run.merged_by %}
+                    (merged by {{ run.merged_by }})
+                    {% else %}
+                    (pushed)
+                    {% endif %}
+                    </br>
                     {% set command = run.command -%}
                     {% set result = run.result -%}
                     {% include [run.campaign + "/summary.html", "generic/summary.html"] %}
