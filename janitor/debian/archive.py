@@ -510,8 +510,8 @@ async def refresh_on_demand_dists(
                 "run.result_code = 'success' "
                 "ORDER BY run.finish_time DESC", kind, id)
             if cs_id is None:
-                if not (await conn.fetchrow("SELECT name FROM package WHERE name = $1", id)):
-                    raise web.HTTPNotFound(text=f"No such package: {id}")
+                if not (await conn.fetchrow("SELECT 1 FROM debian_build WHERE source = $1", id)):
+                    raise web.HTTPNotFound(text=f"No such source package: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
             get_packages = partial(
