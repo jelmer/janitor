@@ -36,16 +36,7 @@ from breezy.errors import NotBranchError
 from breezy.repository import Repository
 from dulwich.errors import HangupException, MissingCommitError
 from dulwich.objects import valid_hexsha, ZERO_SHA
-from dulwich.web import HTTPGitApplication
-
-try:
-    from dulwich.web import NO_CACHE_HEADERS  # type: ignore
-except ImportError:  # dulwich < 0.20.47
-    NO_CACHE_HEADERS = [
-        ("Expires", "Fri, 01 Jan 1980 00:00:00 GMT"),
-        ("Pragma", "no-cache"),
-        ("Cache-Control", "no-cache, max-age=0, must-revalidate"),
-    ]
+from dulwich.web import HTTPGitApplication, NO_CACHE_HEADERS
 
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
