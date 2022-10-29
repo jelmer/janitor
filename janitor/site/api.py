@@ -44,11 +44,7 @@ from breezy.revision import NULL_REVISION
 from marshmallow import Schema, fields
 from yarl import URL
 
-try:
-    from ognibuild.build import BUILD_LOG_FILENAME
-except ImportError:  # older ognibuild
-    BUILD_LOG_FILENAME = 'build.log'
-
+from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor import CAMPAIGN_REGEX
