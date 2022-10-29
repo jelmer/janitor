@@ -33,9 +33,10 @@
         {% set last_date = None %}
         <ul>
         {% for run in runs %}
-            {% if run.absorbed_at.date().isoformat() != last_date %}
+            {% if run.absorbed_at %}{% set run_date = run.absorbed_at.date().isoformat() %}{% else %}{% set run_date = 'unknown' %}{% endif %}
+            {% if run_date != last_date %}
                 {% if last_date %}</ul><ul>{% endif %}
-                {% set last_date = run.absorbed_at.date().isoformat() %}
+                {% set last_date = run_date %}
                 <h2>{{ last_date }}</h2>
             {% endif %}
             <ul>
