@@ -43,11 +43,10 @@
                 <li>
                     <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
                     {% if run.merged_by %}
-                    (merged by {{ run.merged_by }})
+                    <em>(merged by {{ run.merged_by }})</em>
                     {% else %}
-                    (pushed)
+                    <em>(pushed)</em>
                     {% endif %}
-                    </br>
                     {% set command = run.command -%}
                     {% set result = run.result -%}
                     {% include [run.campaign + "/summary.html", "generic/summary.html"] %}
