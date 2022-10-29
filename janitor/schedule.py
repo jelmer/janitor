@@ -439,7 +439,8 @@ async def do_schedule_control(
     refresh: bool = False,
     bucket: str = "control",
     requestor: Optional[str] = None,
-    estimated_duration: Optional[timedelta] = None
+    estimated_duration: Optional[timedelta] = None,
+    codebase: Optional[str] = None,
 ) -> Tuple[float, Optional[timedelta], int]:
     command = ["brz", "up"]
     if main_branch_revision is not None:
@@ -454,6 +455,7 @@ async def do_schedule_control(
         bucket=bucket,
         requestor=requestor,
         command=shlex_join(command),
+        codebase=codebase,
     )
 
 
@@ -467,6 +469,7 @@ async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
     campaign: str,
+    codebase: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: str = "default",
@@ -488,8 +491,9 @@ async def do_schedule(
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, campaign)
     # TODO(jelmer): Pass in codebase, not package
-    codebase = conn.fetchval(
-        'SELECT codebase FROM package WHERE name = $1', package)
+    if codebase is None:
+        codebase = conn.fetchval(
+            'SELECT codebase FROM package WHERE name = $1', package)
     queue = Queue(conn)
     queue_id = await queue.add(
         package=package,
