@@ -29,16 +29,26 @@
 	       max="{{ utcnow().date().isoformat() }}"/>
 	</form>
 
-        <ul>
-            {% for run in runs %}
+	{% set last_date = None %}
+	<ul>
+        {% for run in runs %}
+	    {% if run.absorbed_at.date().isoformat() != last_date %}
+		{% if last_date %}</ul><ul>{% endif %}
+		{% set last_date = run.absorbed_at.date().isoformat() %}
+		<h2>{{ last_date }}</h2>
+	    {% endif %}
+	    <ul>
                 <li>
                     <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
 		    {% if run.merged_by %}
 		    (merged by {{ run.merged_by }})
+		    {% else %}
+		    (pushed)
 		    {% endif %}
+		    </br>
                     {% set command = run.command -%}
                     {% set result = run.result -%}
-                    {% include [run.suite + "/summary.html", "generic/summary.html"] %}
+                    {% include [run.campaign + "/summary.html", "generic/summary.html"] %}
                 </li>
             {% endfor %}
         </ul>
