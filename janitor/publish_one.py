@@ -29,6 +29,7 @@ from typing import Optional, List, Any, Dict, Tuple
 import logging
 
 import shlex
+import traceback
 
 import urllib.error
 import urllib.parse
@@ -58,7 +59,11 @@ from silver_platter.publish import (
 from silver_platter.utils import create_temp_sprout
 
 from breezy.branch import Branch
-from breezy.errors import DivergedBranches, NoSuchRevision
+from breezy.errors import (
+    DivergedBranches,
+    NoSuchRevision,
+    UnexpectedHttpStatus,
+)
 from breezy.forge import (
     Forge,
     get_forge,
@@ -434,6 +439,14 @@ def publish_one(
                     e, full_branch_url(target_branch),
                 )
             forge = None
+        except UnexpectedHttpStatus as e:
+            if e.code == 502:
+                raise PublishFailure("bad-gateway", str(e))
+            elif e.code == 429:
+                raise PublishFailure("too-many-requests", str(e))
+            else:
+                traceback.print_exc()
+                raise PublishFailure("http-%s" % e.code, str(e))
         else:
             try:
                 (resume_branch, overwrite, existing_proposals) = find_existing_proposed(
