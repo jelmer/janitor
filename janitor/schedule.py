@@ -106,6 +106,7 @@ async def iter_candidates_with_publish_policy(
     query = """
 SELECT
   package.name AS package,
+  package.codebase AS codebase,
   package.branch_url AS branch_url,
   candidate.suite AS campaign,
   candidate.context AS context,
@@ -141,7 +142,8 @@ def queue_item_from_candidate_and_publish_policy(row):
 
     command = row['command']
 
-    return (row['package'], row['context'], command, row['campaign'],
+    return (row['package'], row['codebase'],
+            row['context'], command, row['campaign'],
             value, row['success_chance'])
 
 
@@ -255,10 +257,7 @@ async def bulk_add_to_queue(
             logging.info("Maximum value: %d", max_value)
     else:
         max_value = None
-    for package, context, command, campaign, value, success_chance in todo:
-        # TODO(jelmer): Pass in codebase rather than package
-        codebase = await conn.fetch(
-            'SELECT codebase FROM package WHERE name = $1', package)
+    for package, codebase, context, command, campaign, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
         estimated_duration = await estimate_duration(conn, package, campaign)
