@@ -447,7 +447,7 @@ async def create_app(
         "/{suite:%s}/ready" % CAMPAIGN_REGEX, handle_ready_proposals, name="campaign-ready"
     )
     app.router.add_get(
-        "/{suite:%s}/done" % CAMPAIGN_REGEX, handle_done_proposals, name="campaign-done"
+        "/{campaign:%s}/done" % CAMPAIGN_REGEX, handle_done_proposals, name="campaign-done"
     )
 
     from .cupboard import register_cupboard_endpoints

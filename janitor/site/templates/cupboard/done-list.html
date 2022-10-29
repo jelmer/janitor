@@ -1,14 +1,9 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% if not campaign %}
-        {% include "cupboard/sidebar.html" %}
-    {% else %}
-        {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
-    {% endif %}
+    {% include "cupboard/sidebar.html" %}
 {% endblock sidebar %}
 {% block page_title %}
     Changes that have been merged or pushed
-    {% if campaign %}- {{ campaign }}{% endif %}
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="history">

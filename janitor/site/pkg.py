@@ -356,13 +356,17 @@ async def generate_done_list(
         db, campaign: Optional[str], since: Optional[datetime] = None):
 
     async with db.acquire() as conn:
-        oldest = await conn.fetchval("SELECT MIN(absorbed_at) FROM absorbed_runs")
+        oldest = await conn.fetchval(
+            "SELECT MIN(absorbed_at) FROM absorbed_runs WHERE campaign = $1",
+            campaign)
 
         if since:
             runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1", since)
+                "SELECT * FROM absorbed_runs "
+                "WHERE absorbed_at >= $1 AND campaign = $2", since, campaign)
         else:
-            runs = await conn.fetch("SELECT * FROM absorbed_runs")
+            runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs WHERE campaign = $1", campaign)
 
     return {"oldest": oldest, "runs": runs, "campaign": campaign, "since": since}
 
