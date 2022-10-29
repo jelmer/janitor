@@ -30,11 +30,11 @@
         {% for run in runs %}
             {% if run.absorbed_at %}{% set run_date = run.absorbed_at.date().isoformat() %}{% else %}{% set run_date = 'unknown' %}{% endif %}
             {% if run_date != last_date %}
-                {% if last_date %}</ul><ul>{% endif %}
+                {% if last_date %}</ul>{% endif %}
                 {% set last_date = run_date %}
                 <h2>{{ last_date }}</h2>
+                <ul>
             {% endif %}
-            <ul>
                 <li>
                     <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
                     {% if run.merged_by %}
