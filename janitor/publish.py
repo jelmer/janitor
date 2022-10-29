@@ -528,7 +528,7 @@ async def consider_publish_run(
             "Run %s is publish ready, but does not have revision set.", run.id
         )
         return {}
-    campaign_config = get_campaign_config(config, run.suite)
+    campaign_config = get_campaign_config(config, run.campaign)
     # TODO(jelmer): next try in SQL query
     attempt_count = await get_publish_attempt_count(
         conn, run.revision, {"differ-unreachable"}
@@ -539,7 +539,7 @@ async def consider_publish_run(
             "Not attempting to push %s / %s (%s) due to "
             "exponential backoff. Next try in %s.",
             run.package,
-            run.suite,
+            run.campaign,
             run.id,
             next_try_time - datetime.utcnow(),
         )
@@ -552,7 +552,7 @@ async def consider_publish_run(
             logger.info(
                 "Not pushing %s / %s: push limit reached",
                 run.package,
-                run.suite,
+                run.campaign,
             )
             push_limit_count.inc()
             return {}
@@ -746,7 +746,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            campaign=run.suite,
+            campaign=run.campaign,
             change_set=run.change_set,
             requestor="publisher (pre-creation merge conflict)",
             bucket=bucket, codebase=codebase,
@@ -756,7 +756,7 @@ async def handle_publish_failure(e, conn, run, bucket):
         await do_schedule(
             conn,
             package=run.package,
-            campaign=run.suite,
+            campaign=run.campaign,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
             bucket=bucket, codebase=codebase,
@@ -769,7 +769,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             await do_schedule(
                 conn,
                 package=run.package,
-                campaign=run.suite,
+                campaign=run.campaign,
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
@@ -956,7 +956,7 @@ async def publish_from_policy(
             "Not publishing %s/%s: command is different (policy changed?). "
             "Build used %r, now: %r. Rescheduling.",
             run.package,
-            run.suite,
+            run.campaign,
             run.command,
             command,
         )
@@ -965,7 +965,7 @@ async def publish_from_policy(
         await do_schedule(
             conn,
             run.package,
-            run.suite,
+            run.campaign,
             change_set=run.change_set,
             command=command,
             bucket="update-new-mp",
@@ -1005,21 +1005,21 @@ async def publish_from_policy(
                 maintainer_rate_limiter.check_allowed(maintainer_email)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
-                    package=run.package, campaign=run.suite
+                    package=run.package, campaign=run.campaign
                 ).inc()
                 logger.debug(
-                    "Not creating proposal for %s/%s: %s", run.package, run.suite, e
+                    "Not creating proposal for %s/%s: %s", run.package, run.campaign, e
                 )
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
                 last_published = await check_last_published(
-                    conn, run.suite, run.package)
+                    conn, run.campaign, run.package)
                 if (last_published is not None
                         and (datetime.utcnow() - last_published).days < max_frequency_days):
                     logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
-                        run.package, run.suite, max_frequency_days, last_published)
+                        run.package, run.campaign, max_frequency_days, last_published)
                     mode = MODE_BUILD_ONLY
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
@@ -1034,7 +1034,7 @@ async def publish_from_policy(
         unchanged_run
         and unchanged_run['result_code'] in (
             "debian-upstream-metadata-invalid", )
-        and run.suite == "lintian-fixes"
+        and run.campaign == "lintian-fixes"
     ):
         require_binary_diff = False
 
@@ -1044,7 +1044,7 @@ async def publish_from_policy(
     try:
         publish_result = await publish_one(
             template_env_path,
-            run.suite,
+            run.campaign,
             run.package,
             run.command,
             run.result,
@@ -1122,7 +1122,7 @@ async def publish_from_policy(
     topic_entry: Dict[str, Any] = {
         "id": publish_id,
         "package": run.package,
-        "campaign": run.suite,
+        "campaign": run.campaign,
         "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
         "main_branch_url": main_branch_url,
@@ -1196,7 +1196,7 @@ async def publish_and_store(
         try:
             publish_result = await publish_one(
                 template_env_path,
-                run.suite,
+                run.campaign,
                 run.package,
                 run.command,
                 run.result,
@@ -1245,7 +1245,7 @@ async def publish_and_store(
                 "result_code": e.code,
                 "description": e.description,
                 "package": run.package,
-                "campaign": run.suite,
+                "campaign": run.campaign,
                 "main_branch_url": run.branch_url,
                 "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
                 "result": run.result,
@@ -1285,7 +1285,7 @@ async def publish_and_store(
         publish_entry = {
             "id": publish_id,
             "package": run.package,
-            "campaign": run.suite,
+            "campaign": run.campaign,
             "proposal_url": publish_result.proposal_url or None,
             "mode": mode,
             "main_branch_url": run.branch_url,
@@ -1634,7 +1634,7 @@ async def publish_request(request):
             publish_and_store(
                 request.app['db'],
                 request.app['redis'],
-                get_campaign_config(request.app['config'], run.suite),
+                get_campaign_config(request.app['config'], run.campaign),
                 request.app['template_env_path'],
                 publish_id,
                 run,
@@ -2475,8 +2475,8 @@ applied independently.
             try:
                 await do_schedule(
                     conn,
-                    last_run.package,
-                    last_run.suite,
+                    package=last_run.package,
+                    campaign=last_run.campaign,
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
                     refresh=False,
@@ -2485,7 +2485,7 @@ applied independently.
             except CandidateUnavailable as e:
                 logging.warning(
                     'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.package, last_run.suite, e)
+                    last_run.package, last_run.campaign, e)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
@@ -2496,7 +2496,7 @@ applied independently.
             await do_schedule(
                 conn,
                 last_run.package,
-                last_run.suite,
+                last_run.campaign,
                 change_set=last_run.change_set,
                 bucket="update-existing-mp",
                 refresh=False,
@@ -2653,7 +2653,7 @@ This merge proposal will be closed, since the branch has moved to %s.
         try:
             publish_result = await publish_one(
                 template_env_path,
-                last_run.suite,
+                last_run.campaign,
                 last_run.package,
                 last_run.command,
                 last_run.result,
@@ -3006,12 +3006,12 @@ async def listen_to_runner(
 ):
     async def process_run(conn, run, maintainer_email, branch_url):
         publish_policy, command = await get_publish_policy(
-            conn, run.package, run.suite
+            conn, run.package, run.campaign
         )
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn,
-                get_campaign_config(config, run.suite),
+                get_campaign_config(config, run.campaign),
                 template_env_path,
                 maintainer_rate_limiter,
                 vcs_managers,
@@ -3045,7 +3045,7 @@ async def listen_to_runner(
                 logging.warning('Package %s not in database?', result['package'])
                 continue
             run = await get_run(conn, result["log_id"])
-            if run.suite != "unchanged":
+            if run.campaign != "unchanged":
                 await process_run(
                     conn, run, package['maintainer_email'],
                     package['branch_url'])

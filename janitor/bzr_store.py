@@ -167,7 +167,7 @@ async def bzr_backend(request):
         try:
             get_campaign_config(request.app.config, branch_name)
         except KeyError as e:
-            raise web.HTTPNotFound(text='no such suite: %s' % branch_name) from e
+            raise web.HTTPNotFound(text='no such campaign: %s' % branch_name) from e
         transport = repo.user_transport.clone(branch_name)
     else:
         transport = repo.user_transport

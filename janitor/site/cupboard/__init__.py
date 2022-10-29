@@ -211,7 +211,7 @@ async def handle_review_post(request):
             request.app['http_client_session'],
             request.app['differ_url'],
             request.app['vcs_managers'],
-            suites=post.getall("suite", None),
+            campaigns=post.getall("suite", None),
             publishable_only=publishable_only,
         )
         return web.Response(
@@ -225,7 +225,7 @@ async def handle_review(request):
     from .review import generate_review
     publishable_only = request.query.get("publishable_only", "true") == "true"
 
-    suites = request.query.getall("suite", None)
+    campaigns = request.query.getall("suite", None)
     async with request.app.database.acquire() as conn:
         text = await generate_review(
             conn,
@@ -233,7 +233,7 @@ async def handle_review(request):
             request.app['http_client_session'],
             request.app['differ_url'],
             request.app['vcs_managers'],
-            suites=suites,
+            campaigns=campaigns,
             publishable_only=publishable_only,
         )
     return web.Response(

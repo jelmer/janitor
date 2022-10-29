@@ -93,7 +93,7 @@ async def handle_simple(templatename, request):
 
 @html_template(env, "generic/start.html")
 async def handle_generic_start(request):
-    return {"suite": request.match_info["suite"]}
+    return {"suite": request.match_info["campaign"]}
 
 
 @html_template(env, "generic/candidates.html", headers={"Vary": "Cookie"})
@@ -289,7 +289,7 @@ async def handle_generic_pkg(request):
     return await generate_pkg_context(
         request.app.database,
         request.app['config'],
-        request.match_info["suite"],
+        request.match_info["campaign"],
         request.app['http_client_session'],
         request.app['differ_url'],
         request.app['vcs_managers'],
@@ -458,7 +458,7 @@ async def create_app(
         name="result-file",
     )
     app.router.add_get(
-        "/{suite:" + CAMPAIGN_REGEX + "}/", handle_generic_start, name="generic-start"
+        "/{campaign:" + CAMPAIGN_REGEX + "}/", handle_generic_start, name="generic-start"
     )
     app.router.add_get(
         "/{suite:" + CAMPAIGN_REGEX + "}/candidates",
@@ -466,12 +466,12 @@ async def create_app(
         name="generic-candidates",
     )
     app.router.add_get(
-        "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/",
+        "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/",
         handle_generic_pkg,
         name="generic-package",
     )
     app.router.add_get(
-        "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}",
+        "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}",
         handle_generic_pkg,
         name="generic-run",
     )

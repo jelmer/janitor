@@ -190,6 +190,10 @@ class Run(object):
     def get_result_branch(self, role):
         return get_result_branch(self.result_branches, role)
 
+    @property
+    def campaign(self):
+        return self.suite
+
     @classmethod
     def from_row(cls, row) -> "Run":
         return cls(
