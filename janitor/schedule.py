@@ -492,7 +492,7 @@ async def do_schedule(
         estimated_duration = await estimate_duration(conn, package, campaign)
     # TODO(jelmer): Pass in codebase, not package
     if codebase is None:
-        codebase = conn.fetchval(
+        codebase = await conn.fetchval(
             'SELECT codebase FROM package WHERE name = $1', package)
     queue = Queue(conn)
     queue_id = await queue.add(
