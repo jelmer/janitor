@@ -228,6 +228,7 @@ queue.id ASC
     async def add(
             self,
             package: str,
+            codebase: str,
             command: str,
             campaign: str,
             change_set: Optional[str] = None,
@@ -240,18 +241,17 @@ queue.id ASC
         return await self.conn.fetchval(
             "INSERT INTO queue "
             "(package, command, priority, bucket, context, "
-            "estimated_duration, suite, refresh, requestor, change_set) "
-            "VALUES "
-            "($1, $2, "
+            "estimated_duration, suite, refresh, requestor, change_set, "
+            "codebase) VALUES ($1, $2, "
             "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
-            + " + $3, $4, $5, $6, $7, $8, $9, $10) "
+            + " + $3, $4, $5, $6, $7, $8, $9, $10, $11) "
             "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "bucket = EXCLUDED.bucket, "
             "estimated_duration = EXCLUDED.estimated_duration, "
             "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
-            "command = EXCLUDED.command "
+            "command = EXCLUDED.command, codebase = EXCLUDED.codebase "
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
             "queue.priority >= EXCLUDED.priority) RETURNING id",
@@ -265,6 +265,7 @@ queue.id ASC
             refresh,
             requestor,
             change_set,
+            codebase,
         )
 
     async def get_buckets(self):
