@@ -47,7 +47,7 @@ async def generate_rejected(conn, config, campaign=None):
 
 
 async def generate_review(
-    conn, request, client, differ_url, vcs_managers, suites=None,
+    conn, request, client, differ_url, vcs_managers, campaigns=None,
     publishable_only=True
 ):
     if 'required_only' in request.query:
@@ -68,7 +68,7 @@ async def generate_review(
         entries = await iter_needs_review(
             conn,
             limit=limit,
-            campaigns=suites,
+            campaigns=campaigns,
             publishable_only=publishable_only,
             required_only=required_only,
             reviewer=reviewer
@@ -183,7 +183,8 @@ async def generate_review(
         "command": command,
         "branches": result_branches,
         "suite": suite,
-        "suites": suites,
+        "suites": campaigns,
+        "campaigns": campaigns,
         "value": value,
         'finish_time': finish_time,
         "publishable_only": publishable_only,
