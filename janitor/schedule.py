@@ -106,6 +106,7 @@ async def iter_candidates_with_publish_policy(
     query = """
 SELECT
   package.name AS package,
+  package.codebase AS codebase,
   package.branch_url AS branch_url,
   candidate.suite AS campaign,
   candidate.context AS context,
@@ -141,7 +142,8 @@ def queue_item_from_candidate_and_publish_policy(row):
 
     command = row['command']
 
-    return (row['package'], row['context'], command, row['campaign'],
+    return (row['package'], row['codebase'],
+            row['context'], command, row['campaign'],
             value, row['success_chance'])
 
 
@@ -247,14 +249,15 @@ async def bulk_add_to_queue(
     default_offset: float = 0.0,
     bucket: str = "default",
 ) -> None:
-    popcon = {k: (v or 0) for (k, v) in await conn.fetch("SELECT name, popcon_inst FROM package")}
-    if popcon:
-        max_inst = max([(v or 0) for v in popcon.values()])
-        if max_inst:
-            logging.info("Maximum inst count: %d", max_inst)
+    values = {k: (v or 0) for (k, v) in await conn.fetch(
+        "SELECT name, value FROM codebase WHERE name IS NOT NULL")}
+    if values:
+        max_value = max([(v or 0) for v in values.values()])
+        if max_value:
+            logging.info("Maximum value: %d", max_value)
     else:
-        max_inst = None
-    for package, context, command, campaign, value, success_chance in todo:
+        max_value = None
+    for package, codebase, context, command, campaign, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
         estimated_duration = await estimate_duration(conn, package, campaign)
@@ -281,9 +284,9 @@ async def bulk_add_to_queue(
             package,
             estimated_cost,
         )
-        if max_inst:
+        if max_value:
             estimated_popularity = max(
-                popcon.get(package, 0.0) / float(max_inst) * 5.0, 1.0
+                values.get(codebase, 0.0) / float(max_value) * 5.0, 1.0
             )
         else:
             estimated_popularity = 1.0
@@ -311,6 +314,7 @@ async def bulk_add_to_queue(
             queue = Queue(conn)
             await queue.add(
                 package=package,
+                codebase=codebase,
                 campaign=campaign,
                 change_set=None,
                 command=command,
@@ -435,7 +439,8 @@ async def do_schedule_control(
     refresh: bool = False,
     bucket: str = "control",
     requestor: Optional[str] = None,
-    estimated_duration: Optional[timedelta] = None
+    estimated_duration: Optional[timedelta] = None,
+    codebase: Optional[str] = None,
 ) -> Tuple[float, Optional[timedelta], int]:
     command = ["brz", "up"]
     if main_branch_revision is not None:
@@ -450,6 +455,7 @@ async def do_schedule_control(
         bucket=bucket,
         requestor=requestor,
         command=shlex_join(command),
+        codebase=codebase,
     )
 
 
@@ -463,6 +469,7 @@ async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
     campaign: str,
+    codebase: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: str = "default",
@@ -483,6 +490,10 @@ async def do_schedule(
         command = candidate['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, campaign)
+    # TODO(jelmer): Pass in codebase, not package
+    if codebase is None:
+        codebase = conn.fetchval(
+            'SELECT codebase FROM package WHERE name = $1', package)
     queue = Queue(conn)
     queue_id = await queue.add(
         package=package,
@@ -494,6 +505,7 @@ async def do_schedule(
         estimated_duration=estimated_duration,
         refresh=refresh,
         requestor=requestor,
+        codebase=codebase,
     )
     return offset, estimated_duration, queue_id
 

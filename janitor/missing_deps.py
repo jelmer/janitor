@@ -104,7 +104,7 @@ async def schedule_new_package(conn, upstream_info, config, change_set=None, req
         DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE, publish_policy)
 
     await do_schedule(
-        conn, package, campaign, change_set=change_set,
+        conn, package, campaign, codebase=codebase, change_set=change_set,
         requestor=requestor, bucket='missing-deps', command=command)
 
 
@@ -113,13 +113,16 @@ async def schedule_update_package(conn, package, desired_version, change_set=Non
     logging.info('Scheduling new run for %s/%s', package, campaign)
     # TODO(jelmer): Do something with desired_version
     # TODO(jelmer): fresh-snapshots?
+    codebase = await conn.fetchval(
+        'SELECT codebase FROM package WHERE name = $1', package)
     await conn.execute(
         "INSERT INTO candidate "
-        "(package, suite, context, value, success_chance) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        "(package, suite, context, value, success_chance, codebase) "
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
         package, campaign, None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
-        DEFAULT_SUCCESS_CHANCE)
-    await do_schedule(conn, package, campaign, change_set=change_set, requestor=requestor, bucket='missing-deps')
+        DEFAULT_SUCCESS_CHANCE, codebase)
+    await do_schedule(conn, package, campaign, change_set=change_set, requestor=requestor, bucket='missing-deps',
+                      codebase=codebase)
 
 
 async def followup_missing_requirement(conn, apt_mgr, config, requirement, needed_by=None, dep_server_url=None):
