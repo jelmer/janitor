@@ -24,7 +24,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 RUN rm -rf /usr/share/aclocal
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
-RUN pip3 install "ognibuild[dep-server,gcp]@git+https://github.com/jelmer/ognibuild.git"
+RUN pip3 install "ognibuild[dep_server,gcp]@git+https://github.com/jelmer/ognibuild.git"
 
 EXPOSE 9934
 ENTRYPOINT ["python3", "-m", "ognibuild.dep_server", "--port=9934", "--listen-address=0.0.0.0"]
