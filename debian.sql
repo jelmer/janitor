@@ -12,34 +12,6 @@ CREATE INDEX ON debian_build (run_id);
 CREATE INDEX ON debian_build (distribution, source, version);
 
 
-CREATE OR REPLACE VIEW debian_run AS
-SELECT
-    id,
-    command,
-    start_time,
-    finish_time,
-    description,
-    package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution,
-    debian_build.lintian_result AS lintian_result,
-    result_code,
-    main_branch_revision,
-    revision,
-    context,
-    result,
-    suite,
-    instigated_context,
-    branch_url,
-    logfilenames,
-    worker,
-    result_tags
-FROM
-    run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id;
-
-
 CREATE VIEW all_debian_versions AS
 SELECT
   source,
