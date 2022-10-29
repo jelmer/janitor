@@ -361,11 +361,11 @@ async def generate_done_list(
             runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs "
                 "WHERE absorbed_at >= $1 AND campaign = $2 "
-                "ORDER BY absorbed_at DESC", since, campaign)
+                "ORDER BY absorbed_at DESC NULLS LAST", since, campaign)
         else:
             runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE campaign = $1 "
-                "ORDER BY absorbed_at DESC", campaign)
+                "ORDER BY absorbed_at DESC NULLS LAST", campaign)
 
     return {
         "oldest": oldest, "runs": runs, "campaign": campaign,
