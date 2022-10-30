@@ -82,10 +82,10 @@ from the ``janitor/site/templates/`` subdirectory.
 Installation
 ============
 
-There are two common ways of deployign a new janitor instance.
+There are two common ways of deploying a new janitor instance.
 
  * On top of kubernetes (see the configuration for the Debian & Upstream janitor)
- * Using ansible, based on the playbooks in the ``ansible/`` directory
+ * Using e.g. ansible and/or a venv
 
 Docker
 ------
@@ -112,6 +112,9 @@ notification of accepted merge proposals and pushes.
 
 Contributing
 ============
+
+See CONTRIBUTING.md for instructions on e.g. setting up
+a development environment.
 
 If you're interested in working on adding another campaign, see
 [adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
