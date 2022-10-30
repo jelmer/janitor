@@ -35,7 +35,7 @@ flake8:
 style:: yamllint
 
 yamllint:
-	yamllint .github/ ansible/
+	yamllint .github/
 
 style:: djlint
 
