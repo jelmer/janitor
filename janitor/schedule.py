@@ -435,7 +435,7 @@ async def do_schedule_control(
     main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
     refresh: bool = False,
-    bucket: str = "control",
+    bucket: Optional[str] = None,
     requestor: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None,
     codebase: Optional[str] = None,
@@ -443,6 +443,8 @@ async def do_schedule_control(
     command = ["brz", "up"]
     if main_branch_revision is not None:
         command.append("--revision=%s" % main_branch_revision.decode("utf-8"))
+    if bucket is None:
+        bucket = "control"
     return await do_schedule(
         conn,
         package,
@@ -470,7 +472,7 @@ async def do_schedule(
     codebase: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
-    bucket: str = "default",
+    bucket: Optional[str] = None,
     refresh: bool = False,
     requestor: Optional[str] = None,
     estimated_duration=None,
@@ -478,6 +480,8 @@ async def do_schedule(
 ) -> Tuple[float, Optional[timedelta], int]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
+    if bucket is None:
+        bucket = "default"
     if command is None:
         candidate = await conn.fetchrow(
             "SELECT command "
