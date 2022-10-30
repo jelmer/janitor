@@ -258,8 +258,6 @@ async def bulk_add_to_queue(
     else:
         max_value = None
     for package, codebase, context, command, campaign, value, success_chance in todo:
-        assert package is not None
-        assert value > 0, "Value: %s" % value
         estimated_duration = await estimate_duration(conn, package, campaign)
         assert estimated_duration >= timedelta(
             0
