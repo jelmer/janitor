@@ -2013,14 +2013,21 @@ async def handle_assign(request):
     assignment_count.labels(worker=json.get("worker")).inc()
     span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
-    assignment = await next_item(
-        queue_processor, request.app['config'],
-        span, 'assign', worker=json.get("worker"),
-        worker_link=json.get("worker_link"),
-        backchannel=json.get('backchannel'),
-        package=json.get('package'),
-        campaign=json.get('campaign')
-    )
+    try:
+        assignment = await next_item(
+            queue_processor, request.app['config'],
+            span, 'assign', worker=json.get("worker"),
+            worker_link=json.get("worker_link"),
+            backchannel=json.get('backchannel'),
+            package=json.get('package'),
+            campaign=json.get('campaign')
+        )
+    except QueueEmpty:
+        return web.json_response({'reason': 'queue empty'}, status=503)
+    except QueueRateLimiting as e:
+        return web.json_response(
+            {'reason': str(e)}, status=429, headers={
+                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
     return web.json_response(
         assignment, status=201, headers={
             'Location': str(request.app.router['get-active-run'].url_for(
@@ -2032,8 +2039,15 @@ async def handle_assign(request):
 async def handle_peek(request):
     span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
-    assignment = await next_item(
-        queue_processor, request.app['config'], span, 'peek')
+    try:
+        assignment = await next_item(
+            queue_processor, request.app['config'], span, 'peek')
+    except QueueEmpty:
+        return web.json_response({'reason': 'queue empty'}, status=503)
+    except QueueRateLimiting as e:
+        return web.json_response(
+            {'reason': str(e)}, status=429, headers={
+                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
     return web.json_response(
         assignment, status=201, headers={
             'Location': str(request.app.router['get-active-run'].url_for(
@@ -2065,6 +2079,17 @@ async def handle_queue(request):
     return web.json_response(response_obj)
 
 
+class QueueEmpty(Exception):
+    """Queue is empty."""
+
+
+class QueueRateLimiting(Exception):
+    """Rate limiting encountered while getting queue item."""
+
+    def __init__(self, retry_after):
+        self.retry_after = retry_after
+
+
 async def next_item(
         queue_processor, config, span, mode, *, worker=None,
         worker_link: Optional[str] = None,
@@ -2093,7 +2118,7 @@ async def next_item(
                     conn, package=package, campaign=campaign)
             if item is None:
                 queue_empty_count.inc()
-                return web.json_response({'reason': 'queue empty'}, status=503)
+                raise QueueEmpty()
 
             bc: Backchannel
             if backchannel and backchannel['kind'] == 'http':
@@ -2157,9 +2182,7 @@ async def next_item(
                 logging.warning('Rate limiting for %s: %r', host, e)
                 await queue_processor.rate_limited(host, e.retry_after)
                 await abort(active_run, 'pull-rate-limited', str(e))
-                return web.json_response(
-                    {'reason': str(e)}, status=429, headers={
-                        'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                raise QueueRateLimiting(e.retry_after)
             except BranchOpenFailure as e:
                 logging.debug(
                     'Error opening branch %s: %s', vcs_info['branch_url'],
@@ -2194,9 +2217,7 @@ async def next_item(
                             logging.warning('Rate limiting for %s: %r', host, e)
                             await queue_processor.rate_limited(host, e.retry_after)
                             await abort(active_run, 'resume-rate-limited', str(e))
-                            return web.json_response(
-                                {'reason': str(e)}, status=429, headers={
-                                    'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                            raise QueueRateLimiting(e.retry_after)
                         except asyncio.TimeoutError:
                             logging.debug('Timeout opening resume branch')
                             resume_branch = None
