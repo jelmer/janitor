@@ -20,11 +20,28 @@ from janitor.publish import (
     create_app,
 )
 
+from mockaioredis import create_redis_pool
+import aioredlock
+
+import mock
+
+
+def create_lock_manager():
+    with mock.patch('aioredlock.algorithm', 'Redis', create_redis_pool):
+        return aioredlock.Aioredlock()
+
+
+async def test_lock_manager():
+    lm = create_lock_manager()
+    async with await lm.lock("publish:https://github.com/jelmer/xandikos"):
+        pass
+
 
 async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
-        vcs_managers={}, db=None, redis=None,
-        lock_manager=None, config=None, differ_url="https://differ/"))
+        vcs_managers={}, db=None, redis=create_redis_pool(None),
+        lock_manager=create_lock_manager(), config=None,
+        differ_url="https://differ/"))
 
 
 async def test_health(aiohttp_client):
