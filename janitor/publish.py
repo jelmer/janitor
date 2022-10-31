@@ -2266,7 +2266,7 @@ def find_campaign_by_branch_name(config, branch_name):
     for campaign in config.campaign:
         if campaign.branch_name == branch_name:
             return campaign.name
-    raise None
+    return None
 
 
 async def check_existing_mp(

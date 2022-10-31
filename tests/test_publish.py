@@ -16,9 +16,13 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+from janitor.config import Config
 from janitor.publish import (
     create_app,
+    find_campaign_by_branch_name,
 )
+
+from google.protobuf import text_format  # type: ignore
 
 import asyncio
 from mockaioredis import create_redis_pool
@@ -50,3 +54,16 @@ async def test_ready(aiohttp_client):
     assert resp.status == 200
     text = await resp.text()
     assert text == "ok"
+
+
+def test_find_campaign_by_branch_name():
+    config = text_format.Parse("""\
+campaign {
+ name: "bar"
+ branch_name: "fo"
+}
+""", Config())
+
+    assert find_campaign_by_branch_name(config, "fo") == "bar"
+    assert find_campaign_by_branch_name(config, "bar") is None
+    assert find_campaign_by_branch_name(config, "lala") is None
