@@ -2116,14 +2116,6 @@ async def process_queue_loop(
             await asyncio.sleep(to_wait)
 
 
-async def is_conflicted(mp):
-    try:
-        return not await to_thread(mp.can_be_merged)
-    except NotImplementedError:
-        # TODO(jelmer): Download and attempt to merge locally?
-        return None
-
-
 class NoRunForMergeProposal(Exception):
     """No run matching merge proposal."""
 
@@ -2189,7 +2181,7 @@ LIMIT 1
 
 async def get_proposal_info(
     conn: asyncpg.Connection, url
-) -> Tuple[Optional[bytes], str, str, str, str]:
+) -> Tuple[Optional[bytes], str, str, Optional[bool], str, str]:
     row = await conn.fetchrow(
         """\
 SELECT
@@ -2197,7 +2189,8 @@ SELECT
     merge_proposal.revision,
     merge_proposal.status,
     merge_proposal.target_branch_url,
-    package.name
+    package.name,
+    can_be_merged
 FROM
     merge_proposal
 LEFT JOIN package ON merge_proposal.package = package.name
@@ -2208,7 +2201,8 @@ WHERE
     )
     if not row:
         raise KeyError
-    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[4], row[0])
+    return (row[1].encode("utf-8") if row[1] else None,
+            row[2], row[3], row[5], row[4], row[0])
 
 
 async def guess_package_from_revision(
@@ -2278,7 +2272,7 @@ async def check_existing_mp(
 ) -> bool:
     async def update_proposal_status(
             mp, status, revision, package_name, target_branch_url,
-            campaign):
+            campaign, can_be_merged):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2296,8 +2290,8 @@ async def check_existing_mp(
                 await conn.execute(
                     """INSERT INTO merge_proposal (
                         url, status, revision, package, merged_by, merged_at,
-                        target_branch_url, last_scanned)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                        target_branch_url, last_scanned, can_be_merged)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
                     ON CONFLICT (url)
                     DO UPDATE SET
                       status = EXCLUDED.status,
@@ -2306,10 +2300,12 @@ async def check_existing_mp(
                       merged_by = EXCLUDED.merged_by,
                       merged_at = EXCLUDED.merged_at,
                       target_branch_url = EXCLUDED.target_branch_url,
-                      last_scanned = EXCLUDED.last_scanned
+                      last_scanned = EXCLUDED.last_scanned,
+                      can_be_merged = EXCLUDED.can_be_merged
                     """, mp.url, status,
                     revision.decode("utf-8") if revision is not None else None,
-                    package_name, merged_by, merged_at, target_branch_url)
+                    package_name, merged_by, merged_at, target_branch_url,
+                    can_be_merged)
                 if revision:
                     await conn.execute("""
                     UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
@@ -2335,17 +2331,25 @@ async def check_existing_mp(
             old_revision,
             old_status,
             old_target_branch_url,
+            old_can_be_merged,
             package_name,
             maintainer_email,
         ) = await get_proposal_info(conn, mp.url)
     except KeyError:
         old_revision = None
+        old_can_be_merged = None
         old_status = None
         old_target_branch_url = None
         maintainer_email = None
         package_name = None
     revision = await to_thread(mp.get_source_revision)
     source_branch_url = await to_thread(mp.get_source_branch_url)
+    try:
+        can_be_merged = not await to_thread(mp.can_be_merged)
+    except NotImplementedError:
+        # TODO(jelmer): Download and attempt to merge locally?
+        can_be_merged = None
+
     if revision is None:
         if source_branch_url is None:
             logger.warning("No source branch for %r", mp)
@@ -2399,11 +2403,13 @@ async def check_existing_mp(
         status = old_status
     if (old_status != status
             or revision != old_revision
-            or target_branch_url != old_target_branch_url):
+            or target_branch_url != old_target_branch_url
+            or can_be_merged != old_can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await update_proposal_status(
             mp, status, revision, package_name, target_branch_url,
-            campaign=mp_run['campaign'] if mp_run else None)
+            campaign=mp_run['campaign'] if mp_run else None,
+            can_be_merged=can_be_merged)
     else:
         await conn.execute(
             'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
@@ -2483,7 +2489,7 @@ archive.
         if not dry_run:
             await update_proposal_status(
                 mp, "applied", revision, package_name, target_branch_url,
-                mp_run['campaign'])
+                mp_run['campaign'], can_be_merged=can_be_merged)
             try:
                 await to_thread(
                     mp.post_comment,
@@ -2600,7 +2606,7 @@ applied independently.
                 )
                 await update_proposal_status(
                     mp, "abandoned", revision, package_name, target_branch_url,
-                    campaign=mp_run['campaign'])
+                    campaign=mp_run['campaign'], can_be_merged=can_be_merged)
                 try:
                     await to_thread(mp.post_comment, """
 This merge proposal will be closed, since the branch for the role '%s'
@@ -2639,7 +2645,7 @@ has changed from %s to %s.
         if not dry_run:
             await update_proposal_status(
                 mp, "abandoned", revision, package_name, target_branch_url,
-                campaign=mp_run['campaign'])
+                campaign=mp_run['campaign'], can_be_merged=can_be_merged)
             try:
                 await to_thread(
                     mp.post_comment,
@@ -2745,7 +2751,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 if not dry_run:
                     await update_proposal_status(
                         mp, "applied", revision, package_name,
-                        target_branch_url, campaign=mp_run['campaign'])
+                        target_branch_url, campaign=mp_run['campaign'],
+                        can_be_merged=can_be_merged)
                     try:
                         await to_thread(
                             mp.post_comment,
@@ -2823,7 +2830,7 @@ applied independently.
         # It may take a while for the 'conflicted' bit on the proposal to
         # be refreshed, so only check it if we haven't made any other
         # changes.
-        if await is_conflicted(mp):
+        if can_be_merged:
             logger.info("%s is conflicted. Rescheduling.", mp.url)
             if not dry_run:
                 try:
