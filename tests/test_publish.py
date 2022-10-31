@@ -39,7 +39,8 @@ async def test_lock_manager():
 
 async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
-        vcs_managers={}, db=None, redis=create_redis_pool(None),
+        vcs_managers={}, db=None,
+        redis=await create_redis_pool('redis://localhost'),
         lock_manager=create_lock_manager(), config=None,
         differ_url="https://differ/"))
 
