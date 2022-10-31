@@ -531,7 +531,7 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 
 async def consider_publish_run(
-        conn: asyncpg.Connection, config: Config, template_env_path: str,
+        conn: asyncpg.Connection, *, config: Config, template_env_path: str,
         vcs_managers, maintainer_rate_limiter, external_url: Optional[str], differ_url: str,
         redis, lock_manager,
         run, maintainer_email,
@@ -599,9 +599,13 @@ async def consider_publish_run(
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
-            conn, campaign_config, template_env_path, maintainer_rate_limiter,
-            vcs_managers, run, role, maintainer_email, run.branch_url,
-            redis, lock_manager, publish_mode, max_frequency_days, command,
+            conn=conn, campaign_config=campaign_config,
+            template_env_path=template_env_path,
+            maintainer_rate_limiter=maintainer_rate_limiter,
+            vcs_managers=vcs_managers, run=run, role=role,
+            maintainer_email=maintainer_email, main_branch_url=run.branch_url,
+            redis=redis, lock_manager=lock_manager, mode=publish_mode,
+            max_frequency_days=max_frequency_days, command=command,
             dry_run=dry_run,
             external_url=external_url, differ_url=differ_url,
             require_binary_diff=require_binary_diff,
@@ -614,6 +618,7 @@ async def consider_publish_run(
 
 async def iter_publish_ready(
     conn: asyncpg.Connection,
+    *,
     campaigns: Optional[List[str]] = None,
     review_status: Optional[List[str]] = None,
     limit: Optional[int] = None,
@@ -680,6 +685,7 @@ SELECT * FROM publish_ready
 
 
 async def publish_pending_ready(
+    *,
     db,
     redis,
     lock_manager,
@@ -945,6 +951,7 @@ async def store_publish(
 
 
 async def publish_from_policy(
+    *,
     conn: asyncpg.Connection,
     campaign_config: Campaign,
     template_env_path: str,
@@ -1180,6 +1187,7 @@ def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bo
 
 
 async def publish_and_store(
+    *,
     db: asyncpg.Connection,
     redis,
     lock_manager,
@@ -1548,7 +1556,7 @@ async def consider_request(request):
             else:
                 return
             await consider_publish_run(
-                conn, request.app['config'],
+                conn, config=request.app['config'],
                 template_env_path=request.app['template_env_path'],
                 vcs_managers=request.app['vcs_managers'],
                 maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
@@ -1664,16 +1672,16 @@ async def publish_request(request):
 
         create_background_task(
             publish_and_store(
-                request.app['db'],
-                request.app['redis'],
-                request.app['lock_manager'],
-                get_campaign_config(request.app['config'], run.campaign),
-                request.app['template_env_path'],
-                publish_id,
-                run,
-                mode,
-                role,
-                package['maintainer_email'],
+                db=request.app['db'],
+                redis=request.app['redis'],
+                lock_manager=request.app['lock_manager'],
+                campaign_config=get_campaign_config(request.app['config'], run.campaign),
+                template_env_path=request.app['template_env_path'],
+                publish_id=publish_id,
+                run=run,
+                mode=mode,
+                role=role,
+                maintainer_email=package['maintainer_email'],
                 vcs_managers=vcs_managers,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=dry_run,
@@ -1892,13 +1900,13 @@ async def autopublish_request(request):
 
     async def autopublish():
         await publish_pending_ready(
-            request.app['db'],
-            request.app['redis'],
-            request.app['lock_manager'],
-            request.app['config'],
-            request.app['template_env_path'],
-            request.app['maintainer_rate_limiter'],
-            request.app['vcs_managers'],
+            db=request.app['db'],
+            redis=request.app['redis'],
+            lock_manager=request.app['lock_manager'],
+            config=request.app['config'],
+            template_env_path=request.app['template_env_path'],
+            maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+            vcs_managers=request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
             external_url=request.app['external_url'],
             differ_url=request.app['differ_url'],
@@ -2058,6 +2066,7 @@ WHERE run.id = $1
 
 
 async def process_queue_loop(
+    *,
     db,
     redis,
     lock_manager,
@@ -2095,13 +2104,13 @@ async def process_queue_loop(
             )
         if auto_publish:
             await publish_pending_ready(
-                db,
-                redis,
-                lock_manager,
-                config,
-                template_env_path,
-                maintainer_rate_limiter,
-                vcs_managers,
+                db=db,
+                redis=redis,
+                lock_manager=lock_manager,
+                config=config,
+                template_env_path=template_env_path,
+                maintainer_rate_limiter=maintainer_rate_limiter,
+                vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -3050,6 +3059,7 @@ ORDER BY start_time DESC
 
 
 async def listen_to_runner(
+    *,
     db,
     redis,
     lock_manager,
@@ -3068,20 +3078,20 @@ async def listen_to_runner(
         )
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
-                conn,
-                get_campaign_config(config, run.campaign),
-                template_env_path,
-                maintainer_rate_limiter,
-                vcs_managers,
-                run,
-                role,
-                maintainer_email,
-                branch_url,
-                redis,
-                lock_manager,
-                mode,
-                max_frequency_days,
-                command,
+                conn=conn,
+                campaign_config=get_campaign_config(config, run.campaign),
+                template_env_path=template_env_path,
+                maintainer_rate_limiter=maintainer_rate_limiter,
+                vcs_managers=vcs_managers,
+                run=run,
+                role=role,
+                maintainer_email=maintainer_email,
+                main_branch_url=branch_url,
+                redis=redis,
+                lock_manager=lock_manager,
+                mode=mode,
+                max_frequency_days=max_frequency_days,
+                command=command,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -3254,17 +3264,17 @@ async def main(argv=None):
         redis = await aioredis.create_redis_pool(config.redis_location)
         stack.callback(redis.close)
 
-        lock_manager = await aioredlock.Aioredlock(config.redis_location)
+        lock_manager = aioredlock.Aioredlock(config.redis_location)
         stack.push_async_callback(lock_manager.destroy)
 
         if args.once:
             await publish_pending_ready(
-                db,
-                redis,
-                lock_manager,
-                config,
-                args.template_env_path,
-                maintainer_rate_limiter,
+                db=db,
+                redis=redis,
+                lock_manager=lock_manager,
+                config=config,
+                template_env_path=args.template_env_path,
+                maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=args.dry_run,
                 external_url=args.external_url,
                 differ_url=args.differ_url,
@@ -3279,13 +3289,13 @@ async def main(argv=None):
             tasks = [
                 loop.create_task(
                     process_queue_loop(
-                        db,
-                        redis,
-                        lock_manager,
-                        config,
-                        args.template_env_path,
-                        maintainer_rate_limiter,
-                        forge_rate_limiter,
+                        db=db,
+                        redis=redis,
+                        lock_manager=lock_manager,
+                        config=config,
+                        template_env_path=args.template_env_path,
+                        maintainer_rate_limiter=maintainer_rate_limiter,
+                        forge_rate_limiter=forge_rate_limiter,
                         dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
                         interval=args.interval,
@@ -3307,6 +3317,7 @@ async def main(argv=None):
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
                         db=db, redis=redis, config=config,
+                        lock_manager=lock_manager,
                         dry_run=args.dry_run,
                         external_url=args.external_url,
                         differ_url=args.differ_url,
@@ -3323,13 +3334,13 @@ async def main(argv=None):
                 tasks.append(
                     loop.create_task(
                         listen_to_runner(
-                            db,
-                            redis,
-                            lock_manager,
-                            config,
-                            args.template_env_path,
-                            maintainer_rate_limiter,
-                            vcs_managers,
+                            db=db,
+                            redis=redis,
+                            lock_manager=lock_manager,
+                            config=config,
+                            template_env_path=args.template_env_path,
+                            maintainer_rate_limiter=maintainer_rate_limiter,
+                            vcs_managers=vcs_managers,
                             dry_run=args.dry_run,
                             external_url=args.external_url,
                             differ_url=args.differ_url,
