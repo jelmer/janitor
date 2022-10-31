@@ -11,7 +11,7 @@ those, you'll also want to install various other bits of software. On Debian,
 run:
 
  $ sudo apt install libgpgme-dev rustc libapt-pkg-dev protobuf-compiler \
-     python3-venv python3-pip rustc libpcre3-dev libgpg-error-dev
+     python3-venv python3-pip rustc libpcre3-dev libgpg-error-dev swig
 
 For example, to create a dev enviroment:
 
