@@ -2361,7 +2361,7 @@ async def check_existing_mp(
     revision = await to_thread(mp.get_source_revision)
     source_branch_url = await to_thread(mp.get_source_branch_url)
     try:
-        can_be_merged = not await to_thread(mp.can_be_merged)
+        can_be_merged = await to_thread(mp.can_be_merged)
     except NotImplementedError:
         # TODO(jelmer): Download and attempt to merge locally?
         can_be_merged = None
@@ -2453,13 +2453,13 @@ async def check_existing_mp(
                         change_set=None,
                         bucket="update-existing-mp",
                         refresh=True,
-                        requestor="publisher (orphaned conflicted merge proposal)",
+                        requestor="publisher (orphaned merge proposal)",
                     )
                 except CandidateUnavailable:
                     logging.warning(
                         'Candidate unavailable while attempting to reschedule '
-                        'conflicted %s/%s',
-                        package_name, campaign)
+                        'orphaned %s: %s/%s',
+                        mp.url, package_name, campaign)
 
         raise NoRunForMergeProposal(mp, revision)
 
@@ -2865,7 +2865,7 @@ applied independently.
         # It may take a while for the 'conflicted' bit on the proposal to
         # be refreshed, so only check it if we haven't made any other
         # changes.
-        if can_be_merged:
+        if can_be_merged is False:
             logger.info("%s is conflicted. Rescheduling.", mp.url)
             if not dry_run:
                 try:
