@@ -21,29 +21,16 @@ from janitor.publish import (
 )
 
 import asyncio
-from mockaioredis import create_redis_pool, MockRedis
-import aioredlock
+from mockaioredis import create_redis_pool
 
 import mock
-
-
-def create_lock_manager():
-    with mock.patch('aioredlock.algorithm', 'Redis',
-                    asyncio.run(create_redis_pool('redis://localhost'))):
-        return aioredlock.Aioredlock()
-
-
-async def test_lock_manager():
-    lm = create_lock_manager()
-    async with await lm.lock("publish:https://github.com/jelmer/xandikos"):
-        pass
 
 
 async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
         vcs_managers={}, db=None,
         redis=await create_redis_pool('redis://localhost'),
-        lock_manager=create_lock_manager(), config=None,
+        lock_manager=None, config=None,
         differ_url="https://differ/"))
 
 
