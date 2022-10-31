@@ -2262,6 +2262,13 @@ ORDER BY length(branch_url) DESC
     return result
 
 
+def find_campaign_by_branch_name(config, branch_name):
+    for campaign in config.campaign:
+        if campaign.branch_name == source_branch_name:
+            return campaign.name
+    raise None
+
+
 async def check_existing_mp(
     conn,
     redis,
@@ -2435,6 +2442,25 @@ async def check_existing_mp(
     if mp_run is None:
         mp_run = await get_merge_proposal_run(conn, mp.url)
     if mp_run is None:
+        if package_name and source_branch_name:
+            campaign = find_campaign_by_branch_name(config, source_branch_name)
+            if campaign:
+                try:
+                    await do_schedule(
+                        conn,
+                        package_name,
+                        campaign,
+                        change_set=None,
+                        bucket="update-existing-mp",
+                        refresh=True,
+                        requestor="publisher (orphaned conflicted merge proposal)",
+                    )
+                except CandidateUnavailable:
+                    logging.warning(
+                        'Candidate unavailable while attempting to reschedule '
+                        'conflicted %s/%s',
+                        package_name, campaign)
+
         raise NoRunForMergeProposal(mp, revision)
 
     mp_remote_branch_name = mp_run['remote_branch_name']
