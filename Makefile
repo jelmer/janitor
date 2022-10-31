@@ -1,5 +1,7 @@
 PB2_PY_OUTPUT = janitor/config_pb2.py janitor/package_metadata_pb2.py
 
+DOCKER_TAG ?= latest
+
 core: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
 
 all: core
@@ -54,8 +56,8 @@ clean:
 SHA=$(shell git rev-parse HEAD)
 
 docker-%: core
-	buildah build -t ghcr.io/jelmer/janitor/$*:latest -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
-	buildah push ghcr.io/jelmer/janitor/$*:latest
+	buildah build -t ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG) -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
+	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
 docker-site: docker-base
