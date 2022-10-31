@@ -20,14 +20,14 @@ from janitor.publish import (
     create_app,
 )
 
-from mockaioredis import create_redis_pool
+from mockaioredis import create_redis_pool, MockRedis
 import aioredlock
 
 import mock
 
 
 def create_lock_manager():
-    with mock.patch('aioredlock.algorithm', 'Redis', create_redis_pool):
+    with mock.patch('aioredlock.algorithm', 'Redis', MockRedis):
         return aioredlock.Aioredlock()
 
 
