@@ -20,6 +20,7 @@ from janitor.publish import (
     create_app,
 )
 
+import asyncio
 from mockaioredis import create_redis_pool, MockRedis
 import aioredlock
 
@@ -27,7 +28,8 @@ import mock
 
 
 def create_lock_manager():
-    with mock.patch('aioredlock.algorithm', 'Redis', MockRedis):
+    with mock.patch('aioredlock.algorithm', 'Redis',
+                    asyncio.run(create_redis_pool('redis://localhost'))):
         return aioredlock.Aioredlock()
 
 
