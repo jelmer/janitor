@@ -1451,7 +1451,6 @@ async def handle_policy_put(request):
 async def handle_full_policy_put(request):
     policy = await request.json()
     async with request.app['db'].acquire() as conn, conn.transaction():
-        await conn.execute("DELETE FROM named_publish_policy")
         entries = [
             (name, v['qa_review'],
              [(r, b['mode'], b.get('max_frequency_days'))
@@ -1465,6 +1464,9 @@ async def handle_full_policy_put(request):
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
             "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket", entries)
+        await conn.execute(
+            "DELETE FROM named_publish_policy WHERE name != ANY($1::text[])",
+            policy.keys())
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 

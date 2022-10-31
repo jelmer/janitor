@@ -1973,8 +1973,6 @@ async def handle_candidates(request):
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance'),
                 publish_policy))
-        if 'replace' in request.query:
-            await conn.execute('DELETE FROM candidate')
 
         await conn.executemany(
             "INSERT INTO candidate "
