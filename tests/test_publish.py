@@ -20,11 +20,18 @@ from janitor.publish import (
     create_app,
 )
 
+import asyncio
+from mockaioredis import create_redis_pool
+
+import mock
+
 
 async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
-        vcs_managers={}, db=None, redis=None,
-        config=None, differ_url="https://differ/"))
+        vcs_managers={}, db=None,
+        redis=await create_redis_pool('redis://localhost'),
+        lock_manager=None, config=None,
+        differ_url="https://differ/"))
 
 
 async def test_health(aiohttp_client):

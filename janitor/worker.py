@@ -61,6 +61,7 @@ from silver_platter.apply import (
     CommandResult as GenericCommandResult,
     DetailedFailure as GenericDetailedFailure,
     ScriptFailed,
+    ScriptNotFound,
     ScriptMadeNoChanges,
     ResultFileFormatError,
 )
@@ -347,6 +348,10 @@ class DebianTarget(Target):
             stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
                 e.result_code, e.description, e.details, stage=stage) from e
+        except ScriptNotFound as e:
+            raise WorkerFailure(
+                "codemod-not-found",
+                "Codemod script %r not found" % argv) from e
         except ScriptFailed as e:
             raise _convert_codemod_script_failed(e) from e
         except MemoryError as e:
@@ -408,6 +413,10 @@ class GenericTarget(Target):
             stage = ("codemod", ) + (e.stage if e.stage else ())
             raise WorkerFailure(
                 e.result_code, e.description, e.details, stage=stage) from e
+        except ScriptNotFound as e:
+            raise WorkerFailure(
+                "codemod-not-found",
+                "Codemod script %r not found" % argv) from e
         except ScriptFailed as e:
             raise _convert_codemod_script_failed(e) from e
 

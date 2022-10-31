@@ -324,7 +324,8 @@ class DebianBuilder(Builder):
 
     result_cls = DebianResult
 
-    def __init__(self, distro_config, apt_location, dep_server_url):
+    def __init__(self, distro_config, apt_location: Optional[str] = None,
+                 dep_server_url: Optional[str] = None):
         self.distro_config = distro_config
         self.apt_location = apt_location
         self.dep_server_url = dep_server_url
@@ -340,10 +341,12 @@ class DebianBuilder(Builder):
             extra_janitor_distributions.append('cs/%s' % queue_item.change_set)
 
         # TODO(jelmer): Ship build-extra-repositories-keys, and specify [signed-by] here
-        config['build-extra-repositories'] = [
-            "deb [trusted=yes] %s %s main" % (self.apt_location, suite)
-            for suite in extra_janitor_distributions
-        ]
+        config['build-extra-repositories'] = []
+        if self.apt_location:
+            config['build-extra-repositories'].extend([
+                "deb [trusted=yes] %s %s main" % (self.apt_location, suite)
+                for suite in extra_janitor_distributions
+            ])
 
         config["build-distribution"] = campaign_config.debian_build.build_distribution or campaign_config.name
 
@@ -1970,8 +1973,6 @@ async def handle_candidates(request):
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance'),
                 publish_policy))
-        if 'replace' in request.query:
-            await conn.execute('DELETE FROM candidate')
 
         await conn.executemany(
             "INSERT INTO candidate "
