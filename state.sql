@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    merged_by text,
    merged_at timestamp,
    last_scanned timestamp,
+   can_be_merged boolean,
    foreign key (package) references package(name),
    primary key(url)
 );
