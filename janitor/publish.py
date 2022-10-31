@@ -3290,7 +3290,7 @@ async def main(argv=None):
         redis = await aioredis.create_redis_pool(config.redis_location)
         stack.callback(redis.close)
 
-        lock_manager = aioredlock.Aioredlock(config.redis_location)
+        lock_manager = aioredlock.Aioredlock([config.redis_location])
         stack.push_async_callback(lock_manager.destroy)
 
         if args.once:
