@@ -689,6 +689,7 @@ CREATE VIEW absorbed_runs AS
        run.id,
        merge_proposal.merged_at AS absorbed_at,
        merge_proposal.merged_by,
+       merge_proposal.url AS merge_proposal_url,
        run.revision
     FROM merge_proposal
     INNER JOIN run ON merge_proposal.revision = run.revision
@@ -704,6 +705,7 @@ CREATE VIEW absorbed_runs AS
         run.result::jsonb AS result,
         run.id, timestamp AS absorbed_at,
         NULL AS merged_by,
+        NULL AS merge_proposal_url,
         run.revision
     FROM publish
     INNER JOIN run ON publish.revision = run.revision
