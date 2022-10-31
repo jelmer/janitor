@@ -22,6 +22,8 @@ from janitor.publish import (
     find_campaign_by_branch_name,
 )
 
+from google.protobuf import text_format  # type: ignore
+
 import asyncio
 from mockaioredis import create_redis_pool
 
@@ -55,11 +57,13 @@ async def test_ready(aiohttp_client):
 
 
 def test_find_campaign_by_branch_name():
-    config = Config()
-    c = config.add_campaign()
-    c.name = "bar"
-    c.branch_name = "fo"
+    config = text_format.Parse("""\
+campaign {
+ name: "bar"
+ branch_name: "fo"
+}
+""", Config())
 
-    assert find_campaign_config(c, "fo") == c
-    assert find_campaign_config(c, "bar") is None
-    assert find_campaign_config(c, "lala") is None
+    assert find_campaign_by_branch_name(config, "fo") == "bar"
+    assert find_campaign_by_branch_name(config, "bar") is None
+    assert find_campaign_by_branch_name(config, "lala") is None
