@@ -2264,7 +2264,7 @@ ORDER BY length(branch_url) DESC
 
 def find_campaign_by_branch_name(config, branch_name):
     for campaign in config.campaign:
-        if campaign.branch_name == source_branch_name:
+        if campaign.branch_name == branch_name:
             return campaign.name
     raise None
 
