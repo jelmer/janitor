@@ -16,8 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+from janitor.config import Config
 from janitor.publish import (
     create_app,
+    find_campaign_by_branch_name,
 )
 
 import asyncio
@@ -50,3 +52,14 @@ async def test_ready(aiohttp_client):
     assert resp.status == 200
     text = await resp.text()
     assert text == "ok"
+
+
+def test_find_campaign_by_branch_name():
+    config = Config()
+    c = config.add_campaign()
+    c.name = "bar"
+    c.branch_name = "fo"
+
+    assert find_campaign_config(c, "fo") == c
+    assert find_campaign_config(c, "bar") is None
+    assert find_campaign_config(c, "lala") is None
