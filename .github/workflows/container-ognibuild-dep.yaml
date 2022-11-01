@@ -10,7 +10,7 @@ on:
 
 jobs:
   # define job to build and publish container image
-  build-and-push-container-image:
+  build-and-push-ognibuild-dep-container-image:
     name: Build Docker image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
