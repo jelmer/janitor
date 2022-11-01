@@ -143,8 +143,7 @@ async def generate_run_file(
             )
         with span.new_child('sql:package'):
             package = await conn.fetchrow(
-                'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
-                'FROM package WHERE name = $1', run['package'])
+                'SELECT * FROM package WHERE name = $1', run['package'])
         with span.new_child('sql:publish-history'):
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
                 publish_history = await get_publish_history(conn, run['revision'])
@@ -158,13 +157,9 @@ async def generate_run_file(
         with span.new_child('sql:success-probability'):
             kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
                 conn, run['package'], run['suite'])
+    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["branch_url"] = package['branch_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
 
@@ -325,12 +320,7 @@ async def generate_run_file(
 async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
     kwargs = {}
     kwargs["package"] = package['name']
-    kwargs["vcswatch_status"] = package['vcswatch_status']
-    kwargs["maintainer_email"] = package['maintainer_email']
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["branch_url"] = package['branch_url']
+    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = runs
     kwargs["removed"] = package['removed']

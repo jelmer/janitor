@@ -36,8 +36,6 @@ There are several cron jobs that run daily:
 
 * the *package_metadata* syncer imports package metadata from UDD
 * the *candidate* syncer determines candidates
-* the *scheduler* determines what packages are ready for processing
-  based on lintian, vcswatch and upstream data, and queues them.
 
 Several permanently running jobs:
 

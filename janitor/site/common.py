@@ -186,9 +186,7 @@ async def generate_pkg_context(
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
             package = await conn.fetchrow("""\
-SELECT package.name AS name, maintainer_email, uploader_emails, removed, branch_url, vcs_type,
-    vcs_url, vcs_browse, vcswatch_version,
-    named_publish_policy.per_branch_policy AS publish_policy
+SELECT package.*, named_publish_policy.per_branch_policy AS publish_policy
 FROM package
 LEFT JOIN candidate ON package.name = candidate.package AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
@@ -298,6 +296,8 @@ WHERE run.package = $1 AND run.suite = $2
             return "Error retrieving debdiff: %s" % e
 
     kwargs = {}
+    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
+
     if run:
         kwargs.update(run)
         env, plain_command = splitout_env(run['command'])
@@ -313,13 +313,6 @@ WHERE run.package = $1 AND run.suite = $2
         "reviews": reviews,
         "unchanged_run": unchanged_run,
         "merge_proposals": merge_proposals,
-        "maintainer_email": package['maintainer_email'],
-        "uploader_emails": package['uploader_emails'],
-        "removed": package['removed'],
-        "vcs_url": package['vcs_url'],
-        "vcs_type": package['vcs_type'],
-        "vcs_browse": package['vcs_browse'],
-        "vcswatch_version": package['vcswatch_version'],
         "run_id": run_id,
         "suite": suite,
         "campaign": campaign,
@@ -332,7 +325,6 @@ WHERE run.package = $1 AND run.suite = $2
         "candidate_value": candidate_value,
         "queue_position": queue_position,
         "queue_wait_time": queue_wait_time,
-        "publish_policy": package['publish_policy'],
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
         "config": config,
     })
