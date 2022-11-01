@@ -48,8 +48,6 @@ jobs:
           containerfiles: "Dockerfile_bzr_store"
           image: ghcr.io/jelmer/janitor/bzr_store
           tags: ${{ env.TAGS }}
-          build-args: |
-            BASE_TAG=${{ github.sha }}
 
       - name: Push bzr-store image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}

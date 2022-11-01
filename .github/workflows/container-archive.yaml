@@ -48,8 +48,6 @@ jobs:
           containerfiles: "Dockerfile_archive"
           image: ghcr.io/jelmer/janitor/archive
           tags: ${{ env.TAGS }}
-          build-args: |
-            BASE_TAG=${{ github.sha }}
 
       - name: Push archive image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
