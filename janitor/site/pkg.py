@@ -51,7 +51,6 @@ from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
-    tracker_url,
 )
 
 from .common import iter_candidates, get_unchanged_run
@@ -247,10 +246,6 @@ async def generate_run_file(
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
     kwargs["campaign"] = get_campaign_config(config, run['suite'])
-    if kwargs['campaign'].HasField('debian_build'):
-        kwargs["tracker_url"] = partial(
-            tracker_url, config,
-            kwargs['campaign'].debian_build.base_distribution)
     kwargs["resume_from"] = run['resume_from']
 
     def read_file(f):
@@ -340,7 +335,6 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["runs"] = runs
     kwargs["removed"] = package['removed']
     kwargs["distributions"] = config.distribution
-    kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
         with span.new_child('sql:candidates'):
