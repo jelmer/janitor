@@ -22,7 +22,7 @@
                     Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].start_time) }})
                 </li>
             {% endif %}
-            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>{% endif %}
+            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
             {% if queue_position %}
                 <li id="queue-position.{{ package }}">
                     Queue position: {{ queue_position }}
