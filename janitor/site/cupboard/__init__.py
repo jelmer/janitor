@@ -516,7 +516,6 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
-    router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get(
         "/cupboard/run/{run_id}/", handle_run_redirect, name="cupboard-run-redirect")
     router.add_get(
