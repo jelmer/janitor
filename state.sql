@@ -28,7 +28,6 @@ CREATE INDEX ON codebase (name);
 -- TODO(jelmer): Move to Debian janitor
 CREATE EXTENSION IF NOT EXISTS debversion;
 CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
    distribution distribution_name not null,
@@ -46,10 +45,7 @@ CREATE TABLE IF NOT EXISTS package (
    archive_version debversion,
    vcs_url text,
    vcs_browse text,
-   popcon_inst integer,
    removed boolean default false,
-   vcswatch_status vcswatch_status,
-   vcswatch_version debversion,
    in_base boolean,
    origin text,
    unique(distribution, name)

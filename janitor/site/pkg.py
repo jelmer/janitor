@@ -17,7 +17,6 @@
 
 
 from datetime import datetime
-from functools import partial
 from io import BytesIO
 import logging
 
@@ -33,6 +32,8 @@ from aiohttp import (
 import asyncpg
 
 from breezy.revision import NULL_REVISION
+from breezy.forge import get_forge_by_hostname, UnsupportedForge
+from breezy import urlutils
 
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
@@ -49,7 +50,6 @@ from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
-    tracker_url,
 )
 
 from .common import iter_candidates, get_unchanged_run
@@ -142,8 +142,7 @@ async def generate_run_file(
             )
         with span.new_child('sql:package'):
             package = await conn.fetchrow(
-                'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
-                'FROM package WHERE name = $1', run['package'])
+                'SELECT * FROM package WHERE name = $1', run['package'])
         with span.new_child('sql:publish-history'):
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
                 publish_history = await get_publish_history(conn, run['revision'])
@@ -157,13 +156,9 @@ async def generate_run_file(
         with span.new_child('sql:success-probability'):
             kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
                 conn, run['package'], run['suite'])
+    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["branch_url"] = package['branch_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
 
@@ -245,10 +240,6 @@ async def generate_run_file(
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
     kwargs["campaign"] = get_campaign_config(config, run['suite'])
-    if kwargs['campaign'].HasField('debian_build'):
-        kwargs["tracker_url"] = partial(
-            tracker_url, config,
-            kwargs['campaign'].debian_build.base_distribution)
     kwargs["resume_from"] = run['resume_from']
 
     def read_file(f):
@@ -328,17 +319,11 @@ async def generate_run_file(
 async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
     kwargs = {}
     kwargs["package"] = package['name']
-    kwargs["vcswatch_status"] = package['vcswatch_status']
-    kwargs["maintainer_email"] = package['maintainer_email']
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["branch_url"] = package['branch_url']
+    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = runs
     kwargs["removed"] = package['removed']
     kwargs["distributions"] = config.distribution
-    kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
         with span.new_child('sql:candidates'):
@@ -358,18 +343,48 @@ async def generate_done_list(
             campaign)
 
         if since:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs "
                 "WHERE absorbed_at >= $1 AND campaign = $2 "
                 "ORDER BY absorbed_at DESC NULLS LAST", since, campaign)
         else:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE campaign = $1 "
                 "ORDER BY absorbed_at DESC NULLS LAST", campaign)
+    
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
 
     return {
         "oldest": oldest, "runs": runs, "campaign": campaign,
         "since": since}
+
+
+class MergeProposalUserUrlResolver(object):
+
+    def __init__(self):
+        self._forges = {}
+
+    def resolve(self, url, user):
+        hostname = urlutils.URL.from_string(url).host
+        if hostname not in self._forges:
+            try:
+                self._forges[hostname] = get_forge_by_hostname(hostname)
+            except UnsupportedForge:
+                self._forges[hostname] = None
+        if self._forges[hostname]:
+            return self._forges[hostname].get_user_url(user)
+        else:
+            return None
 
 
 async def generate_ready_list(

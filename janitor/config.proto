@@ -9,9 +9,6 @@ message Distribution {
 
   optional string signed_by = 11;
 
-  // This should eventually be distribution-specific
-  optional string tracker_url = 3;
-
   // Chroot name to use in sbuild
   optional string chroot = 5;
 

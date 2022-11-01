@@ -30,7 +30,7 @@ from janitor.runner import (
 async def create_client(aiohttp_client):
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4='127.0.0.1', port=80)
     tracer = await aiozipkin.create_custom(endpoint)
-    return await aiohttp_client(await create_app(None, None, tracer))
+    return await aiohttp_client(await create_app(None, None, None, tracer))
 
 
 async def test_health(aiohttp_client):

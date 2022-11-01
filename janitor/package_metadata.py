@@ -97,7 +97,7 @@ async def update_package_metadata(
         "INSERT INTO package "
         "(name, distribution, branch_url, subpath, maintainer_email, "
         "uploader_emails, archive_version, vcs_type, vcs_browse, "
-        "vcs_last_revision, popcon_inst, "
+        "vcs_last_revision, "
         "removed, in_base, origin, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
         "$13, $14, $15) "
@@ -110,7 +110,6 @@ async def update_package_metadata(
         "vcs_type = EXCLUDED.vcs_type, "
         "vcs_last_revision = EXCLUDED.vcs_last_revision, "
         "vcs_browse = EXCLUDED.vcs_browse, "
-        "popcon_inst = EXCLUDED.popcon_inst, "
         "removed = EXCLUDED.removed, "
         "in_base = EXCLUDED.in_base, "
         "codebase = EXCLUDED.codebase",

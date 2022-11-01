@@ -19,12 +19,15 @@ import subprocess
 import json
 import os
 import logging
+from typing import Optional, List
 
 
 logger = logging.getLogger(__name__)
 
 
-def run_lintian(output_directory, changes_names, profile=None, suppress_tags=None):
+def run_lintian(output_directory: str, changes_names: List[str],
+                profile: Optional[str] = None,
+                suppress_tags: Optional[List[str]] = None):
     logger.info('Running lintian')
     args = ['--exp-output=format=json', '--allow-root']
     if suppress_tags:
@@ -34,8 +37,8 @@ def run_lintian(output_directory, changes_names, profile=None, suppress_tags=Non
     try:
         lintian_output = subprocess.check_output(
             ['lintian'] + args
-            + [os.path.join(output_directory, changes_name)
-               for changes_name in changes_names])
+            + changes_names,
+            cwd=output_directory)
     except subprocess.CalledProcessError:
         logger.warning('lintian failed to run.')
         return None

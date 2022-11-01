@@ -1533,6 +1533,9 @@ class QueueProcessor(object):
             if dt > datetime.utcnow():
                 yield h.decode('utf-8'), dt
 
+    async def active_run_count(self):
+        return len(await self.redis.hlen('active-runs'))
+
     async def status_json(self) -> Any:
         last_keepalives = {
             r.decode('utf-8'): datetime.fromisoformat(v.decode('utf-8'))
@@ -1685,14 +1688,16 @@ async def handle_queue_position(request):
     span = aiozipkin.request_span(request)
     package = request.query['package']
     campaign = request.query['campaign']
-    async with request.app['queue_processor'].database.acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
                 campaign, package)
+    active_run_count = await request.app['queue_processor'].active_run_count()
     return web.json_response({
         "position": queue_position,
-        "wait_time": queue_wait_time.total_seconds(),
+        "wait_time": queue_wait_time.total_seconds() / active_run_count,
+        "cumulative_wait_time": queue_wait_time.total_seconds(),
     })
 
 
@@ -1709,7 +1714,7 @@ async def handle_schedule_control(request):
         timedelta(seconds=json['estimated_duration'])
         if json.get('estimated_duration') else None)
 
-    async with request.app['queue_processor'].database.acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         try:
             run_id = json['run_id']
         except KeyError:
@@ -1757,7 +1762,7 @@ async def handle_schedule_control(request):
 async def handle_schedule(request):
     span = aiozipkin.request_span(request)
     json = await request.json()
-    async with request.app['queue_processor'].database.acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         try:
             run_id = json['run_id']
         except KeyError:
@@ -2458,12 +2463,13 @@ async def handle_finish(request):
     )
 
 
-async def create_app(queue_processor, config, tracer=None):
+async def create_app(queue_processor, config, db, tracer=None):
     app = web.Application(middlewares=[
         state.asyncpg_error_middleware,
         state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['config'] = config
+    app['database'] = db
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     setup_metrics(app)
@@ -2604,7 +2610,7 @@ async def main(argv=None):
 
         queue_processor.start_watchdog()
 
-        app = await create_app(queue_processor, config, tracer=tracer)
+        app = await create_app(queue_processor, config, db, tracer=tracer)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, args.listen_address, port=args.port)
