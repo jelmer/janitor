@@ -1346,7 +1346,7 @@ def create_app(
 
     setup_aiohttp_apispec(
         app=app,
-        title="Debian Janitor API Documentation",
+        title="Janitor API Documentation",
         version=None,
         url="/swagger.json",
         swagger_path="/docs",

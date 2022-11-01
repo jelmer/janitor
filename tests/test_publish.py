@@ -24,10 +24,7 @@ from janitor.publish import (
 
 from google.protobuf import text_format  # type: ignore
 
-import asyncio
 from mockaioredis import create_redis_pool
-
-import mock
 
 
 async def create_client(aiohttp_client):
