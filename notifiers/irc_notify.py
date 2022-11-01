@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fullname",
         help="IRC fullname",
-        default="Debian Janitor Notifier (https://janitor.debian.net/contact/",
+        default="Janitor Notifier (https://github.com/jelmer/janitor/)",
     )
     parser.add_argument(
         "--prometheus-listen-address",
