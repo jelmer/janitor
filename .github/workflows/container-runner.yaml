@@ -1,17 +1,19 @@
 ---
-name: Build and Publish Worker Container Images
+name: Build and Publish Runner Container Image
 
-"on":
+on:
   # run it on push to the default repository branch
   push:
+    branches:
+      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 jobs:
   # define job to build and publish container image
-  build-and-push-worker-container-image:
-    name: Build Container image and push to repositories
+  build-and-push-runner-container-image:
+    name: Build container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
 
@@ -39,20 +41,20 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build worker image
-        id: build-image-worker
+      - name: Build runner image
+        id: build-image-runner
         uses: redhat-actions/buildah-build@v2
         with:
-          containerfiles: "Dockerfile_worker"
-          image: ghcr.io/jelmer/janitor/worker
+          containerfiles: "Dockerfile_runner"
+          image: ghcr.io/jelmer/janitor/runner
           tags: ${{ env.TAGS }}
 
-      - name: Push worker image to ghcr.io
+      - name: Push runner image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
         uses: redhat-actions/push-to-registry@v2
         with:
-          image: ${{ steps.build-image-worker.outputs.image }}
-          tags: ${{ steps.build-image-worker.outputs.tags }}
+          image: ${{ steps.build-image-runner.outputs.image }}
+          tags: ${{ steps.build-image-runner.outputs.tags }}
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}

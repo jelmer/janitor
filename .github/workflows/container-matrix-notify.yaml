@@ -12,7 +12,7 @@ on:
 
 jobs:
   # define job to build and publish container image
-  build-and-push-container-image:
+  build-and-push-matrix-notify-container-image:
     name: Build Container image and push to repositories
     # run only when code is compiling and tests are passing
     runs-on: ubuntu-latest
