@@ -32,7 +32,7 @@ test:
 style:: flake8
 
 flake8:
-	flake8 janitor
+	flake8 janitor tests
 
 style:: yamllint
 
@@ -45,7 +45,7 @@ djlint:
 	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
 
 typing:
-	mypy janitor
+	mypy janitor tests
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
