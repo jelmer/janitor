@@ -169,6 +169,11 @@ async def main():
     parser.add_argument(
         "--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
+    parser.add_argument(
+        "--remove-unmentioned",
+        action="store_true",
+        help="Mark packages not included in input as removed.")
+
     args = parser.parse_args()
     if args.gcp_logging:
         import google.cloud.logging
@@ -188,7 +193,13 @@ async def main():
     logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
 
-    async with state.create_pool(config.database_location) as conn:
+    async with state.create_pool(config.database_location) as conn, conn.transaction():
+        if args.remove_others:
+            referenced_packages = set(package.name for package in packages)
+            await conn.fetch(
+                'UPDATE package SET removed = True WHERE NOT (name = ANY($1::text[]))',
+                referenced_packages)
+
         logging.info(
             'Updating package data for %d packages',
             len(packages))
