@@ -33,6 +33,8 @@ from aiohttp import (
 import asyncpg
 
 from breezy.revision import NULL_REVISION
+from breezy.forge import get_forge_by_hostname, UnsupportedForge
+from breezy import urlutils
 
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
@@ -358,18 +360,48 @@ async def generate_done_list(
             campaign)
 
         if since:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs "
                 "WHERE absorbed_at >= $1 AND campaign = $2 "
                 "ORDER BY absorbed_at DESC NULLS LAST", since, campaign)
         else:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE campaign = $1 "
                 "ORDER BY absorbed_at DESC NULLS LAST", campaign)
+    
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
 
     return {
         "oldest": oldest, "runs": runs, "campaign": campaign,
         "since": since}
+
+
+class MergeProposalUserUrlResolver(object):
+
+    def __init__(self):
+        self._forges = {}
+
+    def resolve(self, url, user):
+        hostname = urlutils.URL.from_string(url).host
+        if hostname not in forges:
+            try:
+                self._forges[hostname] = get_forge_by_hostname(hostname)
+            except UnsupportedForge:
+                self._forges[hostname] = None
+        if self._forges[hostname]:
+            return forges[hostname].get_user_url(user)
+        else:
+            return None
 
 
 async def generate_ready_list(

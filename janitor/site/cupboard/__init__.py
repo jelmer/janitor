@@ -29,6 +29,7 @@ from ... import state
 
 from .. import is_admin, env, check_logged_in, is_qa_reviewer
 from ..common import html_template
+from ..pkg import MergeProposalUserUrlResolver
 
 
 @html_template(env, "cupboard/rejected.html")
@@ -438,13 +439,25 @@ async def generate_done_list(db, since: Optional[datetime] = None):
             "SELECT MIN(absorbed_at) FROM absorbed_runs")
 
         if since:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
                 "ORDER BY absorbed_at DESC NULLS LAST", since)
         else:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs "
                 "ORDER BY absorbed_at DESC NULLS LAST")
+
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
 
     return {"oldest": oldest, "runs": runs, "since": since}
 
