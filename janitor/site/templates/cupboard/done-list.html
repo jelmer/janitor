@@ -38,7 +38,7 @@
                 <li>
                     <a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
                     {% if run.merged_by %}
-                    <em>(merged by {{ run.merged_by }})</em>
+		    <em>(<a href="{{ run.merge_proposal_url }}">merged</a> by {{ run.merged_by }})</em>
                     {% else %}
                     <em>(pushed)</em>
                     {% endif %}
