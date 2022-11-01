@@ -17,7 +17,6 @@
 
 
 from datetime import datetime
-from functools import partial
 from io import BytesIO
 import logging
 
@@ -377,13 +376,13 @@ class MergeProposalUserUrlResolver(object):
 
     def resolve(self, url, user):
         hostname = urlutils.URL.from_string(url).host
-        if hostname not in forges:
+        if hostname not in self._forges:
             try:
                 self._forges[hostname] = get_forge_by_hostname(hostname)
             except UnsupportedForge:
                 self._forges[hostname] = None
         if self._forges[hostname]:
-            return forges[hostname].get_user_url(user)
+            return self._forges[hostname].get_user_url(user)
         else:
             return None
 

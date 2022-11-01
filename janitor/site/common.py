@@ -3,7 +3,6 @@
 from aiohttp import ClientConnectorError, ClientResponseError
 from aiohttp import web
 import asyncpg
-from functools import partial
 from typing import Optional, List
 
 from breezy.revision import NULL_REVISION
