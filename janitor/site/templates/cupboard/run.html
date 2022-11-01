@@ -25,7 +25,7 @@
             <li>
                 Change set: <a href="/cupboard/cs/{{ run.change_set }}">{{ run.change_set }}</a>
             </li>
-            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>{% endif %}
+            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
             {% if run.result and 'upstream_branch_url' in run.result %}
                 <li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
             {% endif %}
