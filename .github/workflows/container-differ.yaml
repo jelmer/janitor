@@ -48,8 +48,6 @@ jobs:
           containerfiles: "Dockerfile_differ"
           image: ghcr.io/jelmer/janitor/differ
           tags: ${{ env.TAGS }}
-          build-args: |
-            BASE_TAG=${{ github.sha }}
 
       - name: Push differ image to ghcr.io
         if: ${{ github.event_name != 'pull_request' }}
