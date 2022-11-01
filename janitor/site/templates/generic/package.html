@@ -32,7 +32,7 @@
                 <li id="queue-position.{{ package }}"/>
             {% endif %}
         </ul>
-        {% if branch_url %}{{ reschedule_button(suite, package, "Schedule a new run") }}{% endif %}
+        {% if branch_url or campaign.default_empty %}{{ reschedule_button(suite, package, "Schedule a new run") }}{% endif %}
         {% if merge_proposals %}
             <div class="section" id="recent-merge-proposals">
                 <h2>Recent merge proposals</h2>
