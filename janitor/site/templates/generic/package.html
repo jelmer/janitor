@@ -10,11 +10,6 @@
     <div class="section" id="{{ package }}">
         <h1>{{ suite }} Package - {{ package }}</h1>
         <ul class="metadata">
-            {% if tracker_url and tracker_url(package) %}
-                <li>
-                    <a class="reference external" href="{{ tracker_url(package) }}">QA Page</a>
-                </li>
-            {% endif %}
             <li>
                 Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
             </li>
@@ -27,7 +22,7 @@
                     Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].start_time) }})
                 </li>
             {% endif %}
-            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>{% endif %}
+            {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
             {% if queue_position %}
                 <li id="queue-position.{{ package }}">
                     Queue position: {{ queue_position }}
@@ -37,7 +32,7 @@
                 <li id="queue-position.{{ package }}"/>
             {% endif %}
         </ul>
-        {% if branch_url %}{{ reschedule_button(suite, package, "Schedule a new run") }}{% endif %}
+        {% if branch_url or campaign.default_empty %}{{ reschedule_button(suite, package, "Schedule a new run") }}{% endif %}
         {% if merge_proposals %}
             <div class="section" id="recent-merge-proposals">
                 <h2>Recent merge proposals</h2>

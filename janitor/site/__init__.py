@@ -23,9 +23,9 @@ from typing import Optional
 from yarl import URL
 
 from janitor import config_pb2
-from janitor.config import Config, get_distribution
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
+
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
@@ -235,13 +235,6 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
         )
 
     return login
-
-
-def tracker_url(config: Config, base_distribution: str, pkg: str) -> Optional[str]:
-    distribution = get_distribution(config, base_distribution)
-    if distribution and distribution.tracker_url:
-        return "%s/%s" % (distribution.tracker_url.rstrip("/"), pkg)
-    return None
 
 
 def iter_accept(request):

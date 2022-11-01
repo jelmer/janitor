@@ -251,13 +251,12 @@ cd {{ package }}
         </blockquote>
     {% endif %}
 {% endmacro %}
-{% macro display_branch_url(vcs_browse, vcs_url, vcswatch_version=None) %}
+{% macro display_branch_url(vcs_browse, vcs_url) %}
     {% if vcs_browse %}
         <a href="{{ vcs_browse }}">{{ vcs_url }}</a>
     {% else %}
         <a href="{{ vcs_url }}">{{ vcs_url }}</a>
     {% endif %}
-    {% if vcswatch_version %}(taken from version <b>{{ vcswatch_version }}</b>){% endif %}
 {% endmacro %}
 {% macro display_upstream_branch_url(result) %}
     {% if result.get('upstream_branch_browse') %}
@@ -265,9 +264,6 @@ cd {{ package }}
     {% else %}
         {{ result['upstream_branch_url'] }}
     {% endif %}
-{% endmacro %}
-{% macro display_maintainer_email(maintainer_email) %}
-    <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
 {% endmacro %}
 {% macro display_publish_result_code(code) %}
     {% if code == 'success' %}

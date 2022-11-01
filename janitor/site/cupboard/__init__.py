@@ -25,10 +25,9 @@ import aiozipkin
 
 from aiohttp import web
 
-from ... import state
-
 from .. import is_admin, env, check_logged_in, is_qa_reviewer
 from ..common import html_template
+from ..pkg import MergeProposalUserUrlResolver
 
 
 @html_template(env, "cupboard/rejected.html")
@@ -351,45 +350,6 @@ async def handle_run_redirect(request):
                 pkg=package, run_id=run_id))
 
 
-@html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})
-async def handle_pkg(request):
-    from ..pkg import generate_pkg_file
-
-    span = aiozipkin.request_span(request)
-
-    package_name = request.match_info["pkg"]
-    async with request.app.database.acquire() as conn:
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow(
-                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
-        if package is None:
-            raise web.HTTPNotFound(text="No package with name %s" % package_name)
-        with span.new_child('sql:merge-proposals'):
-            merge_proposals = await conn.fetch("""\
-SELECT DISTINCT ON (merge_proposal.url)
-merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
-FROM
-merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE run.package = $1
-ORDER BY merge_proposal.url, run.finish_time DESC
-""", package['name'])
-        with span.new_child('sql:publishable-suites'):
-            available_suites = await state.iter_publishable_suites(conn, package_name)
-    with span.new_child('sql:runs'):
-        async with request.app.database.acquire() as conn:
-            runs = await conn.fetch(
-                "SELECT id, finish_time, result_code, suite FROM run "
-                "LEFT JOIN debian_build ON run.id = debian_build.run_id "
-                "WHERE package = $1 ORDER BY finish_time DESC", package['name'])
-    return await generate_pkg_file(
-        request.app.database, request.app['config'], package, merge_proposals, runs,
-        available_suites, span
-    )
-
-
 @html_template(env, "cupboard/merge-proposals.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
@@ -438,13 +398,25 @@ async def generate_done_list(db, since: Optional[datetime] = None):
             "SELECT MIN(absorbed_at) FROM absorbed_runs")
 
         if since:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
                 "ORDER BY absorbed_at DESC NULLS LAST", since)
         else:
-            runs = await conn.fetch(
+            orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs "
                 "ORDER BY absorbed_at DESC NULLS LAST")
+
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
 
     return {"oldest": oldest, "runs": runs, "since": since}
 
@@ -542,7 +514,6 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/review-stats", handle_review_stats, name="cupboard-review-stats"
     )
-    router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get(
         "/cupboard/run/{run_id}/", handle_run_redirect, name="cupboard-run-redirect")
     router.add_get(

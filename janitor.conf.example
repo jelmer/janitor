@@ -31,7 +31,6 @@ bugtracker {
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
-  tracker_url: "https://tracker.debian.org/pkg/"
   component: "main"
   chroot: "unstable-amd64-sbuild"
   lintian_profile: "debian"
