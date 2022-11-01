@@ -237,12 +237,5 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
     return login
 
 
-def tracker_url(config: Config, base_distribution: str, pkg: str) -> Optional[str]:
-    distribution = get_distribution(config, base_distribution)
-    if distribution and distribution.tracker_url:
-        return "%s/%s" % (distribution.tracker_url.rstrip("/"), pkg)
-    return None
-
-
 def iter_accept(request):
     return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]

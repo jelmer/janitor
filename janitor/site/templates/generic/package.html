@@ -10,11 +10,6 @@
     <div class="section" id="{{ package }}">
         <h1>{{ suite }} Package - {{ package }}</h1>
         <ul class="metadata">
-            {% if tracker_url and tracker_url(package) %}
-                <li>
-                    <a class="reference external" href="{{ tracker_url(package) }}">QA Page</a>
-                </li>
-            {% endif %}
             <li>
                 Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
             </li>

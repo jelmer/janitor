@@ -352,45 +352,6 @@ async def handle_run_redirect(request):
                 pkg=package, run_id=run_id))
 
 
-@html_template(env, "cupboard/package-overview.html", headers={"Vary": "Cookie"})
-async def handle_pkg(request):
-    from ..pkg import generate_pkg_file
-
-    span = aiozipkin.request_span(request)
-
-    package_name = request.match_info["pkg"]
-    async with request.app.database.acquire() as conn:
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow(
-                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
-        if package is None:
-            raise web.HTTPNotFound(text="No package with name %s" % package_name)
-        with span.new_child('sql:merge-proposals'):
-            merge_proposals = await conn.fetch("""\
-SELECT DISTINCT ON (merge_proposal.url)
-merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
-FROM
-merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE run.package = $1
-ORDER BY merge_proposal.url, run.finish_time DESC
-""", package['name'])
-        with span.new_child('sql:publishable-suites'):
-            available_suites = await state.iter_publishable_suites(conn, package_name)
-    with span.new_child('sql:runs'):
-        async with request.app.database.acquire() as conn:
-            runs = await conn.fetch(
-                "SELECT id, finish_time, result_code, suite FROM run "
-                "LEFT JOIN debian_build ON run.id = debian_build.run_id "
-                "WHERE package = $1 ORDER BY finish_time DESC", package['name'])
-    return await generate_pkg_file(
-        request.app.database, request.app['config'], package, merge_proposals, runs,
-        available_suites, span
-    )
-
-
 @html_template(env, "cupboard/merge-proposals.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals

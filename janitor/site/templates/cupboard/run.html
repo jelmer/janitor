@@ -21,9 +21,6 @@
             </li>
             <li>
                 Package: <a class="reference external" href="..">{{ package }}</a>
-                {% if tracker_url and tracker_url(package) %}
-                    (<a href="{{ tracker_url(package) }}">QA Page</a>)
-                {% endif %}
             </li>
             <li>
                 Change set: <a href="/cupboard/cs/{{ run.change_set }}">{{ run.change_set }}</a>

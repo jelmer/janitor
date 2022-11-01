@@ -15,7 +15,6 @@ from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
-    tracker_url,
     update_vars_from_request,
 )
 
@@ -337,8 +336,6 @@ WHERE run.package = $1 AND run.suite = $2
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
         "config": config,
     })
-    if campaign.HasField('debian_build'):
-        kwargs["tracker_url"] = partial(tracker_url, config, campaign.debian_build.base_distribution)
     return kwargs
 
 
