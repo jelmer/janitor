@@ -346,7 +346,7 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_change_set_state()
     if (TG_OP = 'UPDATE' AND NEW.absorbed != OLD.absorbed) then
         SELECT change_set INTO STRICT change_set_id FROM run WHERE id = OLD.run_id;
         perform refresh_change_set_state(change_set_id);
-        IF old.change_set != new.change_set THEN
+        IF old.run_id != new.run_id THEN
             SELECT change_set INTO STRICT change_set_id FROM run WHERE id = NEW.run_id;
             perform refresh_change_set_state(change_set_id);
         END IF;
