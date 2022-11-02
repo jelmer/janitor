@@ -2227,8 +2227,8 @@ ORDER BY length(branch_url) DESC
 def find_campaign_by_branch_name(config, branch_name):
     for campaign in config.campaign:
         if campaign.branch_name == branch_name:
-            return campaign.name
-    return None
+            return campaign.name, 'main'
+    return None, None
 
 
 async def check_existing_mp(
@@ -2403,27 +2403,52 @@ async def check_existing_mp(
 
     if mp_run is None:
         mp_run = await get_merge_proposal_run(conn, mp.url)
-    if mp_run is None:
-        if package_name and source_branch_name:
-            campaign = find_campaign_by_branch_name(config, source_branch_name)
-            if campaign:
-                try:
-                    await do_schedule(
-                        conn,
-                        package_name,
-                        campaign,
-                        change_set=None,
-                        bucket="update-existing-mp",
-                        refresh=True,
-                        requestor="publisher (orphaned merge proposal)",
-                    )
-                except CandidateUnavailable:
-                    logging.warning(
-                        'Candidate unavailable while attempting to reschedule '
-                        'orphaned %s: %s/%s',
-                        mp.url, package_name, campaign)
 
-        raise NoRunForMergeProposal(mp, revision)
+    if mp_run is None:
+        # If we don't have any information about this merge proposal, then
+        # it might be one that we lost the data for. Let's reschedule.
+        if package_name and source_branch_name:
+            campaign, role = find_campaign_by_branch_name(config, source_branch_name)
+            if campaign:
+                logging.warning(
+                    'Recovered orphaned merge proposal %s', mp.url)
+                last_run = await get_last_effective_run(
+                    conn, package_name, campaign)
+                if last_run is None:
+                    try:
+                        await do_schedule(
+                            conn,
+                            package_name,
+                            campaign,
+                            change_set=None,
+                            bucket="update-existing-mp",
+                            refresh=True,
+                            requestor="publisher (orphaned merge proposal)",
+                        )
+                    except CandidateUnavailable:
+                        logging.warning(
+                            'Candidate unavailable while attempting to reschedule '
+                            'orphaned %s: %s/%s',
+                            mp.url, package_name, campaign)
+                        raise NoRunForMergeProposal(mp, revision)
+                    else:
+                        logging.warning('Rescheduled')
+                        return False
+                else:
+                    mp_run = {
+                        'remote_branch_name': None,
+                        'package': package_name,
+                        'campaign': campaign,
+                        'role': role,
+                        'id': None,
+                        'branch_url': target_branch_url,
+                        'revision': revision,
+                    }
+                    logging.warning('Going ahead with dummy old run')
+            else:
+                raise NoRunForMergeProposal(mp, revision)
+        else:
+            raise NoRunForMergeProposal(mp, revision)
 
     mp_remote_branch_name = mp_run['remote_branch_name']
 
