@@ -2161,8 +2161,8 @@ async def next_item(
                 item = None
                 continue
 
-            if vcs_info is None or (
-                    vcs_info["branch_url"] is None and not campaign_config.default_empty):
+            if not campaign_config.default_empty and (
+                    vcs_info is None or vcs_info["branch_url"] is None):
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
