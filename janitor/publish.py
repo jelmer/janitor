@@ -2563,16 +2563,21 @@ applied independently.
                 last_run.result_code,
                 last_run_age.days,
             )
-            await do_schedule(
-                conn,
-                last_run.package,
-                last_run.campaign,
-                change_set=last_run.change_set,
-                bucket="update-existing-mp",
-                refresh=False,
-                requestor="publisher (retrying failed run after %d days)"
-                % last_run_age.days,
-            )
+            try:
+                await do_schedule(
+                    conn,
+                    last_run.package,
+                    last_run.campaign,
+                    change_set=last_run.change_set,
+                    bucket="update-existing-mp",
+                    refresh=False,
+                    requestor="publisher (retrying failed run after %d days)"
+                    % last_run_age.days,
+                )
+            except CandidateUnavailable as e:
+                logging.warning(
+                    'Candidate unavailable while attempting to reschedule %s/%s: %s',
+                    last_run.package, last_run.campaign, e)
         else:
             logger.info(
                 "%s: Last run failed (%s). Not touching merge proposal.",
