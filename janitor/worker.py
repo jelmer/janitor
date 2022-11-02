@@ -1197,6 +1197,7 @@ INDEX_TEMPLATE = Template("""\
 {% for key, value in assignment['codemod']['environment'].items() %}
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
+</ul>
 </li>
 </ul>
 
@@ -1209,6 +1210,7 @@ INDEX_TEMPLATE = Template("""\
 {% for key, value in assignment['build']['environment'].items() %}
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
+</ul>
 </li>
 </ul>
 
