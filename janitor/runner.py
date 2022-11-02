@@ -2179,7 +2179,7 @@ async def next_item(
         with span.new_child('config'):
             build_config = await builder.config(conn, campaign_config, item)
 
-        if vcs_info["branch_url"] is not None:
+        if vcs_info and vcs_info["branch_url"] is not None:
             try:
                 with span.new_child('branch:open'):
                     probers = select_preferred_probers(vcs_info['vcs_type'])
@@ -2312,9 +2312,9 @@ async def next_item(
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,
-            "url": vcs_info['branch_url'],
-            "subpath": vcs_info['subpath'],
-            "vcs_type": vcs_info['vcs_type'],
+            "url": vcs_info.get('branch_url'),
+            "subpath": vcs_info.get('subpath'),
+            "vcs_type": vcs_info.get('vcs_type'),
             "cached_url": cached_branch_url,
             "additional_colocated_branches": additional_colocated_branches,
         },
@@ -2332,7 +2332,7 @@ async def next_item(
         "skip-setup-validation": campaign_config.skip_setup_validation,
         "target_repository": {
             "url": target_repository_url,
-            "vcs_type": vcs_info['vcs_type'],
+            "vcs_type": vcs_info.get('vcs_type'),
         }
     }
 
