@@ -45,40 +45,6 @@
             {% if result_code == 'success' %}
                 <li>
                     Review Status: {{ run.review_status }}
-                    {% for review in reviews %}{% if review.reviewer == user %}{% set my_review = review %}{% endif %}{% endfor %}
-                    {% if is_qa_reviewer %}
-                        <select id="review-status" name="review-status" onchange="submit_review(this.value)">
-                            <option value="unreviewed"
-                                    {% if my_review and my_review.review_status == 'unreviewed' %} selected="true"{% endif %}>
-                                Unreviewed
-                            </option>
-                            <option value="approved"
-                                    {% if my_review and my_review.review_status == 'approved' %} selected="true"{% endif %}>
-                                Approved
-                            </option>
-                            <option value="abstained"
-                                    {% if my_review and my_review.review_status == 'abstained' %} selected="true"{% endif %}>
-                                Abstained
-                            </option>
-                            <option value="rejected"
-                                    {% if my_review and my_review.review_status == 'rejected' %} selected="true"{% endif %}>
-                                Rejected
-                            </option>
-                        </select>
-                        <script>
-                            function submit_review(status) {
-                                var comment = undefined;
-                                if (status == 'rejected') {
-                                    comment = window.prompt('Please specify a comment for the rejection');
-                                }
-                                console.log("Submitting review " + status + " for run {{ run_id }} ");
-                                $.post('/api/run/{{ run_id }}', {
-                                    'review-status': status,
-                                    'review-comment': comment
-                                });
-                            }
-                        </script>
-                    {% endif %}
                 </li>
             {% endif %}
             {% if queue_position %}
@@ -201,7 +167,11 @@
                         </th>
                     </tr>
                 </thead>
+                {% st ns = namespace() %}
                 {% for review in reviews %}
+                    {% if is_qa_reviewer and review.reviewer in (user.email, user.name) %}
+                    {% set ns.my_review = review %}
+                    {% else %}
                     <tr>
                         <td>
                             {{ review['reviewer'] }}
@@ -213,6 +183,48 @@
                             {{ review['review_comment'] }}
                         </td>
                     </tr>
+                    {% endif %}
+                    {% if is_qa_reviewer %}
+                    <tr>
+                        <td>Your review</td>
+                        <td>
+                            <select id="review-status" name="review-status" onchange="submit_review(this.value)">
+                                <option value="unreviewed"
+                                        {% if ns.my_review and ns.my_review.review_status == 'unreviewed' %} selected="true"{% endif %}>
+                                    Unreviewed
+                                </option>
+                                <option value="approved"
+                                        {% if ns.my_review and ns.my_review.review_status == 'approved' %} selected="true"{% endif %}>
+                                    Approved
+                                </option>
+                                <option value="abstained"
+                                        {% if ns.my_review and ns.my_review_status == 'abstained' %} selected="true"{% endif %}>
+                                    Abstained
+                                </option>
+                                <option value="rejected"
+                                        {% if ns.my_review and ns.my_review.review_status == 'rejected' %} selected="true"{% endif %}>
+                                    Rejected
+                                </option>
+                            </select>
+                            <script>
+                                function submit_review(status) {
+                                    var comment = undefined;
+                                    if (status == 'rejected') {
+                                        comment = window.prompt('Please specify a comment for the rejection');
+                                    }
+                                    console.log("Submitting review " + status + " for run {{ run_id }} ");
+                                    $.post('/api/run/{{ run_id }}', {
+                                        'review-status': status,
+                                        'review-comment': comment
+                                    });
+                                }
+                            </script>
+                        </td>
+                        <td>
+                            {{ my_review['review_comment'] }}
+                        </td>
+                    </tr>
+                    {% endif %}
                 {% endfor %}
             </table>
         {% endif %}
