@@ -35,10 +35,10 @@ def parse_email(f):
 
     for i, line in enumerate(lines):
         if line == 'Reply to this email directly or view it on GitHub:':
-            return lines[i+1].split('#')[0]
-        if (line == 'For more details, see:' and
-                lines[i+1].startswith('https://code.launchpad.net/')):
-            return lines[i+1]
+            return lines[i + 1].split('#')[0]
+        if (line == 'For more details, see:'
+                and lines[i + 1].startswith('https://code.launchpad.net/')):
+            return lines[i + 1]
         try:
             (field, value) = line.split(':', 1)
         except ValueError:
@@ -58,7 +58,7 @@ async def refresh_merge_proposal(api_url, merge_proposal_url):
                     resp.status, api_url))
 
 
-if __name__ == '__main__':
+def main(argv):
     import argparse
     import asyncio
     parser = argparse.ArgumentParser()
@@ -76,4 +76,8 @@ if __name__ == '__main__':
         sys.exit(0)
     print('Found merge proposal URL: %s' % merge_proposal_url)
     asyncio.run(refresh_merge_proposal(args.refresh_url, merge_proposal_url))
-    sys.exit(0)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
