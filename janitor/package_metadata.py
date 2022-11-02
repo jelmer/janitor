@@ -64,7 +64,6 @@ async def update_package_metadata(
                 package.vcs_type.lower() if package.vcs_type else None,
                 package.browse_url,
                 vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
-                package.value,
                 package.removed,
                 package.in_base,
                 package.origin,
@@ -100,7 +99,7 @@ async def update_package_metadata(
         "vcs_last_revision, "
         "removed, in_base, origin, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15) "
+        "$13, $14) "
         "ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
@@ -192,8 +191,10 @@ async def main():
     logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
 
-    async with state.create_pool(config.database_location) as conn, conn.transaction():
-        if args.remove_others:
+    async with await state.create_pool(config.database_location) as db, \
+            db.acquire() as conn,\
+            conn.transaction():
+        if args.remove_unmentioned:
             referenced_packages = set(package.name for package in packages)
             await conn.fetch(
                 'UPDATE package SET removed = True WHERE NOT (name = ANY($1::text[]))',
