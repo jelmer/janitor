@@ -167,7 +167,7 @@
                         </th>
                     </tr>
                 </thead>
-                {% st ns = namespace() %}
+                {% set ns = namespace(my_review=None) %}
                 {% for review in reviews %}
                     {% if is_qa_reviewer and review.reviewer in (user.email, user.name) %}
                     {% set ns.my_review = review %}
