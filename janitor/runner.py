@@ -1534,7 +1534,15 @@ class QueueProcessor(object):
                 yield h.decode('utf-8'), dt
 
     async def active_run_count(self):
-        return len(await self.redis.hlen('active-runs'))
+        return await self.redis.hlen('active-runs')
+
+    async def estimate_wait(self, package, campaign):
+        async with self.database.acquire() as conn:
+            queue = Queue(conn)
+            (position, wait_time) = await queue.get_position(
+                campaign, package)
+        active_run_count = await self.active_run_count()
+        return (position, wait_time / active_run_count, wait_time)
 
     async def status_json(self) -> Any:
         last_keepalives = {
@@ -1688,16 +1696,15 @@ async def handle_queue_position(request):
     span = aiozipkin.request_span(request)
     package = request.query['package']
     campaign = request.query['campaign']
-    async with request.app['database'].acquire() as conn:
-        with span.new_child('sql:queue-position'):
-            queue = Queue(conn)
-            (queue_position, queue_wait_time) = await queue.get_position(
-                campaign, package)
-    active_run_count = await request.app['queue_processor'].active_run_count()
+    with span.new_child('sql:queue-position'):
+        (position, wait_time,
+         cum_wait_time) = request.app['queue_processor'].estimate_wait(
+            package, campaign)
+
     return web.json_response({
-        "position": queue_position,
-        "wait_time": queue_wait_time.total_seconds() / active_run_count,
-        "cumulative_wait_time": queue_wait_time.total_seconds(),
+        "position": position,
+        "wait_time": wait_time.total_seconds(),
+        "cumulative_wait_time": cum_wait_time.total_seconds(),
     })
 
 
