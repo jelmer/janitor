@@ -119,8 +119,7 @@ INNER JOIN package on package.name = candidate.package
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
 WHERE
-  NOT package.removed AND
-  package.branch_url IS NOT NULL
+  NOT package.removed
 """
     args = []
     if campaign is not None and packages is not None:
