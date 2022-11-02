@@ -1176,7 +1176,7 @@ INDEX_TEMPLATE = Template("""\
 <h1>Run Details</h1>
 
 <ul>
-<li><a href="/assignment">Raw Assignment</a><li>
+<li><a href="/assignment">Raw Assignment</a></li>
 <li><b>Campaign</b>: {{ metadata['campaign'] }}</li>
 {% if metadata and metadata.get('start_time') %}
 <li><b>Start Time</b>: {{ metadata['start_time'] }}
@@ -1197,6 +1197,7 @@ INDEX_TEMPLATE = Template("""\
 {% for key, value in assignment['codemod']['environment'].items() %}
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
+</ul>
 </li>
 </ul>
 
@@ -1209,6 +1210,7 @@ INDEX_TEMPLATE = Template("""\
 {% for key, value in assignment['build']['environment'].items() %}
 <li>{{ key }}: {{ value }}</li>
 {% endfor %}
+</ul>
 </li>
 </ul>
 
