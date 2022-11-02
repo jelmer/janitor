@@ -40,8 +40,6 @@ import asyncpg
 import asyncpg.pool
 
 from aiohttp_apispec import (
-    docs,
-    response_schema,
     setup_aiohttp_apispec,
 )
 
@@ -53,7 +51,6 @@ from aiohttp_openmetrics import (
     setup_metrics,
     push_to_gateway
 )
-from marshmallow import Schema, fields
 
 from breezy import urlutils
 import gpg
@@ -1363,20 +1360,6 @@ async def get_publish_attempt_count(
     )
 
 
-class BranchPublishPolicySchema(Schema):
-
-    mode = fields.Str(description="publish mode")
-    max_frequency_days = fields.Integer(
-        description="maximum frequency for publishing")
-
-
-class PolicySchema(Schema):
-
-    per_branch = fields.Dict(
-        keys=fields.Str(),
-        values=fields.Nested(BranchPublishPolicySchema))
-
-
 @routes.get("/absorbed")
 async def handle_absorbed(request):
     try:
@@ -1415,13 +1398,6 @@ FROM absorbed_runs
     return web.json_response(ret)
 
 
-@docs(
-    responses={
-        404: {"description": "Package does not exist or does not have a policy"},
-        200: {"description": "Success response"}
-    }
-)
-@response_schema(PolicySchema())
 @routes.get("/policy/{name}", name="get-policy")
 async def handle_policy_get(request):
     name = request.match_info["name"]
@@ -1457,13 +1433,6 @@ async def handle_full_policy_get(request):
     } for row in rows})
 
 
-@docs(
-    responses={
-        404: {"description": "Package does not exist or does not have a policy"},
-        200: {"description": "Success response"}
-    }
-)
-@response_schema(PolicySchema())
 @routes.put("/policy/{name}", name="put-policy")
 async def handle_policy_put(request):
     name = request.match_info["name"]
@@ -1508,13 +1477,6 @@ async def handle_full_policy_put(request):
     return web.json_response({})
 
 
-@docs(
-    responses={
-        404: {"description": "Package does not exist or does not have a policy"},
-        200: {"description": "Success response"}
-    }
-)
-@response_schema(PolicySchema())
 @routes.delete("/policy/{name}", name="delete-policy")
 async def handle_policy_del(request):
     name = request.match_info["name"]
