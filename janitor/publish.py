@@ -2442,7 +2442,7 @@ async def check_existing_mp(
                         'role': role,
                         'id': None,
                         'branch_url': target_branch_url,
-                        'revision': revision,
+                        'revision': revision.decode('utf-8'),
                     }
                     logging.warning('Going ahead with dummy old run')
             else:

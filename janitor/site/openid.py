@@ -31,14 +31,9 @@ async def openid_middleware(request, handler):
     session_id = request.cookies.get("session_id")
     if session_id is not None:
         async with request.app.database.acquire() as conn:
-            row = await conn.fetchrow(
+            userinfo = await conn.fetchval(
                 "SELECT userinfo FROM site_session WHERE id = $1",
                 session_id)
-            if row is not None:
-                (userinfo,) = row
-            else:
-                # Session expired?
-                userinfo = None
     else:
         userinfo = None
     request['user'] = userinfo
@@ -96,7 +91,6 @@ async def handle_oauth_callback(request):
     async with request.app.database.acquire() as conn:
         await conn.execute("""
 INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
-ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
 """, session_id, userinfo)
 
     # TODO(jelmer): Store access token / refresh token?

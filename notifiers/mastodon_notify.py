@@ -46,7 +46,7 @@ class MastodonNotifier(object):
         )
 
     async def notify_pushed(self, url, package, campaign, result):
-        msg = "Pushed %s changes to %s (%s)" % (campaign, url, package)
+        msg = f"Pushed #{campaign} changes to {url} ({package})"
         if campaign == "lintian-fixes":
             tags = set()
             for entry in result["applied"]:

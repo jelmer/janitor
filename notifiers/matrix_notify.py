@@ -80,6 +80,7 @@ async def main(args):
                     d["url"], d.get("package"), d.get("campaign"),
                     ((" by %s" % d["merged_by"]) if d.get("merged_by") else ""))
                 outhtml = f"<a href=\"{d['url']}\">Merge proposal</a> for <a href=\"{args.janitor_url}/{d['campaign']}\">{d['campaign']}</a>/{d.get('package')} merged%s." % ((" by %s" % d["merged_by"]) if d.get("merged_by") else "")
+                outhtml += f" #{d['campaign']}"
                 await message(out, outhtml)
             if (
                 k == "publish"
@@ -98,6 +99,7 @@ async def main(args):
                     if tags:
                         out += ", fixing: %s." % (", ".join(tags))
                         outhtml += ", fixing: %s." % (", ".join([f"<a href=\"https://lintian.debian.org/tags/{tag}.html\">{tag}</a>" for tag in tags]))
+                outhtml += f" #{d['campaign']}"
                 await message(out, outhtml)
 
 

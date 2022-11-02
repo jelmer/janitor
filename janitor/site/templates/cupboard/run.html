@@ -115,7 +115,7 @@
             <li style="display: none">Build Version: {{ run.build_version }}</li>
         </ul>
         {{ local_command(command, None, package, vcs_type, vcs_url) }}
-        {% if branch_url %}
+        {% if branch_url or campaign.default_empty %}
             {{ reschedule_button(suite, package, "Reschedule") }}
             {{ reschedule_button(suite, package, "Reschedule (from scratch)", data={"refresh": "1"}, id="reschedule-refresh") }}
             {% if run.result_branches %}{{ publish_buttons(suite, package) }}{% endif %}
