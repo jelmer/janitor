@@ -2448,6 +2448,8 @@ async def check_existing_mp(
         if package_name and source_branch_name:
             campaign, role = find_campaign_by_branch_name(config, source_branch_name)
             if campaign:
+                logging.warning(
+                    'Recovered orphaned merge proposal %s', mp.url)
                 last_run = await get_last_effective_run(
                     conn, package_name, campaign)
                 if last_run is None:
@@ -2466,6 +2468,10 @@ async def check_existing_mp(
                             'Candidate unavailable while attempting to reschedule '
                             'orphaned %s: %s/%s',
                             mp.url, package_name, campaign)
+                        raise NoRunForMergeProposal(mp, revision)
+                    else:
+                        logging.warning('Rescheduled')
+                        return False
                 else:
                     mp_run = {
                         'remote_branch_name': None,
@@ -2476,6 +2482,7 @@ async def check_existing_mp(
                         'branch_url': target_branch_url,
                         'revision': revision,
                     }
+                    logging.warning('Going ahead with dummy old run')
             else:
                 raise NoRunForMergeProposal(mp, revision)
         else:
