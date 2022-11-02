@@ -61,6 +61,6 @@ campaign {
 }
 """, Config())
 
-    assert find_campaign_by_branch_name(config, "fo") == "bar"
-    assert find_campaign_by_branch_name(config, "bar") is None
-    assert find_campaign_by_branch_name(config, "lala") is None
+    assert find_campaign_by_branch_name(config, "fo") == ("bar", "main")
+    assert find_campaign_by_branch_name(config, "bar") == (None, None)
+    assert find_campaign_by_branch_name(config, "lala") == (None, None)
