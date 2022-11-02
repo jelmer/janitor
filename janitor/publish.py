@@ -1502,7 +1502,7 @@ async def handle_full_policy_put(request):
             "per_branch_policy = EXCLUDED.per_branch_policy, "
             "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket", entries)
         await conn.execute(
-            "DELETE FROM named_publish_policy WHERE name != ANY($1::text[])",
+            "DELETE FROM named_publish_policy WHERE NOT (name = ANY($1::text[]))",
             policy.keys())
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
