@@ -211,6 +211,9 @@
                                     var comment = undefined;
                                     if (status == 'rejected') {
                                         comment = window.prompt('Please specify a comment for the rejection');
+                                        $("#my-review-comment").html(comment);
+                                    } else {
+                                        $("#my-review-comment").html("");
                                     }
                                     console.log("Submitting review " + status + " for run {{ run_id }} ");
                                     $.post('/api/run/{{ run_id }}', {
@@ -220,7 +223,7 @@
                                 }
                             </script>
                         </td>
-                        <td>
+                        <td id="my-review-comment">
                               {% if ns.my_review %}{{ ns.my_review.review_comment }}{% endif %}
                         </td>
                     </tr>
