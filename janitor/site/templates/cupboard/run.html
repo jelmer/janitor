@@ -149,7 +149,7 @@
             <h2>Lintian Result</h2>
             {{ display_lintian_result(lintian_result) }}
         {% endif %}
-        {% if reviews %}
+        {% if reviews or is_qa_reviewer %}
             <h2>
                 Reviews
             </h2>

@@ -1698,7 +1698,7 @@ async def handle_queue_position(request):
     campaign = request.query['campaign']
     with span.new_child('sql:queue-position'):
         (position, wait_time,
-         cum_wait_time) = request.app['queue_processor'].estimate_wait(
+         cum_wait_time) = await request.app['queue_processor'].estimate_wait(
             package, campaign)
 
     return web.json_response({
@@ -2238,6 +2238,9 @@ async def next_item(
                     resume_branch = None
         else:
             active_run.vcs_info = None
+            vcs_type = None
+            resume_branch = None
+            additional_colocated_branches = None
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()

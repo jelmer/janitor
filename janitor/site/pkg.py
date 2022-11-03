@@ -351,7 +351,7 @@ async def generate_done_list(
             orig_runs = await conn.fetch(
                 "SELECT * FROM absorbed_runs WHERE campaign = $1 "
                 "ORDER BY absorbed_at DESC NULLS LAST", campaign)
-    
+
     mp_user_url_resolver = MergeProposalUserUrlResolver()
 
     runs = []
