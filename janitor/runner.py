@@ -2244,6 +2244,7 @@ async def next_item(
             vcs_type = None
             resume_branch = None
             additional_colocated_branches = None
+            vcs_info = {}
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
