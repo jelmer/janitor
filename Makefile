@@ -56,7 +56,7 @@ clean:
 SHA=$(shell git rev-parse HEAD)
 
 docker-%: core
-	buildah build -t ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG) -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
+	buildah build --no-cache -t ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG) -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
