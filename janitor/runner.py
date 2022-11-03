@@ -1340,16 +1340,22 @@ async def followup_run(
                         campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
-        from .missing_deps import schedule_new_package, schedule_update_package
+        from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
         requestor = 'schedule-missing-deps (needed by %s)' % active_run.package
         async with database.acquire() as conn:
             for scenario in result.followup_actions:
                 for action in scenario:
                     if action['action'] == 'new-package':
-                        await schedule_new_package(
-                            conn, action['upstream-info'],
-                            config,
-                            requestor=requestor, change_set=result.change_set)
+                        try:
+                            await schedule_new_package(
+                                conn, action['upstream-info'],
+                                config,
+                                requestor=requestor, change_set=result.change_set)
+                        except IncompleteUpstreamInfo as e:
+                            logging.warning(
+                                'Unable to schedule follow up, '
+                                'incomplete upstream info: %r',
+                                e.upstream_info)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
                             conn, action['package'], action['desired-version'],
@@ -1542,7 +1548,10 @@ class QueueProcessor(object):
             (position, wait_time) = await queue.get_position(
                 campaign, package)
         active_run_count = await self.active_run_count()
-        return (position, wait_time / active_run_count, wait_time)
+        return (position,
+                (wait_time / active_run_count)
+                if wait_time is not None else None,
+                wait_time)
 
     async def status_json(self) -> Any:
         last_keepalives = {
@@ -2241,6 +2250,7 @@ async def next_item(
             vcs_type = None
             resume_branch = None
             additional_colocated_branches = None
+            vcs_info = {}
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()

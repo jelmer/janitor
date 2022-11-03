@@ -221,7 +221,7 @@
                             </script>
                         </td>
                         <td>
-                            {{ my_review['review_comment'] }}
+                              {% if ns.my_review %}{{ ns.my_review.review_comment }}{% endif %}
                         </td>
                     </tr>
                     {% endif %}
