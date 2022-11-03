@@ -1340,16 +1340,22 @@ async def followup_run(
                         campaign=run_to_retry['campaign'])
 
     if result.followup_actions and result.code != 'success':
-        from .missing_deps import schedule_new_package, schedule_update_package
+        from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
         requestor = 'schedule-missing-deps (needed by %s)' % active_run.package
         async with database.acquire() as conn:
             for scenario in result.followup_actions:
                 for action in scenario:
                     if action['action'] == 'new-package':
-                        await schedule_new_package(
-                            conn, action['upstream-info'],
-                            config,
-                            requestor=requestor, change_set=result.change_set)
+                        try:
+                            await schedule_new_package(
+                                conn, action['upstream-info'],
+                                config,
+                                requestor=requestor, change_set=result.change_set)
+                        except IncompleteUpstreamInfo as e:
+                            logging.warning(
+                                'Unable to schedule follow up, '
+                                'incomplete upstream info: %r',
+                                e.upstream_info)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
                             conn, action['package'], action['desired-version'],

@@ -24,6 +24,7 @@ from breezy import urlutils
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
 from ognibuild.session.plain import PlainSession
+from ognibuild.upstream import UpstreamInfo
 from buildlog_consultant import problem_clses
 
 from . import state
@@ -34,6 +35,13 @@ from .schedule import do_schedule
 DEFAULT_NEW_PACKAGE_PRIORITY = 150
 DEFAULT_UPDATE_PACKAGE_PRIORITY = 150
 DEFAULT_SUCCESS_CHANCE = 0.5
+
+
+class IncompleteUpstreamInfo(Exception):
+    """Incomplete upstream info."""
+
+    def __init__(self, upstream_info):
+        self.upstream_info = upstream_info
 
 
 def reconstruct_problem(result_code, failure_details):
@@ -64,9 +72,12 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             yield row['package'], row['suite'], requirement
 
 
-async def schedule_new_package(conn, upstream_info, config, change_set=None, requestor=None, origin=None):
+async def schedule_new_package(conn, upstream_info: UpstreamInfo, config, *,
+                               change_set=None, requestor=None, origin=None):
     from debmutate.vcs import unsplit_vcs_url
     campaign = "debianize"
+    if upstream_info['branch_url'] is None:
+        raise IncompleteUpstreamInfo(upstream_info)
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
         "Creating new upstream %s => %s",
@@ -108,7 +119,7 @@ async def schedule_new_package(conn, upstream_info, config, change_set=None, req
         requestor=requestor, bucket='missing-deps', command=command)
 
 
-async def schedule_update_package(conn, package, desired_version, change_set=None, requestor=None):
+async def schedule_update_package(conn, package, desired_version, *, change_set=None, requestor=None):
     campaign = "fresh-releases"
     logging.info('Scheduling new run for %s/%s', package, campaign)
     # TODO(jelmer): Do something with desired_version
