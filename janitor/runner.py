@@ -1542,7 +1542,10 @@ class QueueProcessor(object):
             (position, wait_time) = await queue.get_position(
                 campaign, package)
         active_run_count = await self.active_run_count()
-        return (position, wait_time / active_run_count, wait_time)
+        return (position,
+                (wait_time / active_run_count)
+                if wait_time is not None else None,
+                wait_time)
 
     async def status_json(self) -> Any:
         last_keepalives = {
