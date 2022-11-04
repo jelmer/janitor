@@ -154,10 +154,10 @@ async def listen_to_runner(
         debsign_keyid: Optional[str] = None,
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
-    import aioredis
-    redis = await aioredis.create_redis_pool(redis_location)
+    from redis.asyncio import Redis
+    redis = Redis.from_url(redis_location)
 
-    ch = (await redis.subscribe('result'))[0]
+    ch = (await redis.pubsub().subscribe('result'))[0]
     try:
         while (await ch.wait_message()):
             result = await ch.get_json()
@@ -172,7 +172,7 @@ async def listen_to_runner(
                     result['log_id'], artifact_manager, dput_host,
                     debsign_keyid=debsign_keyid, source_only=source_only)
     finally:
-        redis.close()
+        await redis.close()
 
 
 async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None, source_only=False):
