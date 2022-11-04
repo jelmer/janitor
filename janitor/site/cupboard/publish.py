@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+from aiohttp import web
+
 
 async def iter_publish_history(conn, limit=None):
     query = """
@@ -45,6 +47,9 @@ WHERE id = $1
 
 
 async def write_publish(conn, id):
+    publish = await get_publish(conn, id)
+    if publish is None:
+        raise web.HTTPNotFound(text="no such publish: %s" % id)
     return {
-        "publish": await get_publish(conn, id),
+        "publish": publish
     }

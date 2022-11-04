@@ -1712,8 +1712,11 @@ async def handle_queue_position(request):
 
     return web.json_response({
         "position": position,
-        "wait_time": wait_time.total_seconds(),
-        "cumulative_wait_time": cum_wait_time.total_seconds(),
+        "wait_time":
+            wait_time.total_seconds() if wait_time is not None else None,
+        "cumulative_wait_time":
+            cum_wait_time.total_seconds()
+            if cum_wait_time is not None else None,
     })
 
 
