@@ -699,7 +699,7 @@ def process_package(
                 "main_branch_revision"
             ] = ws.main_branch.last_revision().decode('utf-8')
         else:
-            metadata["revision"] = metadata["main_branch_revision"] = NULL_REVISION
+            metadata["revision"] = metadata["main_branch_revision"] = NULL_REVISION.decode("utf-8")
 
         metadata["codemod"] = {}
         metadata["remotes"] = {}
