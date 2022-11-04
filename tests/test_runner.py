@@ -18,7 +18,8 @@
 
 import aiozipkin
 from datetime import datetime, timedelta
-import mockaioredis
+from redis.asyncio import Redis
+from fakeredis.aioredis import FakeRedis
 from janitor.runner import (
     create_app,
     is_log_filename,
@@ -71,7 +72,7 @@ def test_is_log_filename():
 
 
 async def create_queue_processor():
-    redis = await mockaioredis.create_redis_pool('redis://localhost')
+    redis = Redis('redis://localhost')
     return QueueProcessor(None, redis, run_timeout=30)
 
 

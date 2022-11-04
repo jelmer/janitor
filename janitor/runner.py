@@ -43,7 +43,6 @@ from typing import (
 import uuid
 import warnings
 
-import aioredis
 import aiozipkin
 import asyncpg
 import asyncpg.pool
@@ -57,6 +56,7 @@ from aiohttp import (
     ClientResponseError,
     ServerDisconnectedError,
 )
+from redis.asyncio import Redis
 
 from yarl import URL
 
@@ -2613,8 +2613,8 @@ async def main(argv=None):
             backup_artifact_manager = None
             backup_logfile_manager = None
         db = await state.create_pool(config.database_location)
-        redis = await aioredis.create_redis_pool(config.redis_location)
-        stack.callback(redis.close)
+        redis = Redis.from_url(config.redis_location)
+        stack.push_async_callback(redis.close)
         queue_processor = QueueProcessor(
             db, redis,
             followup_run=partial(followup_run, config, db),
