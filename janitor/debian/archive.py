@@ -649,10 +649,10 @@ async def run_web_server(listen_addr, port, dists_dir, config, db, generator_man
 
 
 async def listen_to_runner(redis_location, generator_manager):
-    import aioredis
-    redis = await aioredis.create_redis_pool(redis_location)
+    from redis.asyncio import Redis
+    redis = Redis.from_url(redis_location)
 
-    ch = (await redis.subscribe('result'))[0]
+    ch = (await redis.pubsub().subscribe('result'))[0]
     try:
         while (await ch.wait_message()):
             result = await ch.get_json()
@@ -662,7 +662,7 @@ async def listen_to_runner(redis_location, generator_manager):
             if campaign:
                 generator_manager.trigger(campaign)
     finally:
-        redis.close()
+        await redis.close()
 
 
 async def publish_suite(

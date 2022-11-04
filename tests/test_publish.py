@@ -24,13 +24,13 @@ from janitor.publish import (
 
 from google.protobuf import text_format  # type: ignore
 
-from mockaioredis import create_redis_pool
+from fakeredis.aioredis import FakeRedis
 
 
 async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
         vcs_managers={}, db=None,
-        redis=await create_redis_pool('redis://localhost'),
+        redis=FakeRedis(),
         lock_manager=None, config=None,
         differ_url="https://differ/"))
 

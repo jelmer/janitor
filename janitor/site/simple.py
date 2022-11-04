@@ -27,7 +27,6 @@ import shutil
 import tempfile
 import time
 
-import aioredis
 import aiozipkin
 from aiohttp.web_urldispatcher import (
     URL,
@@ -36,6 +35,7 @@ from aiohttp import web, ClientSession, ClientConnectorError
 from aiohttp_openmetrics import metrics, metrics_middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
+from redis.asyncio import Redis
 
 from .. import state
 from ..logs import get_log_manager
@@ -377,10 +377,10 @@ async def create_app(
         app.on_cleanup.append(cleanup_gpg)
 
     async def connect_redis(app):
-        app['redis'] = await aioredis.create_redis_pool(config.redis_location)
+        app['redis'] = Redis.from_url(config.redis_location)
 
     async def disconnect_redis(app):
-        app['redis'].close()
+        await app['redis'].close()
 
     app.on_startup.append(connect_redis)
     app.on_cleanup.append(disconnect_redis)

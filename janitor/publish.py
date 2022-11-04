@@ -31,7 +31,6 @@ import uuid
 import warnings
 
 
-import aioredis
 import aioredlock
 import aiozipkin
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -54,6 +53,7 @@ from aiohttp_openmetrics import (
 
 from breezy import urlutils
 import gpg
+from redis.asyncio import Redis
 
 from breezy.forge import (
     Forge,
@@ -3118,7 +3118,7 @@ async def listen_to_runner(
                 requestor="runner",
             )
 
-    channel = (await redis.subscribe('result'))[0]
+    channel = (await redis.pubsub().subscribe('result'))[0]
     while (await channel.wait_message()):
         result = channel.get_json()
         if result["code"] != "success":
@@ -3279,8 +3279,8 @@ async def main(argv=None):
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     async with AsyncExitStack() as stack:
-        redis = await aioredis.create_redis_pool(config.redis_location)
-        stack.callback(redis.close)
+        redis = Redis.from_url(config.redis_location)
+        stack.push_async_callback(redis.close)
 
         lock_manager = aioredlock.Aioredlock([config.redis_location])
         stack.push_async_callback(lock_manager.destroy)
