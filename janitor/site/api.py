@@ -1201,7 +1201,6 @@ suite AS campaign,
 finish_time - start_time as duration
 FROM last_runs
 WHERE
-branch_url IS NOT NULL AND
 package IN (SELECT name FROM package WHERE NOT removed) AND
 """
         where = []
