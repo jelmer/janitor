@@ -605,7 +605,7 @@ async def listen_to_runner(redis_location, app):
     from redis.asyncio import Redis
 
     redis = Redis.from_url(redis_location)
-    channel = (await redis.subscribe('result'))[0]
+    channel = (await redis.pubsub().subscribe('result'))[0]
     try:
         while (await channel.wait_message()):
             result = await channel.get_json()
