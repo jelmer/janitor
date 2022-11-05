@@ -386,10 +386,42 @@ class BranchBusy(Exception):
         self.branch_url = branch_url
 
 
+class WorkerInvalidResponse(Exception):
+    """Invalid response from worker."""
+
+    def __init__(self, output):
+        self.output = output
+
+
+async def run_worker_process(args, request, *, encoding='utf-8'):
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE
+    )
+
+    (stdout, stderr) = await p.communicate(
+        json.dumps(request).encode(encoding))
+
+    if p.returncode == 1:
+        try:
+            response = json.loads(stdout.decode(encoding))
+        except json.JSONDecodeError as e:
+            raise WorkerInvalidResponse(stderr.decode(encoding))
+        sys.stderr.write(stderr.decode(encoding))
+        return 1, response
+
+    if p.returncode == 0:
+        return p.returncode, json.loads(stdout.decode(encoding))
+
+    raise WorkerInvalidResponse(stderr.decode(encoding))
+
+
 class PublishWorker(object):
 
     def __init__(self, *,
-                 lock_manager,
+                 lock_manager=None,
                  redis=None,
                  template_env_path: Optional[str] = None,
                  external_url: Optional[str] = None,
@@ -401,11 +433,11 @@ class PublishWorker(object):
         self.redis = redis
 
     async def publish_one(
+        self,
         *,
         campaign: str,
         pkg: str,
         command,
-        codemod_result,
         main_branch_url: str,
         mode: str,
         role: str,
@@ -415,8 +447,8 @@ class PublishWorker(object):
         derived_branch_name: str,
         maintainer_email: str,
         vcs_manager: VcsManager,
-        maintainer_rate_limiter: RateLimiter,
-        dry_run: bool,
+        maintainer_rate_limiter: Optional[RateLimiter] = None,
+        dry_run: bool = False,
         require_binary_diff: bool = False,
         allow_create_proposal: bool = False,
         reviewers: Optional[List[str]] = None,
@@ -424,6 +456,7 @@ class PublishWorker(object):
         result_tags: Optional[List[Tuple[str, bytes]]] = None,
         commit_message_template: Optional[str] = None,
         title_template: Optional[str] = None,
+        codemod_result=None,
         existing_mp_url: Optional[str] = None,
     ) -> PublishResult:
         """Publish a single run in some form.
@@ -434,14 +467,7 @@ class PublishWorker(object):
           command: Command that was run
         """
         assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
-        local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (campaign, role))
-        if local_branch is None:
-            raise PublishFailure(
-                mode,
-                "result-branch-not-found",
-                "can not find local branch for %s / %s / %s (%s)"
-                % (pkg, campaign, role, log_id),
-            )
+        local_branch_url = vcs_manager.get_branch_url(pkg, "%s/%s" % (campaign, role))
         target_branch_url = main_branch_url.rstrip("/")
 
         request = {
@@ -451,7 +477,7 @@ class PublishWorker(object):
             "command": command,
             "codemod_result": codemod_result,
             "target_branch_url": target_branch_url,
-            "source_branch_url": full_branch_url(local_branch),
+            "source_branch_url": local_branch_url,
             "existing_mp_url": existing_mp_url,
             "derived_branch_name": derived_branch_name,
             "mode": mode,
@@ -480,30 +506,22 @@ class PublishWorker(object):
             args.append('--template-env-path=%s' % self.template_env_path)
 
         try:
-            async with await self.lock_manager.lock("publish:%s" % target_branch_url):
-                p = await asyncio.create_subprocess_exec(
-                    *args,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    stdin=asyncio.subprocess.PIPE
-                )
-
-                (stdout, stderr) = await p.communicate(json.dumps(request).encode())
+            async with AsyncExitStack() as es:
+                if self.lock_manager:
+                    es.enter_async_context(
+                        self.lock_manager.lock("publish:%s" % target_branch_url))
+                try:
+                    returncode, response = await run_worker_process(args, request)
+                except WorkerInvalidResponse as e:
+                    raise PublishFailure(
+                        mode, "publisher-invalid-response", e.error) from e
         except aioredlock.LockError as e:
             raise BranchBusy(target_branch_url) from e
 
-        if p.returncode == 1:
-            try:
-                response = json.loads(stdout.decode())
-            except json.JSONDecodeError as e:
-                raise PublishFailure(
-                    mode, "publisher-invalid-response", stderr.decode()) from e
-            sys.stderr.write(stderr.decode())
+        if returncode == 1:
             raise PublishFailure(mode, response["code"], response["description"])
 
-        if p.returncode == 0:
-            response = json.loads(stdout.decode())
-
+        if returncode == 0:
             proposal_url = response.get("proposal_url")
             branch_name = response.get("branch_name")
             is_new = response.get("is_new")
@@ -519,14 +537,15 @@ class PublishWorker(object):
                             "target_branch_url": main_branch_url.rstrip("/")}))
 
                 merge_proposal_count.labels(status="open").inc()
-                maintainer_rate_limiter.inc(maintainer_email)
+                if maintainer_rate_limiter:
+                    maintainer_rate_limiter.inc(maintainer_email)
                 open_proposal_count.labels(maintainer=maintainer_email).inc()
 
             return PublishResult(
                 proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
                 description=description)
 
-        raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
+        raise AssertionError
 
 
 def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
@@ -2444,7 +2463,7 @@ async def check_existing_mp(
             await post_comment(mp, """
 This merge proposal will be closed, since the package has been removed from the
 archive.
-"""
+""")
             try:
                 await to_thread(mp.close)
             except PermissionDenied as e:
@@ -2872,7 +2891,7 @@ async def check_existing(
                 conn=conn,
                 redis=redis,
                 config=config,
-                publish_worker=publish_worker
+                publish_worker=publish_worker,
                 mp=mp,
                 status=status,
                 vcs_managers=vcs_managers,
