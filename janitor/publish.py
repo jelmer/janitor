@@ -2706,9 +2706,9 @@ has changed from %s to %s.
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch has moved to %s.
 """ % (bzr_to_browse_url(last_run.branch_url),), dry_run=dry_run)
-         except PermissionDenied:
-             return False
-         return True
+        except PermissionDenied:
+            return False
+        return True
 
     if last_run.id != mp_run['id']:
         publish_id = str(uuid.uuid4())
