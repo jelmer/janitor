@@ -65,7 +65,7 @@ from .common import (
     render_template_for_request,
 )
 from janitor.logs import get_log_manager
-from .webhook import process_webhook
+from .webhook import parse_webhook
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
@@ -115,7 +115,9 @@ async def handle_webhook(request):
             content_type="text/html",
             text=text,
         )
-    return await process_webhook(request, request.app['db'])
+    async for codebase, url in parse_webhook(request, request.app['db']):
+        pass # TODO(jelmer): Reschedule codebase
+    return web.json_response({}, status=200)
 
 
 class ScheduleResultSchema(Schema):
