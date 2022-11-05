@@ -798,6 +798,7 @@ class ActiveRun(object):
 
     def __init__(
         self,
+        *,
         campaign: str,
         package: str,
         change_set: Optional[str],
@@ -916,6 +917,9 @@ class ActiveRun(object):
         if self.vcs_info is None:
             return None
         return self.vcs_info["subpath"]
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.json() == other.json()
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -1586,7 +1590,7 @@ class QueueProcessor(object):
             tr.hset(
                 'last-keepalive', active_run.log_id, datetime.utcnow().isoformat())
             await tr.execute()
-        await self.redis.publish_json('queue', await self.status_json())
+        await self.redis.publish('queue', json.dumps(await self.status_json()))
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
@@ -1675,9 +1679,9 @@ class QueueProcessor(object):
         if self.followup_run:
             await self.followup_run(active_run, result)
 
-        await self.redis.publish_json('result', result.json())
+        await self.redis.publish('result', json.dumps(result.json()))
         await self.unclaim_run(result.log_id)
-        await self.redis.publish_json('queue', await self.status_json())
+        await self.redis.publish('queue', json.dumps(await self.status_json()))
         last_success_gauge.set_to_current_time()
 
     async def rate_limited(self, host, retry_after):
