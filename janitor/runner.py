@@ -1679,9 +1679,9 @@ class QueueProcessor(object):
         if self.followup_run:
             await self.followup_run(active_run, result)
 
-        await self.redis.publish_json('result', result.json())
+        await self.redis.publish('result', json.dumps(result.json()))
         await self.unclaim_run(result.log_id)
-        await self.redis.publish_json('queue', await self.status_json())
+        await self.redis.publish('queue', json.dumps(await self.status_json()))
         last_success_gauge.set_to_current_time()
 
     async def rate_limited(self, host, retry_after):

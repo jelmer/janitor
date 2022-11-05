@@ -501,11 +501,12 @@ async def publish_one(
         description = response.get('description')
 
         if proposal_url and is_new:
-            await redis.publish_json(
+            await redis.publish(
                 'merge-proposal',
-                {"url": proposal_url, "status": "open", "package": pkg,
-                 "campaign": campaign,
-                 "target_branch_url": main_branch_url.rstrip("/")})
+                json.dumps({
+                    "url": proposal_url, "status": "open", "package": pkg,
+                    "campaign": campaign,
+                    "target_branch_url": main_branch_url.rstrip("/")}))
 
             merge_proposal_count.labels(status="open").inc()
             maintainer_rate_limiter.inc(maintainer_email)
@@ -1161,10 +1162,14 @@ async def publish_from_policy(
         "publish_delay": (publish_delay.total_seconds() if publish_delay else None),
     }
 
-    await redis.publish_json('publish', topic_entry)
+    await pubsub_publish(redis, topic_entry)
 
     if code == "success":
         return mode
+
+
+async def pubsub_publish(redis, topic_entry):
+    await redis.publish('publish', json.dumps(topic_entry))
 
 
 def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
@@ -1285,7 +1290,7 @@ async def publish_and_store(
                 "result": run.result,
             }
 
-            await redis.publish_json('publish', publish_entry)
+            await pubsub_publish(redis, publish_entry)
             return
 
         if mode == MODE_ATTEMPT_PUSH:
@@ -1332,7 +1337,7 @@ async def publish_and_store(
             "run_id": run.id,
         }
 
-        await redis.publish_json('publish', publish_entry)
+        await pubsub_publish(redis, publish_entry)
 
 
 def create_background_task(fn, title):
@@ -2291,7 +2296,7 @@ async def check_existing_mp(
 
             # TODO(jelmer): Check if the change_set should be marked as published
 
-            await redis.publish_json('merge-proposal', {
+            await redis.publish('merge-proposal', json.dumps({
                 "url": mp.url,
                 "target_branch_url": target_branch_url,
                 "status": status,
@@ -2299,7 +2304,7 @@ async def check_existing_mp(
                 "merged_by": merged_by,
                 "merged_at": str(merged_at),
                 "campaign": campaign,
-            })
+            }))
 
     old_status: Optional[str]
     maintainer_email: Optional[str]
