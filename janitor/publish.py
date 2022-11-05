@@ -2134,9 +2134,18 @@ LIMIT 1
     return await conn.fetchrow(query, mp_url)
 
 
-async def get_proposal_info(
-    conn: asyncpg.Connection, url
-) -> Tuple[Optional[bytes], str, str, Optional[bool], str, str]:
+@dataclass
+class ProposalInfo:
+
+    can_be_merged: Optional[bool]
+    status: str
+    revision: bytes
+    target_branch_url: Optional[str]
+    maintainer_email: Optional[str] = None
+    package_name: Optional[str]
+
+
+async def get_proposal_info(conn: asyncpg.Connection, url) -> Optional[ProposalInfo]:
     row = await conn.fetchrow(
         """\
 SELECT
@@ -2144,7 +2153,7 @@ SELECT
     merge_proposal.revision,
     merge_proposal.status,
     merge_proposal.target_branch_url,
-    package.name,
+    package.name AS package,
     can_be_merged
 FROM
     merge_proposal
@@ -2155,9 +2164,14 @@ WHERE
         url,
     )
     if not row:
-        raise KeyError
-    return (row[1].encode("utf-8") if row[1] else None,
-            row[2], row[3], row[5], row[4], row[0])
+        return None
+    return ProposalInfo(
+        maintainer_email=row['maintainer_email'],
+        revision=row['revision'].encode("utf-8") if row[1] else None,
+        status=row['status'],
+        target_branch_url=row['target_branch_url'],
+        package=row['package'],
+        can_be_merged=row['can_be_merged'])
 
 
 async def guess_package_from_revision(
@@ -2220,7 +2234,7 @@ async def abandon_mp(conn, redis, mp, revision, package_name, target_branch_url,
     logger.info('%s: %s', mp.url, comment)
     if dry_run:
         return False
-    await ProposalStatusManager(conn, redis).update_proposal_status(
+    await ProposalStatusManager(conn, redis).update_proposal_info(
         mp, "abandoned", revision, package_name, target_branch_url,
         campaign=campaign, can_be_merged=can_be_merged)
     try:
@@ -2242,7 +2256,7 @@ async def abandon_mp(conn, redis, mp, revision, package_name, target_branch_url,
 async def close_applied_mp(conn, redis, mp, revision, package_name, target_branch_url,
                            campaign, can_be_merged, comment, dry_run=False):
     
-    await ProposalStatusManager(conn, redis).update_proposal_status(
+    await ProposalStatusManager(conn, redis).update_proposal_info(
         mp, "applied", revision, package_name, target_branch_url,
         campaign, can_be_merged=can_be_merged, dry_run=dry_run)
     try:
@@ -2267,7 +2281,7 @@ class ProposalStatusManager(object):
         self.conn = conn
         self.redis = redis
 
-    async def update_proposal_status(
+    async def update_proposal_info(
             self, mp, status, revision, package_name, target_branch_url,
             campaign, can_be_merged, dry_run=False):
         if status == "closed":
@@ -2337,25 +2351,13 @@ async def check_existing_mp(
     close_below_threshold: bool = True,
 ) -> bool:
 
-    old_status: Optional[str]
-    maintainer_email: Optional[str]
-    package_name: Optional[str]
-    try:
-        (
-            old_revision,
-            old_status,
-            old_target_branch_url,
-            old_can_be_merged,
-            package_name,
-            maintainer_email,
-        ) = await get_proposal_info(conn, mp.url)
-    except KeyError:
-        old_revision = None
-        old_can_be_merged = None
-        old_status = None
-        old_target_branch_url = None
-        maintainer_email = None
+    old_proposal_info = await get_proposal_info(conn, mp.url)
+    if old_proposal_info:
+        package_name = old_proposal_info.package_name
+        maintainer_email = old_proposal_info.maintainer_email
+    else:
         package_name = None
+        maintainer_email = None
     revision = await to_thread(mp.get_source_revision)
     source_branch_url = await to_thread(mp.get_source_branch_url)
     try:
@@ -2387,8 +2389,8 @@ async def check_existing_mp(
         source_branch_name = segment_params.get("branch")
         if source_branch_name is not None:
             source_branch_name = urlutils.unescape(source_branch_name)
-    if revision is None:
-        revision = old_revision
+    if revision is None and old_proposal_info:
+        revision = old_proposal_info.revision
     target_branch_url = await to_thread(mp.get_target_branch_url)
     if maintainer_email is None:
         row = await guess_package_from_branch_url(
@@ -2413,14 +2415,14 @@ async def check_existing_mp(
                     package_name,
                     mp.url,
                 )
-    if old_status in ("abandoned", "applied", "rejected") and status == "closed":
-        status = old_status
-    if (old_status != status
-            or revision != old_revision
-            or target_branch_url != old_target_branch_url
-            or can_be_merged != old_can_be_merged):
+    if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
+        status = old_proposal_info.status
+    if (old_proposal_info.status != status
+            or revision != old_proposal_info.revision
+            or target_branch_url != old_proposal_info.target_branch_url
+            or can_be_merged != old_proposal_info.can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
-        await ProposalStatusManager(conn, redis).update_proposal_status(
+        await ProposalStatusManager(conn, redis).update_proposal_info(
             mp, status, revision, package_name, target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
             can_be_merged=can_be_merged, dry_run=dry_run)
@@ -2609,7 +2611,6 @@ applied independently.
             campaign=mp_run['campaign'], can_be_merged=can_be_merged,
             comment="This merge proposal will be closed, since only trivial changes are left.",
             dry_run=dry_run)
-
 
     try:
         (
