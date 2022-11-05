@@ -25,12 +25,6 @@ import asyncpg
 from breezy.git.refs import ref_to_branch_name
 from breezy.git.urls import git_url_to_bzr_url
 
-from ..config import get_campaign_config
-from .. import state
-from ..schedule import (
-    do_schedule,
-)
-
 
 def is_webhook_request(request):
     return ("X-Gitlab-Event" in request.headers
