@@ -1578,14 +1578,14 @@ class QueueProcessor(object):
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
-        tr = self.redis.multi_exec()
-        tr.hset(
-            'active-runs', active_run.log_id, json.dumps(active_run.json()))
-        tr.hset(
-            'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
-        tr.hset(
-            'last-keepalive', active_run.log_id, datetime.utcnow().isoformat())
-        await tr.execute()
+        async with self.redis.pipeline() as tr:
+            tr.hset(
+                'active-runs', active_run.log_id, json.dumps(active_run.json()))
+            tr.hset(
+                'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
+            tr.hset(
+                'last-keepalive', active_run.log_id, datetime.utcnow().isoformat())
+            await tr.execute()
         await self.redis.publish_json('queue', await self.status_json())
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
@@ -1602,11 +1602,11 @@ class QueueProcessor(object):
         active_run_count.labels(worker=active_run.worker_name if active_run else None).dec()
         if not active_run:
             return
-        tr = self.redis.multi_exec()
-        tr.hdel('assigned-queue-items', str(active_run.queue_id))
-        tr.hdel('active-runs', log_id)
-        tr.hdel('last-keepalive', log_id)
-        await tr.execute()
+        async with self.redis.pipeline() as tr:
+            tr.hdel('assigned-queue-items', str(active_run.queue_id))
+            tr.hdel('active-runs', log_id)
+            tr.hdel('last-keepalive', log_id)
+            await tr.execute()
 
     async def abort_run(self, run: ActiveRun, code: str, description: str) -> None:
         result = run.create_result(
