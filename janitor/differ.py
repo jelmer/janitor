@@ -606,7 +606,7 @@ async def listen_to_runner(redis, app):
     async def handle_result_message(msg):
         result = json.loads(msg)
         if result["code"] != "success":
-            continue
+            return
         async with app['pool'].acquire() as conn:
             to_precache = []
             if result["revision"] == result["main_branch_revision"]:
