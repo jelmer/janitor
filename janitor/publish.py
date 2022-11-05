@@ -2220,8 +2220,8 @@ async def abandon_mp(conn, redis, mp, revision, package_name, target_branch_url,
     logger.info('%s: %s', mp.url, comment)
     if dry_run:
         return False
-    await update_proposal_status(
-        conn, redis, mp, "abandoned", revision, package_name, target_branch_url,
+    await ProposalStatusManager(conn, redis).update_proposal_status(
+        mp, "abandoned", revision, package_name, target_branch_url,
         campaign=campaign, can_be_merged=can_be_merged)
     try:
         await to_thread(mp.post_comment, comment)
@@ -2241,8 +2241,9 @@ async def abandon_mp(conn, redis, mp, revision, package_name, target_branch_url,
 
 async def close_applied_mp(conn, redis, mp, revision, package_name, target_branch_url,
                            campaign, can_be_merged, comment, dry_run=False):
-    await update_proposal_status(
-        conn, redis, mp, "applied", revision, package_name, target_branch_url,
+    
+    await ProposalStatusManager(conn, redis).update_proposal_status(
+        mp, "applied", revision, package_name, target_branch_url,
         campaign, can_be_merged=can_be_merged, dry_run=dry_run)
     try:
         await to_thread(mp.post_comment, comment)
@@ -2260,58 +2261,64 @@ async def close_applied_mp(conn, redis, mp, revision, package_name, target_branc
     return True
 
 
-async def update_proposal_status(
-        conn, redis, mp, status, revision, package_name, target_branch_url,
-        campaign, can_be_merged, dry_run=False):
-    if status == "closed":
-        # TODO(jelmer): Check if changes were applied manually and mark
-        # as applied rather than closed?
-        pass
-    if status == "merged":
-        merged_by = mp.get_merged_by()
-        merged_at = mp.get_merged_at()
-        if merged_at is not None:
-            merged_at = merged_at.replace(tzinfo=None)
-    else:
-        merged_by = None
-        merged_at = None
-    if not dry_run:
-        async with conn.transaction():
-            await conn.execute(
-                """INSERT INTO merge_proposal (
-                    url, status, revision, package, merged_by, merged_at,
-                    target_branch_url, last_scanned, can_be_merged)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
-                ON CONFLICT (url)
-                DO UPDATE SET
-                  status = EXCLUDED.status,
-                  revision = EXCLUDED.revision,
-                  package = EXCLUDED.package,
-                  merged_by = EXCLUDED.merged_by,
-                  merged_at = EXCLUDED.merged_at,
-                  target_branch_url = EXCLUDED.target_branch_url,
-                  last_scanned = EXCLUDED.last_scanned,
-                  can_be_merged = EXCLUDED.can_be_merged
-                """, mp.url, status,
-                revision.decode("utf-8") if revision is not None else None,
-                package_name, merged_by, merged_at, target_branch_url,
-                can_be_merged)
-            if revision:
-                await conn.execute("""
-                UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
-                """, (status == 'merged'), revision.decode('utf-8'))
+class ProposalStatusManager(object):
 
-        # TODO(jelmer): Check if the change_set should be marked as published
+    def __init__(self, conn, redis):
+        self.conn = conn
+        self.redis = redis
 
-        await redis.publish('merge-proposal', json.dumps({
-            "url": mp.url,
-            "target_branch_url": target_branch_url,
-            "status": status,
-            "package": package_name,
-            "merged_by": merged_by,
-            "merged_at": str(merged_at),
-            "campaign": campaign,
-        }))
+    async def update_proposal_status(
+            self, mp, status, revision, package_name, target_branch_url,
+            campaign, can_be_merged, dry_run=False):
+        if status == "closed":
+            # TODO(jelmer): Check if changes were applied manually and mark
+            # as applied rather than closed?
+            pass
+        if status == "merged":
+            merged_by = mp.get_merged_by()
+            merged_at = mp.get_merged_at()
+            if merged_at is not None:
+                merged_at = merged_at.replace(tzinfo=None)
+        else:
+            merged_by = None
+            merged_at = None
+        if not dry_run:
+            async with self.conn.transaction():
+                await self.conn.execute(
+                    """INSERT INTO merge_proposal (
+                        url, status, revision, package, merged_by, merged_at,
+                        target_branch_url, last_scanned, can_be_merged)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+                    ON CONFLICT (url)
+                    DO UPDATE SET
+                      status = EXCLUDED.status,
+                      revision = EXCLUDED.revision,
+                      package = EXCLUDED.package,
+                      merged_by = EXCLUDED.merged_by,
+                      merged_at = EXCLUDED.merged_at,
+                      target_branch_url = EXCLUDED.target_branch_url,
+                      last_scanned = EXCLUDED.last_scanned,
+                      can_be_merged = EXCLUDED.can_be_merged
+                    """, mp.url, status,
+                    revision.decode("utf-8") if revision is not None else None,
+                    package_name, merged_by, merged_at, target_branch_url,
+                    can_be_merged)
+                if revision:
+                    await self.conn.execute("""
+                    UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
+                    """, (status == 'merged'), revision.decode('utf-8'))
+
+            # TODO(jelmer): Check if the change_set should be marked as published
+
+            await self.redis.publish('merge-proposal', json.dumps({
+                "url": mp.url,
+                "target_branch_url": target_branch_url,
+                "status": status,
+                "package": package_name,
+                "merged_by": merged_by,
+                "merged_at": str(merged_at),
+                "campaign": campaign,
+            }))
 
 
 async def check_existing_mp(
@@ -2413,8 +2420,8 @@ async def check_existing_mp(
             or target_branch_url != old_target_branch_url
             or can_be_merged != old_can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
-        await update_proposal_status(
-            conn, redis, mp, status, revision, package_name, target_branch_url,
+        await ProposalStatusManager(conn, redis).update_proposal_status(
+            mp, status, revision, package_name, target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
             can_be_merged=can_be_merged, dry_run=dry_run)
     else:
