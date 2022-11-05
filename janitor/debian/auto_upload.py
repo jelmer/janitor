@@ -17,8 +17,10 @@
 
 import asyncio
 import os
+import json
 import logging
 import sys
+from redis.asyncio import Redis
 import tempfile
 from typing import Optional, List
 
@@ -150,27 +152,25 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
 
 
 async def listen_to_runner(
-        redis_location, artifact_manager, dput_host,
+        redis, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
-    from redis.asyncio import Redis
-    redis = Redis.from_url(redis_location)
 
-    ch = (await redis.pubsub().subscribe('result'))[0]
     try:
-        while (await ch.wait_message()):
-            result = await ch.get_json()
-            if result["code"] != "success":
-                continue
-            if not result['target']:
-                continue
-            if result['target']['name'] != 'debian':
-                continue
-            if not distributions or result['target']['details']['build_distribution'] in distributions:
-                await upload_build_result(
-                    result['log_id'], artifact_manager, dput_host,
-                    debsign_keyid=debsign_keyid, source_only=source_only)
+        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
+            await ch.subscribe('result')
+            async for msg in ch.listen():
+                result = json.loads(msg)
+
+                if not result['target']:
+                    continue
+                if result['target']['name'] != 'debian':
+                    continue
+                if not distributions or result['target']['details']['build_distribution'] in distributions:
+                    await upload_build_result(
+                        result['log_id'], artifact_manager, dput_host,
+                        debsign_keyid=debsign_keyid, source_only=source_only)
     finally:
         await redis.close()
 
@@ -241,9 +241,10 @@ async def main(argv=None):
             logging.exception('listening to runner failed')
             sys.exit(1)
 
+    redis = Redis.from_url(config.redis_location)
     runner_task = loop.create_task(
         listen_to_runner(
-            config.redis_location, artifact_manager, args.dput_host,
+            redis, artifact_manager, args.dput_host,
             args.debsign_keyid, args.distribution,
             source_only=args.source_only))
     runner_task.add_done_callback(log_result)
