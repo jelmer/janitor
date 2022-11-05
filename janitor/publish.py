@@ -2231,7 +2231,7 @@ class ProposalInfoManager(object):
             revision=row['revision'].encode("utf-8") if row[1] else None,
             status=row['status'],
             target_branch_url=row['target_branch_url'],
-            package=row['package'],
+            package_name=row['package'],
             can_be_merged=row['can_be_merged'])
 
     async def update_proposal_info(
@@ -2288,20 +2288,24 @@ class ProposalInfoManager(object):
             }))
 
 
-async def abandon_mp(proposal_info_manager: ProposalInfoManager, mp, revision,
-                     package_name, target_branch_url,
-                     campaign, can_be_merged, comment, dry_run=False):
-    logger.info('%s: %s', mp.url, comment)
+async def abandon_mp(proposal_info_manager: ProposalInfoManager,
+                     mp: MergeProposal, revision: bytes,
+                     package_name: Optional[str], target_branch_url: str,
+                     campaign: Optional[str], can_be_merged: Optional[bool],
+                     comment: Optional[str], dry_run: bool = False):
+    if comment:
+        logger.info('%s: %s', mp.url, comment)
     if dry_run:
-        return False
+        return
     await proposal_info_manager.update_proposal_info(
         mp, "abandoned", revision, package_name, target_branch_url,
         campaign=campaign, can_be_merged=can_be_merged)
-    try:
-        await to_thread(mp.post_comment, comment)
-    except PermissionDenied as e:
-        logger.warning(
-            "Permission denied posting comment to %s: %s", mp.url, e)
+    if comment:
+        try:
+            await to_thread(mp.post_comment, comment)
+        except PermissionDenied as e:
+            logger.warning(
+                "Permission denied posting comment to %s: %s", mp.url, e)
 
     try:
         await to_thread(mp.close)
@@ -2309,13 +2313,14 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager, mp, revision,
         logger.warning(
             "Permission denied closing merge request %s: %s", mp.url, e
         )
-        return False
-    return True
+        raise
 
 
-async def close_applied_mp(proposal_info_manager, mp, revision, package_name,
-                           target_branch_url,
-                           campaign, can_be_merged, comment, dry_run=False):
+async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
+                           revision: bytes, package_name: Optional[str],
+                           target_branch_url: str,
+                           campaign: Optional[str], can_be_merged: Optional[bool],
+                           comment: Optional[str], dry_run=False):
 
     await proposal_info_manager.update_proposal_info(
         mp, "applied", revision, package_name, target_branch_url,
@@ -2332,8 +2337,7 @@ async def close_applied_mp(proposal_info_manager, mp, revision, package_name,
         logger.warning(
             "Permission denied closing merge request %s: %s", mp.url, e
         )
-        return False
-    return True
+        raise
 
 
 async def check_existing_mp(
@@ -2419,7 +2423,8 @@ async def check_existing_mp(
     if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
         status = old_proposal_info.status
 
-    if (old_proposal_info.status != status
+    if old_proposal_info is None or (
+            old_proposal_info.status != status
             or revision != old_proposal_info.revision
             or target_branch_url != old_proposal_info.target_branch_url
             or can_be_merged != old_proposal_info.can_be_merged):
@@ -2521,12 +2526,17 @@ async def check_existing_mp(
             "%s: package has been removed from the archive, " "closing proposal.",
             mp.url,
         )
-        return await abandon_mp(
-            proposal_info_manager, revision, package_name, target_branch_url,
-            mp_run['campaign'], can_be_merged, comment="""\
+        try:
+            await abandon_mp(
+                proposal_info_manager, mp, revision, package_name,
+                target_branch_url, mp_run['campaign'], can_be_merged,
+                comment="""\
 This merge proposal will be closed, since the package has been removed from the \
 archive.
 """, dry_run=dry_run)
+        except PermissionDenied:
+            return False
+        return True
 
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
@@ -2537,7 +2547,7 @@ archive.
 
         try:
             await close_applied_mp(
-                proposal_info_manager, revision, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, package_name, target_branch_url,
                 mp_run['campaign'], can_be_merged=can_be_merged, comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
@@ -2608,11 +2618,15 @@ applied independently.
 
     if close_below_threshold and not run_sufficient_for_proposal(
             campaign_config, mp_run['value']):
-        return await abandon_mp(
-            proposal_info_manager, revision, package_name, target_branch_url,
-            campaign=mp_run['campaign'], can_be_merged=can_be_merged,
-            comment="This merge proposal will be closed, since only trivial changes are left.",
-            dry_run=dry_run)
+        try:
+            await abandon_mp(
+                proposal_info_manager, mp, revision, package_name, target_branch_url,
+                campaign=mp_run['campaign'], can_be_merged=can_be_merged,
+                comment="This merge proposal will be closed, since only trivial changes are left.",
+                dry_run=dry_run)
+        except PermissionDenied:
+            return False
+        return True
 
     try:
         (
@@ -2657,13 +2671,16 @@ applied independently.
                     mp_remote_branch_name,
                     last_run_remote_branch_name,
                 )
-                if not await abandon_mp(
-                    proposal_info_manager, revision, package_name, target_branch_url,
-                    campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
+                try:
+                    await abandon_mp(
+                        proposal_info_manager, mp, revision, package_name, target_branch_url,
+                        campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
 """ % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run):
+                except PermissionDenied:
                     return False
+                return True
             else:
                 target_branch_url = role_branch_url(
                     mp_run['branch_url'], mp_remote_branch_name)
@@ -2683,11 +2700,15 @@ has changed from %s to %s.
         # TODO(jelmer): Don't do this if there's a redirect in place,
         # or if one of the branches has a branch name included and the other
         # doesn't
-        return await abandon_mp(
-            proposal_info_manager, revision, package_name, target_branch_url,
-            campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
+        try:
+            await abandon_mp(
+                proposal_info_manager, mp, revision, package_name, target_branch_url,
+                campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch has moved to %s.
 """ % (bzr_to_browse_url(last_run.branch_url),), dry_run=dry_run)
+         except PermissionDenied:
+             return False
+         return True
 
     if last_run.id != mp_run['id']:
         publish_id = str(uuid.uuid4())
