@@ -116,7 +116,7 @@ async def handle_webhook(request):
             text=text,
         )
     async for codebase, url in parse_webhook(request, request.app['db']):
-        pass # TODO(jelmer): Reschedule codebase
+        pass  # TODO(jelmer): Reschedule codebase
     return web.json_response({}, status=200)
 
 
