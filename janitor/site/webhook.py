@@ -101,9 +101,9 @@ def get_branch_urls_from_gitlab_webhook(body):
     return urls
 
 
-async def get_package_by_branch_url(
+async def get_codebases_by_branch_url(
     conn: asyncpg.Connection, branch_urls: List[str]
-) -> Optional[Tuple[str, str]]:
+) -> List[Tuple[Optional[str], str]]:
     query = """
 SELECT
   name, branch_url
@@ -117,105 +117,50 @@ WHERE
         candidates.extend([
             url.rstrip('/'),
             url.rstrip('/') + '/'])
-    return await conn.fetchrow(query, candidates)
+    return await conn.fetch(query, candidates)
 
 
-async def get_package_by_upstream_branch_url(
-    conn: asyncpg.Connection, upstream_branch_urls: List[str]
-) -> Optional[Tuple[str, str]]:
-    query = """
-SELECT
-  package AS name, url AS upstream_branch_url
-FROM
-  upstream_branch_urls
-WHERE
-  upstream_branch_urls.url = ANY($1::text[])
-"""
-    candidates = []
-    for url in upstream_branch_urls:
-        candidates.extend([
-            url.rstrip('/'),
-            url.rstrip('/') + '/',
-        ])
-    return await conn.fetchrow(query, candidates)
-
-
-async def process_webhook(request, db):
+async def parse_webhook(request, db):
     if request.content_type == "application/json":
         body = await request.json()
     elif request.content_type == "application/x-www-form-urlencoded":
         post = await request.post()
         body = json.loads(post["payload"])
     else:
-        return web.Response(
-            status=415, text="Invalid content type %s" % request.content_type
+        raise web.HTTPUnsupportedMediaType(
+            text="Invalid content type %s" % request.content_type
         )
     if "X-Gitlab-Event" in request.headers:
         if request.headers["X-Gitlab-Event"] != "Push Hook":
-            return web.json_response({}, status=200)
+            return
         urls = get_branch_urls_from_gitlab_webhook(body)
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
     elif "X-GitHub-Event" in request.headers:
         if request.headers["X-GitHub-Event"] not in ("push", ):
-            return web.json_response({}, status=200)
+            return
         urls = get_branch_urls_from_github_webhook(body)
     elif "X-Gitea-Event" in request.headers:
         if request.headers["X-Gitea-Event"] not in ("push", ):
-            return web.json_response({}, status=200)
+            return
         urls = get_branch_urls_from_github_webhook(body)
     elif "X-Gogs-Event" in request.headers:
         if request.headers["X-Gogs-Event"] not in ("push", ):
-            return web.json_response({}, status=200)
+            return
         urls = get_branch_urls_from_github_webhook(body)
     elif "X-Launchpad-Event-Type" in request.headers:
         if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
-            return web.json_response({}, status=200)
+            return
         if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
             urls = get_bzr_branch_urls_from_launchpad_webhook(body)
         elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
             urls = get_git_branch_urls_from_launchpad_webhook(body)
         else:
-            return web.json_response({}, status=200)
+            return
     else:
-        return web.Response(status=400, text="Unrecognized webhook")
-
-    # TODO(jelmer): Update codebases to new git sha
+        raise web.HTTPBadRequest(text="Unrecognized webhook")
 
     async with db.acquire() as conn:
-        rescheduled = {}
-        package = await get_package_by_branch_url(conn, urls)
-        if package is not None:
-            requestor = "Push hook for %s" % package['branch_url']
-            for suite in await state.iter_publishable_suites(
-                    conn, package['name']
-            ):
-                try:
-                    campaign = get_campaign_config(request.app['config'], suite)
-                except KeyError:
-                    continue
-                if not campaign.webhook_trigger:
-                    continue
-                if suite not in rescheduled.get(package['name'], []):
-                    await do_schedule(
-                        conn, package['name'], suite, requestor=requestor, bucket="hook"
-                    )
-                    rescheduled.setdefault(package['name'], []).append(suite)
-
-        # TODODEB(jelmer): This code is debian-specific
-        package = await get_package_by_upstream_branch_url(
-            conn, urls)
-        if package is not None:
-            requestor = "Push hook for %s" % package['upstream_branch_url']
-            for suite in await state.iter_publishable_suites(
-                conn, package['name']
-            ):
-                if suite not in ("fresh-releases", "fresh-snapshots"):
-                    continue
-                if suite not in rescheduled.get(package['name'], []):
-                    await do_schedule(
-                        conn, package['name'], suite, requestor=requestor, bucket="hook"
-                    )
-                    rescheduled.setdefault(package['name'], []).append(suite)
-
-        return web.json_response({"rescheduled": rescheduled, "urls": urls})
+        # TODO(jelmer): Update codebases to new git sha
+        for row in await get_codebases_by_branch_url(conn, urls):
+            yield row
