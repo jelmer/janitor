@@ -386,137 +386,141 @@ class BranchBusy(Exception):
         self.branch_url = branch_url
 
 
-async def publish_one(
-    *,
-    template_env_path: Optional[str],
-    campaign: str,
-    pkg: str,
-    command,
-    codemod_result,
-    main_branch_url: str,
-    mode: str,
-    role: str,
-    revision: bytes,
-    log_id: str,
-    unchanged_id: str,
-    derived_branch_name: str,
-    maintainer_email: str,
-    vcs_manager: VcsManager,
-    redis,
-    lock_manager,
-    maintainer_rate_limiter: RateLimiter,
-    dry_run: bool,
-    differ_url: str,
-    external_url: Optional[str] = None,
-    require_binary_diff: bool = False,
-    allow_create_proposal: bool = False,
-    reviewers: Optional[List[str]] = None,
-    derived_owner: Optional[str] = None,
-    result_tags: Optional[List[Tuple[str, bytes]]] = None,
-    commit_message_template: Optional[str] = None,
-    title_template: Optional[str] = None,
-    existing_mp_url: Optional[str] = None,
-) -> PublishResult:
-    """Publish a single run in some form.
+class PublishWorker(object):
 
-    Args:
-      campaign: The campaign name
-      pkg: Package name
-      command: Command that was run
-    """
-    assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
-    local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (campaign, role))
-    if local_branch is None:
-        raise PublishFailure(
-            mode,
-            "result-branch-not-found",
-            "can not find local branch for %s / %s / %s (%s)"
-            % (pkg, campaign, role, log_id),
-        )
-    target_branch_url = main_branch_url.rstrip("/")
+    def __init__(self, *, template_env_path: Optional[str]):
+        self.template_env_path = template_env_path
 
-    request = {
-        "dry-run": dry_run,
-        "campaign": campaign,
-        "package": pkg,
-        "command": command,
-        "codemod_result": codemod_result,
-        "target_branch_url": target_branch_url,
-        "source_branch_url": full_branch_url(local_branch),
-        "existing_mp_url": existing_mp_url,
-        "derived_branch_name": derived_branch_name,
-        "mode": mode,
-        "role": role,
-        "log_id": log_id,
-        "unchanged_id": unchanged_id,
-        "require-binary-diff": require_binary_diff,
-        "allow_create_proposal": allow_create_proposal,
-        "external_url": external_url,
-        "differ_url": differ_url,
-        "derived-owner": derived_owner,
-        "revision": revision.decode("utf-8"),
-        "reviewers": reviewers,
-        "commit_message_template": commit_message_template,
-        "title_template": title_template,
-    }
+    async def publish_one(
+        *,
+        campaign: str,
+        pkg: str,
+        command,
+        codemod_result,
+        main_branch_url: str,
+        mode: str,
+        role: str,
+        revision: bytes,
+        log_id: str,
+        unchanged_id: str,
+        derived_branch_name: str,
+        maintainer_email: str,
+        vcs_manager: VcsManager,
+        redis,
+        lock_manager,
+        maintainer_rate_limiter: RateLimiter,
+        dry_run: bool,
+        differ_url: str,
+        external_url: Optional[str] = None,
+        require_binary_diff: bool = False,
+        allow_create_proposal: bool = False,
+        reviewers: Optional[List[str]] = None,
+        derived_owner: Optional[str] = None,
+        result_tags: Optional[List[Tuple[str, bytes]]] = None,
+        commit_message_template: Optional[str] = None,
+        title_template: Optional[str] = None,
+        existing_mp_url: Optional[str] = None,
+    ) -> PublishResult:
+        """Publish a single run in some form.
 
-    if result_tags:
-        request["tags"] = {n: r.decode("utf-8") for (n, r) in result_tags}
-    else:
-        request["tags"] = {}
-
-    args = [sys.executable, "-m", "janitor.publish_one"]
-
-    if template_env_path:
-        args.append('--template-env-path=%s' % template_env_path)
-
-    try:
-        async with await lock_manager.lock("publish:%s" % target_branch_url):
-            p = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE
-            )
-
-            (stdout, stderr) = await p.communicate(json.dumps(request).encode())
-    except aioredlock.LockError as e:
-        raise BranchBusy(target_branch_url) from e
-
-    if p.returncode == 1:
-        try:
-            response = json.loads(stdout.decode())
-        except json.JSONDecodeError as e:
+        Args:
+          campaign: The campaign name
+          pkg: Package name
+          command: Command that was run
+        """
+        assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
+        local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (campaign, role))
+        if local_branch is None:
             raise PublishFailure(
-                mode, "publisher-invalid-response", stderr.decode()) from e
-        sys.stderr.write(stderr.decode())
-        raise PublishFailure(mode, response["code"], response["description"])
+                mode,
+                "result-branch-not-found",
+                "can not find local branch for %s / %s / %s (%s)"
+                % (pkg, campaign, role, log_id),
+            )
+        target_branch_url = main_branch_url.rstrip("/")
 
-    if p.returncode == 0:
-        response = json.loads(stdout.decode())
+        request = {
+            "dry-run": dry_run,
+            "campaign": campaign,
+            "package": pkg,
+            "command": command,
+            "codemod_result": codemod_result,
+            "target_branch_url": target_branch_url,
+            "source_branch_url": full_branch_url(local_branch),
+            "existing_mp_url": existing_mp_url,
+            "derived_branch_name": derived_branch_name,
+            "mode": mode,
+            "role": role,
+            "log_id": log_id,
+            "unchanged_id": unchanged_id,
+            "require-binary-diff": require_binary_diff,
+            "allow_create_proposal": allow_create_proposal,
+            "external_url": external_url,
+            "differ_url": differ_url,
+            "derived-owner": derived_owner,
+            "revision": revision.decode("utf-8"),
+            "reviewers": reviewers,
+            "commit_message_template": commit_message_template,
+            "title_template": title_template,
+        }
 
-        proposal_url = response.get("proposal_url")
-        branch_name = response.get("branch_name")
-        is_new = response.get("is_new")
-        description = response.get('description')
+        if result_tags:
+            request["tags"] = {n: r.decode("utf-8") for (n, r) in result_tags}
+        else:
+            request["tags"] = {}
 
-        if proposal_url and is_new:
-            await redis.publish(
-                'merge-proposal',
-                json.dumps({
-                    "url": proposal_url, "status": "open", "package": pkg,
-                    "campaign": campaign,
-                    "target_branch_url": main_branch_url.rstrip("/")}))
+        args = [sys.executable, "-m", "janitor.publish_one"]
 
-            merge_proposal_count.labels(status="open").inc()
-            maintainer_rate_limiter.inc(maintainer_email)
-            open_proposal_count.labels(maintainer=maintainer_email).inc()
+        if self.template_env_path:
+            args.append('--template-env-path=%s' % self.template_env_path)
 
-        return PublishResult(
-            proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
-            description=description)
+        try:
+            async with await lock_manager.lock("publish:%s" % target_branch_url):
+                p = await asyncio.create_subprocess_exec(
+                    *args,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    stdin=asyncio.subprocess.PIPE
+                )
 
-    raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
+                (stdout, stderr) = await p.communicate(json.dumps(request).encode())
+        except aioredlock.LockError as e:
+            raise BranchBusy(target_branch_url) from e
+
+        if p.returncode == 1:
+            try:
+                response = json.loads(stdout.decode())
+            except json.JSONDecodeError as e:
+                raise PublishFailure(
+                    mode, "publisher-invalid-response", stderr.decode()) from e
+            sys.stderr.write(stderr.decode())
+            raise PublishFailure(mode, response["code"], response["description"])
+
+        if p.returncode == 0:
+            response = json.loads(stdout.decode())
+
+            proposal_url = response.get("proposal_url")
+            branch_name = response.get("branch_name")
+            is_new = response.get("is_new")
+            description = response.get('description')
+
+            if proposal_url and is_new:
+                await redis.publish(
+                    'merge-proposal',
+                    json.dumps({
+                        "url": proposal_url, "status": "open", "package": pkg,
+                        "campaign": campaign,
+                        "target_branch_url": main_branch_url.rstrip("/")}))
+
+                merge_proposal_count.labels(status="open").inc()
+                maintainer_rate_limiter.inc(maintainer_email)
+                open_proposal_count.labels(maintainer=maintainer_email).inc()
+
+            return PublishResult(
+                proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
+                description=description)
+
+        raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
 
 def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
@@ -529,8 +533,9 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 
 async def consider_publish_run(
-        conn: asyncpg.Connection, *, config: Config, template_env_path: str,
-        vcs_managers, maintainer_rate_limiter, external_url: Optional[str], differ_url: str,
+        conn: asyncpg.Connection, *, config: Config, publish_worker: PublishWorker,
+        vcs_managers, maintainer_rate_limiter,
+        differ_url: str, external_url: Optional[str], differ_url: str,
         redis, lock_manager,
         run, maintainer_email,
         unpublished_branches, command,
@@ -598,7 +603,7 @@ async def consider_publish_run(
             continue
         actual_modes[role] = await publish_from_policy(
             conn=conn, campaign_config=campaign_config,
-            template_env_path=template_env_path,
+            publish_worker=publish_worker,
             maintainer_rate_limiter=maintainer_rate_limiter,
             vcs_managers=vcs_managers, run=run, role=role,
             maintainer_email=maintainer_email, main_branch_url=run.branch_url,
@@ -688,7 +693,7 @@ async def publish_pending_ready(
     redis,
     lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
@@ -719,7 +724,7 @@ async def publish_pending_ready(
         ):
             actual_modes = await consider_publish_run(
                 conn, config=config,
-                template_env_path=template_env_path,
+                publish_worker=publish_worker,
                 vcs_managers=vcs_managers,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 external_url=external_url, differ_url=differ_url,
@@ -952,7 +957,7 @@ async def publish_from_policy(
     *,
     conn: asyncpg.Connection,
     campaign_config: Campaign,
-    template_env_path: str,
+    publish_worker: PublishWorker,
     maintainer_rate_limiter: RateLimiter,
     vcs_managers: Dict[str, VcsManager],
     run: state.Run,
@@ -1066,8 +1071,7 @@ async def publish_from_policy(
         "Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode
     )
     try:
-        publish_result = await publish_one(
-            template_env_path=template_env_path,
+        publish_result = await publish_worker.publish_one(
             campaign=run.campaign,
             pkg=run.package,
             command=run.command,
@@ -1194,7 +1198,7 @@ async def publish_and_store(
     redis,
     lock_manager,
     campaign_config: Campaign,
-    template_env_path: str,
+    publish_worker: PublishWorker,
     publish_id: str,
     run: state.Run,
     mode: str,
@@ -1228,8 +1232,7 @@ async def publish_and_store(
             unchanged_run_id = None
 
         try:
-            publish_result = await publish_one(
-                template_env_path=template_env_path,
+            publish_result = await publish_worker.publish_one(
                 campaign=run.campaign,
                 pkg=run.package,
                 command=run.command,
@@ -1524,7 +1527,7 @@ async def consider_request(request):
                 return
             await consider_publish_run(
                 conn, config=request.app['config'],
-                template_env_path=request.app['template_env_path'],
+                publish_worker=request.app['publish_worker'],
                 vcs_managers=request.app['vcs_managers'],
                 maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
                 external_url=request.app['external_url'],
@@ -1643,7 +1646,7 @@ async def publish_request(request):
                 redis=request.app['redis'],
                 lock_manager=request.app['lock_manager'],
                 campaign_config=get_campaign_config(request.app['config'], run.campaign),
-                template_env_path=request.app['template_env_path'],
+                publish_worker=request.app['publish_worker'],
                 publish_id=publish_id,
                 run=run,
                 mode=mode,
@@ -1720,7 +1723,7 @@ async def create_app(
     lock_manager,
     config,
     differ_url: str,
-    template_env_path: Optional[str] = None,
+    publish_worker: Optional[PublishWorker] = None,
     dry_run: bool = False,
     external_url: Optional[str] = None,
     forge_rate_limiter: Optional[Dict[str, datetime]] = None,
@@ -1734,7 +1737,7 @@ async def create_app(
         trailing_slash_redirect, state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['gpg'] = gpg.Context(armor=True)
-    app['template_env_path'] = template_env_path
+    app['publish_worker'] = publish_worker
     app['vcs_managers'] = vcs_managers
     app['db'] = db
     app['redis'] = redis
@@ -1805,14 +1808,14 @@ async def scan_request(request):
     async def scan():
         async with request.app['db'].acquire() as conn:
             await check_existing(
-                conn,
-                request.app['redis'],
-                request.app['lock_manager'],
-                request.app['config'],
-                request.app['template_env_path'],
-                request.app['maintainer_rate_limiter'],
-                request.app['forge_rate_limiter'],
-                request.app['vcs_managers'],
+                conn=conn,
+                redis=request.app['redis'],
+                lock_manager=request.app['lock_manager'],
+                config=request.app['config'],
+                publish_worker=request.app['publish_worker'],
+                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+                forge_rate_limiter=request.app['forge_rate_limiter'],
+                vcs_managers=request.app['vcs_managers'],
                 dry_run=request.app['dry_run'],
                 differ_url=request.app['differ_url'],
                 external_url=request.app['external_url'],
@@ -1838,13 +1841,13 @@ async def refresh_proposal_status_request(request):
             status = await get_mp_status(mp)
             try:
                 await check_existing_mp(
-                    conn,
-                    request.app['redis'],
-                    request.app['lock_manager'],
-                    request.app['config'],
-                    request.app['template_env_path'],
-                    mp,
-                    status,
+                    conn=conn,
+                    redis=request.app['redis'],
+                    lock_manager=request.app['lock_manager'],
+                    config=request.app['config'],
+                    publish_worker=request.app['publish_worker'],
+                    mp=mp,
+                    status=status,
                     vcs_managers=request.app['vcs_managers'],
                     maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
                     dry_run=request.app['dry_run'],
@@ -1871,7 +1874,7 @@ async def autopublish_request(request):
             redis=request.app['redis'],
             lock_manager=request.app['lock_manager'],
             config=request.app['config'],
-            template_env_path=request.app['template_env_path'],
+            publish_worker=request.app['publish_worker'],
             maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
             vcs_managers=request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
@@ -2038,7 +2041,7 @@ async def process_queue_loop(
     redis,
     lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     forge_rate_limiter,
     dry_run,
@@ -2056,14 +2059,14 @@ async def process_queue_loop(
         cycle_start = datetime.utcnow()
         async with db.acquire() as conn:
             await check_existing(
-                conn,
-                redis,
-                lock_manager,
-                config,
-                template_env_path,
-                maintainer_rate_limiter,
-                forge_rate_limiter,
-                vcs_managers,
+                conn=conn,
+                redis=redis,
+                lock_manager=lock_manager,
+                config=config,
+                publish_worker=publish_worker,
+                maintainer_rate_limiter=maintainer_rate_limiter,
+                forge_rate_limiter=forge_rate_limiter,
+                vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -2075,7 +2078,7 @@ async def process_queue_loop(
                 redis=redis,
                 lock_manager=lock_manager,
                 config=config,
-                template_env_path=template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
@@ -2241,7 +2244,7 @@ async def check_existing_mp(
     redis,
     lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     mp,
     status,
     vcs_managers,
@@ -2731,8 +2734,7 @@ This merge proposal will be closed, since the branch has moved to %s.
         )
 
         try:
-            publish_result = await publish_one(
-                template_env_path=template_env_path,
+            publish_result = await publish_worker.publish_one(
                 campaign=last_run.campaign,
                 pkg=last_run.package,
                 command=last_run.command,
@@ -2909,11 +2911,12 @@ def iter_all_mps(
 
 
 async def check_existing(
+    *,
     conn,
     redis,
     lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     forge_rate_limiter: Dict[Forge, datetime],
     vcs_managers,
@@ -2957,13 +2960,13 @@ async def check_existing(
                 continue
         try:
             modified = await check_existing_mp(
-                conn,
-                redis,
-                lock_manager,
-                config,
-                template_env_path,
-                mp,
-                status,
+                conn=conn,
+                redis=redis,
+                lock_manager=lock_manager,
+                config=config,
+                publish_worker=publish_worker
+                mp=mp,
+                status=status,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 external_url=external_url,
@@ -3087,7 +3090,7 @@ async def listen_to_runner(
     redis,
     lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
@@ -3103,7 +3106,7 @@ async def listen_to_runner(
             await publish_from_policy(
                 conn=conn,
                 campaign_config=get_campaign_config(config, run.campaign),
-                template_env_path=template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 vcs_managers=vcs_managers,
                 run=run,
@@ -3300,7 +3303,7 @@ async def main(argv=None):
                 redis=redis,
                 lock_manager=lock_manager,
                 config=config,
-                template_env_path=args.template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=args.dry_run,
                 external_url=args.external_url,
@@ -3320,7 +3323,7 @@ async def main(argv=None):
                         redis=redis,
                         lock_manager=lock_manager,
                         config=config,
-                        template_env_path=args.template_env_path,
+                        publish_worker=publish_worker,
                         maintainer_rate_limiter=maintainer_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         dry_run=args.dry_run,
@@ -3339,7 +3342,7 @@ async def main(argv=None):
                     run_web_server(
                         args.listen_address,
                         args.port,
-                        template_env_path=args.template_env_path,
+                        publish_worker=publish_worker,
                         maintainer_rate_limiter=maintainer_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
@@ -3365,7 +3368,7 @@ async def main(argv=None):
                             redis=redis,
                             lock_manager=lock_manager,
                             config=config,
-                            template_env_path=args.template_env_path,
+                            publish_worker=publish_worker,
                             maintainer_rate_limiter=maintainer_rate_limiter,
                             vcs_managers=vcs_managers,
                             dry_run=args.dry_run,
