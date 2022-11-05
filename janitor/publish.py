@@ -1100,7 +1100,7 @@ async def publish_from_policy(
             require_binary_diff=require_binary_diff,
             maintainer_rate_limiter=maintainer_rate_limiter,
             result_tags=run.result_tags,
-            allow_create_proposal=run_allow_proposal_creation(campaign_config, run),
+            allow_create_proposal=run_sufficient_for_proposal(campaign_config, run.value),
             commit_message_template=(
                 campaign_config.merge_proposal.commit_message
                 if campaign_config.merge_proposal else None),
@@ -1191,11 +1191,13 @@ def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
     return urlutils.join_segment_parameters(base_url, params)
 
 
-def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bool:
-    if (run.value is not None and campaign_config.merge_proposal is not None
+def run_sufficient_for_proposal(campaign_config: Campaign, run_value: Optional[int]) -> bool:
+    if (run_value is not None and campaign_config.merge_proposal is not None
             and campaign_config.merge_proposal.value_threshold):
-        return (run.value >= campaign_config.merge_proposal.value_threshold)
+        return (run_value >= campaign_config.merge_proposal.value_threshold)
     else:
+        # Assume yes, if the run doesn't have an associated value or if there
+        # is no threshold configured.
         return True
 
 
@@ -1222,7 +1224,8 @@ async def publish_and_store(
     main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
 
     if allow_create_proposal is None:
-        allow_create_proposal = run_allow_proposal_creation(campaign_config, run)
+        allow_create_proposal = run_sufficient_for_proposal(
+            campaign_config, run.value)
 
     async with db.acquire() as conn:
         if run.main_branch_revision:
@@ -2112,6 +2115,7 @@ SELECT
     run.suite AS campaign,
     run.branch_url AS branch_url,
     run.command AS command,
+    run.value AS value,
     rb.role AS role,
     rb.remote_name AS remote_branch_name,
     rb.revision AS revision
@@ -2219,6 +2223,7 @@ async def check_existing_mp(
     mps_per_maintainer=None,
     possible_transports: Optional[List[Transport]] = None,
     check_only: bool = False,
+    close_below_threshold: bool = True,
 ) -> bool:
     async def update_proposal_status(
             mp, status, revision, package_name, target_branch_url,
@@ -2422,6 +2427,7 @@ async def check_existing_mp(
                         'id': None,
                         'branch_url': target_branch_url,
                         'revision': revision.decode('utf-8'),
+                        'value': None,
                     }
                     logging.warning('Going ahead with dummy old run')
             else:
@@ -2553,6 +2559,25 @@ applied independently.
         logger.info("%s: No maintainer email known.", mp.url)
         return False
 
+    campaign_config = get_campaign_config(config, mp_run['campaign'])
+
+    if close_below_threshold and not run_sufficient_for_proposal(
+            campaign_config, mp_run['value']):
+        await update_proposal_status(
+            mp, "abandoned", revision, package_name, target_branch_url,
+            campaign=mp_run['campaign'], can_be_merged=can_be_merged)
+        await post_comment(mp, """
+This merge proposal will be closed, since only trivial changes are left.
+""")
+        try:
+            await to_thread(mp.close)
+        except PermissionDenied as e:
+            logger.warning(
+                "Permission denied closing merge request %s: %s", mp.url, e
+            )
+            return False
+        return True
+
     try:
         (
             last_run_remote_branch_name,
@@ -2665,7 +2690,6 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
-        campaign_config = get_campaign_config(config, mp_run['campaign'])
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(conn, campaign_config, last_run, mp_run['role'])
 
