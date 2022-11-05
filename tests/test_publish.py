@@ -15,11 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import mock
+import sys
+
 
 from janitor.config import Config
 from janitor.publish import (
     create_app,
     find_campaign_by_branch_name,
+    PublishWorker,
 )
 
 from google.protobuf import text_format  # type: ignore
@@ -31,8 +35,7 @@ async def create_client(aiohttp_client):
     return await aiohttp_client(await create_app(
         vcs_managers={}, db=None,
         redis=FakeRedis(),
-        lock_manager=None, config=None,
-        differ_url="https://differ/"))
+        config=None))
 
 
 async def test_health(aiohttp_client):
@@ -64,3 +67,48 @@ campaign {
     assert find_campaign_by_branch_name(config, "fo") == ("bar", "main")
     assert find_campaign_by_branch_name(config, "bar") == (None, None)
     assert find_campaign_by_branch_name(config, "lala") == (None, None)
+
+
+class DummyVcsManager(object):
+
+    def get_branch_url(self, pkg, name):
+        return 'file://foo'
+
+
+async def test_publish_worker():
+    with mock.patch('janitor.publish.run_worker_process', return_value=(0, {})) as e:
+        pw = PublishWorker()
+        await pw.publish_one(
+            campaign='test-campaign', pkg='pkg', command='blah --foo',
+            codemod_result={}, main_branch_url='https://example.com/',
+            mode='attempt-push', role='main', revision=b'main-revid',
+            log_id='some-id', unchanged_id='unchanged-id',
+            derived_branch_name='branch-name',
+            maintainer_email='jelmer@jelmer.uk',
+            vcs_manager=DummyVcsManager())
+        e.assert_called_with(
+            [sys.executable, '-m', 'janitor.publish_one'], {
+                'dry-run': False,
+                'campaign': 'test-campaign',
+                'package': 'pkg',
+                'command': 'blah --foo',
+                'codemod_result': {},
+                'target_branch_url': 'https://example.com',
+                'source_branch_url': 'file://foo',
+                'existing_mp_url': None,
+                'derived_branch_name': 'branch-name',
+                'mode': 'attempt-push',
+                'role': 'main',
+                'log_id': 'some-id',
+                'unchanged_id': 'unchanged-id',
+                'require-binary-diff': False,
+                'allow_create_proposal': False,
+                'external_url': None,
+                'differ_url': None,
+                'derived-owner': None,
+                'revision': 'main-revid',
+                'reviewers': None,
+                'commit_message_template': None,
+                'title_template': None,
+                'tags': {}
+            })

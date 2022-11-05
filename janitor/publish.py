@@ -67,7 +67,6 @@ from silver_platter.utils import (
     BranchMissing,
     BranchUnavailable,
     BranchRateLimited,
-    full_branch_url,
 )
 
 from breezy.errors import PermissionDenied, UnexpectedHttpStatus
@@ -386,137 +385,166 @@ class BranchBusy(Exception):
         self.branch_url = branch_url
 
 
-async def publish_one(
-    *,
-    template_env_path: Optional[str],
-    campaign: str,
-    pkg: str,
-    command,
-    codemod_result,
-    main_branch_url: str,
-    mode: str,
-    role: str,
-    revision: bytes,
-    log_id: str,
-    unchanged_id: str,
-    derived_branch_name: str,
-    maintainer_email: str,
-    vcs_manager: VcsManager,
-    redis,
-    lock_manager,
-    maintainer_rate_limiter: RateLimiter,
-    dry_run: bool,
-    differ_url: str,
-    external_url: Optional[str] = None,
-    require_binary_diff: bool = False,
-    allow_create_proposal: bool = False,
-    reviewers: Optional[List[str]] = None,
-    derived_owner: Optional[str] = None,
-    result_tags: Optional[List[Tuple[str, bytes]]] = None,
-    commit_message_template: Optional[str] = None,
-    title_template: Optional[str] = None,
-    existing_mp_url: Optional[str] = None,
-) -> PublishResult:
-    """Publish a single run in some form.
+class WorkerInvalidResponse(Exception):
+    """Invalid response from worker."""
 
-    Args:
-      campaign: The campaign name
-      pkg: Package name
-      command: Command that was run
-    """
-    assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
-    local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (campaign, role))
-    if local_branch is None:
-        raise PublishFailure(
-            mode,
-            "result-branch-not-found",
-            "can not find local branch for %s / %s / %s (%s)"
-            % (pkg, campaign, role, log_id),
-        )
-    target_branch_url = main_branch_url.rstrip("/")
+    def __init__(self, output):
+        self.output = output
 
-    request = {
-        "dry-run": dry_run,
-        "campaign": campaign,
-        "package": pkg,
-        "command": command,
-        "codemod_result": codemod_result,
-        "target_branch_url": target_branch_url,
-        "source_branch_url": full_branch_url(local_branch),
-        "existing_mp_url": existing_mp_url,
-        "derived_branch_name": derived_branch_name,
-        "mode": mode,
-        "role": role,
-        "log_id": log_id,
-        "unchanged_id": unchanged_id,
-        "require-binary-diff": require_binary_diff,
-        "allow_create_proposal": allow_create_proposal,
-        "external_url": external_url,
-        "differ_url": differ_url,
-        "derived-owner": derived_owner,
-        "revision": revision.decode("utf-8"),
-        "reviewers": reviewers,
-        "commit_message_template": commit_message_template,
-        "title_template": title_template,
-    }
 
-    if result_tags:
-        request["tags"] = {n: r.decode("utf-8") for (n, r) in result_tags}
-    else:
-        request["tags"] = {}
+async def run_worker_process(args, request, *, encoding='utf-8'):
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE
+    )
 
-    args = [sys.executable, "-m", "janitor.publish_one"]
-
-    if template_env_path:
-        args.append('--template-env-path=%s' % template_env_path)
-
-    try:
-        async with await lock_manager.lock("publish:%s" % target_branch_url):
-            p = await asyncio.create_subprocess_exec(
-                *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.PIPE
-            )
-
-            (stdout, stderr) = await p.communicate(json.dumps(request).encode())
-    except aioredlock.LockError as e:
-        raise BranchBusy(target_branch_url) from e
+    (stdout, stderr) = await p.communicate(
+        json.dumps(request).encode(encoding))
 
     if p.returncode == 1:
         try:
-            response = json.loads(stdout.decode())
+            response = json.loads(stdout.decode(encoding))
         except json.JSONDecodeError as e:
-            raise PublishFailure(
-                mode, "publisher-invalid-response", stderr.decode()) from e
-        sys.stderr.write(stderr.decode())
-        raise PublishFailure(mode, response["code"], response["description"])
+            raise WorkerInvalidResponse(stderr.decode(encoding)) from e
+        sys.stderr.write(stderr.decode(encoding))
+        return 1, response
 
     if p.returncode == 0:
-        response = json.loads(stdout.decode())
+        return p.returncode, json.loads(stdout.decode(encoding))
 
-        proposal_url = response.get("proposal_url")
-        branch_name = response.get("branch_name")
-        is_new = response.get("is_new")
-        description = response.get('description')
+    raise WorkerInvalidResponse(stderr.decode(encoding))
 
-        if proposal_url and is_new:
-            await redis.publish(
-                'merge-proposal',
-                json.dumps({
-                    "url": proposal_url, "status": "open", "package": pkg,
-                    "campaign": campaign,
-                    "target_branch_url": main_branch_url.rstrip("/")}))
 
-            merge_proposal_count.labels(status="open").inc()
-            maintainer_rate_limiter.inc(maintainer_email)
-            open_proposal_count.labels(maintainer=maintainer_email).inc()
+class PublishWorker(object):
 
-        return PublishResult(
-            proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
-            description=description)
+    def __init__(self, *,
+                 lock_manager=None,
+                 redis=None,
+                 template_env_path: Optional[str] = None,
+                 external_url: Optional[str] = None,
+                 differ_url: Optional[str] = None):
+        self.template_env_path = template_env_path
+        self.external_url = external_url
+        self.differ_url = differ_url
+        self.lock_manager = lock_manager
+        self.redis = redis
 
-    raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
+    async def publish_one(
+        self,
+        *,
+        campaign: str,
+        pkg: str,
+        command,
+        main_branch_url: str,
+        mode: str,
+        role: str,
+        revision: bytes,
+        log_id: str,
+        unchanged_id: str,
+        derived_branch_name: str,
+        maintainer_email: str,
+        vcs_manager: VcsManager,
+        maintainer_rate_limiter: Optional[RateLimiter] = None,
+        dry_run: bool = False,
+        require_binary_diff: bool = False,
+        allow_create_proposal: bool = False,
+        reviewers: Optional[List[str]] = None,
+        derived_owner: Optional[str] = None,
+        result_tags: Optional[List[Tuple[str, bytes]]] = None,
+        commit_message_template: Optional[str] = None,
+        title_template: Optional[str] = None,
+        codemod_result=None,
+        existing_mp_url: Optional[str] = None,
+    ) -> PublishResult:
+        """Publish a single run in some form.
+
+        Args:
+          campaign: The campaign name
+          pkg: Package name
+          command: Command that was run
+        """
+        assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
+        local_branch_url = vcs_manager.get_branch_url(pkg, "%s/%s" % (campaign, role))
+        target_branch_url = main_branch_url.rstrip("/")
+
+        request = {
+            "dry-run": dry_run,
+            "campaign": campaign,
+            "package": pkg,
+            "command": command,
+            "codemod_result": codemod_result,
+            "target_branch_url": target_branch_url,
+            "source_branch_url": local_branch_url,
+            "existing_mp_url": existing_mp_url,
+            "derived_branch_name": derived_branch_name,
+            "mode": mode,
+            "role": role,
+            "log_id": log_id,
+            "unchanged_id": unchanged_id,
+            "require-binary-diff": require_binary_diff,
+            "allow_create_proposal": allow_create_proposal,
+            "external_url": self.external_url,
+            "differ_url": self.differ_url,
+            "derived-owner": derived_owner,
+            "revision": revision.decode("utf-8"),
+            "reviewers": reviewers,
+            "commit_message_template": commit_message_template,
+            "title_template": title_template,
+        }
+
+        if result_tags:
+            request["tags"] = {n: r.decode("utf-8") for (n, r) in result_tags}
+        else:
+            request["tags"] = {}
+
+        args = [sys.executable, "-m", "janitor.publish_one"]
+
+        if self.template_env_path:
+            args.append('--template-env-path=%s' % self.template_env_path)
+
+        try:
+            async with AsyncExitStack() as es:
+                if self.lock_manager:
+                    await es.enter_async_context(
+                        self.lock_manager.lock("publish:%s" % target_branch_url))
+                try:
+                    returncode, response = await run_worker_process(args, request)
+                except WorkerInvalidResponse as e:
+                    raise PublishFailure(
+                        mode, "publisher-invalid-response", e.output) from e
+        except aioredlock.LockError as e:
+            raise BranchBusy(target_branch_url) from e
+
+        if returncode == 1:
+            raise PublishFailure(mode, response["code"], response["description"])
+
+        if returncode == 0:
+            proposal_url = response.get("proposal_url")
+            branch_name = response.get("branch_name")
+            is_new = response.get("is_new")
+            description = response.get('description')
+
+            if proposal_url and is_new:
+                if self.redis:
+                    await self.redis.publish(
+                        'merge-proposal',
+                        json.dumps({
+                            "url": proposal_url, "status": "open", "package": pkg,
+                            "campaign": campaign,
+                            "target_branch_url": main_branch_url.rstrip("/")}))
+
+                merge_proposal_count.labels(status="open").inc()
+                if maintainer_rate_limiter:
+                    maintainer_rate_limiter.inc(maintainer_email)
+                open_proposal_count.labels(maintainer=maintainer_email).inc()
+
+            return PublishResult(
+                proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
+                description=description)
+
+        raise AssertionError
 
 
 def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
@@ -529,9 +557,8 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 
 async def consider_publish_run(
-        conn: asyncpg.Connection, *, config: Config, template_env_path: str,
-        vcs_managers, maintainer_rate_limiter, external_url: Optional[str], differ_url: str,
-        redis, lock_manager,
+        conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
+        vcs_managers, maintainer_rate_limiter,
         run, maintainer_email,
         unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
@@ -598,14 +625,14 @@ async def consider_publish_run(
             continue
         actual_modes[role] = await publish_from_policy(
             conn=conn, campaign_config=campaign_config,
-            template_env_path=template_env_path,
+            publish_worker=publish_worker,
             maintainer_rate_limiter=maintainer_rate_limiter,
             vcs_managers=vcs_managers, run=run, role=role,
             maintainer_email=maintainer_email, main_branch_url=run.branch_url,
-            redis=redis, lock_manager=lock_manager, mode=publish_mode,
+            mode=publish_mode,
             max_frequency_days=max_frequency_days, command=command,
             dry_run=dry_run,
-            external_url=external_url, differ_url=differ_url,
+            redis=redis,
             require_binary_diff=require_binary_diff,
             force=False,
             requestor="publisher (publish pending)",
@@ -686,14 +713,11 @@ async def publish_pending_ready(
     *,
     db,
     redis,
-    lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     reviewed_only: bool = False,
     push_limit: Optional[int] = None,
     require_binary_diff: bool = False,
@@ -718,13 +742,10 @@ async def publish_pending_ready(
             change_set_state=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
-                conn, config=config,
-                template_env_path=template_env_path,
+                conn, redis=redis, config=config,
+                publish_worker=publish_worker,
                 vcs_managers=vcs_managers,
                 maintainer_rate_limiter=maintainer_rate_limiter,
-                external_url=external_url, differ_url=differ_url,
-                redis=redis,
-                lock_manager=lock_manager,
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
@@ -951,22 +972,19 @@ async def store_publish(
 async def publish_from_policy(
     *,
     conn: asyncpg.Connection,
+    redis,
     campaign_config: Campaign,
-    template_env_path: str,
+    publish_worker: PublishWorker,
     maintainer_rate_limiter: RateLimiter,
     vcs_managers: Dict[str, VcsManager],
     run: state.Run,
     role: str,
     maintainer_email: str,
     main_branch_url: str,
-    redis,
-    lock_manager,
     mode: str,
     max_frequency_days: Optional[int],
     command: str,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     require_binary_diff: bool = False,
     force: bool = False,
     requestor: Optional[str] = None,
@@ -1066,8 +1084,7 @@ async def publish_from_policy(
         "Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode
     )
     try:
-        publish_result = await publish_one(
-            template_env_path=template_env_path,
+        publish_result = await publish_worker.publish_one(
             campaign=run.campaign,
             pkg=run.package,
             command=run.command,
@@ -1081,15 +1098,11 @@ async def publish_from_policy(
             derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
             maintainer_email=maintainer_email,
             vcs_manager=vcs_managers[run.vcs_type],
-            redis=redis,
-            lock_manager=lock_manager,
             dry_run=dry_run,
-            external_url=external_url,
-            differ_url=differ_url,
             require_binary_diff=require_binary_diff,
             maintainer_rate_limiter=maintainer_rate_limiter,
             result_tags=run.result_tags,
-            allow_create_proposal=run_allow_proposal_creation(campaign_config, run),
+            allow_create_proposal=run_sufficient_for_proposal(campaign_config, run.value),
             commit_message_template=(
                 campaign_config.merge_proposal.commit_message
                 if campaign_config.merge_proposal else None),
@@ -1180,11 +1193,13 @@ def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
     return urlutils.join_segment_parameters(base_url, params)
 
 
-def run_allow_proposal_creation(campaign_config: Campaign, run: state.Run) -> bool:
-    if (run.value is not None and campaign_config.merge_proposal is not None
+def run_sufficient_for_proposal(campaign_config: Campaign, run_value: Optional[int]) -> bool:
+    if (run_value is not None and campaign_config.merge_proposal is not None
             and campaign_config.merge_proposal.value_threshold):
-        return (run.value >= campaign_config.merge_proposal.value_threshold)
+        return (run_value >= campaign_config.merge_proposal.value_threshold)
     else:
+        # Assume yes, if the run doesn't have an associated value or if there
+        # is no threshold configured.
         return True
 
 
@@ -1192,9 +1207,8 @@ async def publish_and_store(
     *,
     db: asyncpg.Connection,
     redis,
-    lock_manager,
     campaign_config: Campaign,
-    template_env_path: str,
+    publish_worker: PublishWorker,
     publish_id: str,
     run: state.Run,
     mode: str,
@@ -1203,8 +1217,6 @@ async def publish_and_store(
     vcs_managers: Dict[str, VcsManager],
     maintainer_rate_limiter: RateLimiter,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     allow_create_proposal: bool = True,
     require_binary_diff: bool = False,
     requestor: Optional[str] = None,
@@ -1214,7 +1226,8 @@ async def publish_and_store(
     main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
 
     if allow_create_proposal is None:
-        allow_create_proposal = run_allow_proposal_creation(campaign_config, run)
+        allow_create_proposal = run_sufficient_for_proposal(
+            campaign_config, run.value)
 
     async with db.acquire() as conn:
         if run.main_branch_revision:
@@ -1228,8 +1241,7 @@ async def publish_and_store(
             unchanged_run_id = None
 
         try:
-            publish_result = await publish_one(
-                template_env_path=template_env_path,
+            publish_result = await publish_worker.publish_one(
                 campaign=run.campaign,
                 pkg=run.package,
                 command=run.command,
@@ -1244,12 +1256,8 @@ async def publish_and_store(
                 maintainer_email=maintainer_email,
                 vcs_manager=vcs_managers[run.vcs_type],
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
-                redis=redis,
-                lock_manager=lock_manager,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
@@ -1523,14 +1531,11 @@ async def consider_request(request):
             else:
                 return
             await consider_publish_run(
-                conn, config=request.app['config'],
-                template_env_path=request.app['template_env_path'],
+                conn, redis=request.app['redis'],
+                config=request.app['config'],
+                publish_worker=request.app['publish_worker'],
                 vcs_managers=request.app['vcs_managers'],
                 maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
-                external_url=request.app['external_url'],
-                differ_url=request.app['differ_url'],
-                redis=request.app['redis'],
-                lock_manager=request.app['lock_manager'],
                 run=run,
                 command=command,
                 maintainer_email=maintainer_email,
@@ -1641,9 +1646,8 @@ async def publish_request(request):
             publish_and_store(
                 db=request.app['db'],
                 redis=request.app['redis'],
-                lock_manager=request.app['lock_manager'],
                 campaign_config=get_campaign_config(request.app['config'], run.campaign),
-                template_env_path=request.app['template_env_path'],
+                publish_worker=request.app['publish_worker'],
                 publish_id=publish_id,
                 run=run,
                 mode=mode,
@@ -1652,8 +1656,6 @@ async def publish_request(request):
                 vcs_managers=vcs_managers,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=dry_run,
-                external_url=request.app['external_url'],
-                differ_url=request.app['differ_url'],
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
@@ -1717,12 +1719,9 @@ async def create_app(
     vcs_managers: Dict[str, VcsManager],
     db: asyncpg.pool.Pool,
     redis,
-    lock_manager,
     config,
-    differ_url: str,
-    template_env_path: Optional[str] = None,
+    publish_worker: Optional[PublishWorker] = None,
     dry_run: bool = False,
-    external_url: Optional[str] = None,
     forge_rate_limiter: Optional[Dict[str, datetime]] = None,
     maintainer_rate_limiter: Optional[RateLimiter] = None,
     require_binary_diff: bool = False,
@@ -1734,14 +1733,11 @@ async def create_app(
         trailing_slash_redirect, state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['gpg'] = gpg.Context(armor=True)
-    app['template_env_path'] = template_env_path
+    app['publish_worker'] = publish_worker
     app['vcs_managers'] = vcs_managers
     app['db'] = db
     app['redis'] = redis
-    app['lock_manager'] = lock_manager
     app['config'] = config
-    app['external_url'] = external_url
-    app['differ_url'] = differ_url
     if maintainer_rate_limiter is None:
         maintainer_rate_limiter = NonRateLimiter()
     app['maintainer_rate_limiter'] = maintainer_rate_limiter
@@ -1805,17 +1801,14 @@ async def scan_request(request):
     async def scan():
         async with request.app['db'].acquire() as conn:
             await check_existing(
-                conn,
-                request.app['redis'],
-                request.app['lock_manager'],
-                request.app['config'],
-                request.app['template_env_path'],
-                request.app['maintainer_rate_limiter'],
-                request.app['forge_rate_limiter'],
-                request.app['vcs_managers'],
+                conn=conn,
+                redis=request.app['redis'],
+                config=request.app['config'],
+                publish_worker=request.app['publish_worker'],
+                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+                forge_rate_limiter=request.app['forge_rate_limiter'],
+                vcs_managers=request.app['vcs_managers'],
                 dry_run=request.app['dry_run'],
-                differ_url=request.app['differ_url'],
-                external_url=request.app['external_url'],
                 modify_limit=request.app['modify_mp_limit'],
             )
 
@@ -1838,18 +1831,15 @@ async def refresh_proposal_status_request(request):
             status = await get_mp_status(mp)
             try:
                 await check_existing_mp(
-                    conn,
-                    request.app['redis'],
-                    request.app['lock_manager'],
-                    request.app['config'],
-                    request.app['template_env_path'],
-                    mp,
-                    status,
+                    conn=conn,
+                    redis=request.app['redis'],
+                    config=request.app['config'],
+                    publish_worker=request.app['publish_worker'],
+                    mp=mp,
+                    status=status,
                     vcs_managers=request.app['vcs_managers'],
                     maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
                     dry_run=request.app['dry_run'],
-                    differ_url=request.app['differ_url'],
-                    external_url=request.app['external_url'],
                 )
             except NoRunForMergeProposal as e:
                 logger.warning(
@@ -1869,14 +1859,11 @@ async def autopublish_request(request):
         await publish_pending_ready(
             db=request.app['db'],
             redis=request.app['redis'],
-            lock_manager=request.app['lock_manager'],
             config=request.app['config'],
-            template_env_path=request.app['template_env_path'],
+            publish_worker=request.app['publish_worker'],
             maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
             vcs_managers=request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
-            external_url=request.app['external_url'],
-            differ_url=request.app['differ_url'],
             push_limit=request.app['push_limit'],
             reviewed_only=reviewed_only,
             require_binary_diff=request.app['require_binary_diff'],
@@ -2036,16 +2023,13 @@ async def process_queue_loop(
     *,
     db,
     redis,
-    lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     forge_rate_limiter,
     dry_run,
     vcs_managers,
     interval,
-    external_url: Optional[str],
-    differ_url: str,
     auto_publish: bool = True,
     reviewed_only: bool = False,
     push_limit: Optional[int] = None,
@@ -2056,31 +2040,25 @@ async def process_queue_loop(
         cycle_start = datetime.utcnow()
         async with db.acquire() as conn:
             await check_existing(
-                conn,
-                redis,
-                lock_manager,
-                config,
-                template_env_path,
-                maintainer_rate_limiter,
-                forge_rate_limiter,
-                vcs_managers,
+                conn=conn,
+                redis=redis,
+                config=config,
+                publish_worker=publish_worker,
+                maintainer_rate_limiter=maintainer_rate_limiter,
+                forge_rate_limiter=forge_rate_limiter,
+                vcs_managers=vcs_managers,
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 modify_limit=modify_mp_limit,
             )
         if auto_publish:
             await publish_pending_ready(
                 db=db,
                 redis=redis,
-                lock_manager=lock_manager,
                 config=config,
-                template_env_path=template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 reviewed_only=reviewed_only,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
@@ -2142,6 +2120,7 @@ SELECT
     run.suite AS campaign,
     run.branch_url AS branch_url,
     run.command AS command,
+    run.value AS value,
     rb.role AS role,
     rb.remote_name AS remote_branch_name,
     rb.revision AS revision
@@ -2239,19 +2218,17 @@ def find_campaign_by_branch_name(config, branch_name):
 async def check_existing_mp(
     conn,
     redis,
-    lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     mp,
     status,
     vcs_managers,
     maintainer_rate_limiter,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     mps_per_maintainer=None,
     possible_transports: Optional[List[Transport]] = None,
     check_only: bool = False,
+    close_below_threshold: bool = True,
 ) -> bool:
     async def update_proposal_status(
             mp, status, revision, package_name, target_branch_url,
@@ -2305,6 +2282,13 @@ async def check_existing_mp(
                 "merged_at": str(merged_at),
                 "campaign": campaign,
             }))
+
+    async def post_comment(mp, comment):
+        try:
+            await to_thread(mp.post_comment, comment)
+        except PermissionDenied as e:
+            logger.warning(
+                "Permission denied posting comment to %s: %s", mp.url, e)
 
     old_status: Optional[str]
     maintainer_email: Optional[str]
@@ -2448,6 +2432,7 @@ async def check_existing_mp(
                         'id': None,
                         'branch_url': target_branch_url,
                         'revision': revision.decode('utf-8'),
+                        'value': None,
                     }
                     logging.warning('Going ahead with dummy old run')
             else:
@@ -2486,24 +2471,15 @@ async def check_existing_mp(
             mp.url,
         )
         if not dry_run:
-            try:
-                await to_thread(
-                    mp.post_comment,
-                    """
+            await post_comment(mp, """
 This merge proposal will be closed, since the package has been removed from the
 archive.
-"""
-                )
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied posting comment to %s: %s", mp.url, e
-                )
+""")
             try:
                 await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e
-                )
+                    "Permission denied closing merge request %s: %s", mp.url, e)
                 return False
             return True
 
@@ -2517,18 +2493,10 @@ archive.
             await update_proposal_status(
                 mp, "applied", revision, package_name, target_branch_url,
                 mp_run['campaign'], can_be_merged=can_be_merged)
-            try:
-                await to_thread(
-                    mp.post_comment,
-                    """
+            await post_comment(mp, """
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
-"""
-                )
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied posting comment to %s: %s", mp.url, e
-                )
+""")
             try:
                 await to_thread(mp.close)
             except PermissionDenied as e:
@@ -2595,6 +2563,25 @@ applied independently.
         logger.info("%s: No maintainer email known.", mp.url)
         return False
 
+    campaign_config = get_campaign_config(config, mp_run['campaign'])
+
+    if close_below_threshold and not run_sufficient_for_proposal(
+            campaign_config, mp_run['value']):
+        await update_proposal_status(
+            mp, "abandoned", revision, package_name, target_branch_url,
+            campaign=mp_run['campaign'], can_be_merged=can_be_merged)
+        await post_comment(mp, """
+This merge proposal will be closed, since only trivial changes are left.
+""")
+        try:
+            await to_thread(mp.close)
+        except PermissionDenied as e:
+            logger.warning(
+                "Permission denied closing merge request %s: %s", mp.url, e
+            )
+            return False
+        return True
+
     try:
         (
             last_run_remote_branch_name,
@@ -2626,7 +2613,9 @@ applied independently.
         # the default branch name.
         if not dry_run and mp_remote_branch_name is not None:
             try:
-                mp.set_target_branch_name(last_run_remote_branch_name or "")
+                await to_thread(
+                    mp.set_target_branch_name,
+                    last_run_remote_branch_name or "")
             except NotImplementedError:
                 logger.info(
                     "%s: Closing merge proposal, since branch for role "
@@ -2639,15 +2628,10 @@ applied independently.
                 await update_proposal_status(
                     mp, "abandoned", revision, package_name, target_branch_url,
                     campaign=mp_run['campaign'], can_be_merged=can_be_merged)
-                try:
-                    await to_thread(mp.post_comment, """
+                await post_comment(mp, """
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
 """ % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
-                except PermissionDenied as e:
-                    logger.warning(
-                        "Permission denied posting comment to %s: %s", mp.url, e
-                    )
                 try:
                     await to_thread(mp.close)
                 except PermissionDenied as e:
@@ -2678,25 +2662,16 @@ has changed from %s to %s.
             await update_proposal_status(
                 mp, "abandoned", revision, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged)
-            try:
-                await to_thread(
-                    mp.post_comment,
-                    """
+            await post_comment(mp, """
 This merge proposal will be closed, since the branch has moved to %s.
-"""
-                    % (bzr_to_browse_url(last_run.branch_url),)
-                )
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied posting comment to %s: %s", mp.url, e
-                )
+""" % (bzr_to_browse_url(last_run.branch_url),))
             try:
                 await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e
-                )
+                    "Permission denied closing merge request %s: %s", mp.url, e)
                 return False
+
         return False
 
     if last_run.id != mp_run['id']:
@@ -2719,7 +2694,6 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
-        campaign_config = get_campaign_config(config, mp_run['campaign'])
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(conn, campaign_config, last_run, mp_run['role'])
 
@@ -2731,8 +2705,7 @@ This merge proposal will be closed, since the branch has moved to %s.
         )
 
         try:
-            publish_result = await publish_one(
-                template_env_path=template_env_path,
+            publish_result = await publish_worker.publish_one(
                 campaign=last_run.campaign,
                 pkg=last_run.package,
                 command=last_run.command,
@@ -2747,12 +2720,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 maintainer_email=maintainer_email,
                 vcs_manager=vcs_managers[last_run.vcs_type],
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 require_binary_diff=False,
                 allow_create_proposal=True,
-                redis=redis,
-                lock_manager=lock_manager,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
@@ -2785,18 +2754,10 @@ This merge proposal will be closed, since the branch has moved to %s.
                         mp, "applied", revision, package_name,
                         target_branch_url, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged)
-                    try:
-                        await to_thread(
-                            mp.post_comment,
-                            """
+                    await post_comment(mp, """
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
-"""
-                        )
-                    except PermissionDenied as f:
-                        logger.warning(
-                            "Permission denied posting comment to %s: %s", mp.url, f
-                        )
+""")
                     try:
                         await to_thread(mp.close)
                     except PermissionDenied as f:
@@ -2820,15 +2781,15 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
-                    last_run.change_set,
-                    last_run.package,
-                    campaign_config.branch_name,
-                    last_run_base_revision,
-                    last_run_revision,
-                    mp_run['role'],
-                    e.mode,
-                    code,
-                    description,
+                    change_set_id=last_run.change_set,
+                    package=last_run.package,
+                    branch_name=campaign_config.branch_name,
+                    main_branch_revision=last_run_base_revision,
+                    revision=last_run_revision,
+                    role=mp_run['role'],
+                    mode=e.mode,
+                    result_code=code,
+                    description=description,
                     merge_proposal_url=mp.url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
@@ -2837,14 +2798,14 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
-                    last_run.change_set,
-                    last_run.package,
-                    publish_result.branch_name,
-                    last_run_base_revision,
-                    last_run_revision,
-                    mp_run['role'],
-                    MODE_PROPOSE,
-                    "success",
+                    change_set_id=last_run.change_set,
+                    package=last_run.package,
+                    branch_name=publish_result.branch_name,
+                    main_branch_revision=last_run_base_revision,
+                    revision=last_run_revision,
+                    role=mp_run['role'],
+                    mode=MODE_PROPOSE,
+                    result_code="success",
                     description=(publish_result.description or "Succesfully updated"),
                     merge_proposal_url=publish_result.proposal_url,
                     target_branch_url=target_branch_url,
@@ -2863,7 +2824,7 @@ applied independently.
         # be refreshed, so only check it if we haven't made any other
         # changes.
         if can_be_merged is False:
-            logger.info("%s is conflicted. Rescheduling.", mp.url)
+            logger.info("%s can not be merged (conflict?). Rescheduling.", mp.url)
             if not dry_run:
                 try:
                     await do_schedule(
@@ -2909,17 +2870,15 @@ def iter_all_mps(
 
 
 async def check_existing(
+    *,
     conn,
     redis,
-    lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     forge_rate_limiter: Dict[Forge, datetime],
     vcs_managers,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     modify_limit=None,
     unexpected_limit: int = 5,
 ):
@@ -2957,17 +2916,14 @@ async def check_existing(
                 continue
         try:
             modified = await check_existing_mp(
-                conn,
-                redis,
-                lock_manager,
-                config,
-                template_env_path,
-                mp,
-                status,
+                conn=conn,
+                redis=redis,
+                config=config,
+                publish_worker=publish_worker,
+                mp=mp,
+                status=status,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 possible_transports=possible_transports,
                 mps_per_maintainer=mps_per_maintainer,
@@ -3085,14 +3041,11 @@ async def listen_to_runner(
     *,
     db,
     redis,
-    lock_manager,
     config,
-    template_env_path,
+    publish_worker,
     maintainer_rate_limiter,
     vcs_managers,
     dry_run: bool,
-    external_url: Optional[str],
-    differ_url: str,
     require_binary_diff: bool = False,
 ):
     async def process_run(conn, run, maintainer_email, branch_url):
@@ -3103,21 +3056,18 @@ async def listen_to_runner(
             await publish_from_policy(
                 conn=conn,
                 campaign_config=get_campaign_config(config, run.campaign),
-                template_env_path=template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 vcs_managers=vcs_managers,
                 run=run,
+                redis=redis,
                 role=role,
                 maintainer_email=maintainer_email,
                 main_branch_url=branch_url,
-                redis=redis,
-                lock_manager=lock_manager,
                 mode=mode,
                 max_frequency_days=max_frequency_days,
                 command=command,
                 dry_run=dry_run,
-                external_url=external_url,
-                differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
                 force=True,
                 requestor="runner",
@@ -3285,6 +3235,7 @@ async def main(argv=None):
 
     forge_rate_limiter: Dict[Forge, datetime] = {}
 
+
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
     async with AsyncExitStack() as stack:
@@ -3294,17 +3245,21 @@ async def main(argv=None):
         lock_manager = aioredlock.Aioredlock([config.redis_location])
         stack.push_async_callback(lock_manager.destroy)
 
+        publish_worker = PublishWorker(
+            template_env_path=args.template_env_path,
+            external_url=args.external_url,
+            differ_url=args.differ_url,
+            lock_manager=lock_manager,
+            redis=redis)
+
         if args.once:
             await publish_pending_ready(
                 db=db,
                 redis=redis,
-                lock_manager=lock_manager,
                 config=config,
-                template_env_path=args.template_env_path,
+                publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 dry_run=args.dry_run,
-                external_url=args.external_url,
-                differ_url=args.differ_url,
                 vcs_managers=vcs_managers,
                 reviewed_only=args.reviewed_only,
                 require_binary_diff=args.require_binary_diff,
@@ -3318,17 +3273,14 @@ async def main(argv=None):
                     process_queue_loop(
                         db=db,
                         redis=redis,
-                        lock_manager=lock_manager,
                         config=config,
-                        template_env_path=args.template_env_path,
+                        publish_worker=publish_worker,
                         maintainer_rate_limiter=maintainer_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
                         interval=args.interval,
                         auto_publish=not args.no_auto_publish,
-                        external_url=args.external_url,
-                        differ_url=args.differ_url,
                         reviewed_only=args.reviewed_only,
                         push_limit=args.push_limit,
                         modify_mp_limit=args.modify_mp_limit,
@@ -3339,15 +3291,12 @@ async def main(argv=None):
                     run_web_server(
                         args.listen_address,
                         args.port,
-                        template_env_path=args.template_env_path,
+                        publish_worker=publish_worker,
                         maintainer_rate_limiter=maintainer_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
                         db=db, redis=redis, config=config,
-                        lock_manager=lock_manager,
                         dry_run=args.dry_run,
-                        external_url=args.external_url,
-                        differ_url=args.differ_url,
                         require_binary_diff=args.require_binary_diff,
                         modify_mp_limit=args.modify_mp_limit,
                         push_limit=args.push_limit,
@@ -3363,14 +3312,11 @@ async def main(argv=None):
                         listen_to_runner(
                             db=db,
                             redis=redis,
-                            lock_manager=lock_manager,
                             config=config,
-                            template_env_path=args.template_env_path,
+                            publish_worker=publish_worker,
                             maintainer_rate_limiter=maintainer_rate_limiter,
                             vcs_managers=vcs_managers,
                             dry_run=args.dry_run,
-                            external_url=args.external_url,
-                            differ_url=args.differ_url,
                             require_binary_diff=args.require_binary_diff,
                         )
                     )
