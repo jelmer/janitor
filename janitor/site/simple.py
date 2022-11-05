@@ -21,6 +21,7 @@ import asyncio
 from datetime import datetime
 import functools
 import logging
+import json
 import os
 import re
 import shutil
@@ -387,28 +388,30 @@ async def create_app(
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
-            ch = (await app['redis'].subscribe('publish'))[0]
-            while (await ch.wait_message()):
-                app.topic_notifications.publish(["publish", await ch.get_json()])
+            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
+                await ch.subscribe('publish')
+                async for msg in ch.listen():
+                    app.topic_notifications.publish(["publish", json.loads(msg)])
 
         async def listen_to_publisher_mp(app):
-            ch = (await app['redis'].subscribe('merge-proposal'))[0]
-            while (await ch.wait_message()):
-                app.topic_notifications.publish(["merge-proposal", await ch.get_json()])
+            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
+                await ch.subscribe('merge-proposal')
+                async for msg in ch.listen():
+                    app.topic_notifications.publish(["merge-proposal", json.loads(msg)])
 
         app['runner_status'] = None
 
         async def listen_to_queue(app):
-            ch = (await app['redis'].subscribe('queue'))[0]
-            while (await ch.wait_message()):
-                msg = await ch.get_json()
-                app['runner_status'] = msg
-                app.topic_notifications.publish(["queue", msg])
+            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
+                await ch.subscribe('queue')
+                async for msg in ch.listen():
+                    app.topic_notifications.publish(["queue", json.loads(msg)])
 
         async def listen_to_result(app):
-            ch = (await app['redis'].subscribe('result'))[0]
-            while (await ch.wait_message()):
-                app.topic_notifications.publish(["result", await ch.get_json()])
+            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
+                await ch.subscribe('result')
+                async for msg in ch.listen():
+                    app.topic_notifications.publish(["result", json.loads(msg)])
 
         for cb, title in [
             (listen_to_publisher_publish, 'publisher publish listening'),
