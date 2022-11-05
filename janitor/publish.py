@@ -2677,7 +2677,7 @@ applied independently.
                         campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
-""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run):
+""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run)
                 except PermissionDenied:
                     return False
                 return True
