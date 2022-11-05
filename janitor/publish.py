@@ -508,7 +508,7 @@ class PublishWorker(object):
             async with AsyncExitStack() as es:
                 if self.lock_manager:
                     await es.enter_async_context(
-                        self.lock_manager.lock("publish:%s" % target_branch_url))
+                        await self.lock_manager.lock("publish:%s" % target_branch_url))
                 try:
                     returncode, response = await run_worker_process(args, request)
                 except WorkerInvalidResponse as e:
