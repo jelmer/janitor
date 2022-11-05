@@ -22,6 +22,7 @@ from contextlib import ExitStack
 import json
 import logging
 import os
+from redis.asyncio import Redis
 import sys
 from tempfile import TemporaryDirectory
 import traceback
@@ -601,57 +602,55 @@ async def run_web_server(app, listen_addr, port, tracer):
         await runner.cleanup()
 
 
-async def listen_to_runner(redis_location, app):
-    from redis.asyncio import Redis
-
-    redis = Redis.from_url(redis_location)
-    channel = (await redis.pubsub().subscribe('result'))[0]
+async def listen_to_runner(redis, app):
     try:
-        while (await channel.wait_message()):
-            result = await channel.get_json()
-            if result["code"] != "success":
-                continue
-            async with app['pool'].acquire() as conn:
-                to_precache = []
-                if result["revision"] == result["main_branch_revision"]:
-                    for row in await conn.fetch(
-                        "select id from run where result_code = 'success' "
-                        "and main_branch_revision = $1",
-                        result["revision"],
-                    ):
-                        to_precache.append((result["log_id"], row[0]))
-                else:
-                    unchanged_run = await get_unchanged_run(
-                        conn,
-                        result["package"],
-                        result["main_branch_revision"])
-                    if unchanged_run:
-                        to_precache.append((unchanged_run['id'], result["log_id"]))
-            # This could be concurrent, but risks hitting resource constraints
-            # for large packages.
-            for old_id, new_id in to_precache:
-                try:
-                    await precache(app, old_id, new_id)
-                except ArtifactsMissing as e:
-                    logging.info(
-                        "Artifacts missing while precaching diff for "
-                        "new result %s: %r",
-                        result["log_id"],
-                        e,
-                    )
-                except ArtifactRetrievalTimeout as e:
-                    logging.info("Timeout retrieving artifacts: %s", e)
-                except DiffCommandTimeout as e:
-                    logging.info("Timeout diffing artifacts: %s", e)
-                except DiffCommandMemoryError as e:
-                    logging.info("Memory error diffing artifacts: %s", e)
-                except DiffCommandError as e:
-                    logging.info("Error diff artifacts: %s", e)
-                except Exception as e:
-                    logging.info(
-                        "Error precaching diff for %s: %r", result["log_id"], e
-                    )
-                    traceback.print_exc()
+        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
+            await ch.subscribe('result')
+            async for msg in ch.listen():
+                result = json.loads(msg)
+                if result["code"] != "success":
+                    continue
+                async with app['pool'].acquire() as conn:
+                    to_precache = []
+                    if result["revision"] == result["main_branch_revision"]:
+                        for row in await conn.fetch(
+                            "select id from run where result_code = 'success' "
+                            "and main_branch_revision = $1",
+                            result["revision"],
+                        ):
+                            to_precache.append((result["log_id"], row[0]))
+                    else:
+                        unchanged_run = await get_unchanged_run(
+                            conn,
+                            result["package"],
+                            result["main_branch_revision"])
+                        if unchanged_run:
+                            to_precache.append((unchanged_run['id'], result["log_id"]))
+                # This could be concurrent, but risks hitting resource constraints
+                # for large packages.
+                for old_id, new_id in to_precache:
+                    try:
+                        await precache(app, old_id, new_id)
+                    except ArtifactsMissing as e:
+                        logging.info(
+                            "Artifacts missing while precaching diff for "
+                            "new result %s: %r",
+                            result["log_id"],
+                            e,
+                        )
+                    except ArtifactRetrievalTimeout as e:
+                        logging.info("Timeout retrieving artifacts: %s", e)
+                    except DiffCommandTimeout as e:
+                        logging.info("Timeout diffing artifacts: %s", e)
+                    except DiffCommandMemoryError as e:
+                        logging.info("Memory error diffing artifacts: %s", e)
+                    except DiffCommandError as e:
+                        logging.info("Error diff artifacts: %s", e)
+                    except Exception as e:
+                        logging.info(
+                            "Error precaching diff for %s: %r", result["log_id"], e
+                        )
+                        traceback.print_exc()
     finally:
         await redis.close()
 
@@ -704,6 +703,7 @@ async def main(argv=None):
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
 
+    redis = Redis.from_url(config.redis_location)
     async with state.create_pool(config.database_location) as pool:
         app = DifferWebApp(
             pool=pool,
@@ -715,7 +715,7 @@ async def main(argv=None):
 
         tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
 
-        tasks.append(loop.create_task(listen_to_runner(config.redis_location, app)))
+        tasks.append(loop.create_task(listen_to_runner(redis, app)))
 
         await asyncio.gather(*tasks)
 

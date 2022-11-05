@@ -22,6 +22,7 @@ from functools import partial
 import hashlib
 import logging
 import gzip
+import json
 import bz2
 import io
 import os
@@ -648,19 +649,17 @@ async def run_web_server(listen_addr, port, dists_dir, config, db, generator_man
     await site.start()
 
 
-async def listen_to_runner(redis_location, generator_manager):
-    from redis.asyncio import Redis
-    redis = Redis.from_url(redis_location)
-
-    ch = (await redis.pubsub().subscribe('result'))[0]
+async def listen_to_runner(redis, generator_manager):
     try:
-        while (await ch.wait_message()):
-            result = await ch.get_json()
-            if result["code"] != "success":
-                continue
-            campaign = get_campaign_config(generator_manager.config, result["campaign"])
-            if campaign:
-                generator_manager.trigger(campaign)
+        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
+            await ch.subscribe('result')
+            async for msg in ch.listen():
+                result = json.loads(msg)
+                if result["code"] != "success":
+                    continue
+                campaign = get_campaign_config(generator_manager.config, result["campaign"])
+                if campaign:
+                    generator_manager.trigger(campaign)
     finally:
         await redis.close()
 
@@ -750,6 +749,7 @@ async def loop_publish(config, generator_manager):
 
 async def main(argv=None):
     import argparse
+    from redis.asyncio import Redis
 
     parser = argparse.ArgumentParser(prog="janitor.debian.archive")
     parser.add_argument(
@@ -828,10 +828,10 @@ async def main(argv=None):
             loop_publish(config, generator_manager), 'regenerate suites'),
     ]
 
+    redis = Redis.from_url(config.redis_location)
+
     tasks.append(loop.create_task(
-        listen_to_runner(
-            config.redis_location,
-            generator_manager)))
+        listen_to_runner(redis, generator_manager)))
 
     async with package_info_provider:
         await asyncio.gather(*tasks)
