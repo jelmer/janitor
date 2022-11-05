@@ -116,8 +116,7 @@ for distribution in args.distribution:
 
     if args.user:
         subprocess.check_call(
-            ['schroot', '-c',
-             sbuild_schroot_name(distro_config.name, sbuild_arch),
-             '--directory', '/', '--', 'install', '-d',
-             '--owner=%s' % args.user,
-             pwd.getpwnam(args.user).pw_dir])
+            "install -d / --owner=%s \"~%s\" | sbuild-shell %s" % (
+                args.user, args.user,
+                sbuild_schroot_name(distro_config.name, sbuild_arch)),
+            shell=True)
