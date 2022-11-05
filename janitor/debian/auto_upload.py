@@ -157,20 +157,20 @@ async def listen_to_runner(
         distributions: Optional[List[str]] = None,
         source_only: bool = False):
 
+    async def handle_result_message(msg):
+        result = json.loads(msg)
+
+        if result['target']['name'] != 'debian':
+            return
+        if not distributions or result['target']['details']['build_distribution'] in distributions:
+            await upload_build_result(
+                result['log_id'], artifact_manager, dput_host,
+                debsign_keyid=debsign_keyid, source_only=source_only)
+
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('result')
-            async for msg in ch.listen():
-                result = json.loads(msg)
-
-                if not result['target']:
-                    continue
-                if result['target']['name'] != 'debian':
-                    continue
-                if not distributions or result['target']['details']['build_distribution'] in distributions:
-                    await upload_build_result(
-                        result['log_id'], artifact_manager, dput_host,
-                        debsign_keyid=debsign_keyid, source_only=source_only)
+            await ch.subscribe('result', result=handle_result_message)
+            await ch.run()
     finally:
         await redis.close()
 
