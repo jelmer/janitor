@@ -3073,33 +3073,35 @@ async def listen_to_runner(
                 requestor="runner",
             )
 
+    async def handle_result_message(msg):
+        result = json.loads(msg)
+        if result["code"] != "success":
+            return
+        async with db.acquire() as conn:
+            # TODO(jelmer): Fold these into a single query ?
+            package = await conn.fetchrow(
+                'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
+                result["package"])
+            if package is None:
+                logging.warning('Package %s not in database?', result['package'])
+                return
+            run = await get_run(conn, result["log_id"])
+            if run.campaign != "unchanged":
+                await process_run(
+                    conn, run, package['maintainer_email'],
+                    package['branch_url'])
+            else:
+                for run in await iter_control_matching_runs(
+                        conn, main_branch_revision=run.revision,
+                        package=run.package):
+                    await process_run(
+                        conn, run, package['maintainer_email'],
+                        package['branch_url'])
+
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('result')
-            async for msg in ch.listen():
-                result = json.loads(msg)
-                if result["code"] != "success":
-                    continue
-                async with db.acquire() as conn:
-                    # TODO(jelmer): Fold these into a single query ?
-                    package = await conn.fetchrow(
-                        'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
-                        result["package"])
-                    if package is None:
-                        logging.warning('Package %s not in database?', result['package'])
-                        continue
-                    run = await get_run(conn, result["log_id"])
-                    if run.campaign != "unchanged":
-                        await process_run(
-                            conn, run, package['maintainer_email'],
-                            package['branch_url'])
-                    else:
-                        for run in await iter_control_matching_runs(
-                                conn, main_branch_revision=run.revision,
-                                package=run.package):
-                            await process_run(
-                                conn, run, package['maintainer_email'],
-                                package['branch_url'])
+            await ch.subscribe('result', result=handle_result_message)
+            await ch.run()
     finally:
         await redis.close()
 

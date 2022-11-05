@@ -387,39 +387,22 @@ async def create_app(
     app.on_cleanup.append(disconnect_redis)
 
     async def start_pubsub_forwarder(app):
-        async def listen_to_publisher_publish(app):
+        async def forward_redis(app, name):
             async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
-                await ch.subscribe('publish')
-                async for msg in ch.listen():
-                    app.topic_notifications.publish(["publish", json.loads(msg)])
-
-        async def listen_to_publisher_mp(app):
-            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
-                await ch.subscribe('merge-proposal')
-                async for msg in ch.listen():
-                    app.topic_notifications.publish(["merge-proposal", json.loads(msg)])
+                await ch.subscribe(name, **{
+                    name: lambda msg: app.topic_notifications.publish(
+                        [name, json.loads(msg)])})
+                await ch.run()
 
         app['runner_status'] = None
 
-        async def listen_to_queue(app):
-            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
-                await ch.subscribe('queue')
-                async for msg in ch.listen():
-                    app.topic_notifications.publish(["queue", json.loads(msg)])
-
-        async def listen_to_result(app):
-            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
-                await ch.subscribe('result')
-                async for msg in ch.listen():
-                    app.topic_notifications.publish(["result", json.loads(msg)])
-
         for cb, title in [
-            (listen_to_publisher_publish, 'publisher publish listening'),
-            (listen_to_publisher_mp, 'merge proposal listening'),
-            (listen_to_queue, 'queue listening'),
-            (listen_to_result, 'result listening'),
+            ('publish', 'publisher publish listening'),
+            ('merge-proposal', 'merge proposal listening'),
+            ('queue', 'queue listening'),
+            ('result', 'result listening'),
         ]:
-            listener = create_background_task(cb(app), title)
+            listener = create_background_task(forward_redis(app, name), title)
 
             async def stop_listener(app):
                 listener.cancel()

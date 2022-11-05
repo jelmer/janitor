@@ -650,16 +650,20 @@ async def run_web_server(listen_addr, port, dists_dir, config, db, generator_man
 
 
 async def listen_to_runner(redis, generator_manager):
+    async def handle_result_message(msg):
+        result = json.loads(msg)
+        if result['target']['name'] != 'debian':
+            return
+        if result["code"] != "success":
+            return
+        campaign = get_campaign_config(generator_manager.config, result["campaign"])
+        if campaign:
+            generator_manager.trigger(campaign)
+
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('result')
-            async for msg in ch.listen():
-                result = json.loads(msg)
-                if result["code"] != "success":
-                    continue
-                campaign = get_campaign_config(generator_manager.config, result["campaign"])
-                if campaign:
-                    generator_manager.trigger(campaign)
+            await ch.subscribe('result', result=handle_result_message)
+            await ch.run()
     finally:
         await redis.close()
 
