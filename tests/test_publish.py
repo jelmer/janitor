@@ -111,4 +111,4 @@ async def test_publish_worker():
                 'commit_message_template': None,
                 'title_template': None,
                 'tags': {}
-                })
+            })

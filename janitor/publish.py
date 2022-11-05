@@ -67,7 +67,6 @@ from silver_platter.utils import (
     BranchMissing,
     BranchUnavailable,
     BranchRateLimited,
-    full_branch_url,
 )
 
 from breezy.errors import PermissionDenied, UnexpectedHttpStatus
@@ -408,7 +407,7 @@ async def run_worker_process(args, request, *, encoding='utf-8'):
         try:
             response = json.loads(stdout.decode(encoding))
         except json.JSONDecodeError as e:
-            raise WorkerInvalidResponse(stderr.decode(encoding))
+            raise WorkerInvalidResponse(stderr.decode(encoding)) from e
         sys.stderr.write(stderr.decode(encoding))
         return 1, response
 
@@ -508,13 +507,13 @@ class PublishWorker(object):
         try:
             async with AsyncExitStack() as es:
                 if self.lock_manager:
-                    es.enter_async_context(
+                    await es.enter_async_context(
                         self.lock_manager.lock("publish:%s" % target_branch_url))
                 try:
                     returncode, response = await run_worker_process(args, request)
                 except WorkerInvalidResponse as e:
                     raise PublishFailure(
-                        mode, "publisher-invalid-response", e.error) from e
+                        mode, "publisher-invalid-response", e.output) from e
         except aioredlock.LockError as e:
             raise BranchBusy(target_branch_url) from e
 
@@ -558,7 +557,7 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 
 async def consider_publish_run(
-        conn: asyncpg.Connection, *, config: Config, publish_worker: PublishWorker,
+        conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
         vcs_managers, maintainer_rate_limiter,
         run, maintainer_email,
         unpublished_branches, command,
@@ -633,6 +632,7 @@ async def consider_publish_run(
             mode=publish_mode,
             max_frequency_days=max_frequency_days, command=command,
             dry_run=dry_run,
+            redis=redis,
             require_binary_diff=require_binary_diff,
             force=False,
             requestor="publisher (publish pending)",
@@ -712,6 +712,7 @@ SELECT * FROM publish_ready
 async def publish_pending_ready(
     *,
     db,
+    redis,
     config,
     publish_worker,
     maintainer_rate_limiter,
@@ -741,7 +742,7 @@ async def publish_pending_ready(
             change_set_state=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
-                conn, config=config,
+                conn, redis=redis, config=config,
                 publish_worker=publish_worker,
                 vcs_managers=vcs_managers,
                 maintainer_rate_limiter=maintainer_rate_limiter,
@@ -971,6 +972,7 @@ async def store_publish(
 async def publish_from_policy(
     *,
     conn: asyncpg.Connection,
+    redis,
     campaign_config: Campaign,
     publish_worker: PublishWorker,
     maintainer_rate_limiter: RateLimiter,
@@ -1529,7 +1531,8 @@ async def consider_request(request):
             else:
                 return
             await consider_publish_run(
-                conn, config=request.app['config'],
+                conn, redis=request.app['redis'],
+                config=request.app['config'],
                 publish_worker=request.app['publish_worker'],
                 vcs_managers=request.app['vcs_managers'],
                 maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
@@ -1855,6 +1858,7 @@ async def autopublish_request(request):
     async def autopublish():
         await publish_pending_ready(
             db=request.app['db'],
+            redis=request.app['redis'],
             config=request.app['config'],
             publish_worker=request.app['publish_worker'],
             maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
@@ -2049,6 +2053,7 @@ async def process_queue_loop(
         if auto_publish:
             await publish_pending_ready(
                 db=db,
+                redis=redis,
                 config=config,
                 publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
@@ -2491,8 +2496,7 @@ archive.
             await post_comment(mp, """
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
-"""
-                )
+""")
             try:
                 await to_thread(mp.close)
             except PermissionDenied as e:
@@ -3056,6 +3060,7 @@ async def listen_to_runner(
                 maintainer_rate_limiter=maintainer_rate_limiter,
                 vcs_managers=vcs_managers,
                 run=run,
+                redis=redis,
                 role=role,
                 maintainer_email=maintainer_email,
                 main_branch_url=branch_url,
@@ -3250,6 +3255,7 @@ async def main(argv=None):
         if args.once:
             await publish_pending_ready(
                 db=db,
+                redis=redis,
                 config=config,
                 publish_worker=publish_worker,
                 maintainer_rate_limiter=maintainer_rate_limiter,
