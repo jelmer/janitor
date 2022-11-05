@@ -24,6 +24,8 @@ from janitor.runner import (
     is_log_filename,
     committer_env,
     QueueProcessor,
+    ActiveRun,
+    Backchannel,
 )
 
 
@@ -101,3 +103,27 @@ async def test_status_json():
     qp = await create_queue_processor()
     data = await qp.status_json()
     assert data == {'avoid_hosts': [], 'processing': [], 'rate_limit_hosts': {}}
+
+
+async def test_register_run():
+    qp = await create_queue_processor()
+    assert await qp.active_run_count() == 0
+    active_run = ActiveRun(
+        campaign='test', package='pkg', change_set=None, command='blah',
+        queue_id=12, log_id='some-id', start_time=datetime.utcnow(),
+        vcs_info={}, backchannel=Backchannel(), worker_name='tester',
+        instigated_context=None, estimated_duration=timedelta(seconds=10))
+    await qp.register_run(active_run)
+    assert await qp.active_run_count() == 1
+    assert await qp.redis.hkeys('active-runs') == [b'some-id']
+    assert await qp.redis.hkeys('assigned-queue-items') == [b'12']
+    assert await qp.redis.hkeys('last-keepalive') == [b'some-id']
+
+    assert await qp.get_run('nonexistent-id') is None
+    assert (await qp.get_run('some-id')).queue_id == 12
+    await qp.unclaim_run('unknown-id')
+    await qp.unclaim_run('some-id')
+    assert await qp.redis.hkeys('active-runs') == []
+    assert await qp.redis.hkeys('assigned-queue-items') == []
+    assert await qp.redis.hkeys('last-keepalive') == []
+    assert await qp.active_run_count() == 0
