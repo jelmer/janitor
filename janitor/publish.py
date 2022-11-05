@@ -2215,6 +2215,105 @@ def find_campaign_by_branch_name(config, branch_name):
     return None, None
 
 
+async def abandon_mp(conn, redis, mp, revision, package_name, target_branch_url,
+                     campaign, can_be_merged, comment, dry_run=False):
+    logger.info('%s: %s', mp.url, comment)
+    if dry_run:
+        return False
+    await update_proposal_status(
+        conn, redis, mp, "abandoned", revision, package_name, target_branch_url,
+        campaign=campaign, can_be_merged=can_be_merged)
+    try:
+        await to_thread(mp.post_comment, comment)
+    except PermissionDenied as e:
+        logger.warning(
+            "Permission denied posting comment to %s: %s", mp.url, e)
+
+    try:
+        await to_thread(mp.close)
+    except PermissionDenied as e:
+        logger.warning(
+            "Permission denied closing merge request %s: %s", mp.url, e
+        )
+        return False
+    return True
+
+
+async def close_applied_mp(conn, redis, mp, revision, package_name, target_branch_url,
+                           campaign, can_be_merged, comment, dry_run=False):
+    await update_proposal_status(
+        conn, redis, mp, "applied", revision, package_name, target_branch_url,
+        campaign, can_be_merged=can_be_merged, dry_run=dry_run)
+    try:
+        await to_thread(mp.post_comment, comment)
+    except PermissionDenied as e:
+        logger.warning(
+            "Permission denied posting comment to %s: %s", mp.url, e)
+
+    try:
+        await to_thread(mp.close)
+    except PermissionDenied as e:
+        logger.warning(
+            "Permission denied closing merge request %s: %s", mp.url, e
+        )
+        return False
+    return True
+
+
+async def update_proposal_status(
+        conn, redis, mp, status, revision, package_name, target_branch_url,
+        campaign, can_be_merged, dry_run=False):
+    if status == "closed":
+        # TODO(jelmer): Check if changes were applied manually and mark
+        # as applied rather than closed?
+        pass
+    if status == "merged":
+        merged_by = mp.get_merged_by()
+        merged_at = mp.get_merged_at()
+        if merged_at is not None:
+            merged_at = merged_at.replace(tzinfo=None)
+    else:
+        merged_by = None
+        merged_at = None
+    if not dry_run:
+        async with conn.transaction():
+            await conn.execute(
+                """INSERT INTO merge_proposal (
+                    url, status, revision, package, merged_by, merged_at,
+                    target_branch_url, last_scanned, can_be_merged)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+                ON CONFLICT (url)
+                DO UPDATE SET
+                  status = EXCLUDED.status,
+                  revision = EXCLUDED.revision,
+                  package = EXCLUDED.package,
+                  merged_by = EXCLUDED.merged_by,
+                  merged_at = EXCLUDED.merged_at,
+                  target_branch_url = EXCLUDED.target_branch_url,
+                  last_scanned = EXCLUDED.last_scanned,
+                  can_be_merged = EXCLUDED.can_be_merged
+                """, mp.url, status,
+                revision.decode("utf-8") if revision is not None else None,
+                package_name, merged_by, merged_at, target_branch_url,
+                can_be_merged)
+            if revision:
+                await conn.execute("""
+                UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
+                """, (status == 'merged'), revision.decode('utf-8'))
+
+        # TODO(jelmer): Check if the change_set should be marked as published
+
+        await redis.publish('merge-proposal', json.dumps({
+            "url": mp.url,
+            "target_branch_url": target_branch_url,
+            "status": status,
+            "package": package_name,
+            "merged_by": merged_by,
+            "merged_at": str(merged_at),
+            "campaign": campaign,
+        }))
+
+
 async def check_existing_mp(
     conn,
     redis,
@@ -2230,65 +2329,6 @@ async def check_existing_mp(
     check_only: bool = False,
     close_below_threshold: bool = True,
 ) -> bool:
-    async def update_proposal_status(
-            mp, status, revision, package_name, target_branch_url,
-            campaign, can_be_merged):
-        if status == "closed":
-            # TODO(jelmer): Check if changes were applied manually and mark
-            # as applied rather than closed?
-            pass
-        if status == "merged":
-            merged_by = mp.get_merged_by()
-            merged_at = mp.get_merged_at()
-            if merged_at is not None:
-                merged_at = merged_at.replace(tzinfo=None)
-        else:
-            merged_by = None
-            merged_at = None
-        if not dry_run:
-            async with conn.transaction():
-                await conn.execute(
-                    """INSERT INTO merge_proposal (
-                        url, status, revision, package, merged_by, merged_at,
-                        target_branch_url, last_scanned, can_be_merged)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
-                    ON CONFLICT (url)
-                    DO UPDATE SET
-                      status = EXCLUDED.status,
-                      revision = EXCLUDED.revision,
-                      package = EXCLUDED.package,
-                      merged_by = EXCLUDED.merged_by,
-                      merged_at = EXCLUDED.merged_at,
-                      target_branch_url = EXCLUDED.target_branch_url,
-                      last_scanned = EXCLUDED.last_scanned,
-                      can_be_merged = EXCLUDED.can_be_merged
-                    """, mp.url, status,
-                    revision.decode("utf-8") if revision is not None else None,
-                    package_name, merged_by, merged_at, target_branch_url,
-                    can_be_merged)
-                if revision:
-                    await conn.execute("""
-                    UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
-                    """, (status == 'merged'), revision.decode('utf-8'))
-
-            # TODO(jelmer): Check if the change_set should be marked as published
-
-            await redis.publish('merge-proposal', json.dumps({
-                "url": mp.url,
-                "target_branch_url": target_branch_url,
-                "status": status,
-                "package": package_name,
-                "merged_by": merged_by,
-                "merged_at": str(merged_at),
-                "campaign": campaign,
-            }))
-
-    async def post_comment(mp, comment):
-        try:
-            await to_thread(mp.post_comment, comment)
-        except PermissionDenied as e:
-            logger.warning(
-                "Permission denied posting comment to %s: %s", mp.url, e)
 
     old_status: Optional[str]
     maintainer_email: Optional[str]
@@ -2374,9 +2414,9 @@ async def check_existing_mp(
             or can_be_merged != old_can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await update_proposal_status(
-            mp, status, revision, package_name, target_branch_url,
+            conn, redis, mp, status, revision, package_name, target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
-            can_be_merged=can_be_merged)
+            can_be_merged=can_be_merged, dry_run=dry_run)
     else:
         await conn.execute(
             'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
@@ -2470,41 +2510,31 @@ async def check_existing_mp(
             "%s: package has been removed from the archive, " "closing proposal.",
             mp.url,
         )
-        if not dry_run:
-            await post_comment(mp, """
-This merge proposal will be closed, since the package has been removed from the
+        return await abandon_mp(
+            conn, mp, revision, package_name, target_branch_url,
+            mp_run['campaign'], can_be_merged, comment="""\
+This merge proposal will be closed, since the package has been removed from the \
 archive.
-""")
-            try:
-                await to_thread(mp.close)
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e)
-                return False
-            return True
+""", dry_run=dry_run)
 
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
         # do.
         logger.info(
-            "%s: Last run did not produce any changes, " "closing proposal.", mp.url
+            "%s: Last run did not produce any changes, closing proposal.", mp.url
         )
-        if not dry_run:
-            await update_proposal_status(
-                mp, "applied", revision, package_name, target_branch_url,
-                mp_run['campaign'], can_be_merged=can_be_merged)
-            await post_comment(mp, """
-This merge proposal will be closed, since all remaining changes have been
+
+        try:
+            await close_applied_mp(
+                conn, redis, revision, package_name, target_branch_url,
+                mp_run['campaign'], can_be_merged=can_be_merged, comment="""
+This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""")
-            try:
-                await to_thread(mp.close)
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e
-                )
-                return False
-        return True
+""", dry_run=dry_run)
+        except PermissionDenied:
+            return False
+        else:
+            return True
 
     if last_run.result_code != "success":
         last_run_age = datetime.utcnow() - last_run.finish_time
@@ -2567,20 +2597,12 @@ applied independently.
 
     if close_below_threshold and not run_sufficient_for_proposal(
             campaign_config, mp_run['value']):
-        await update_proposal_status(
-            mp, "abandoned", revision, package_name, target_branch_url,
-            campaign=mp_run['campaign'], can_be_merged=can_be_merged)
-        await post_comment(mp, """
-This merge proposal will be closed, since only trivial changes are left.
-""")
-        try:
-            await to_thread(mp.close)
-        except PermissionDenied as e:
-            logger.warning(
-                "Permission denied closing merge request %s: %s", mp.url, e
-            )
-            return False
-        return True
+        return await abandon_mp(
+            conn, mp, revision, package_name, target_branch_url,
+            campaign=mp_run['campaign'], can_be_merged=can_be_merged,
+            comment="This merge proposal will be closed, since only trivial changes are left.",
+            dry_run=dry_run)
+
 
     try:
         (
@@ -2625,19 +2647,12 @@ This merge proposal will be closed, since only trivial changes are left.
                     mp_remote_branch_name,
                     last_run_remote_branch_name,
                 )
-                await update_proposal_status(
-                    mp, "abandoned", revision, package_name, target_branch_url,
-                    campaign=mp_run['campaign'], can_be_merged=can_be_merged)
-                await post_comment(mp, """
+                if not await abandon_mp(
+                    conn, mp, revision, package_name, target_branch_url,
+                    campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
-""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
-                try:
-                    await to_thread(mp.close)
-                except PermissionDenied as e:
-                    logger.warning(
-                        "Permission denied closing merge request %s: %s", mp.url, e
-                    )
+""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run):
                     return False
             else:
                 target_branch_url = role_branch_url(
@@ -2658,21 +2673,11 @@ has changed from %s to %s.
         # TODO(jelmer): Don't do this if there's a redirect in place,
         # or if one of the branches has a branch name included and the other
         # doesn't
-        if not dry_run:
-            await update_proposal_status(
-                mp, "abandoned", revision, package_name, target_branch_url,
-                campaign=mp_run['campaign'], can_be_merged=can_be_merged)
-            await post_comment(mp, """
+        return await abandon_mp(
+            conn, mp, revision, package_name, target_branch_url,
+            campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch has moved to %s.
-""" % (bzr_to_browse_url(last_run.branch_url),))
-            try:
-                await to_thread(mp.close)
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e)
-                return False
-
-        return False
+""" % (bzr_to_browse_url(last_run.branch_url),), dry_run=dry_run)
 
     if last_run.id != mp_run['id']:
         publish_id = str(uuid.uuid4())
@@ -2749,23 +2754,20 @@ This merge proposal will be closed, since the branch has moved to %s.
                     "some other way. Closing.",
                     mp.url,
                 )
-                if not dry_run:
-                    await update_proposal_status(
-                        mp, "applied", revision, package_name,
+                try:
+                    await close_applied_mp(
+                        conn, redis, mp, revision, package_name,
                         target_branch_url, campaign=mp_run['campaign'],
-                        can_be_merged=can_be_merged)
-                    await post_comment(mp, """
-This merge proposal will be closed, since all remaining changes have been
+                        can_be_merged=can_be_merged, comment="""
+This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""")
-                    try:
-                        await to_thread(mp.close)
-                    except PermissionDenied as f:
-                        logger.warning(
-                            "Permission denied closing merge request %s: %s", mp.url, f
-                        )
-                        code = "empty-failed-to-close"
-                        description = "Permission denied closing merge request: %s" % f
+""", dry_run=dry_run)
+                except PermissionDenied as f:
+                    logger.warning(
+                        "Permission denied closing merge request %s: %s", mp.url, f
+                    )
+                    code = "empty-failed-to-close"
+                    description = "Permission denied closing merge request: %s" % f
                 code = "success"
                 description = (
                     "Closing merge request for which changes were "
