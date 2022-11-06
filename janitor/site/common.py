@@ -109,7 +109,9 @@ SELECT
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags,
-  change_set
+  change_set,
+  failure_stage,
+  failure_transient
 FROM
   last_unabsorbed_runs
 LEFT JOIN worker ON worker.name = last_unabsorbed_runs.worker
