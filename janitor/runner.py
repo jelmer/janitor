@@ -885,6 +885,7 @@ class ActiveRun(object):
             vcs_info=js['vcs'],
             worker_name=js['worker'],
             worker_link=js['worker_link'],
+            codebase=js.get('codebase'),
         )
 
     @property
