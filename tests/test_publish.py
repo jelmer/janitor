@@ -25,6 +25,9 @@ from janitor.publish import (
     find_campaign_by_branch_name,
     PublishWorker,
 )
+from janitor.publish_one import (
+    _drop_env,
+)
 
 from google.protobuf import text_format  # type: ignore
 
@@ -112,3 +115,11 @@ async def test_publish_worker():
                 'title_template': None,
                 'tags': {}
             })
+
+
+def test_drop_env():
+    args = ['PATH=foo', 'BAR=foo', 'ls', 'bar']
+    _drop_env(args)
+    assert args == ['ls', 'bar']
+    _drop_env(args)
+    assert args == ['ls', 'bar']
