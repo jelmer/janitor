@@ -115,7 +115,7 @@ async def schedule_new_package(conn, upstream_info: UpstreamInfo, config, *,
         DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE, publish_policy)
 
     await do_schedule(
-        conn, package, campaign, codebase=codebase, change_set=change_set,
+        conn, package, campaign=campaign, codebase=codebase, change_set=change_set,
         requestor=requestor, bucket='missing-deps', command=command)
 
 
@@ -132,8 +132,10 @@ async def schedule_update_package(conn, package, desired_version, *, change_set=
         "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
         package, campaign, None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE, codebase)
-    await do_schedule(conn, package, campaign, change_set=change_set, requestor=requestor, bucket='missing-deps',
-                      codebase=codebase)
+    await do_schedule(
+        conn, package, campaign=campaign, change_set=change_set,
+        requestor=requestor, bucket='missing-deps',
+        codebase=codebase)
 
 
 async def followup_missing_requirement(conn, apt_mgr, config, requirement, needed_by=None, dep_server_url=None):
