@@ -19,7 +19,6 @@ from janitor.worker import (
     bundle_results,
     create_app,
     _convert_codemod_script_failed,
-    _drop_env,
     WorkerFailure,
 )
 from aiohttp.multipart import MultipartReader
@@ -164,8 +163,3 @@ def test_convert_codemod_script_failed():
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
         'codemod-command-failed', 'Script foobar failed to run with code 1',
         stage=('codemod', ))
-
-
-def test_drop_env():
-    assert _drop_env(['PATH=foo', 'BAR=foo', 'ls', 'bar']) == ['ls', 'bar']
-    assert _drop_env(['ls', 'bar']) == ['ls', 'bar']
