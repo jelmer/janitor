@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS run (
    -- The run this one resumed from
    resume_from text references run (id),
    change_set text not null references change_set(id),
+   codebase text references codebase(name),
    foreign key (package) references package(name),
    check(finish_time >= start_time),
    check(branch_url is null or vcs_type is not null)
@@ -630,7 +631,8 @@ CREATE OR REPLACE VIEW publishable AS
   run.change_set AS change_set,
   change_set.state AS change_set_state,
   run.failure_transient AS failure_transient,
-  run.failure_stage AS failure_stage
+  run.failure_stage AS failure_stage,
+  run.codebase AS codebase
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package

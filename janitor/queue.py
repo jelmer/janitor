@@ -38,6 +38,7 @@ class QueueItem(object):
 
     def __init__(
         self,
+        *,
         id,
         package,
         context,
@@ -47,6 +48,7 @@ class QueueItem(object):
         refresh,
         requestor,
         change_set,
+        codebase,
     ):
         self.id = id
         self.package = package
@@ -57,6 +59,7 @@ class QueueItem(object):
         self.refresh = refresh
         self.requestor = requestor
         self.change_set = change_set
+        self.codebase = codebase
 
     @classmethod
     def from_row(cls, row) -> "QueueItem":
@@ -70,6 +73,7 @@ class QueueItem(object):
             refresh=row['refresh'],
             requestor=row['requestor'],
             change_set=row['change_set'],
+            codebase=row['codebase'],
         )
 
     @property
@@ -113,7 +117,8 @@ SELECT
     queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
-    queue.change_set AS change_set
+    queue.change_set AS change_set,
+    queue.codebase AS codebase
 FROM
     queue
 WHERE queue.id = $1
@@ -140,7 +145,8 @@ SELECT
     queue.change_set AS change_set,
     package.vcs_type AS vcs_type,
     package.branch_url AS branch_url,
-    package.subpath AS subpath
+    package.subpath AS subpath,
+    queue.codebase AS codebase
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -198,7 +204,8 @@ SELECT
     queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
-    queue.change_set AS change_set
+    queue.change_set AS change_set,
+    queue.codebase AS codebase
 FROM
     queue
 """

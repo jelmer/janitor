@@ -86,6 +86,7 @@ class Run(object):
     change_set: str
     failure_transient: Optional[bool]
     failure_stage: Optional[str]
+    codebase: Optional[str]
 
     __slots__ = [
         "id",
@@ -113,10 +114,12 @@ class Run(object):
         "change_set",
         "failure_transient",
         "failure_stage",
+        "codebase",
     ]
 
     def __init__(
         self,
+        *,
         run_id,
         start_time,
         finish_time,
@@ -142,6 +145,7 @@ class Run(object):
         change_set,
         failure_transient,
         failure_stage,
+        codebase,
     ):
         self.id = run_id
         self.start_time = start_time
@@ -182,6 +186,7 @@ class Run(object):
         self.change_set = change_set
         self.failure_transient = failure_transient
         self.failure_stage = failure_stage
+        self.codebase = codebase
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -222,6 +227,7 @@ class Run(object):
             change_set=row['change_set'],
             failure_transient=row['failure_transient'],
             failure_stage=row['failure_stage'],
+            codebase=row['codebase'],
         )
 
     def __eq__(self, other) -> bool:

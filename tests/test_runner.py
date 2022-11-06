@@ -111,6 +111,7 @@ async def test_register_run():
     active_run = ActiveRun(
         campaign='test', package='pkg', change_set=None, command='blah',
         queue_id=12, log_id='some-id', start_time=datetime.utcnow(),
+        codebase='test-1.1',
         vcs_info={}, backchannel=Backchannel(), worker_name='tester',
         instigated_context=None, estimated_duration=timedelta(seconds=10))
     await qp.register_run(active_run)
