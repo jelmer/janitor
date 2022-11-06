@@ -1,5 +1,5 @@
 {% macro local_command(command, command_package, package, vcs, vcs_url) %}
-    {% if command %}
+    {% if failure_stage == 'validate' or (command and failure_stage.startswith('codemod/')) %}
         <p>
             Try this locally
             {% if command_package %}
@@ -10,9 +10,14 @@
         <div class="highlight-default notranslate">
             <div class="highlight">
                 <pre>
+{% if failure_stage == 'validate' %}
+debcheckout {{ package }}
+deb-vcs-up-to-date
+{% elif failure_stage.startswith('codemod/') %}
 debcheckout {{ package }}
 cd {{ package }}
 {{ command }}
+{% endif %}
 </pre>
             </div>
         </div>
