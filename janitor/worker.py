@@ -1331,6 +1331,7 @@ async def process_single_item(
     with ExitStack() as es:
         es.callback(workitem.clear)
         campaign = assignment["campaign"]
+        codebase = assignment["codebase"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
         additional_colocated_branches = assignment["branch"]["additional_colocated_branches"]
@@ -1389,6 +1390,7 @@ async def process_single_item(
             None,
             partial(
                 run_worker,
+                codebase=codebase,
                 main_branch_url=branch_url,
                 run_id=run_id,
                 subpath=subpath,
