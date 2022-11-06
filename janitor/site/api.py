@@ -1060,11 +1060,13 @@ async def handle_run_reprocess_logs(request):
     result = await reprocess_run_logs(
         request.app['db'],
         request.app['logfile_manager'],
-        run['package'], run['campaign'], run_id,
-        run['command'], run['change_set'], run['duration'], run['result_code'],
-        run['description'], run['failure_details'],
-        [('dist-', DIST_LOG_FILENAME, process_dist_log),
-         ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
+        package=run['package'], campaign=run['campaign'], log_id=run_id,
+        command=run['command'], change_set=run['change_set'], duration=run['duration'],
+        result_code=run['result_code'],
+        description=run['description'], failure_details=run['failure_details'],
+        process_fns=[
+            ('dist-', DIST_LOG_FILENAME, process_dist_log),
+            ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
         dry_run=dry_run, reschedule=reschedule)
 
     if result:

@@ -442,10 +442,13 @@ class JanitorResult(object):
     subpath: str
     code: str
     transient: Optional[bool]
+    codebase: Optional[str]
 
     def __init__(
         self,
+        *,
         pkg: str,
+        codebase: str,
         log_id: str,
         branch_url: str,
         code: str,
@@ -499,6 +502,7 @@ class JanitorResult(object):
             self.vcs_type = worker_result.vcs_type
             self.subpath = worker_result.subpath
             self.transient = worker_result.transient
+            self.codebase = worker_result.codebase
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -517,14 +521,11 @@ class JanitorResult(object):
             self.followup_actions = []
             self.resume_from = None
             self.transient = None
+            self.codebase = codebase
 
     @property
     def duration(self):
         return self.finish_time - self.start_time
-
-    @property
-    def codebase(self):
-        return self.package
 
     def json(self):
         return {
@@ -616,6 +617,7 @@ class WorkerResult(object):
     vcs_type: Optional[str] = None
     subpath: Optional[str] = None
     transient: Optional[bool] = None
+    codebase: Optional[str] = None
 
     @classmethod
     def from_file(cls, path):
@@ -682,6 +684,7 @@ class WorkerResult(object):
             subpath=worker_result.get("subpath"),
             vcs_type=worker_result.get("vcs_type"),
             transient=worker_result.get("transient"),
+            codebase=worker_result.get("codebase"),
         )
 
 
@@ -801,6 +804,7 @@ class ActiveRun(object):
         *,
         campaign: str,
         package: str,
+        codebase: str,
         change_set: Optional[str],
         command: str,
         instigated_context: Any,
@@ -829,6 +833,7 @@ class ActiveRun(object):
         self.worker_link = worker_link
         self.resume_from = None
         self._watch_dog = None
+        self.codebase = codebase
 
     @classmethod
     def from_queue_item(
@@ -842,6 +847,7 @@ class ActiveRun(object):
         return cls(
             campaign=queue_item.campaign,
             package=queue_item.package,
+            codebase=queue_item.codebase,
             change_set=queue_item.change_set,
             command=queue_item.command,
             instigated_context=queue_item.context,
@@ -879,6 +885,7 @@ class ActiveRun(object):
             vcs_info=js['vcs'],
             worker_name=js['worker'],
             worker_link=js['worker_link'],
+            codebase=js.get('codebase'),
         )
 
     @property
@@ -895,6 +902,7 @@ class ActiveRun(object):
             worker_name=self.worker_name,
             resume_from=self.resume_from,
             change_set=self.change_set,
+            codebase=self.codebase,
             **kwargs)
 
     async def ping(self):
@@ -927,7 +935,7 @@ class ActiveRun(object):
             "queue_id": self.queue_id,
             "id": self.log_id,
             "package": self.package,
-            "codebase": self.package,
+            "codebase": self.codebase,
             "change_set": self.change_set,
             "campaign": self.campaign,
             "command": self.command,
@@ -1222,6 +1230,7 @@ async def store_change_set(
 
 async def store_run(
     conn: asyncpg.Connection,
+    *,
     run_id: str,
     name: str,
     vcs_type: Optional[str],
@@ -1250,6 +1259,7 @@ async def store_run(
     change_set: Optional[str] = None,
     followup_actions: Optional[Any] = None,
     failure_transient: Optional[bool] = None,
+    codebase: Optional[str] = None,
 ):
     """Store a run in the database."""
     if result_tags is None:
@@ -1264,10 +1274,10 @@ async def store_run(
         "revision, result, suite, vcs_type, branch_url, subpath, logfilenames, "
         "value, worker, result_tags, "
         "resume_from, failure_details, failure_stage, target_branch_url, change_set, "
-        "followup_actions, failure_transient) "
+        "followup_actions, failure_transient, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
         "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, "
-        "$24, $25, $26, $27)",
+        "$24, $25, $26, $27, $28)",
         run_id,
         command,
         description,
@@ -1295,6 +1305,7 @@ async def store_run(
         change_set,
         followup_actions,
         failure_transient,
+        codebase,
     )
 
     if result_branches:
@@ -1322,7 +1333,8 @@ async def followup_run(
                 logging.info("Scheduling control run for %s.", active_run.package)
                 await do_schedule_control(
                     conn,
-                    active_run.package,
+                    package=active_run.package,
+                    codebase=active_run.codebase,
                     main_branch_revision=result.main_branch_revision,
                     estimated_duration=result.duration,
                     requestor="control",
@@ -1334,14 +1346,15 @@ async def followup_run(
                     campaign.name for campaign in config.campaign
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
-                    "SELECT package, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
+                    "SELECT package, codebase, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     active_run.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
                     await do_schedule(
-                        conn, run_to_retry['package'],
+                        conn, package=run_to_retry['package'],
                         change_set=result.change_set,
                         bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
-                        campaign=run_to_retry['campaign'])
+                        campaign=run_to_retry['campaign'],
+                        codebase=runs_to_retry['codebase'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
@@ -1403,11 +1416,14 @@ async def followup_run(
         # TODO(jelmer): check test dependencies?
 
         async with database.acquire() as conn:
-            for source in need_control:
-                logging.info("Scheduling control run for %s.", source)
+            for row in await conn.fetch(
+                    'SELECT name, codebase FROM package WHERE name = ANY($1::text[])',
+                    need_control):
+                logging.info("Scheduling control run for %s (%s).", row['codebase'],
+                             row['name'])
                 await do_schedule_control(
-                    conn, source, change_set=result.change_set,
-                    requestor="control")
+                    conn, package=row['name'], change_set=result.change_set,
+                    requestor="control", codebase=row['codebase'])
 
 
 class RunExists(Exception):
@@ -1665,6 +1681,7 @@ class QueueProcessor(object):
                     change_set=result.change_set,
                     followup_actions=result.followup_actions,
                     failure_transient=result.transient,
+                    codebase=result.codebase,
                 )
             except asyncpg.UniqueViolationError as e:
                 if ((e.table_name == 'run' and e.column_name == 'id')
@@ -1742,16 +1759,18 @@ async def handle_schedule_control(request):
             run_id = json['run_id']
         except KeyError:
             package = json['package']
+            codebase = json.get('codebase')
             main_branch_revision = json['main_branch_revision'].encode('utf-8')
         else:
             with span.new_child('sql:find-run'):
                 run = await conn.fetchrow(
-                    "SELECT main_branch_revision, package FROM run "
+                    "SELECT main_branch_revision, package, codebase FROM run "
                     "WHERE id = $1",
                     run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
             package = run['package']
+            codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         try:
             with span.new_child('do-schedule-control'):
@@ -1764,6 +1783,7 @@ async def handle_schedule_control(request):
                     refresh=refresh,
                     bucket=bucket,
                     requestor=requestor,
+                    codebase=codebase,
                     estimated_duration=estimated_duration)
         except CandidateUnavailable:
             return web.json_response(
@@ -1791,14 +1811,16 @@ async def handle_schedule(request):
         except KeyError:
             package = json['package']
             campaign = json['campaign']
+            codebase = json.get('codebase')
         else:
             run = await conn.fetchrow(
-                "SELECT suite AS campaign, package FROM run WHERE id = $1",
+                "SELECT suite AS campaign, package, codebase FROM run WHERE id = $1",
                 run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
             package = run['package']
             campaign = run['campaign']
+            codebase = run.get('codebase')
         refresh = json.get('refresh', False)
         change_set = json.get('change_set')
         requestor = json.get('requestor')
@@ -1818,6 +1840,7 @@ async def handle_schedule(request):
                     refresh=refresh,
                     requestor=requestor,
                     estimated_duration=estimated_duration,
+                    codebase=codebase,
                     bucket=bucket)
         except CandidateUnavailable:
             return web.json_response(
