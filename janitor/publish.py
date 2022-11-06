@@ -1006,8 +1006,8 @@ async def publish_from_policy(
         codebase = None
         await do_schedule(
             conn,
-            run.package,
-            run.campaign,
+            package=run.package,
+            campaign=run.campaign,
             change_set=run.change_set,
             command=command,
             bucket="update-new-mp",
@@ -2463,8 +2463,8 @@ async def check_existing_mp(
                     try:
                         await do_schedule(
                             conn,
-                            package_name,
-                            campaign,
+                            package=package_name,
+                            campaign=campaign,
                             change_set=None,
                             bucket="update-existing-mp",
                             refresh=True,
@@ -2590,8 +2590,8 @@ applied independently.
             try:
                 await do_schedule(
                     conn,
-                    last_run.package,
-                    last_run.campaign,
+                    package=last_run.package,
+                    campaign=last_run.campaign,
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
                     refresh=False,
@@ -2862,8 +2862,8 @@ applied independently.
                 try:
                     await do_schedule(
                         conn,
-                        mp_run['package'],
-                        mp_run['campaign'],
+                        package=mp_run['package'],
+                        campaign=mp_run['campaign'],
                         change_set=last_run.change_set,
                         bucket="update-existing-mp",
                         refresh=True,
