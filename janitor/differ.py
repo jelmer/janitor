@@ -604,7 +604,7 @@ async def run_web_server(app, listen_addr, port, tracer):
 
 async def listen_to_runner(redis, app):
     async def handle_result_message(msg):
-        result = json.loads(msg)
+        result = json.loads(msg['data'])
         if result["code"] != "success":
             return
         async with app['pool'].acquire() as conn:
