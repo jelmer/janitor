@@ -1131,8 +1131,8 @@ async def get_assignment(
 
 
 INDEX_TEMPLATE = Template("""\
-<html>
-<head><title>Job</title></head>
+<html lang="en">
+<head><title>Job{% if assignment %}{{ assignment['id'] {% endif %}</title></head>
 <body>
 
 {% if assignment %}
