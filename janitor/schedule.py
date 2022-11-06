@@ -430,6 +430,7 @@ async def main():
 async def do_schedule_control(
     conn: asyncpg.Connection,
     package: str,
+    *,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
@@ -469,6 +470,7 @@ async def do_schedule(
     package: str,
     campaign: str,
     codebase: Optional[str] = None,
+    *,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: Optional[str] = None,

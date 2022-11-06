@@ -22,7 +22,7 @@ from typing import Optional
 import silver_platter  # noqa: E402, F401
 from buildlog_consultant.common import find_build_failure_description  # noqa: E402
 from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
-from janitor.schedule import do_schedule  # noqa: E402
+from janitor.schedule import do_schedule
 
 
 def process_sbuild_log(logf):
@@ -140,8 +140,8 @@ async def reprocess_run_logs(
                 if reschedule and new_code != result_code:
                     await do_schedule(
                         conn,
-                        package,
-                        campaign,
+                        package=package,
+                        campaign=campaign,
                         change_set=change_set,
                         estimated_duration=duration,
                         requestor="reprocess-build-results",
