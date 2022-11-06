@@ -2368,6 +2368,7 @@ async def next_item(
             "config": build_config,
         },
         "command": command,
+        "codebase": item.codebase,
         "codemod": {"command": command, "environment": {}},
         "env": env,
         "campaign": item.campaign,
