@@ -32,7 +32,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, List, Dict, Iterator, Tuple
+from typing import Any, Optional, List, Dict, Tuple
 import warnings
 
 from aiohttp import (
@@ -430,13 +430,6 @@ class GenericTarget(Target):
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
                 details=e.details, followup_actions=e.followup_actions) from e
-
-
-def _drop_env(command):
-    ret = list(command)
-    while ret and '=' in ret[0]:
-        ret.pop(0)
-    return ret
 
 
 @backoff.on_exception(
@@ -978,10 +971,6 @@ def run_worker(
                     raise NotImplementedError
             except Exception as e:
                 raise _push_error_to_worker_failure(e, ("result-push", )) from e
-
-            actual_command = _drop_env(command)
-
-            logging.info('Actual command: %r', actual_command)
 
             if force_build:
                 should_build = True
