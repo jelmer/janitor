@@ -118,6 +118,7 @@ assignment_failed_count = Counter(
     "assignment_failed_count", "Failed to obtain assignment")
 
 
+routes = web.RouteTableDef()
 DEFAULT_UPLOAD_TIMEOUT = ClientTimeout(30 * 60)
 
 
@@ -1132,7 +1133,7 @@ async def get_assignment(
 
 INDEX_TEMPLATE = Template("""\
 <html lang="en">
-<head><title>Job{% if assignment %}{{ assignment['id'] {% endif %}</title></head>
+<head><title>Job{% if assignment %}{{ assignment['id'] }}{% endif %}</title></head>
 <body>
 
 {% if assignment %}
@@ -1197,6 +1198,7 @@ INDEX_TEMPLATE = Template("""\
 """)
 
 
+@routes.get('/', name='index')
 async def handle_index(request):
     if 'directory' in request.app['workitem']:
         lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
@@ -1211,10 +1213,12 @@ async def handle_index(request):
         content_type='text/html', status=200)
 
 
+@routes.get('/assignment', name='assignment')
 async def handle_assignment(request):
     return web.json_response(request.app['workitem'].get('assignment'))
 
 
+@routes.get('/intermediate-result', name='intermediate-result')
 async def handle_intermediate_result(request):
     return web.json_response(request.app['workitem'].get('metadata'))
 
@@ -1234,6 +1238,7 @@ ARTIFACT_INDEX_TEMPLATE = Template("""\
 """)
 
 
+@routes.get('/artifacts/', name='artifact-index')
 async def handle_artifact_index(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Output directory not created yet")
@@ -1244,6 +1249,7 @@ async def handle_artifact_index(request):
         status=200)
 
 
+@routes.get('/artifacts/{filename}', name='artifact')
 async def handle_artifact(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Artifact directory not created yet")
@@ -1268,6 +1274,7 @@ LOG_INDEX_TEMPLATE = Template("""\
 """)
 
 
+@routes.get('/logs/', name='log-index')
 async def handle_log_index(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Log directory not created yet")
@@ -1281,6 +1288,7 @@ async def handle_log_index(request):
             status=200)
 
 
+@routes.get('/logs/{filename}', name='log')
 async def handle_log(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Log directory not created yet")
@@ -1290,10 +1298,12 @@ async def handle_log(request):
     return web.FileResponse(p)
 
 
+@routes.get('/health', name='health')
 async def handle_health(request):
     return web.Response(text='ok', status=200)
 
 
+@routes.get('/log-id', name='log_id')
 async def handle_log_id(request):
     assignment = request.app['workitem'].get('assignment')
     if assignment is None:
@@ -1459,16 +1469,7 @@ async def process_single_item(
 async def create_app():
     app = web.Application()
     app['workitem'] = {}
-    app.router.add_get('/', handle_index, name='index')
-    app.router.add_get('/assignment', handle_assignment, name='assignment')
-    app.router.add_get('/intermediate-result',
-                       handle_intermediate_result, name='intermediate-result')
-    app.router.add_get('/logs/', handle_log_index, name='log-index')
-    app.router.add_get('/logs/{filename}', handle_log, name='log')
-    app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')
-    app.router.add_get('/artifacts/{filename}', handle_artifact, name='artifact')
-    app.router.add_get('/health', handle_health, name='health')
-    app.router.add_get('/log-id', handle_log_id, name='log_id')
+    app.router.add_routes(routes)
     setup_metrics(app)
     return app
 
