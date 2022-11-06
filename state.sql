@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    -- vcs type, if known
    vcs_type vcs_type,
    value int,
+   inactive boolean not null default false,
    unique(branch_url, subpath),
    unique(name)
 );
