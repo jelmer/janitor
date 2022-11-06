@@ -1029,10 +1029,13 @@ def run_worker(
 
             if cached_branch_url:
                 # TODO(jelmer): integrate into import_branches_git / import_branches_bzr
-                logging.info("Pushing packaging branch cache to %s", cached_branch_url)
+                logging.info(
+                    "Pushing packaging branch cache to %s",
+                    cached_branch_url)
 
                 def tag_selector(tag_name):
-                    return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
+                    return (tag_name.startswith(vendor + '/')
+                            or tag_name.startswith('upstream/'))
 
                 if ws.main_branch:
                     try:

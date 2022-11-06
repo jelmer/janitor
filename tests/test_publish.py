@@ -118,5 +118,8 @@ async def test_publish_worker():
 
 
 def test_drop_env():
-    assert _drop_env(['PATH=foo', 'BAR=foo', 'ls', 'bar']) == ['ls', 'bar']
-    assert _drop_env(['ls', 'bar']) == ['ls', 'bar']
+    args = ['PATH=foo', 'BAR=foo', 'ls', 'bar']
+    _drop_env(args)
+    assert args == ['ls', 'bar']
+    _drop_env(args)
+    assert args == ['ls', 'bar']
