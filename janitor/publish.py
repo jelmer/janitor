@@ -779,9 +779,6 @@ async def handle_publish_failure(e, conn, run, bucket):
         run.package, run.main_branch_revision.decode('utf-8')
     )
 
-    # TODO(jelmer): Set codebase
-    codebase = None
-
     code = e.code
     description = e.description
     if e.code == "merge-conflict":
@@ -791,8 +788,9 @@ async def handle_publish_failure(e, conn, run, bucket):
             package=run.package,
             campaign=run.campaign,
             change_set=run.change_set,
+            codebase=run.codebase,
             requestor="publisher (pre-creation merge conflict)",
-            bucket=bucket, codebase=codebase,
+            bucket=bucket,
         )
     elif e.code == "diverged-branches":
         logger.info("Branches have diverged; restarting.")
@@ -802,7 +800,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             campaign=run.campaign,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
-            bucket=bucket, codebase=codebase,
+            bucket=bucket, codebase=run.codebase,
         )
     elif e.code == "missing-build-diff-self":
         if run.result_code != "success":
@@ -816,7 +814,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                 change_set=run.change_set,
                 refresh=True,
                 requestor="publisher (missing build artifacts - self)",
-                bucket=bucket, codebase=codebase,
+                bucket=bucket, codebase=run.codebase,
             )
     elif e.code == "missing-build-diff-control":
         if unchanged_run and unchanged_run['result_code'] != "success":
@@ -835,7 +833,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                 main_branch_revision=unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
-                bucket=bucket, codebase=codebase,
+                bucket=bucket, codebase=run.codebase,
             )
         else:
             description = "Missing binary diff; requesting control run."
@@ -845,7 +843,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                     package=run.package,
                     main_branch_revision=run.main_branch_revision,
                     requestor="publisher (missing control run for diff)",
-                    bucket=bucket, codebase=codebase,
+                    bucket=bucket, codebase=run.codebase,
                 )
             else:
                 logger.warning(
@@ -1002,8 +1000,6 @@ async def publish_from_policy(
             run.command,
             command,
         )
-        # TODO(jelmer): Determine codebase
-        codebase = None
         await do_schedule(
             conn,
             package=run.package,
@@ -1014,7 +1010,7 @@ async def publish_from_policy(
             refresh=True,
             requestor="publisher (changed policy: %r => %r)" % (
                 run.command, command),
-            codebase=codebase,
+            codebase=run.codebase,
         )
         return
 
@@ -2123,7 +2119,9 @@ SELECT
     run.value AS value,
     rb.role AS role,
     rb.remote_name AS remote_branch_name,
-    rb.revision AS revision
+    rb.revision AS revision,
+    run.codebase AS codebase,
+    run.change_set AS change_set
 FROM new_result_branch rb
 RIGHT JOIN run ON rb.run_id = run.id
 WHERE rb.revision IN (
@@ -2469,6 +2467,8 @@ async def check_existing_mp(
                             bucket="update-existing-mp",
                             refresh=True,
                             requestor="publisher (orphaned merge proposal)",
+                            # TODO(jelmer): Determine codebase
+                            codebase=None
                         )
                     except CandidateUnavailable:
                         logging.warning(
@@ -2484,6 +2484,8 @@ async def check_existing_mp(
                         'remote_branch_name': None,
                         'package': package_name,
                         'campaign': campaign,
+                        'change_set': None,
+                        'codebase': None,
                         'role': role,
                         'id': None,
                         'branch_url': target_branch_url,
@@ -2575,6 +2577,7 @@ applied independently.
                     bucket="update-existing-mp",
                     refresh=False,
                     requestor="publisher (transient error)",
+                    codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:
                 logging.warning(
@@ -2597,6 +2600,7 @@ applied independently.
                     refresh=False,
                     requestor="publisher (retrying failed run after %d days)"
                     % last_run_age.days,
+                    codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:
                 logging.warning(
@@ -2864,10 +2868,11 @@ applied independently.
                         conn,
                         package=mp_run['package'],
                         campaign=mp_run['campaign'],
-                        change_set=last_run.change_set,
+                        change_set=mp_run['change_set'],
                         bucket="update-existing-mp",
                         refresh=True,
                         requestor="publisher (merge conflict)",
+                        codebase=mp_run['codebase'],
                     )
                 except CandidateUnavailable:
                     logging.warning(

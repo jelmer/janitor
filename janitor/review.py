@@ -28,14 +28,15 @@ async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
             status = "rejected"
 
             run = await conn.fetchrow(
-                'SELECT package, suite FROM run WHERE id = $1', run_id)
+                'SELECT package, suite, codebase FROM run WHERE id = $1', run_id)
             await do_schedule(
                 conn,
-                run['package'],
-                run['suite'],
+                package=run['package'],
+                campaign=run['suite'],
                 refresh=True,
                 requestor="reviewer (%s)" % reviewer,
                 bucket="default",
+                codebase=run['codebase']
             )
 
         if status != 'abstained' and is_qa_reviewer:

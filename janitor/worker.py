@@ -721,6 +721,7 @@ def _push_error_to_worker_failure(e, stage):
 
 def run_worker(
     *,
+    codebase: str,
     main_branch_url: str,
     run_id: str,
     subpath: str,
@@ -752,6 +753,7 @@ def run_worker(
         es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
         try:
             metadata["command"] = command
+            metadata["codebase"] = codebase
 
             build_target: Target
             if target == "debian":
@@ -1142,6 +1144,7 @@ INDEX_TEMPLATE = Template("""\
 <ul>
 <li><a href="/assignment">Raw Assignment</a></li>
 <li><b>Campaign</b>: {{ metadata['campaign'] }}</li>
+<li><b>Codebase</b>: {{ metadata['codebase'] }}</li>
 {% if metadata and metadata.get('start_time') %}
 <li><b>Start Time</b>: {{ metadata['start_time'] }}
 <li><b>Current duration</b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
