@@ -391,7 +391,7 @@ async def create_app(
             async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
                 await ch.subscribe(name, **{
                     name: lambda msg: app.topic_notifications.publish(
-                        [name, json.loads(msg)])})
+                        [name, json.loads(msg['data'])])})
                 await ch.run()
 
         app['runner_status'] = None

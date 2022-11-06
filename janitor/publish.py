@@ -3107,7 +3107,7 @@ async def listen_to_runner(
             )
 
     async def handle_result_message(msg):
-        result = json.loads(msg)
+        result = json.loads(msg['data'])
         if result["code"] != "success":
             return
         async with db.acquire() as conn:

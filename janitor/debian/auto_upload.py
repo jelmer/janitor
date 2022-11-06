@@ -158,7 +158,7 @@ async def listen_to_runner(
         source_only: bool = False):
 
     async def handle_result_message(msg):
-        result = json.loads(msg)
+        result = json.loads(msg['data'])
 
         if result['target']['name'] != 'debian':
             return
