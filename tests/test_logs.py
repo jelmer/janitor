@@ -24,7 +24,6 @@ from janitor.logs import (
     FileSystemLogFileManager,
     S3LogFileManager,
     GCSLogFileManager,
-    get_log_manager,
 )
 
 
