@@ -22,6 +22,16 @@
                     Package: <a href="/cupboard/pkg/{{ proposal.package }}">{{ proposal.package }}</a>
                 </li>
             {% endif %}
+            {% if proposal.can_be_merged is not none %}
+                {% if proposal.can_be_merged %}
+                    <li>Can be merged</li>
+                {% else %}
+                    <li>Can not be merged</li>
+                {% endif %}
+            {% endif %}
+            {% if proposal.last_scanned %}
+                <li>Last scanned: {{ format_timestamp(proposal.last_scanned }}</li>
+            {% endif %}
             <li>
                 Status:
                 {% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
