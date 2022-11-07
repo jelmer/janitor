@@ -76,10 +76,6 @@ class QueueItem(object):
             codebase=row['codebase'],
         )
 
-    @property
-    def codebase(self):
-        return self.package
-
     def __eq__(self, other):
         if isinstance(other, QueueItem):
             return self.id == other.id
