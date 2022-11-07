@@ -148,7 +148,7 @@ def main():
             wt, subpath, args.output_directory, config=config,
             env=os.environ)
     except BuildFailure as e:
-        json.dump(e.json())
+        json.dump(e.json(), sys.stdout)
         return 1
 
     json.dump(result, sys.stdout, indent=4)

@@ -27,6 +27,7 @@ import re
 import shutil
 import tempfile
 import time
+from typing import Dict, Any, List
 
 import aiozipkin
 from aiohttp.web_urldispatcher import (
@@ -50,8 +51,11 @@ from .common import (
     html_template,
     render_template_for_request,
 )
+from .config import get_campaign_config
 from .openid import setup_openid
 from .pubsub import pubsub_handler, Topic
+from .schedule import do_schedule
+from .webhook import parse_webhook, is_webhook_request
 
 
 routes = web.RouteTableDef()
@@ -84,7 +88,7 @@ async def get_credentials(session, publisher_url):
 
 
 async def handle_simple(templatename, request):
-    vs = {}
+    vs: Dict[str, Any] = {}
     return web.Response(
         content_type="text/html",
         text=await render_template_for_request(env, templatename, request, vs),
@@ -316,6 +320,40 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def process_webhook(request, db):
+    rescheduled: Dict[str, List[str]] = {}
+
+    urls = []
+    codebases: Dict[str, str] = {}
+    async for codebase, branch_url in parse_webhook(request, db):
+        urls.append(branch_url)
+        if codebase is not None:
+            codebase[codebase] = branch_url
+
+    async with db.acquire() as conn:
+        for codebase, branch_url in codebases.items():
+            package = await conn.fetchrow(
+                'SELECT name FROM package WHERE codebase = $1', codebase)
+            if package:
+                requestor = "Push hook for %s" % branch_url
+                for suite in await state.iter_publishable_suites(
+                        conn, package['name']
+                ):
+                    try:
+                        campaign = get_campaign_config(request.app['config'], suite)
+                    except KeyError:
+                        continue
+                    if not campaign.webhook_trigger:
+                        continue
+                    if suite not in rescheduled.get(package['name'], []):
+                        await do_schedule(
+                            conn, package['name'], suite, requestor=requestor, bucket="hook"
+                        )
+                        rescheduled.setdefault(package['name'], []).append(suite)
+
+        return web.json_response({"rescheduled": rescheduled, "urls": urls})
+
+
 async def create_app(
         config, minified=False,
         external_url=None, debugtoolbar=None,
@@ -496,7 +534,6 @@ async def create_app(
             ),
         )
     from .api import create_app as create_api_app
-    from .webhook import process_webhook, is_webhook_request
 
     async def handle_post_root(request):
         if is_webhook_request(request):

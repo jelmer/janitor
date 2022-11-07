@@ -1053,13 +1053,14 @@ async def handle_run_reprocess_logs(request):
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
             'SELECT package, suite AS campaign, command, '
-            'finish_time - start_time as duration, '
+            'finish_time - start_time as duration, codebase, '
             'result_code, description, failure_details, change_set FROM run WHERE id = $1',
             run_id)
 
     result = await reprocess_run_logs(
-        request.app['db'],
-        request.app['logfile_manager'],
+        db=request.app['db'],
+        codebase=run['codebase'],
+        logfile_manager=request.app['logfile_manager'],
         package=run['package'], campaign=run['campaign'], log_id=run_id,
         command=run['command'], change_set=run['change_set'], duration=run['duration'],
         result_code=run['result_code'],
@@ -1148,13 +1149,15 @@ WHERE
     async def do_reprocess():
         todo = [
             reprocess_run_logs(
-                request.app['db'],
-                request.app['logfile_manager'],
-                row['package'], row['campaign'], row['id'],
-                row['command'], row['change_set'], row['duration'], row['result_code'],
-                row['description'], row['failure_details'],
-                [('dist-', DIST_LOG_FILENAME, process_dist_log),
-                 ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
+                db=request.app['db'],
+                logfile_manager=request.app['logfile_manager'],
+                package=row['package'], campaign=row['campaign'], log_id=row['id'],
+                command=row['command'], change_set=row['change_set'],
+                duration=row['duration'], result_code=row['result_code'],
+                description=row['description'], failure_details=row['failure_details'],
+                process_fns=[
+                    ('dist-', DIST_LOG_FILENAME, process_dist_log),
+                    ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
                 dry_run=dry_run, reschedule=reschedule)
             for row in rows]
         for i in range(0, len(todo), 100):
