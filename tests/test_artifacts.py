@@ -21,11 +21,10 @@ import shutil
 import tempfile
 import unittest
 
-from typing import Protocol
 from janitor.artifacts import LocalArtifactManager, ArtifactManager, ArtifactsMissing
 
 
-class ArtifactManagerTests(Protocol):
+class ArtifactManagerTests:
 
     manager: ArtifactManager
 
