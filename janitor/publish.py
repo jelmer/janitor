@@ -125,8 +125,9 @@ proposal_rate_limited_count = Counter(
     "Number of attempts to create a proposal that was rate-limited",
     ["package", "campaign"],
 )
-open_proposal_count = Gauge(
-    "open_proposal_count", "Number of open proposals.", labelnames=("maintainer",)
+open_proposal_count = Gauge("open_proposal_count", "Number of open proposals.")
+bucket_proposal_count = Gauge(
+    "bucket_proposal_count", "Number of proposals per bucket.", labelnames=("bucket",)
 )
 merge_proposal_count = Gauge(
     "merge_proposal_count",
@@ -203,28 +204,28 @@ class RateLimited(Exception):
     """A rate limit was reached."""
 
 
-class MaintainerRateLimited(RateLimited):
-    """Per-maintainer rate-limit was reached."""
+class BucketRateLimited(RateLimited):
+    """Per-bucket rate-limit was reached."""
 
-    def __init__(self, maintainer_email, open_mps, max_open_mps):
-        super(MaintainerRateLimited, self).__init__(
-            "Maintainer %s already has %d merge proposal open (max: %d)" % (
-                maintainer_email, open_mps, max_open_mps))
-        self.maintainer_email = maintainer_email
+    def __init__(self, bucket, open_mps, max_open_mps):
+        super(BucketRateLimited, self).__init__(
+            "Bucke %s already has %d merge proposal open (max: %d)" % (
+                bucket, open_mps, max_open_mps))
+        self.bucket = bucket
         self.open_mps = open_mps
         self.max_open_mps = max_open_mps
 
 
 class RateLimiter(object):
-    def set_mps_per_maintainer(
-        self, mps_per_maintainer: Dict[str, Dict[str, int]]
+    def set_mps_per_bucket(
+        self, mps_per_bucket: Dict[str, Dict[str, int]]
     ) -> None:
-        raise NotImplementedError(self.set_mps_per_maintainer)
+        raise NotImplementedError(self.set_mps_per_bucket)
 
-    def check_allowed(self, maintainer_email: str) -> None:
+    def check_allowed(self, bucket: str) -> None:
         raise NotImplementedError(self.check_allowed)
 
-    def inc(self, maintainer_email: str) -> None:
+    def inc(self, bucket: str) -> None:
         raise NotImplementedError(self.inc)
 
     def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
@@ -233,49 +234,48 @@ class RateLimiter(object):
 
 class FixedRateLimiter(RateLimiter):
 
-    _open_mps_per_maintainer: Optional[Dict[str, int]]
+    _open_mps_per_bucket: Optional[Dict[str, int]]
 
-    def __init__(self, max_mps_per_maintainer: Optional[int] = None):
-        self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer = None
+    def __init__(self, max_mps_per_bucket: Optional[int] = None):
+        self._max_mps_per_bucket = max_mps_per_bucket
+        self._open_mps_per_bucket = None
 
-    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
-        self._open_mps_per_maintainer = mps_per_maintainer["open"]
+    def set_mps_per_bucket(self, mps_per_bucket: Dict[str, Dict[str, int]]):
+        self._open_mps_per_bucket = mps_per_bucket["open"]
 
-    def check_allowed(self, maintainer_email: str):
-        if not self._max_mps_per_maintainer:
+    def check_allowed(self, bucket: str):
+        if not self._max_mps_per_bucket:
             return
-        if self._open_mps_per_maintainer is None:
+        if self._open_mps_per_bucket is None:
             # Be conservative
-            raise RateLimited("Open mps per maintainer not yet determined.")
-        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
-        if current > self._max_mps_per_maintainer:
-            raise MaintainerRateLimited(
-                maintainer_email, current, self._max_mps_per_maintainer)
+            raise RateLimited("Open mps per bucket not yet determined.")
+        current = self._open_mps_per_bucket.get(bucket, 0)
+        if current > self._max_mps_per_bucket:
+            raise BucketRateLimited(bucket, current, self._max_mps_per_bucket)
 
-    def inc(self, maintainer_email: str):
-        if self._open_mps_per_maintainer is None:
+    def inc(self, bucket: str):
+        if self._open_mps_per_bucket is None:
             return
-        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        self._open_mps_per_maintainer[maintainer_email] += 1
+        self._open_mps_per_bucket.setdefault(bucket, 0)
+        self._open_mps_per_bucket[bucket] += 1
 
     def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
-        if self._open_mps_per_maintainer:
+        if self._open_mps_per_bucket:
             return {
-                email: (current, self._max_mps_per_maintainer)
-                for (email, current) in self._open_mps_per_maintainer.items()}
+                bucket: (current, self._max_mps_per_bucket)
+                for (bucket, current) in self._open_mps_per_bucket.items()}
         else:
             return {}
 
 
 class NonRateLimiter(RateLimiter):
-    def check_allowed(self, email):
+    def check_allowed(self, bucket):
         pass
 
-    def inc(self, maintainer_email):
+    def inc(self, bucket):
         pass
 
-    def set_mps_per_maintainer(self, mps_per_maintainer):
+    def set_mps_per_bucket(self, mps_per_bucket):
         pass
 
     def get_stats(self):
@@ -283,53 +283,52 @@ class NonRateLimiter(RateLimiter):
 
 
 class SlowStartRateLimiter(RateLimiter):
-    def __init__(self, max_mps_per_maintainer=None):
-        self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer: Optional[Dict[str, int]] = None
-        self._absorbed_mps_per_maintainer: Optional[Dict[str, int]] = None
+    def __init__(self, max_mps_per_bucket=None):
+        self._max_mps_per_bucket = max_mps_per_bucket
+        self._open_mps_per_bucket: Optional[Dict[str, int]] = None
+        self._absorbed_mps_per_bucket: Optional[Dict[str, int]] = None
 
-    def check_allowed(self, email: str) -> None:
+    def check_allowed(self, bucket: str) -> None:
         if (
-            self._open_mps_per_maintainer is None
-            or self._absorbed_mps_per_maintainer is None
+            self._open_mps_per_bucket is None
+            or self._absorbed_mps_per_bucket is None
         ):
             # Be conservative
-            raise RateLimited("Open mps per maintainer not yet determined.")
-        current = self._open_mps_per_maintainer.get(email, 0)
-        if self._max_mps_per_maintainer and current >= self._max_mps_per_maintainer:
-            raise MaintainerRateLimited(
-                email, current, self._max_mps_per_maintainer)
-        limit = self._get_limit(email)
+            raise RateLimited("Open mps per bucket not yet determined.")
+        current = self._open_mps_per_bucket.get(bucket, 0)
+        if self._max_mps_per_bucket and current >= self._max_mps_per_bucket:
+            raise BucketRateLimited(bucket, current, self._max_mps_per_bucket)
+        limit = self._get_limit(bucket)
         if current >= limit:
-            raise MaintainerRateLimited(email, current, limit)
+            raise BucketRateLimited(bucket, current, limit)
 
-    def _get_limit(self, maintainer_email):
-        return self._absorbed_mps_per_maintainer.get(maintainer_email, 0) + 1
+    def _get_limit(self, bucket):
+        return self._absorbed_mps_per_bucket.get(bucket, 0) + 1
 
-    def inc(self, maintainer_email: str):
-        if self._open_mps_per_maintainer is None:
+    def inc(self, bucket: str):
+        if self._open_mps_per_bucket is None:
             return
-        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        self._open_mps_per_maintainer[maintainer_email] += 1
+        self._open_mps_per_bucket.setdefault(bucket, 0)
+        self._open_mps_per_bucket[bucket] += 1
 
-    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
-        self._open_mps_per_maintainer = mps_per_maintainer.get("open", {})
+    def set_mps_per_bucket(self, mps_per_bucket: Dict[str, Dict[str, int]]):
+        self._open_mps_per_bucket = mps_per_bucket.get("open", {})
         ms: Dict[str, int] = {}
         for status in ['merged', 'applied']:
-            for m, c in mps_per_maintainer.get(status, {}).items():
+            for m, c in mps_per_bucket.get(status, {}).items():
                 ms.setdefault(m, 0)
                 ms[m] += c
-        self._absorbed_mps_per_maintainer = ms
+        self._absorbed_mps_per_bucket = ms
 
     def get_stats(self):
-        if self._open_mps_per_maintainer is None:
+        if self._open_mps_per_bucket is None:
             return {}
         else:
             return {
-                email: (
+                bucket: (
                     current,
-                    min(self._max_mps_per_maintainer, self._get_limit(email)))
-                for email, current in self._open_mps_per_maintainer.items()}
+                    min(self._max_mps_per_bucket, self._get_limit(bucket)))
+                for bucket, current in self._open_mps_per_bucket.items()}
 
 
 class PublishFailure(Exception):
@@ -444,9 +443,9 @@ class PublishWorker(object):
         log_id: str,
         unchanged_id: str,
         derived_branch_name: str,
-        maintainer_email: str,
+        rate_limit_bucket: Optional[str],
         vcs_manager: VcsManager,
-        maintainer_rate_limiter: Optional[RateLimiter] = None,
+        bucket_rate_limiter: Optional[RateLimiter] = None,
         dry_run: bool = False,
         require_binary_diff: bool = False,
         allow_create_proposal: bool = False,
@@ -536,9 +535,11 @@ class PublishWorker(object):
                             "target_branch_url": main_branch_url.rstrip("/")}))
 
                 merge_proposal_count.labels(status="open").inc()
-                if maintainer_rate_limiter:
-                    maintainer_rate_limiter.inc(maintainer_email)
-                open_proposal_count.labels(maintainer=maintainer_email).inc()
+                open_proposal_count.inc()
+                if rate_limit_bucket:
+                    if bucket_rate_limiter:
+                        bucket_rate_limiter.inc(rate_limit_bucket)
+                    bucket_proposal_count.labels(bucket=rate_limit_bucket).inc()
 
             return PublishResult(
                 proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
@@ -558,8 +559,8 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 
 async def consider_publish_run(
         conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
-        vcs_managers, maintainer_rate_limiter,
-        run, maintainer_email,
+        vcs_managers, bucket_rate_limiter,
+        run, rate_limit_bucket,
         unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
         dry_run=False):
@@ -626,9 +627,9 @@ async def consider_publish_run(
         actual_modes[role] = await publish_from_policy(
             conn=conn, campaign_config=campaign_config,
             publish_worker=publish_worker,
-            maintainer_rate_limiter=maintainer_rate_limiter,
+            bucket_rate_limiter=bucket_rate_limiter,
             vcs_managers=vcs_managers, run=run, role=role,
-            maintainer_email=maintainer_email, main_branch_url=run.branch_url,
+            rate_limit_bucket=rate_limit_bucket, main_branch_url=run.branch_url,
             mode=publish_mode,
             max_frequency_days=max_frequency_days, command=command,
             dry_run=dry_run,
@@ -655,7 +656,8 @@ async def iter_publish_ready(
         state.Run,
         str,
         str,
-        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
+        List[Tuple[str, Optional[str], str, bytes, bytes, Optional[str],
+                   Optional[int], Optional[str]]],
     ]
 ]:
     args: List[Any] = []
@@ -702,7 +704,7 @@ SELECT * FROM publish_ready
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
             [state.Run.from_row(record),
-             record['maintainer_email'],
+             record['rate_limit_bucket'],
              record['policy_command'],
              record['unpublished_branches']
              ]
@@ -715,7 +717,7 @@ async def publish_pending_ready(
     redis,
     config,
     publish_worker,
-    maintainer_rate_limiter,
+    bucket_rate_limiter,
     vcs_managers,
     dry_run: bool,
     reviewed_only: bool = False,
@@ -733,7 +735,7 @@ async def publish_pending_ready(
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (
             run,
-            maintainer_email,
+            rate_limit_bucket,
             command,
             unpublished_branches,
         ) in iter_publish_ready(
@@ -745,10 +747,10 @@ async def publish_pending_ready(
                 conn, redis=redis, config=config,
                 publish_worker=publish_worker,
                 vcs_managers=vcs_managers,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 run=run,
                 command=command,
-                maintainer_email=maintainer_email,
+                rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
@@ -973,11 +975,11 @@ async def publish_from_policy(
     redis,
     campaign_config: Campaign,
     publish_worker: PublishWorker,
-    maintainer_rate_limiter: RateLimiter,
+    bucket_rate_limiter: RateLimiter,
     vcs_managers: Dict[str, VcsManager],
     run: state.Run,
     role: str,
-    maintainer_email: str,
+    rate_limit_bucket: Optional[str],
     main_branch_url: str,
     mode: str,
     max_frequency_days: Optional[int],
@@ -1040,7 +1042,8 @@ async def publish_from_policy(
         )
         if not open_mp:
             try:
-                maintainer_rate_limiter.check_allowed(maintainer_email)
+                if rate_limit_bucket:
+                    bucket_rate_limiter.check_allowed(rate_limit_bucket)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
                     package=run.package, campaign=run.campaign
@@ -1092,11 +1095,11 @@ async def publish_from_policy(
             log_id=run.id,
             unchanged_id=(unchanged_run['id'] if unchanged_run else None),
             derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
-            maintainer_email=maintainer_email,
+            rate_limit_bucket=rate_limit_bucket,
             vcs_manager=vcs_managers[run.vcs_type],
             dry_run=dry_run,
             require_binary_diff=require_binary_diff,
-            maintainer_rate_limiter=maintainer_rate_limiter,
+            bucket_rate_limiter=bucket_rate_limiter,
             result_tags=run.result_tags,
             allow_create_proposal=run_sufficient_for_proposal(campaign_config, run.value),
             commit_message_template=(
@@ -1209,9 +1212,9 @@ async def publish_and_store(
     run: state.Run,
     mode: str,
     role: str,
-    maintainer_email: str,
+    rate_limit_bucket: Optional[str],
     vcs_managers: Dict[str, VcsManager],
-    maintainer_rate_limiter: RateLimiter,
+    bucket_rate_limiter: RateLimiter,
     dry_run: bool,
     allow_create_proposal: bool = True,
     require_binary_diff: bool = False,
@@ -1249,12 +1252,12 @@ async def publish_and_store(
                 log_id=run.id,
                 unchanged_id=unchanged_run_id,
                 derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
-                maintainer_email=maintainer_email,
+                rate_limit_bucket=rate_limit_bucket,
                 vcs_manager=vcs_managers[run.vcs_type],
                 dry_run=dry_run,
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message
@@ -1417,7 +1420,7 @@ async def handle_policy_get(request):
     if not row:
         return web.json_response({"reason": "Publish policy not found"}, status=404)
     return web.json_response({
-        "rate_limiting_bucket": row["rate_limiting_bucket"],
+        "rate_limit_bucket": row["rate_limit_bucket"],
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
@@ -1432,7 +1435,7 @@ async def handle_full_policy_get(request):
     async with request.app['db'].acquire() as conn:
         rows = await conn.fetch("SELECT * FROM named_publish_policy")
     return web.json_response({row['name']: {
-        "rate_limiting_bucket": row["rate_limiting_bucket"],
+        "rate_limit_bucket": row["rate_limit_bucket"],
         "per_branch": {
             p['role']: {
                 'mode': p['mode'],
@@ -1449,15 +1452,15 @@ async def handle_policy_put(request):
     async with request.app['db'].acquire() as conn:
         await conn.execute(
             "INSERT INTO named_publish_policy "
-            "(name, qa_review, per_branch_policy, rate_limiting_bucket) "
+            "(name, qa_review, per_branch_policy, rate_limit_bucket) "
             "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
-            "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket",
+            "rate_limit_bucket = EXCLUDED.rate_limit_bucket",
             name, policy['qa_review'],
             [(r, v['mode'], v.get('max_frequency_days'))
              for (r, v) in policy['per_branch'].items()],
-            policy.get('rate_limiting_bucket'))
+            policy.get('rate_limit_bucket'))
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1470,15 +1473,15 @@ async def handle_full_policy_put(request):
             (name, v['qa_review'],
              [(r, b['mode'], b.get('max_frequency_days'))
               for (r, b) in v['per_branch'].items()],
-             v.get('rate_limiting_bucket'))
+             v.get('rate_limit_bucket'))
             for (name, v) in policy.items()]
         await conn.executemany(
             "INSERT INTO named_publish_policy "
-            "(name, qa_review, per_branch_policy, rate_limiting_bucket) "
+            "(name, qa_review, per_branch_policy, rate_limit_bucket) "
             "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
             "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
-            "rate_limiting_bucket = EXCLUDED.rate_limiting_bucket", entries)
+            "rate_limit_bucket = EXCLUDED.rate_limit_bucket", entries)
         await conn.execute(
             "DELETE FROM named_publish_policy WHERE NOT (name = ANY($1::text[]))",
             policy.keys())
@@ -1519,7 +1522,8 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, maintainer_email, command, unpublished_branches) in iter_publish_ready(
+            async for (run, rate_limit_bucket,
+                       command, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
                     needs_review=False, run_id=run_id,
                     change_set_state=['ready', 'publishing']):
@@ -1531,10 +1535,10 @@ async def consider_request(request):
                 config=request.app['config'],
                 publish_worker=request.app['publish_worker'],
                 vcs_managers=request.app['vcs_managers'],
-                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+                bucket_rate_limiter=request.app['bucket_rate_limiter'],
                 run=run,
                 command=command,
-                maintainer_email=maintainer_email,
+                rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
                 require_binary_diff=request.app['require_binary_diff'],
                 dry_run=request.app['dry_run'])
@@ -1545,7 +1549,7 @@ async def consider_request(request):
 
 async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: str):
     row = await conn.fetchrow(
-        "SELECT per_branch_policy, command "
+        "SELECT per_branch_policy, command, rate_limit_bucket "
         "FROM candidate "
         "LEFT JOIN named_publish_policy "
         "ON named_publish_policy.name = candidate.publish_policy "
@@ -1557,8 +1561,8 @@ async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: s
         return (
             {v['role']: (v['mode'], v['frequency_days'])
              for v in row['per_branch_policy']},
-            row['command'])
-    return None, None
+            row['command'], row['rate_limit_bucket'])
+    return None, None, None
 
 
 @routes.get("/publish/{publish_id}", name="publish-details")
@@ -1597,26 +1601,21 @@ FROM publish WHERE id = $1
 async def publish_request(request):
     dry_run = request.app['dry_run']
     vcs_managers = request.app['vcs_managers']
-    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
+    bucket_rate_limiter = request.app['bucket_rate_limiter']
     package = request.match_info["package"]
     campaign = request.match_info["campaign"]
     role = request.query.get("role")
     post = await request.post()
     mode = post.get("mode")
     async with request.app['db'].acquire() as conn:
-        package = await conn.fetchrow(
-            'SELECT name, maintainer_email FROM package WHERE name = $1',
-            package)
-        if package is None:
-            return web.json_response({}, status=400)
-
-        run = await get_last_effective_run(conn, package['name'], campaign)
+        run = await get_last_effective_run(conn, package, campaign)
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await get_publish_policy(conn, package['name'], campaign))[0]
+        publish_policy, _, rate_limit_bucket = (
+            await get_publish_policy(conn, package, campaign))
 
-        logger.info("Handling request to publish %s/%s", package['name'], campaign)
+        logger.info("Handling request to publish %s/%s", package, campaign)
 
     if role is not None:
         roles = [role]
@@ -1648,14 +1647,14 @@ async def publish_request(request):
                 run=run,
                 mode=mode,
                 role=role,
-                maintainer_email=package['maintainer_email'],
+                rate_limit_bucket=rate_limit_bucket,
                 vcs_managers=vcs_managers,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 dry_run=dry_run,
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), 'publish of %s/%s, role %s' % (package['name'], campaign, role)
+            ), 'publish of %s/%s, role %s' % (package, campaign, role)
         )
 
     if not publish_ids:
@@ -1719,7 +1718,7 @@ async def create_app(
     publish_worker: Optional[PublishWorker] = None,
     dry_run: bool = False,
     forge_rate_limiter: Optional[Dict[str, datetime]] = None,
-    maintainer_rate_limiter: Optional[RateLimiter] = None,
+    bucket_rate_limiter: Optional[RateLimiter] = None,
     require_binary_diff: bool = False,
     push_limit: Optional[int] = None,
     modify_mp_limit: Optional[int] = None,
@@ -1734,9 +1733,9 @@ async def create_app(
     app['db'] = db
     app['redis'] = redis
     app['config'] = config
-    if maintainer_rate_limiter is None:
-        maintainer_rate_limiter = NonRateLimiter()
-    app['maintainer_rate_limiter'] = maintainer_rate_limiter
+    if bucket_rate_limiter is None:
+        bucket_rate_limiter = NonRateLimiter()
+    app['bucket_rate_limiter'] = bucket_rate_limiter
     if forge_rate_limiter is None:
         forge_rate_limiter = {}
     app['forge_rate_limiter'] = forge_rate_limiter
@@ -1801,7 +1800,7 @@ async def scan_request(request):
                 redis=request.app['redis'],
                 config=request.app['config'],
                 publish_worker=request.app['publish_worker'],
-                maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+                bucket_rate_limiter=request.app['bucket_rate_limiter'],
                 forge_rate_limiter=request.app['forge_rate_limiter'],
                 vcs_managers=request.app['vcs_managers'],
                 dry_run=request.app['dry_run'],
@@ -1834,7 +1833,7 @@ async def refresh_proposal_status_request(request):
                     mp=mp,
                     status=status,
                     vcs_managers=request.app['vcs_managers'],
-                    maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+                    bucket_rate_limiter=request.app['bucket_rate_limiter'],
                     dry_run=request.app['dry_run'],
                 )
             except NoRunForMergeProposal as e:
@@ -1857,7 +1856,7 @@ async def autopublish_request(request):
             redis=request.app['redis'],
             config=request.app['config'],
             publish_worker=request.app['publish_worker'],
-            maintainer_rate_limiter=request.app['maintainer_rate_limiter'],
+            bucket_rate_limiter=request.app['bucket_rate_limiter'],
             vcs_managers=request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
             push_limit=request.app['push_limit'],
@@ -1869,14 +1868,14 @@ async def autopublish_request(request):
     return web.Response(status=202, text="Autopublish started.")
 
 
-@routes.get("/rate-limits/{maintainer}", name="maintainer-rate-limits")
-async def maintainer_rate_limits_request(request):
-    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
+@routes.get("/rate-limits/{bucket}", name="bucket-rate-limits")
+async def bucket_rate_limits_request(request):
+    bucket_rate_limiter = request.app['bucket_rate_limiter']
 
-    stats = maintainer_rate_limiter.get_stats()
+    stats = bucket_rate_limiter.get_stats()
 
     (current_open, max_open) = stats.get(
-        request.match_info['maintainer'], (None, None))
+        request.match_info['bucket'], (None, None))
 
     ret = {
         'open': current_open,
@@ -1890,12 +1889,12 @@ async def maintainer_rate_limits_request(request):
 
 @routes.get("/rate-limits", name="rate-limits")
 async def rate_limits_request(request):
-    maintainer_rate_limiter = request.app['maintainer_rate_limiter']
+    bucket_rate_limiter = request.app['bucket_rate_limiter']
 
-    per_maintainer = {}
-    for email, (current_open, max_open) in (
-            maintainer_rate_limiter.get_stats().items()):
-        per_maintainer[email] = {
+    per_bucket = {}
+    for bucket, (current_open, max_open) in (
+            bucket_rate_limiter.get_stats().items()):
+        per_bucket[bucket] = {
             'open': current_open,
             'max_open': max_open,
             'remaining': (
@@ -1903,7 +1902,7 @@ async def rate_limits_request(request):
                 else max_open - current_open)}
 
     return web.json_response({
-        'proposals_per_maintainer': per_maintainer,
+        'proposals_per_bucket': per_bucket,
         'per_forge': {
             str(f): dt.isoformat()
             for f, dt in request.app['forge_rate_limiter'].items()},
@@ -1922,7 +1921,7 @@ SELECT
   run.review_status AS review_status,
   run.command AS run_command,
   named_publish_policy.qa_review AS qa_review_policy,
-  package.maintainer_email AS rate_limiting_bucket,
+  named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   run.revision AS revision,
   candidate.command AS policy_command,
   package.removed AS removed,
@@ -1993,10 +1992,10 @@ WHERE run.id = $1
 
     ret['propose_rate_limit'] = {
         'details': {
-            'bucket': run['rate_limiting_bucket']}}
+            'bucket': run['rate_limit_bucket']}}
     try:
-        request.app['maintainer_rate_limiter'].check_allowed(run['rate_limiting_bucket'])
-    except MaintainerRateLimited as e:
+        request.app['bucket_rate_limiter'].check_allowed(run['rate_limit_bucket'])
+    except BucketRateLimited as e:
         ret['propose_rate_limit']['result'] = False
         ret['propose_rate_limit']['details'] = {
             'open': e.open_mps,
@@ -2021,7 +2020,7 @@ async def process_queue_loop(
     redis,
     config,
     publish_worker,
-    maintainer_rate_limiter,
+    bucket_rate_limiter,
     forge_rate_limiter,
     dry_run,
     vcs_managers,
@@ -2040,7 +2039,7 @@ async def process_queue_loop(
                 redis=redis,
                 config=config,
                 publish_worker=publish_worker,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 forge_rate_limiter=forge_rate_limiter,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
@@ -2052,7 +2051,7 @@ async def process_queue_loop(
                 redis=redis,
                 config=config,
                 publish_worker=publish_worker,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
                 reviewed_only=reviewed_only,
@@ -2147,9 +2146,10 @@ async def guess_package_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
-select distinct package, maintainer_email from run
-left join new_result_branch rb ON rb.run_id = run.id
-left join package on package.name = run.package
+SELECT distinct package, maintainer_email AS rate_limit_bucket
+FROM run
+LEFT JOIN new_result_branch rb ON rb.run_id = run.id
+LEFT JOIN package on package.name = run.package
 where rb.revision = $1 and run.package is not null
 """
     rows = await conn.fetch(query, revision.decode("utf-8"))
@@ -2162,7 +2162,7 @@ async def guess_package_from_branch_url(
         conn: asyncpg.Connection, url: str, possible_transports=None):
     query = """
 SELECT
-  name, maintainer_email, branch_url
+  name, maintainer_email AS rate_limit_bucket, branch_url
 FROM
   package
 WHERE
@@ -2346,9 +2346,9 @@ async def check_existing_mp(
     mp,
     status,
     vcs_managers,
-    maintainer_rate_limiter,
+    bucket_rate_limiter,
     dry_run: bool,
-    mps_per_maintainer=None,
+    mps_per_bucket=None,
     possible_transports: Optional[List[Transport]] = None,
     check_only: bool = False,
     close_below_threshold: bool = True,
@@ -2357,10 +2357,10 @@ async def check_existing_mp(
     old_proposal_info = await proposal_info_manager.get_proposal_info(mp.url)
     if old_proposal_info:
         package_name = old_proposal_info.package_name
-        maintainer_email = old_proposal_info.maintainer_email
+        rate_limit_bucket = old_proposal_info.maintainer_email
     else:
         package_name = None
-        maintainer_email = None
+        rate_limit_bucket = None
     revision = await to_thread(mp.get_source_revision)
     source_branch_url = await to_thread(mp.get_source_branch_url)
     try:
@@ -2395,18 +2395,18 @@ async def check_existing_mp(
     if revision is None and old_proposal_info:
         revision = old_proposal_info.revision
     target_branch_url = await to_thread(mp.get_target_branch_url)
-    if maintainer_email is None:
+    if rate_limit_bucket is None:
         row = await guess_package_from_branch_url(
             conn, target_branch_url,
             possible_transports=possible_transports)
         if row is not None:
-            maintainer_email = row['maintainer_email']
+            rate_limit_bucket = row['rate_limit_bucket']
             package_name = row['name']
         else:
             if revision is not None:
                 (
                     package_name,
-                    maintainer_email,
+                    rate_limit_bucket,
                 ) = await guess_package_from_revision(conn, revision)
             if package_name is None:
                 logger.warning(
@@ -2436,9 +2436,9 @@ async def check_existing_mp(
             'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
             mp.url)
         mp_run = None
-    if maintainer_email is not None and mps_per_maintainer is not None:
-        mps_per_maintainer[status].setdefault(maintainer_email, 0)
-        mps_per_maintainer[status][maintainer_email] += 1
+    if rate_limit_bucket is not None and mps_per_bucket is not None:
+        mps_per_bucket[status].setdefault(rate_limit_bucket, 0)
+        mps_per_bucket[status][rate_limit_bucket] += 1
     if status != "open":
         return False
     if check_only:
@@ -2614,10 +2614,6 @@ applied independently.
             )
         return False
 
-    if maintainer_email is None:
-        logger.info("%s: No maintainer email known.", mp.url)
-        return False
-
     campaign_config = get_campaign_config(config, mp_run['campaign'])
 
     if close_below_threshold and not run_sufficient_for_proposal(
@@ -2757,12 +2753,12 @@ This merge proposal will be closed, since the branch has moved to %s.
                 log_id=last_run.id,
                 unchanged_id=unchanged_run_id,
                 derived_branch_name=source_branch_name,
-                maintainer_email=maintainer_email,
+                rate_limit_bucket=rate_limit_bucket,
                 vcs_manager=vcs_managers[last_run.vcs_type],
                 dry_run=dry_run,
                 require_binary_diff=False,
                 allow_create_proposal=True,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message
@@ -2913,14 +2909,14 @@ async def check_existing(
     redis,
     config,
     publish_worker,
-    maintainer_rate_limiter,
+    bucket_rate_limiter,
     forge_rate_limiter: Dict[Forge, datetime],
     vcs_managers,
     dry_run: bool,
     modify_limit=None,
     unexpected_limit: int = 5,
 ):
-    mps_per_maintainer: Dict[str, Dict[str, int]] = {
+    mps_per_bucket: Dict[str, Dict[str, int]] = {
         "open": {},
         "closed": {},
         "merged": {},
@@ -2962,9 +2958,9 @@ async def check_existing(
                 status=status,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 possible_transports=possible_transports,
-                mps_per_maintainer=mps_per_maintainer,
+                mps_per_bucket=mps_per_bucket,
                 check_only=check_only,
             )
         except NoRunForMergeProposal as e:
@@ -3013,9 +3009,13 @@ async def check_existing(
         for status, count in status_count.items():
             merge_proposal_count.labels(status=status).set(count)
 
-        maintainer_rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
-        for maintainer_email, count in mps_per_maintainer["open"].items():
-            open_proposal_count.labels(maintainer=maintainer_email).set(count)
+        bucket_rate_limiter.set_mps_per_bucket(mps_per_bucket)
+        total = 0
+        for bucket, count in mps_per_bucket["open"].items():
+            total += count
+            if bucket is not None:
+                bucket_proposal_count.labels(bucket=bucket).set(count)
+        open_proposal_count.set(total)
     else:
         logging.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
 
@@ -3081,26 +3081,25 @@ async def listen_to_runner(
     redis,
     config,
     publish_worker,
-    maintainer_rate_limiter,
+    bucket_rate_limiter,
     vcs_managers,
     dry_run: bool,
     require_binary_diff: bool = False,
 ):
-    async def process_run(conn, run, maintainer_email, branch_url):
-        publish_policy, command = await get_publish_policy(
-            conn, run.package, run.campaign
-        )
+    async def process_run(conn, run, branch_url):
+        publish_policy, command, rate_limit_bucket = await get_publish_policy(
+            conn, run.package, run.campaign)
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn=conn,
                 campaign_config=get_campaign_config(config, run.campaign),
                 publish_worker=publish_worker,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 vcs_managers=vcs_managers,
                 run=run,
                 redis=redis,
                 role=role,
-                maintainer_email=maintainer_email,
+                rate_limit_bucket=rate_limit_bucket,
                 main_branch_url=branch_url,
                 mode=mode,
                 max_frequency_days=max_frequency_days,
@@ -3118,23 +3117,19 @@ async def listen_to_runner(
         async with db.acquire() as conn:
             # TODO(jelmer): Fold these into a single query ?
             package = await conn.fetchrow(
-                'SELECT maintainer_email, branch_url FROM package WHERE name = $1',
+                'SELECT branch_url FROM package WHERE name = $1',
                 result["package"])
             if package is None:
                 logging.warning('Package %s not in database?', result['package'])
                 return
             run = await get_run(conn, result["log_id"])
             if run.campaign != "unchanged":
-                await process_run(
-                    conn, run, package['maintainer_email'],
-                    package['branch_url'])
+                await process_run(conn, run, package['branch_url'])
             else:
                 for run in await iter_control_matching_runs(
                         conn, main_branch_revision=run.revision,
                         package=run.package):
-                    await process_run(
-                        conn, run, package['maintainer_email'],
-                        package['branch_url'])
+                    await process_run(conn, run, package['branch_url'])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
@@ -3144,19 +3139,20 @@ async def listen_to_runner(
         await redis.close()
 
 
-async def refresh_maintainer_mp_counts(db, maintainer_rate_limiter):
-    per_maintainer = {}
+async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
+    per_bucket = {}
     async with db.acquire() as conn:
         for row in await conn.fetch("""
-                SELECT maintainer_email, merge_proposal.status AS status,
+                SELECT package.maintainer_email AS rate_limit_bucket,
+                merge_proposal.status AS status,
                 count(*) as c
                 from merge_proposal
                 left join package on merge_proposal.package = package.name
                 group by 1, 2
                 """):
-            per_maintainer.setdefault(
-                row['status'], {})[row['maintainer_email']] = row['c']
-    maintainer_rate_limiter.set_mps_per_maintainer(per_maintainer)
+            per_bucket.setdefault(
+                row['status'], {})[row['rate_limit_bucket']] = row['c']
+    bucket_rate_limiter.set_mps_per_bucket(per_bucket)
 
 
 async def main(argv=None):
@@ -3263,11 +3259,11 @@ async def main(argv=None):
         config = read_config(f)
 
     if args.slowstart:
-        maintainer_rate_limiter = SlowStartRateLimiter(args.max_mps_per_maintainer)
-    elif args.max_mps_per_maintainer > 0:
-        maintainer_rate_limiter = FixedRateLimiter(args.max_mps_per_maintainer)
+        bucket_rate_limiter = SlowStartRateLimiter(args.max_mps_per_bucket)
+    elif args.max_mps_per_bucket > 0:
+        bucket_rate_limiter = FixedRateLimiter(args.max_mps_per_bucket)
     else:
-        maintainer_rate_limiter = NonRateLimiter()
+        bucket_rate_limiter = NonRateLimiter()
 
     if args.no_auto_publish and args.once:
         sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
@@ -3298,7 +3294,7 @@ async def main(argv=None):
                 redis=redis,
                 config=config,
                 publish_worker=publish_worker,
-                maintainer_rate_limiter=maintainer_rate_limiter,
+                bucket_rate_limiter=bucket_rate_limiter,
                 dry_run=args.dry_run,
                 vcs_managers=vcs_managers,
                 reviewed_only=args.reviewed_only,
@@ -3315,7 +3311,7 @@ async def main(argv=None):
                         redis=redis,
                         config=config,
                         publish_worker=publish_worker,
-                        maintainer_rate_limiter=maintainer_rate_limiter,
+                        bucket_rate_limiter=bucket_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
@@ -3332,7 +3328,7 @@ async def main(argv=None):
                         args.listen_address,
                         args.port,
                         publish_worker=publish_worker,
-                        maintainer_rate_limiter=maintainer_rate_limiter,
+                        bucket_rate_limiter=bucket_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
                         db=db, redis=redis, config=config,
@@ -3343,7 +3339,7 @@ async def main(argv=None):
                     )
                 ),
                 loop.create_task(
-                    refresh_maintainer_mp_counts(db, maintainer_rate_limiter),
+                    refresh_bucket_mp_counts(db, bucket_rate_limiter),
                 ),
             ]
             if not args.reviewed_only and not args.no_auto_publish:
@@ -3354,7 +3350,7 @@ async def main(argv=None):
                             redis=redis,
                             config=config,
                             publish_worker=publish_worker,
-                            maintainer_rate_limiter=maintainer_rate_limiter,
+                            bucket_rate_limiter=bucket_rate_limiter,
                             vcs_managers=vcs_managers,
                             dry_run=args.dry_run,
                             require_binary_diff=args.require_binary_diff,
