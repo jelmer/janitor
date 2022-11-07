@@ -10,9 +10,6 @@
     <div class="section" id="{{ package }}">
         <h1>{{ suite }} Package - {{ package }}</h1>
         <ul class="metadata">
-            <li>
-                Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
-            </li>
             {% if publish_policy %}<li>Automatic publish policy: {{ describe_publish_policy(publish_policy) }}</li>{% endif %}
             {% if changelog_policy != 'auto' %}<li>Changelog update policy: {{ changelog_policy }}</li>{% endif %}
             {% if compat_release %}<li>Release compatibility: {{ compat_release }}</li>{% endif %}
