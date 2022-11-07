@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from abc import abstractmethod, ABC
 from aiohttp import (
     ClientSession,
     ClientResponseError,
@@ -32,19 +33,24 @@ class ServiceUnavailable(Exception):
     """The remote server is temporarily unavailable."""
 
 
-class LogFileManager(object):
+class LogFileManager(ABC):
+    @abstractmethod
     async def has_log(self, pkg: str, run_id: str, name: str, timeout=None):
         raise NotImplementedError(self.has_log)
 
+    @abstractmethod
     async def get_log(self, pkg: str, run_id: str, name: str, timeout=None):
         raise NotImplementedError(self.get_log)
 
+    @abstractmethod
     async def import_log(self, pkg: str, run_id: str, orig_path: str, timeout=None, mtime=None):
         raise NotImplementedError(self.import_log)
 
+    @abstractmethod
     async def iter_logs(self):
         raise NotImplementedError(self.iter_logs)
 
+    @abstractmethod
     async def get_ctime(self, pkg: str, run_id: str, name: str) -> datetime:
         raise NotImplementedError(self.get_ctime)
 
@@ -64,7 +70,11 @@ class FileSystemLogFileManager(LogFileManager):
     async def iter_logs(self):
         for pkg in os.scandir(self.log_directory):
             for entry in os.scandir(pkg.path):
-                yield pkg.name, entry.name, os.listdir(entry.path)
+                yield (
+                    pkg.name,
+                    entry.name,
+                    [n[:-3] if n.endswith('.gz') else n
+                     for n in os.listdir(entry.path)])
 
     async def has_log(self, pkg, run_id, name):
         return any(map(os.path.exists, self._get_paths(pkg, run_id, name)))
@@ -101,6 +111,10 @@ class FileSystemLogFileManager(LogFileManager):
                 os.unlink(path)
             except FileNotFoundError:
                 pass
+            else:
+                break
+        else:
+            raise FileNotFoundError(name)
 
 
 class LogRetrievalError(Exception):
@@ -160,8 +174,16 @@ class S3LogFileManager(LogFileManager):
         key = self._get_key(pkg, run_id, name)
         self.s3_bucket.delete_objects(Delete={"Objects": [{"Key": key}]})
 
+    async def iter_logs(self):
+        # TODO(jelmer)
+        raise NotImplementedError(self.iter_logs)
 
-class GCSLogFilemanager(LogFileManager):
+    async def get_ctime(self, pkg, run_id, name):
+        # TODO(jelmer)
+        raise NotImplementedError(self.get_ctime)
+
+
+class GCSLogFileManager(LogFileManager):
     def __init__(self, location, creds_path=None, trace_configs=None):
         from gcloud.aio.storage import Storage
 
@@ -230,7 +252,7 @@ class GCSLogFilemanager(LogFileManager):
 
 def get_log_manager(location, trace_configs=None):
     if location.startswith("gs://"):
-        return GCSLogFilemanager(location, trace_configs=trace_configs)
+        return GCSLogFileManager(location, trace_configs=trace_configs)
     if location.startswith("http:") or location.startswith("https:"):
         return S3LogFileManager(location, trace_configs=trace_configs)
     return FileSystemLogFileManager(location)
