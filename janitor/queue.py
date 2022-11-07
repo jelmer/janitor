@@ -34,6 +34,7 @@ class QueueItem(object):
         "refresh",
         "requestor",
         "change_set",
+        "codebase",
     ]
 
     def __init__(
