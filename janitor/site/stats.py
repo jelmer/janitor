@@ -2,6 +2,8 @@
 
 import operator
 
+from typing import Dict, Tuple
+
 from . import env, json_chart_data
 from aiohttp import web
 from .common import html_template
@@ -26,8 +28,8 @@ async def handle_graph_pushes_over_time(request, conn):
 @html_template(env, "cupboard/stats.html")
 async def handle_stats(request):
     async with request.app.database.acquire() as conn:
-        by_status = {}
-        by_hoster = {}
+        by_status: Dict[str, Dict[str, int]] = {}
+        by_hoster: Dict[str, Dict[str, int]] = {}
         for hoster, status, count in await conn.fetch(
             """
     SELECT
@@ -167,7 +169,7 @@ async def handle_package_hosters(request, conn):
     minimum = int(request.query.get("min", 0))
     query = "select name, vcs_type, branch_url from package where not removed"
 
-    hosters = {}
+    hosters: Dict[Tuple[str, str], int] = {}
     for name, vcs, url in await conn.fetch(query):
         if url is None:
             name = None

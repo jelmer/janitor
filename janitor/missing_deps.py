@@ -18,12 +18,14 @@
 import argparse
 import asyncio
 import logging
+from typing import Dict, List, Tuple, Iterator, Optional, AsyncGenerator
 
 from breezy import urlutils
 
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
 from ognibuild.session.plain import PlainSession
+from ognibuild.requirements import Requirement
 from ognibuild.upstream import UpstreamInfo
 from buildlog_consultant import problem_clses
 
@@ -55,7 +57,8 @@ def reconstruct_problem(result_code, failure_details):
         return None
 
 
-async def gather_requirements(db, session, run_ids=None):
+async def gather_requirements(
+        db, session, run_ids: Optional[List[str]] = None):
     async with db.acquire() as conn:
         query = """
 SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
@@ -193,7 +196,7 @@ async def main():
     async with state.create_pool(config.database_location) as pool:
         session = PlainSession()
         with session:
-            requirements = {}
+            requirements: Dict[Requirement, List[Tuple[str, str]]] = {}
             async for package, suite, requirement in gather_requirements(pool, session, args.run_id or None):
                 requirements.setdefault(requirement, []).append((package, suite))
 

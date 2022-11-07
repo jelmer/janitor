@@ -15,6 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from debian.changelog import Version
+
 from janitor.debian import tree_set_changelog_version, dpkg_vendor
 
 from breezy.tests import TestCaseWithTransport
@@ -40,7 +42,7 @@ blah (0.39) UNRELEASED; urgency=medium
         )
         tree.add(["debian", "debian/changelog"])
         tree.commit("add changelog")
-        tree_set_changelog_version(tree, "0.39~jan+lint1", "")
+        tree_set_changelog_version(tree, Version("0.39~jan+lint1"), "")
         self.assertFileEqual(
             """\
 blah (0.39~jan+lint1) UNRELEASED; urgency=medium
@@ -71,7 +73,7 @@ blah (0.40) UNRELEASED; urgency=medium
         )
         tree.add(["debian", "debian/changelog"])
         tree.commit("add changelog")
-        tree_set_changelog_version(tree, "0.39~jan+lint1", "")
+        tree_set_changelog_version(tree, Version("0.39~jan+lint1"), "")
         self.assertFileEqual(
             """\
 blah (0.40) UNRELEASED; urgency=medium

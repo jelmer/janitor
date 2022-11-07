@@ -17,7 +17,7 @@
 
 import asyncio
 import re
-from typing import Iterator, Tuple, List, Optional
+from typing import Iterator, Tuple, List, Optional, Iterable
 
 
 def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
@@ -73,8 +73,8 @@ def filter_boring_wdiff(
     return lines
 
 
-def _iter_fields(lines):
-    cl = []
+def _iter_fields(lines: Iterable[str]) -> Iterator[List[str]]:
+    cl: List[str] = []
     for line in lines:
         if cl and line.startswith(" "):
             cl.append(line)
@@ -86,6 +86,7 @@ def _iter_fields(lines):
 
 
 def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
+    lines: List[str] = []
     ret: List[Tuple[Optional[str], List[str]]] = []
     for title, paragraph in iter_sections(debdiff):
         if not title:
@@ -222,7 +223,8 @@ def htmlize_debdiff(debdiff: str) -> str:
         )
         return line
 
-    ret = []
+    ret: List[str] = []
+    lines: List[str]
     for title, lines in iter_sections(debdiff):
         if title:
             ret.append("<h4>%s</h4>" % title)
@@ -237,11 +239,11 @@ def htmlize_debdiff(debdiff: str) -> str:
                 wdiff = False
             if wdiff:
                 ret.append("<ul>")
-                for line in _iter_fields(lines):
-                    if not line:
+                for mlines in _iter_fields(lines):
+                    if not mlines:
                         continue
                     ret.extend(
-                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(line))]
+                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(mlines))]
                     )
                 ret.append("</ul>")
             else:

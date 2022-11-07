@@ -3,9 +3,11 @@
 from aiohttp import ClientConnectorError, ClientResponseError
 from aiohttp import web
 import asyncpg
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from breezy.revision import NULL_REVISION
+
+from jinja2 import Environment
 
 from janitor import state, splitout_env
 from janitor.config import get_campaign_config
@@ -357,7 +359,8 @@ def html_template(jinja_env, template_name, headers={}):
     return decorator
 
 
-async def render_template_for_request(jinja_env, templatename, request, vs):
+async def render_template_for_request(
+        jinja_env: Environment, templatename, request, vs: Dict[str, Any]):
     update_vars_from_request(vs, request)
     template = jinja_env.get_template(templatename)
     return await template.render_async(**vs)

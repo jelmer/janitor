@@ -2,9 +2,12 @@
 
 import logging
 
+from typing import Dict, List
+
 import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError, ClientResponseError
+import asyncpg
 
 from breezy.revision import NULL_REVISION
 
@@ -36,7 +39,7 @@ async def generate_rejected(conn, config, campaign=None):
         "ORDER BY finish_time DESC",
         campaigns)
 
-    reviews = {}
+    reviews: Dict[str, List[asyncpg.Record]] = {}
 
     for row in await conn.fetch(
             'SELECT * FROM review WHERE run_id = ANY($1::text[])',

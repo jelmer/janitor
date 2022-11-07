@@ -170,6 +170,10 @@ class BuilderResult(object):
     def artifact_filenames(self):
         raise NotImplementedError(self.artifact_filenames)
 
+    @classmethod
+    def from_json(cls, json):
+        raise NotImplementedError(cls.from_json)
+
 
 class Builder(object):
     """Abstract builder class."""
@@ -331,7 +335,7 @@ class DebianBuilder(Builder):
         self.dep_server_url = dep_server_url
 
     async def config(self, conn, campaign_config, queue_item):
-        config = {}
+        config: Dict[str, Any] = {}
         config['lintian'] = {'profile': self.distro_config.lintian_profile}
         if self.distro_config.lintian_suppress_tag:
             config['lintian']['suppress-tags'] = list(self.distro_config.lintian_suppress_tag)
@@ -568,8 +572,8 @@ class JanitorResult(object):
         }
 
 
-def committer_env(committer):
-    env = {}
+def committer_env(committer: str) -> Dict[str, str]:
+    env: Dict[str, str] = {}
     if not committer:
         return env
     (user, email) = parseaddr(committer)
@@ -1713,9 +1717,9 @@ class QueueProcessor(object):
         exclude_hosts = set(self.avoid_hosts)
         async for host, retry_after in self.rate_limited_hosts():
             exclude_hosts.add(host)
-        assigned_queue_items = [
+        assigned_queue_items = set([
             int(i.decode('utf-8'))
-            for i in await self.redis.hkeys('assigned-queue-items')]
+            for i in await self.redis.hkeys('assigned-queue-items')])
         return await queue.next_item(
             campaign=campaign, package=package,
             assigned_queue_items=assigned_queue_items)
@@ -1796,7 +1800,8 @@ async def handle_schedule_control(request):
         "offset": offset,
         "bucket": bucket,
         "queue_id": queue_id,
-        "estimated_duration_seconds": estimated_duration.total_seconds(),
+        "estimated_duration_seconds":
+            estimated_duration.total_seconds() if estimated_duration else None,
     }
     return web.json_response(response_obj)
 
@@ -1853,7 +1858,8 @@ async def handle_schedule(request):
         "offset": offset,
         "bucket": bucket,
         "queue_id": queue_id,
-        "estimated_duration_seconds": estimated_duration.total_seconds(),
+        "estimated_duration_seconds":
+            estimated_duration.total_seconds() if estimated_duration else None,
     }
     return web.json_response(response_obj)
 
@@ -1915,7 +1921,7 @@ async def handle_log(request):
 
     try:
         response = web.StreamResponse(
-            status=200, reason="OK", headers=[("Content-Type", "text/plain")]
+            status=200, reason="OK", headers={"Content-Type": "text/plain"}
         )
         await response.prepare(request)
         for chunk in f:
@@ -2079,7 +2085,7 @@ async def handle_assign(request):
     except QueueRateLimiting as e:
         return web.json_response(
             {'reason': str(e)}, status=429, headers={
-                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                'Retry-After': str(e.retry_after or DEFAULT_RETRY_AFTER)})
     return web.json_response(
         assignment, status=201, headers={
             'Location': str(request.app.router['get-active-run'].url_for(
@@ -2099,7 +2105,7 @@ async def handle_peek(request):
     except QueueRateLimiting as e:
         return web.json_response(
             {'reason': str(e)}, status=429, headers={
-                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
+                'Retry-After': str(e.retry_after or DEFAULT_RETRY_AFTER)})
     return web.json_response(
         assignment, status=201, headers={
             'Location': str(request.app.router['get-active-run'].url_for(
@@ -2525,9 +2531,7 @@ async def create_app(queue_processor, config, db, tracer=None):
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     setup_metrics(app)
-    aiozipkin.setup(app, tracer, skip_routes=[
-        app.router['metrics'],
-    ])
+    aiozipkin.setup(app, tracer, skip_routes=[app.router['metrics']])
     return app
 
 

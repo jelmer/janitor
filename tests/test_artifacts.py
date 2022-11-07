@@ -21,10 +21,11 @@ import shutil
 import tempfile
 import unittest
 
+from typing import Protocol, Any
 from janitor.artifacts import LocalArtifactManager, ArtifactManager, ArtifactsMissing
 
 
-class ArtifactManagerTests:
+class ArtifactManagerTests(Protocol):
 
     manager: ArtifactManager
 
@@ -49,7 +50,10 @@ class ArtifactManagerTests:
     def test_retrieve_nonexistent(self):
         loop = asyncio.get_event_loop()
         with tempfile.TemporaryDirectory() as td:
-            self.assertRaises(ArtifactsMissing, loop.run_until_complete, self.manager.retrieve_artifacts('some-run-id', td))
+            self.assertRaises(
+                ArtifactsMissing,
+                loop.run_until_complete,
+                self.manager.retrieve_artifacts('some-run-id', td))
 
 
 class LocalArtifactManagerTests(ArtifactManagerTests, unittest.TestCase):

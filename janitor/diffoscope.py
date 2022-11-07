@@ -16,11 +16,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from io import BytesIO, StringIO
+from io import StringIO
 import os
 import json
 import logging
 import sys
+from typing import Dict, Any
 
 from breezy.patches import (
     iter_hunks,
@@ -159,7 +160,6 @@ async def format_diffoscope(
 async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     args = ["diffoscope", "--json=-", "--exclude-directory-metadata=yes"]
     args.extend([old_binary, new_binary])
-    stdout = BytesIO()
     logging.debug("running %r", args)
     p = await asyncio.create_subprocess_exec(
         *args,
@@ -180,7 +180,7 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
 
 
 async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
-    ret = {
+    ret: Dict[str, Any] = {
         "diffoscope-json-version": 1,
         "source1": "old version",
         "source2": "new version",

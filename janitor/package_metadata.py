@@ -33,7 +33,7 @@ from .package_metadata_pb2 import PackageList, PackageMetadata, PackageRemoval
 
 
 async def update_package_metadata(
-    conn, distribution: str, provided_packages: List[PackageMetadata]
+    conn, distribution: str, provided_packages: Sequence[PackageMetadata]
 ):
     logging.info("Updating package metadata.")
     packages = []
@@ -117,7 +117,7 @@ async def update_package_metadata(
 
 
 async def mark_removed_packages(
-        conn, distribution: str, removals: List[PackageRemoval]):
+        conn, distribution: str, removals: Sequence[PackageRemoval]):
     existing_packages = set([
         row['name'] for row in await conn.fetch(
             "SELECT name FROM package WHERE NOT removed")])
