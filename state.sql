@@ -211,7 +211,8 @@ CREATE TABLE IF NOT EXISTS branch_publish_policy (
 CREATE TABLE IF NOT EXISTS named_publish_policy (
    name text not null primary key,
    per_branch_policy branch_publish_policy[],
-   qa_review review_policy
+   qa_review review_policy,
+   rate_limit_bucket text
 );
 
 
@@ -618,6 +619,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.value AS value,
   package.maintainer_email AS maintainer_email,
   candidate.command AS policy_command,
+  named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   named_publish_policy.qa_review AS qa_review_policy,
   (named_publish_policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
   ARRAY(
