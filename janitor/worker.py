@@ -214,7 +214,7 @@ class WorkerFailure(Exception):
             self, code: str, description: str,
             details: Optional[Any] = None, stage=None,
             followup_actions: Optional[List[Any]] = None,
-            transient: bool = None) -> None:
+            transient: Optional[bool] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
