@@ -2460,6 +2460,7 @@ async def handle_finish(request):
             logfilenames=logfilenames,
             resume_from=resume_from,
             change_set=active_run.change_set,
+            codebase=active_run.codebase,
         )
 
         with span.new_child('import-logs'):
