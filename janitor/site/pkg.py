@@ -20,7 +20,7 @@ from datetime import datetime
 from io import BytesIO
 import logging
 
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, List, Dict
 
 import asyncpg
 
@@ -31,7 +31,6 @@ from aiohttp import (
     ClientResponseError,
     ClientTimeout,
 )
-import asyncpg
 
 from breezy.revision import NULL_REVISION
 from breezy.forge import get_forge_by_hostname, UnsupportedForge

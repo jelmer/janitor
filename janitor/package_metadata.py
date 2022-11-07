@@ -18,7 +18,7 @@
 """Importing of upstream metadata."""
 
 import logging
-from typing import List, Tuple, Sequence
+from typing import Tuple, Sequence
 
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore

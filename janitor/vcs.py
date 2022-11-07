@@ -573,7 +573,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("url", type=str)
     args = parser.parse_args(argv)
-    branch = open_branch_ext(args.url)
+    open_branch_ext(args.url)
 
 
 if __name__ == "__main__":

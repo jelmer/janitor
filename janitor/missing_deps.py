@@ -18,7 +18,7 @@
 import argparse
 import asyncio
 import logging
-from typing import Dict, List, Tuple, Iterator, Optional, AsyncGenerator
+from typing import Dict, List, Tuple, Optional
 
 from breezy import urlutils
 
