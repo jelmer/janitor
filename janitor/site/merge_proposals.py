@@ -59,7 +59,9 @@ SELECT
     merge_proposal.url AS url,
     merge_proposal.status AS status,
     merge_proposal.merged_at AS merged_at,
-    merge_proposal.merged_by AS merged_by
+    merge_proposal.merged_by AS merged_by,
+    merge_proposal.last_scanned AS last_scanned,
+    merge_proposal.can_be_merged AS can_be_merged
 FROM
     merge_proposal
 LEFT JOIN new_result_branch ON new_result_branch.revision = merge_proposal.revision
