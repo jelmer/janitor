@@ -535,10 +535,11 @@ class PublishWorker(object):
                             "target_branch_url": main_branch_url.rstrip("/")}))
 
                 merge_proposal_count.labels(status="open").inc()
-                if bucket_rate_limiter:
-                    bucket_rate_limiter.inc(rate_limit_bucket)
                 open_proposal_count.inc()
-                bucket_proposal_count.labels(bucket=rate_limit_bucket).inc()
+                if rate_limit_bucket:
+                    if bucket_rate_limiter:
+                        bucket_rate_limiter.inc(rate_limit_bucket)
+                    bucket_proposal_count.labels(bucket=rate_limit_bucket).inc()
 
             return PublishResult(
                 proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
@@ -1041,7 +1042,8 @@ async def publish_from_policy(
         )
         if not open_mp:
             try:
-                bucket_rate_limiter.check_allowed(rate_limit_bucket)
+                if rate_limit_bucket:
+                    bucket_rate_limiter.check_allowed(rate_limit_bucket)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
                     package=run.package, campaign=run.campaign
