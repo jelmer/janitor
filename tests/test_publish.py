@@ -87,7 +87,7 @@ async def test_publish_worker():
             mode='attempt-push', role='main', revision=b'main-revid',
             log_id='some-id', unchanged_id='unchanged-id',
             derived_branch_name='branch-name',
-            maintainer_email='jelmer@jelmer.uk',
+            rate_limit_bucket='jelmer@jelmer.uk',
             vcs_manager=DummyVcsManager())
         e.assert_called_with(
             [sys.executable, '-m', 'janitor.publish_one'], {
