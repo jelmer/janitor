@@ -1,0 +1,92 @@
+/* -- result codes */
+span.result-code-bug, span.publish-bug {
+    color: darkred;
+}
+
+span.result-code-failure, span.publish-failure {
+    color: red;
+}
+
+span.result-code-transient-failure, span.publish-transient {
+    color: orange;
+}
+
+span.result-code-success, span.publish-success {
+    color: green;
+}
+
+span.result-code-nothing-new-to-do, span.publish-nothing-to-do {
+    color: lightgreen;
+}
+
+span.result-code-nothing-to-do, span.publish-missing {
+    color: grey;
+}
+
+blockquote.result-code-explanation {
+    background-color: #FE9;
+}
+
+tr.package-error {
+  background-color: coral;
+}
+
+tr.package-unabsorbed {
+  background-color: azure;
+}
+
+tr.package-candidates {
+  background-color: beige;
+}
+
+tr.package-nothing-to-do, tr.package-nothing-new-to-do {
+  background-color: grey;
+  opacity: 0.5;
+}
+
+tr.package-proposal {
+  background-color: lightgreen;
+}
+
+li.not-in-archive {
+  font-weight: bolder;
+}
+
+ul.metadata {
+  list-style: none;
+  background-color: lightyellow;
+}
+
+tr.row-disabled, td.old-version {
+  color: lightgrey;
+}
+
+span.tinycode {
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 1px 3px;
+}
+
+span.tinyhint {
+    font-weight: 700;
+    font-size: 0.9em;
+}
+
+span.tinycontext {
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+span.tinycomment {
+    font-size: 0.9em;
+}
+
+td.version {
+    text-align: center;
+}
+
+/* Queue active lines */
+tr.active {
+    background-color: bisque;
+}
