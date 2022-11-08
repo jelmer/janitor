@@ -194,11 +194,11 @@ class WorkerResult(object):
             "branches": [
                 (f, n, br.decode("utf-8") if br else None,
                  r.decode("utf-8") if r else None)
-                for (f, n, br, r) in self.branches
+                for (f, n, br, r) in (self.branches or [])
             ],
             "tags": [
                 (n, r.decode("utf-8") if r else None)
-                for (n, r) in self.tags.items()],
+                for (n, r) in (self.tags or {}).items()],
             "target": {
                 "name": self.target,
                 "details": self.target_details,
@@ -453,7 +453,7 @@ def import_branches_git(
     repo = vcs_result_controldir.open_repository()
 
     def get_changed_refs(refs):
-        changed_refs = {}
+        changed_refs: Dict[bytes, Tuple[bytes, Optional[bytes]]] = {}
         for (fn, n, br, r) in (branches or []):
             tagname = ("refs/tags/%s/%s" % (log_id, fn)).encode("utf-8")
             if r is None:
@@ -1560,7 +1560,7 @@ async def main(argv=None):
     await runner.setup()
     site = web.TCPSite(runner, args.listen_address, args.port)
     await site.start()
-    (site_addr, site_port) = site._server.sockets[0].getsockname()
+    (unused_site_addr, site_port) = site._server.sockets[0].getsockname()
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)

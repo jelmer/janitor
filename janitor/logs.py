@@ -26,6 +26,7 @@ from datetime import datetime
 import gzip
 from io import BytesIO
 import os
+from typing import Dict, List, Tuple
 from yarl import URL
 
 
@@ -193,7 +194,7 @@ class GCSLogFileManager(LogFileManager):
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
     async def iter_logs(self):
-        seen = {}
+        seen: Dict[Tuple[str, str], List[str]] = {}
         for name in await self.bucket.list_blobs():
             pkg, log_id, lfn = name.split("/")
             seen.setdefault((pkg, log_id), []).append(lfn)

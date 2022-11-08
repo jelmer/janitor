@@ -1675,8 +1675,8 @@ async def credentials_request(request):
             with open(entry.path, "r") as f:
                 ssh_keys.extend([line.strip() for line in f.readlines()])
     pgp_keys = []
-    for entry in list(request.app['gpg'].keylist(secret=True)):
-        pgp_keys.append(request.app['gpg'].key_export_minimal(entry.fpr).decode())
+    for gpg_entry in list(request.app['gpg'].keylist(secret=True)):
+        pgp_keys.append(request.app['gpg'].key_export_minimal(gpg_entry.fpr).decode())
     hosting = []
     for name, forge_cls in forges.items():
         for instance in forge_cls.iter_instances():
@@ -3270,7 +3270,6 @@ async def main(argv=None):
         sys.exit(1)
 
     forge_rate_limiter: Dict[Forge, datetime] = {}
-
 
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)
