@@ -1,5 +1,5 @@
 {% macro local_command(command, command_package, package, vcs, vcs_url) %}
-    {% if failure_stage == 'validate' or (command and failure_stage.startswith('codemod/')) %}
+    {% if failure_stage and (failure_stage == 'validate' or (command and failure_stage.startswith('codemod/'))) %}
         <p>
             Try this locally
             {% if command_package %}
