@@ -28,6 +28,7 @@ from janitor.publish import (
 from janitor.publish_one import (
     _drop_env,
 )
+from janitor.vcs import VcsManager
 
 from google.protobuf import text_format  # type: ignore
 
@@ -72,7 +73,7 @@ campaign {
     assert find_campaign_by_branch_name(config, "lala") == (None, None)
 
 
-class DummyVcsManager(object):
+class DummyVcsManager(VcsManager):
 
     def get_branch_url(self, pkg, name):
         return 'file://foo'

@@ -20,7 +20,9 @@ from datetime import datetime
 from io import BytesIO
 import logging
 
-from typing import Optional, Tuple
+from typing import Optional, List, Dict
+
+import asyncpg
 
 from yarl import URL
 
@@ -29,7 +31,6 @@ from aiohttp import (
     ClientResponseError,
     ClientTimeout,
 )
-import asyncpg
 
 from breezy.revision import NULL_REVISION
 from breezy.forge import get_forge_by_hostname, UnsupportedForge
@@ -54,6 +55,7 @@ from janitor.site import (
 
 from .common import iter_candidates, get_unchanged_run
 from ..config import get_campaign_config
+from ..vcs import VcsManager
 
 
 FAIL_BUILD_LOG_LEN = 15
@@ -110,7 +112,7 @@ def in_line_boundaries(i, boundaries):
 
 async def get_publish_history(
     conn: asyncpg.Connection, revision: bytes
-) -> Tuple[str, Optional[str], str, str, str, datetime]:
+) -> asyncpg.Record:
     return await conn.fetch(
         "select mode, merge_proposal_url, description, result_code, "
         "requestor, timestamp from publish where revision = $1 "
@@ -120,8 +122,9 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, publisher_url, logfile_manager, run,
-    vcs_managers, is_admin, span
+        db, client, config,
+        differ_url: Optional[str], publisher_url: Optional[str], logfile_manager, run,
+        vcs_managers: Dict[str, VcsManager], is_admin, span
 ):
     from ..schedule import estimate_success_probability
     kwargs = {}
@@ -144,6 +147,7 @@ async def generate_run_file(
             package = await conn.fetchrow(
                 'SELECT * FROM package WHERE name = $1', run['package'])
         with span.new_child('sql:publish-history'):
+            publish_history: List[asyncpg.Record]
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
                 publish_history = await get_publish_history(conn, run['revision'])
             else:

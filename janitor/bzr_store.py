@@ -17,8 +17,6 @@
 
 """Manage VCS repositories."""
 
-import aiozipkin
-import asyncpg.pool
 import asyncio
 from io import BytesIO
 import logging
@@ -26,6 +24,8 @@ import os
 from typing import Optional
 import warnings
 
+import aiozipkin
+import asyncpg.pool
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
@@ -76,7 +76,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
     if p.returncode != 3:
         return web.Response(body=stdout, content_type="text/x-diff")
     logging.warning('bzr diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
+    raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr.decode())
 
 
 async def bzr_diff_request(request):

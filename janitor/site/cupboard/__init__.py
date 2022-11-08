@@ -345,7 +345,7 @@ async def handle_run_redirect(request):
         package = await conn.fetchone("SELECT package FROM run WHERE id = $1", run_id)
         if package is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
-        raise web.HTTPermanentRedirect(
+        raise web.HTTPPermanentRedirect(
             location=request.app.router["cupboard-run"].url_for(
                 pkg=package, run_id=run_id))
 

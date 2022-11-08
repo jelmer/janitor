@@ -50,7 +50,7 @@ def parse_json_ld(ld):
             return next(filter(None, map(parse_json_ld, ld)))
         except StopIteration:
             return None
-    
+
     if ld['@context'] not in ('https://schema.org', 'http://schema.org'):
         logging.debug('Found unexpected @context: %s', ld['@context'])
         return None
@@ -87,7 +87,7 @@ def parse_email(f):
         ret = parse_html_body(html_body.get_content())
         if ret:
             return ret
-    
+
     text_body = msg.get_body(preferencelist=('plain', ))
 
     return parse_plain_text_body(text_body.get_content())

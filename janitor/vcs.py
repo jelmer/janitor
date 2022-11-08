@@ -285,10 +285,10 @@ class LocalGitVcsManager(VcsManager):
         else:
             new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
 
-        args = [
+        args: List[str] = [
             "git",
             "diff",
-            old_sha, new_sha
+            old_sha.decode('utf-8'), new_sha.decode('utf-8')
         ]
 
         p = await asyncio.create_subprocess_exec(
@@ -525,7 +525,7 @@ def get_vcs_managers(location):
             'git': RemoteGitVcsManager(str(URL(location) / "git")),
             'bzr': RemoteBzrVcsManager(str(URL(location) / "bzr")),
         }
-    ret = {}
+    ret: Dict[str, VcsManager] = {}
     for p in location.split(','):
         (k, v) = p.split('=', 1)
         if k == 'git':
@@ -567,10 +567,14 @@ def is_authenticated_url(url: str):
     return (url.startswith('git+ssh://') or url.startswith('bzr+ssh://'))
 
 
-if __name__ == "__main__":
+def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("url", type=str)
-    args = parser.parse_args()
-    branch = open_branch_ext(args.url)
+    args = parser.parse_args(argv)
+    open_branch_ext(args.url)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
