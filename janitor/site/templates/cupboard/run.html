@@ -5,6 +5,7 @@
 {% from "codeblock.html" import include_console_log with context %}
 {% from "run_util.html" import local_command, merge_command, reschedule_button, schedule_control_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url, display_vcs_diffs, display_publish_result, file_bug_buttons, reprocess_logs_button, display_publish_blockers with context %}
 {% from "lintian_util.html" import display_lintian_result with context %}
+{% from "review_util.html" import display_reviews_table %}
 {% block page_title %}
     Run details - {{ package }}
 {% endblock page_title %}
@@ -153,83 +154,7 @@
             <h2>
                 Reviews
             </h2>
-            <table class="reviews">
-                <thead>
-                    <tr>
-                        <th>
-                            Reviewer
-                        </th>
-                        <th>
-                            Verdict
-                        </th>
-                        <th>
-                            Comment
-                        </th>
-                    </tr>
-                </thead>
-                {% set ns = namespace(my_review=None) %}
-                {% for review in reviews %}
-                    {% if is_qa_reviewer and review.reviewer in (user.email, user.name) %}
-                    {% set ns.my_review = review %}
-                    {% else %}
-                    <tr>
-                        <td>
-                            {{ review['reviewer'] }}
-                        </td>
-                        <td>
-                            <span class="review-{{ review['review_status'] }}">{{ review['review_status'] }}</span>
-                        </td>
-                        <td>
-                            {{ review['review_comment'] }}
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% if is_qa_reviewer %}
-                    <tr>
-                        <td>Your review</td>
-                        <td>
-                            <select id="review-status" name="review-status" onchange="submit_review(this.value)">
-                                <option value="unreviewed"
-                                        {% if ns.my_review and ns.my_review.review_status == 'unreviewed' %} selected="true"{% endif %}>
-                                    Unreviewed
-                                </option>
-                                <option value="approved"
-                                        {% if ns.my_review and ns.my_review.review_status == 'approved' %} selected="true"{% endif %}>
-                                    Approved
-                                </option>
-                                <option value="abstained"
-                                        {% if ns.my_review and ns.my_review_status == 'abstained' %} selected="true"{% endif %}>
-                                    Abstained
-                                </option>
-                                <option value="rejected"
-                                        {% if ns.my_review and ns.my_review.review_status == 'rejected' %} selected="true"{% endif %}>
-                                    Rejected
-                                </option>
-                            </select>
-                            <script>
-                                function submit_review(status) {
-                                    var comment = undefined;
-                                    if (status == 'rejected') {
-                                        comment = window.prompt('Please specify a comment for the rejection');
-                                        $("#my-review-comment").html(comment);
-                                    } else {
-                                        $("#my-review-comment").html("");
-                                    }
-                                    console.log("Submitting review " + status + " for run {{ run_id }} ");
-                                    $.post('/api/run/{{ run_id }}', {
-                                        'review-status': status,
-                                        'review-comment': comment
-                                    });
-                                }
-                            </script>
-                        </td>
-                        <td id="my-review-comment">
-                              {% if ns.my_review %}{{ ns.my_review.review_comment }}{% endif %}
-                        </td>
-                    </tr>
-                    {% endif %}
-                {% endfor %}
-            </table>
+            {{ display_reviews_table(reviews, user.email or user.name) }}
         {% endif %}
         <p>
             {% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}
