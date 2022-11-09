@@ -106,20 +106,6 @@ async def handle_publish(request):
         return web.json_response({"reason": "unable to contact publisher"}, status=400)
 
 
-@routes.post("/webhook", name="webhook")
-@routes.get("/webhook", name="webhook-help")
-async def handle_webhook(request):
-    if request.headers.get("Content-Type") != "application/json":
-        text = await render_template_for_request(env, "webhook.html", request, {})
-        return web.Response(
-            content_type="text/html",
-            text=text,
-        )
-    async for codebase, url in parse_webhook(request, request.app['db']):
-        pass  # TODO(jelmer): Reschedule codebase
-    return web.json_response({}, status=200)
-
-
 class ScheduleResultSchema(Schema):
 
     package = fields.Str(description="package name")
