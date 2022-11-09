@@ -363,9 +363,7 @@ async def handle_webhook(request):
             content_type="text/html",
             text=text,
         )
-    async for codebase, url in parse_webhook(request, request.app['db']):
-        pass  # TODO(jelmer): Reschedule codebase
-    return web.json_response({}, status=200)
+    return await process_webhook(request, request.app['db'])
 
 
 async def create_app(
