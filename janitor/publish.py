@@ -3160,10 +3160,10 @@ async def main(argv=None):
 
     parser = argparse.ArgumentParser(prog="janitor.publish")
     parser.add_argument(
-        "--max-mps-per-maintainer",
+        "--max-mps-per-bucket",
         default=0,
         type=int,
-        help="Maximum number of open merge proposals per maintainer.",
+        help="Maximum number of open merge proposals per bucket.",
     )
     parser.add_argument(
         "--dry-run",
