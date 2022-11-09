@@ -65,7 +65,6 @@ from .common import (
     render_template_for_request,
 )
 from janitor.logs import get_log_manager
-from .webhook import parse_webhook
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
@@ -104,20 +103,6 @@ async def handle_publish(request):
         )
     except ClientConnectorError:
         return web.json_response({"reason": "unable to contact publisher"}, status=400)
-
-
-@routes.post("/webhook", name="webhook")
-@routes.get("/webhook", name="webhook-help")
-async def handle_webhook(request):
-    if request.headers.get("Content-Type") != "application/json":
-        text = await render_template_for_request(env, "webhook.html", request, {})
-        return web.Response(
-            content_type="text/html",
-            text=text,
-        )
-    async for codebase, url in parse_webhook(request, request.app['db']):
-        pass  # TODO(jelmer): Reschedule codebase
-    return web.json_response({}, status=200)
 
 
 class ScheduleResultSchema(Schema):
