@@ -354,6 +354,18 @@ async def process_webhook(request, db):
         return web.json_response({"rescheduled": rescheduled, "urls": urls})
 
 
+@routes.post("/webhook", name="webhook")
+@routes.get("/webhook", name="webhook-help")
+async def handle_webhook(request):
+    if request.headers.get("Content-Type") != "application/json":
+        text = await render_template_for_request(env, "webhook.html", request, {})
+        return web.Response(
+            content_type="text/html",
+            text=text,
+        )
+    return await process_webhook(request, request.app['db'])
+
+
 async def create_app(
         config, minified=False,
         external_url=None, debugtoolbar=None,
