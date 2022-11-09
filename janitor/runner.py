@@ -1598,7 +1598,8 @@ class QueueProcessor(object):
             "processing": processing,
             "avoid_hosts": list(self.avoid_hosts),
             "rate_limit_hosts": {
-                h: t async for (h, t) in self.rate_limited_hosts()},
+                h: t.isoformat(timespec='seconds')
+                async for (h, t) in self.rate_limited_hosts()},
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
