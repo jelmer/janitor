@@ -65,7 +65,6 @@ from .common import (
     render_template_for_request,
 )
 from janitor.logs import get_log_manager
-from .webhook import parse_webhook
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
