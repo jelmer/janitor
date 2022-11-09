@@ -20,7 +20,7 @@
                     {{ proposal.url }}
                 {% endif %}
             </a>
-            {% if proposal.suite %}(<a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Details</a>){% endif %}
+            {% if proposal.suite %}(<a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}/">Details</a>){% endif %}
             {% if not suite %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
         {% endmacro %}
         {% if open_proposals %}
