@@ -186,7 +186,6 @@ async def generate_run_file(
                     run['id'], e)
                 return {}
 
-
     kwargs["publish_blockers"] = publish_blockers
 
     async def show_diff(role):

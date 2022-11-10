@@ -65,6 +65,7 @@ from .common import (
     render_template_for_request,
 )
 from janitor.logs import get_log_manager
+from .. import state
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
@@ -1301,8 +1302,12 @@ async def handle_get_active_run(request):
             return web.json_response({}, status=404)
 
 
+@routes.get('/', name='redirect-docs')
+async def redirect_docs(req):
+    raise web.HTTPFound(location='docs')
+
+
 def create_app(
-    db,
     publisher_url: str,
     runner_url: str,
     vcs_managers: VcsManager,
@@ -1323,17 +1328,17 @@ def create_app(
     app.cleanup_ctx.append(persistent_session)
     app['config'] = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
-    app['db'] = db
     app['external_url'] = external_url
     app['publisher_url'] = publisher_url
     app['vcs_managers'] = vcs_managers
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
 
-    async def redirect_docs(req):
-        raise web.HTTPFound(location='docs')
+    async def connect_postgres(app):
+        database = await state.create_pool(app['config'].database_location)
+        app['db'] = database
 
-    app.router.add_get('/', redirect_docs)
+    app.on_startup.append(connect_postgres)
 
     setup_aiohttp_apispec(
         app=app,
