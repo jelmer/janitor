@@ -455,7 +455,7 @@ def import_branches_git(
     def get_changed_refs(refs):
         changed_refs: Dict[bytes, Tuple[bytes, Optional[bytes]]] = {}
         for (fn, n, br, r) in (branches or []):
-            tagname = ("refs/tags/%s/%s" % (log_id, fn)).encode("utf-8")
+            tagname = ("refs/tags/run/%s/%s" % (log_id, fn)).encode("utf-8")
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
             else:
