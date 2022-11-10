@@ -46,7 +46,7 @@ class IncompleteUpstreamInfo(Exception):
         self.upstream_info = upstream_info
 
 
-def reconstruct_problem(result_code, failure_details):
+def reconstruct_problem(result_code, failure_stage, failure_details):
     kind = result_code
     for prefix in ['build-', 'post-build-', 'dist-', 'install-deps-']:
         if kind.startswith(prefix):
@@ -61,14 +61,14 @@ async def gather_requirements(
         db, session, run_ids: Optional[List[str]] = None):
     async with db.acquire() as conn:
         query = """
-SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
+SELECT package, suite, result_code, failure_stage, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
 """
         args = []
         if run_ids:
             query += " AND id = ANY($1::text[])"
             args.append(run_ids)
         for row in await conn.fetch(query, *args):
-            problem = reconstruct_problem(row['result_code'], row['failure_details'])
+            problem = reconstruct_problem(row['result_code'], row['failure_stage'], row['failure_details'])
             requirement = problem_to_upstream_requirement(problem)
             if requirement is None:
                 continue
