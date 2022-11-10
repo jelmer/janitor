@@ -375,7 +375,7 @@ async def create_app(
         differ_url=None,
         listen_address=None, port=None):
     if minified:
-       minified_prefix = ""
+        minified_prefix = ""
     else:
         minified_prefix = "min."
 
