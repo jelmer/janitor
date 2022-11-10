@@ -1382,7 +1382,7 @@ async def followup_run(
                             conn, action['package'], action['desired-version'],
                             requestor=requestor, change_set=result.change_set)
         from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
-        problem = reconstruct_problem(result.code, result.failure_details)
+        problem = reconstruct_problem(result.code, result.failure_stage, result.failure_details)
         if problem is not None:
             requirement = problem_to_upstream_requirement(problem)
         else:
