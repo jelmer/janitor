@@ -51,11 +51,12 @@ from .common import (
     html_template,
     render_template_for_request,
 )
-from .config import get_campaign_config
 from .openid import setup_openid
 from .pubsub import pubsub_handler, Topic
-from .schedule import do_schedule
 from .webhook import parse_webhook, is_webhook_request
+
+from ..config import get_campaign_config
+from ..schedule import do_schedule
 
 
 routes = web.RouteTableDef()
@@ -106,7 +107,7 @@ async def handle_generic_candidates(request):
     from .common import generate_candidates
 
     return await generate_candidates(
-        request.app.database, suite=request.match_info["suite"]
+        request.app['pool'], suite=request.match_info["suite"]
     )
 
 
@@ -115,7 +116,7 @@ async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
     suite = request.match_info.get("suite")
-    return await write_merge_proposals(request.app.database, suite)
+    return await write_merge_proposals(request.app['pool'], suite)
 
 
 @html_template(env, "merge-proposal.html", headers={"Vary": "Cookie"})
@@ -123,7 +124,7 @@ async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
     url = request.query["url"]
-    return await write_merge_proposal(request.app.database, url)
+    return await write_merge_proposal(request.app['pool'], url)
 
 
 @routes.get("/credentials", name="credentials")
@@ -265,7 +266,7 @@ async def handle_ready_proposals(request):
 
     suite = request.match_info.get("suite")
     review_status = request.query.get("review_status")
-    return await generate_ready_list(request.app.database, suite, review_status)
+    return await generate_ready_list(request.app['pool'], suite, review_status)
 
 
 @html_template(env, "generic/done.html", headers={"Vary": "Cookie"})
@@ -283,7 +284,7 @@ async def handle_done_proposals(request):
     else:
         since = None
 
-    return await generate_done_list(request.app.database, campaign, since)
+    return await generate_done_list(request.app['pool'], campaign, since)
 
 
 @html_template(env, "generic/package.html", headers={"Vary": "Cookie"})
@@ -294,7 +295,7 @@ async def handle_generic_pkg(request):
     pkg = request.match_info["pkg"]
     run_id = request.match_info.get("run_id")
     return await generate_pkg_context(
-        request.app.database,
+        request.app['pool'],
         request.app['config'],
         request.match_info["campaign"],
         request.app['http_client_session'],
@@ -367,14 +368,14 @@ async def handle_webhook(request):
 
 
 async def create_app(
-        config, minified=False,
+        config, *, minified=False,
         external_url=None, debugtoolbar=None,
         runner_url=None, publisher_url=None,
         archiver_url=None, vcs_managers=None,
         differ_url=None,
         listen_address=None, port=None):
     if minified:
-        minified_prefix = ""
+       minified_prefix = ""
     else:
         minified_prefix = "min."
 
@@ -549,7 +550,7 @@ async def create_app(
 
     async def handle_post_root(request):
         if is_webhook_request(request):
-            return await process_webhook(request, request.app.database)
+            return await process_webhook(request, request.app['pool'])
         raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
     app['runner_url'] = runner_url
@@ -563,9 +564,14 @@ async def create_app(
         app['external_url'] = URL(external_url)
     else:
         app['external_url'] = None
-    database = await state.create_pool(config.database_location)
-    app['pool'] = database
-    app.database = database
+
+    async def startup_postgres(app):
+        database = await state.create_pool(config.database_location)
+        app['pool'] = database
+        app.database = database
+
+    app.on_startup.append(startup_postgres)
+
     app['config'] = config
 
     from janitor.artifacts import get_artifact_manager
@@ -583,14 +589,10 @@ async def create_app(
     setup_openid(
         app, config.oauth2_provider.base_url if config.oauth2_provider else None)
     app.router.add_post("/", handle_post_root, name="root-post")
-    from .stats import stats_app
-    app.add_subapp(
-        "/cupboard/stats", stats_app(app['pool'], config, app['external_url']))
 
     app.add_subapp(
         "/api",
         create_api_app(
-            app['pool'],
             publisher_url,
             runner_url,  # type: ignore
             vcs_managers,
