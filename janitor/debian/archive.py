@@ -652,9 +652,9 @@ async def run_web_server(listen_addr, port, dists_dir, config, db, generator_man
 async def listen_to_runner(redis, generator_manager):
     async def handle_result_message(msg):
         result = json.loads(msg['data'])
-        if result['target']['name'] != 'debian':
-            return
         if result["code"] != "success":
+            return
+        if result['target']['name'] != 'debian':
             return
         campaign = get_campaign_config(generator_manager.config, result["campaign"])
         if campaign:
