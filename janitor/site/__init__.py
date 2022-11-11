@@ -23,7 +23,6 @@ from typing import Optional
 from yarl import URL
 
 from janitor import config_pb2
-from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
 
 
@@ -35,6 +34,43 @@ BUG_ERROR_RESULT_CODES = [
     'autopkgtest-chroot-not-found',
     'build-chroot-not-found',
     'worker-killed',
+]
+
+
+TRANSIENT_ERROR_RESULT_CODES = [
+    'cancelled',
+    'aborted',
+    'install-deps-file-fetch-failure',
+    'apt-get-update-file-fetch-failure',
+    'build-failed-stage-apt-get-update',
+    'build-failed-stage-apt-get-dist-upgrade',
+    'build-failed-stage-explain-bd-uninstallable',
+    '502-bad-gateway',
+    'worker-502-bad-gateway',
+    'build-failed-stage-create-session',
+    'apt-get-update-missing-release-file',
+    'no-space-on-device',
+    'worker-killed',
+    'too-many-requests',
+    'autopkgtest-testbed-chroot-disappeared',
+    'autopkgtest-file-fetch-failure',
+    'autopkgtest-apt-file-fetch-failure',
+    'check-space-insufficient-disk-space',
+    'worker-resume-branch-unavailable',
+    'explain-bd-uninstallable-apt-file-fetch-failure',
+    'worker-timeout',
+    'worker-clone-bad-gateway',
+    'worker-clone-temporary-transport-error',
+    'result-push-failed',
+    'result-push-bad-gateway',
+    'dist-apt-file-fetch-failure',
+    'post-build-testbed-chroot-disappeared',
+    'post-build-file-fetch-failure',
+    'post-build-apt-file-fetch-failure',
+    'pull-rate-limited',
+    'session-setup-failure',
+    'run-disappeared',
+    'branch-temporarily-unavailable',
 ]
 
 
@@ -118,12 +154,14 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def classify_result_code(result_code, transient):
+def classify_result_code(result_code, transient: Optional[bool]):
     if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
     if result_code in BUG_ERROR_RESULT_CODES:
         return "bug"
-    if result_code in TRANSIENT_ERROR_RESULT_CODES or transient:
+    if transient is None:
+        transient = result_code in TRANSIENT_ERROR_RESULT_CODES
+    if transient:
         return "transient-failure"
     return "failure"
 
