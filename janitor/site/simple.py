@@ -46,7 +46,7 @@ from ..logs import get_log_manager
 from ..vcs import get_vcs_managers_from_config
 
 from . import (
-    env,
+    template_loader,
     format_duration,
     format_timestamp,
     highlight_diff,
@@ -389,7 +389,7 @@ async def create_app(
     app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
     aiohttp_jinja2.setup(
-        app, env.loader, enable_async=True,
+        app, template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     jinja_env = aiohttp_jinja2.get_env(app)
     jinja_env.globals.update(utcnow=datetime.utcnow)
