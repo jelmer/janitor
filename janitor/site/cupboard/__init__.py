@@ -25,7 +25,7 @@ import aiozipkin
 
 from aiohttp import web
 
-from .. import is_admin, env, check_logged_in, is_qa_reviewer
+from .. import is_admin, check_logged_in, is_qa_reviewer
 from ..common import html_template
 from ..pkg import MergeProposalUserUrlResolver
 

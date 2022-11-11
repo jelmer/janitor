@@ -834,7 +834,7 @@ def run_worker(
             else:
                 resume_branch = None
 
-            roles = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
+            roles: Dict[Optional[str], str] = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
 
             if main_branch:
                 roles[main_branch.name] = 'main'

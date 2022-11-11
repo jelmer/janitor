@@ -51,7 +51,7 @@ from . import (
 
 from .compat import to_thread
 from .config import read_config
-from .site import is_worker, iter_accept, env as site_env
+from .site import is_worker, iter_accept, template_loader
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
@@ -527,7 +527,7 @@ async def create_web_app(
         client_max_size=(client_max_size or 0)
     )
     aiohttp_jinja2.setup(
-        public_app, site_env.loader, enable_async=True,
+        public_app, template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     public_app['local_path'] = local_path
     public_app['db'] = db
