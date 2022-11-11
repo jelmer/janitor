@@ -2,12 +2,11 @@
 
 from aiohttp import ClientConnectorError, ClientResponseError
 from aiohttp import web
+import aiohttp_jinja2
 import asyncpg
 from typing import Optional, List, Dict, Any
 
 from breezy.revision import NULL_REVISION
-
-from jinja2 import Environment
 
 from janitor import state, splitout_env
 from janitor.config import get_campaign_config
@@ -31,7 +30,8 @@ SELECT
   finish_time - start_time AS duration,
   description,
   package,
-  result_code
+  result_code,
+  failure_transient
 FROM
   run
 WHERE
@@ -143,7 +143,9 @@ SELECT
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags,
     resume_from,
-    change_set
+    change_set,
+    failure_stage,
+    failure_transient
 FROM
     run
 LEFT JOIN worker ON worker.name = run.worker
@@ -343,24 +345,22 @@ async def generate_candidates(db, suite):
     return {"candidates": candidates, "suite": suite}
 
 
-def html_template(jinja_env, template_name, headers={}):
+def html_template(template_name, headers={}):
     def decorator(fn):
         async def handle(request):
-            template = jinja_env.get_template(template_name)
             vs = await fn(request)
             if isinstance(vs, web.Response):
                 return vs
-            update_vars_from_request(vs, request)
-            text = await template.render_async(**vs)
-            return web.Response(content_type="text/html", text=text, headers=headers)
+            text = await render_template_for_request(
+                template_name, request, vs)
+            return web.Response(
+                content_type="text/html", text=text, headers=headers)
 
         return handle
 
     return decorator
 
 
-async def render_template_for_request(
-        jinja_env: Environment, templatename, request, vs: Dict[str, Any]):
+async def render_template_for_request(templatename, request, vs: Dict[str, Any]):
     update_vars_from_request(vs, request)
-    template = jinja_env.get_template(templatename)
-    return await template.render_async(**vs)
+    return await aiohttp_jinja2.render_template_async(templatename, request, vs)

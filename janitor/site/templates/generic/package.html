@@ -80,7 +80,7 @@
             <ul>
                 {% for previous_run in previous_runs %}
                     <li>
-                        <a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a>
+                        <a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code, previous_run.failure_transient)|safe }}: {{ previous_run.description }}</a>
                     </li>
                 {% endfor %}
             </ul>

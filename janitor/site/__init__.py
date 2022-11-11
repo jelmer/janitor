@@ -18,12 +18,11 @@
 import aiohttp
 from datetime import datetime
 from aiohttp import ClientConnectorError, web, BasicAuth
-from jinja2 import Environment, PackageLoader, select_autoescape
+from jinja2 import PackageLoader
 from typing import Optional
 from yarl import URL
 
 from janitor import config_pb2
-from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
 
 
@@ -35,6 +34,43 @@ BUG_ERROR_RESULT_CODES = [
     'autopkgtest-chroot-not-found',
     'build-chroot-not-found',
     'worker-killed',
+]
+
+
+TRANSIENT_ERROR_RESULT_CODES = [
+    'cancelled',
+    'aborted',
+    'install-deps-file-fetch-failure',
+    'apt-get-update-file-fetch-failure',
+    'build-failed-stage-apt-get-update',
+    'build-failed-stage-apt-get-dist-upgrade',
+    'build-failed-stage-explain-bd-uninstallable',
+    '502-bad-gateway',
+    'worker-502-bad-gateway',
+    'build-failed-stage-create-session',
+    'apt-get-update-missing-release-file',
+    'no-space-on-device',
+    'worker-killed',
+    'too-many-requests',
+    'autopkgtest-testbed-chroot-disappeared',
+    'autopkgtest-file-fetch-failure',
+    'autopkgtest-apt-file-fetch-failure',
+    'check-space-insufficient-disk-space',
+    'worker-resume-branch-unavailable',
+    'explain-bd-uninstallable-apt-file-fetch-failure',
+    'worker-timeout',
+    'worker-clone-bad-gateway',
+    'worker-clone-temporary-transport-error',
+    'result-push-failed',
+    'result-push-bad-gateway',
+    'dist-apt-file-fetch-failure',
+    'post-build-testbed-chroot-disappeared',
+    'post-build-file-fetch-failure',
+    'post-build-apt-file-fetch-failure',
+    'pull-rate-limited',
+    'session-setup-failure',
+    'run-disappeared',
+    'branch-temporarily-unavailable',
 ]
 
 
@@ -102,12 +138,7 @@ def format_timestamp(ts):
     return ts.isoformat(timespec="minutes")
 
 
-env = Environment(
-    loader=PackageLoader("janitor.site", "templates"),
-    autoescape=select_autoescape(["html", "xml"]),
-    enable_async=True,
-)
-
+template_loader = PackageLoader("janitor.site")
 
 
 def highlight_diff(diff):
@@ -118,23 +149,16 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def classify_result_code(result_code, transient):
+def classify_result_code(result_code, transient: Optional[bool]):
     if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
     if result_code in BUG_ERROR_RESULT_CODES:
         return "bug"
-    if result_code in TRANSIENT_ERROR_RESULT_CODES or transient:
+    if transient is None:
+        transient = result_code in TRANSIENT_ERROR_RESULT_CODES
+    if transient:
         return "transient-failure"
     return "failure"
-
-
-env.globals.update(utcnow=datetime.utcnow)
-env.globals.update(format_duration=format_duration)
-env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(enumerate=enumerate)
-env.globals.update(highlight_diff=highlight_diff)
-env.globals.update(classify_result_code=classify_result_code)
-env.globals.update(URL=URL)
 
 
 class DebdiffRetrievalError(Exception):
@@ -239,3 +263,14 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
 
 def iter_accept(request):
     return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
+
+
+TEMPLATE_ENV = {
+    'utcnow': datetime.utcnow,
+    'enumerate': enumerate,
+    'format_duration': format_duration,
+    'format_timestamp': format_timestamp,
+    'highlight_diff': highlight_diff,
+    'classify_result_code': classify_result_code,
+    'URL': URL,
+}

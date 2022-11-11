@@ -46,7 +46,7 @@ async def update_package_metadata(
                     package.commit_id.encode("ascii")
                 )
         if package.repository_url and package.branch:
-            branch_url = urlutils.join_segments_parameters(
+            branch_url = urlutils.join_segment_parameters(
                 package.repository_url.rstrip('/'),
                 {'branch': urlutils.escape(package.branch)})
         else:
