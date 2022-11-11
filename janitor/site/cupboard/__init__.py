@@ -34,7 +34,7 @@ routes = web.RouteTableDef()
 
 
 @routes.get("/cupboard/rejected", name="cupboard-rejected")
-@html_template(env, "cupboard/rejected.html")
+@html_template("cupboard/rejected.html")
 async def handle_rejected(request):
     from .review import generate_rejected
 
@@ -44,7 +44,7 @@ async def handle_rejected(request):
 
 
 @routes.get("/cupboard/history", name="history")
-@html_template(env, "cupboard/history.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/history.html", headers={"Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
     offset = int(request.query.get("offset", "0"))
@@ -68,13 +68,13 @@ ORDER BY finish_time DESC"""
 
 
 @routes.get("/cupboard/reprocess-logs", name="reprocess-logs")
-@html_template(env, "cupboard/reprocess-logs.html")
+@html_template("cupboard/reprocess-logs.html")
 async def handle_reprocess_logs(request):
     return {}
 
 
 @routes.get("/cupboard/workers", name="workers")
-@html_template(env, "cupboard/workers.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/workers.html", headers={"Vary": "Cookie"})
 async def handle_workers(request):
     async with request.app.database.acquire() as conn:
         return {"workers": await conn.fetch(
@@ -84,7 +84,7 @@ async def handle_workers(request):
 
 
 @routes.get("/cupboard/queue", name="queue")
-@html_template(env, "cupboard/queue.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/queue.html", headers={"Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
     from .queue import write_queue
@@ -97,7 +97,7 @@ async def handle_queue(request):
 
 
 @routes.get("/cupboard/never-processed", name="never-processed")
-@html_template(env, "cupboard/never-processed.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/never-processed.html", headers={"Vary": "Cookie"})
 async def handle_never_processed(request):
     campaign = request.query.get("campaign")
     if campaign is not None and campaign.lower() == "_all":
@@ -120,7 +120,7 @@ async def handle_never_processed(request):
 
 
 @routes.get("/cupboard/result-codes/", name="result-code-list")
-@html_template(env, "cupboard/result-code-index.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
     campaign = request.query.get("campaign")
     exclude_never_processed = "exclude_never_processed" in request.query
@@ -157,7 +157,7 @@ async def handle_result_codes(request):
 
 
 @routes.get("/cupboard/result-codes/{code}", name="result-code")
-@html_template(env, "cupboard/result-code.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
     campaign = request.query.get("campaign")
     include_transient = "include_transient" in request.query
@@ -185,7 +185,7 @@ async def handle_result_code(request):
 
 
 @routes.get("/cupboard/publish/{id}", name="publish")
-@html_template(env, "cupboard/publish.html")
+@html_template("cupboard/publish.html")
 async def handle_publish(request):
     id = request.match_info["id"]
     from .publish import write_publish
@@ -195,7 +195,7 @@ async def handle_publish(request):
 
 
 @routes.get("/cupboard/publish/", name="publish-history")
-@html_template(env, "cupboard/publish-history.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/publish-history.html", headers={"Vary": "Cookie"})
 async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
@@ -206,7 +206,7 @@ async def handle_publish_history(request):
 
 
 @routes.get("/cupboard/review-stats", name="cupboard-review-stats")
-@html_template(env, "cupboard/review-stats.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/review-stats.html", headers={"Vary": "Cookie"})
 async def handle_review_stats(request):
     from .review import generate_review_stats
     async with request.app.database.acquire() as conn:
@@ -272,7 +272,7 @@ async def handle_review(request):
 
 
 @routes.get("/cupboard/pkg/{pkg}/{run_id}/", name="cupboard-run")
-@html_template(env, "cupboard/run.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/run.html", headers={"Vary": "Cookie"})
 async def handle_run(request):
     from ..common import get_run
     from ..pkg import generate_run_file
@@ -304,7 +304,7 @@ async def handle_run(request):
 
 @routes.get("/cupboard/broken-merge-proposals", name="broken-mps")
 @html_template(
-    env, "cupboard/broken-merge-proposals.html", headers={"Vary": "Cookie"}
+    "cupboard/broken-merge-proposals.html", headers={"Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
     async with request.app.database.acquire() as conn:
@@ -338,13 +338,13 @@ order by url, last_run.finish_time desc
 
 
 @routes.get("/cupboard/", name="cupboard-start")
-@html_template(env, "cupboard/start.html")
+@html_template("cupboard/start.html")
 async def handle_cupboard_start(request):
     return {'extra_cupboard_links': _extra_cupboard_links}
 
 
 @routes.get("/cupboard/cs/{id}/", name="cupboard-changeset")
-@html_template(env, "cupboard/changeset.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/changeset.html", headers={"Vary": "Cookie"})
 async def handle_changeset(request):
     span = aiozipkin.request_span(request)
     async with request.app.database.acquire() as conn:
@@ -362,7 +362,7 @@ async def handle_changeset(request):
 
 
 @routes.get("/cupboard/cs/", name="cupboard-changeset-list")
-@html_template(env, "cupboard/changeset-list.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/changeset-list.html", headers={"Vary": "Cookie"})
 async def handle_changeset_list(request):
     span = aiozipkin.request_span(request)
     async with request.app.database.acquire() as conn:
@@ -389,7 +389,7 @@ async def handle_run_redirect(request):
 
 
 @routes.get("/cupboard/merge-proposals", name="cupboard-merge-proposals")
-@html_template(env, "cupboard/merge-proposals.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/merge-proposals.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
@@ -398,7 +398,7 @@ async def handle_merge_proposals(request):
 
 
 @routes.get("/cupboard/merge-proposal", name="cupboard-merge-proposal")
-@html_template(env, "cupboard/merge-proposal.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/merge-proposal.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
@@ -478,7 +478,7 @@ async def handle_result_file(request):
 
 
 @routes.get("/cupboard/ready", name="cupboard-ready")
-@html_template(env, "cupboard/ready-list.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/ready-list.html", headers={"Vary": "Cookie"})
 async def handle_ready_proposals(request):
     review_status = request.query.get("review_status")
     async with request.app.database.acquire() as conn:
@@ -502,7 +502,7 @@ async def handle_ready_proposals(request):
 
 
 @routes.get("/cupboard/done", name="cupboard-done")
-@html_template(env, "cupboard/done-list.html", headers={"Vary": "Cookie"})
+@html_template("cupboard/done-list.html", headers={"Vary": "Cookie"})
 async def handle_done_proposals(request):
     since_str = request.query.get("since")
     if since_str:
