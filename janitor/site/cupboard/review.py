@@ -13,7 +13,6 @@ from breezy.revision import NULL_REVISION
 
 from janitor import state
 from .. import (
-    env,
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,

@@ -54,7 +54,6 @@ from . import (
     is_qa_reviewer,
     check_logged_in,
     check_worker_creds,
-    env,
     highlight_diff,
     get_archive_diff,
     iter_accept,

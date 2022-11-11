@@ -18,7 +18,7 @@
 import aiohttp
 from datetime import datetime
 from aiohttp import ClientConnectorError, web, BasicAuth
-from jinja2 import Environment, PackageLoader, select_autoescape
+from jinja2 import PackageLoader
 from typing import Optional
 from yarl import URL
 
@@ -263,3 +263,14 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
 
 def iter_accept(request):
     return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
+
+
+TEMPLATE_ENV = {
+    'utcnow': datetime.utcnow,
+    'enumerate': enumerate,
+    'format_duration': format_duration,
+    'format_timestamp': format_timestamp,
+    'highlight_diff': highlight_diff,
+    'classify_result_code': classify_result_code,
+    'URL': URL,
+}

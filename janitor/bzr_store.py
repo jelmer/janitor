@@ -44,7 +44,7 @@ from . import (
 )
 
 from .config import read_config, get_campaign_config
-from .site import is_worker, iter_accept, env as site_env
+from .site import is_worker, iter_accept, template_loader
 
 
 async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
@@ -267,7 +267,7 @@ async def create_web_app(
         client_max_size=(client_max_size or 0)
     )
     aiohttp_jinja2.setup(
-        public_app, site_env.loader, enable_async=True,
+        public_app, template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     public_app.local_path = local_path
     public_app.db = db

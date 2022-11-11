@@ -47,10 +47,7 @@ from ..vcs import get_vcs_managers_from_config
 
 from . import (
     template_loader,
-    format_duration,
-    format_timestamp,
-    highlight_diff,
-    classify_result_code,
+    TEMPLATE_ENV,
 )
 
 from .common import (
@@ -392,13 +389,7 @@ async def create_app(
         app, template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     jinja_env = aiohttp_jinja2.get_env(app)
-    jinja_env.globals.update(utcnow=datetime.utcnow)
-    jinja_env.globals.update(enumerate=enumerate)
-    jinja_env.globals.update(format_duration=format_duration)
-    jinja_env.globals.update(format_timestamp=format_timestamp)
-    jinja_env.globals.update(highlight_diff=highlight_diff)
-    jinja_env.globals.update(classify_result_code=classify_result_code)
-    jinja_env.globals.update(URL=URL)
+    jinja_env.globals.update(TEMPLATE_ENV)
     app.router.add_routes(routes)
     private_app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
