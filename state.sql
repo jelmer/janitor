@@ -417,8 +417,8 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     BEGIN
     SELECT id, result_code INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
 
-    IF last_run.result_code = 'nothing-new-to-do' THEN
-        SELECT id, result_code INTO STRICT last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' ORDER BY start_time DESC limit 1;
+    IF last_run.result_code = 'nothing-new-to-do' OR last_run.failure_transient THEN
+        SELECT id, result_code INTO STRICT last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND NOT failure_transient ORDER BY start_time DESC limit 1;
     ELSE
         last_effective_run := last_run;
     END IF;
@@ -665,11 +665,11 @@ CREATE UNIQUE INDEX ON review (run_id, reviewer);
 
 CREATE OR REPLACE VIEW change_set_todo AS
   SELECT * FROM candidate WHERE change_set is not NULL AND NOT EXISTS (
-        SELECT FROM last_runs WHERE
+        SELECT FROM last_effective_runs WHERE
                 change_set = candidate.change_set AND
                 package = candidate.package AND
                 suite = candidate.suite AND
-                result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'));
+                result_code in ('success', 'nothing-to-do'));
 
 CREATE OR REPLACE VIEW change_set_unpublished AS
   SELECT change_set, last_unabsorbed_runs.id, new_result_branch.role FROM last_unabsorbed_runs
