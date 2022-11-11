@@ -2169,9 +2169,14 @@ WHERE
   TRIM(trailing '/' from branch_url) = ANY($1::text[])
 ORDER BY length(branch_url) DESC
 """
+    repo_url, params = urlutils.split_segment_parameters(url.rstrip('/'))
+    try:
+        branch = urlutils.unescape(params['branch'])
+    except KeyError:
+        branch = None
     options = [
         url.rstrip('/'),
-        urlutils.split_segment_parameters(url.rstrip('/'))[0],
+        repo_url.rstrip('/'),
     ]
     result = await conn.fetchrow(query, options)
     if result is None:
@@ -2184,9 +2189,11 @@ ORDER BY length(branch_url) DESC
         open_branch,
         result['branch_url'].rstrip('/'),
         possible_transports=possible_transports)
-    if source_branch.user_url.rstrip('/') != url.rstrip('/'):
-        logging.info('Did not resolve branch URL to package: %r != %r',
-                     source_branch.user_url, url)
+    if (source_branch.controldir.user_url.rstrip('/') != url.rstrip('/')
+            and source_branch.name != branch):
+        logging.info(
+            'Did not resolve branch URL to package: %r (%r) != %r (%r)',
+            source_branch.user_url, source_branch.name, url, branch)
         return None
     return result
 
