@@ -86,7 +86,6 @@ from .compat import to_thread
 from .config import read_config, get_campaign_config, Campaign, Config
 from .schedule import (
     do_schedule,
-    TRANSIENT_ERROR_RESULT_CODES,
     CandidateUnavailable,
 )
 from .vcs import (
@@ -849,7 +848,7 @@ async def handle_publish_failure(e, conn, run, bucket):
                 )
             else:
                 logger.warning(
-                    "Successful run (%s) does not have main branch " "revision set",
+                    "Successful run (%s) does not have main branch revision set",
                     run.id,
                 )
     return (code, description)
@@ -2532,7 +2531,7 @@ async def check_existing_mp(
 
     if removed:
         logger.info(
-            "%s: package has been removed from the archive, " "closing proposal.",
+            "%s: package has been removed from the archive, closing proposal.",
             mp.url,
         )
         try:
@@ -2568,10 +2567,9 @@ applied independently.
 
     if last_run.result_code != "success":
         last_run_age = datetime.utcnow() - last_run.finish_time
-        if (last_run.failure_transient
-                or last_run.result_code in TRANSIENT_ERROR_RESULT_CODES):
+        if last_run.failure_transient:
             logger.info(
-                "%s: Last run failed with transient error (%s). " "Rescheduling.",
+                "%s: Last run failed with transient error (%s). Rescheduling.",
                 mp.url,
                 last_run.result_code,
             )
@@ -2592,7 +2590,7 @@ applied independently.
                     last_run.package, last_run.campaign, e)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
-                "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
+                "%s: Last run failed (%s) a long time ago (%d days). Rescheduling.",
                 mp.url,
                 last_run.result_code,
                 last_run_age.days,
@@ -2643,7 +2641,7 @@ applied independently.
         ) = last_run.get_result_branch(mp_run['role'])
     except KeyError:
         logger.warning(
-            "%s: Merge proposal run %s had role %s" " but it is gone now (%s)",
+            "%s: Merge proposal run %s had role %s but it is gone now (%s)",
             mp.url,
             mp_run['id'],
             mp_run['role'],
@@ -2728,7 +2726,7 @@ This merge proposal will be closed, since the branch has moved to %s.
         )
         if last_run_revision == mp_run['revision'].encode('utf-8'):
             logger.warning(
-                "%s (%s): old run (%s/%s) has same revision as new run (%s/%s)" ": %r",
+                "%s (%s): old run (%s/%s) has same revision as new run (%s/%s): %r",
                 mp.url,
                 mp_run['package'],
                 mp_run['id'],
@@ -3193,7 +3191,7 @@ async def main(argv=None):
     parser.add_argument(
         "--interval",
         type=int,
-        help=("Seconds to wait in between publishing " "pending proposals"),
+        help=("Seconds to wait in between publishing pending proposals"),
         default=7200,
     )
     parser.add_argument(

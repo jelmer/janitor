@@ -34,9 +34,9 @@
             <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
             <li>Success probability: {{ success_probability|round(2) }} (based on {{ total_previous_runs }} previous runs)</li>
             <li>
-                Status: {{ display_result_code(result_code)|safe }}
+                Status: {{ display_result_code(result_code, failure_transient)|safe }}
                 {% if unchanged_run and suite not in ('unchanged', 'control') %}
-                    (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(unchanged_run.result_code)|safe }})
+                    (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(unchanged_run.result_code, unchanged_run.failure_transient)|safe }})
                 {% elif suite not in ('unchanged', 'control') %}
                     ({{ schedule_control_button(run.id, "schedule control run", id="schedule-control") }})
                 {% endif %}

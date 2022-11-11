@@ -31,7 +31,8 @@ SELECT
   finish_time - start_time AS duration,
   description,
   package,
-  result_code
+  result_code,
+  failure_transient
 FROM
   run
 WHERE
@@ -143,7 +144,9 @@ SELECT
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags,
     resume_from,
-    change_set
+    change_set,
+    failure_stage,
+    failure_transient
 FROM
     run
 LEFT JOIN worker ON worker.name = run.worker

@@ -160,7 +160,7 @@
                             </td>
                             <td>
                                 {% if last_run.id %}
-                                    <a href="/cupboard/pkg/{{ last_run.package }}/{{ last_run.id }}">{{ display_result_code(last_run.result_code) }}</a>
+                                    <a href="/cupboard/pkg/{{ last_run.package }}/{{ last_run.id }}">{{ display_result_code(last_run.result_code, last_run.failure_transient) }}</a>
                                 {% endif %}
                             </td>
                         </tr>
