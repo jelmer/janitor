@@ -29,6 +29,7 @@ import tempfile
 import time
 from typing import Dict, Any, List
 
+import aiohttp_jinja2
 import aiozipkin
 from aiohttp.web_urldispatcher import (
     URL,
@@ -37,6 +38,7 @@ from aiohttp import web, ClientSession, ClientConnectorError
 from aiohttp_openmetrics import metrics, metrics_middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
+from jinja2 import select_autoescape
 from redis.asyncio import Redis
 
 from .. import state
@@ -44,7 +46,8 @@ from ..logs import get_log_manager
 from ..vcs import get_vcs_managers_from_config
 
 from . import (
-    env,
+    template_loader,
+    TEMPLATE_ENV,
 )
 
 from .common import (
@@ -92,17 +95,17 @@ async def handle_simple(templatename, request):
     vs: Dict[str, Any] = {}
     return web.Response(
         content_type="text/html",
-        text=await render_template_for_request(env, templatename, request, vs),
+        text=await render_template_for_request(templatename, request, vs),
         headers={"Vary": "Cookie"},
     )
 
 
-@html_template(env, "generic/start.html")
+@html_template("generic/start.html")
 async def handle_generic_start(request):
     return {"suite": request.match_info["campaign"]}
 
 
-@html_template(env, "generic/candidates.html", headers={"Vary": "Cookie"})
+@html_template("generic/candidates.html", headers={"Vary": "Cookie"})
 async def handle_generic_candidates(request):
     from .common import generate_candidates
 
@@ -111,7 +114,7 @@ async def handle_generic_candidates(request):
     )
 
 
-@html_template(env, "merge-proposals.html", headers={"Vary": "Cookie"})
+@html_template("merge-proposals.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
@@ -119,7 +122,7 @@ async def handle_merge_proposals(request):
     return await write_merge_proposals(request.app['pool'], suite)
 
 
-@html_template(env, "merge-proposal.html", headers={"Vary": "Cookie"})
+@html_template("merge-proposal.html", headers={"Vary": "Cookie"})
 async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
@@ -128,7 +131,7 @@ async def handle_merge_proposal(request):
 
 
 @routes.get("/credentials", name="credentials")
-@html_template(env, "credentials.html", headers={"Vary": "Cookie"})
+@html_template("credentials.html", headers={"Vary": "Cookie"})
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
@@ -260,7 +263,7 @@ async def handle_result_file(request):
         return web.Response(body=f.read())
 
 
-@html_template(env, "ready-list.html", headers={"Vary": "Cookie"})
+@html_template("ready-list.html", headers={"Vary": "Cookie"})
 async def handle_ready_proposals(request):
     from .pkg import generate_ready_list
 
@@ -269,7 +272,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app['pool'], suite, review_status)
 
 
-@html_template(env, "generic/done.html", headers={"Vary": "Cookie"})
+@html_template("generic/done.html", headers={"Vary": "Cookie"})
 async def handle_done_proposals(request):
     from .pkg import generate_done_list
 
@@ -287,7 +290,7 @@ async def handle_done_proposals(request):
     return await generate_done_list(request.app['pool'], campaign, since)
 
 
-@html_template(env, "generic/package.html", headers={"Vary": "Cookie"})
+@html_template("generic/package.html", headers={"Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
 
@@ -308,7 +311,7 @@ async def handle_generic_pkg(request):
 
 
 @routes.get("/{vcs:git|bzr}/", name="repo-list")
-@html_template(env, "repo-list.html")
+@aiohttp_jinja2.template("repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     url = request.app['vcs_managers'][vcs].base_url
@@ -359,7 +362,7 @@ async def process_webhook(request, db):
 @routes.get("/webhook", name="webhook-help")
 async def handle_webhook(request):
     if request.headers.get("Content-Type") != "application/json":
-        text = await render_template_for_request(env, "webhook.html", request, {})
+        text = await render_template_for_request("webhook.html", request, {})
         return web.Response(
             content_type="text/html",
             text=text,
@@ -382,6 +385,11 @@ async def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    aiohttp_jinja2.setup(
+        app, template_loader, enable_async=True,
+        autoescape=select_autoescape(["html", "xml"]))
+    jinja_env = aiohttp_jinja2.get_env(app)
+    jinja_env.globals.update(TEMPLATE_ENV)
     app.router.add_routes(routes)
     private_app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])

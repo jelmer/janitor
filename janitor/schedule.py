@@ -39,42 +39,6 @@ DEFAULT_ESTIMATED_DURATION = 15
 DEFAULT_SCHEDULE_OFFSET = -1.0
 
 
-TRANSIENT_ERROR_RESULT_CODES = [
-    "cancelled",
-    "aborted",
-    "install-deps-file-fetch-failure",
-    "apt-get-update-file-fetch-failure",
-    "build-failed-stage-apt-get-update",
-    "build-failed-stage-apt-get-dist-upgrade",
-    "build-failed-stage-explain-bd-uninstallable",
-    "502-bad-gateway",
-    "worker-502-bad-gateway",
-    "build-failed-stage-create-session",
-    "apt-get-update-missing-release-file",
-    "no-space-on-device",
-    "worker-killed",
-    "too-many-requests",
-    "autopkgtest-testbed-chroot-disappeared",
-    "autopkgtest-file-fetch-failure",
-    "autopkgtest-apt-file-fetch-failure",
-    "check-space-insufficient-disk-space",
-    "worker-resume-branch-unavailable",
-    "explain-bd-uninstallable-apt-file-fetch-failure",
-    "worker-timeout",
-    "worker-clone-bad-gateway",
-    "worker-clone-temporary-transport-error",
-    "result-push-failed",
-    "result-push-bad-gateway",
-    "dist-apt-file-fetch-failure",
-    "post-build-testbed-chroot-disappeared",
-    "post-build-file-fetch-failure",
-    "post-build-apt-file-fetch-failure",
-    "pull-rate-limited",
-    "session-setup-failure",
-    "run-disappeared",
-    "branch-temporarily-unavailable",
-]
-
 # In some cases, we want to ignore certain results when guessing
 # whether a future run is going to be successful.
 # For example, some results are transient, or sometimes new runs
@@ -83,11 +47,6 @@ IGNORE_RESULT_CODE = {
     # Run worker failures from more than a day ago.
     "worker-failure": lambda run: ((datetime.utcnow() - run['start_time']).days > 0),
 }
-
-IGNORE_RESULT_CODE.update(
-    {code: lambda run: True for code in TRANSIENT_ERROR_RESULT_CODES}
-)
-
 
 PUBLISH_MODE_VALUE = {
     "skip": 0,

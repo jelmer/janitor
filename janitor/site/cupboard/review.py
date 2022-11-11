@@ -13,7 +13,6 @@ from breezy.revision import NULL_REVISION
 
 from janitor import state
 from .. import (
-    env,
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
@@ -78,7 +77,7 @@ async def generate_review(
         )
     if not entries:
         return await render_template_for_request(
-            env, "cupboard/review-done.html", request, {
+            "cupboard/review-done.html", request, {
                 'publishable_only': publishable_only})
 
     (
@@ -203,4 +202,4 @@ async def generate_review(
             } for entry in entries
         ],
     }
-    return await render_template_for_request(env, "cupboard/review.html", request, kwargs)
+    return await render_template_for_request("cupboard/review.html", request, kwargs)

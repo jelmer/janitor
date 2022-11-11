@@ -24,11 +24,13 @@ import os
 from typing import Optional
 import warnings
 
+import aiohttp_jinja2
 import aiozipkin
 import asyncpg.pool
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
+from jinja2 import select_autoescape
 
 from breezy import urlutils
 from breezy.branch import Branch
@@ -42,7 +44,7 @@ from . import (
 )
 
 from .config import read_config, get_campaign_config
-from .site import is_worker, iter_accept, env as site_env
+from .site import is_worker, iter_accept, template_loader
 
 
 async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
@@ -225,8 +227,8 @@ async def handle_repo_list(request):
                 text=''.join([line + '\n' for line in names]),
                 content_type='text/plain')
         elif accept in ('text/html', ):
-            template = site_env.get_template('repo-list.html')
-            text = await template.render_async(vcs="bzr", repositories=names)
+            text = await aiohttp_jinja2.render_template_async(
+                'repo-list.html', request, {'vcs': "bzr", 'repositories': names})
             return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
@@ -264,6 +266,9 @@ async def create_web_app(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
         client_max_size=(client_max_size or 0)
     )
+    aiohttp_jinja2.setup(
+        public_app, template_loader, enable_async=True,
+        autoescape=select_autoescape(["html", "xml"]))
     public_app.local_path = local_path
     public_app.db = db
     public_app.allow_writes = None
