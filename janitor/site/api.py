@@ -710,7 +710,7 @@ async def handle_runner_log_index(request):
                 content_type='text/plain')
         elif accept in ('text/html', ):
             text = await render_template_for_request(
-                env, "log-index.html", request, {'contents': ret})
+                "log-index.html", request, {'contents': ret})
             return web.Response(text=text, content_type="text/html")
 
     return web.json_response(ret)
