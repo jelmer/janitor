@@ -24,7 +24,7 @@ from .schedule import do_schedule
 
 async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
     async with conn.transaction():
-        if status == "rescheduled":
+        if status == "reschedule":
             status = "rejected"
 
             run = await conn.fetchrow(
