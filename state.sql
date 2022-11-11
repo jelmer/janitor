@@ -411,37 +411,47 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     DECLARE last_unabsorbed_run RECORD;
     DECLARE last_run_id TEXT;
     DECLARE last_effective_run_id TEXT;
+    DECLARE last_effective_run_result_code TEXT;
     DECLARE last_unabsorbed_run_id TEXT;
-    DECLARE row_count int;
 
     BEGIN
-    SELECT id, result_code INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
-
-    IF last_run.result_code = 'nothing-new-to-do' OR last_run.failure_transient THEN
-        SELECT id, result_code INTO STRICT last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND NOT failure_transient ORDER BY start_time DESC limit 1;
+    SELECT id, result_code, failure_transient INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    IF FOUND THEN
+        last_run_id := last_run.id;
     ELSE
-        last_effective_run := last_run;
+        DELETE FROM last_run WHERE package = _package AND campaign = _campaign;
+        RETURN;
     END IF;
 
-    IF last_effective_run.result_code = 'nothing-to-do' THEN
-        last_unabsorbed_run := NULL;
-    ELSIF last_effective_run.result_code != 'success' THEN
-        last_unabsorbed_run := last_effective_run;
+    IF last_run.result_code = 'nothing-new-to-do' OR last_run.failure_transient IS TRUE THEN
+        SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND not coalesce(failure_transient, False) ORDER BY start_time DESC limit 1;
+        IF FOUND THEN
+           last_effective_run_id := last_effective_run.id;
+           last_effective_run_result_code := last_effective_run.result_code;
+        ELSE
+           last_effective_run_id := NULL;
+           last_effective_run_result_code := NULL;
+        END IF;
     ELSE
-       SELECT COUNT(*) INTO row_count from new_result_branch WHERE run_id = last_effective_run.id and not absorbed;
+        last_effective_run_id := last_run.id;
+        last_effective_run_result_code := last_run.result_code;
+    END IF;
+
+    IF last_effective_run_result_code = 'nothing-to-do' THEN
+        last_unabsorbed_run_id := NULL;
+    ELSIF last_effective_run_result_code != 'success' THEN
+        last_unabsorbed_run_id := last_effective_run_id;
+    ELSE
+       PERFORM from new_result_branch WHERE run_id = last_effective_run_id and not absorbed;
        if FOUND then
-           last_unabsorbed_run := last_effective_run;
+           last_unabsorbed_run_id := last_effective_run_id;
        else
-          last_unabsorbed_run := null;
+          last_unabsorbed_run_id := null;
        end if;
      END IF;
 
-    if last_run is not null then last_run_id := last_run.id; end if;
-    if last_effective_run is not null then last_effective_run_id = last_effective_run.id; end if;
-    if last_unabsorbed_run is not null then last_unabsorbed_run_id := last_unabsorbed_run.id; end if;
-
     INSERT INTO last_run (package, campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id) VALUES (
-          _package, _campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id)
+          _package, _campaign, last_run.id, last_effective_run_id, last_unabsorbed_run_id)
          ON CONFLICT (package, campaign) DO UPDATE SET last_run_id = EXCLUDED.last_run_id, last_effective_run_id = EXCLUDED.last_effective_run_id, last_unabsorbed_run_id = EXCLUDED.last_unabsorbed_run_id;
     END;
 $$;
