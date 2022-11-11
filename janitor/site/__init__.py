@@ -138,12 +138,7 @@ def format_timestamp(ts):
     return ts.isoformat(timespec="minutes")
 
 
-env = Environment(
-    loader=PackageLoader("janitor.site", "templates"),
-    autoescape=select_autoescape(["html", "xml"]),
-    enable_async=True,
-)
-
+template_loader = PackageLoader("janitor.site")
 
 
 def highlight_diff(diff):
@@ -164,15 +159,6 @@ def classify_result_code(result_code, transient: Optional[bool]):
     if transient:
         return "transient-failure"
     return "failure"
-
-
-env.globals.update(utcnow=datetime.utcnow)
-env.globals.update(format_duration=format_duration)
-env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(enumerate=enumerate)
-env.globals.update(highlight_diff=highlight_diff)
-env.globals.update(classify_result_code=classify_result_code)
-env.globals.update(URL=URL)
 
 
 class DebdiffRetrievalError(Exception):
