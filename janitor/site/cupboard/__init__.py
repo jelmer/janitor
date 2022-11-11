@@ -124,21 +124,24 @@ async def handle_never_processed(request):
 async def handle_result_codes(request):
     campaign = request.query.get("campaign")
     exclude_never_processed = "exclude_never_processed" in request.query
-    exclude_transient = "exclude_transient" in request.query
+    include_transient = "include_transient" in request.query
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     all_campaigns = [c.name for c in request.app['config'].campaign]
     args = [[campaign] if campaign else all_campaigns]
     async with request.app.database.acquire() as conn:
-        query = """\
+        if include_transient:
+            query = """\
     select (
             case when result_code = 'nothing-new-to-do' then 'success'
             else result_code end), count(result_code) from last_runs
-        where suite = ANY($1::text[])
+        where suite = ANY($1::text[]) group by 1
     """
-        if exclude_transient:
-            query += " AND NOT failure_transient"
-        query += " group by 1"
+        else:
+            query = """\
+    select result_code, count(result_code) from last_effective_runs
+    where suite = ANY($1::text[]) group by 1
+    """
         if not exclude_never_processed:
             query = """(%s) union
     select 'never-processed', count(*) from candidate c
@@ -148,7 +151,7 @@ async def handle_result_codes(request):
     """ % query
         return {
             "exclude_never_processed": exclude_never_processed,
-            "exclude_transient": exclude_transient,
+            "include_transient": include_transient,
             "result_codes": await conn.fetch(query, *args),
             "campaign": campaign, "all_campaigns": all_campaigns}
 
@@ -157,12 +160,21 @@ async def handle_result_codes(request):
 @html_template(env, "cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
     campaign = request.query.get("campaign")
+    include_transient = "include_transient" in request.query
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     code = request.match_info["code"]
+    if code == "success":
+        table = "last_runs"
+        codes = ["success", "nothing-new-to-do"]
+    else:
+        codes = [code]
+        if include_transient:
+            table = "last_runs"
+        else:
+            table = "last_effective_runs"
     query = ('SELECT * FROM %s '
-             'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
-    codes = [code]
+             'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])' % table)
     all_campaigns = [c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
