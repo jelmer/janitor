@@ -386,7 +386,7 @@ async def create_app(
     app = web.Application(middlewares=[
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
     aiohttp_jinja2.setup(
-        app, template_loader, enable_async=True,
+        app, loader=template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     jinja_env = aiohttp_jinja2.get_env(app)
     jinja_env.globals.update(TEMPLATE_ENV)
