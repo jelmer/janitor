@@ -363,4 +363,4 @@ def html_template(template_name, headers={}):
 
 async def render_template_for_request(templatename, request, vs: Dict[str, Any]):
     update_vars_from_request(vs, request)
-    return await aiohttp_jinja2.render_template_async(templatename, request, vs)
+    return await aiohttp_jinja2.render_string_async(templatename, request, vs)
