@@ -107,12 +107,12 @@ async def handle_publish(request):
 
 class ScheduleResultSchema(Schema):
 
-    package = fields.Str(description="package name")
-    campaign = fields.Str(description="campaign")
-    offset = fields.Int(description="offset from top of queue")
-    estimated_duration_seconds = fields.Int(description="estimated duration in seconds")
-    queue_position = fields.Int(description="new position in the queue")
-    queue_wait_time = fields.Int(description="new delay until run, in seconds")
+    package = fields.Str(metadata={'description': "package name"})
+    campaign = fields.Str(metadata={'description': "campaign"})
+    offset = fields.Int(metadata={'description': "offset from top of queue"})
+    estimated_duration_seconds = fields.Int(metadata={'description': "estimated duration in seconds"})
+    queue_position = fields.Int(metadata={'description': "new position in the queue"})
+    queue_wait_time = fields.Int(metadata={'description': "new delay until run, in seconds"})
 
 
 @response_schema(ScheduleResultSchema())
@@ -246,9 +246,9 @@ async def handle_schedule_control(request):
 
 class MergeProposalSchema(Schema):
 
-    package = fields.Str(description='package name')
-    url = fields.Url(description='merge proposal URL')
-    status = fields.Str(description='status')
+    package = fields.Str(metadata={'description': 'package name'})
+    url = fields.Url(metadata={'description': 'merge proposal URL'})
+    status = fields.Str(metadata={'description': 'status'})
 
 
 @docs()
@@ -317,11 +317,11 @@ async def handle_refresh_proposal_status(request):
 
 class QueueItemSchema(Schema):
 
-    queue_id = fields.Int(description="Queue identifier")
-    branch_url = fields.Str(description="Branch URL")
-    package = fields.Str(description="Package name")
-    context = fields.Str(description="Run context")  # type: ignore
-    command = fields.Str(description="Command")
+    queue_id = fields.Int(metadata={'description': "Queue identifier"})
+    branch_url = fields.Str(metadata={'description': "Branch URL"})
+    package = fields.Str(metadata={'description': "Package name"})
+    context = fields.Str(metadata={'description': "Run context"})  # type: ignore
+    command = fields.Str(metadata={'description': "Command"})
 
 
 @docs()
@@ -598,20 +598,20 @@ async def handle_run_post(request):
 
 class BuildInfoSchema(Schema):
 
-    version = fields.Str(description="build version")
-    distribution = fields.Str(description="build distribution name")
+    version = fields.Str(metadata={'description': "build version"})
+    distribution = fields.Str(metadata={'description': "build distribution name"})
 
 
 class RunSchema(Schema):
 
-    run_id = fields.Str(description="Run identifier")
-    start_time = fields.DateTime(description="Run start time")
-    finish_time = fields.DateTime(description="Run finish time")
-    command = fields.Str(description="Command to run")
-    description = fields.Str(description="Build result description")
-    package = fields.Str(description="Package name")
+    run_id = fields.Str(metadata={'description': "Run identifier"})
+    start_time = fields.DateTime(metadata={'description': "Run start time"})
+    finish_time = fields.DateTime(metadata={'description': "Run finish time"})
+    command = fields.Str(metadata={'description': "Command to run"})
+    description = fields.Str(metadata={'description': "Build result description"})
+    package = fields.Str(metadata={'description': "Package name"})
     build_info = BuildInfoSchema()
-    result_code = fields.Str(description="Result code")
+    result_code = fields.Str(metadata={'description': "Result code"})
 
 
 @docs()
@@ -1306,6 +1306,14 @@ async def redirect_docs(req):
     raise web.HTTPFound(location='docs')
 
 
+def setup_postgres(app):
+    async def connect_postgres(app):
+        database = await state.create_pool(app['config'].database_location)
+        app['db'] = database
+
+    app.on_startup.append(connect_postgres)
+
+
 def create_app(
     publisher_url: str,
     runner_url: str,
@@ -1333,12 +1341,7 @@ def create_app(
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
 
-    async def connect_postgres(app):
-        database = await state.create_pool(app['config'].database_location)
-        app['db'] = database
-
-    app.on_startup.append(connect_postgres)
-
+    setup_postgres(app)
     setup_aiohttp_apispec(
         app=app,
         title="Janitor API Documentation",
