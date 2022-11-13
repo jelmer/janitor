@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    vcs_type vcs_type,
    value int,
    inactive boolean not null default false,
+   hostname text generated always as (substring(branch_url, '.*://(?:[^/@]*@)?([^/]*)'::text)) stored,
    unique(branch_url, subpath),
    unique(name)
 );
@@ -158,7 +159,7 @@ CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    change_set text not null references change_set(id),
-   package text not null,
+   package text not null references package(name),
    target_branch_url text,
    subpath text,
    branch_name text,
@@ -166,13 +167,11 @@ CREATE TABLE IF NOT EXISTS publish (
    revision text,
    role text,
    mode publish_mode not null,
-   merge_proposal_url text,
+   merge_proposal_url text references merge_proposal(url),
    result_code text not null,
    description text,
    requestor text,
    timestamp timestamp default now(),
-   foreign key (package) references package(name),
-   foreign key (merge_proposal_url) references merge_proposal(url),
    foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
 );
 CREATE INDEX ON publish (revision);
@@ -225,10 +224,10 @@ CREATE TABLE IF NOT EXISTS candidate (
    command text not null,
    publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
-   codebase text references codebase(name),
+   codebase text not null references codebase(name),
    foreign key (package) references package(name)
 );
-CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));
+CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 

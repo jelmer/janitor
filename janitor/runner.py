@@ -1780,23 +1780,18 @@ async def handle_schedule_control(request):
             package = run['package']
             codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
-        try:
-            with span.new_child('do-schedule-control'):
-                offset, estimated_duration, queue_id = await do_schedule_control(
-                    conn,
-                    package=package,
-                    change_set=change_set,
-                    main_branch_revision=main_branch_revision,
-                    offset=offset,
-                    refresh=refresh,
-                    bucket=bucket,
-                    requestor=requestor,
-                    codebase=codebase,
-                    estimated_duration=estimated_duration)
-        except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
+        with span.new_child('do-schedule-control'):
+            offset, estimated_duration, queue_id = await do_schedule_control(
+                conn,
+                package=package,
+                change_set=change_set,
+                main_branch_revision=main_branch_revision,
+                offset=offset,
+                refresh=refresh,
+                bucket=bucket,
+                requestor=requestor,
+                codebase=codebase,
+                estimated_duration=estimated_duration)
 
     response_obj = {
         "package": package,
@@ -1852,9 +1847,7 @@ async def handle_schedule(request):
                     codebase=codebase,
                     bucket=bucket)
         except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
+            raise web.HTTPBadRequest(text="Candidate not available")
 
     response_obj = {
         "package": package,
@@ -1986,6 +1979,7 @@ async def handle_codebases(request):
 @routes.post("/candidates", name="upload-candidates")
 async def handle_candidates(request):
     unknown_packages = []
+    unknown_codebases = []
     unknown_campaigns = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
@@ -1993,6 +1987,10 @@ async def handle_candidates(request):
         known_packages = set()
         for record in (await conn.fetch('SELECT name FROM package')):
             known_packages.add(record[0])
+
+        known_codebases = set()
+        for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
+            known_codebases.add(record[0])
 
         known_campaign_names = [
             campaign.name for campaign in request.app['config'].campaign]
@@ -2009,6 +2007,12 @@ async def handle_candidates(request):
                     'ignoring candidate %s/%s; package unknown',
                     candidate['package'], candidate['campaign'])
                 unknown_packages.append(candidate['package'])
+                continue
+            if candidate['codebase'] not in known_codebases:
+                logging.warning(
+                    'ignoring candidate %s/%s; codebase unknown',
+                    candidate['codebase'], candidate['campaign'])
+                unknown_codebases.append(candidate['codebase'])
                 continue
             if candidate['campaign'] not in known_campaign_names:
                 logging.warning('unknown suite %r', candidate['campaign'])
@@ -2033,22 +2037,24 @@ async def handle_candidates(request):
                 command,
                 candidate.get('change_set'), candidate.get('context'),
                 candidate.get('value'), candidate.get('success_chance'),
-                publish_policy))
+                publish_policy, candidate['codebase']))
 
         await conn.executemany(
             "INSERT INTO candidate "
             "(package, suite, command, change_set, context, value, "
-            "success_chance, publish_policy) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
-            "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+            "success_chance, publish_policy, codebase) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+            "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
             "success_chance = EXCLUDED.success_chance, "
             "command = EXCLUDED.command, "
-            "publish_policy = EXCLUDED.publish_policy",
+            "publish_policy = EXCLUDED.publish_policy, "
+            "codebase = EXCLUDED.codebase",
             entries,
         )
     return web.json_response({
         'unknown_campaigns': unknown_campaigns,
+        'unknown_codebases': unknown_codebases,
         'unknown_publish_policies': unknown_publish_policies,
         'unknown_packages': unknown_packages})
 
