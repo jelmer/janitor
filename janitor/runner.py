@@ -1505,14 +1505,15 @@ class QueueProcessor(object):
             if keepalive_age > timedelta(days=1):
                 try:
                     await self.abort_run(
-                        active_run, 'run-disappeared', "no support for ping")
+                        active_run, 'run-disappeared', "no support for ping", transient=True)
                 except RunExists:
                     logging.warning('Run not properly cleaned up?')
                 return
         except ActiveRunDisappeared as e:
             if keepalive_age > timedelta(minutes=self.run_timeout):
                 try:
-                    await self.abort_run(active_run, 'run-disappeared', e.reason)
+                    await self.abort_run(active_run, 'run-disappeared', e.reason,
+                                         transient=True)
                 except RunExists:
                     logging.warning('Run not properly cleaned up?')
                 return
@@ -1526,7 +1527,8 @@ class QueueProcessor(object):
             try:
                 await self.abort_run(
                     active_run, code='worker-timeout',
-                    description=("No keepalives received in %s." % keepalive_age))
+                    description=("No keepalives received in %s." % keepalive_age),
+                    transient=True)
             except RunExists:
                 logging.warning('Run not properly cleaned up?')
             return
@@ -1633,13 +1635,14 @@ class QueueProcessor(object):
             tr.hdel('last-keepalive', log_id)
             await tr.execute()
 
-    async def abort_run(self, run: ActiveRun, code: str, description: str) -> None:
+    async def abort_run(self, run: ActiveRun, code: str, description: str, transient=None) -> None:
         result = run.create_result(
             branch_url=run.main_branch_url,
             vcs_type=run.vcs_type,
             description=description,
             code=code,
             logfilenames=[],
+            transient=transient
         )
         await self.finish_run(run, result)
 
