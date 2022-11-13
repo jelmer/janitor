@@ -24,8 +24,6 @@ import logging
 import json
 import os
 import re
-import shutil
-import tempfile
 import time
 from typing import Dict, Any, List
 
@@ -39,10 +37,8 @@ from aiohttp_openmetrics import metrics, metrics_middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 from jinja2 import select_autoescape
-from redis.asyncio import Redis
 
 from .. import state
-from ..logs import get_log_manager
 from ..vcs import get_vcs_managers_from_config
 
 from . import (
@@ -559,8 +555,6 @@ async def create_app(
     app['differ_url'] = differ_url
     app['publisher_url'] = publisher_url
     app['vcs_managers'] = vcs_managers
-    app.on_startup.append(start_pubsub_forwarder)
-    app.on_startup.append(start_gpg_context)
     if external_url:
         app['external_url'] = URL(external_url)
     else:
