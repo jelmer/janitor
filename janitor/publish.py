@@ -2137,7 +2137,7 @@ class ProposalInfo:
     status: str
     revision: bytes
     target_branch_url: Optional[str]
-    maintainer_email: Optional[str] = None
+    rate_limit_bucket: Optional[str] = None
     package_name: Optional[str] = None
 
 
@@ -2214,7 +2214,7 @@ class ProposalInfoManager(object):
         row = await self.conn.fetchrow(
             """\
     SELECT
-        package.maintainer_email,
+        package.maintainer_email AS rate_limit_bucket,
         merge_proposal.revision,
         merge_proposal.status,
         merge_proposal.target_branch_url,
@@ -2231,7 +2231,7 @@ class ProposalInfoManager(object):
         if not row:
             return None
         return ProposalInfo(
-            maintainer_email=row['maintainer_email'],
+            rate_limit_bucket=row['rate_limit_bucket'],
             revision=row['revision'].encode("utf-8") if row[1] else None,
             status=row['status'],
             target_branch_url=row['target_branch_url'],
@@ -2363,7 +2363,7 @@ async def check_existing_mp(
     old_proposal_info = await proposal_info_manager.get_proposal_info(mp.url)
     if old_proposal_info:
         package_name = old_proposal_info.package_name
-        rate_limit_bucket = old_proposal_info.maintainer_email
+        rate_limit_bucket = old_proposal_info.rate_limit_bucket
     else:
         package_name = None
         rate_limit_bucket = None
