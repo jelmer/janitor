@@ -145,10 +145,15 @@ async def handle_schedule(request):
             'bucket': "manual"
         }, raise_for_status=True) as resp:
             ret = await resp.json()
-        async with session.get(queue_position_url, params={
-                'campaign': campaign,
-                'package': package}, raise_for_status=True) as resp:
-            queue_position = await resp.json()
+        try:
+            async with session.get(queue_position_url, params={
+                    'campaign': campaign,
+                    'package': package}, raise_for_status=True) as resp:
+                queue_position = await resp.json()
+        except ClientResponseError as e:
+            if e.status == 400:
+                raise web.HTTPBadRequest(text=e.message)
+            raise
     return web.json_response({
         "package": ret['package'],
         "campaign": ret['campaign'],
