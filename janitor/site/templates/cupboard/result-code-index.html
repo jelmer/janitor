@@ -80,12 +80,12 @@
                 var url;
                 if (code == 'never-processed') {
                     url = '/cupboard/never-processed';
+                    url += '?' + '{{ {'campaign': campaign } | urlencode }}';
                 } else {
                     url = '/cupboard/result-codes/' + code;
                     url += '?' + '{{ {'campaign': campaign, 'include_transient': include_transient, 'include_historical': include_historical } | urlencode }}';
-                    {% endif %}
                 }
-                window.open(ur + {% if campaign -%} + "?campaign={{ campaign }}" {%- endif -%}, "_self");
+                window.open(url, "_self");
             }
         </script>
         <table id="result-code-table" class="docutils display" border="1">
