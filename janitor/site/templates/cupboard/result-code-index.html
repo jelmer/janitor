@@ -36,6 +36,12 @@
                    {% if include_transient %} checked{% endif %}
                    onchange="$('#filter').submit()"/>
             <label for="transient">Include transient</label>
+            <input type="checkbox"
+                   name="include_historical"
+                   id="historical"
+                   {% if include_historical %} checked{% endif %}
+                   onchange="$('#filter').submit()"/>
+            <label for="historical">Include historical</label>
         </form>
 {%- macro random_colors(n) -%}
 [{% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]
@@ -76,15 +82,10 @@
                     url = '/cupboard/never-processed';
                 } else {
                     url = '/cupboard/result-codes/' + code;
-                    {% if campaign %}
-                    url += '?campaign={{ campaign }}';
-                    {% endif %}
-                    {% if include_transient %}
-                    {% if campaign %}url += ';';{% else %}url += '?';{% endif %}
-                    url += 'include_transient=1';
+                    url += '?' + '{{ {'campaign': campaign, 'include_transient': include_transient, 'include_historical': include_historical } | urlencode }}';
                     {% endif %}
                 }
-                window.open(url {%- if campaign -%} + "?campaign={{ campaign }}" {%- endif -%}, "_self");
+                window.open(ur + {% if campaign -%} + "?campaign={{ campaign }}" {%- endif -%}, "_self");
             }
         </script>
         <table id="result-code-table" class="docutils display" border="1">
@@ -112,7 +113,7 @@
                         <tr class="row-even">
                             <td>
                                 <a class="reference external"
-                                   href="/cupboard/result-codes/{{ code }}{%- if campaign -%}?campaign={{ campaign }}{%- endif -%}{%- if include_transient -%}{%- if campaign -%};{%- else -%}?{%- endif -%}include_transient=1{%- endif -%}">{{ display_result_code(code)|safe }}</a>
+                                   href="/cupboard/result-codes/{{ code }}?{{ {'campaign': campaign, 'include_transient': include_transient, 'include_historical': include_historical } | urlencode }}">{{ display_result_code(code)|safe }}</a>
                             </td>
                             <td>{{ count }}</td>
                         </tr>
