@@ -2736,7 +2736,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['revision'].encode('utf-8'),
             )
         if source_branch_name is None:
-            source_branch_name = await derived_branch_name(conn, campaign_config, last_run, mp_run['role'])
+            source_branch_name = await derived_branch_name(
+                conn, campaign_config, last_run, mp_run['role'])
 
         unchanged_run_id = await conn.fetchval(
             "SELECT id FROM run "
