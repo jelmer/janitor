@@ -1780,23 +1780,18 @@ async def handle_schedule_control(request):
             package = run['package']
             codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
-        try:
-            with span.new_child('do-schedule-control'):
-                offset, estimated_duration, queue_id = await do_schedule_control(
-                    conn,
-                    package=package,
-                    change_set=change_set,
-                    main_branch_revision=main_branch_revision,
-                    offset=offset,
-                    refresh=refresh,
-                    bucket=bucket,
-                    requestor=requestor,
-                    codebase=codebase,
-                    estimated_duration=estimated_duration)
-        except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
+        with span.new_child('do-schedule-control'):
+            offset, estimated_duration, queue_id = await do_schedule_control(
+                conn,
+                package=package,
+                change_set=change_set,
+                main_branch_revision=main_branch_revision,
+                offset=offset,
+                refresh=refresh,
+                bucket=bucket,
+                requestor=requestor,
+                codebase=codebase,
+                estimated_duration=estimated_duration)
 
     response_obj = {
         "package": package,
@@ -1852,9 +1847,7 @@ async def handle_schedule(request):
                     codebase=codebase,
                     bucket=bucket)
         except CandidateUnavailable:
-            return web.json_response(
-                {"reason": "Candidate not available."}, status=503
-            )
+            raise web.HTTPBadRequest(text="Candidate not available")
 
     response_obj = {
         "package": package,
