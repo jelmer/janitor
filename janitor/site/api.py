@@ -64,7 +64,6 @@ from .common import (
     render_template_for_request,
 )
 from janitor.logs import get_log_manager
-from .. import state
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()

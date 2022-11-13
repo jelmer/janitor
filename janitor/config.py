@@ -65,6 +65,7 @@ def setup_redis(app):
 def setup_gpg(app):
     import tempfile
     import gpg
+
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
         gpg_home.__enter__()
@@ -81,8 +82,9 @@ def setup_gpg(app):
 
 def setup_postgres(app):
     from .state import create_pool
+
     async def connect_postgres(app):
-        database = await state.create_pool(app['config'].database_location)
+        database = await create_pool(app['config'].database_location)
         app.database = database
         app['pool'] = database
 
@@ -91,6 +93,7 @@ def setup_postgres(app):
 
 def setup_logfile_manager(app, trace_configs=None):
     from .logs import get_log_manager
+
     async def startup_logfile_manager(app):
         app.logfile_manager = get_log_manager(
             app['config'].logs_location, trace_configs=trace_configs)
