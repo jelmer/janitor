@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    vcs_type vcs_type,
    value int,
    inactive boolean not null default false,
+   hostname text generated always as (substring(branch_url, '.*://(?:[^/@]*@)?([^/]*)'::text)) stored,
    unique(branch_url, subpath),
    unique(name)
 );
@@ -223,10 +224,10 @@ CREATE TABLE IF NOT EXISTS candidate (
    command text not null,
    publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
-   codebase text references codebase(name),
+   codebase text not null references codebase(name),
    foreign key (package) references package(name)
 );
-CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, ''));
+CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 
