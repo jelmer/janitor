@@ -108,13 +108,13 @@ async def schedule_new_package(conn, upstream_info: UpstreamInfo, config, *,
 
     await conn.execute(
         "INSERT INTO candidate "
-        "(package, suite, command, change_set, value, success_chance, publish_policy) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) "
-        "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+        "(codebase, package, suite, command, change_set, value, success_chance, publish_policy) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+        "ON CONFLICT (candidate, suite, coalesce(change_set, ''::text)) "
         "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
         "success_chance = EXCLUDED.success_chance, command = EXCLUDED.command, "
-        "publish_policy = EXCLUDED.publish_policy",
-        package, campaign, command, change_set,
+        "publish_policy = EXCLUDED.publish_policy, package = EXCLUDED.package",
+        codebase, package, campaign, command, change_set,
         DEFAULT_NEW_PACKAGE_PRIORITY, DEFAULT_SUCCESS_CHANCE, publish_policy)
 
     await do_schedule(
@@ -131,8 +131,8 @@ async def schedule_update_package(conn, package, desired_version, *, change_set=
         'SELECT codebase FROM package WHERE name = $1', package)
     await conn.execute(
         "INSERT INTO candidate "
-        "(package, suite, context, value, success_chance, codebase) "
-        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
+        "(codebase, package, suite, context, value, success_chance, codebase) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
         package, campaign, None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE, codebase)
     await do_schedule(
