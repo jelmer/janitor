@@ -125,6 +125,7 @@ async def handle_result_codes(request):
     campaign = request.query.get("campaign")
     exclude_never_processed = "exclude_never_processed" in request.query
     include_transient = "include_transient" in request.query
+    include_historical = "include_historical" in request.query
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     all_campaigns = [c.name for c in request.app['config'].campaign]
@@ -134,14 +135,20 @@ async def handle_result_codes(request):
             query = """\
     select (
             case when result_code = 'nothing-new-to-do' then 'success'
-            else result_code end), count(result_code) from last_runs
-        where suite = ANY($1::text[]) group by 1
+            else result_code end), count(result_code) from last_runs AS run
     """
         else:
             query = """\
-    select result_code, count(result_code) from last_effective_runs
-    where suite = ANY($1::text[]) group by 1
+    select result_code, count(result_code) from last_effective_runs AS run
     """
+        query += " where suite = ANY($1::text[])"
+        if not include_historical:
+            query += (
+                " AND EXISTS (SELECT FROM candidate WHERE "
+                "run.package = candidate.package AND "
+                "run.suite = candidate.suite AND "
+                "run.change_set = candidate.change_set)")
+        query += " group by 1"
         if not exclude_never_processed:
             query = """(%s) union
     select 'never-processed', count(*) from candidate c
@@ -152,6 +159,7 @@ async def handle_result_codes(request):
         return {
             "exclude_never_processed": exclude_never_processed,
             "include_transient": include_transient,
+            "include_historical": include_historical,
             "result_codes": await conn.fetch(query, *args),
             "campaign": campaign, "all_campaigns": all_campaigns}
 
@@ -161,6 +169,7 @@ async def handle_result_codes(request):
 async def handle_result_code(request):
     campaign = request.query.get("campaign")
     include_transient = "include_transient" in request.query
+    include_historical = "include_historical" in request.query
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     code = request.match_info["code"]
@@ -173,14 +182,22 @@ async def handle_result_code(request):
             table = "last_runs"
         else:
             table = "last_effective_runs"
-    query = ('SELECT * FROM %s '
+    query = ('SELECT * FROM %s AS run '
              'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])' % table)
+    if not include_historical:
+        query += (
+            " AND EXISTS (SELECT FROM candidate WHERE "
+            "run.package = candidate.package AND "
+            "run.suite = candidate.suite AND "
+            "run.change_set = candidate.change_set)")
     all_campaigns = [c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,
             "runs": await conn.fetch(query, codes, [campaign] if campaign else all_campaigns),
             "campaign": campaign,
+            "include_historical": include_historical,
+            "include_transient": include_transient,
             "all_campaigns": all_campaigns}
 
 
