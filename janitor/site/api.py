@@ -48,7 +48,7 @@ from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor import CAMPAIGN_REGEX
-from janitor.config import Config
+from janitor.config import Config, setup_postgres
 from . import (
     check_admin,
     is_qa_reviewer,
@@ -259,7 +259,7 @@ async def handle_merge_proposal_list(request):
     response_obj = []
     package = request.match_info.get("package")
     campaign = request.match_info.get("campaign")
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         args = []
         query = """
     SELECT
@@ -347,7 +347,7 @@ async def handle_revision_info(request):
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
     campaign = request.match_info.get("campaign")
-    run = await find_vcs_info(request.app['db'], role, run_id, package, campaign)
+    run = await find_vcs_info(request.app['pool'], role, run_id, package, campaign)
     if run is None:
         if run_id is None:
             return web.json_response(
@@ -408,7 +408,7 @@ async def handle_diff(request):
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
     campaign = request.match_info.get("campaign")
-    run = await find_vcs_info(request.app['db'], role, run_id, package, campaign)
+    run = await find_vcs_info(request.app['pool'], role, run_id, package, campaign)
     span = aiozipkin.request_span(request)
     if run is None:
         if run_id:
@@ -483,7 +483,7 @@ async def handle_archive_diff(request):
     kind = request.match_info["kind"]
     span = aiozipkin.request_span(request)
     with span.new_child('sql:get-run'):
-        async with request.app['db'].acquire() as conn:
+        async with request.app['pool'].acquire() as conn:
             run = await conn.fetchrow(
                 'select id, package, suite AS campaign, main_branch_revision, result_code from run where id = $1',
                 run_id)
@@ -569,7 +569,7 @@ async def consider_publishing(session, publisher_url, run_id):
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
 async def handle_run_post(request):
     from ..review import store_review
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         run_id = request.match_info["run_id"]
 
         check_logged_in(request)
@@ -628,7 +628,7 @@ async def handle_run_list(request):
     if limit is not None:
         query += ' LIMIT %d' % int(limit)
     response_obj = []
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         for row in await conn.fetch(query, *args):
             response_obj.append({'run_id': row['id']})
     return web.json_response(response_obj)
@@ -645,7 +645,7 @@ async def handle_run_success_list(request):
     if limit is not None:
         query += ' limit %d' % int(limit)
     response_obj = []
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         for row in await conn.fetch(query):
             response_obj.append({
                 'run_id': row['id'],
@@ -784,7 +784,7 @@ async def handle_report(request):
     campaign = request.match_info["campaign"]
     report = {}
     merge_proposal = {}
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         for package, url in await conn.fetch("""
 SELECT
     DISTINCT ON (merge_proposal.url)
@@ -842,7 +842,7 @@ async def handle_needs_review(request):
     else:
         limit = None
     ret = []
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         with span.new_child('sql:needs-review'):
             for (
                 run_id,
@@ -904,7 +904,7 @@ async def handle_run_assign(request):
     json = await request.json()
     span = aiozipkin.request_span(request)
     with span.new_child('check-worker-creds'):
-        worker_name = await check_worker_creds(request.app['db'], request)
+        worker_name = await check_worker_creds(request.app['pool'], request)
     with span.new_child('forward-runner'):
         url = URL(request.app['runner_url']) / "active-runs"
         try:
@@ -934,7 +934,7 @@ async def handle_run_assign(request):
 async def handle_run_finish(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     with span.new_child('check-worker-creds'):
-        worker_name = await check_worker_creds(request.app['db'], request)
+        worker_name = await check_worker_creds(request.app['pool'], request)
     run_id = request.match_info["run_id"]
     with span.new_child('multipart-init'):
         reader: aiohttp.MultipartReader = await request.multipart()
@@ -1035,7 +1035,7 @@ async def handle_run_reprocess_logs(request):
     run_id = request.match_info['run_id']
     dry_run = 'dry_run' in post
     reschedule = 'reschedule' in post
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         run = await conn.fetchrow(
             'SELECT package, suite AS campaign, command, '
             'finish_time - start_time as duration, codebase, '
@@ -1043,7 +1043,7 @@ async def handle_run_reprocess_logs(request):
             run_id)
 
     result = await reprocess_run_logs(
-        db=request.app['db'],
+        db=request.app['pool'],
         codebase=run['codebase'],
         logfile_manager=request.app['logfile_manager'],
         package=run['package'], campaign=run['campaign'], log_id=run_id,
@@ -1128,13 +1128,13 @@ FROM run
 WHERE
   id = ANY($1::text[])
 """
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         rows = await conn.fetch(query, *args)
 
     async def do_reprocess():
         todo = [
             reprocess_run_logs(
-                db=request.app['db'],
+                db=request.app['pool'],
                 logfile_manager=request.app['logfile_manager'],
                 package=row['package'], campaign=row['campaign'], log_id=row['id'],
                 command=row['command'], change_set=row['change_set'],
@@ -1216,7 +1216,7 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
             where.append("finish_time < $%d" % len(params))
     query += " AND ".join(where)
 
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         runs = await conn.fetch(query, *params)
 
     session = request.app['http_client_session']
@@ -1271,7 +1271,7 @@ async def handle_list_active_runs(request):
 async def handle_result_code(request):
     result_code = request.match_info["result_code"]
     ret = []
-    async with request.app['db'].acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         for row in await conn.fetch(
                 'SELECT id, package, vcs_type, branch_url FROM last_runs '
                 'WHERE result_code = $1', result_code):
@@ -1304,14 +1304,6 @@ async def handle_get_active_run(request):
 @routes.get('/', name='redirect-docs')
 async def redirect_docs(req):
     raise web.HTTPFound(location='docs')
-
-
-def setup_postgres(app):
-    async def connect_postgres(app):
-        database = await state.create_pool(app['config'].database_location)
-        app['db'] = database
-
-    app.on_startup.append(connect_postgres)
 
 
 def create_app(

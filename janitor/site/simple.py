@@ -58,7 +58,14 @@ from .openid import setup_openid
 from .pubsub import pubsub_handler, Topic
 from .webhook import parse_webhook, is_webhook_request
 
-from ..config import get_campaign_config
+from ..config import (
+    get_campaign_config,
+    setup_logfile_manager,
+    setup_artifact_manager,
+    setup_gpg,
+    setup_redis,
+    setup_postgres,
+)
 from ..schedule import do_schedule
 
 
@@ -376,7 +383,7 @@ async def create_app(
         runner_url=None, publisher_url=None,
         archiver_url=None, vcs_managers=None,
         differ_url=None,
-        listen_address=None, port=None):
+        listen_address=None, port=None, redis=None):
     if minified:
         minified_prefix = ""
     else:
@@ -425,25 +432,11 @@ async def create_app(
 
     app.cleanup_ctx.append(persistent_session)
 
-    async def start_gpg_context(app):
-        gpg_home = tempfile.TemporaryDirectory()
-        gpg_context = gpg.Context(home_dir=gpg_home.name)
-        app['gpg'] = gpg_context.__enter__()
-
-        async def cleanup_gpg(app):
-            gpg_context.__exit__(None, None, None)
-            shutil.rmtree(gpg_home)
-
-        app.on_cleanup.append(cleanup_gpg)
-
-    async def connect_redis(app):
-        app['redis'] = Redis.from_url(config.redis_location)
-
-    async def disconnect_redis(app):
-        await app['redis'].close()
-
-    app.on_startup.append(connect_redis)
-    app.on_cleanup.append(disconnect_redis)
+    setup_gpg(app)
+    if redis is not None:
+        app['redis'] = redis
+    else:
+        setup_redis(app)
 
     async def start_pubsub_forwarder(app):
         async def forward_redis(app, name):
@@ -573,27 +566,11 @@ async def create_app(
     else:
         app['external_url'] = None
 
-    async def startup_postgres(app):
-        database = await state.create_pool(config.database_location)
-        app['pool'] = database
-        app.database = database
-
-    app.on_startup.append(startup_postgres)
+    setup_postgres(app)
 
     app['config'] = config
 
-    from janitor.artifacts import get_artifact_manager
-
-    async def startup_artifact_manager(app):
-        app['artifact_manager'] = get_artifact_manager(
-            config.artifact_location, trace_configs=trace_configs)
-        await app['artifact_manager'].__aenter__()
-
-    async def turndown_artifact_manager(app):
-        await app['artifact_manager'].__aexit__(None, None, None)
-
-    app.on_startup.append(startup_artifact_manager)
-    app.on_cleanup.append(turndown_artifact_manager)
+    setup_artifact_manager(app)
     setup_openid(
         app, config.oauth2_provider.base_url if config.oauth2_provider else None)
     app.router.add_post("/", handle_post_root, name="root-post")
@@ -620,10 +597,7 @@ async def create_app(
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
 
-    async def setup_logfile_manager(app):
-        app.logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
-
-    app.on_startup.append(setup_logfile_manager)
+    setup_logfile_manager(app, trace_configs=trace_configs)
     return private_app, app
 
 
