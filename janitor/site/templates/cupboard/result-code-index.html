@@ -83,7 +83,7 @@
                     url += '?' + '{{ {'campaign': campaign } | urlencode }}';
                 } else {
                     url = '/cupboard/result-codes/' + code;
-                    url += '?' + '{{ {'campaign': campaign, 'include_transient': include_transient, 'include_historical': include_historical } | urlencode }}';
+                    url += '?' + "{{ {'campaign': campaign or '_all', 'include_transient': 'on' if include_transient else 'off', 'include_historical': 'on' if include_historical else 'off' } | urlencode }}";
                 }
                 window.open(url, "_self");
             }
@@ -113,7 +113,7 @@
                         <tr class="row-even">
                             <td>
                                 <a class="reference external"
-                                   href="/cupboard/result-codes/{{ code }}?{{ {'campaign': campaign, 'include_transient': include_transient, 'include_historical': include_historical } | urlencode }}">{{ display_result_code(code)|safe }}</a>
+                                   href="/cupboard/result-codes/{{ code }}?{{ {'campaign': campaign or '_all', 'include_transient': 'on' if include_transient else 'off', 'include_historical': 'on' if include_historical else 'off' } | urlencode }}">{{ display_result_code(code)|safe }}</a>
                             </td>
                             <td>{{ count }}</td>
                         </tr>
