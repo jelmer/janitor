@@ -147,7 +147,7 @@ async def handle_result_codes(request):
                 " AND EXISTS (SELECT FROM candidate WHERE "
                 "run.package = candidate.package AND "
                 "run.suite = candidate.suite AND "
-                "run.change_set = candidate.change_set)")
+                "(run.change_set = candidate.change_set OR candidate.change_set is NULL))")
         query += " group by 1"
         if not exclude_never_processed:
             query = """(%s) union
@@ -189,7 +189,7 @@ async def handle_result_code(request):
             " AND EXISTS (SELECT FROM candidate WHERE "
             "run.package = candidate.package AND "
             "run.suite = candidate.suite AND "
-            "run.change_set = candidate.change_set)")
+            "(run.change_set = candidate.change_set OR candidate.change_set IS NULL))")
     all_campaigns = [c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
