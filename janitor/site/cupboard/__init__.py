@@ -123,9 +123,9 @@ async def handle_never_processed(request):
 @html_template("cupboard/result-code-index.html", headers={"Vary": "Cookie"})
 async def handle_result_codes(request):
     campaign = request.query.get("campaign")
-    exclude_never_processed = "exclude_never_processed" in request.query
-    include_transient = "include_transient" in request.query
-    include_historical = "include_historical" in request.query
+    exclude_never_processed = request.query.get("exclude_never_processed") == "on"
+    include_transient = request.query.get("include_transient") == "on"
+    include_historical = request.query.get("include_historical") == "on"
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     all_campaigns = [c.name for c in request.app['config'].campaign]
@@ -168,8 +168,8 @@ async def handle_result_codes(request):
 @html_template("cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
     campaign = request.query.get("campaign")
-    include_transient = "include_transient" in request.query
-    include_historical = "include_historical" in request.query
+    include_transient = request.query("include_transient") == "on"
+    include_historical = request.query("include_historical") == "on"
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     code = request.match_info["code"]
