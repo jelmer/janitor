@@ -110,11 +110,11 @@ notification of accepted merge proposals and pushes.
 Contributing
 ============
 
-See CONTRIBUTING.md for instructions on e.g. setting up
+See [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on e.g. setting up
 a development environment.
 
-If you're interested in working on adding another campaign, see
-[adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
+If you're interested in working on adding another campaign for a janitor
+instance, see [adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
 
 Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC
 (irc.oftc.net) or
