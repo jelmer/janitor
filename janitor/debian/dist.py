@@ -39,6 +39,7 @@ from ognibuild.debian import satisfy_build_deps
 from ognibuild.debian.apt import run_apt
 from ognibuild.logs import (
     DirectoryLogManager,
+    LogManager,
     NoLogManager,
 )
 
@@ -165,6 +166,7 @@ if __name__ == '__main__':
             target_dir = os.path.abspath(
                 os.path.join(args.directory, args.target_dir))
 
+            log_manager: LogManager
             if args.log_directory:
                 log_manager = DirectoryLogManager(
                     os.path.join(args.log_directory, DIST_LOG_FILENAME),

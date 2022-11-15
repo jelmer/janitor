@@ -75,7 +75,7 @@ SELECT package, suite, result_code, failure_stage, failure_details FROM last_una
             yield row['package'], row['suite'], requirement
 
 
-async def schedule_new_package(conn, upstream_info: UpstreamInfo, config, *,
+async def schedule_new_package(conn, upstream_info, config, *,
                                change_set=None, requestor=None, origin=None):
     from debmutate.vcs import unsplit_vcs_url
     campaign = "debianize"

@@ -139,6 +139,7 @@ class S3LogFileManager(LogFileManager):
         self.base_url = endpoint_url + ("/%s/" % bucket_name)
         self.trace_configs = trace_configs
         self.bucket_name = bucket_name
+        self.endpoint_url = endpoint_url
 
     async def __aenter__(self):
         import boto3
@@ -204,6 +205,9 @@ class S3LogFileManager(LogFileManager):
 
 
 class GCSLogFileManager(LogFileManager):
+
+    session: ClientSession
+
     def __init__(self, location, creds_path=None, trace_configs=None):
         self.bucket_name = URL(location).host
         self.trace_configs = trace_configs

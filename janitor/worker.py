@@ -168,7 +168,7 @@ class WorkerResult(object):
         self,
         description: Optional[str],
         value: Optional[int],
-        branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
+        branches: Optional[List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]],
         target: str,
         target_details: Optional[Any],
@@ -440,7 +440,7 @@ class GenericTarget(Target):
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
-        branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
+        branches: Optional[List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
         tags: Optional[Dict[str, bytes]],
         update_current: bool = True):
     from breezy.repository import InterRepository
@@ -787,8 +787,7 @@ def run_worker(
                 try:
                     cached_branch = open_branch(
                         cached_branch_url, possible_transports=possible_transports,
-                        probers=select_probers(vcs_type)
-                    )
+                        probers=select_probers(vcs_type))
                 except BranchMissing as e:
                     logger.info("Cached branch URL %s missing: %s", cached_branch_url, e)
                     cached_branch = None
@@ -798,7 +797,8 @@ def run_worker(
                     )
                     cached_branch = None
                 else:
-                    logger.info("Using cached branch %s", full_branch_url(cached_branch))
+                    if cached_branch is not None:
+                        logger.info("Using cached branch %s", full_branch_url(cached_branch))
             else:
                 cached_branch = None
 
@@ -934,7 +934,7 @@ def run_worker(
                     elif force_build:
                         changer_result = GenericCommandResult(
                             description='No change build',
-                            context=None,
+                            context={},
                             tags=[],
                             value=0)
                     else:
@@ -944,7 +944,7 @@ def run_worker(
             finally:
                 metadata["revision"] = ws.local_tree.branch.last_revision().decode('utf-8')
 
-            result_branches = []
+            result_branches: List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
             for (name, base_revision, revision) in ws.result_branches():
                 try:
                     role = roles[name]
@@ -1567,6 +1567,7 @@ async def main(argv=None):
 
     base_url = yarl.URL(args.base_url)
 
+    auth: Optional[BasicAuth]
     if args.credentials:
         with open(args.credentials) as f:
             creds = json.load(f)
@@ -1586,8 +1587,8 @@ async def main(argv=None):
             ):
                 if host == base_url.host:
                     return {
-                        "user": auth.login,
-                        "password": auth.password,
+                        "user": auth.login,  # type: ignore
+                        "password": auth.password,  # type: ignore
                         "protocol": protocol,
                         "port": port,
                         "host": host,

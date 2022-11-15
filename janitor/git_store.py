@@ -102,7 +102,7 @@ async def git_diff_request(request):
     if p.returncode == 0:
         return web.Response(body=stdout, content_type="text/x-diff")
     logging.warning('git diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
+    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr.decode())
 
 
 async def git_revision_info_request(request):
@@ -347,7 +347,7 @@ async def cgit_backend(request):
             content_length = int(headers['Content-Length'])
             return web.Response(
                 headers=headers, status=status_code, reason=status_reason,
-                body=await p.stdout.read(content_length))
+                body=await p.stdout.read(content_length))  # type: ignore
         else:
             response = web.StreamResponse(
                 headers=headers,
@@ -359,10 +359,10 @@ async def cgit_backend(request):
 
             await response.prepare(request)
 
-            chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
+            chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
             while chunk:
                 await response.write(chunk)
-                chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
+                chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
 
             await response.write_eof()
 
@@ -487,9 +487,8 @@ async def handle_repo_list(request):
                 text=''.join([line + '\n' for line in names]),
                 content_type='text/plain')
         elif accept in ('text/html', ):
-            text = await aiohttp_jinja2.render_template_async(
+            return await aiohttp_jinja2.render_template_async(
                 'repo-list.html', request, {'vcs': "git", 'repositories': names})
-            return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
 

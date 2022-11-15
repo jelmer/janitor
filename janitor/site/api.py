@@ -1126,7 +1126,8 @@ SELECT
   result_code,
   description,
   failure_details,
-  change_set
+  change_set,
+  codebase
 FROM run
 WHERE
   id = ANY($1::text[])
@@ -1143,6 +1144,7 @@ WHERE
                 command=row['command'], change_set=row['change_set'],
                 duration=row['duration'], result_code=row['result_code'],
                 description=row['description'], failure_details=row['failure_details'],
+                codebase=row['codebase'],
                 process_fns=[
                     ('dist-', DIST_LOG_FILENAME, process_dist_log),
                     ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
