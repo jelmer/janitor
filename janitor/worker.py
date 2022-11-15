@@ -303,7 +303,7 @@ class DebianTarget(Target):
 
         if not argv:
             return GenericCommandResult(
-                description='No change build', context=None, tags=[], value=0)
+                description='No change build', context={}, tags=[], value=0)
 
         logging.info('Running %r', argv)
         # TODO(jelmer): This is only necessary for deb-new-upstream
@@ -393,7 +393,7 @@ class GenericTarget(Target):
                      resume_metadata=None):
         if not argv:
             return GenericCommandResult(
-                description='No change build', context=None, tags=[], value=0)
+                description='No change build', context={}, tags=[], value=0)
 
         logging.info('Running %r', argv)
         try:
@@ -1560,7 +1560,7 @@ async def main(argv=None):
     await runner.setup()
     site = web.TCPSite(runner, args.listen_address, args.port)
     await site.start()
-    (unused_site_addr, site_port) = site._server.sockets[0].getsockname()
+    (unused_site_addr, site_port) = site._server.sockets[0].getsockname()  # type: ignore
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)

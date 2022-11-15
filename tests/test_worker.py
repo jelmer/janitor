@@ -21,13 +21,14 @@ from janitor.worker import (
     _convert_codemod_script_failed,
     WorkerFailure,
 )
-from aiohttp.multipart import MultipartReader
+from aiohttp.multipart import MultipartReader, BodyPartReader
 from silver_platter.apply import ScriptFailed
 
 from io import BytesIO
 
 import asyncio
 import os
+import pytest
 import shutil
 import tempfile
 import unittest
@@ -50,51 +51,38 @@ class AsyncBytesIO:
         return self._io.read(size)
 
 
-class BundleResultsTests(unittest.TestCase):
-    def setUp(self):
-        super(BundleResultsTests, self).setUp()
-        self.test_dir = tempfile.mkdtemp()
-        old_dir = os.getcwd()
-        os.chdir(self.test_dir)
-        self.addCleanup(os.chdir, old_dir)
-        self.addCleanup(shutil.rmtree, self.test_dir)
-
-    def test_simple(self):
-        loop = asyncio.get_event_loop()
-        with open("a", "w") as f:
+@pytest.mark.asyncio
+async def test_bundle_results():
+    with tempfile.TemporaryDirectory() as test_dir:
+        with open(os.path.join(test_dir, "a"), "w") as f:
             f.write("some data\n")
-        with bundle_results({"result_code": "success"}, self.test_dir) as writer:
-            self.assertEqual(["Content-Type"], list(writer.headers.keys()))
+        with bundle_results({"result_code": "success"}, test_dir) as writer:
+            assert ["Content-Type"] == list(writer.headers.keys())
             b = AsyncBytesIO()
-            loop.run_until_complete(writer.write(b))
+            await writer.write(b)
             b.seek(0)
-            reader = MultipartReader(writer.headers, b)
-            part = loop.run_until_complete(reader.next())
-            self.assertEqual(
-                part.headers,
-                {
-                    "Content-Disposition": 'attachment; filename="result.json"; '
-                    "filename*=utf-8''result.json",
-                    "Content-Length": "26",
-                    "Content-Type": "application/json",
-                },
-            )
-            self.assertEqual("result.json", part.filename)
-            self.assertEqual(
-                b'{"result_code": "success"}', bytes(loop.run_until_complete(part.read())))
-            part = loop.run_until_complete(reader.next())
-            self.assertEqual(
-                part.headers,
-                {
-                    "Content-Disposition": 'attachment; filename="a"; '
-                    "filename*=utf-8''a",
-                    "Content-Length": "10",
-                    "Content-Type": "application/octet-stream",
-                },
-            )
-            self.assertEqual("a", part.filename)
-            self.assertEqual(b"some data\n", bytes(loop.run_until_complete(part.read())))
-            self.assertTrue(part.at_eof())
+            reader = MultipartReader(writer.headers, b)  # type: ignore
+            part = await reader.next()
+            assert isinstance(part, BodyPartReader)
+            assert part.headers == {
+                "Content-Disposition": 'attachment; filename="result.json"; '
+                "filename*=utf-8''result.json",
+                "Content-Length": "26",
+                "Content-Type": "application/json",
+            }
+            assert "result.json" == part.filename
+            assert b'{"result_code": "success"}' == bytes(await part.read())
+            part = await reader.next()
+            assert isinstance(part, BodyPartReader)
+            assert part.headers == {
+                "Content-Disposition": 'attachment; filename="a"; '
+                "filename*=utf-8''a",
+                "Content-Length": "10",
+                "Content-Type": "application/octet-stream",
+            }
+            assert "a" == part.filename
+            assert b"some data\n" == bytes(await part.read())
+            assert part.at_eof()
 
 
 async def create_client(aiohttp_client):

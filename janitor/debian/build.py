@@ -23,7 +23,7 @@ from typing import Optional, List, Any
 
 from ognibuild.debian.apt import AptManager
 from ognibuild.debian.fix_build import build_incrementally
-from ognibuild.session import SessionSetupFailure
+from ognibuild.session import SessionSetupFailure, Session
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
 from ognibuild.debian.build import (
@@ -73,6 +73,7 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
     if not local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
         raise BuildFailure("not-debian-package", "Not a Debian package", stage="pre-check")
 
+    session: Session
     if chroot:
         session = SchrootSession(chroot)
     else:

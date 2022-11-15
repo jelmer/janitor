@@ -209,14 +209,17 @@ class GCSLogFileManager(LogFileManager):
     session: ClientSession
 
     def __init__(self, location, creds_path=None, trace_configs=None):
-        self.bucket_name = URL(location).host
+        hostname = URL(location).host
+        if hostname is None:
+            raise ValueError('invalid location missing bucket name: %s' % location)
+        self.bucket_name = hostname
         self.trace_configs = trace_configs
         self.creds_path = creds_path
 
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
         self.session = ClientSession(trace_configs=self.trace_configs)
-        self.storage = Storage(service_file=self.creds_path, session=self.session)
+        self.storage = Storage(service_file=self.creds_path, session=self.session)  # type: ignore
         self.bucket = self.storage.get_bucket(self.bucket_name)
         return self
 
@@ -236,26 +239,27 @@ class GCSLogFileManager(LogFileManager):
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
-        return await self.bucket.blob_exists(object_name, self.session)
+        return await self.bucket.blob_exists(object_name, session=self.session)  # type: ignore
 
     async def get_ctime(self, pkg, run_id, name):
         from iso8601 import parse_date
         object_name = self._get_object_name(pkg, run_id, name)
         try:
-            blob = await self.bucket.get_blob(object_name, self.session)
+            blob = await self.bucket.get_blob(object_name, session=self.session)  # type: ignore
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name) from e
             raise ServiceUnavailable() from e
         except ServerDisconnectedError as e:
             raise ServiceUnavailable() from e
-        return parse_date(blob.timeCreated)
+        return parse_date(blob.timeCreated)  # type: ignore
 
     async def get_log(self, pkg, run_id, name, timeout=30):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
             data = await self.storage.download(
-                self.bucket_name, object_name, session=self.session, timeout=timeout
+                self.bucket_name, object_name,
+                session=self.session, timeout=timeout  # type: ignore
             )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:

@@ -33,11 +33,9 @@ from aiohttp_openmetrics import metrics_middleware, metrics
 from http.client import parse_headers  # type: ignore
 from jinja2 import select_autoescape
 
-from breezy.controldir import ControlDir, format_registry
-from breezy.errors import NotBranchError
-from breezy.repository import Repository
 from dulwich.errors import HangupException, MissingCommitError
 from dulwich.objects import valid_hexsha, ZERO_SHA
+from dulwich.repo import Repo, NotGitRepository
 from dulwich.web import HTTPGitApplication, NO_CACHE_HEADERS
 
 from dulwich.protocol import ReceivableProtocol
@@ -68,8 +66,8 @@ async def git_diff_request(request):
     path = request.query.get('path')
     try:
         with span.new_child('open-repo'):
-            repo = Repository.open(os.path.join(request.app['local_path'], codebase))
-    except NotBranchError as e:
+            repo = Repo(os.path.join(request.app['local_path'], codebase))
+    except NotGitRepository as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             codebase) from e
@@ -89,7 +87,7 @@ async def git_diff_request(request):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.PIPE,
-        cwd=repo.user_transport.local_abspath('.'),
+        cwd=repo.path,
     )
 
     # TODO(jelmer): Stream this
@@ -115,8 +113,8 @@ async def git_revision_info_request(request):
         raise web.HTTPBadRequest(text='need both old and new') from e
     try:
         with span.new_child('open-repo'):
-            repo = Repository.open(os.path.join(request.app['local_path'], codebase))
-    except NotBranchError as e:
+            repo = Repo(os.path.join(request.app['local_path'], codebase))
+    except NotGitRepository as e:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             codebase) from e
@@ -125,7 +123,7 @@ async def git_revision_info_request(request):
     ret = []
     try:
         with span.new_child('get-walker'):
-            walker = repo._git.get_walker(
+            walker = repo.get_walker(
                 include=[new_sha],
                 exclude=([old_sha] if old_sha != ZERO_SHA else []))
     except MissingCommitError:
@@ -140,21 +138,19 @@ async def git_revision_info_request(request):
     return web.json_response(ret)
 
 
-async def _git_open_repo(local_path: str, db, codebase: str) -> Repository:
+async def _git_open_repo(local_path: str, db, codebase: str) -> Repo:
     repo_path = os.path.join(local_path, codebase)
     try:
-        repo = Repository.open(repo_path)
-    except NotBranchError as e:
+        repo = Repo(repo_path)
+    except NotGitRepository as e:
         async with db.acquire() as conn:
             if not await codebase_exists(conn, codebase):
                 raise web.HTTPNotFound(text='no such codebase: %s' % codebase) from e
-        controldir = ControlDir.create(repo_path, format=format_registry.get("git-bare")())
+        repo = Repo.init_bare(repo_path)
         logging.info(
-            "Created missing git repository for %s at %s", codebase, controldir.user_url
+            "Created missing git repository for %s at %s", codebase, repo.path
         )
-        return controldir.open_repository()
-    else:
-        return repo
+    return repo
 
 
 def _git_check_service(service: str, allow_writes: bool = False) -> None:
@@ -253,14 +249,11 @@ async def handle_set_git_remote(request):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
     post = await request.post()
-    r = repo._git
-    c = r.get_config()
+    c = repo.get_config()
     section = ("remote", remote)
     c.set(section, "url", post["url"])
     c.set(section, "fetch", "+refs/heads/*:refs/remotes/%s/*" % remote)
-    b = BytesIO()
-    c.write_to_file(b)
-    r._controltransport.put_bytes("config", b.getvalue())
+    c.write_to_path()
 
     # TODO(jelmer): Run 'git fetch $remote'?
 
@@ -287,8 +280,7 @@ async def cgit_backend(request):
     if allow_writes:
         args.extend(["-c", "http.receivepack=1"])
     args.append("http-backend")
-    local_path = repo.user_transport.local_abspath(".")
-    full_path = os.path.join(local_path, subpath.lstrip('/'))
+    full_path = os.path.join(repo.path, subpath.lstrip('/'))
     env = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
@@ -346,11 +338,11 @@ async def cgit_backend(request):
         if 'Content-Length' in headers:
             content_length = int(headers['Content-Length'])
             return web.Response(
-                headers=headers, status=status_code, reason=status_reason,
+                headers=dict(headers), status=status_code, reason=status_reason,
                 body=await p.stdout.read(content_length))  # type: ignore
         else:
             response = web.StreamResponse(
-                headers=headers,
+                headers=dict(headers),
                 status=status_code, reason=status_reason,
             )
 
@@ -392,7 +384,6 @@ async def dulwich_refs(request):
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
-    r = repo._git
 
     service = request.query.get("service")
     _git_check_service(service, allow_writes)
@@ -411,7 +402,7 @@ async def dulwich_refs(request):
     out = BytesIO()
     proto = ReceivableProtocol(BytesIO().read, out.write)
     handler = handler_cls(
-        DictBackend({".": r}), ["."], proto, stateless_rpc=True, advertise_refs=True
+        DictBackend({".": repo}), ["."], proto, stateless_rpc=True, advertise_refs=True
     )
     handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
     handler.proto.write_pkt_line(None)
@@ -453,9 +444,8 @@ async def dulwich_service(request):
     outf = BytesIO()
 
     def handle():
-        r = repo._git
         proto = ReceivableProtocol(inf.read, outf.write)
-        handler = handler_cls(DictBackend({".": r}), ["."], proto, stateless_rpc=True)
+        handler = handler_cls(DictBackend({".": repo}), ["."], proto, stateless_rpc=True)
         try:
             handler.handle()
         except HangupException:
