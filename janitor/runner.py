@@ -1358,7 +1358,7 @@ async def followup_run(
                         change_set=result.change_set,
                         bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
                         campaign=run_to_retry['campaign'],
-                        codebase=runs_to_retry['codebase'])
+                        codebase=run_to_retry['codebase'])
 
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
