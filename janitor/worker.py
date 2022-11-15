@@ -157,7 +157,7 @@ def gce_external_ip():
     try:
         resp = urlopen(req)
     except HTTPError as e:
-        if e.status == 404:
+        if e.code == 404:
             return None
         raise
     return resp.read().decode()
