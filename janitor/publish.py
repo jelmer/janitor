@@ -298,10 +298,12 @@ class SlowStartRateLimiter(RateLimiter):
         if self._max_mps_per_bucket and current >= self._max_mps_per_bucket:
             raise BucketRateLimited(bucket, current, self._max_mps_per_bucket)
         limit = self._get_limit(bucket)
-        if current >= limit:
+        if limit is not None and current >= limit:
             raise BucketRateLimited(bucket, current, limit)
 
-    def _get_limit(self, bucket):
+    def _get_limit(self, bucket) -> Optional[int]:
+        if self._absorbed_mps_per_bucket is None:
+            return None
         return self._absorbed_mps_per_bucket.get(bucket, 0) + 1
 
     def inc(self, bucket: str):

@@ -60,7 +60,7 @@ from redis.asyncio import Redis
 
 from yarl import URL
 
-from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
+from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics_middleware, metrics
 
 from breezy import debug, urlutils
 from breezy.branch import Branch
@@ -2540,8 +2540,9 @@ async def create_app(queue_processor, config, db, tracer=None):
     app['database'] = db
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
-    setup_metrics(app)
-    aiozipkin.setup(app, tracer, skip_routes=[app.router['metrics']])
+    app.middlewares.insert(0, metrics_middleware)
+    metrics_route = app.router.add_get("/metrics", metrics, name="metrics")
+    aiozipkin.setup(app, tracer, skip_routes=[metrics_route])
     return app
 
 

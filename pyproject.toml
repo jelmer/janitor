@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.mypy]
 warn_redundant_casts = true
 warn_unused_configs = true
-#check_untyped_defs = true
+check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = [
