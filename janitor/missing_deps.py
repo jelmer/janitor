@@ -26,7 +26,6 @@ from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
 from ognibuild.session.plain import PlainSession
 from ognibuild.requirements import Requirement
-from ognibuild.upstream import UpstreamInfo
 from buildlog_consultant import problem_clses
 
 from . import state

@@ -26,12 +26,9 @@ from silver_platter.apply import ScriptFailed
 
 from io import BytesIO
 
-import asyncio
 import os
 import pytest
-import shutil
 import tempfile
-import unittest
 
 
 class AsyncBytesIO:
