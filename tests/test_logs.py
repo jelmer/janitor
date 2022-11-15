@@ -37,22 +37,22 @@ def test_gcs_log_file_manager():
 
 async def test_file_log_file_manager():
     with tempfile.TemporaryDirectory() as td:
-        lm = FileSystemLogFileManager(td)
-        assert not await lm.has_log('mypkg', 'run-id', 'foo.log')
-        with pytest.raises(FileNotFoundError):
-            await lm.get_log('mypkg', 'run-id', 'foo.log')
-        with pytest.raises(FileNotFoundError):
-            await lm.get_ctime('mypkg', 'run-id', 'foo.log')
-        with pytest.raises(FileNotFoundError):
-            await lm.delete_log('mypkg', 'run-id', 'foo.log')
-        with tempfile.NamedTemporaryFile(suffix='.log') as f:
-            f.write(b'foo bar\n')
-            f.flush()
-            await lm.import_log('mypkg', 'run-id', f.name)
-            logname = os.path.basename(f.name)
-        assert await lm.has_log('mypkg', 'run-id', logname)
-        assert (await lm.get_log('mypkg', 'run-id', logname)).read() == b'foo bar\n'
-        assert isinstance(await lm.get_ctime('mypkg', 'run-id', logname), datetime)
-        assert [x async for x in lm.iter_logs()] == [('mypkg', 'run-id', [logname])]
-        await lm.delete_log('mypkg', 'run-id', logname)
-        assert not await lm.has_log('mypkg', 'run-id', logname)
+        async with FileSystemLogFileManager(td) as lm:
+            assert not await lm.has_log('mypkg', 'run-id', 'foo.log')
+            with pytest.raises(FileNotFoundError):
+                await lm.get_log('mypkg', 'run-id', 'foo.log')
+            with pytest.raises(FileNotFoundError):
+                await lm.get_ctime('mypkg', 'run-id', 'foo.log')
+            with pytest.raises(FileNotFoundError):
+                await lm.delete_log('mypkg', 'run-id', 'foo.log')
+            with tempfile.NamedTemporaryFile(suffix='.log') as f:
+                f.write(b'foo bar\n')
+                f.flush()
+                await lm.import_log('mypkg', 'run-id', f.name)
+                logname = os.path.basename(f.name)
+            assert await lm.has_log('mypkg', 'run-id', logname)
+            assert (await lm.get_log('mypkg', 'run-id', logname)).read() == b'foo bar\n'
+            assert isinstance(await lm.get_ctime('mypkg', 'run-id', logname), datetime)
+            assert [x async for x in lm.iter_logs()] == [('mypkg', 'run-id', [logname])]
+            await lm.delete_log('mypkg', 'run-id', logname)
+            assert not await lm.has_log('mypkg', 'run-id', logname)
