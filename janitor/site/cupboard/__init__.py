@@ -168,8 +168,8 @@ async def handle_result_codes(request):
 @html_template("cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
     campaign = request.query.get("campaign")
-    include_transient = request.query("include_transient") == "on"
-    include_historical = request.query("include_historical") == "on"
+    include_transient = request.query.get("include_transient") == "on"
+    include_historical = request.query.get("include_historical") == "on"
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     code = request.match_info["code"]
