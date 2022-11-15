@@ -2617,7 +2617,7 @@ async def main(argv=None):
         public_vcs_managers = get_vcs_managers(args.public_vcs_location)
     except UnsupportedProtocol as e:
         parser.error(
-            'Unsupported protocol in --public-vcs-location: %s' % e.url)
+            'Unsupported protocol in --public-vcs-location: %s' % e.path)
 
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:

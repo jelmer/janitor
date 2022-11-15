@@ -270,12 +270,12 @@ class HashedFileWriter(object):
                 self.size += len(chunk)
 
         d, n = os.path.split(self.path)
-        for h, v in hashes.items():
-            os.makedirs(os.path.join(self.base, d, "by-hash", h), exist_ok=True)
-            hash_path = os.path.join(self.base, d, "by-hash", h, v.hexdigest())
+        for hn, v in hashes.items():
+            os.makedirs(os.path.join(self.base, d, "by-hash", hn), exist_ok=True)
+            hash_path = os.path.join(self.base, d, "by-hash", hn, v.hexdigest())
             shutil.copy(self._tmpf_path, hash_path)
-            self.release.setdefault(h, []).append({
-                h.lower(): v.hexdigest(),
+            self.release.setdefault(hn, []).append({
+                hn.lower(): v.hexdigest(),
                 "size": self.size,
                 "name": self.path
             })

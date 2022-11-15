@@ -362,7 +362,7 @@ def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
     if url_a.rstrip("/") != url_b.rstrip("/"):  # type: ignore
         return False
     try:
-        return open_branch(url_a).name == open_branch(url_b).name
+        return open_branch(url_a).name == open_branch(url_b).name  # type: ignore
     except BranchMissing:
         return False
 
@@ -3146,7 +3146,7 @@ async def listen_to_runner(
 
 
 async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
-    per_bucket = {}
+    per_bucket: Dict[str, Dict[str, int]] = {}
     async with db.acquire() as conn:
         for row in await conn.fetch("""
                 SELECT package.maintainer_email AS rate_limit_bucket,
@@ -3264,6 +3264,7 @@ async def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
+    bucket_rate_limiter: RateLimiter
     if args.slowstart:
         bucket_rate_limiter = SlowStartRateLimiter(args.max_mps_per_bucket)
     elif args.max_mps_per_bucket > 0:

@@ -1,3 +1,26 @@
 [build-system]
 requires = ["setuptools", "setuptools_protobuf[mypy]"]
 build-backend = "setuptools.build_meta"
+
+[tool.mypy]
+warn_redundant_casts = true
+warn_unused_configs = true
+#check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    # No type hints yet
+    "gpg.*",
+    "aioredlock.*",
+    "diffoscope.*",
+    "ruamel.*",
+    "aiohttp_apispec.*",
+    "launchpadlib.*",
+    "klaus.*",
+    "aiohttp_debugtoolbar.*",
+    "buildlog_consultant.*",
+    "fakeredis.*",
+    # https://github.com/MagicStack/asyncpg/issues/387
+    "asyncpg.*",
+]
+ignore_missing_imports = true

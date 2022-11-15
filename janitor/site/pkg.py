@@ -167,6 +167,8 @@ async def generate_run_file(
     kwargs["publish_history"] = publish_history
 
     async def publish_blockers():
+        if publisher_url is None:
+            return {}
         url = URL(publisher_url) / "blockers" / run['id']
         with span.new_child('publish-blockers'):
             try:

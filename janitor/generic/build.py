@@ -25,7 +25,7 @@ from ognibuild.build import run_build, BUILD_LOG_FILENAME
 from ognibuild.test import run_test
 from ognibuild.buildlog import InstallFixer
 from ognibuild.logs import DirectoryLogManager
-from ognibuild.session import SessionSetupFailure
+from ognibuild.session import SessionSetupFailure, Session
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
 from ognibuild.resolver import auto_resolver
@@ -62,6 +62,7 @@ class BuildFailure(Exception):
 
 
 def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=None):
+    session: Session
     if chroot:
         session = SchrootSession(chroot)
         logging.info('Using schroot %s', chroot)
