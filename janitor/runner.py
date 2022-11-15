@@ -2637,6 +2637,7 @@ async def main(argv=None):
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(artifact_manager)
+        await stack.enter_async_context(logfile_manager)
         if args.backup_directory:
             backup_logfile_directory = os.path.join(args.backup_directory, "logs")
             backup_artifact_directory = os.path.join(args.backup_directory, "artifacts")
@@ -2647,6 +2648,7 @@ async def main(argv=None):
             backup_artifact_manager = LocalArtifactManager(backup_artifact_directory)
             await stack.enter_async_context(backup_artifact_manager)
             backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
+            await stack.enter_async_context(backup_logfile_manager)
             loop.create_task(
                 upload_backup_artifacts(
                     backup_artifact_manager, artifact_manager, timeout=60 * 15
