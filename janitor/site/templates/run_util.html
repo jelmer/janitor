@@ -13,7 +13,11 @@
 {% if failure_stage == 'validate' %}
 debcheckout {{ package }}
 deb-vcs-up-to-date
-{% elif failure_stage.startswith('codemod/') %}
+{% elif failure_stage == 'codemod/dist' %}
+git clone {{ result['upstream_branch_url'] }} {{ package }}
+cd {{ package }}
+ogni dist
+{% elif failure_stage.startswith('codemod/') or failure_stage == 'codemod' %}
 debcheckout {{ package }}
 cd {{ package }}
 {{ command }}
