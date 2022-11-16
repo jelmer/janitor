@@ -102,6 +102,7 @@ from breezy.transform import (
     ImmortalLimbo,
 )
 from breezy.transport import NoSuchFile, get_transport, Transport
+from breezy.tree import MissingNestedTree
 
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
@@ -889,6 +890,8 @@ def run_worker(
                 raise WorkerFailure("worker-clone-git-error", str(e), stage=("setup", "clone")) from e
             except TimeoutError as e:
                 raise WorkerFailure("worker-clone-timeout", str(e), stage=("setup", "clone")) from e
+            except MissingNestedTree as e:
+                raise WorkerFailure("requires-nested-tree-support", str(e), stage=("setup", "clone")) from e
 
             logger.info('Workspace ready - starting.')
 
