@@ -227,9 +227,8 @@ async def handle_repo_list(request):
                 text=''.join([line + '\n' for line in names]),
                 content_type='text/plain')
         elif accept in ('text/html', ):
-            text = await aiohttp_jinja2.render_template_async(
+            return await aiohttp_jinja2.render_template_async(
                 'repo-list.html', request, {'vcs': "bzr", 'repositories': names})
-            return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
 
 

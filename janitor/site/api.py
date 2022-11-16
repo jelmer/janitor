@@ -48,7 +48,7 @@ from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor import CAMPAIGN_REGEX
-from janitor.config import Config, setup_postgres
+from janitor.config import Config, setup_postgres, setup_logfile_manager
 from . import (
     check_admin,
     is_qa_reviewer,
@@ -63,7 +63,6 @@ from . import (
 from .common import (
     render_template_for_request,
 )
-from janitor.logs import get_log_manager
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
@@ -1127,7 +1126,8 @@ SELECT
   result_code,
   description,
   failure_details,
-  change_set
+  change_set,
+  codebase
 FROM run
 WHERE
   id = ANY($1::text[])
@@ -1144,6 +1144,7 @@ WHERE
                 command=row['command'], change_set=row['change_set'],
                 duration=row['duration'], result_code=row['result_code'],
                 description=row['description'], failure_details=row['failure_details'],
+                codebase=row['codebase'],
                 process_fns=[
                     ('dist-', DIST_LOG_FILENAME, process_dist_log),
                     ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
@@ -1244,7 +1245,7 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
                 }, raise_for_status=True):
                     pass
             except ClientResponseError as e:
-                if e.status == 503:
+                if e.status == 400:
                     logging.debug(
                         'Not rescheduling %s/%s: candidate unavailable',
                         run['package'], run['campaign'])
@@ -1330,7 +1331,8 @@ def create_app(
 
     app.cleanup_ctx.append(persistent_session)
     app['config'] = config
-    app['logfile_manager'] = get_log_manager(config.logs_location)
+
+    setup_logfile_manager(app, trace_configs=trace_configs)
     app['external_url'] = external_url
     app['publisher_url'] = publisher_url
     app['vcs_managers'] = vcs_managers

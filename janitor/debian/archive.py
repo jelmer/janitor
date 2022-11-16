@@ -77,6 +77,18 @@ routes = web.RouteTableDef()
 
 
 class PackageInfoProvider(object):
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_tp, exc_val, exc_tb):
+        return False
+
+    async def info_for_run(self, run_id, suite_name, package):
+        raise NotImplementedError(self.info_for_run)
+
+
+class GeneratingPackageInfoProvider(PackageInfoProvider):
     def __init__(self, artifact_manager):
         self.artifact_manager = artifact_manager
 
@@ -93,6 +105,8 @@ class PackageInfoProvider(object):
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
             p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert p.stdout
+            assert p.stderr
             for para in Packages.iter_paragraphs(p.stdout):
                 para["Filename"] = os.path.join(
                     suite_name,
@@ -120,7 +134,7 @@ class PackageInfoProvider(object):
         await asyncio.sleep(0)
 
 
-class DiskCachingPackageInfoProvider(object):
+class DiskCachingPackageInfoProvider(PackageInfoProvider):
     def __init__(self, primary_info_provider, cache_directory):
         self.primary_info_provider = primary_info_provider
         self.cache_directory = cache_directory
@@ -270,12 +284,12 @@ class HashedFileWriter(object):
                 self.size += len(chunk)
 
         d, n = os.path.split(self.path)
-        for h, v in hashes.items():
-            os.makedirs(os.path.join(self.base, d, "by-hash", h), exist_ok=True)
-            hash_path = os.path.join(self.base, d, "by-hash", h, v.hexdigest())
+        for hn, v in hashes.items():
+            os.makedirs(os.path.join(self.base, d, "by-hash", hn), exist_ok=True)
+            hash_path = os.path.join(self.base, d, "by-hash", hn, v.hexdigest())
             shutil.copy(self._tmpf_path, hash_path)
-            self.release.setdefault(h, []).append({
-                h.lower(): v.hexdigest(),
+            self.release.setdefault(hn, []).append({
+                hn.lower(): v.hexdigest(),
                 "size": self.size,
                 "name": self.path
             })
@@ -804,7 +818,8 @@ async def main(argv=None):
 
     gpg_context = gpg.Context()
 
-    package_info_provider = PackageInfoProvider(artifact_manager)
+    package_info_provider: PackageInfoProvider
+    package_info_provider = GeneratingPackageInfoProvider(artifact_manager)
     if args.cache_directory:
         os.makedirs(args.cache_directory, exist_ok=True)
         package_info_provider = DiskCachingPackageInfoProvider(

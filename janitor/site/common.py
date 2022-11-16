@@ -300,7 +300,7 @@ WHERE run.package = $1 AND run.suite = $2
         except DebdiffRetrievalError as e:
             return "Error retrieving debdiff: %s" % e
 
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
     kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
 
     if run:

@@ -222,14 +222,6 @@ async def handle_publish_history(request):
 
 
 
-@routes.get("/cupboard/review-stats", name="cupboard-review-stats")
-@html_template("cupboard/review-stats.html", headers={"Vary": "Cookie"})
-async def handle_review_stats(request):
-    from .review import generate_review_stats
-    async with request.app.database.acquire() as conn:
-        return await generate_review_stats(conn)
-
-
 @routes.post("/cupboard/review", name="cupboard-review-post")
 async def handle_review_post(request):
     from .review import generate_review

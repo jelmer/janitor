@@ -55,10 +55,22 @@ class LogFileManager(ABC):
     async def get_ctime(self, pkg: str, run_id: str, name: str) -> datetime:
         raise NotImplementedError(self.get_ctime)
 
+    async def __aexit__(self, exc_typ, exc_val, exc_tb):
+        return False
+
+    async def __aenter__(self):
+        return self
+
 
 class FileSystemLogFileManager(LogFileManager):
     def __init__(self, log_directory):
         self.log_directory = log_directory
+
+    async def __aexit__(self, exc_typ, exc_val, exc_tb):
+        return False
+
+    async def __aenter__(self):
+        return self
 
     def _get_paths(self, pkg, run_id, name):
         if "/" in pkg or "/" in run_id or "/" in name:
@@ -124,12 +136,20 @@ class LogRetrievalError(Exception):
 
 class S3LogFileManager(LogFileManager):
     def __init__(self, endpoint_url, bucket_name="debian-janitor", trace_configs=None):
-        import boto3
-
         self.base_url = endpoint_url + ("/%s/" % bucket_name)
-        self.session = ClientSession(trace_configs=trace_configs)
-        self.s3 = boto3.resource("s3", endpoint_url=endpoint_url)
-        self.s3_bucket = self.s3.Bucket(bucket_name)
+        self.trace_configs = trace_configs
+        self.bucket_name = bucket_name
+        self.endpoint_url = endpoint_url
+
+    async def __aenter__(self):
+        import boto3
+        self.session = ClientSession(trace_configs=self.trace_configs)
+        self.s3 = boto3.resource("s3", endpoint_url=self.endpoint_url)
+        self.s3_bucket = self.s3.Bucket(self.bucket_name)
+        return self
+
+    async def __aexit__(self, exc_typ, exc_val, exc_tb):
+        return False
 
     def _get_key(self, pkg, run_id, name):
         return "logs/%s/%s/%s.gz" % (pkg, run_id, name)
@@ -185,13 +205,26 @@ class S3LogFileManager(LogFileManager):
 
 
 class GCSLogFileManager(LogFileManager):
-    def __init__(self, location, creds_path=None, trace_configs=None):
-        from gcloud.aio.storage import Storage
 
-        self.bucket_name = URL(location).host
-        self.session = ClientSession(trace_configs=trace_configs)
-        self.storage = Storage(service_file=creds_path, session=self.session)
+    session: ClientSession
+
+    def __init__(self, location, creds_path=None, trace_configs=None):
+        hostname = URL(location).host
+        if hostname is None:
+            raise ValueError('invalid location missing bucket name: %s' % location)
+        self.bucket_name = hostname
+        self.trace_configs = trace_configs
+        self.creds_path = creds_path
+
+    async def __aenter__(self):
+        from gcloud.aio.storage import Storage
+        self.session = ClientSession(trace_configs=self.trace_configs)
+        self.storage = Storage(service_file=self.creds_path, session=self.session)  # type: ignore
         self.bucket = self.storage.get_bucket(self.bucket_name)
+        return self
+
+    def __aexit__(self, exc_typ, exc_val, exc_tb):
+        return False
 
     async def iter_logs(self):
         seen: Dict[Tuple[str, str], List[str]] = {}
@@ -206,26 +239,27 @@ class GCSLogFileManager(LogFileManager):
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
-        return await self.bucket.blob_exists(object_name, self.session)
+        return await self.bucket.blob_exists(object_name, session=self.session)  # type: ignore
 
     async def get_ctime(self, pkg, run_id, name):
         from iso8601 import parse_date
         object_name = self._get_object_name(pkg, run_id, name)
         try:
-            blob = await self.bucket.get_blob(object_name, self.session)
+            blob = await self.bucket.get_blob(object_name, session=self.session)  # type: ignore
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name) from e
             raise ServiceUnavailable() from e
         except ServerDisconnectedError as e:
             raise ServiceUnavailable() from e
-        return parse_date(blob.timeCreated)
+        return parse_date(blob.timeCreated)  # type: ignore
 
     async def get_log(self, pkg, run_id, name, timeout=30):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
             data = await self.storage.download(
-                self.bucket_name, object_name, session=self.session, timeout=timeout
+                self.bucket_name, object_name,
+                session=self.session, timeout=timeout  # type: ignore
             )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:

@@ -97,8 +97,14 @@ def setup_logfile_manager(app, trace_configs=None):
     async def startup_logfile_manager(app):
         app.logfile_manager = get_log_manager(
             app['config'].logs_location, trace_configs=trace_configs)
+        await app.logfile_manager.__aenter__()
 
     app.on_startup.append(startup_logfile_manager)
+
+    async def teardown_logfile_manager(app):
+        await app.logfile_manager.__aexit__(None, None, None)
+
+    app.on_startup.append(teardown_logfile_manager)
 
 
 def setup_artifact_manager(app, trace_configs=None):

@@ -17,7 +17,7 @@
 
 """Artifacts."""
 
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 import asyncio
 
 from io import BytesIO
@@ -124,8 +124,19 @@ class LocalArtifactManager(ArtifactManager):
 
 
 class GCSArtifactManager(ArtifactManager):
+
+    if TYPE_CHECKING:
+        from gcloud.aio.storage import Storage
+
+    session: ClientSession
+    bucket_name: str
+    storage: "Storage"
+
     def __init__(self, location, creds_path=None, trace_configs=None):
-        self.bucket_name = URL(location).host
+        hostname = URL(location).host
+        if hostname is None:
+            raise ValueError('missing bucket in %s' % location)
+        self.bucket_name = hostname
         self.creds_path = creds_path
         self.trace_configs = trace_configs
 
@@ -135,9 +146,9 @@ class GCSArtifactManager(ArtifactManager):
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
 
-        self.session = ClientSession(trace_configs=self.trace_configs)
-        await self.session.__aenter__()
-        self.storage = Storage(service_file=self.creds_path, session=self.session)
+        s = ClientSession(trace_configs=self.trace_configs)
+        self.session = await s.__aenter__()
+        self.storage = Storage(service_file=self.creds_path, session=self.session)  # type: ignore
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
     async def __aexit__(self, exc_type, exc, tb):

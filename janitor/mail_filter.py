@@ -24,6 +24,7 @@ of any merge request mentioned in the body.
 
 import logging
 import sys
+from typing import cast, Optional
 
 
 def parse_plain_text_body(text):
@@ -79,17 +80,19 @@ def parse_html_body(contents):
 
 def parse_email(f):
     from email import policy
+    from email.message import EmailMessage, MIMEPart
     from email.parser import BytesParser
 
-    msg = BytesParser(policy=policy.default).parse(f)
-    html_body = msg.get_body(preferencelist=('html', ))
+    msg = cast(EmailMessage, BytesParser(policy=policy.default).parse(f))
+    html_body = cast(Optional[MIMEPart], msg.get_body(preferencelist=('html', )))
     if html_body:
         ret = parse_html_body(html_body.get_content())
         if ret:
             return ret
 
-    text_body = msg.get_body(preferencelist=('plain', ))
+    text_body = cast(Optional[MIMEPart], msg.get_body(preferencelist=('plain', )))
 
+    assert text_body
     return parse_plain_text_body(text_body.get_content())
 
 
