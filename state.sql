@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    merged_at timestamp,
    last_scanned timestamp,
    can_be_merged boolean,
+   rate_limit_bucket text,
    foreign key (package) references package(name),
    primary key(url)
 );
