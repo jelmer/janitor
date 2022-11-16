@@ -399,10 +399,7 @@ def publish_one(
 
         try:
             if mode == MODE_BTS:
-                from breezy.plugins.debian.bts import DebianBtsForge
-
-                forge = DebianBtsForge()
-                mode = MODE_PROPOSE
+                raise NotImplementedError
             else:
                 forge = get_forge(target_branch, possible_forges=possible_forges)
         except UnsupportedForge as e:

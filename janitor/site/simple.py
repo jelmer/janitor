@@ -398,10 +398,10 @@ async def create_app(
         metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
     private_app.router.add_routes(private_routes)
 
-    private_app.router.add_get("/metrics", metrics, name="metrics")
+    metrics_route = private_app.router.add_get("/metrics", metrics, name="metrics")
 
     app.topic_notifications = Topic("notifications")
-    app.router.add_get(
+    ws_notifications_route = app.router.add_get(
         "/ws/notifications",
         functools.partial(pubsub_handler, app.topic_notifications),  # type: ignore
         name="ws-notifications",
@@ -414,12 +414,8 @@ async def create_app(
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    aiozipkin.setup(private_app, tracer, skip_routes=[
-        private_app.router['metrics'],
-    ])
-    aiozipkin.setup(app, tracer, skip_routes=[
-        app.router['ws-notifications'],
-    ])
+    aiozipkin.setup(private_app, tracer, skip_routes=[metrics_route])
+    aiozipkin.setup(app, tracer, skip_routes=[ws_notifications_route])
 
     async def persistent_session(app):
         app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)

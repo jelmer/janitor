@@ -19,6 +19,7 @@ import asyncio
 import os
 import shutil
 import tempfile
+from typing import Callable
 import unittest
 
 from janitor.artifacts import LocalArtifactManager, ArtifactManager, ArtifactsMissing
@@ -27,6 +28,9 @@ from janitor.artifacts import LocalArtifactManager, ArtifactManager, ArtifactsMi
 class ArtifactManagerTests:
 
     manager: ArtifactManager
+
+    assertEqual: Callable
+    assertRaises: Callable
 
     def test_store_twice(self):
         with tempfile.TemporaryDirectory() as td:

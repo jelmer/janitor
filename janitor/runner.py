@@ -60,7 +60,7 @@ from redis.asyncio import Redis
 
 from yarl import URL
 
-from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
+from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics_middleware, metrics
 
 from breezy import debug, urlutils
 from breezy.branch import Branch
@@ -2540,8 +2540,9 @@ async def create_app(queue_processor, config, db, tracer=None):
     app['database'] = db
     app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
-    setup_metrics(app)
-    aiozipkin.setup(app, tracer, skip_routes=[app.router['metrics']])
+    app.middlewares.insert(0, metrics_middleware)
+    metrics_route = app.router.add_get("/metrics", metrics, name="metrics")
+    aiozipkin.setup(app, tracer, skip_routes=[metrics_route])
     return app
 
 
@@ -2617,7 +2618,7 @@ async def main(argv=None):
         public_vcs_managers = get_vcs_managers(args.public_vcs_location)
     except UnsupportedProtocol as e:
         parser.error(
-            'Unsupported protocol in --public-vcs-location: %s' % e.url)
+            'Unsupported protocol in --public-vcs-location: %s' % e.path)
 
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
@@ -2637,6 +2638,7 @@ async def main(argv=None):
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(artifact_manager)
+        await stack.enter_async_context(logfile_manager)
         if args.backup_directory:
             backup_logfile_directory = os.path.join(args.backup_directory, "logs")
             backup_artifact_directory = os.path.join(args.backup_directory, "artifacts")
@@ -2647,6 +2649,7 @@ async def main(argv=None):
             backup_artifact_manager = LocalArtifactManager(backup_artifact_directory)
             await stack.enter_async_context(backup_artifact_manager)
             backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
+            await stack.enter_async_context(backup_logfile_manager)
             loop.create_task(
                 upload_backup_artifacts(
                     backup_artifact_manager, artifact_manager, timeout=60 * 15

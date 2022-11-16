@@ -162,6 +162,7 @@ async def handle_debdiff(request):
             except asyncio.TimeoutError as e:
                 raise web.HTTPGatewayTimeout(
                     text="Timeout running debdiff") from e
+        assert debdiff
 
         if cache_path:
             with open(cache_path, "wb") as f:

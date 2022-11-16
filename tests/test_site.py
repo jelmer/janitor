@@ -15,14 +15,28 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from datetime import timedelta
+from datetime import timedelta, datetime
+from jinja2 import Environment
 
-from janitor.site import format_duration
+from janitor.site import format_duration, template_loader, format_timestamp
 
 
-def test_some():
+def test_duration():
     assert "10s" == format_duration(timedelta(seconds=10))
     assert "1m10s" == format_duration(timedelta(seconds=70))
     assert "1h0m" == format_duration(timedelta(hours=1))
     assert "1d1h" == format_duration(timedelta(days=1, hours=1))
     assert "2w1d" == format_duration(timedelta(weeks=2, days=1))
+
+
+def test_timestamp():
+    assert "2022-10-01T11:10" == format_timestamp(datetime(2022, 10, 1, 11, 10, 22))
+
+
+def test_render_merge_proposal():
+    env = Environment(loader=template_loader)
+    template = env.get_template('cupboard/merge-proposal.html')
+    template.render(proposal={
+        'url': 'https://github.com/jelmer/example/pulls/1',
+        'package': 'zz',
+    })
