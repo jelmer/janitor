@@ -47,7 +47,7 @@ def setup_gpg(app):
 
 
 def setup_postgres(app):
-    from .state import create_pool
+    from ..state import create_pool
 
     async def connect_postgres(app):
         database = await create_pool(app['config'].database_location)
@@ -58,7 +58,7 @@ def setup_postgres(app):
 
 
 def setup_logfile_manager(app, trace_configs=None):
-    from .logs import get_log_manager
+    from ..logs import get_log_manager
 
     async def startup_logfile_manager(app):
         app['logfile_manager'] = get_log_manager(
@@ -74,7 +74,7 @@ def setup_logfile_manager(app, trace_configs=None):
 
 
 def setup_artifact_manager(app, trace_configs=None):
-    from janitor.artifacts import get_artifact_manager
+    from ..artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
         app['artifact_manager'] = get_artifact_manager(
