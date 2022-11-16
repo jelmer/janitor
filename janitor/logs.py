@@ -223,7 +223,7 @@ class GCSLogFileManager(LogFileManager):
         self.bucket = self.storage.get_bucket(self.bucket_name)
         return self
 
-    def __aexit__(self, exc_typ, exc_val, exc_tb):
+    async def __aexit__(self, exc_typ, exc_val, exc_tb):
         return False
 
     async def iter_logs(self):

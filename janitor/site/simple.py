@@ -243,7 +243,7 @@ async def handle_result_file(request):
             )
 
         try:
-            logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
+            logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
                 text="No log file %s for run %s" % (filename, run_id)

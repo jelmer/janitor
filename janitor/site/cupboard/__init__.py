@@ -303,7 +303,7 @@ async def handle_run(request):
         request.app['config'],
         request.app['differ_url'],
         request.app['publisher_url'],
-        request.app.logfile_manager,
+        request.app['logfile_manager'],
         run,
         request.app['vcs_managers'],
         is_admin=is_admin(request),
@@ -464,7 +464,7 @@ async def handle_result_file(request):
             )
 
         try:
-            logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
+            logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
         except FileNotFoundError:
             raise web.HTTPNotFound(
                 text="No log file %s for run %s" % (filename, run_id)
