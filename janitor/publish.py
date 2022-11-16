@@ -2216,7 +2216,7 @@ class ProposalInfoManager(object):
         row = await self.conn.fetchrow(
             """\
     SELECT
-        package.maintainer_email AS rate_limit_bucket,
+        merge_proposal.rate_limit_bucket AS rate_limit_bucket,
         merge_proposal.revision,
         merge_proposal.status,
         merge_proposal.target_branch_url,
@@ -2242,7 +2242,7 @@ class ProposalInfoManager(object):
 
     async def update_proposal_info(
             self, mp, status, revision, package_name, target_branch_url,
-            campaign, can_be_merged, dry_run=False):
+            campaign, can_be_merged, rate_limit_bucket, dry_run=False):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2260,8 +2260,8 @@ class ProposalInfoManager(object):
                 await self.conn.execute(
                     """INSERT INTO merge_proposal (
                         url, status, revision, package, merged_by, merged_at,
-                        target_branch_url, last_scanned, can_be_merged)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+                        target_branch_url, last_scanned, can_be_merged, rate_limit_bucket)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9)
                     ON CONFLICT (url)
                     DO UPDATE SET
                       status = EXCLUDED.status,
@@ -2271,7 +2271,8 @@ class ProposalInfoManager(object):
                       merged_at = EXCLUDED.merged_at,
                       target_branch_url = EXCLUDED.target_branch_url,
                       last_scanned = EXCLUDED.last_scanned,
-                      can_be_merged = EXCLUDED.can_be_merged
+                      can_be_merged = EXCLUDED.can_be_merged,
+                      rate_limit_bucket = EXCLUDED.rate_limit_bucket
                     """, mp.url, status,
                     revision.decode("utf-8") if revision is not None else None,
                     package_name, merged_by, merged_at, target_branch_url,
@@ -2286,6 +2287,7 @@ class ProposalInfoManager(object):
             await self.redis.publish('merge-proposal', json.dumps({
                 "url": mp.url,
                 "target_branch_url": target_branch_url,
+                "rate_limit_bucket": rate_limit_bucket,
                 "status": status,
                 "package": package_name,
                 "merged_by": merged_by,
@@ -2298,6 +2300,7 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
                      mp: MergeProposal, revision: bytes,
                      package_name: Optional[str], target_branch_url: str,
                      campaign: Optional[str], can_be_merged: Optional[bool],
+                     rate_limit_bucket: Optional[str],
                      comment: Optional[str], dry_run: bool = False):
     if comment:
         logger.info('%s: %s', mp.url, comment)
@@ -2305,7 +2308,8 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
         return
     await proposal_info_manager.update_proposal_info(
         mp, "abandoned", revision, package_name, target_branch_url,
-        campaign=campaign, can_be_merged=can_be_merged)
+        campaign=campaign, rate_limit_bucket=rate_limit_bucket,
+        can_be_merged=can_be_merged)
     if comment:
         try:
             await to_thread(mp.post_comment, comment)
@@ -2326,11 +2330,13 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
                            revision: bytes, package_name: Optional[str],
                            target_branch_url: str,
                            campaign: Optional[str], can_be_merged: Optional[bool],
+                           rate_limit_bucket: Optional[str],
                            comment: Optional[str], dry_run=False):
 
     await proposal_info_manager.update_proposal_info(
         mp, "applied", revision, package_name, target_branch_url,
-        campaign, can_be_merged=can_be_merged, dry_run=dry_run)
+        campaign, can_be_merged=can_be_merged,
+        rate_limit_bucket=rate_limit_bucket, dry_run=dry_run)
     try:
         await to_thread(mp.post_comment, comment)
     except PermissionDenied as e:
@@ -2433,12 +2439,14 @@ async def check_existing_mp(
             old_proposal_info.status != status
             or revision != old_proposal_info.revision
             or target_branch_url != old_proposal_info.target_branch_url
+            or rate_limit_bucket != old_proposal_info.rate_limit_bucket
             or can_be_merged != old_proposal_info.can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await proposal_info_manager.update_proposal_info(
             mp, status, revision, package_name, target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
-            can_be_merged=can_be_merged, dry_run=dry_run)
+            can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
+            dry_run=dry_run)
     else:
         await conn.execute(
             'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
@@ -2539,7 +2547,8 @@ async def check_existing_mp(
         try:
             await abandon_mp(
                 proposal_info_manager, mp, revision, package_name,
-                target_branch_url, mp_run['campaign'], can_be_merged,
+                target_branch_url, campaign=mp_run['campaign'],
+                can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
                 comment="""\
 This merge proposal will be closed, since the package has been removed from the \
 archive.
@@ -2558,7 +2567,8 @@ archive.
         try:
             await close_applied_mp(
                 proposal_info_manager, mp, revision, package_name, target_branch_url,
-                mp_run['campaign'], can_be_merged=can_be_merged, comment="""
+                mp_run['campaign'], can_be_merged=can_be_merged,
+                rate_limit_bucket=rate_limit_bucket, comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
 """, dry_run=dry_run)
@@ -2629,6 +2639,7 @@ applied independently.
             await abandon_mp(
                 proposal_info_manager, mp, revision, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
+                rate_limit_bucket=rate_limit_bucket,
                 comment="This merge proposal will be closed, since only trivial changes are left.",
                 dry_run=dry_run)
         except PermissionDenied:
@@ -2681,7 +2692,8 @@ applied independently.
                 try:
                     await abandon_mp(
                         proposal_info_manager, mp, revision, package_name, target_branch_url,
-                        campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
+                        rate_limit_bucket=rate_limit_bucket, campaign=mp_run['campaign'],
+                        can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
 """ % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run)
@@ -2710,7 +2722,8 @@ has changed from %s to %s.
         try:
             await abandon_mp(
                 proposal_info_manager, mp, revision, package_name, target_branch_url,
-                campaign=mp_run['campaign'], can_be_merged=can_be_merged, comment="""\
+                campaign=mp_run['campaign'], can_be_merged=can_be_merged,
+                rate_limit_bucket=rate_limit_bucket, comment="""\
 This merge proposal will be closed, since the branch has moved to %s.
 """ % (bzr_to_browse_url(last_run.branch_url),), dry_run=dry_run)
         except PermissionDenied:
@@ -2797,7 +2810,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                     await close_applied_mp(
                         proposal_info_manager, mp, revision, package_name,
                         target_branch_url, campaign=mp_run['campaign'],
-                        can_be_merged=can_be_merged, comment="""
+                        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
+                        comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
 """, dry_run=dry_run)
