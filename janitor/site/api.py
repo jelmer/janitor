@@ -48,7 +48,7 @@ from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor import CAMPAIGN_REGEX
-from janitor.config import Config, setup_postgres, setup_logfile_manager
+from janitor.config import Config
 from . import (
     check_admin,
     is_qa_reviewer,
@@ -63,6 +63,7 @@ from . import (
 from .common import (
     render_template_for_request,
 )
+from .setup import setup_postgres, setup_logfile_manager
 from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
