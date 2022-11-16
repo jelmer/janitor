@@ -52,15 +52,17 @@ from .common import (
 )
 from .openid import setup_openid
 from .pubsub import pubsub_handler, Topic
-from .webhook import parse_webhook, is_webhook_request
-
-from ..config import (
-    get_campaign_config,
+from .setup import (
     setup_logfile_manager,
     setup_artifact_manager,
     setup_gpg,
     setup_redis,
     setup_postgres,
+)
+from .webhook import parse_webhook, is_webhook_request
+
+from ..config import (
+    get_campaign_config,
 )
 from ..schedule import do_schedule
 
