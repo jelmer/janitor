@@ -186,7 +186,7 @@ class S3LogFileManager(LogFileManager):
 
     async def import_log(self, pkg, run_id, orig_path, timeout=360, mtime=None):
         with open(orig_path, "rb") as f:
-            data = gzip.compress(f.read(), mtime=mtime)
+            data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
 
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
         self.s3_bucket.put_object(Key=key, Body=data, ACL="public-read")
@@ -272,7 +272,7 @@ class GCSLogFileManager(LogFileManager):
     async def import_log(self, pkg, run_id, orig_path, timeout=360, mtime=None):
         object_name = self._get_object_name(pkg, run_id, os.path.basename(orig_path))
         with open(orig_path, "rb") as f:
-            uploaded_data = gzip.compress(f.read(), mtime=mtime)
+            uploaded_data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
         try:
             await self.storage.upload(
                 self.bucket_name, object_name, uploaded_data, timeout=timeout
