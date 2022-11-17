@@ -774,7 +774,7 @@ def run_worker(
                     raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
                         'url': main_branch_url,
                         'retry_after': e.retry_after,
-                    }) from e
+                    }, transient=('temporarily' in e.code)) from e
                 metadata["branch_url"] = main_branch.user_url
                 metadata["vcs_type"] = get_branch_vcs_type(main_branch)
                 metadata["subpath"] = subpath
