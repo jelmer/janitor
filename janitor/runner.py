@@ -106,7 +106,7 @@ from .logs import (
     FileSystemLogFileManager,
 )
 from .queue import QueueItem, Queue
-from .schedule import do_schedule_control, do_schedule, CandidateUnavailable
+from .schedule import do_schedule_control, do_schedule, CandidateUnavailable, bulk_queue_refresh
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -1701,6 +1701,7 @@ class QueueProcessor(object):
             if result.builder_result:
                 await result.builder_result.store(conn, result.log_id)
             await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
+            await bulk_queue_refresh(conn, [active_run.package])
         if self.followup_run:
             await self.followup_run(active_run, result)
 
@@ -1933,6 +1934,7 @@ async def handle_log(request):
 async def handle_codebases(request):
     queue_processor = request.app['queue_processor']
 
+    queue_refresh = []
     codebases = []
     for entry in await request.json():
         if 'branch_url' in entry:
@@ -1957,6 +1959,9 @@ async def handle_codebases(request):
             entry.get('vcs_last_revision'),
             entry.get('value')))
 
+        if entry.get('name'):
+            queue_refresh.append(entry['name'])
+
     async with queue_processor.database.acquire() as conn:
         # TODO(jelmer): When a codebase with a certain name already exists,
         # steal its name
@@ -1972,6 +1977,7 @@ async def handle_codebases(request):
             "value = EXCLUDED.value, url = EXCLUDED.url, "
             "branch = EXCLUDED.branch",
             codebases)
+        await bulk_queue_refresh(conn, queue_refresh)
 
     return web.json_response({})
 
@@ -1983,6 +1989,7 @@ async def handle_candidates(request):
     unknown_campaigns = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
+    queue_refresh = []
     async with queue_processor.database.acquire() as conn, conn.transaction():
         known_packages = set()
         for record in (await conn.fetch('SELECT name FROM package')):
@@ -2052,10 +2059,12 @@ async def handle_candidates(request):
             "codebase = EXCLUDED.codebase",
             entries,
         )
+        await bulk_queue_refresh(conn, queue_refresh)
     return web.json_response({
         'unknown_campaigns': unknown_campaigns,
         'unknown_codebases': unknown_codebases,
         'unknown_publish_policies': unknown_publish_policies,
+        'unknown_codebases': unknown_codebases,
         'unknown_packages': unknown_packages})
 
 
