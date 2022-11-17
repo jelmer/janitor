@@ -1168,6 +1168,7 @@ WHERE
 async def handle_mass_reschedule(request):
     check_admin(request)
     post = await request.post()
+    include_transient = request.query.get('include_transient', 'off') == 'on'
     try:
         result_code = post['result_code']
     except KeyError as e:
@@ -1192,15 +1193,22 @@ async def handle_mass_reschedule(request):
             params.append(all_campaigns)
             where.append("c.suite = ANY($%d::text[])" % len(params))
     else:
+        if include_transient:
+            table = "last_runs"
+        else:
+            table = "last_effective_runs"
         query = """
 SELECT
 package,
 suite AS campaign,
 finish_time - start_time as duration
-FROM last_runs
+FROM %s AS run
 WHERE
-package IN (SELECT name FROM package WHERE NOT removed) AND
-"""
+EXISTS (SELECT FROM candidate WHERE
+run.package = candidate.package AND
+run.suite = candidate.suite AND
+(run.change_set = candidate.change_set OR candidate.change_set IS NULL))
+AND """ % table
         where = []
         params = []
         if result_code is not None:
@@ -1251,7 +1259,10 @@ package IN (SELECT name FROM package WHERE NOT removed) AND
                         'Not rescheduling %s/%s: candidate unavailable',
                         run['package'], run['campaign'])
                 else:
-                    raise
+                    logging.exception(
+                        "Unable to reschedule %s/%s: %d: %s",
+                        run['package'], run['campaign'],
+                        e.status, e.message)
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([

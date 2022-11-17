@@ -16,6 +16,7 @@
                 Description regex:
                 <input type="text" name="description_re"/>
                 {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
+                <input type="hidden" name="include_transient" value="{{ 'on' if include_transient else 'off' }}"/>
                 Min age (days):
                 <select name="min_age">
                     {% for i in range(90) %}
