@@ -2241,8 +2241,9 @@ class ProposalInfoManager(object):
             can_be_merged=row['can_be_merged'])
 
     async def update_proposal_info(
-            self, mp, status, revision, package_name, target_branch_url,
-            campaign, can_be_merged, rate_limit_bucket, dry_run=False):
+            self, mp, *, status, revision, package_name, target_branch_url,
+            campaign, can_be_merged: Optional[bool], rate_limit_bucket: Optional[str],
+            dry_run: bool = False):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2276,7 +2277,7 @@ class ProposalInfoManager(object):
                     """, mp.url, status,
                     revision.decode("utf-8") if revision is not None else None,
                     package_name, merged_by, merged_at, target_branch_url,
-                    can_be_merged)
+                    can_be_merged, rate_limit_bucket)
                 if revision:
                     await self.conn.execute("""
                     UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
@@ -2307,9 +2308,9 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
     if dry_run:
         return
     await proposal_info_manager.update_proposal_info(
-        mp, "abandoned", revision, package_name, target_branch_url,
-        campaign=campaign, rate_limit_bucket=rate_limit_bucket,
-        can_be_merged=can_be_merged)
+        mp, status="abandoned", revision=revision, package_name=package_name,
+        target_branch_url=target_branch_url, campaign=campaign,
+        rate_limit_bucket=rate_limit_bucket, can_be_merged=can_be_merged)
     if comment:
         try:
             await to_thread(mp.post_comment, comment)
@@ -2334,9 +2335,10 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
                            comment: Optional[str], dry_run=False):
 
     await proposal_info_manager.update_proposal_info(
-        mp, "applied", revision, package_name, target_branch_url,
-        campaign, can_be_merged=can_be_merged,
-        rate_limit_bucket=rate_limit_bucket, dry_run=dry_run)
+        mp, status="applied", revision=revision, package_name=package_name,
+        target_branch_url=target_branch_url, campaign=campaign,
+        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
+        dry_run=dry_run)
     try:
         await to_thread(mp.post_comment, comment)
     except PermissionDenied as e:
@@ -2443,7 +2445,8 @@ async def check_existing_mp(
             or can_be_merged != old_proposal_info.can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await proposal_info_manager.update_proposal_info(
-            mp, status, revision, package_name, target_branch_url,
+            mp, status=status, revision=revision, package_name=package_name,
+            target_branch_url=target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
             can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
             dry_run=dry_run)
