@@ -287,6 +287,10 @@ def publish(
     except InsufficientChangesForNewProposal as e:
         raise PublishNothingToDo(
             'not enough changes for a new merge proposal') from e
+    except BranchTemporarilyUnavailable as e:
+        raise PublishFailure("branch-temporarily-unavailable", str(e)) from e
+    except BranchUnavailable as e:
+        raise PublishFailure("branch-unavailable", str(e)) from e
 
 
 class DebdiffMissingRun(Exception):
