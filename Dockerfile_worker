@@ -37,6 +37,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	ca-certificates \
 	python3-apt \
 	libpcre3-dev \
+	python3-gpg \
 	&& apt clean \
 	&& make -C /code \
 	&& pip3 install "/code[gcp,debian]" \
