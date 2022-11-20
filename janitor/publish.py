@@ -2164,12 +2164,24 @@ WHERE rb.revision = $1 AND run.package is not null
     return None, None
 
 
+async def guess_rate_limit_bucket(
+        conn: asyncpg.Connection, package_name: str, source_branch_name: str):
+    # For now, just assume that source_branch_name is campaign
+    campaign = source_branch_name.split('/')[0]
+    query = """\
+SELECT named_publish_policy.rate_limit_bucket FROM candidate
+INNER JOIN named_publish_policy.name = candidate.named_publish_policy
+WHERE candidate.suite = $1 AND candidate.package = $1
+"""
+    return await conn.fetchval(query, campaign, package_name)
+
+
 async def guess_package_from_branch_url(
         conn: asyncpg.Connection, url: str,
         possible_transports: Optional[List[Transport]] = None):
     query = """
 SELECT
-  name, maintainer_email AS rate_limit_bucket, branch_url
+  name, branch_url
 FROM
   package
 WHERE
@@ -2187,10 +2199,10 @@ ORDER BY length(branch_url) DESC
     ]
     result = await conn.fetchrow(query, options)
     if result is None:
-        return None, None
+        return None
 
     if url.rstrip('/') == result['branch_url'].rstrip('/'):
-        return result['name'], result['rate_limit_bucket']
+        return result['name']
 
     source_branch = await to_thread(
         open_branch,
@@ -2202,7 +2214,7 @@ ORDER BY length(branch_url) DESC
             'Did not resolve branch URL to package: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
-    return result['name'], result['rate_limit_bucket']
+    return result['name']
 
 
 def find_campaign_by_branch_name(config, branch_name):
@@ -2418,7 +2430,7 @@ async def check_existing_mp(
         revision = old_proposal_info.revision
     target_branch_url = await to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
-        package_name, rate_limit_bucket = await guess_package_from_branch_url(
+        package_name = await guess_package_from_branch_url(
             conn, target_branch_url,
             possible_transports=possible_transports)
         if package_name is None:
@@ -2437,6 +2449,10 @@ async def check_existing_mp(
                     package_name,
                     mp.url,
                 )
+        else:
+            if source_branch_name is not None:
+                rate_limit_bucket = await guess_rate_limit_bucket(
+                    conn, package_name, source_branch_name)
     if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
         status = old_proposal_info.status
 
