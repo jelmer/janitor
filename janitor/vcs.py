@@ -408,6 +408,9 @@ class RemoteGitVcsManager(VcsManager):
     def __init__(self, base_url: str):
         self.base_url = base_url
 
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.base_url == other.base_url
+
     async def get_diff(self, codebase, old_revid, new_revid):
         if old_revid == new_revid:
             return b""
@@ -455,6 +458,9 @@ class RemoteGitVcsManager(VcsManager):
 class RemoteBzrVcsManager(VcsManager):
     def __init__(self, base_url: str):
         self.base_url = base_url
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.base_url == other.base_url
 
     async def get_diff(self, codebase, old_revid, new_revid):
         if old_revid == new_revid:
