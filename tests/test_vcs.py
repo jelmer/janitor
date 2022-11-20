@@ -20,6 +20,10 @@ from janitor.vcs import (
     LocalBzrVcsManager,
     get_run_diff,
     is_authenticated_url,
+    is_alioth_url,
+    get_vcs_managers,
+    RemoteBzrVcsManager,
+    RemoteGitVcsManager,
 )
 from breezy.tests import TestCaseWithTransport
 
@@ -101,3 +105,19 @@ def test_authenticated():
 def test_not_authenticated():
     assert not is_authenticated_url("https://github.com/jelmer/janitor")
     assert not is_authenticated_url("git://github.com/jelmer/janitor")
+
+
+def test_is_alioth_url():
+    assert is_alioth_url('https://svn.debian.org/svn/blah')
+    assert is_alioth_url('git+ssh://git.debian.org/blah')
+    assert is_alioth_url('https://git.debian.org/blah')
+    assert is_alioth_url('http://alioth.debian.org/blah')
+    assert not is_alioth_url('https://salsa.debian.org/blah')
+
+
+def test_get_vcs_managers():
+    assert {'bzr': RemoteBzrVcsManager('https://example.com/bzr'),
+            'git': RemoteGitVcsManager('https://example.com/git')} == get_vcs_managers('https://example.com/')
+    assert {'git': RemoteGitVcsManager('https://example.com/git/')} == get_vcs_managers('git=https://example.com/git/')
+    assert {'bzr': RemoteBzrVcsManager('https://example.com/bzr'),
+            'git': RemoteGitVcsManager('https://example.com/git/')} == get_vcs_managers('git=https://example.com/git/,bzr=https://example.com/bzr')

@@ -19,6 +19,7 @@
 import aiozipkin
 from datetime import datetime, timedelta
 from fakeredis.aioredis import FakeRedis
+from janitor.queue import QueueItem
 from janitor.runner import (
     create_app,
     is_log_filename,
@@ -26,13 +27,31 @@ from janitor.runner import (
     QueueProcessor,
     ActiveRun,
     Backchannel,
+    queue_item_env,
 )
 
 
-async def create_client(aiohttp_client):
+async def create_client(aiohttp_client, queue_processor=None):
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4='127.0.0.1', port=80)
     tracer = await aiozipkin.create_custom(endpoint)
-    return await aiohttp_client(await create_app(None, None, None, tracer))
+    return await aiohttp_client(await create_app(queue_processor, None, None, tracer))
+
+
+async def test_status(aiohttp_client):
+    qp = await create_queue_processor()
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.get("/status")
+    assert resp.status == 200
+    assert {'avoid_hosts': [], 'processing': [], 'rate_limit_hosts': {}} == await resp.json()
+
+
+async def test_get_active_runs(aiohttp_client):
+    qp = await create_queue_processor()
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.get("/active-runs")
+    assert resp.status == 200
+    assert [] == await resp.json()
+
 
 
 async def test_health(aiohttp_client):
@@ -54,6 +73,7 @@ async def test_ready(aiohttp_client):
 
 
 def test_committer_env():
+    assert committer_env("") == {}
     assert committer_env("Joe Example <joe@example.com>") == {
         "DEBFULLNAME": "Joe Example",
         "DEBEMAIL": "joe@example.com",
@@ -128,3 +148,8 @@ async def test_register_run():
     assert await qp.redis.hkeys('assigned-queue-items') == []
     assert await qp.redis.hkeys('last-keepalive') == []
     assert await qp.active_run_count() == 0
+
+
+def test_queue_item_env():
+    item = QueueItem(id='some-id', package='package', context={}, command='ls', estimated_duration=timedelta(seconds=30), campaign='campaign', refresh=False, requestor='somebody', change_set=None, codebase='codebase')
+    assert queue_item_env(item) == {'PACKAGE': 'package'}
