@@ -21,7 +21,6 @@ import pytest
 
 
 from janitor.config import (
-    Config,
     read_config,
     get_distribution,
     get_campaign_config,
