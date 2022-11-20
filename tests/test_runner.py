@@ -45,6 +45,15 @@ async def test_status(aiohttp_client):
     assert {'avoid_hosts': [], 'processing': [], 'rate_limit_hosts': {}} == await resp.json()
 
 
+async def test_get_active_runs(aiohttp_client):
+    qp = await create_queue_processor()
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.get("/active-runs")
+    assert resp.status == 200
+    assert [] == await resp.json()
+
+
+
 async def test_health(aiohttp_client):
     client = await create_client(aiohttp_client)
 
