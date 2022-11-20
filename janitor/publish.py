@@ -3173,13 +3173,13 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     per_bucket: Dict[str, Dict[str, int]] = {}
     async with db.acquire() as conn:
         for row in await conn.fetch("""
-                SELECT package.maintainer_email AS rate_limit_bucket,
-                merge_proposal.status AS status,
-                count(*) as c
-                from merge_proposal
-                left join package on merge_proposal.package = package.name
-                group by 1, 2
-                """):
+             SELECT
+             merge_proposal.rate_limit_bucket AS rate_limit_bucket,
+             merge_proposal.status AS status,
+             count(*) as c
+             FROM named_publish_policy
+             GROUP BY 1, 2
+             """):
             per_bucket.setdefault(
                 row['status'], {})[row['rate_limit_bucket']] = row['c']
     bucket_rate_limiter.set_mps_per_bucket(per_bucket)
