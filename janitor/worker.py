@@ -167,6 +167,7 @@ def gce_external_ip():
 class WorkerResult(object):
     def __init__(
         self,
+        *,
         description: Optional[str],
         value: Optional[int],
         branches: Optional[List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],

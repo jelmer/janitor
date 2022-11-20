@@ -20,6 +20,7 @@ from janitor.worker import (
     create_app,
     _convert_codemod_script_failed,
     WorkerFailure,
+    WorkerResult,
 )
 from aiohttp.multipart import MultipartReader, BodyPartReader
 from silver_platter.apply import ScriptFailed
@@ -183,3 +184,19 @@ def test_convert_codemod_script_failed():
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
         'codemod-command-failed', 'Script foobar failed to run with code 1',
         stage=('codemod', ))
+
+
+def test_worker_result():
+    r = WorkerResult(
+        description='this is a description', value=42, branches=None, tags=None,
+        target='generic', target_details={}, codemod={}, refreshed=False)
+    assert r.json() == {
+        'branches': [],
+        'codemod': {},
+        'description': 'this is a description',
+        'refreshed': False,
+        'tags': [],
+        'target': {'details': {}, 'name': 'generic'},
+        'target_branch_url': None,
+        'value': 42,
+    }
