@@ -2187,10 +2187,10 @@ ORDER BY length(branch_url) DESC
     ]
     result = await conn.fetchrow(query, options)
     if result is None:
-        return None
+        return None, None
 
     if url.rstrip('/') == result['branch_url'].rstrip('/'):
-        return result
+        return result['name'], result['rate_limit_bucket']
 
     source_branch = await to_thread(
         open_branch,
@@ -2202,7 +2202,7 @@ ORDER BY length(branch_url) DESC
             'Did not resolve branch URL to package: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
-    return result
+    return result['name'], result['rate_limit_bucket']
 
 
 def find_campaign_by_branch_name(config, branch_name):
@@ -2418,16 +2418,13 @@ async def check_existing_mp(
         revision = old_proposal_info.revision
     target_branch_url = await to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
-        row = await guess_package_from_branch_url(
+        package_name, rate_limit_bucket = await guess_package_from_branch_url(
             conn, target_branch_url,
             possible_transports=possible_transports)
-        if row is not None:
-            rate_limit_bucket = row['rate_limit_bucket']
-            package_name = row['name']
-        else:
+        if package_name is None:
             if revision is not None:
                 (
-                    codebase,
+                    package_name,
                     rate_limit_bucket,
                 ) = await guess_proposal_info_from_revision(conn, revision)
             if package_name is None:
