@@ -375,6 +375,7 @@ class PublishResult:
     description: str
     is_new: bool = False
     proposal_url: Optional[str] = None
+    proposal_web_url: Optional[str] = None
     branch_name: Optional[str] = None
 
 
@@ -522,6 +523,7 @@ class PublishWorker(object):
 
         if returncode == 0:
             proposal_url = response.get("proposal_url")
+            proposal_web_url = response.get("proposal_web_url")
             branch_name = response.get("branch_name")
             is_new = response.get("is_new")
             description = response.get('description')
@@ -531,7 +533,8 @@ class PublishWorker(object):
                     await self.redis.publish(
                         'merge-proposal',
                         json.dumps({
-                            "url": proposal_url, "status": "open", "package": pkg,
+                            "url": proposal_url, "web_url": proposal_web_url,
+                            "status": "open", "package": pkg,
                             "campaign": campaign,
                             "target_branch_url": main_branch_url.rstrip("/")}))
 
@@ -543,7 +546,9 @@ class PublishWorker(object):
                     bucket_proposal_count.labels(bucket=rate_limit_bucket).inc()
 
             return PublishResult(
-                proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
+                proposal_url=proposal_url,
+                proposal_web_url=proposal_web_url,
+                branch_name=branch_name, is_new=is_new,
                 description=description)
 
         raise AssertionError

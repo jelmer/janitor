@@ -621,6 +621,7 @@ if __name__ == "__main__":
     result = {}
     if publish_result.proposal:
         result["proposal_url"] = publish_result.proposal.url
+        result["proposal_web_url"] = publish_result.proposal.get_web_url()
         result["is_new"] = publish_result.is_new
     result["branch_name"] = branch_name
 
