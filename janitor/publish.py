@@ -2148,15 +2148,15 @@ class ProposalInfo:
     package_name: Optional[str] = None
 
 
-async def guess_package_from_revision(
+async def guess_proposal_info_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
-SELECT distinct package, maintainer_email AS rate_limit_bucket
-FROM run
+SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucketFROM run
 LEFT JOIN new_result_branch rb ON rb.run_id = run.id
-LEFT JOIN package on package.name = run.package
-where rb.revision = $1 and run.package is not null
+INNER JOIN candidate ON run.package = candidate.package AND run.suite = candidate.suite
+INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
+WHERE rb.revision = $1 AND run.package is not null
 """
     rows = await conn.fetch(query, revision.decode("utf-8"))
     if len(rows) == 1:
@@ -2165,7 +2165,8 @@ where rb.revision = $1 and run.package is not null
 
 
 async def guess_package_from_branch_url(
-        conn: asyncpg.Connection, url: str, possible_transports=None):
+        conn: asyncpg.Connection, url: str,
+        possible_transports: Optional[List[Transport]] = None):
     query = """
 SELECT
   name, maintainer_email AS rate_limit_bucket, branch_url
@@ -2426,9 +2427,9 @@ async def check_existing_mp(
         else:
             if revision is not None:
                 (
-                    package_name,
+                    codebase,
                     rate_limit_bucket,
-                ) = await guess_package_from_revision(conn, revision)
+                ) = await guess_proposal_info_from_revision(conn, revision)
             if package_name is None:
                 logger.warning(
                     "No package known for %s (%s)", mp.url, target_branch_url
