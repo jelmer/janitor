@@ -20,6 +20,7 @@ __all__ = [
     "Campaign",
     "read_config",
     "get_campaign_config",
+    "get_distribution",
 ]
 
 from google.protobuf import text_format  # type: ignore

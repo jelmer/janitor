@@ -1248,8 +1248,11 @@ ARTIFACT_INDEX_TEMPLATE = Template("""\
 async def handle_artifact_index(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Output directory not created yet")
-    names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-             if not entry.name.endswith('.log') and entry.is_file()]
+    try:
+        names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
+                 if not entry.name.endswith('.log') and entry.is_file()]
+    except FileNotFoundError:
+        raise web.HTTPNotFound(text="Output directory does not exist")
     return web.Response(
         text=ARTIFACT_INDEX_TEMPLATE.render(names=names), content_type='text/html',
         status=200)

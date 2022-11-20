@@ -138,6 +138,41 @@ async def test_assignment(aiohttp_client):
     assert data == app['workitem']['assignment']
 
 
+async def test_intermediate_result(aiohttp_client):
+    app, client = await create_client(aiohttp_client)
+
+    resp = await client.get("/intermediate-result")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data is None
+
+    app['workitem']['metadata'] = {'id': 'my-id'}
+
+    resp = await client.get("/intermediate-result")
+    assert resp.status == 200
+    data = await resp.json()
+    assert data == app['workitem']['metadata']
+
+
+async def test_artifact_index(aiohttp_client):
+    app, client = await create_client(aiohttp_client)
+
+    resp = await client.get("/artifacts/")
+    assert resp.status == 404
+
+    app['workitem']['directory'] = '/nonexistent'
+    resp = await client.get("/artifacts/")
+    assert resp.status == 404
+
+    with tempfile.TemporaryDirectory() as td:
+        app['workitem']['directory'] = td
+
+        resp = await client.get("/artifacts/")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "<body>" in text
+
+
 def test_convert_codemod_script_failed():
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)) == WorkerFailure(
         'codemod-command-not-found',
