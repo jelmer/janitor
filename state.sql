@@ -40,23 +40,17 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_type vcs_type,
    branch_url text,
    subpath text,
-   vcs_last_revision text,
 
-   maintainer_email text,
-   uploader_emails text[],
    archive_version debversion,
    vcs_url text,
    vcs_browse text,
    removed boolean default false,
-   in_base boolean,
    origin text,
    unique(distribution, name)
 );
 CREATE INDEX ON package (removed);
 CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
-CREATE INDEX ON package (maintainer_email);
-CREATE INDEX ON package (uploader_emails);
 
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
