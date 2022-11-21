@@ -50,6 +50,12 @@ def process_sbuild_log(logf):
 def process_build_log(logf):
     lines = [line.decode('utf-8', 'replace') for line in logf]
     failure = find_build_failure_description(lines)[1]
+    if not failure:
+        new_code = "build-failed"
+        new_description = lines[-1]
+        new_phase = None
+        new_failure_details = None
+        return (new_code, new_description, new_phase, new_failure_details)
     if failure.error:
         if failure.stage and not failure.error.is_global:
             new_code = "%s-%s" % (failure.stage, failure.error.kind)
