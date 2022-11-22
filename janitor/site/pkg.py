@@ -68,13 +68,21 @@ def find_build_log_failure(logf, length):
     linecount = sbuildlog.sections[-1].offsets[1]
     failure = worker_failure_from_sbuild_log(sbuildlog)
 
-    if failure.match:
+    if failure.match and failure.section:
         abs_offset = failure.section.offsets[0] + failure.match.lineno
         include_lines = (
             max(1, abs_offset - length // 2),
             abs_offset + min(length // 2, len(failure.section.lines)),
         )
         highlight_lines = [abs_offset]
+        return (linecount, include_lines, highlight_lines)
+
+    if failure.match:
+        include_lines = (
+            max(1, failure.match.lineno - length // 2),
+            failure.match.lineno + min(length // 2, linecount),
+        )
+        highlight_lines = [failure.match.lineno]
         return (linecount, include_lines, highlight_lines)
 
     if failure.section:
@@ -91,7 +99,7 @@ def find_dist_log_failure(logf, length):
     lines = [line.decode('utf-8', 'replace') for line in logf.readlines()]
     match, unused_err = find_build_failure_description(lines)
     if match is not None:
-        highlight_lines = [match.lineno]
+        highlight_lines = getattr(match, 'linenos', None)
     else:
         highlight_lines = None
 
