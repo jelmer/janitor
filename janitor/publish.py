@@ -3188,10 +3188,10 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     async with db.acquire() as conn:
         for row in await conn.fetch("""
              SELECT
-             merge_proposal.rate_limit_bucket AS rate_limit_bucket,
-             merge_proposal.status AS status,
+             rate_limit_bucket AS rate_limit_bucket,
+             status AS status,
              count(*) as c
-             FROM named_publish_policy
+             FROM merge_proposal
              GROUP BY 1, 2
              """):
             per_bucket.setdefault(
