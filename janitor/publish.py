@@ -375,6 +375,7 @@ class PublishResult:
     description: str
     is_new: bool = False
     proposal_url: Optional[str] = None
+    proposal_web_url: Optional[str] = None
     branch_name: Optional[str] = None
 
 
@@ -522,6 +523,7 @@ class PublishWorker(object):
 
         if returncode == 0:
             proposal_url = response.get("proposal_url")
+            proposal_web_url = response.get("proposal_web_url")
             branch_name = response.get("branch_name")
             is_new = response.get("is_new")
             description = response.get('description')
@@ -531,7 +533,8 @@ class PublishWorker(object):
                     await self.redis.publish(
                         'merge-proposal',
                         json.dumps({
-                            "url": proposal_url, "status": "open", "package": pkg,
+                            "url": proposal_url, "web_url": proposal_web_url,
+                            "status": "open", "package": pkg,
                             "campaign": campaign,
                             "target_branch_url": main_branch_url.rstrip("/")}))
 
@@ -543,7 +546,9 @@ class PublishWorker(object):
                     bucket_proposal_count.labels(bucket=rate_limit_bucket).inc()
 
             return PublishResult(
-                proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
+                proposal_url=proposal_url,
+                proposal_web_url=proposal_web_url,
+                branch_name=branch_name, is_new=is_new,
                 description=description)
 
         raise AssertionError
@@ -2143,15 +2148,15 @@ class ProposalInfo:
     package_name: Optional[str] = None
 
 
-async def guess_package_from_revision(
+async def guess_proposal_info_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
-SELECT distinct package, maintainer_email AS rate_limit_bucket
-FROM run
+SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucketFROM run
 LEFT JOIN new_result_branch rb ON rb.run_id = run.id
-LEFT JOIN package on package.name = run.package
-where rb.revision = $1 and run.package is not null
+INNER JOIN candidate ON run.package = candidate.package AND run.suite = candidate.suite
+INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
+WHERE rb.revision = $1 AND run.package is not null
 """
     rows = await conn.fetch(query, revision.decode("utf-8"))
     if len(rows) == 1:
@@ -2159,11 +2164,24 @@ where rb.revision = $1 and run.package is not null
     return None, None
 
 
+async def guess_rate_limit_bucket(
+        conn: asyncpg.Connection, package_name: str, source_branch_name: str):
+    # For now, just assume that source_branch_name is campaign
+    campaign = source_branch_name.split('/')[0]
+    query = """\
+SELECT named_publish_policy.rate_limit_bucket FROM candidate
+INNER JOIN named_publish_policy.name = candidate.named_publish_policy
+WHERE candidate.suite = $1 AND candidate.package = $1
+"""
+    return await conn.fetchval(query, campaign, package_name)
+
+
 async def guess_package_from_branch_url(
-        conn: asyncpg.Connection, url: str, possible_transports=None):
+        conn: asyncpg.Connection, url: str,
+        possible_transports: Optional[List[Transport]] = None):
     query = """
 SELECT
-  name, maintainer_email AS rate_limit_bucket, branch_url
+  name, branch_url
 FROM
   package
 WHERE
@@ -2184,7 +2202,7 @@ ORDER BY length(branch_url) DESC
         return None
 
     if url.rstrip('/') == result['branch_url'].rstrip('/'):
-        return result
+        return result['name']
 
     source_branch = await to_thread(
         open_branch,
@@ -2196,7 +2214,7 @@ ORDER BY length(branch_url) DESC
             'Did not resolve branch URL to package: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
-    return result
+    return result['name']
 
 
 def find_campaign_by_branch_name(config, branch_name):
@@ -2412,18 +2430,15 @@ async def check_existing_mp(
         revision = old_proposal_info.revision
     target_branch_url = await to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
-        row = await guess_package_from_branch_url(
+        package_name = await guess_package_from_branch_url(
             conn, target_branch_url,
             possible_transports=possible_transports)
-        if row is not None:
-            rate_limit_bucket = row['rate_limit_bucket']
-            package_name = row['name']
-        else:
+        if package_name is None:
             if revision is not None:
                 (
                     package_name,
                     rate_limit_bucket,
-                ) = await guess_package_from_revision(conn, revision)
+                ) = await guess_proposal_info_from_revision(conn, revision)
             if package_name is None:
                 logger.warning(
                     "No package known for %s (%s)", mp.url, target_branch_url
@@ -2434,6 +2449,10 @@ async def check_existing_mp(
                     package_name,
                     mp.url,
                 )
+        else:
+            if source_branch_name is not None:
+                rate_limit_bucket = await guess_rate_limit_bucket(
+                    conn, package_name, source_branch_name)
     if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
         status = old_proposal_info.status
 
@@ -3168,13 +3187,13 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     per_bucket: Dict[str, Dict[str, int]] = {}
     async with db.acquire() as conn:
         for row in await conn.fetch("""
-                SELECT package.maintainer_email AS rate_limit_bucket,
-                merge_proposal.status AS status,
-                count(*) as c
-                from merge_proposal
-                left join package on merge_proposal.package = package.name
-                group by 1, 2
-                """):
+             SELECT
+             merge_proposal.rate_limit_bucket AS rate_limit_bucket,
+             merge_proposal.status AS status,
+             count(*) as c
+             FROM named_publish_policy
+             GROUP BY 1, 2
+             """):
             per_bucket.setdefault(
                 row['status'], {})[row['rate_limit_bucket']] = row['c']
     bucket_rate_limiter.set_mps_per_bucket(per_bucket)
