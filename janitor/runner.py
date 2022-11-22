@@ -467,6 +467,7 @@ class JanitorResult(object):
         subpath=None,
         resume_from=None,
         change_set=None,
+        transient=None,
     ):
         self.package = pkg
         self.campaign = campaign
@@ -524,7 +525,7 @@ class JanitorResult(object):
             self.remotes = {}
             self.followup_actions = []
             self.resume_from = None
-            self.transient = None
+            self.transient = transient
             self.codebase = codebase
 
     @property
@@ -1507,7 +1508,7 @@ class QueueProcessor(object):
                     await self.abort_run(
                         active_run, 'run-disappeared', "no support for ping", transient=True)
                 except RunExists:
-                    logging.warning('Run not properly cleaned up?')
+                    logging.warning('Run exists. Not properly cleaned up?')
                 return
         except ActiveRunDisappeared as e:
             if keepalive_age > timedelta(minutes=self.run_timeout):
@@ -1530,7 +1531,7 @@ class QueueProcessor(object):
                     description=("No keepalives received in %s." % keepalive_age),
                     transient=True)
             except RunExists:
-                logging.warning('Run not properly cleaned up?')
+                logging.warning('Run exists. Not properly cleaned up?')
             return
 
     async def _watchdog(self):

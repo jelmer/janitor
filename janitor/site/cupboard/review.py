@@ -97,7 +97,7 @@ async def generate_review(
             (remote_name, base_revid, revid) = state.get_result_branch(result_branches, role)
         except KeyError:
             return ""
-        external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
+        external_url = f"/api/run/{run_id}/diff?role={role}"
         if vcs_type is None:
             return "no vcs known"
         if revid is None:
@@ -110,10 +110,7 @@ async def generate_review(
                     revid.encode('utf-8'))
                 ).decode("utf-8", "replace")
                 if len(diff) > MAX_DIFF_SIZE:
-                    return "Diff too large (%d). See it at %s" % (
-                        len(diff),
-                        external_url,
-                    )
+                    return f"Diff too large ({len(diff)}). See it at {external_url}"
                 else:
                     return diff
         except ClientResponseError as e:

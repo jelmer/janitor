@@ -52,7 +52,7 @@ async def handle_history(request):
     query = """\
 SELECT finish_time, package, suite, worker_link,
 worker as worker_name, finish_time - start_time AS duration,
-result_code, id, description FROM run
+result_code, id, description, failure_transient FROM run
 ORDER BY finish_time DESC"""
     if offset:
         query += ' OFFSET %d' % offset
@@ -64,7 +64,6 @@ ORDER BY finish_time DESC"""
         "count": limit,
         "history": runs
     }
-
 
 
 @routes.get("/cupboard/reprocess-logs", name="reprocess-logs")

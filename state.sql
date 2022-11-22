@@ -622,6 +622,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.result_tags AS result_tags,
   run.value AS value,
   candidate.command AS policy_command,
+  named_publish_policy.name AS publish_policy_name,
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   named_publish_policy.qa_review AS qa_review_policy,
   (named_publish_policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
