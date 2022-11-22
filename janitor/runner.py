@@ -1930,8 +1930,22 @@ async def handle_log(request):
     return response
 
 
+@routes.get("/codebases", name="download-codebases")
+async def handle_codebases_download(request):
+    queue_processor = request.app['queue_processor']
+    codebases = []
+
+    async with queue_processor.database.acquire() as conn:
+        for row in await conn.fetch(
+                'SELECT name, branch_url, url, branch, subpath, vcs_type, '
+                'vcs_last_revision, value FROM codebase'):
+            codebases.append(dict(row))
+
+    return web.json_response(codebases)
+
+
 @routes.post("/codebases", name="upload-codebases")
-async def handle_codebases(request):
+async def handle_codebases_upload(request):
     queue_processor = request.app['queue_processor']
 
     codebases = []
