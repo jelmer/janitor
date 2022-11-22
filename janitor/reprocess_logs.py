@@ -49,25 +49,23 @@ def process_sbuild_log(logf):
 
 def process_build_log(logf):
     lines = [line.decode('utf-8', 'replace') for line in logf]
-    failure = find_build_failure_description(lines)[1]
-    if failure.error:
-        if failure.stage and not failure.error.is_global:
-            new_code = "%s-%s" % (failure.stage, failure.error.kind)
-        else:
-            new_code = failure.error.kind
+    match, problem = find_build_failure_description(lines)
+    if problem:
+        new_code = problem.kind
         try:
-            new_failure_details = failure.error.json()
+            new_failure_details = problem.json()
         except NotImplementedError:
             new_failure_details = None
-    elif failure.stage:
-        new_code = "build-failed-stage-%s" % failure.stage
-        new_failure_details = None
     else:
         new_code = "build-failed"
         new_failure_details = None
-    new_description = failure.description
-    new_phase = failure.phase
-    return (new_code, new_description, new_phase, new_failure_details)
+    if match:
+        new_description = str(match.line)
+    elif problem:
+        new_description = str(problem)
+    else:
+        new_description = "Build failed"
+    return (new_code, new_description, "build", new_failure_details)
 
 
 def process_dist_log(logf):

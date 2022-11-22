@@ -3,5 +3,4 @@ from setuptools import setup
 from setuptools_protobuf import Protobuf
 setup(protobufs=[
     Protobuf('janitor/config.proto', mypy=True),
-    Protobuf('janitor/package_metadata.proto', mypy=True),
 ])

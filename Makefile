@@ -1,21 +1,10 @@
-PB2_PY_OUTPUT = janitor/config_pb2.py janitor/package_metadata_pb2.py
-
 DOCKER_TAG ?= latest
 
-core: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
+core: janitor/site/_static/pygments.css
 
 all: core
 
 .PHONY: all check
-
-PROTOC_ARGS = --python_out=.
-
-ifneq (,$(shell which protoc-gen-mypy))
-PROTOC_ARGS += --mypy_out=.
-endif
-
-janitor/%_pb2.py: janitor/%.proto
-	protoc $(PROTOC_ARGS) $<
 
 check:: typing
 
@@ -51,7 +40,6 @@ janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
 
 clean:
-	rm -f $(PB2_PY_OUTPUT)
 
 SHA=$(shell git rev-parse HEAD)
 
