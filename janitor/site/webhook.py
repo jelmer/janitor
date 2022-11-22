@@ -19,11 +19,73 @@ from typing import List, Optional, Tuple
 import json
 import logging
 
-from aiohttp import web
+from aiohttp import web, ClientSession
 import asyncpg
+from yarl import URL
 
+from breezy import urlutils
+from breezy.forge import UnsupportedForge, get_forge
 from breezy.git.refs import ref_to_branch_name
 from breezy.git.urls import git_url_to_bzr_url
+
+
+def subscribe_webhook_github(branch, github, callback_url):
+    from breezy.plugins.github.forge import parse_github_branch_url
+    (owner, repo_name, branch_name) = (
+        parse_github_branch_url(branch))
+
+    parameters = {
+        "hub.mode": "subscribe",
+        "hub.topic": f"https://github.com/{owner}/{repo_name}/events/push",
+        "hub.callback": callback_url}
+    response = github._api_request(
+        'GET',
+        '/hub' + '?' + ';'.join(
+            ['%s=%s' % (k, urlutils.quote(v))
+             for (k, v) in parameters.items()]))
+    if response.status != 200:
+        logging.warning(
+            'Unable to subscribe to %s/%s: %s', owner, repo_name,
+            response.text)
+        return False
+    return True
+
+
+def subscribe_webhook_gitlab(branch, gitlab, callback_url):
+    from breezy.plugins.gitlab.forge import NotGitLabUrl, parse_gitlab_branch_url
+    try:
+        (host, project_name, branch_name) = (
+            parse_gitlab_branch_url(branch))
+    except NotGitLabUrl:
+        raise UnsupportedForge(branch.user_url)
+
+    project = gitlab._get_project_name(project_name)
+    path = 'projects/%s/hooks' % (
+        urlutils.quote(str(project['id']), ''))
+
+    response = gitlab._api_request('POST', path, fields={
+        'url': callback_url,
+        'push_events': True
+    })
+    if response not in (200, 201):
+        logging.warning(
+            'Unable to subscribe to %s: %s', project_name,
+            response.text)
+        return False
+    return True
+
+
+def subscribe_webhook(branch, callback_url):
+    from breezy.plugins.github.forge import GitHub
+    from breezy.plugins.gitlab.forge import GitLab
+    forge = get_forge(branch)
+
+    if isinstance(forge, GitHub):
+        return subscribe_webhook_github(branch, forge, callback_url)
+    elif isinstance(forge, GitLab):
+        return subscribe_webhook_gitlab(branch, forge, callback_url)
+    else:
+        raise UnsupportedForge(branch)
 
 
 def is_webhook_request(request):
@@ -158,3 +220,42 @@ async def parse_webhook(request, db):
         # TODO(jelmer): Update codebases to new git sha
         for row in await get_codebases_by_branch_url(conn, urls):
             yield row
+
+
+async def get_codebases(runner_url):
+    async with ClientSession() as session, \
+            session.get(URL(runner_url) / "codebases",
+                        raise_for_status=True) as resp:
+        return await resp.json()
+
+
+def main(argv=None):
+    import argparse
+    import logging
+    import breezy.git  # noqa: F401
+    import breezy.bzr  # noqa: F401
+    from breezy.branch import Branch
+    import asyncio
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--runner-url', type=str)
+    parser.add_argument('callback_url', type=str)
+    args = parser.parse_args()
+
+    logging.basicConfig(format='%(message)s')
+
+    codebases = asyncio.run(get_codebases(args.runner_url))
+
+    # TODO(jelmer): retrieve all codebases
+    for codebase in codebases:
+        b = Branch.open(codebase['branch_url'])
+        try:
+            subscribe_webhook(b, args.callback_url)
+        except UnsupportedForge:
+            logging.warning('Ignoring branch with unknown forge: %s', b.user_url)
+            continue
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main(sys.argv[1:]))
