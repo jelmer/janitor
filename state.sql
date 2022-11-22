@@ -40,23 +40,17 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_type vcs_type,
    branch_url text,
    subpath text,
-   vcs_last_revision text,
 
-   maintainer_email text,
-   uploader_emails text[],
    archive_version debversion,
    vcs_url text,
    vcs_browse text,
    removed boolean default false,
-   in_base boolean,
    origin text,
    unique(distribution, name)
 );
 CREATE INDEX ON package (removed);
 CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
-CREATE INDEX ON package (maintainer_email);
-CREATE INDEX ON package (uploader_emails);
 
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
@@ -627,7 +621,6 @@ CREATE OR REPLACE VIEW publishable AS
   array(SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE new_result_branch.run_id = run.id) as result_branches,
   run.result_tags AS result_tags,
   run.value AS value,
-  package.maintainer_email AS maintainer_email,
   candidate.command AS policy_command,
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   named_publish_policy.qa_review AS qa_review_policy,
