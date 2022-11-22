@@ -34,19 +34,34 @@ def subscribe_webhook_github(branch, github, callback_url):
     (owner, repo_name, branch_name) = (
         parse_github_branch_url(branch))
 
-    parameters = {
-        "hub.mode": "subscribe",
-        "hub.topic": f"https://github.com/{owner}/{repo_name}/events/push",
-        "hub.callback": callback_url}
+    path = 'repos/%s/%s/hooks' % (owner, repo_name)
+
+    data = {
+        "name": "web",
+        "active": True,
+        "events": ["push"],
+        "config": {
+            "url": callback_url,
+            "content_type": "json",
+            "insecure_ssl": "0",
+        }
+    }
+
     response = github._api_request(
-        'GET',
-        '/hub' + '?' + ';'.join(
-            ['%s=%s' % (k, urlutils.quote(v))
-             for (k, v) in parameters.items()]))
-    if response.status != 200:
+        'POST',
+        path,
+        body=json.dumps(data).encode('utf-8'))
+
+    if response.status in (200, 201):
+        return True
+    if response.status == 422:
+        data = json.loads(response.text)
+        if any([x['message'] == "Hook already exists on this repository"
+                for x in data['errors']]):  # type: ignore
+            return True
         logging.warning(
-            'Unable to subscribe to %s/%s: %s', owner, repo_name,
-            response.text)
+            'Unable to subscribe to %s/%s: %d: %s', owner, repo_name,
+            response.status, response.text)
         return False
     return True
 
@@ -59,7 +74,7 @@ def subscribe_webhook_gitlab(branch, gitlab, callback_url):
     except NotGitLabUrl:
         raise UnsupportedForge(branch.user_url)
 
-    project = gitlab._get_project_name(project_name)
+    project = gitlab._get_project(project_name)
     path = 'projects/%s/hooks' % (
         urlutils.quote(str(project['id']), ''))
 
@@ -67,9 +82,9 @@ def subscribe_webhook_gitlab(branch, gitlab, callback_url):
         'url': callback_url,
         'push_events': True
     })
-    if response not in (200, 201):
+    if response.status not in (200, 201):
         logging.warning(
-            'Unable to subscribe to %s: %s', project_name,
+            'Unable to subscribe to %s: %d %s', project_name, response.status,
             response.text)
         return False
     return True
@@ -234,8 +249,8 @@ def main(argv=None):
     import logging
     import breezy.git  # noqa: F401
     import breezy.bzr  # noqa: F401
-    from breezy.branch import Branch
     import asyncio
+    from janitor.vcs import BranchUnavailable, BranchMissing, open_branch
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner-url', type=str)
@@ -246,14 +261,18 @@ def main(argv=None):
 
     codebases = asyncio.run(get_codebases(args.runner_url))
 
-    # TODO(jelmer): retrieve all codebases
     for codebase in codebases:
-        b = Branch.open(codebase['branch_url'])
         try:
-            subscribe_webhook(b, args.callback_url)
+            b = open_branch(codebase['branch_url'])
+        except (BranchUnavailable, BranchMissing):
+            continue
+        try:
+            present = subscribe_webhook(b, args.callback_url)
         except UnsupportedForge:
             logging.warning('Ignoring branch with unknown forge: %s', b.user_url)
             continue
+        if present:
+            logging.info('Registered webhook for %s', codebase['name'])
 
 
 if __name__ == '__main__':
