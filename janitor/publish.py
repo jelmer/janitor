@@ -2152,7 +2152,8 @@ async def guess_proposal_info_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
-SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucketFROM run
+SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucket
+FROM run
 LEFT JOIN new_result_branch rb ON rb.run_id = run.id
 INNER JOIN candidate ON run.package = candidate.package AND run.suite = candidate.suite
 INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
@@ -2170,8 +2171,8 @@ async def guess_rate_limit_bucket(
     campaign = source_branch_name.split('/')[0]
     query = """\
 SELECT named_publish_policy.rate_limit_bucket FROM candidate
-INNER JOIN named_publish_policy.name = candidate.named_publish_policy
-WHERE candidate.suite = $1 AND candidate.package = $1
+INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
+WHERE candidate.suite = $1 AND candidate.package = $2
 """
     return await conn.fetchval(query, campaign, package_name)
 
