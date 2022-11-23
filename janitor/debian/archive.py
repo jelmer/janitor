@@ -337,7 +337,7 @@ async def write_suite_files(
             component_dir = component
             os.makedirs(os.path.join(base_path, component_dir), exist_ok=True)
             for arch in arches:
-                arch_dir = os.path.join(component_dir, f"binary-%{arch}")
+                arch_dir = os.path.join(component_dir, f"binary-{arch}")
                 os.makedirs(os.path.join(base_path, arch_dir), exist_ok=True)
                 br = Release()
                 br["Origin"] = origin
