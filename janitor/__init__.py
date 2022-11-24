@@ -20,7 +20,6 @@ from breezy.transport import http as _mod_http
 from breezy.transport.http import urllib as _mod_urllib
 
 import shlex
-from .compat import shlex_join
 
 __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))
@@ -45,4 +44,4 @@ def splitout_env(command):
     while len(args) > 0 and '=' in args[0]:
         (key, value) = args.pop(0).split('=', 1)
         env[key] = value
-    return env, shlex_join(args)
+    return env, shlex.join(args)

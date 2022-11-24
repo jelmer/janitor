@@ -94,7 +94,6 @@ from .artifacts import (
     store_artifacts_with_backup,
     upload_backup_artifacts,
 )
-from .compat import to_thread
 from .config import read_config, get_campaign_config, get_distribution, Config, Campaign
 from .debian import (
     dpkg_vendor,
@@ -148,7 +147,7 @@ queue_empty_count = Counter(
 
 
 async def to_thread_timeout(timeout, func, *args, **kwargs):
-    cor = to_thread(func, *args, **kwargs)
+    cor = asyncio.to_thread(func, *args, **kwargs)
     if timeout is not None:
         cor = asyncio.wait_for(cor, timeout=timeout)
     return await cor
@@ -1354,13 +1353,18 @@ async def followup_run(
                     "SELECT package, codebase, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     active_run.package, dependent_suites)
                 for run_to_retry in runs_to_retry:
-                    await do_schedule(
-                        conn, package=run_to_retry['package'],
-                        change_set=result.change_set,
-                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
-                        campaign=run_to_retry['campaign'],
-                        codebase=run_to_retry['codebase'])
-
+                    try:
+                        await do_schedule(
+                            conn, package=run_to_retry['package'],
+                            change_set=result.change_set,
+                            bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
+                            campaign=run_to_retry['campaign'],
+                            codebase=run_to_retry['codebase'])
+                    except CandidateUnavailable as e:
+                        logging.warning(
+                            'Candidate unavailable while trying to reschedule %s/%s: %s',
+                            run_to_retry['campaign'], run_to_retry['package'], e)
+    
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
         requestor = 'schedule-missing-deps (needed by %s)' % active_run.package
@@ -1416,7 +1420,7 @@ async def followup_run(
             base_distribution.archive_mirror_uri, base_distribution.name,
             base_distribution.component)
 
-        need_control = await to_thread(find_reverse_source_deps, apt, binary_packages)
+        need_control = await asyncio.to_thread(find_reverse_source_deps, apt, binary_packages)
 
         # TODO(jelmer): check test dependencies?
 
@@ -2282,7 +2286,7 @@ async def next_item(
                 # We try the public branch first, since perhaps a maintainer
                 # has made changes to the branch there.
                 active_run.vcs_info["branch_url"] = full_branch_url(main_branch).rstrip('/')
-                additional_colocated_branches = await to_thread(
+                additional_colocated_branches = await asyncio.to_thread(
                     builder.additional_colocated_branches, main_branch)
                 vcs_type = get_vcs_abbreviation(main_branch.repository)
                 if not item.refresh:
