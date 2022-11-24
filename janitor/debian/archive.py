@@ -84,16 +84,22 @@ class PackageInfoProvider(object):
     async def __aexit__(self, exc_tp, exc_val, exc_tb):
         return False
 
-    async def info_for_run(self, run_id, suite_name, package):
+    async def info_for_run(self, run_id, suite_name, package, arch):
         raise NotImplementedError(self.info_for_run)
 
 
-async def scan_packages(td):
-    p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert p.stdout
-    assert p.stderr
-    yield from Packages.iter_paragraphs(p.stdout)
-    for line in p.stderr.readlines():
+async def scan_packages(td, arch: Optional[str] = None):
+    args = []
+    if arch:
+        args.extend(['-a', arch])
+    proc = await asyncio.create_subprocess_exec(
+        "dpkg-scanpackages", td, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await proc.communicate()
+    for para in Packages.iter_paragraphs(stdout):
+        yield para
+    for line in stderr.splitlines(keepends=False):
         if line.startswith(b'dpkg-scanpackages: '):
             line = line[len(b'dpkg-scanpackages: '):]
         if line.startswith(b'info: '):
@@ -119,12 +125,12 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
         await self.artifact_manager.__aexit__(exc_tp, exc_val, exc_tb)
         return False
 
-    async def info_for_run(self, run_id, suite_name, package):
+    async def info_for_run(self, run_id, suite_name, package, arch):
         with tempfile.TemporaryDirectory() as td:
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
-            for para in scan_packages(td):
+            async for para in scan_packages(td):
                 para["Filename"] = os.path.join(
                     suite_name,
                     "pkg",
@@ -150,24 +156,22 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
         await self.primary_info_provider.__aexit__(exc_tp, exc_val, exc_tb)
         return False
 
-    async def info_for_run(self, run_id, suite_name, package):
-        cache_path = os.path.join(self.cache_directory, run_id)
+    async def info_for_run(self, run_id, suite_name, package, arch):
+        cache_path = os.path.join(self.cache_directory, arch, run_id)
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         try:
             with open(cache_path, "rb") as f:
                 for chunk in f:
                     yield chunk
         except FileNotFoundError:
-            chunks = []
             logger.debug('Retrieving artifacts for %s/%s (%s)',
                          suite_name, package, run_id)
             with open(cache_path, "wb") as f:
                 async for chunk in self.primary_info_provider.info_for_run(
-                    run_id, suite_name, package
+                    run_id, suite_name, package, arch=arch
                 ):
                     f.write(chunk)
-                    chunks.append(chunk)
-            for chunk in chunks:
-                yield chunk
+                    yield chunk
 
 
 async def retrieve_packages(info_provider, suite_name, component, arch, rows):
@@ -175,7 +179,7 @@ async def retrieve_packages(info_provider, suite_name, component, arch, rows):
                  len(rows), suite_name, component, arch)
     for package, run_id, build_distribution, build_version in rows:
         try:
-            async for chunk in info_provider.info_for_run(run_id, build_distribution, package):
+            async for chunk in info_provider.info_for_run(run_id, build_distribution, package, arch=arch):
                 yield chunk
                 await asyncio.sleep(0)
         except ArtifactsMissing:
