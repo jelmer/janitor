@@ -414,16 +414,6 @@ async def write_suite_files(
             for arch in arches:
                 arch_dir = os.path.join(component_dir, f"binary-{arch}")
                 os.makedirs(os.path.join(base_path, arch_dir), exist_ok=True)
-                br = Release()
-                br["Origin"] = origin
-                br["Label"] = archive_description
-                br["Archive"] = suite_name
-                br["Architecture"] = arch
-                br["Component"] = component
-                bp = os.path.join(arch_dir, "Release")
-                f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
-                br.dump(f)
-                f.done()
 
                 packages_path = os.path.join(arch_dir, "Packages")
                 fs = []
@@ -442,16 +432,6 @@ async def write_suite_files(
                 await asyncio.sleep(0)
             source_dir = os.path.join(component_dir, 'source')
             os.makedirs(os.path.join(base_path, source_dir), exist_ok=True)
-            br = Release()
-            br["Origin"] = origin
-            br["Label"] = archive_description
-            br["Archive"] = suite_name
-            br["Architecture"] = "source"
-            br["Component"] = component
-            bp = os.path.join(source_dir, "Release")
-            f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
-            br.dump(f)
-            f.done()
 
             sources_path = os.path.join(source_dir, "Sources")
             fs = []
