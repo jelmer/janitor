@@ -23,6 +23,7 @@ request, and writes results to standard out as JSON.
 """
 
 from contextlib import ExitStack
+from email.utils import parseaddr
 import os
 from typing import Optional, List, Any, Dict, Tuple
 
@@ -169,6 +170,7 @@ def publish(
             'external_url': external_url,
             'debdiff_is_empty': debdiff_is_empty,
             'markdownify_debdiff': markdownify_debdiff,
+            'parseaddr': parseaddr,
             'role': role,
         }
         if codemod_result:
