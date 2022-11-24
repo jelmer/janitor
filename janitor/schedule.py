@@ -27,7 +27,6 @@ from debian.changelog import Version
 
 import asyncpg
 
-from .compat import shlex_join
 from .config import read_config
 from .queue import Queue
 
@@ -413,7 +412,7 @@ async def do_schedule_control(
         refresh=refresh,
         bucket=bucket,
         requestor=requestor,
-        command=shlex_join(command),
+        command=shlex.join(command),
         codebase=codebase,
     )
 

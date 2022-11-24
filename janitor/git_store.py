@@ -47,7 +47,6 @@ from . import (
     state,
 )
 
-from .compat import to_thread
 from .config import read_config
 from .site import is_worker, iter_accept, template_loader
 
@@ -407,7 +406,7 @@ async def dulwich_refs(request):
     handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
     handler.proto.write_pkt_line(None)
 
-    await to_thread(handler.handle)
+    await asyncio.to_thread(handler.handle)
 
     await response.write(out.getvalue())
 
@@ -451,7 +450,7 @@ async def dulwich_service(request):
         except HangupException:
             response.force_close()
 
-    await to_thread(handle)
+    await asyncio.to_thread(handle)
 
     await response.write(outf.getvalue())
 

@@ -82,7 +82,6 @@ import breezy.plugins.github  # noqa: F401
 from . import (
     state,
 )
-from .compat import to_thread
 from .config import read_config, get_campaign_config, Campaign, Config
 from .schedule import (
     do_schedule,
@@ -1789,9 +1788,9 @@ async def handle_ready(request):
 
 
 async def get_mp_status(mp):
-    if await to_thread(mp.is_merged):
+    if await asyncio.to_thread(mp.is_merged):
         return "merged"
-    elif await to_thread(mp.is_closed):
+    elif await asyncio.to_thread(mp.is_closed):
         return "closed"
     else:
         return "open"
@@ -1827,7 +1826,7 @@ async def refresh_proposal_status_request(request):
     logger.info("Request to refresh proposal status for %s", url)
 
     async def scan():
-        mp = await to_thread(get_proposal_by_url, url)
+        mp = await asyncio.to_thread(get_proposal_by_url, url)
         async with request.app['db'].acquire() as conn:
             status = await get_mp_status(mp)
             try:
@@ -2205,7 +2204,7 @@ ORDER BY length(branch_url) DESC
     if url.rstrip('/') == result['branch_url'].rstrip('/'):
         return result['name']
 
-    source_branch = await to_thread(
+    source_branch = await asyncio.to_thread(
         open_branch,
         result['branch_url'].rstrip('/'),
         possible_transports=possible_transports)
@@ -2268,8 +2267,8 @@ class ProposalInfoManager(object):
             # as applied rather than closed?
             pass
         if status == "merged":
-            merged_by = await to_thread(mp.get_merged_by)
-            merged_at = await to_thread(mp.get_merged_at)
+            merged_by = await asyncio.to_thread(mp.get_merged_by)
+            merged_at = await asyncio.to_thread(mp.get_merged_at)
             if merged_at is not None:
                 merged_at = merged_at.replace(tzinfo=None)
         else:
@@ -2332,13 +2331,13 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
         rate_limit_bucket=rate_limit_bucket, can_be_merged=can_be_merged)
     if comment:
         try:
-            await to_thread(mp.post_comment, comment)
+            await asyncio.to_thread(mp.post_comment, comment)
         except PermissionDenied as e:
             logger.warning(
                 "Permission denied posting comment to %s: %s", mp.url, e)
 
     try:
-        await to_thread(mp.close)
+        await asyncio.to_thread(mp.close)
     except PermissionDenied as e:
         logger.warning(
             "Permission denied closing merge request %s: %s", mp.url, e
@@ -2359,13 +2358,13 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
         can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
         dry_run=dry_run)
     try:
-        await to_thread(mp.post_comment, comment)
+        await asyncio.to_thread(mp.post_comment, comment)
     except PermissionDenied as e:
         logger.warning(
             "Permission denied posting comment to %s: %s", mp.url, e)
 
     try:
-        await to_thread(mp.close)
+        await asyncio.to_thread(mp.close)
     except PermissionDenied as e:
         logger.warning(
             "Permission denied closing merge request %s: %s", mp.url, e
@@ -2396,10 +2395,10 @@ async def check_existing_mp(
     else:
         package_name = None
         rate_limit_bucket = None
-    revision = await to_thread(mp.get_source_revision)
-    source_branch_url = await to_thread(mp.get_source_branch_url)
+    revision = await asyncio.to_thread(mp.get_source_revision)
+    source_branch_url = await asyncio.to_thread(mp.get_source_branch_url)
     try:
-        can_be_merged = await to_thread(mp.can_be_merged)
+        can_be_merged = await asyncio.to_thread(mp.can_be_merged)
     except NotImplementedError:
         # TODO(jelmer): Download and attempt to merge locally?
         can_be_merged = None
@@ -2411,14 +2410,14 @@ async def check_existing_mp(
             source_branch_name = None
         else:
             try:
-                source_branch = await to_thread(
+                source_branch = await asyncio.to_thread(
                     open_branch,
                     source_branch_url, possible_transports=possible_transports)
             except (BranchMissing, BranchUnavailable):
                 revision = None
                 source_branch_name = None
             else:
-                revision = await to_thread(source_branch.last_revision)
+                revision = await asyncio.to_thread(source_branch.last_revision)
                 source_branch_name = source_branch.name
     else:
         source_branch_name = None
@@ -2429,7 +2428,7 @@ async def check_existing_mp(
             source_branch_name = urlutils.unescape(source_branch_name)
     if revision is None and old_proposal_info:
         revision = old_proposal_info.revision
-    target_branch_url = await to_thread(mp.get_target_branch_url)
+    target_branch_url = await asyncio.to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
         package_name = await guess_package_from_branch_url(
             conn, target_branch_url,
@@ -2544,7 +2543,7 @@ async def check_existing_mp(
             logger.warning("No target branch for %r", mp)
         else:
             try:
-                mp_remote_branch_name = (await to_thread(
+                mp_remote_branch_name = (await asyncio.to_thread(
                     open_branch,
                     target_branch_url, possible_transports=possible_transports)
                 ).name
@@ -2700,7 +2699,7 @@ applied independently.
         # the default branch name.
         if not dry_run and mp_remote_branch_name is not None:
             try:
-                await to_thread(
+                await asyncio.to_thread(
                     mp.set_target_branch_name,
                     last_run_remote_branch_name or "")
             except NotImplementedError:
@@ -2729,7 +2728,7 @@ has changed from %s to %s.
         else:
             return False
 
-    if not await to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
+    if not await asyncio.to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
         logger.warning(
             "%s: Remote branch URL appears to have have changed: "
             "%s => %s, skipping.",
