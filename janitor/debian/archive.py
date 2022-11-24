@@ -501,9 +501,12 @@ async def handle_health(request):
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
     missing = []
-    for suite in request.app['config'].campaign:
-        if suite not in last_publish_time:
-            missing.append(suite)
+    for campaign_config in request.app['config'].campaign:
+        if not campaign_config.HasField('debian_build'):
+            continue
+        build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
+        if build_distribution not in last_publish_time:
+            missing.append(build_distribution)
     if missing:
         return web.Response(text='missing: %s' % ', '.join(missing), status=500)
     return web.Response(text='ok')
