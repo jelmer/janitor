@@ -319,6 +319,7 @@ def cleanup_by_hash_files(base, number_to_keep):
 
 
 class HashedFileWriter(object):
+    """File write wrapper that writes by-hash files."""
 
     def __init__(self, release, base, path, open=open):
         self.open = open
@@ -336,6 +337,7 @@ class HashedFileWriter(object):
         return self
 
     def done(self):
+        """Mark the file as done, close it and calculate size/hash."""
         self._tmpf.flush()
         self._tmpf.close()
 
@@ -420,7 +422,7 @@ async def write_suite_files(
                 br["Component"] = component
                 bp = os.path.join(arch_dir, "Release")
                 f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
-                r.dump(f)
+                br.dump(f)
                 f.done()
 
                 packages_path = os.path.join(arch_dir, "Packages")
@@ -448,7 +450,7 @@ async def write_suite_files(
             br["Component"] = component
             bp = os.path.join(source_dir, "Release")
             f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
-            r.dump(f)
+            br.dump(f)
             f.done()
 
             sources_path = os.path.join(source_dir, "Sources")
@@ -725,7 +727,7 @@ async def create_app(generator_manager, config, dists_dir, db):
         serve_dists_release_file)
     app.router.add_get(
         "/dists/{release}/{component}/{arch}/"
-        r"{file:Packages(|\..*)}",
+        r"{file:(Packages|Sources)(|\..*)}",
         serve_dists_component_file)
     app.router.add_get(
         "/dists/{release}/{component}/{arch}/"
@@ -738,7 +740,7 @@ async def create_app(generator_manager, config, dists_dir, db):
         serve_on_demand_dists_release_file)
     app.router.add_get(
         "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
-        r"{file:Packages(|\..*)}",
+        r"{file:(Packages|Sources)(|\..*)}",
         serve_on_demand_dists_component_file)
     app.router.add_get(
         "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
