@@ -118,7 +118,7 @@ async def reprocess_run_logs(
 
     if new_code != result_code or description != new_description or failure_details != new_failure_details:
         logging.info(
-            "%s/%s: Updated %r, %r => %r, %r %r",
+            "%s/%s: Updated %r, %r ⇒ %r, %r %r",
             package,
             log_id,
             result_code,
