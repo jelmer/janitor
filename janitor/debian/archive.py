@@ -376,7 +376,7 @@ class HashedFileWriter(object):
 
 
 async def write_suite_files(
-    base_path, *, get_packages, get_sources, package_info_provider, suite_name, archive_description,
+    base_path, *, get_packages, get_sources, suite_name, archive_description,
     components, arches, origin, gpg_context,
     timestamp: Optional[datetime] = None
 ):
@@ -637,7 +637,6 @@ async def refresh_on_demand_dists(
         os.path.join(dists_dir, kind, id),
         get_packages=get_packages,
         get_sources=None,
-        package_info_provider=package_info_provider,
         suite_name=f"{kind}/{id}",
         archive_description=description,
         components=distribution.component,
@@ -793,7 +792,6 @@ async def publish_suite(
         suite_path,
         get_packages=partial(get_packages_for_suite, db, package_info_provider),
         get_sources=None,
-        package_info_provider=package_info_provider,
         suite_name=suite.name,
         archive_description=suite.debian_build.archive_description,
         components=distribution.component,
