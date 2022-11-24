@@ -376,10 +376,15 @@ class HashedFileWriter(object):
 
 
 async def write_suite_files(
-    base_path, *, get_packages, package_info_provider, suite_name, archive_description,
+    base_path, *, get_packages, get_sources, package_info_provider, suite_name, archive_description,
     components, arches, origin, gpg_context,
     timestamp: Optional[datetime] = None
 ):
+    SUFFIXES: Dict[str, Any] = {
+        "": open,
+        ".gz": gzip.GzipFile,
+        ".bz2": bz2.BZ2File,
+    }
 
     if timestamp is None:
         timestamp = datetime.utcnow()
@@ -418,11 +423,6 @@ async def write_suite_files(
                 f.done()
 
                 packages_path = os.path.join(arch_dir, "Packages")
-                SUFFIXES: Dict[str, Any] = {
-                    "": open,
-                    ".gz": gzip.GzipFile,
-                    ".bz2": bz2.BZ2File,
-                }
                 fs = []
                 for suffix, fn in SUFFIXES.items():
                     fs.append(
@@ -437,6 +437,35 @@ async def write_suite_files(
                     os.path.join(base_path, arch_dir),
                     4 * len(SUFFIXES))
                 await asyncio.sleep(0)
+            if get_sources is not None:
+                source_dir = os.path.join(component_dir, 'source')
+                os.makedirs(os.path.join(base_path, source_dir), exist_ok=True)
+                br = Release()
+                br["Origin"] = origin
+                br["Label"] = archive_description
+                br["Archive"] = suite_name
+                br["Architecture"] = "source"
+                br["Component"] = component
+                bp = os.path.join(source_dir, "Release")
+                f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
+                r.dump(f)
+                f.done()
+    
+                sources_path = os.path.join(source_dir, "Sources")
+                fs = []
+                for suffix, fn in SUFFIXES.items():
+                    fs.append(
+                        es.enter_context(
+                            HashedFileWriter(r, base_path, sources_path + suffix, fn)))
+                async for chunk in get_sources(suite_name, component):
+                    for f in fs:
+                        f.write(chunk)
+                for f in fs:
+                    f.done()
+                cleanup_by_hash_files(
+                    os.path.join(base_path, source_dir),
+                    4 * len(SUFFIXES))
+    
             await asyncio.sleep(0)
 
     logger.debug('Writing Release file for %s', suite_name)
@@ -607,6 +636,7 @@ async def refresh_on_demand_dists(
     await write_suite_files(
         os.path.join(dists_dir, kind, id),
         get_packages=get_packages,
+        get_sources=None,
         package_info_provider=package_info_provider,
         suite_name=f"{kind}/{id}",
         archive_description=description,
@@ -762,6 +792,7 @@ async def publish_suite(
     await write_suite_files(
         suite_path,
         get_packages=partial(get_packages_for_suite, db, package_info_provider),
+        get_sources=None,
         package_info_provider=package_info_provider,
         suite_name=suite.name,
         archive_description=suite.debian_build.archive_description,
