@@ -99,7 +99,7 @@ async def scan_packages(td, arch: Optional[str] = None):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await proc.communicate()
-    for para in Packages.iter_paragraphs(stdout):
+    for para in Packages.iter_paragraphs(stdout, use_apt_pkg=False):
         yield para
     for line in stderr.splitlines(keepends=False):
         if line.startswith(b'dpkg-scanpackages: '):
@@ -122,7 +122,7 @@ async def scan_sources(td):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await proc.communicate()
-    for para in Sources.iter_paragraphs(stdout):
+    for para in Sources.iter_paragraphs(stdout, use_apt_pkg=False):
         yield para
     for line in stderr.splitlines(keepends=False):
         if line.startswith(b'dpkg-scansources: '):
@@ -173,7 +173,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
-            async for para in scan_packages(td):
+            async for para in scan_sources(td):
                 para["Directory"] = os.path.join(
                     suite_name,
                     "pkg",
@@ -285,7 +285,7 @@ async def get_builds_for_changeset(db, cs_id):
         )
 
 
-async def get_builds_for_run(db, run_id, suite_name, component, arch):
+async def get_builds_for_run(db, run_id):
     async with db.acquire() as conn:
         return await conn.fetch(
             "SELECT DISTINCT ON (source) "
@@ -438,35 +438,34 @@ async def write_suite_files(
                     os.path.join(base_path, arch_dir),
                     4 * len(SUFFIXES))
                 await asyncio.sleep(0)
-            if get_sources is not None:
-                source_dir = os.path.join(component_dir, 'source')
-                os.makedirs(os.path.join(base_path, source_dir), exist_ok=True)
-                br = Release()
-                br["Origin"] = origin
-                br["Label"] = archive_description
-                br["Archive"] = suite_name
-                br["Architecture"] = "source"
-                br["Component"] = component
-                bp = os.path.join(source_dir, "Release")
-                f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
-                r.dump(f)
-                f.done()
-    
-                sources_path = os.path.join(source_dir, "Sources")
-                fs = []
-                for suffix, fn in SUFFIXES.items():
-                    fs.append(
-                        es.enter_context(
-                            HashedFileWriter(r, base_path, sources_path + suffix, fn)))
-                async for chunk in get_sources(suite_name, component):
-                    for f in fs:
-                        f.write(chunk)
+            source_dir = os.path.join(component_dir, 'source')
+            os.makedirs(os.path.join(base_path, source_dir), exist_ok=True)
+            br = Release()
+            br["Origin"] = origin
+            br["Label"] = archive_description
+            br["Archive"] = suite_name
+            br["Architecture"] = "source"
+            br["Component"] = component
+            bp = os.path.join(source_dir, "Release")
+            f = es.enter_context(HashedFileWriter(r, base_path, bp, open))
+            r.dump(f)
+            f.done()
+
+            sources_path = os.path.join(source_dir, "Sources")
+            fs = []
+            for suffix, fn in SUFFIXES.items():
+                fs.append(
+                    es.enter_context(
+                        HashedFileWriter(r, base_path, sources_path + suffix, fn)))
+            async for chunk in get_sources(suite_name, component):
                 for f in fs:
-                    f.done()
-                cleanup_by_hash_files(
-                    os.path.join(base_path, source_dir),
-                    4 * len(SUFFIXES))
-    
+                    f.write(chunk)
+            for f in fs:
+                f.done()
+            cleanup_by_hash_files(
+                os.path.join(base_path, source_dir),
+                4 * len(SUFFIXES))
+
             await asyncio.sleep(0)
 
     logger.debug('Writing Release file for %s', suite_name)
