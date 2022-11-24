@@ -148,7 +148,6 @@ def publish(
     forge: Forge,
     target_branch: Branch,
     source_branch: Branch,
-    external_url: Optional[str],
     derived_branch_name: str,
     resume_branch: Optional[Branch] = None,
     dry_run: bool = False,
@@ -167,14 +166,11 @@ def publish(
             'log_id': log_id,
             'campaign': campaign,
             'suite': campaign,   # TODO(jelmer): Backwards compatibility
-            'external_url': external_url,
-            'debdiff_is_empty': debdiff_is_empty,
-            'markdownify_debdiff': markdownify_debdiff,
-            'parseaddr': parseaddr,
             'role': role,
         }
         if codemod_result:
             vs.update(codemod_result)
+            vs['codemod'] = codemod_result
         if debdiff:
             vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
@@ -354,7 +350,6 @@ def publish_one(
     unchanged_id: str,
     source_branch_url: str,
     differ_url: str,
-    external_url: str,
     derived_branch_name: str,
     dry_run: bool = False,
     require_binary_diff: bool = False,
@@ -532,7 +527,6 @@ def publish_one(
                 forge=forge,
                 target_branch=target_branch,
                 source_branch=source_branch,
-                external_url=external_url,
                 derived_branch_name=derived_branch_name,
                 resume_branch=resume_branch,
                 dry_run=dry_run,
@@ -561,6 +555,18 @@ def publish_one(
     return publish_result, derived_branch_name
 
 
+def load_template_env(path):
+    env = Environment(
+        loader=FileSystemLoader(path),
+        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False))
+    env.globals.update({
+        'debdiff_is_empty': debdiff_is_empty,
+        'markdownify_debdiff': markdownify_debdiff,
+        'parseaddr': parseaddr,
+    })
+    return env
+
+
 if __name__ == "__main__":
     import argparse
     import json
@@ -579,10 +585,10 @@ if __name__ == "__main__":
 
     request = json.load(sys.stdin)
 
-    template_env = Environment(
-        loader=FileSystemLoader(args.template_env_path),
-        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
-    )
+    template_env = load_template_env(args.template_env_path)
+    template_env.globals['external_url'] = (
+        request["external_url"].rstrip("/")
+        if request["external_url"] else None)
 
     try:
         publish_result, branch_name = publish_one(
@@ -597,7 +603,6 @@ if __name__ == "__main__":
             role=request["role"],
             log_id=request["log_id"],
             unchanged_id=request["unchanged_id"],
-            external_url=request["external_url"].rstrip("/") if request["external_url"] else None,
             source_branch_url=request["source_branch_url"],
             dry_run=request["dry-run"],
             derived_owner=request.get("derived-owner"),

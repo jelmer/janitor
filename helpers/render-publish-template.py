@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os
 import sys
-from janitor.publish_one import template_env
+from janitor.publish_one import load_template_env
 from janitor.config import read_config
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -28,6 +28,9 @@ parser.add_argument(
 parser.add_argument(
     '--format', type=str, choices=['md', 'txt'], default='md')
 
+parser.add_argument(
+    '--template-env-path', type=str, help='Path to template env')
+
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -35,6 +38,9 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 with open(args.config, "r") as f:
     config = read_config(f)
+
+
+template_env = load_template_env(args.template_env_path)
 
 
 async def process_build(db_location, run_id, role, format):

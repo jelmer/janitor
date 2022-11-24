@@ -402,10 +402,10 @@ async def create_app(
 
     metrics_route = private_app.router.add_get("/metrics", metrics, name="metrics")
 
-    app.topic_notifications = Topic("notifications")
+    app["topic_notifications"] = Topic("notifications")
     ws_notifications_route = app.router.add_get(
         "/ws/notifications",
-        functools.partial(pubsub_handler, app.topic_notifications),  # type: ignore
+        functools.partial(pubsub_handler, app["topic_notifications"]),  # type: ignore
         name="ws-notifications",
     )
 
@@ -436,7 +436,7 @@ async def create_app(
         async def forward_redis(app, name):
             async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
                 await ch.subscribe(name, **{
-                    name: lambda msg: app.topic_notifications.publish(
+                    name: lambda msg: app["topic_notifications"].publish(
                         [name, json.loads(msg['data'])])})
                 await ch.run()
 
