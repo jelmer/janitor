@@ -595,7 +595,7 @@ async def refresh_on_demand_dists(
             if row is None:
                 raise web.HTTPNotFound(text=f"no such run: {id}")
             campaign, max_finish_time = row
-            builds = get_builds_for_run(db, id)
+            builds = await get_builds_for_run(db, id)
             campaign_config = get_campaign_config(config, campaign)
         elif kind == 'cs':
             campaign = await conn.fetchval(
@@ -604,7 +604,7 @@ async def refresh_on_demand_dists(
                 raise web.HTTPNotFound(text=f"no such changeset: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', id)
-            builds = get_builds_for_changeset(db, id)
+            builds = await get_builds_for_changeset(db, id)
             description = f"Change set {id}"
             campaign_config = get_campaign_config(config, campaign)
         else:
@@ -624,7 +624,7 @@ async def refresh_on_demand_dists(
                     raise web.HTTPNotFound(text=f"No such source package: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
-            builds = get_builds_for_changeset(db, cs_id)
+            builds = await get_builds_for_changeset(db, cs_id)
             description = f"Campaign {kind} for {id}"
     if stamp is not None and max_finish_time and max_finish_time.astimezone() < stamp:
         return
@@ -786,7 +786,7 @@ async def publish_suite(
     logger.info("Publishing %s", suite.name)
     distribution = get_distribution(config, suite.debian_build.base_distribution)
     suite_path = os.path.join(dists_directory, suite.name)
-    builds = get_builds_for_suite(db, suite.name)
+    builds = await get_builds_for_suite(db, suite.name)
     await write_suite_files(
         suite_path,
         get_packages=partial(retrieve_packages, package_info_provider, builds),
