@@ -28,7 +28,6 @@ import io
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -41,7 +40,7 @@ from time import mktime
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
-from debian.deb822 import Release, Packages
+from debian.deb822 import Release, Packages, Sources
 
 import gpg
 from gpg.constants.sig import mode as gpg_mode
@@ -84,8 +83,11 @@ class PackageInfoProvider(object):
     async def __aexit__(self, exc_tp, exc_val, exc_tb):
         return False
 
-    async def info_for_run(self, run_id, suite_name, package, arch):
-        raise NotImplementedError(self.info_for_run)
+    async def packages_for_run(self, run_id, suite_name, package, arch):
+        raise NotImplementedError(self.packages_for_run)
+
+    async def sources_for_run(self, run_id, suite_name, package):
+        raise NotImplementedError(self.sources_for_run)
 
 
 async def scan_packages(td, arch: Optional[str] = None):
@@ -114,6 +116,29 @@ async def scan_packages(td, arch: Optional[str] = None):
                 line.rstrip(b'\n').decode())
 
 
+async def scan_sources(td):
+    proc = await asyncio.create_subprocess_exec(
+        "dpkg-scansources", td,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await proc.communicate()
+    for para in Sources.iter_paragraphs(stdout):
+        yield para
+    for line in stderr.splitlines(keepends=False):
+        if line.startswith(b'dpkg-scansources: '):
+            line = line[len(b'dpkg-scansources: '):]
+        if line.startswith(b'info: '):
+            logging.debug('%s', line.rstrip(b'\n').decode())
+        elif line.startswith(b'warning: '):
+            logging.warning('%s', line.rstrip(b'\n').decode())
+        elif line.startswith(b'error: '):
+            logging.error('%s', line.rstrip(b'\n').decode())
+        else:
+            logging.info(
+                'dpkg-scansources error: %s',
+                line.rstrip(b'\n').decode())
+
+
 class GeneratingPackageInfoProvider(PackageInfoProvider):
     def __init__(self, artifact_manager):
         self.artifact_manager = artifact_manager
@@ -125,7 +150,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
         await self.artifact_manager.__aexit__(exc_tp, exc_val, exc_tb)
         return False
 
-    async def info_for_run(self, run_id, suite_name, package, arch):
+    async def packages_for_run(self, run_id, suite_name, package, arch):
         with tempfile.TemporaryDirectory() as td:
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
@@ -137,6 +162,23 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
                     package,
                     run_id,
                     os.path.basename(para["Filename"]),
+                )
+                yield bytes(para)
+                yield b"\n"
+
+        await asyncio.sleep(0)
+
+    async def sources_for_run(self, run_id, suite_name, package):
+        with tempfile.TemporaryDirectory() as td:
+            await self.artifact_manager.retrieve_artifacts(
+                run_id, td, timeout=DEFAULT_GCS_TIMEOUT
+            )
+            async for para in scan_packages(td):
+                para["Directory"] = os.path.join(
+                    suite_name,
+                    "pkg",
+                    package,
+                    run_id,
                 )
                 yield bytes(para)
                 yield b"\n"
@@ -156,7 +198,7 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
         await self.primary_info_provider.__aexit__(exc_tp, exc_val, exc_tb)
         return False
 
-    async def info_for_run(self, run_id, suite_name, package, arch):
+    async def packages_for_run(self, run_id, suite_name, package, arch):
         cache_path = os.path.join(self.cache_directory, arch, run_id)
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         try:
@@ -167,8 +209,25 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
             logger.debug('Retrieving artifacts for %s/%s (%s)',
                          suite_name, package, run_id)
             with open(cache_path, "wb") as f:
-                async for chunk in self.primary_info_provider.info_for_run(
+                async for chunk in self.primary_info_provider.packages_for_run(
                     run_id, suite_name, package, arch=arch
+                ):
+                    f.write(chunk)
+                    yield chunk
+
+    async def sources_for_run(self, run_id, suite_name, package):
+        cache_path = os.path.join(self.cache_directory, 'source', run_id)
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        try:
+            with open(cache_path, "rb") as f:
+                for chunk in f:
+                    yield chunk
+        except FileNotFoundError:
+            logger.debug('Retrieving artifacts for %s/%s (%s)',
+                         suite_name, package, run_id)
+            with open(cache_path, "wb") as f:
+                async for chunk in self.primary_info_provider.sources_for_run(
+                    run_id, suite_name, package
                 ):
                     f.write(chunk)
                     yield chunk
@@ -179,7 +238,7 @@ async def retrieve_packages(info_provider, suite_name, component, arch, rows):
                  len(rows), suite_name, component, arch)
     for package, run_id, build_distribution, build_version in rows:
         try:
-            async for chunk in info_provider.info_for_run(run_id, build_distribution, package, arch=arch):
+            async for chunk in info_provider.packages_for_run(run_id, build_distribution, package, arch=arch):
                 yield chunk
                 await asyncio.sleep(0)
         except ArtifactsMissing:
@@ -317,7 +376,7 @@ class HashedFileWriter(object):
 
 
 async def write_suite_files(
-    base_path, get_packages, package_info_provider, suite_name, archive_description,
+    base_path, *, get_packages, package_info_provider, suite_name, archive_description,
     components, arches, origin, gpg_context,
     timestamp: Optional[datetime] = None
 ):
@@ -547,8 +606,8 @@ async def refresh_on_demand_dists(
         config, campaign_config.debian_build.base_distribution)
     await write_suite_files(
         os.path.join(dists_dir, kind, id),
-        get_packages,
-        package_info_provider,
+        get_packages=get_packages,
+        package_info_provider=package_info_provider,
         suite_name=f"{kind}/{id}",
         archive_description=description,
         components=distribution.component,
@@ -702,8 +761,8 @@ async def publish_suite(
     suite_path = os.path.join(dists_directory, suite.name)
     await write_suite_files(
         suite_path,
-        partial(get_packages_for_suite, db, package_info_provider),
-        package_info_provider,
+        get_packages=partial(get_packages_for_suite, db, package_info_provider),
+        package_info_provider=package_info_provider,
         suite_name=suite.name,
         archive_description=suite.debian_build.archive_description,
         components=distribution.component,
