@@ -88,6 +88,26 @@ class PackageInfoProvider(object):
         raise NotImplementedError(self.info_for_run)
 
 
+async def scan_packages(td):
+    p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert p.stdout
+    assert p.stderr
+    yield from Packages.iter_paragraphs(p.stdout)
+    for line in p.stderr.readlines():
+        if line.startswith(b'dpkg-scanpackages: '):
+            line = line[len(b'dpkg-scanpackages: '):]
+        if line.startswith(b'info: '):
+            logging.debug('%s', line.rstrip(b'\n').decode())
+        elif line.startswith(b'warning: '):
+            logging.warning('%s', line.rstrip(b'\n').decode())
+        elif line.startswith(b'error: '):
+            logging.error('%s', line.rstrip(b'\n').decode())
+        else:
+            logging.info(
+                'dpkg-scanpackages error: %s',
+                line.rstrip(b'\n').decode())
+
+
 class GeneratingPackageInfoProvider(PackageInfoProvider):
     def __init__(self, artifact_manager):
         self.artifact_manager = artifact_manager
@@ -104,10 +124,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
-            p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            assert p.stdout
-            assert p.stderr
-            for para in Packages.iter_paragraphs(p.stdout):
+            for para in scan_packages(td):
                 para["Filename"] = os.path.join(
                     suite_name,
                     "pkg",
@@ -117,19 +134,6 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
                 )
                 yield bytes(para)
                 yield b"\n"
-            for line in p.stderr.readlines():
-                if line.startswith(b'dpkg-scanpackages: '):
-                    line = line[len(b'dpkg-scanpackages: '):]
-                if line.startswith(b'info: '):
-                    logging.debug('%s', line.rstrip(b'\n').decode())
-                elif line.startswith(b'warning: '):
-                    logging.warning('%s', line.rstrip(b'\n').decode())
-                elif line.startswith(b'error: '):
-                    logging.error('%s', line.rstrip(b'\n').decode())
-                else:
-                    logging.info(
-                        'dpkg-scanpackages error: %s',
-                        line.rstrip(b'\n').decode())
 
         await asyncio.sleep(0)
 
@@ -753,7 +757,7 @@ class GeneratorManager(object):
                 self.config,
                 campaign_config,
                 self.gpg_context,
-            ), 'publish %s' % campaign_config.name
+            ), f'publish {campaign_config.name}'
         )
 
 
