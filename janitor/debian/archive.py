@@ -233,7 +233,7 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
                     yield chunk
 
 
-async def retrieve_packages(info_provider, suite_name, component, arch, rows):
+async def retrieve_packages(info_provider, rows, suite_name, component, arch):
     logger.debug('Need to process %d rows for %s/%s/%s',
                  len(rows), suite_name, component, arch)
     for package, run_id, build_distribution, build_version in rows:
@@ -246,10 +246,22 @@ async def retrieve_packages(info_provider, suite_name, component, arch, rows):
             continue
 
 
-async def get_packages_for_suite(db, info_provider, suite_name, component, arch):
-    # TODO(jelmer): Actually query component/arch
+async def retrieve_sources(info_provider, rows, suite_name, component):
+    logger.debug('Need to process %d rows for %s/%s',
+                 len(rows), suite_name, component)
+    for package, run_id, build_distribution, build_version in rows:
+        try:
+            async for chunk in info_provider.sources_for_run(run_id, build_distribution, package):
+                yield chunk
+                await asyncio.sleep(0)
+        except ArtifactsMissing:
+            logger.warning("Artifacts missing for %s (%s), skipping", package, run_id)
+            continue
+
+
+async def get_builds_for_suite(db, suite_name):
     async with db.acquire() as conn:
-        rows = await conn.fetch(
+        return await conn.fetch(
             "SELECT DISTINCT ON (source) "
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
@@ -259,14 +271,10 @@ async def get_packages_for_suite(db, info_provider, suite_name, component, arch)
             suite_name,
         )
 
-    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
-        yield chunk
 
-
-async def get_packages_for_changeset(db, info_provider, cs_id, suite_name, component, arch):
-    # TODO(jelmer): Actually query component/arch
+async def get_builds_for_changeset(db, cs_id):
     async with db.acquire() as conn:
-        rows = await conn.fetch(
+        return await conn.fetch(
             "SELECT DISTINCT ON (source) "
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
@@ -276,14 +284,10 @@ async def get_packages_for_changeset(db, info_provider, cs_id, suite_name, compo
             cs_id,
         )
 
-    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
-        yield chunk
 
-
-async def get_packages_for_run(db, info_provider, run_id, suite_name, component, arch):
-    # TODO(jelmer): Actually query component/arch
+async def get_builds_for_run(db, run_id, suite_name, component, arch):
     async with db.acquire() as conn:
-        rows = await conn.fetch(
+        return await conn.fetch(
             "SELECT DISTINCT ON (source) "
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
@@ -292,9 +296,6 @@ async def get_packages_for_run(db, info_provider, run_id, suite_name, component,
             "ORDER BY debian_build.source, debian_build.version DESC",
             run_id,
         )
-
-    async for chunk in retrieve_packages(info_provider, suite_name, component, arch, rows):
-        yield chunk
 
 
 HASHES = {
@@ -594,8 +595,7 @@ async def refresh_on_demand_dists(
             if row is None:
                 raise web.HTTPNotFound(text=f"no such run: {id}")
             campaign, max_finish_time = row
-            get_packages = partial(
-                get_packages_for_run, db, package_info_provider, id)
+            builds = get_builds_for_run(db, id)
             campaign_config = get_campaign_config(config, campaign)
         elif kind == 'cs':
             campaign = await conn.fetchval(
@@ -604,8 +604,7 @@ async def refresh_on_demand_dists(
                 raise web.HTTPNotFound(text=f"no such changeset: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', id)
-            get_packages = partial(
-                get_packages_for_changeset, db, package_info_provider, id)
+            builds = get_builds_for_changeset(db, id)
             description = f"Change set {id}"
             campaign_config = get_campaign_config(config, campaign)
         else:
@@ -625,8 +624,7 @@ async def refresh_on_demand_dists(
                     raise web.HTTPNotFound(text=f"No such source package: {id}")
             max_finish_time = await conn.fetchval(
                 'SELECT max(finish_time) FROM run WHERE change_set = $1', cs_id)
-            get_packages = partial(
-                get_packages_for_changeset, db, package_info_provider, cs_id)
+            builds = get_builds_for_changeset(db, cs_id)
             description = f"Campaign {kind} for {id}"
     if stamp is not None and max_finish_time and max_finish_time.astimezone() < stamp:
         return
@@ -635,8 +633,8 @@ async def refresh_on_demand_dists(
         config, campaign_config.debian_build.base_distribution)
     await write_suite_files(
         os.path.join(dists_dir, kind, id),
-        get_packages=get_packages,
-        get_sources=None,
+        get_packages=partial(retrieve_packages, package_info_provider, builds),
+        get_sources=partial(retrieve_sources, package_info_provider, builds),
         suite_name=f"{kind}/{id}",
         archive_description=description,
         components=distribution.component,
@@ -788,10 +786,11 @@ async def publish_suite(
     logger.info("Publishing %s", suite.name)
     distribution = get_distribution(config, suite.debian_build.base_distribution)
     suite_path = os.path.join(dists_directory, suite.name)
+    builds = get_builds_for_suite(db, suite.name)
     await write_suite_files(
         suite_path,
-        get_packages=partial(get_packages_for_suite, db, package_info_provider),
-        get_sources=None,
+        get_packages=partial(retrieve_packages, package_info_provider, builds),
+        get_sources=partial(retrieve_sources, package_info_provider, builds),
         suite_name=suite.name,
         archive_description=suite.debian_build.archive_description,
         components=distribution.component,
