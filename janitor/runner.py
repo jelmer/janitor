@@ -20,7 +20,6 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
-from functools import partial
 import json
 from io import BytesIO
 import logging
@@ -29,7 +28,6 @@ import ssl
 import sys
 import tempfile
 from typing import (
-    Awaitable,
     List,
     Any,
     Optional,
@@ -38,7 +36,6 @@ from typing import (
     Type,
     Set,
     Iterator,
-    Callable,
 )
 import uuid
 import warnings
@@ -94,7 +91,7 @@ from .artifacts import (
     store_artifacts_with_backup,
     upload_backup_artifacts,
 )
-from .config import read_config, get_campaign_config, get_distribution, Config, Campaign
+from .config import read_config, get_campaign_config, get_distribution, Campaign
 from .debian import (
     dpkg_vendor,
 )
@@ -536,11 +533,16 @@ class JanitorResult(object):
             "package": self.package,
             "codebase": self.codebase,
             "campaign": self.campaign,
+            "change_set": self.change_set,
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
+            "followup_actions": self.followup_actions,
             "failure_details": self.failure_details,
             "failure_stage": self.failure_stage,
+            "duration": self.duration.total_seconds(),
+            "finish_time": self.finish_time.isoformat(),
+            "start_time": self.start_time.isoformat(),
             "transient": self.transient,
             "target": ({
                 "name": self.builder_result.kind,
@@ -1324,117 +1326,6 @@ async def store_run(
         )
 
 
-async def followup_run(
-        config: Config, database: asyncpg.pool.Pool,
-        active_run: ActiveRun, result: JanitorResult) -> None:
-    if result.code == "success" and active_run.campaign not in ("unchanged", "debianize"):
-        async with database.acquire() as conn:
-            run = await conn.fetchrow(
-                "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
-                result.package, result.main_branch_revision.decode('utf-8')
-            )
-            if run is None:
-                logging.info("Scheduling control run for %s.", active_run.package)
-                await do_schedule_control(
-                    conn,
-                    package=active_run.package,
-                    codebase=active_run.codebase,
-                    main_branch_revision=result.main_branch_revision,
-                    estimated_duration=result.duration,
-                    requestor="control",
-                )
-            # see if there are any packages that failed because
-            # they lacked this one
-            if getattr(result.builder_result, 'build_distribution', None) is not None:
-                dependent_suites = [
-                    campaign.name for campaign in config.campaign
-                    if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
-                runs_to_retry = await conn.fetch(
-                    "SELECT package, codebase, suite AS campaign FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
-                    active_run.package, dependent_suites)
-                for run_to_retry in runs_to_retry:
-                    try:
-                        await do_schedule(
-                            conn, package=run_to_retry['package'],
-                            change_set=result.change_set,
-                            bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % active_run.package,
-                            campaign=run_to_retry['campaign'],
-                            codebase=run_to_retry['codebase'])
-                    except CandidateUnavailable as e:
-                        logging.warning(
-                            'Candidate unavailable while trying to reschedule %s/%s: %s',
-                            run_to_retry['campaign'], run_to_retry['package'], e)
-    
-    if result.followup_actions and result.code != 'success':
-        from .missing_deps import schedule_new_package, schedule_update_package, IncompleteUpstreamInfo
-        requestor = 'schedule-missing-deps (needed by %s)' % active_run.package
-        async with database.acquire() as conn:
-            for scenario in result.followup_actions:
-                for action in scenario:
-                    if action['action'] == 'new-package':
-                        try:
-                            await schedule_new_package(
-                                conn, action['upstream-info'],
-                                config,
-                                requestor=requestor, change_set=result.change_set)
-                        except IncompleteUpstreamInfo as e:
-                            logging.warning(
-                                'Unable to schedule follow up, '
-                                'incomplete upstream info: %r',
-                                e.upstream_info)
-                    elif action['action'] == 'update-package':
-                        await schedule_update_package(
-                            conn, action['package'], action['desired-version'],
-                            requestor=requestor, change_set=result.change_set)
-        from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
-        problem = reconstruct_problem(result.code, result.failure_stage, result.failure_details)
-        if problem is not None:
-            requirement = problem_to_upstream_requirement(problem)
-        else:
-            requirement = None
-        if requirement:
-            logging.info('TODO: attempt to find a resolution for %r', requirement)
-
-    # If there was a successful run, trigger builds for any
-    # reverse dependencies in the same changeset.
-    if active_run.campaign in ('fresh-releases', 'fresh-snapshots') and result.code == 'success':
-        from breezy.plugins.debian.apt_repo import RemoteApt
-        from .debian.followup import find_reverse_source_deps
-        # Find all binaries that have changed in this run
-        debian_result = result.builder_result
-        if result.builder_result is None:
-            logging.warning(
-                'Missing debian result for run %s (%s/%s)',
-                result.log_id, result.package, result.campaign)
-            binary_packages = []
-            new_build_version = None   # noqa: F841
-            old_build_version = None   # noqa: F841
-        else:
-            binary_packages = debian_result.binary_packages
-            new_build_version = debian_result.build_version   # noqa: F841
-            # TODO(jelmer): Get old_build_version from base_distribution
-
-        campaign_config = get_campaign_config(config, active_run.campaign)
-        base_distribution = get_distribution(config, campaign_config.debian_build.base_distribution)
-        apt = RemoteApt(
-            base_distribution.archive_mirror_uri, base_distribution.name,
-            base_distribution.component)
-
-        need_control = await asyncio.to_thread(find_reverse_source_deps, apt, binary_packages)
-
-        # TODO(jelmer): check test dependencies?
-
-        async with database.acquire() as conn:
-            for row in await conn.fetch(
-                    'SELECT name, codebase FROM package WHERE name = ANY($1::text[])',
-                    need_control):
-                logging.info("Scheduling control run for %s (%s).", row['codebase'],
-                             row['name'])
-                await do_schedule_control(
-                    conn, package=row['name'], change_set=result.change_set,
-                    requestor="control", codebase=row['codebase'])
-
-
 class RunExists(Exception):
     """Run already exists."""
 
@@ -1451,8 +1342,6 @@ class QueueProcessor(object):
         database: asyncpg.pool.Pool,
         redis,
         run_timeout: int,
-        followup_run: Optional[
-            Callable[[ActiveRun, JanitorResult], Awaitable[None]]] = None,
         logfile_manager: Optional[LogFileManager] = None,
         artifact_manager: Optional[ArtifactManager] = None,
         public_vcs_managers: Optional[Dict[str, VcsManager]] = None,
@@ -1468,7 +1357,6 @@ class QueueProcessor(object):
         """
         self.database = database
         self.redis = redis
-        self.followup_run = followup_run
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
         self.public_vcs_managers = public_vcs_managers
@@ -1706,8 +1594,6 @@ class QueueProcessor(object):
             if result.builder_result:
                 await result.builder_result.store(conn, result.log_id)
             await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
-        if self.followup_run:
-            await self.followup_run(active_run, result)
 
         await self.redis.publish('result', json.dumps(result.json()))
         await self.unclaim_run(result.log_id)
@@ -2682,7 +2568,6 @@ async def main(argv=None):
         stack.push_async_callback(redis.close)
         queue_processor = QueueProcessor(
             db, redis,
-            followup_run=partial(followup_run, config, db),
             run_timeout=args.run_timeout,
             logfile_manager=logfile_manager,
             artifact_manager=artifact_manager,
