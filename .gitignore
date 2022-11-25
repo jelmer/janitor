@@ -27,3 +27,4 @@ bin
 man
 share
 .hypothesis
+.tox
