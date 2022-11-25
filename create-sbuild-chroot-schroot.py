@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import pwd
 import shutil
 import subprocess
 import tempfile
