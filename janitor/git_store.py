@@ -182,7 +182,7 @@ async def handle_klaus(request):
         def __init__(self, codebase, repo):
             super(Klaus, self).__init__("klaus")
             self.codebase = codebase
-            self.valid_repos = {codebase: FancyRepo(repo._transport.local_abspath("."), namespace=None)}
+            self.valid_repos = {codebase: FancyRepo(repo.path, namespace=None)}
 
         def should_use_ctags(self, git_repo, git_commit):
             return False
