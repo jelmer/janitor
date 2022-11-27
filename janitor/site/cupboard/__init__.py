@@ -181,7 +181,7 @@ async def handle_result_code(request):
             table = "last_runs"
         else:
             table = "last_effective_runs"
-    query = ('SELECT * FROM %s AS run '
+    query = ('SELECT *, suite AS campaign FROM %s AS run '
              'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])' % table)
     if not include_historical:
         query += (
