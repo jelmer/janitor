@@ -1766,6 +1766,7 @@ async def _find_active_run(request):
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
         raise web.HTTPNotFound(text="No such current run: %s" % run_id)
+    return active_run
 
 
 @routes.get("/log/{run_id}", name="log-index")
@@ -1778,9 +1779,6 @@ async def handle_log_index(request):
 @routes.post("/kill/{run_id}", name="kill")
 async def handle_kill(request):
     active_run = await _find_active_run(request)
-    if not active_run:
-        raise web.HTTPNotFound(
-            text='no active run %s' % request.match_info['run_id'])
     ret = active_run.json()
     try:
         await active_run.backchannel.kill()
