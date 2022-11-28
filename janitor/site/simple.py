@@ -61,9 +61,6 @@ from .setup import (
 )
 from .webhook import parse_webhook, is_webhook_request
 
-from ..config import (
-    get_campaign_config,
-)
 from ..schedule import do_schedule
 
 
@@ -348,10 +345,6 @@ async def process_webhook(request, db):
                 for suite in await state.iter_publishable_suites(
                         conn, package['name']
                 ):
-                    try:
-                        campaign = get_campaign_config(request.app['config'], suite)
-                    except KeyError:
-                        continue
                     if suite not in rescheduled.get(package['name'], []):
                         await do_schedule(
                             conn, package['name'], suite, requestor=requestor, bucket="hook"
