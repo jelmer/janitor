@@ -2346,14 +2346,18 @@ async def handle_finish(request):
                     worker_result = WorkerResult.from_json(await part.json())
                 elif part.filename is None:
                     return web.json_response(
-                        {"reason": "Part without filename", "headers": dict(part.headers)},
-                        status=400,
-                    )
+                        {"reason": "Part without filename",
+                         "headers": dict(part.headers)},
+                        status=400)
                 else:
                     filenames.append(part.filename)
                     output_path = os.path.join(output_directory, part.filename)
                     with open(output_path, "wb") as f:
-                        f.write(await part.read())
+                        try:
+                            f.write(await part.read())
+                        except ConnectionResetError as e:
+                            return web.json_response(
+                                {"reason": str(e)}, status=400)
 
         if worker_result is None:
             return web.json_response({"reason": "Missing result JSON"}, status=400)
