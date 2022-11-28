@@ -269,7 +269,7 @@ class Target(object):
     def validate(self, local_tree, subpath, config):
         pass
 
-    def make_changes(self, local_tree, subpath, argv, log_directory,
+    def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
         raise NotImplementedError(self.make_changes)
 
@@ -295,7 +295,7 @@ class DebianTarget(Target):
                 'defaulting to auto.', uc)
             self.update_changelog = None
 
-    def make_changes(self, local_tree, subpath, argv, log_directory,
+    def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
         from silver_platter.debian.apply import (
             script_runner as debian_script_runner,
@@ -391,7 +391,7 @@ class GenericTarget(Target):
     def __init__(self, env):
         self.env = env
 
-    def make_changes(self, local_tree, subpath, argv, log_directory,
+    def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
         if not argv:
             return GenericCommandResult(
@@ -926,8 +926,8 @@ def run_worker(
             try:
                 changer_result = build_target.make_changes(
                     ws.local_tree, subpath, command,
-                    output_directory, resume_codemod_result
-                )
+                    log_directory=output_directory,
+                    resume_metadata=resume_codemod_result)
                 if not ws.any_branch_changes():
                     raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ), transient=False)
             except WorkerFailure as e:
