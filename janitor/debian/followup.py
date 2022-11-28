@@ -17,9 +17,13 @@
 
 
 from debian.deb822 import PkgRelation
+from debmutate.control import suppress_substvar_warnings
+import warnings
 
 
 def has_relation(v, pkg):
+    if not v:
+        return False
     for r in PkgRelation.parse_relations(v):
         for o in r:
             if o['name'] == pkg:
