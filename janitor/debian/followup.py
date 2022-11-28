@@ -17,8 +17,6 @@
 
 
 from debian.deb822 import PkgRelation
-from debmutate.control import suppress_substvar_warnings
-import warnings
 
 
 def has_relation(v, pkg):
