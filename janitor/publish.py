@@ -575,10 +575,8 @@ async def consider_publish_run(
         )
         return {}
     campaign_config = get_campaign_config(config, run.campaign)
-    # TODO(jelmer): next try in SQL query
     attempt_count = await get_publish_attempt_count(
-        conn, run.revision, {"differ-unreachable"}
-    )
+        conn, run.revision, {"differ-unreachable"})
     next_try_time = calculate_next_try_time(run.finish_time, attempt_count)
     if datetime.utcnow() < next_try_time:
         logger.info(
@@ -619,8 +617,7 @@ async def consider_publish_run(
     ) in unpublished_branches:
         if publish_mode is None:
             logger.warning(
-                "%s: No publish mode for branch with role %s", run.id, role
-            )
+                "%s: No publish mode for branch with role %s", run.id, role)
             missing_publish_mode_count.labels(role=role).inc()
             continue
         if role == 'main' and None in actual_modes.values():
