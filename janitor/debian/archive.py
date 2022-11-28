@@ -722,11 +722,11 @@ async def create_app(generator_manager, config, dists_dir, db):
         "/dists/{kind:cs|run|" + CAMPAIGNS_REGEX + "}/{id}/{file:InRelease|Release.gpg|Release}",
         serve_on_demand_dists_release_file)
     app.router.add_get(
-        "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
+        "/dists/{kind:cs|run|" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
         r"{file:(Packages|Sources)(|\..*)}",
         serve_on_demand_dists_component_file)
     app.router.add_get(
-        "/dists/{kind:cs|run" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
+        "/dists/{kind:cs|run|" + CAMPAIGNS_REGEX + "}/{id}/{component}/{arch}/"
         r"by-hash/{hash_type}/{hash}",
         serve_on_demand_dists_component_hash_file)
     return app
