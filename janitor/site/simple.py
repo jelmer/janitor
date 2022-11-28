@@ -352,8 +352,6 @@ async def process_webhook(request, db):
                         campaign = get_campaign_config(request.app['config'], suite)
                     except KeyError:
                         continue
-                    if not campaign.webhook_trigger:
-                        continue
                     if suite not in rescheduled.get(package['name'], []):
                         await do_schedule(
                             conn, package['name'], suite, requestor=requestor, bucket="hook"
