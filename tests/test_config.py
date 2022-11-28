@@ -86,7 +86,6 @@ campaign {
     build_suffix: "jan+unchanged"
     base_distribution: "unstable"
   }
-  webhook_trigger: false
 }
 """))
 
