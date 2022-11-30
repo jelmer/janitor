@@ -216,12 +216,10 @@ class WorkerFailure(Exception):
     def __init__(
             self, code: str, description: str,
             details: Optional[Any] = None, stage=None,
-            followup_actions: Optional[List[Any]] = None,
             transient: Optional[bool] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
-        self.followup_actions = followup_actions
         self.stage = stage
         self.transient = transient
 
@@ -236,8 +234,6 @@ class WorkerFailure(Exception):
             'transient': self.transient,
             'stage': "/".join(self.stage) if self.stage else None,
         }
-        if self.followup_actions:
-            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 
@@ -371,7 +367,7 @@ class DebianTarget(Target):
             raise WorkerFailure(
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details, followup_actions=e.followup_actions) from e
+                details=e.details) from e
 
     def validate(self, local_tree, subpath, config):
         from .debian.validate import validate_from_config, ValidateError
@@ -434,7 +430,7 @@ class GenericTarget(Target):
             raise WorkerFailure(
                 e.code, e.description,
                 stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details, followup_actions=e.followup_actions) from e
+                details=e.details) from e
 
 
 @backoff.on_exception(
