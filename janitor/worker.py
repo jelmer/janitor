@@ -32,7 +32,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Any, Optional, List, Dict, Tuple, cast
 import warnings
 
 from aiohttp import (
@@ -446,13 +446,14 @@ def import_branches_git(
         tags: Optional[Dict[str, bytes]],
         update_current: bool = True):
     from breezy.repository import InterRepository
+    from breezy.git.repository import GitRepository
     from dulwich.objects import ZERO_SHA
 
     # The server is expected to have repositories ready for us, so we don't create
     # the repository if it is missing.
     vcs_result_controldir = ControlDir.open(repo_url)
 
-    repo = vcs_result_controldir.open_repository()
+    repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
     def get_changed_refs(refs):
         changed_refs: Dict[bytes, Tuple[bytes, Optional[bytes]]] = {}

@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 import traceback
+from typing import Optional
 
 from ognibuild.session import SessionSetupFailure
 from ognibuild.dist import (
@@ -124,6 +125,8 @@ if __name__ == '__main__':
                 sys.exit(1)
             raise
 
+        packaging_tree: Optional[WorkingTree]
+        packaging_debian_path: Optional[str]
         if args.packaging:
             (packaging_tree,
              packaging_debian_path) = WorkingTree.open_containing(
