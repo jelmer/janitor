@@ -65,7 +65,7 @@ class BuildFailure(Exception):
         return ret
 
 
-def build(local_tree, subpath, output_directory, chroot=None, command=None,
+def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
           suffix=None, distribution=None, last_build_version=None,
           lintian_profile=None, lintian_suppress_tags=None, committer=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
@@ -163,7 +163,9 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                                 'Unable to convert error to upstream requirement: %r',
                                 e.error)
                             actions = None
-                    raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions) from e
+                    raise BuildFailure(
+                        code, e.description, stage=e.stage, details=details,
+                        followup_actions=actions) from e
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
@@ -193,7 +195,7 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
     apt_repository = config.get('base-apt-repository')
     apt_repository_key = config.get('base-apt-repository-signed-by')
     extra_repositories = config.pop('build-extra-repositories', [])
-    dep_server_url = config.get('ognibuild-dep-server')
+    dep_server_url = config.get('dep_server_url')
     committer = env.get("COMMITTER")
     uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
     if uc == "auto":
