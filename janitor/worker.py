@@ -455,7 +455,7 @@ def import_branches_git(
     except NotBranchError:
         # The server is expected to have repositories ready for us, unless
         # we're working locally.
-        vcs_result_controldir = BareGitControlDirFormat.initialize(repo_url)
+        vcs_result_controldir = BareGitControlDirFormat().initialize(repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
