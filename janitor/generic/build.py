@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 import traceback
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 from ognibuild.build import run_build, BUILD_LOG_FILENAME
 from ognibuild.test import run_test
@@ -41,13 +41,11 @@ class BuildFailure(Exception):
 
     def __init__(self, code: str, description: str, *,
                  details: Optional[Any] = None,
-                 stage=None,
-                 followup_actions: Optional[List[Any]] = None) -> None:
+                 stage=None) -> None:
         self.code = code
         self.description = description
         self.details = details
         self.stage = stage
-        self.followup_actions = followup_actions
 
     def json(self):
         ret = {
@@ -56,8 +54,6 @@ class BuildFailure(Exception):
             'details': self.details,
             'stage': self.stage,
         }
-        if self.followup_actions:
-            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 

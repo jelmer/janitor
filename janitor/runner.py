@@ -493,7 +493,6 @@ class JanitorResult(object):
             self.failure_stage = worker_result.stage
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
-            self.followup_actions = worker_result.followup_actions
             if worker_result.refreshed:
                 self.resume_from = None
             else:
@@ -519,7 +518,6 @@ class JanitorResult(object):
             self.failure_stage = None
             self.target_branch_url = None
             self.remotes = {}
-            self.followup_actions = []
             self.resume_from = None
             self.transient = transient
             self.codebase = codebase
@@ -537,7 +535,6 @@ class JanitorResult(object):
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
-            "followup_actions": self.followup_actions,
             "failure_details": self.failure_details,
             "failure_stage": self.failure_stage,
             "duration": self.duration.total_seconds(),
@@ -616,7 +613,6 @@ class WorkerResult(object):
     finish_time: Optional[datetime] = None
     queue_id: Optional[int] = None
     worker_name: Optional[str] = None
-    followup_actions: Optional[List[Any]] = None
     refreshed: bool = False
     target_branch_url: Optional[str] = None
     branch_url: Optional[str] = None
@@ -683,7 +679,6 @@ class WorkerResult(object):
                 int(worker_result["queue_id"])
                 if "queue_id" in worker_result else None),
             worker_name=worker_result.get("worker_name"),
-            followup_actions=worker_result.get("followup_actions"),
             refreshed=worker_result.get("refreshed", False),
             target_branch_url=worker_result.get("target_branch_url", None),
             branch_url=worker_result.get("branch_url"),
@@ -1263,7 +1258,6 @@ async def store_run(
     failure_stage: Optional[str] = None,
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
-    followup_actions: Optional[Any] = None,
     failure_transient: Optional[bool] = None,
     codebase: Optional[str] = None,
 ):
@@ -1280,10 +1274,10 @@ async def store_run(
         "revision, result, suite, vcs_type, branch_url, subpath, logfilenames, "
         "value, worker, result_tags, "
         "resume_from, failure_details, failure_stage, target_branch_url, change_set, "
-        "followup_actions, failure_transient, codebase) "
+        "failure_transient, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
         "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, "
-        "$24, $25, $26, $27, $28)",
+        "$24, $25, $26, $27)",
         run_id,
         command,
         description,
@@ -1309,7 +1303,6 @@ async def store_run(
         failure_stage,
         target_branch_url,
         change_set,
-        followup_actions,
         failure_transient,
         codebase,
     )
@@ -1580,7 +1573,6 @@ class QueueProcessor(object):
                     resume_from=result.resume_from,
                     target_branch_url=result.target_branch_url,
                     change_set=result.change_set,
-                    followup_actions=result.followup_actions,
                     failure_transient=result.transient,
                     codebase=result.codebase,
                 )
