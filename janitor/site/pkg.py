@@ -61,6 +61,7 @@ from ..vcs import VcsManager
 FAIL_BUILD_LOG_LEN = 15
 
 WORKER_LOG_FILENAME = "worker.log"
+CODEMOD_LOG_FILENAME = "codemod.log"
 
 
 def find_build_log_failure(logf, length):
@@ -292,13 +293,43 @@ async def generate_run_file(
     if has_log(WORKER_LOG_FILENAME):
         kwargs["worker_log_name"] = WORKER_LOG_FILENAME
 
+    if has_log(CODEMOD_LOG_FILENAME):
+        kwargs["codemod_log_name"] = CODEMOD_LOG_FILENAME
+
     if has_log(DIST_LOG_FILENAME):
         kwargs["dist_log_name"] = DIST_LOG_FILENAME
 
     kwargs["get_log"] = get_log
-    if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
-        kwargs["primary_log"] = "worker"
-    elif has_log(BUILD_LOG_FILENAME):
+
+    if run.get('failure_stage'):
+        if run['failure_stage'] == 'codemod/dist':
+            primary_log = "dist"
+        if run['failure_stage'].split('/')[0] == 'codemod':
+            primary_log = "codemod"
+        elif run['failure_stage'].split('/')[0] == 'build':
+            primary_log = "build"
+        else:
+            primary_log = "worker"
+    else:
+        # Legacy runs
+        if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
+            primary_log = "worker"
+        elif has_log(BUILD_LOG_FILENAME):
+            primary_log = "build"
+        elif has_log(DIST_LOG_FILENAME) and run['result_code'].startswith('dist-'):
+            primary_log = "dist"
+        elif has_log(WORKER_LOG_FILENAME):
+            primary_log = "worker"
+
+    if primary_log == "dist":
+        logf = await get_log(DIST_LOG_FILENAME)
+        line_count, include_lines, highlight_lines = find_dist_log_failure(
+            logf, FAIL_BUILD_LOG_LEN
+        )
+        kwargs["dist_log_line_count"] = line_count
+        kwargs["dist_log_include_lines"] = include_lines
+        kwargs["dist_log_highlight_lines"] = highlight_lines
+    elif primary_log == "build":
         kwargs["earlier_build_log_names"] = []
         i = 1
         while has_log(BUILD_LOG_FILENAME + ".%d" % i):
@@ -313,18 +344,8 @@ async def generate_run_file(
         kwargs["build_log_line_count"] = line_count
         kwargs["build_log_include_lines"] = include_lines
         kwargs["build_log_highlight_lines"] = highlight_lines
-        kwargs["primary_log"] = "build"
-    elif has_log(DIST_LOG_FILENAME) and run['result_code'].startswith('dist-'):
-        kwargs["primary_log"] = "dist"
-        logf = await get_log(DIST_LOG_FILENAME)
-        line_count, include_lines, highlight_lines = find_dist_log_failure(
-            logf, FAIL_BUILD_LOG_LEN
-        )
-        kwargs["dist_log_line_count"] = line_count
-        kwargs["dist_log_include_lines"] = include_lines
-        kwargs["dist_log_highlight_lines"] = highlight_lines
-    elif has_log(WORKER_LOG_FILENAME):
-        kwargs["primary_log"] = "worker"
+
+    kwargs["primary_log"] = primary_log
 
     return kwargs
 
