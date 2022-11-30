@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 import traceback
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 from ognibuild.build import run_build, BUILD_LOG_FILENAME
 from ognibuild.test import run_test

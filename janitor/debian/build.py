@@ -15,11 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
 import os
 import logging
 import sys
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 from ognibuild.debian.apt import AptManager
 from ognibuild.debian.fix_build import build_incrementally
