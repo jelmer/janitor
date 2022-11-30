@@ -355,63 +355,59 @@ cd {{ package }}
     <ul>
         {% for k, v in blockers.items() %}
             <li>
-                {% if v.result %}
-                    ☑
-                {% else %}
-                    ☒
-                {% endif %}
-                {% set r = v.result %}
-                {% set d = v.details %}
-                {% if k == 'removed' %}
-                    {% if r %}
+                {%- if v.result -%}☑ {% else -%}☒ {% endif -%}
+                {% set r = v.result -%}
+                {%- set d = v.details -%}
+                {%- if k == 'removed' -%}
+                    {%- if r -%}
                         package has not been removed from the archive
-                    {% else %}
+                    {%- else -%}
                         package has been removed from the archive
-                    {% endif %}
-                {% elif k == 'qa_review' %}
-                    {% if not d.needs_review and d.status == 'rejected' %}
+                    {%- endif -%}
+                {%- elif k == 'qa_review' -%}
+                    {%- if not d.needs_review and d.status == 'rejected' -%}
                         review not required but run was rejected
-                    {% elif d.status == 'approved' %}
+                    {%- elif d.status == 'approved' -%}
                         run was approved
-                    {% elif not d.needs_review %}
+                    {%- elif not d.needs_review -%}
                         review not required
-                    {% else %}
+                    {%- else -%}
                         not yet reviewed, but review needed
-                    {% endif %}
-                {% elif k == 'backoff' %}
+                    {%- endif -%}
+                {%- elif k == 'backoff' -%}
                     {{ d.attempt_count }} publish attempts so far.
-                    {% if r %}
+                    {%- if r -%}
                         not currently attempting to back off
-                    {% else %}
+                    {%- else -%}
                         next attempt after {{ d.next_try_time }}
-                    {% endif %}
-                {% elif k == 'command' %}
-                    {% if r %}
+                    {%- endif -%}
+                {%- elif k == 'command' -%}
+                    {%- if r -%}
                         command has not changed
-                    {% else %}
+                    {%- else -%}
                         command changed from <code>{{ d.actual }}</code> to <code>{{ d.correct }}</code>
-                    {% endif %}
-                {% elif k == 'propose_rate_limit' %}
-                    {% if r %}
+                    {%- endif -%}
+                {%- elif k == 'propose_rate_limit' -%}
+                    {%- if r -%}
                         proposals not currently being rate-limited for maintainer {{ d.bucket }}
-                    {% else %}
+                    {%- else -%}
                         merge proposals for the package maintainer {{ d.bucket }} are currently being rate-limited (open: {{ d.open }}, max open: {{ d.max_open }})
-                    {% endif %}
-                {% elif k == 'success' %}
-                    {% if r %}
+                    {%- endif -%}
+                {%- elif k == 'success' -%}
+                    {%- if r -%}
                         run was successful
-                    {% else %}
+                    {%- else -%}
                         run was not successful
-                    {% endif %}
-                {% elif k == 'change_set' %}
-                    {% if r %}
+                    {%- endif -%}
+                {%- elif k == 'change_set' -%}
+                    {%- if r -%}
                         change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
-                    {% else %}
+                    {%- else -%}
                         change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
-                    {% endif %}
-                {% else %}
+                    {%- endif -%}
+                {%- else -%}
                     {{ k }}
-                {% endif %}
+                {%- endif -%}
             </li>
         {% endfor %}
     </ul>
