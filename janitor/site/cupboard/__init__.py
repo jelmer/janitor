@@ -163,6 +163,40 @@ async def handle_result_codes(request):
             "campaign": campaign, "all_campaigns": all_campaigns}
 
 
+@routes.get("/cupboard/failure-stages/", name="failure-stage-list")
+@html_template("cupboard/failure-stage-index.html", headers={"Vary": "Cookie"})
+async def handle_failure_stages(request):
+    campaign = request.query.get("campaign")
+    include_transient = request.query.get("include_transient") == "on"
+    include_historical = request.query.get("include_historical") == "on"
+    if campaign is not None and campaign.lower() == "_all":
+        campaign = None
+    all_campaigns = [c.name for c in request.app['config'].campaign]
+    args = [[campaign] if campaign else all_campaigns]
+    async with request.app.database.acquire() as conn:
+        if include_transient:
+            query = """\
+    select failure_stage, count(failure_stage) from last_runs AS run
+    """
+        else:
+            query = """\
+    select failure_stage, count(failure_stage) from last_effective_runs AS run
+    """
+        query += " where suite = ANY($1::text[])"
+        if not include_historical:
+            query += (
+                " AND EXISTS (SELECT FROM candidate WHERE "
+                "run.package = candidate.package AND "
+                "run.suite = candidate.suite AND "
+                "(run.change_set = candidate.change_set OR candidate.change_set is NULL))")
+        query += " group by 1"
+        return {
+            "include_transient": include_transient,
+            "include_historical": include_historical,
+            "failure_stages": await conn.fetch(query, *args),
+            "campaign": campaign, "all_campaigns": all_campaigns}
+
+
 @routes.get("/cupboard/result-codes/{code}", name="result-code")
 @html_template("cupboard/result-code.html", headers={"Vary": "Cookie"})
 async def handle_result_code(request):
