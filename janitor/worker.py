@@ -445,11 +445,16 @@ def import_branches_git(
         update_current: bool = True):
     from breezy.repository import InterRepository
     from breezy.git.repository import GitRepository
+    from breezy.git.dir import BareLocalGitControlDirFormat
     from dulwich.objects import ZERO_SHA
 
-    # The server is expected to have repositories ready for us, so we don't create
-    # the repository if it is missing.
-    vcs_result_controldir = ControlDir.open(repo_url)
+    try:
+        vcs_result_controldir = ControlDir.open(repo_url)
+    except NotBranchError:
+        # The server is expected to have repositories ready for us, unless
+        # we're working locally.
+        vcs_result_controldir = BareLocalGitControlDirFormat().initialize(
+            repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
@@ -1520,11 +1525,13 @@ async def main(argv=None):
     parser.add_argument(
         '--campaign', type=str, help='Request run for specified campaign')
 
-    # Unused, here for backwards compatibility.
-    parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
     parser.add_argument("--gcp-logging", action="store_true")
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
-    parser.add_argument("--my-url", type=str, default=None)
+    parser.add_argument(
+        "--external-address", type=str,
+        help="IP / hostname this instance can be reached on by runner")
+    parser.add_argument("--my-url", type=str,
+                        help="URL this instance can be reached on by runner")
     parser.add_argument(
         "--loop", action="store_true", help="Keep building until the queue is empty")
     parser.add_argument(
@@ -1615,12 +1622,17 @@ async def main(argv=None):
 
     if args.my_url:
         my_url = yarl.URL(args.my_url)
+    elif args.external_address:
+        my_url = yarl.URL.build(
+            scheme='http', host=args.external_address, port=site_port)
     elif 'MY_IP' in os.environ:
-        my_url = yarl.URL('http://%s:%d/' % (os.environ['MY_IP'], site_port))
+        my_url = yarl.URL.build(
+            scheme='http', host=os.environ['MY_IP'], port=site_port)
     elif is_gce_instance():
         external_ip = gce_external_ip()
         if external_ip:
-            my_url = yarl.URL('http://%s:%d/' % (external_ip, site_port))
+            my_url = yarl.URL.build(
+                scheme='http', host=external_ip, port=site_port)
         else:
             my_url = None
     # TODO(jelmer): Find out kubernetes IP?
