@@ -46,11 +46,10 @@ class BuildFailure(Exception):
     """Building failed."""
 
     def __init__(self, code: str, description: str, stage: Optional[str] = None,
-                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+                 details: Optional[Any] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
-        self.followup_actions = followup_actions
         self.stage = stage
 
     def json(self):
@@ -60,8 +59,6 @@ class BuildFailure(Exception):
             'details': self.details,
             'stage': self.stage,
         }
-        if self.followup_actions:
-            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 
@@ -148,24 +145,8 @@ def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
                         details = e.error.json()
                     except NotImplementedError:
                         details = None
-                        actions = None
-                    else:
-                        from .missing_deps import resolve_requirement
-                        from ognibuild.buildlog import problem_to_upstream_requirement
-                        # Maybe there's a follow-up action we can consider?
-                        req = problem_to_upstream_requirement(e.error)
-                        if req:
-                            actions = asyncio.run(resolve_requirement(apt, req, dep_server_url))
-                            if actions:
-                                logging.info('Suggesting follow-up actions: %r', actions)
-                        else:
-                            logging.info(
-                                'Unable to convert error to upstream requirement: %r',
-                                e.error)
-                            actions = None
                     raise BuildFailure(
-                        code, e.description, stage=e.stage, details=details,
-                        followup_actions=actions) from e
+                        code, e.description, stage=e.stage, details=details) from e
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
