@@ -15,11 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
 import os
 import logging
 import sys
-from typing import Optional, List, Any
+from typing import Optional, Any
 
 from ognibuild.debian.apt import AptManager
 from ognibuild.debian.fix_build import build_incrementally
@@ -46,11 +45,10 @@ class BuildFailure(Exception):
     """Building failed."""
 
     def __init__(self, code: str, description: str, stage: Optional[str] = None,
-                 details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
+                 details: Optional[Any] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
-        self.followup_actions = followup_actions
         self.stage = stage
 
     def json(self):
@@ -60,12 +58,10 @@ class BuildFailure(Exception):
             'details': self.details,
             'stage': self.stage,
         }
-        if self.followup_actions:
-            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 
-def build(local_tree, subpath, output_directory, chroot=None, command=None,
+def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
           suffix=None, distribution=None, last_build_version=None,
           lintian_profile=None, lintian_suppress_tags=None, committer=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
@@ -148,22 +144,8 @@ def build(local_tree, subpath, output_directory, chroot=None, command=None,
                         details = e.error.json()
                     except NotImplementedError:
                         details = None
-                        actions = None
-                    else:
-                        from .missing_deps import resolve_requirement
-                        from ognibuild.buildlog import problem_to_upstream_requirement
-                        # Maybe there's a follow-up action we can consider?
-                        req = problem_to_upstream_requirement(e.error)
-                        if req:
-                            actions = asyncio.run(resolve_requirement(apt, req, dep_server_url))
-                            if actions:
-                                logging.info('Suggesting follow-up actions: %r', actions)
-                        else:
-                            logging.info(
-                                'Unable to convert error to upstream requirement: %r',
-                                e.error)
-                            actions = None
-                    raise BuildFailure(code, e.description, stage=e.stage, details=details, followup_actions=actions) from e
+                    raise BuildFailure(
+                        code, e.description, stage=e.stage, details=details) from e
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
@@ -193,7 +175,7 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
     apt_repository = config.get('base-apt-repository')
     apt_repository_key = config.get('base-apt-repository-signed-by')
     extra_repositories = config.pop('build-extra-repositories', [])
-    dep_server_url = config.get('ognibuild-dep-server')
+    dep_server_url = config.get('dep_server_url')
     committer = env.get("COMMITTER")
     uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
     if uc == "auto":

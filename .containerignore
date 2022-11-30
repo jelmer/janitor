@@ -7,3 +7,5 @@ lib64/
 share/
 bin/
 man/
+*~
+.git/
