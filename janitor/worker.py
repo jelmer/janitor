@@ -447,7 +447,7 @@ def import_branches_git(
         update_current: bool = True):
     from breezy.repository import InterRepository
     from breezy.git.repository import GitRepository
-    from breezy.git.dir import BareGitControlDirFormat
+    from breezy.git.dir import BareLocalGitControlDirFormat
     from dulwich.objects import ZERO_SHA
 
     try:
@@ -455,7 +455,8 @@ def import_branches_git(
     except NotBranchError:
         # The server is expected to have repositories ready for us, unless
         # we're working locally.
-        vcs_result_controldir = BareGitControlDirFormat().initialize(repo_url)
+        vcs_result_controldir = BareLocalGitControlDirFormat().initialize(
+            repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
