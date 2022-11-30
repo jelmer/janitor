@@ -307,59 +307,60 @@ class DebianTarget(Target):
             return GenericCommandResult(
                 description='No change build', context={}, tags=[], value=0)
 
-        logging.info('Running %r', argv)
-        # TODO(jelmer): This is only necessary for deb-new-upstream
-        dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist --log-directory=%s ' % (
-            ':'.join(sys.path), sys.executable, log_directory)
+        with copy_output(os.path.join(log_directory, "codemod.log"), tee=False):
+            logging.info('Running %r', argv)
+            # TODO(jelmer): This is only necessary for deb-new-upstream
+            dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist --log-directory=%s ' % (
+                ':'.join(sys.path), sys.executable, log_directory)
 
-        try:
-            dist_command = "SCHROOT=%s %s" % (self.env["CHROOT"], dist_command)
-        except KeyError:
-            pass
+            try:
+                dist_command = "SCHROOT=%s %s" % (self.env["CHROOT"], dist_command)
+            except KeyError:
+                pass
 
-        if local_tree.has_filename(os.path.join(subpath, 'debian')):
-            dist_command += ' --packaging=%s' % local_tree.abspath(
-                os.path.join(subpath, 'debian'))
+            if local_tree.has_filename(os.path.join(subpath, 'debian')):
+                dist_command += ' --packaging=%s' % local_tree.abspath(
+                    os.path.join(subpath, 'debian'))
 
-        # Prevent 404s because files have gone away:
-        dist_command += ' --apt-update --apt-dist-upgrade'
+            # Prevent 404s because files have gone away:
+            dist_command += ' --apt-update --apt-dist-upgrade'
 
-        extra_env = {'DIST': dist_command}
-        extra_env.update(self.env)
-        try:
-            return debian_script_runner(
-                local_tree, script=argv, commit_pending=None,
-                resume_metadata=resume_metadata, subpath=subpath,
-                update_changelog=self.update_changelog,
-                extra_env=extra_env, committer=self.committer)
-        except ResultFileFormatError as e:
-            raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e,
-                transient=False,
-                stage=("codemod", )) from e
-        except ScriptMadeNoChanges as e:
-            raise WorkerFailure(
-                'nothing-to-do', 'No changes made',
-                transient=False,
-                stage=("codemod", )) from e
-        except MissingChangelog as e:
-            raise WorkerFailure(
-                'missing-changelog', 'No changelog present: %s' % e.args[0],
-                transient=False,
-                stage=("codemod", )) from e
-        except DebianDetailedFailure as e:
-            stage = ("codemod", ) + (e.stage if e.stage else ())
-            raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=stage) from e
-        except ScriptNotFound as e:
-            raise WorkerFailure(
-                "codemod-not-found",
-                "Codemod script %r not found" % argv) from e
-        except ScriptFailed as e:
-            raise _convert_codemod_script_failed(e) from e
-        except MemoryError as e:
-            raise WorkerFailure(
-                'out-of-memory', str(e), stage=("codemod", )) from e
+            extra_env = {'DIST': dist_command}
+            extra_env.update(self.env)
+            try:
+                return debian_script_runner(
+                    local_tree, script=argv, commit_pending=None,
+                    resume_metadata=resume_metadata, subpath=subpath,
+                    update_changelog=self.update_changelog,
+                    extra_env=extra_env, committer=self.committer)
+            except ResultFileFormatError as e:
+                raise WorkerFailure(
+                    'result-file-format', 'Result file was invalid: %s' % e,
+                    transient=False,
+                    stage=("codemod", )) from e
+            except ScriptMadeNoChanges as e:
+                raise WorkerFailure(
+                    'nothing-to-do', 'No changes made',
+                    transient=False,
+                    stage=("codemod", )) from e
+            except MissingChangelog as e:
+                raise WorkerFailure(
+                    'missing-changelog', 'No changelog present: %s' % e.args[0],
+                    transient=False,
+                    stage=("codemod", )) from e
+            except DebianDetailedFailure as e:
+                stage = ("codemod", ) + (e.stage if e.stage else ())
+                raise WorkerFailure(
+                    e.result_code, e.description, e.details, stage=stage) from e
+            except ScriptNotFound as e:
+                raise WorkerFailure(
+                    "codemod-not-found",
+                    "Codemod script %r not found" % argv) from e
+            except ScriptFailed as e:
+                raise _convert_codemod_script_failed(e) from e
+            except MemoryError as e:
+                raise WorkerFailure(
+                    'out-of-memory', str(e), stage=("codemod", )) from e
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.debian.build import build_from_config, BuildFailure
@@ -397,31 +398,32 @@ class GenericTarget(Target):
             return GenericCommandResult(
                 description='No change build', context={}, tags=[], value=0)
 
-        logging.info('Running %r', argv)
-        try:
-            return generic_script_runner(
-                local_tree, script=argv, commit_pending=None,
-                resume_metadata=resume_metadata, subpath=subpath,
-                committer=self.env.get('COMMITTER'), extra_env=self.env)
-        except ResultFileFormatError as e:
-            raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e,
-                transient=False,
-                stage=("codemod", )) from e
-        except ScriptMadeNoChanges as e:
-            raise WorkerFailure(
-                'nothing-to-do', 'No changes made', stage=("codemod", ),
-                transient=False) from e
-        except GenericDetailedFailure as e:
-            stage = ("codemod", ) + (e.stage if e.stage else ())
-            raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=stage) from e
-        except ScriptNotFound as e:
-            raise WorkerFailure(
-                "codemod-not-found",
-                "Codemod script %r not found" % argv) from e
-        except ScriptFailed as e:
-            raise _convert_codemod_script_failed(e) from e
+        with copy_output(os.path.join(log_directory, "codemod.log"), tee=False):
+            logging.info('Running %r', argv)
+            try:
+                return generic_script_runner(
+                    local_tree, script=argv, commit_pending=None,
+                    resume_metadata=resume_metadata, subpath=subpath,
+                    committer=self.env.get('COMMITTER'), extra_env=self.env)
+            except ResultFileFormatError as e:
+                raise WorkerFailure(
+                    'result-file-format', 'Result file was invalid: %s' % e,
+                    transient=False,
+                    stage=("codemod", )) from e
+            except ScriptMadeNoChanges as e:
+                raise WorkerFailure(
+                    'nothing-to-do', 'No changes made', stage=("codemod", ),
+                    transient=False) from e
+            except GenericDetailedFailure as e:
+                stage = ("codemod", ) + (e.stage if e.stage else ())
+                raise WorkerFailure(
+                    e.result_code, e.description, e.details, stage=stage) from e
+            except ScriptNotFound as e:
+                raise WorkerFailure(
+                    "codemod-not-found",
+                    "Codemod script %r not found" % argv) from e
+            except ScriptFailed as e:
+                raise _convert_codemod_script_failed(e) from e
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import build_from_config, BuildFailure
