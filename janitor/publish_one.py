@@ -217,8 +217,7 @@ def publish(
             derived_branch_name,
             get_proposal_description=get_proposal_description,
             get_proposal_commit_message=get_proposal_commit_message,
-            # TODO(jelmer): Enable this once silver-platter/breezy support it
-            # get_proposal_title=get_proposal_title,
+            get_proposal_title=get_proposal_title,
             dry_run=dry_run,
             forge=forge,
             allow_create_proposal=allow_create_proposal,
