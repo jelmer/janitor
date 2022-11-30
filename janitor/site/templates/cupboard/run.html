@@ -91,7 +91,11 @@
             {% endif %}
         {% else %}
             {% if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root', 'success') %}
-                {% if primary_log == 'build' %}
+                {% if primary_log == 'codemod' %}
+                    {% with f = get_log(codemod_log_name) %}
+                        {{ include_console_log(f, id="log") }}
+                    {% endwith %}
+                {% elif primary_log == 'build' %}
                     {% with f = get_log(build_log_name) %}
                         {{ include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines, id="log") }}
                     {% endwith %}
@@ -157,6 +161,7 @@
             {{ display_reviews_table(reviews, user.email or user.name) }}
         {% endif %}
         <p>
+            {% if codemod_log_name %}<a class="reference external" href="{{ codemod_log_name }}">Full codemod log</a>{% endif %}
             {% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}
             {% if build_log_name %}
                 <a class="reference external" href="{{ build_log_name }}">Full build log</a>
