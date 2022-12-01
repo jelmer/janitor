@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import errno
 import os
 import logging
 import sys
@@ -153,6 +154,11 @@ def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
                         code = "build-failed"
                     raise BuildFailure(code, e.description, stage=e.stage) from e
                 logging.info("Built %r.", changes_names)
+    except OSError as e:
+        if e.errno == errno.EMFILE:
+            raise BuildFailure(
+                "too-many-open-files", str(e), stage="session-setup") from e
+        raise
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
