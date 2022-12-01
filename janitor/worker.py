@@ -706,7 +706,8 @@ def _push_error_to_worker_failure(e, stage):
 
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
-                ConnectionError, ConnectionReset, ssl.SSLEOFError)):
+                ConnectionError, ConnectionReset, ssl.SSLEOFError,
+                ssl.SSLError)):
         return WorkerFailure(
             f"{prefix}-failed", "Failed to push result branch: %s" % e,
             stage=stage)
@@ -1062,7 +1063,7 @@ def run_worker(
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
                             TransportNotPossible, ConnectionReset,
-                            ssl.SSLEOFError) as e:
+                            ssl.SSLEOFError, ssl.SSLError) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",
                             cached_branch_url, e)
