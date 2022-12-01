@@ -320,6 +320,8 @@ async def generate_run_file(
             primary_log = "dist"
         elif has_log(WORKER_LOG_FILENAME):
             primary_log = "worker"
+        else:
+            primary_log = None
 
     if primary_log == "dist":
         logf = await get_log(DIST_LOG_FILENAME)
