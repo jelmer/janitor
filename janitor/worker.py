@@ -451,10 +451,16 @@ def import_branches_git(
     try:
         vcs_result_controldir = ControlDir.open(repo_url)
     except NotBranchError:
+        transport = get_transport(repo_url)
+        if not transport.has('.'):
+            try:
+                transport.ensure_base()
+            except NoSuchFile:
+                transport.create_prefix()
         # The server is expected to have repositories ready for us, unless
         # we're working locally.
-        vcs_result_controldir = BareLocalGitControlDirFormat().initialize(
-            repo_url)
+        format = BareLocalGitControlDirFormat()
+        vcs_result_controldir = format.initialize_on_transport(repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
