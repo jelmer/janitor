@@ -220,7 +220,8 @@ CREATE TABLE IF NOT EXISTS candidate (
    publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
    codebase text not null references codebase(name),
-   foreign key (package) references package(name)
+   foreign key (package) references package(name),
+   id serial primary key not null
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
@@ -719,3 +720,9 @@ CREATE VIEW absorbed_runs AS
     AND run.result_code = 'success'
     AND publish.result_code = 'success'
     AND run.suite not in ('unchanged', 'control');
+
+CREATE TABLE followup (
+    origin text not null references run(id),
+    candidate int references candidate (id),
+    unique (origin, candidate)
+);
