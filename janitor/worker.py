@@ -451,10 +451,16 @@ def import_branches_git(
     try:
         vcs_result_controldir = ControlDir.open(repo_url)
     except NotBranchError:
+        transport = get_transport(repo_url)
+        if not transport.has('.'):
+            try:
+                transport.ensure_base()
+            except NoSuchFile:
+                transport.create_prefix()
         # The server is expected to have repositories ready for us, unless
         # we're working locally.
-        vcs_result_controldir = BareLocalGitControlDirFormat().initialize(
-            repo_url)
+        format = BareLocalGitControlDirFormat()
+        vcs_result_controldir = format.initialize_on_transport(repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
@@ -885,7 +891,9 @@ def run_worker(
                         stage=("setup", "clone"), details={'status-code': e.code}) from e
             except TransportError as e:
                 if "No space left on device" in str(e):
-                    raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone")) from e
+                    raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"), transient=True) from e
+                if "Too many open files" in str(e):
+                    raise WorkerFailure("too-many-open-files", e.msg, stage=("setup", "clone"), transient=True) from e
                 if "Temporary failure in name resolution" in str(e):
                     raise WorkerFailure(
                         "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
@@ -1063,7 +1071,7 @@ def run_worker(
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
                             TransportNotPossible, ConnectionReset,
-                            ssl.SSLEOFError, ssl.SSLError) as e:
+                            ssl.SSLEOFError, ssl.SSLError, TransportError) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",
                             cached_branch_url, e)
