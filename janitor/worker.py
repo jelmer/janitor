@@ -891,7 +891,9 @@ def run_worker(
                         stage=("setup", "clone"), details={'status-code': e.code}) from e
             except TransportError as e:
                 if "No space left on device" in str(e):
-                    raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone")) from e
+                    raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"), transient=True) from e
+                if "Too many open files" in str(e):
+                    raise WorkerFailure("too-many-open-files", e.msg, stage=("setup", "clone"), transient=True) from e
                 if "Temporary failure in name resolution" in str(e):
                     raise WorkerFailure(
                         "worker-clone-temporary-transport-error", str(e), stage=("setup", "clone"),
@@ -1069,7 +1071,7 @@ def run_worker(
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
                             TransportNotPossible, ConnectionReset,
-                            ssl.SSLEOFError, ssl.SSLError) as e:
+                            ssl.SSLEOFError, ssl.SSLError, TransportError) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",
                             cached_branch_url, e)
