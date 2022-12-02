@@ -137,22 +137,15 @@ def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
                         details={'filename': e.filename},
                     ) from e
                 except DetailedDebianBuildFailure as e:
-                    if e.stage and not e.error.is_global:
-                        code = "%s-%s" % (e.stage, e.error.kind)
-                    else:
-                        code = e.error.kind
                     try:
                         details = e.error.json()
                     except NotImplementedError:
                         details = None
                     raise BuildFailure(
-                        code, e.description, stage=e.stage, details=details) from e
+                        e.error.kind, e.description, stage=e.stage,
+                        details=details) from e
                 except UnidentifiedDebianBuildError as e:
-                    if e.stage is not None:
-                        code = "build-failed-stage-%s" % e.stage
-                    else:
-                        code = "build-failed"
-                    raise BuildFailure(code, e.description, stage=e.stage) from e
+                    raise BuildFailure("failed", e.description, stage=e.stage) from e
                 logging.info("Built %r.", changes_names)
     except OSError as e:
         if e.errno == errno.EMFILE:
