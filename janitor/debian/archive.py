@@ -531,7 +531,7 @@ async def serve_dists_release_file(request):
         request.match_info['release'],
         request.match_info['file'])
     if not os.path.exists(path):
-        raise web.HTTPNotFound()
+        raise web.HTTPNotFound(text='suite release files not generated yet')
     return web.FileResponse(path)
 
 
@@ -543,7 +543,7 @@ async def serve_dists_component_file(request):
         request.match_info['arch'],
         request.match_info['file'])
     if not os.path.exists(path):
-        raise web.HTTPNotFound()
+        raise web.HTTPNotFound(text='suite component files not generated yet')
     return web.FileResponse(path)
 
 
@@ -557,7 +557,7 @@ async def serve_dists_component_hash_file(request):
         request.match_info['hash_type'],
         request.match_info['hash'])
     if not os.path.exists(path):
-        raise web.HTTPNotFound()
+        raise web.HTTPNotFound(text='suite by-hash file not present')
     return web.FileResponse(path)
 
 
