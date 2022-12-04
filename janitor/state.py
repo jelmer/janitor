@@ -243,22 +243,22 @@ class Run(object):
 
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
-    package: str
+    codebase: str
 ) -> List[str]:
     query = """
 SELECT DISTINCT suite
 FROM publish_ready
-WHERE package = $1
+WHERE codebase = $1
 """
-    return [row[0] for row in await conn.fetch(query, package)]
+    return [row[0] for row in await conn.fetch(query, codebase)]
 
 
 async def has_cotenants(
-    conn: asyncpg.Connection, package: str, url: str
+    conn: asyncpg.Connection, codebase: str, url: str
 ) -> Optional[bool]:
     url = urlutils.split_segment_parameters(url)[0].rstrip("/")
     rows = await conn.fetch(
-        "SELECT name FROM package where "
+        "SELECT name FROM codebase where "
         "branch_url = $1 or "
         "branch_url like $1 || ',branch=%' or "
         "branch_url like $1 || '/,branch=%'",
@@ -266,11 +266,11 @@ async def has_cotenants(
     )
     if len(rows) > 1:
         return True
-    elif len(rows) == 1 and rows[0][0] == package:
+    elif len(rows) == 1 and rows[0][0] == codebase:
         return False
     else:
         # Uhm, we actually don't really know
-        logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
+        logging.warning("Unable to figure out if %s has cotenants on %s", codebase, url)
         return None
 
 
