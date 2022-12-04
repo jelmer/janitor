@@ -121,7 +121,7 @@ SUPPORTED_MODES = [
 proposal_rate_limited_count = Counter(
     "proposal_rate_limited",
     "Number of attempts to create a proposal that was rate-limited",
-    ["package", "campaign"],
+    ["codebase", "campaign"],
 )
 open_proposal_count = Gauge("open_proposal_count", "Number of open proposals.")
 bucket_proposal_count = Gauge(
@@ -1048,7 +1048,7 @@ async def publish_from_policy(
                     bucket_rate_limiter.check_allowed(rate_limit_bucket)
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
-                    package=run.package, campaign=run.campaign
+                    codebase=run.codebase, campaign=run.campaign
                 ).inc()
                 logger.debug(
                     "Not creating proposal for %s/%s: %s", run.package, run.campaign, e
@@ -3083,7 +3083,7 @@ WHERE id = $1
     return None
 
 
-async def iter_control_matching_runs(conn: asyncpg.Connection, main_branch_revision: bytes, package: str):
+async def iter_control_matching_runs(conn: asyncpg.Connection, main_branch_revision: bytes, codebase: str):
     query = """
 SELECT
   id,
@@ -3108,11 +3108,11 @@ SELECT
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM last_runs
-WHERE main_branch_revision = $1 AND package = $2 AND main_branch_revision != revision AND suite NOT in ('unchanged', 'control')
+WHERE main_branch_revision = $1 AND codebase = $2 AND main_branch_revision != revision AND suite NOT in ('unchanged', 'control')
 ORDER BY start_time DESC
 """
     return await conn.fetch(
-        query, main_branch_revision.decode('utf-8'), package)
+        query, main_branch_revision.decode('utf-8'), codebase)
 
 
 
@@ -3157,20 +3157,20 @@ async def listen_to_runner(
             return
         async with db.acquire() as conn:
             # TODO(jelmer): Fold these into a single query ?
-            package = await conn.fetchrow(
-                'SELECT branch_url FROM package WHERE name = $1',
-                result["package"])
-            if package is None:
-                logging.warning('Package %s not in database?', result['package'])
+            codebase = await conn.fetchrow(
+                'SELECT branch_url FROM codebase WHERE name = $1',
+                result["codebase"])
+            if codebase is None:
+                logging.warning('Codebase %s not in database?', result['codebase'])
                 return
             run = await get_run(conn, result["log_id"])
             if run.campaign != "unchanged":
-                await process_run(conn, run, package['branch_url'])
+                await process_run(conn, run, codebase['branch_url'])
             else:
                 for run in await iter_control_matching_runs(
                         conn, main_branch_revision=run.revision,
-                        package=run.package):
-                    await process_run(conn, run, package['branch_url'])
+                        codebase=run.codebase):
+                    await process_run(conn, run, codebase['branch_url'])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:

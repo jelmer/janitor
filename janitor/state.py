@@ -243,14 +243,14 @@ class Run(object):
 
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
-    package: str
+    codebase: str
 ) -> List[str]:
     query = """
 SELECT DISTINCT suite
 FROM publish_ready
-WHERE package = $1
+WHERE codebase = $1
 """
-    return [row[0] for row in await conn.fetch(query, package)]
+    return [row[0] for row in await conn.fetch(query, codebase)]
 
 
 async def has_cotenants(
