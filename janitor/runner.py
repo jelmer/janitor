@@ -1871,6 +1871,15 @@ async def handle_codebases_upload(request):
     return web.json_response({})
 
 
+@routes.delete("/candidates/{id}", name="delete-candidate")
+async def handle_candidate_delete(request):
+    queue_processor = request.app['queue_processor']
+    async with queue_processor.database.acquire() as conn:
+        await conn.execute(
+            'DELETE FROM candidate WHERE id = $1', int(request.match_info['id']))
+        return web.json_response({})
+
+
 @routes.get("/candidates", name="download-candidates")
 async def handle_candidate_download(request):
     queue_processor = request.app['queue_processor']
@@ -1878,6 +1887,7 @@ async def handle_candidate_download(request):
     async with queue_processor.database.acquire() as conn:
         for row in await conn.fetch('SELECT * FROM candidate'):
             ret.append({
+                'id': row['id'],
                 'package': row['package'],
                 'codebase': row['codebase'],
                 'campaign': row['suite'],
