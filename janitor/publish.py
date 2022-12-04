@@ -344,7 +344,7 @@ async def derived_branch_name(conn, campaign_config, run, role):
     else:
         name = "%s/%s" % (campaign_config.branch_name, role)
 
-    if await state.has_cotenants(conn, run.package, run.branch_url):
+    if await state.has_cotenants(conn, run.codebase, run.branch_url):
         return name + "/" + run.package
     else:
         return name
