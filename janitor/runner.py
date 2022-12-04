@@ -1871,8 +1871,28 @@ async def handle_codebases_upload(request):
     return web.json_response({})
 
 
+@routes.get("/candidates", name="download-candidates")
+async def handle_candidate_download(request):
+    queue_processor = request.app['queue_processor']
+    ret = []
+    async with queue_processor.database.acquire() as conn:
+        for row in await conn.fetch('SELECT * FROM candidate'):
+            ret.append({
+                'package': row['package'],
+                'codebase': row['codebase'],
+                'campaign': row['suite'],
+                'command': row['command'],
+                'publish-policy': row['publish_policy'],
+                'change_set': row['change_set'],
+                'context': row['context'],
+                'value': row['value'],
+                'success_chance': row['success_chance'],
+            })
+    return web.json_response(ret)
+
+
 @routes.post("/candidates", name="upload-candidates")
-async def handle_candidates(request):
+async def handle_candidates_upload(request):
     unknown_packages = []
     unknown_codebases = []
     unknown_campaigns = []
