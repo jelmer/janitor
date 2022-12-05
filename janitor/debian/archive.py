@@ -686,7 +686,7 @@ async def serve_on_demand_dists_component_hash_file(request):
         request.match_info['id'],
         request.match_info['component'],
         request.match_info['arch'],
-        'by-type',
+        'by-hash',
         request.match_info['hash_type'],
         request.match_info['hash'])
     if not os.path.exists(path):

@@ -190,7 +190,8 @@ CREATE TABLE IF NOT EXISTS queue (
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   foreign key (codebase) references codebase(name)
+   foreign key (codebase) references codebase(name),
+   check (command != '')
 );
 CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));
 CREATE INDEX ON queue (change_set);
@@ -221,7 +222,8 @@ CREATE TABLE IF NOT EXISTS candidate (
    change_set text references change_set(id),
    codebase text not null references codebase(name),
    foreign key (package) references package(name),
-   id serial primary key not null
+   id serial primary key not null,
+   check (command != '')
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
