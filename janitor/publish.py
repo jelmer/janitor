@@ -85,6 +85,7 @@ from . import (
 from .config import read_config, get_campaign_config, Campaign, Config
 from .schedule import (
     do_schedule,
+    do_schedule_control,
     CandidateUnavailable,
 )
 from .vcs import (
@@ -772,11 +773,6 @@ async def publish_pending_ready(
 
 
 async def handle_publish_failure(e, conn, run, bucket):
-    from .schedule import (
-        do_schedule,
-        do_schedule_control,
-    )
-
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, package, revision FROM last_runs "
         "WHERE revision = $2 AND package = $1 and result_code = 'success'",
@@ -804,7 +800,8 @@ async def handle_publish_failure(e, conn, run, bucket):
             campaign=run.campaign,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
-            bucket=bucket, codebase=run.codebase,
+            bucket=bucket,
+            codebase=run.codebase,
         )
     elif e.code == "missing-build-diff-self":
         if run.result_code != "success":
