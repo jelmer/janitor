@@ -1874,13 +1874,12 @@ async def handle_codebases_upload(request):
 @routes.delete("/candidates/{id}", name="delete-candidate")
 async def handle_candidate_delete(request):
     queue_processor = request.app['queue_processor']
-    async with queue_processor.database.acquire() as conn:
-        (campaign, codebase) = await conn.fetchrow(
-            'DELETE FROM candidate WHERE id = $1 RETURNING campaign, codebase',
-            int(request.match_info['id']))
+    async with queue_processor.database.acquire() as conn, conn.transaction():
+        (suite, codebase) = await conn.fetchrow(
+            'DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase', int(request.match_info['id']))
         await conn.execute(
             'DELETE FROM queue WHERE suite = $1 AND codebase = $2',
-            campaign, codebase)
+            suite, codebase)
         return web.json_response({})
 
 
@@ -1912,76 +1911,107 @@ async def handle_candidates_upload(request):
     unknown_campaigns = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
-    async with queue_processor.database.acquire() as conn, conn.transaction():
-        known_packages = set()
-        for record in (await conn.fetch('SELECT name FROM package')):
-            known_packages.add(record[0])
+    to_schedule = []
+    async with queue_processor.database.acquire() as conn:
+        async with conn.transaction():
+            known_packages = set()
+            for record in (await conn.fetch('SELECT name FROM package')):
+                known_packages.add(record[0])
 
-        known_codebases = set()
-        for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
-            known_codebases.add(record[0])
+            known_codebases = set()
+            for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
+                known_codebases.add(record[0])
 
-        known_campaign_names = [
-            campaign.name for campaign in request.app['config'].campaign]
+            known_campaign_names = [
+                campaign.name for campaign in request.app['config'].campaign]
 
-        known_publish_policies = set()
-        for record in (await conn.fetch(
-                'SELECT name FROM named_publish_policy')):
-            known_publish_policies.add(record[0])
+            known_publish_policies = set()
+            for record in (await conn.fetch(
+                    'SELECT name FROM named_publish_policy')):
+                known_publish_policies.add(record[0])
 
-        entries = []
-        for candidate in (await request.json()):
-            if candidate['package'] not in known_packages:
-                logging.warning(
-                    'ignoring candidate %s/%s; package unknown',
-                    candidate['package'], candidate['campaign'])
-                unknown_packages.append(candidate['package'])
-                continue
-            if candidate['codebase'] not in known_codebases:
-                logging.warning(
-                    'ignoring candidate %s/%s; codebase unknown',
-                    candidate['codebase'], candidate['campaign'])
-                unknown_codebases.append(candidate['codebase'])
-                continue
-            if candidate['campaign'] not in known_campaign_names:
-                logging.warning('unknown suite %r', candidate['campaign'])
-                unknown_campaigns.append(candidate['campaign'])
-                continue
+            entries = []
+            for candidate in (await request.json()):
+                if candidate['package'] not in known_packages:
+                    logging.warning(
+                        'ignoring candidate %s/%s; package unknown',
+                        candidate['package'], candidate['campaign'])
+                    unknown_packages.append(candidate['package'])
+                    continue
+                if candidate['codebase'] not in known_codebases:
+                    logging.warning(
+                        'ignoring candidate %s/%s; codebase unknown',
+                        candidate['codebase'], candidate['campaign'])
+                    unknown_codebases.append(candidate['codebase'])
+                    continue
+                if candidate['campaign'] not in known_campaign_names:
+                    logging.warning('unknown suite %r', candidate['campaign'])
+                    unknown_campaigns.append(candidate['campaign'])
+                    continue
 
-            command = candidate.get('command')
-            if command is None:
-                campaign_config = get_campaign_config(
-                    request.app['config'], candidate['campaign'])
-                command = campaign_config.command
+                command = candidate.get('command')
+                if command is None:
+                    campaign_config = get_campaign_config(
+                        request.app['config'], candidate['campaign'])
+                    command = campaign_config.command
 
-            publish_policy = candidate.get('publish-policy')
-            if (publish_policy is not None
-                    and publish_policy not in known_publish_policies):
-                logging.warning('unknown publish policy %s', publish_policy)
-                unknown_publish_policies.append(publish_policy)
-                continue
+                publish_policy = candidate.get('publish-policy')
+                if (publish_policy is not None
+                        and publish_policy not in known_publish_policies):
+                    logging.warning('unknown publish policy %s', publish_policy)
+                    unknown_publish_policies.append(publish_policy)
+                    continue
 
-            entries.append((
-                candidate['package'], candidate['campaign'],
-                command,
-                candidate.get('change_set'), candidate.get('context'),
-                candidate.get('value'), candidate.get('success_chance'),
-                publish_policy, candidate['codebase']))
+                entries.append((
+                    candidate['package'], candidate['campaign'],
+                    command,
+                    candidate.get('change_set'), candidate.get('context'),
+                    candidate.get('value'), candidate.get('success_chance'),
+                    publish_policy, candidate['codebase']))
 
-        await conn.executemany(
-            "INSERT INTO candidate "
-            "(package, suite, command, change_set, context, value, "
-            "success_chance, publish_policy, codebase) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
-            "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
-            "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
-            "success_chance = EXCLUDED.success_chance, "
-            "command = EXCLUDED.command, "
-            "publish_policy = EXCLUDED.publish_policy, "
-            "codebase = EXCLUDED.codebase",
-            entries,
-        )
+                to_schedule.append((
+                    candidate['package'],
+                    candidate['codebase'],
+                    candidate['campaign'],
+                    candidate.get('change_set'),
+                ))
+
+            await conn.executemany(
+                "INSERT INTO candidate "
+                "(package, suite, command, change_set, context, value, "
+                "success_chance, publish_policy, codebase) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+                "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
+                "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+                "success_chance = EXCLUDED.success_chance, "
+                "command = EXCLUDED.command, "
+                "publish_policy = EXCLUDED.publish_policy, "
+                "codebase = EXCLUDED.codebase",
+                entries,
+            )
+
+        ret = []
+
+        for (package, codebase, campaign, change_set) in to_schedule:
+            offset, estimated_duration, queue_id, = await do_schedule(
+                conn,
+                package,
+                campaign,
+                change_set=change_set,
+                requestor="candidate trigger",
+                codebase=codebase)
+            ret.append({
+                'campaign': campaign,
+                'codebase': codebase,
+                'change_set': change_set,
+                'offset': offset,
+                'estimated_duration': estimated_duration.total_seconds()
+                if estimated_duration is not None else None,
+                'queue-id': queue_id
+            })
+
     return web.json_response({
+        'success': ret,
         'unknown_campaigns': unknown_campaigns,
         'unknown_codebases': unknown_codebases,
         'unknown_publish_policies': unknown_publish_policies,
