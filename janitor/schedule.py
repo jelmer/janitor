@@ -428,7 +428,7 @@ async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
     campaign: str,
-    codebase: Optional[str] = None,
+    codebase: Optional[str],
     *,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
