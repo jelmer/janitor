@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import logging
+import os
 
 from breezy.plugins.debian.vcs_up_to_date import (
     check_up_to_date,
@@ -42,6 +43,9 @@ def validate_from_config(local_tree, subpath, config):
         try:
             check_up_to_date(local_tree, subpath, apt)
         except MissingChangelogError as exc:
+            if not os.path.isdir(local_tree.abspath(os.path.join(subpath, 'debian'))):
+                raise ValidateError(
+                    'not-debian-package', "Not a Debian package") from exc
             raise ValidateError('missing-changelog', str(exc)) from exc
         except PackageMissingInArchive as exc:
             logging.warning(

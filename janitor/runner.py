@@ -1875,8 +1875,12 @@ async def handle_codebases_upload(request):
 async def handle_candidate_delete(request):
     queue_processor = request.app['queue_processor']
     async with queue_processor.database.acquire() as conn:
+        (campaign, codebase) = await conn.fetchrow(
+            'DELETE FROM candidate WHERE id = $1 RETURNING campaign, codebase',
+            int(request.match_info['id']))
         await conn.execute(
-            'DELETE FROM candidate WHERE id = $1', int(request.match_info['id']))
+            'DELETE FROM queue WHERE suite = $1 AND codebase = $2',
+            campaign, codebase)
         return web.json_response({})
 
 
