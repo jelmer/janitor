@@ -67,7 +67,7 @@ def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
           update_changelog=None, dep_server_url=None):
     if not local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
-        raise BuildFailure("not-debian-package", "Not a Debian package", stage="pre-check")
+        raise BuildFailure("missing-changelog", "Missing changelog", stage="pre-check")
 
     session: Session
     if chroot:
