@@ -421,8 +421,13 @@ RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=None):
     if campaign_config.HasField('debian_build'):
-        distribution = get_distribution(
-            config, campaign_config.debian_build.base_distribution)
+        try:
+            distribution = get_distribution(
+                config, campaign_config.debian_build.base_distribution)
+        except KeyError:
+            raise NotImplementedError(
+                "Unsupported distribution: "
+                f"{campaign_config.debian_build.base_distribution}")
         return DebianBuilder(
             distribution,
             apt_archive_url,
@@ -1913,6 +1918,7 @@ async def handle_candidates_upload(request):
     unknown_packages = []
     unknown_codebases = []
     unknown_campaigns = []
+    invalid_command = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
     to_schedule = []
@@ -1954,10 +1960,15 @@ async def handle_candidates_upload(request):
                     continue
 
                 command = candidate.get('command')
-                if command is None:
+                if not command:
                     campaign_config = get_campaign_config(
                         request.app['config'], candidate['campaign'])
                     command = campaign_config.command
+                    if not command:
+                        logging.warning(
+                            'No command in candidate or campaign config')
+                        invalid_command.append(command)
+                        continue
 
                 publish_policy = candidate.get('publish-policy')
                 if (publish_policy is not None
@@ -2016,6 +2027,7 @@ async def handle_candidates_upload(request):
 
     return web.json_response({
         'success': ret,
+        'invalid_command': invalid_command,
         'unknown_campaigns': unknown_campaigns,
         'unknown_codebases': unknown_codebases,
         'unknown_publish_policies': unknown_publish_policies,
@@ -2185,7 +2197,7 @@ async def next_item(
                 item = None
                 continue
 
-        # This is simple for now, since we only support one distribution.
+        # TODO(jelmer): Handle exceptions from get_builder
         builder = get_builder(
             config, campaign_config,
             queue_processor.apt_archive_url,
