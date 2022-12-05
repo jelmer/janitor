@@ -19,6 +19,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 import aiozipkin
 import asyncio
 from contextlib import ExitStack
+from functools import partial
 import json
 import logging
 import os
@@ -95,7 +96,7 @@ async def handle_debdiff(request):
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
-    cache_path = request.app.debdiff_cache_path(old_run['id'], new_run['id'])
+    cache_path = request.app['debdiff_cache_path'](old_run['id'], new_run['id'])
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -123,10 +124,10 @@ async def handle_debdiff(request):
 
             try:
                 await asyncio.gather(
-                    request.app.artifact_manager.retrieve_artifacts(
+                    request.app['artifact_manager'].retrieve_artifacts(
                         old_run['id'], old_dir, filter_fn=is_binary
                     ),
-                    request.app.artifact_manager.retrieve_artifacts(
+                    request.app['artifact_manager'].retrieve_artifacts(
                         new_run['id'], new_dir, filter_fn=is_binary
                     ),
                 )
@@ -271,7 +272,7 @@ async def handle_diffoscope(request):
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
-    cache_path = request.app.diffoscope_cache_path(old_run['id'], new_run['id'])
+    cache_path = request.app['diffoscope_cache_path'](old_run['id'], new_run['id'])
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -299,10 +300,10 @@ async def handle_diffoscope(request):
 
             try:
                 await asyncio.gather(
-                    request.app.artifact_manager.retrieve_artifacts(
+                    request.app['artifact_manager'].retrieve_artifacts(
                         old_run['id'], old_dir, filter_fn=is_binary
                     ),
-                    request.app.artifact_manager.retrieve_artifacts(
+                    request.app['artifact_manager'].retrieve_artifacts(
                         new_run['id'], new_dir, filter_fn=is_binary
                     ),
                 )
@@ -333,9 +334,8 @@ async def handle_diffoscope(request):
                 diffoscope_diff = await asyncio.wait_for(
                     run_diffoscope(
                         old_binaries, new_binaries,
-                        lambda: _set_limits(request.app.task_memory_limit)),
-                    request.app.task_timeout
-                )
+                        lambda: _set_limits(request.app['task_memory_limit'])),
+                    request.app['task_timeout'])
             except MemoryError as e:
                 raise web.HTTPServiceUnavailable(
                     text="diffoscope used too much memory") from e
@@ -404,10 +404,10 @@ async def precache(app, old_id, new_id):
         new_dir = es.enter_context(TemporaryDirectory())
 
         await asyncio.gather(
-            app.artifact_manager.retrieve_artifacts(
+            app['artifact_manager'].retrieve_artifacts(
                 old_id, old_dir, filter_fn=is_binary, timeout=PRECACHE_RETRIEVE_TIMEOUT
             ),
-            app.artifact_manager.retrieve_artifacts(
+            app['artifact_manager'].retrieve_artifacts(
                 new_id, new_dir, filter_fn=is_binary, timeout=PRECACHE_RETRIEVE_TIMEOUT
             ),
         )
@@ -420,7 +420,7 @@ async def precache(app, old_id, new_id):
         if not new_binaries:
             raise ArtifactsMissing(new_id)
 
-        debdiff_cache_path = app.debdiff_cache_path(old_id, new_id)
+        debdiff_cache_path = app['debdiff_cache_path'](old_id, new_id)
 
         if debdiff_cache_path and not os.path.exists(debdiff_cache_path):
             with open(debdiff_cache_path, "wb") as f:
@@ -431,20 +431,19 @@ async def precache(app, old_id, new_id):
                 )
             logging.info("Precached debdiff result for %s/%s", old_id, new_id)
 
-        diffoscope_cache_path = app.diffoscope_cache_path(old_id, new_id)
+        diffoscope_cache_path = app['diffoscope_cache_path'](old_id, new_id)
         if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
             try:
                 diffoscope_diff = await asyncio.wait_for(
                     run_diffoscope(
                         old_binaries, new_binaries,
-                        lambda: _set_limits(app.task_memory_limit)), app.task_timeout
-                )
+                        lambda: _set_limits(app['task_memory_limit'])), app['task_timeout'])
             except MemoryError as e:
                 raise DiffCommandMemoryError(
-                    "diffoscope", app.task_memory_limit) from e
+                    "diffoscope", app['task_memory_limit']) from e
             except asyncio.TimeoutError as e:
                 raise DiffCommandTimeout(
-                    "diffoscope", app.task_timeout) from e
+                    "diffoscope", app['task_timeout']) from e
             except DiffoscopeError as e:
                 raise DiffCommandError("diffoscope", e.args[0]) from e
 
@@ -558,40 +557,22 @@ async def handle_ready(request):
     return web.Response(text="ok")
 
 
-class DifferWebApp(web.Application):
-    def __init__(self, pool, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
-        trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-        super(DifferWebApp, self).__init__(middlewares=[
-            trailing_slash_redirect, state.asyncpg_error_middleware])
-        self.router.add_routes(routes)
-        self['pool'] = pool
-        self.cache_path = cache_path
-        self.artifact_manager = artifact_manager
-        self.task_memory_limit = task_memory_limit
-        self.task_timeout = task_timeout
-
-    def diffoscope_cache_path(self, old_id, new_id):
-        base_path = os.path.join(self.cache_path, "diffoscope")
-        if not os.path.isdir(base_path):
-            os.mkdir(base_path)
-        return os.path.join(base_path, "%s_%s.json" % (old_id, new_id))
-
-    def debdiff_cache_path(self, old_id, new_id):
-        base_path = os.path.join(self.cache_path, "debdiff")
-        # This can happen when the default branch changes
-        if not os.path.isdir(base_path):
-            os.mkdir(base_path)
-        return os.path.join(base_path, "%s_%s" % (old_id, new_id))
+def diffoscope_cache_path(cache_path, old_id, new_id):
+    base_path = os.path.join(cache_path, "diffoscope")
+    if not os.path.isdir(base_path):
+        os.mkdir(base_path)
+    return os.path.join(base_path, "%s_%s.json" % (old_id, new_id))
 
 
-async def run_web_server(app, listen_addr, port, tracer):
-    setup_metrics(app)
+def debdiff_cache_path(cache_path, old_id, new_id):
+    base_path = os.path.join(cache_path, "debdiff")
+    # This can happen when the default branch changes
+    if not os.path.isdir(base_path):
+        os.mkdir(base_path)
+    return os.path.join(base_path, "%s_%s" % (old_id, new_id))
 
-    async def connect_artifact_manager(app):
-        await app.artifact_manager.__aenter__()
 
-    app.on_startup.append(connect_artifact_manager)
-    aiozipkin.setup(app, tracer)
+async def run_web_server(app, listen_addr, port):
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -658,6 +639,30 @@ async def listen_to_runner(redis, app):
         await redis.close()
 
 
+def create_app(cache_path, artifact_manager, database_location, *, task_memory_limit=None, task_timeout=None):
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[
+        trailing_slash_redirect, state.asyncpg_error_middleware])
+    app.router.add_routes(routes)
+    app['artifact_manager'] = artifact_manager
+    app['task_memory_limit'] = task_memory_limit
+    app['task_timeout'] = task_timeout
+    app['diffoscope_cache_path'] = partial(diffoscope_cache_path, cache_path)
+    app['debdiff_cache_path'] = partial(debdiff_cache_path, cache_path)
+
+    async def connect_artifact_manager(app):
+        await app['artifact_manager'].__aenter__()
+
+    app.on_startup.append(connect_artifact_manager)
+
+    async def connect_postgres(app):
+        app['pool'] = await state.create_pool(database_location)
+
+    app.on_startup.append(connect_postgres)
+
+    return app
+
+
 async def main(argv=None):
     import argparse
 
@@ -707,20 +712,19 @@ async def main(argv=None):
         os.makedirs(args.cache_path)
 
     redis = Redis.from_url(config.redis_location)
-    async with state.create_pool(config.database_location) as pool:
-        app = DifferWebApp(
-            pool=pool,
-            cache_path=args.cache_path,
-            artifact_manager=artifact_manager,
-            task_memory_limit=args.task_memory_limit,
-            task_timeout=args.task_timeout,
-        )
 
-        tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
+    app = create_app(
+        args.cache_path, artifact_manager, config.database_location,
+        task_memory_limit=args.task_memory_limit,
+        task_timeout=args.task_timeout)
+    setup_metrics(app)
+    aiozipkin.setup(app, tracer)
 
-        tasks.append(loop.create_task(listen_to_runner(redis, app)))
+    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port))]
 
-        await asyncio.gather(*tasks)
+    tasks.append(loop.create_task(listen_to_runner(redis, app)))
+
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
