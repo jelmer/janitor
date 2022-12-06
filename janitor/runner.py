@@ -1725,6 +1725,14 @@ async def handle_schedule(request):
         estimated_duration = (
             timedelta(seconds=json['estimated_duration'])
             if json.get('estimated_duration') else None)
+        command = await conn.fetchval(
+            "SELECT command "
+            "FROM candidate WHERE package = $1 AND suite = $2",
+            package, campaign)
+        if command is None:
+            command = get_campaign_config(
+                request.app['config'], campaign).command
+
         try:
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, = await do_schedule(
@@ -1989,6 +1997,7 @@ async def handle_candidates_upload(request):
                     candidate['codebase'],
                     candidate['campaign'],
                     candidate.get('change_set'),
+                    command,
                 ))
 
             await conn.executemany(
@@ -2007,13 +2016,14 @@ async def handle_candidates_upload(request):
 
         ret = []
 
-        for (package, codebase, campaign, change_set) in to_schedule:
+        for (package, codebase, campaign, change_set, command) in to_schedule:
             offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
                 campaign,
                 change_set=change_set,
                 requestor="candidate trigger",
+                command=command,
                 codebase=codebase)
             ret.append({
                 'campaign': campaign,
