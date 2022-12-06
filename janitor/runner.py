@@ -1313,6 +1313,8 @@ async def store_run(
     )
 
     if result_branches:
+        roles = [role for (role, remote_name, br, r) in result_branches]
+        assert len(roles) == len(set(roles)), "Duplicate result branches: %r" % result_branches
         await conn.executemany(
             "INSERT INTO new_result_branch "
             "(run_id, role, remote_name, base_revision, revision) "
