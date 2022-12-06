@@ -1316,11 +1316,7 @@ async def store_run(
         await conn.executemany(
             "INSERT INTO new_result_branch "
             "(run_id, role, remote_name, base_revision, revision) "
-            "VALUES ($1, $2, $3, $4, $5) "
-            "ON CONFLICT (run_id, role) DO UPDATE SET "
-            "remote_name = EXCLUDED.remote_name, "
-            "base_revision = EXCLUDED.base_revision, "
-            "revision = EXCLUDED.revision",
+            "VALUES ($1, $2, $3, $4, $5)",
             [
                 (run_id, role, remote_name, br.decode("utf-8") if br else None, r.decode("utf-8") if r else None)
                 for (role, remote_name, br, r) in result_branches
@@ -1745,6 +1741,7 @@ async def handle_schedule(request):
                     requestor=requestor,
                     estimated_duration=estimated_duration,
                     codebase=codebase,
+                    command=command,
                     bucket=bucket)
         except CandidateUnavailable:
             raise web.HTTPBadRequest(text="Candidate not available")
