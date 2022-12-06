@@ -25,6 +25,7 @@ from yarl import URL
 
 from breezy import urlutils
 from breezy.forge import UnsupportedForge, get_forge
+from breezy.git.mapping import default_mapping
 from breezy.git.refs import ref_to_branch_name
 from breezy.git.urls import git_url_to_bzr_url
 
@@ -112,6 +113,7 @@ def is_webhook_request(request):
 
 
 def get_branch_urls_from_github_webhook(body):
+    # https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#push
     url_keys = ["clone_url", "html_url", "git_url", "ssh_url"]
     urls = []
     for url_key in url_keys:
@@ -130,16 +132,19 @@ def get_branch_urls_from_github_webhook(body):
         else:
             if branch_name == body["repository"].get("default_branch"):
                 urls.append(git_url_to_bzr_url(url))
-    return urls
+    new_revid = default_mapping.revision_id_foreign_to_bzr(body['after'].encode())
+    return urls, new_revid
 
 
 def get_bzr_branch_urls_from_launchpad_webhook(body):
-    return [
+    urls = [
         base + body['bzr_branch_path']
         for base in [
             'https://code.launchpad.net/',
             'https://bazaar.launchpad.net/',
             'lp:']]
+
+    return urls, body['new']['revision_id'].encode('utf-8')
 
 
 def get_git_branch_urls_from_launchpad_webhook(body):
@@ -158,6 +163,7 @@ def get_git_branch_urls_from_launchpad_webhook(body):
 
 
 def get_branch_urls_from_gitlab_webhook(body):
+    # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html#push-events
     url_keys = ["git_http_url", "git_ssh_url"]
     urls = []
     for url_key in url_keys:
@@ -169,7 +175,8 @@ def get_branch_urls_from_gitlab_webhook(body):
         else:
             if branch_name == body['project'].get('default_branch'):
                 urls.append(git_url_to_bzr_url(url_key))
-    return urls
+    new_revid = default_mapping.revision_id_foreign_to_bzr(body['after'].encode())
+    return urls, new_revid
 
 
 async def get_codebases_by_branch_url(
@@ -179,7 +186,7 @@ async def get_codebases_by_branch_url(
 SELECT
   name, branch_url
 FROM
-  package
+  codebase
 WHERE
   branch_url = ANY($1::text[])
 """
@@ -204,26 +211,26 @@ async def parse_webhook(request, db):
     if "X-Gitlab-Event" in request.headers:
         if request.headers["X-Gitlab-Event"] != "Push Hook":
             return
-        urls = get_branch_urls_from_gitlab_webhook(body)
+        urls, new_revid = get_branch_urls_from_gitlab_webhook(body)
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
     elif "X-GitHub-Event" in request.headers:
         if request.headers["X-GitHub-Event"] not in ("push", ):
             return
-        urls = get_branch_urls_from_github_webhook(body)
+        urls, new_revid = get_branch_urls_from_github_webhook(body)
     elif "X-Gitea-Event" in request.headers:
         if request.headers["X-Gitea-Event"] not in ("push", ):
             return
-        urls = get_branch_urls_from_github_webhook(body)
+        urls, new_revid = get_branch_urls_from_github_webhook(body)
     elif "X-Gogs-Event" in request.headers:
         if request.headers["X-Gogs-Event"] not in ("push", ):
             return
-        urls = get_branch_urls_from_github_webhook(body)
+        urls, new_revid = get_branch_urls_from_github_webhook(body)
     elif "X-Launchpad-Event-Type" in request.headers:
         if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
             return
         if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
-            urls = get_bzr_branch_urls_from_launchpad_webhook(body)
+            urls, new_revid = get_bzr_branch_urls_from_launchpad_webhook(body)
         elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
             urls = get_git_branch_urls_from_launchpad_webhook(body)
         else:
