@@ -1313,14 +1313,12 @@ async def store_run(
     )
 
     if result_branches:
+        roles = [role for (role, remote_name, br, r) in result_branches]
+        assert len(roles) == len(set(roles)), "Duplicate result branches: %r" % result_branches
         await conn.executemany(
             "INSERT INTO new_result_branch "
             "(run_id, role, remote_name, base_revision, revision) "
-            "VALUES ($1, $2, $3, $4, $5) "
-            "ON CONFLICT (run_id, role) DO UPDATE SET "
-            "remote_name = EXCLUDED.remote_name, "
-            "base_revision = EXCLUDED.base_revision, "
-            "revision = EXCLUDED.revision",
+            "VALUES ($1, $2, $3, $4, $5)",
             [
                 (run_id, role, remote_name, br.decode("utf-8") if br else None, r.decode("utf-8") if r else None)
                 for (role, remote_name, br, r) in result_branches
@@ -1725,6 +1723,14 @@ async def handle_schedule(request):
         estimated_duration = (
             timedelta(seconds=json['estimated_duration'])
             if json.get('estimated_duration') else None)
+        command = await conn.fetchval(
+            "SELECT command "
+            "FROM candidate WHERE package = $1 AND suite = $2",
+            package, campaign)
+        if command is None:
+            command = get_campaign_config(
+                request.app['config'], campaign).command
+
         try:
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, = await do_schedule(
@@ -1737,6 +1743,7 @@ async def handle_schedule(request):
                     requestor=requestor,
                     estimated_duration=estimated_duration,
                     codebase=codebase,
+                    command=command,
                     bucket=bucket)
         except CandidateUnavailable:
             raise web.HTTPBadRequest(text="Candidate not available")
@@ -1989,6 +1996,7 @@ async def handle_candidates_upload(request):
                     candidate['codebase'],
                     candidate['campaign'],
                     candidate.get('change_set'),
+                    command,
                 ))
 
             await conn.executemany(
@@ -2007,13 +2015,14 @@ async def handle_candidates_upload(request):
 
         ret = []
 
-        for (package, codebase, campaign, change_set) in to_schedule:
+        for (package, codebase, campaign, change_set, command) in to_schedule:
             offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
                 campaign,
                 change_set=change_set,
                 requestor="candidate trigger",
+                command=command,
                 codebase=codebase)
             ret.append({
                 'campaign': campaign,
