@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from typing import List, Optional, Tuple
+from typing import List, Set, Union
 import json
 import logging
 
@@ -112,7 +112,35 @@ def is_webhook_request(request):
             or "X-Launchpad-Event-Type" in request.headers)
 
 
-def get_branch_urls_from_github_webhook(body):
+class GitChange:
+
+    urls: Set[str]
+    after: bytes
+
+    def __init__(self, urls, after):
+        self.urls = urls
+        self.after = after
+
+    def after_revision_id(self) -> bytes:
+        if self.after is None:
+            return None
+        return default_mapping.revision_id_foreign_to_bzr(self.after)
+
+
+class BzrChange:
+
+    urls: Set[str]
+    after: bytes
+
+    def __init__(self, urls, after):
+        self.urls = urls
+        self.after = after
+    
+    def after_revision_id(self):
+        return self.after
+
+
+def get_changes_from_github_webhook(body):
     # https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#push
     url_keys = ["clone_url", "html_url", "git_url", "ssh_url"]
     urls = []
@@ -132,11 +160,10 @@ def get_branch_urls_from_github_webhook(body):
         else:
             if branch_name == body["repository"].get("default_branch"):
                 urls.append(git_url_to_bzr_url(url))
-    new_revid = default_mapping.revision_id_foreign_to_bzr(body['after'].encode())
-    return urls, new_revid
+    return [GitChange(urls, body['after'].encode())]
 
 
-def get_bzr_branch_urls_from_launchpad_webhook(body):
+def get_bzr_changes_from_launchpad_webhook(body):
     urls = [
         base + body['bzr_branch_path']
         for base in [
@@ -144,25 +171,28 @@ def get_bzr_branch_urls_from_launchpad_webhook(body):
             'https://bazaar.launchpad.net/',
             'lp:']]
 
-    return urls, body['new']['revision_id'].encode('utf-8')
+    return [BzrChange(urls, body['new']['revision_id'].encode('utf-8'))]
 
 
-def get_git_branch_urls_from_launchpad_webhook(body):
+def get_git_changes_from_launchpad_webhook(body):
     path = body['git_repository_path']
-    base_urls = [
+    base_urls = body['git_repository'] + [
         'https://git.launchpad.net/' + path,
         'git+ssh://git.launchpad.net/' + path]
-    urls = []
-    for base_url in base_urls:
-        for ref in body['ref_changes']:
+    ret = []
+    for ref, changes in body['ref_changes'].items():
+        urls = []
+        for base_url in base_urls:
             urls.append(git_url_to_bzr_url(base_url, ref=body["ref"].encode()))
-        # No idea what the default branch is, so let's trigger on everything
-        # for now:
-        urls.append(git_url_to_bzr_url(base_url))
-    return urls
+        ret.append(GitChange(urls, after=changes['new']['commit_sha1']))
+    # No idea what the default branch is, so let's trigger on everything
+    # for now:
+    for base_url in base_urls:
+        ret.append(GitChange(git_url_to_bzr_url(base_url), after=None))
+    return ret
 
 
-def get_branch_urls_from_gitlab_webhook(body):
+def get_changes_from_gitlab_webhook(body):
     # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html#push-events
     url_keys = ["git_http_url", "git_ssh_url"]
     urls = []
@@ -175,13 +205,11 @@ def get_branch_urls_from_gitlab_webhook(body):
         else:
             if branch_name == body['project'].get('default_branch'):
                 urls.append(git_url_to_bzr_url(url_key))
-    new_revid = default_mapping.revision_id_foreign_to_bzr(body['after'].encode())
-    return urls, new_revid
+    return [GitChange(urls, body['after'].encode())]
 
 
-async def get_codebases_by_branch_url(
-    conn: asyncpg.Connection, branch_urls: List[str]
-) -> List[Tuple[Optional[str], str]]:
+async def get_codebases_by_change(
+        conn: asyncpg.Connection, change: Union[GitChange, BzrChange]):
     query = """
 SELECT
   name, branch_url
@@ -191,7 +219,7 @@ WHERE
   branch_url = ANY($1::text[])
 """
     candidates = []
-    for url in branch_urls:
+    for url in change.urls:
         candidates.extend([
             url.rstrip('/'),
             url.rstrip('/') + '/'])
@@ -208,40 +236,48 @@ async def parse_webhook(request, db):
         raise web.HTTPUnsupportedMediaType(
             text="Invalid content type %s" % request.content_type
         )
+    changes: List[Union[GitChange, BzrChange]]
     if "X-Gitlab-Event" in request.headers:
         if request.headers["X-Gitlab-Event"] != "Push Hook":
             return
-        urls, new_revid = get_branch_urls_from_gitlab_webhook(body)
+        changes = get_changes_from_gitlab_webhook(body)
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
     elif "X-GitHub-Event" in request.headers:
         if request.headers["X-GitHub-Event"] not in ("push", ):
             return
-        urls, new_revid = get_branch_urls_from_github_webhook(body)
+        changes = get_changes_from_github_webhook(body)
     elif "X-Gitea-Event" in request.headers:
         if request.headers["X-Gitea-Event"] not in ("push", ):
             return
-        urls, new_revid = get_branch_urls_from_github_webhook(body)
+        changes = get_changes_from_github_webhook(body)
     elif "X-Gogs-Event" in request.headers:
         if request.headers["X-Gogs-Event"] not in ("push", ):
             return
-        urls, new_revid = get_branch_urls_from_github_webhook(body)
+        changes = get_changes_from_github_webhook(body)
     elif "X-Launchpad-Event-Type" in request.headers:
         if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
             return
         if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
-            urls, new_revid = get_bzr_branch_urls_from_launchpad_webhook(body)
+            changes = get_bzr_changes_from_launchpad_webhook(body)
         elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
-            urls = get_git_branch_urls_from_launchpad_webhook(body)
+            changes = get_git_changes_from_launchpad_webhook(body)
         else:
             return
     else:
         raise web.HTTPBadRequest(text="Unrecognized webhook")
 
     async with db.acquire() as conn:
-        # TODO(jelmer): Update codebases to new git sha
-        for row in await get_codebases_by_branch_url(conn, urls):
-            yield row
+        for change in changes:
+            for row in await get_codebases_by_change(conn, change):
+                if change.after_revision_id() is not None:
+                    await conn.execute(
+                        'UPDATE codebase SET '
+                        'vcs_last_revision = $1, last_scanned = NOW() '
+                        'WHERE branch_url = $2',
+                        change.after_revision_id().decode('utf-8'),
+                        row['branch_url'])
+                yield row
 
 
 async def get_codebases(runner_url):
