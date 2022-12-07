@@ -389,6 +389,7 @@ async def main():
 async def do_schedule_control(
     conn: asyncpg.Connection,
     package: str,
+    codebase: Optional[str],
     *,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
@@ -397,7 +398,6 @@ async def do_schedule_control(
     bucket: Optional[str] = None,
     requestor: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None,
-    codebase: Optional[str] = None,
 ) -> Tuple[float, Optional[timedelta], int]:
     command = ["brz", "up"]
     if main_branch_revision is not None:

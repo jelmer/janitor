@@ -2004,7 +2004,7 @@ async def handle_candidates_upload(request):
                 "(package, suite, command, change_set, context, value, "
                 "success_chance, publish_policy, codebase) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
-                "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
+                "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
                 "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
                 "success_chance = EXCLUDED.success_chance, "
                 "command = EXCLUDED.command, "
