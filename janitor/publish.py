@@ -1064,10 +1064,13 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    unchanged_run = await conn.fetchrow(
-        "SELECT id, result_code FROM last_runs "
-        "WHERE package = $1 AND revision = $2 AND result_code = 'success'",
-        run.package, base_revision.decode('utf-8'))
+    if base_revision is None:
+        unchanged_run = None
+    else:
+        unchanged_run = await conn.fetchrow(
+            "SELECT id, result_code FROM last_runs "
+            "WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+            run.package, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
     if (
