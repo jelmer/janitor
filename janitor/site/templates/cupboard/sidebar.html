@@ -5,7 +5,7 @@
             <a href="/">Janitor</a>
         </h1>
         <h3>
-            <a href="/cupboard">Cupboard</a>
+            <a href="/cupboard/">Cupboard</a>
         </h3>
         {% if user %}
             Logged in as <a href="/cupboard/maintainer/{{ user['email'] }}">{{ user['name'] }}</a>
@@ -50,7 +50,7 @@
                 <a class="reference internal" href="/cupboard/broken-merge-proposals">Broken Merge Proposals</a>
             </li>
             <li class="toctree-l1">
-                <a class="reference internal" href="/cupboard/cs">Change sets</a>
+                <a class="reference internal" href="/cupboard/cs/">Change sets</a>
             </li>
             {% if is_admin %}
                 <li class="toctree-l1">

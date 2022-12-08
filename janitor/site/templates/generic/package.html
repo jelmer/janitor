@@ -72,7 +72,7 @@
             {{ local_command(command, None, package, vcs, vcs_url) }}
             <h3>More details</h3>
             <p>
-                <a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a>
+                <a href="/cupboard/pkg/{{ package }}/{{ run_id }}/">Full run details</a>
             </p>
         {% endif %}
         {% if previous_runs and result_code not in ('nothing-to-do', 'success') %}
