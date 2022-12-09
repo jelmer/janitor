@@ -1706,9 +1706,10 @@ async def handle_schedule(request):
             package = json['package']
             campaign = json['campaign']
             codebase = json.get('codebase')
+            run = None
         else:
             run = await conn.fetchrow(
-                "SELECT suite AS campaign, package, codebase FROM run WHERE id = $1",
+                "SELECT suite AS campaign, package, codebase, command FROM run WHERE id = $1",
                 run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
@@ -1730,6 +1731,10 @@ async def handle_schedule(request):
         if command is None:
             command = get_campaign_config(
                 request.app['config'], campaign).command
+        if command is None and run is not None:
+            command = run['command']
+        if command is None:
+            raise web.HTTPBadRequest(text="no command specified")
 
         try:
             with span.new_child('do-schedule'):
