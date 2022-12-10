@@ -24,11 +24,18 @@ __all__ = [
 ]
 
 from google.protobuf import text_format  # type: ignore
+import sys
 
 from . import config_pb2
 
-Config = config_pb2.Config
-Campaign = config_pb2.Campaign
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+
+    Config: TypeAlias = config_pb2.Config
+    Campaign: TypeAlias = config_pb2.Campaign
+else:
+    Config = config_pb2.Config
+    Campaign = config_pb2.Campaign
 
 
 def read_config(f):

@@ -610,9 +610,9 @@ async def consider_publish_run(
     actual_modes: Dict[str, Optional[str]] = {}
     for (
         role,
-        remote_name,
-        base_revision,
-        revision,
+        _remote_name,
+        _base_revision,
+        _revision,
         publish_mode,
         max_frequency_days
     ) in unpublished_branches:
@@ -2502,12 +2502,12 @@ async def check_existing_mp(
                             # TODO(jelmer): Determine codebase
                             codebase=None
                         )
-                    except CandidateUnavailable:
+                    except CandidateUnavailable as e:
                         logging.warning(
                             'Candidate unavailable while attempting to reschedule '
                             'orphaned %s: %s/%s',
                             mp.url, package_name, campaign)
-                        raise NoRunForMergeProposal(mp, revision)
+                        raise NoRunForMergeProposal(mp, revision) from e
                     else:
                         logging.warning('Rescheduled')
                         return False
@@ -3164,10 +3164,10 @@ async def listen_to_runner(
             if run.campaign != "unchanged":
                 await process_run(conn, run, codebase['branch_url'])
             else:
-                for run in await iter_control_matching_runs(
+                for dependent_run in await iter_control_matching_runs(
                         conn, main_branch_revision=run.revision,
                         codebase=run.codebase):
-                    await process_run(conn, run, codebase['branch_url'])
+                    await process_run(conn, dependent_run, codebase['branch_url'])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:

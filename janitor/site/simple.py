@@ -431,7 +431,7 @@ async def create_app(
 
         app['runner_status'] = None
 
-        for cb, title in [
+        for name, title in [
             ('publish', 'publisher publish listening'),
             ('merge-proposal', 'merge proposal listening'),
             ('queue', 'queue listening'),
@@ -439,11 +439,11 @@ async def create_app(
         ]:
             listener = create_background_task(forward_redis(app, name), title)
 
-            async def stop_listener(app):
+            async def stop_listener(listener, app):
                 listener.cancel()
                 await listener
 
-            app.on_cleanup.append(stop_listener)
+            app.on_cleanup.append(functools.partial(stop_listener, listener))
 
     for path, templatename in [
         ("/", "index"),

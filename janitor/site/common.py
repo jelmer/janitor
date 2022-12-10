@@ -345,7 +345,7 @@ async def generate_candidates(db, suite):
     return {"candidates": candidates, "suite": suite}
 
 
-def html_template(template_name, headers={}):
+def html_template(template_name, headers={}):  # noqa: B006
     def decorator(fn):
         async def handle(request):
             vs = await fn(request)
