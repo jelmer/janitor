@@ -18,6 +18,7 @@
 from aiohttp import ClientSession, ClientTimeout
 from aiozipkin.helpers import TraceContext
 import asyncio
+from contextlib import suppress
 from io import BytesIO
 import logging
 import os
@@ -299,11 +300,16 @@ class LocalGitVcsManager(VcsManager):
             cwd=repo.user_transport.local_abspath('.'),
         )
 
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            with suppress(ProcessLookupError):
+                p.kill()
+            raise
 
-        if p.returncode == 0:
-            return stdout
-        raise RuntimeError('git diff failed: %s', stderr.decode())
+        if p.returncode != 0:
+            raise RuntimeError('git diff failed: %s', stderr.decode())
+        return stdout
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         from dulwich.errors import MissingCommitError
@@ -381,7 +387,12 @@ class LocalBzrVcsManager(VcsManager):
             stdin=asyncio.subprocess.PIPE,
         )
 
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            with suppress(ProcessLookupError):
+                p.kill()
+            raise
 
         if p.returncode != 3:
             return stdout
