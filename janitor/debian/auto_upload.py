@@ -94,7 +94,7 @@ async def dput(directory, changes_filename, dput_host):
 
 async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None, source_only: bool = False):
     logging.info('Uploading results for %s', log_id)
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(prefix='janitor-auto-upload') as td:
         try:
             await artifact_manager.retrieve_artifacts(
                 log_id, td)

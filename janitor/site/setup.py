@@ -33,7 +33,7 @@ def setup_gpg(app):
     import gpg
 
     async def start_gpg_context(app):
-        gpg_home = tempfile.TemporaryDirectory()
+        gpg_home = tempfile.TemporaryDirectory(prefix='janitor-gpg')
         gpg_home.__enter__()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
         app['gpg'] = gpg_context.__enter__()

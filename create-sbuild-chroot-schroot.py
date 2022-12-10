@@ -14,7 +14,7 @@ def sbuild_schroot_name(suite, arch):
     return "%s-%s-sbuild" % (suite, arch)
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006
                   eatmydata=True, make_sbuild_tarball=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
            distro.archive_mirror_uri]

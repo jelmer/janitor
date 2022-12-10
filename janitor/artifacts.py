@@ -255,7 +255,7 @@ async def upload_backup_artifacts(
     backup_artifact_manager, artifact_manager, timeout=None
 ):
     async for run_id in backup_artifact_manager.iter_ids():
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(prefix='janitor-artifacts') as td:
             await backup_artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=timeout
             )

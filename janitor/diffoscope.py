@@ -197,7 +197,8 @@ async def run_diffoscope(old_binaries, new_binaries, *, preexec_fn=None, timeout
         "details": [],
     }
 
-    for (old_name, old_path), (new_name, new_path) in zip(old_binaries, new_binaries):
+    for (old_name, old_path), (new_name, new_path) in zip(
+            old_binaries, new_binaries):
         sub = await _run_diffoscope(
             old_path, new_path, preexec_fn=preexec_fn, timeout=timeout)
         if sub is None:

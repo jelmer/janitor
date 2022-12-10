@@ -446,8 +446,8 @@ async def handle_merge_proposal(request):
 
     try:
         url = request.query["url"]
-    except KeyError:
-        raise web.HTTPBadRequest(text="no url specified")
+    except KeyError as e:
+        raise web.HTTPBadRequest(text="no url specified") from e
     return await write_merge_proposal(request.app.database, url)
 
 
@@ -498,10 +498,10 @@ async def handle_result_file(request):
 
         try:
             logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             raise web.HTTPNotFound(
                 text="No log file %s for run %s" % (filename, run_id)
-            )
+            ) from e
         else:
             with logfile as f:
                 text = f.read().decode("utf-8", "replace")
@@ -514,8 +514,9 @@ async def handle_result_file(request):
             f = await request.app['artifact_manager'].get_artifact(
                 run_id, filename
             )
-        except FileNotFoundError:
-            raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
+        except FileNotFoundError as e:
+            raise web.HTTPNotFound(
+                text="No artifact %s for run %s" % (filename, run_id)) from e
         return web.Response(body=f.read())
 
 

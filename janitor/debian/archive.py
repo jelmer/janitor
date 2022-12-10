@@ -55,6 +55,7 @@ from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config, get_distribution, Campaign, get_campaign_config
 
 
+TMP_PREFIX = 'janitor-apt'
 DEFAULT_GCS_TIMEOUT = 60 * 30
 
 last_publish_time: Dict[str, datetime] = {}
@@ -151,7 +152,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
         return False
 
     async def packages_for_run(self, run_id, suite_name, package, arch):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(prefix=TMP_PREFIX) as td:
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
@@ -169,7 +170,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
         await asyncio.sleep(0)
 
     async def sources_for_run(self, run_id, suite_name, package):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory(prefix=TMP_PREFIX) as td:
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
@@ -236,7 +237,7 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
 async def retrieve_packages(info_provider, rows, suite_name, component, arch):
     logger.debug('Need to process %d rows for %s/%s/%s',
                  len(rows), suite_name, component, arch)
-    for package, run_id, build_distribution, build_version in rows:
+    for package, run_id, build_distribution, _build_version in rows:
         try:
             async for chunk in info_provider.packages_for_run(run_id, build_distribution, package, arch=arch):
                 yield chunk
@@ -249,7 +250,7 @@ async def retrieve_packages(info_provider, rows, suite_name, component, arch):
 async def retrieve_sources(info_provider, rows, suite_name, component):
     logger.debug('Need to process %d rows for %s/%s',
                  len(rows), suite_name, component)
-    for package, run_id, build_distribution, build_version in rows:
+    for package, run_id, build_distribution, _build_version in rows:
         try:
             async for chunk in info_provider.sources_for_run(run_id, build_distribution, package):
                 yield chunk
@@ -314,7 +315,7 @@ def cleanup_by_hash_files(base, number_to_keep):
 
         ages.sort(key=lambda k: k[1])
 
-        for entry, age in ages[number_to_keep:]:
+        for entry, _age in ages[number_to_keep:]:
             os.unlink(entry.path)
 
 
@@ -594,8 +595,8 @@ async def refresh_on_demand_dists(
         else:
             try:
                 campaign_config = get_campaign_config(config, kind)
-            except KeyError:
-                raise web.HTTPNotFound(text=f"No such campaign: {kind}")
+            except KeyError as e:
+                raise web.HTTPNotFound(text=f"No such campaign: {kind}") from e
             cs_id = await conn.fetchval(
                 "SELECT run.change_set FROM run "
                 "INNER JOIN change_set ON change_set.id = run.change_set "
