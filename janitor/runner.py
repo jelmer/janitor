@@ -1991,12 +1991,25 @@ async def handle_candidates_upload(request):
                     candidate.get('value'), candidate.get('success_chance'),
                     publish_policy, candidate['codebase']))
 
+                # Bump priority if there are any open merge proposals with a
+                # different command
+                if any(await conn.fetch(
+                        "SELECT url FROM merge_proposal WHERE "
+                        "status = 'open' AND revision in ("
+                        "SELECT revision FROM last_effective_runs WHERE "
+                        "codebase = $1 AND suite = $2 AND command != $3)",
+                        candidate['codebase'], candidate['campaign'], command)):
+                    bucket = 'update-existing-mp'
+                else:
+                    bucket = None
+
                 to_schedule.append((
                     candidate['package'],
                     candidate['codebase'],
                     candidate['campaign'],
                     candidate.get('change_set'),
                     command,
+                    bucket,
                 ))
 
             await conn.executemany(
@@ -2015,18 +2028,20 @@ async def handle_candidates_upload(request):
 
         ret = []
 
-        for (package, codebase, campaign, change_set, command) in to_schedule:
+        for (package, codebase, campaign, change_set, command, bucket) in to_schedule:
             offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
                 campaign,
                 change_set=change_set,
+                bucket=bucket,
                 requestor="candidate trigger",
                 command=command,
                 codebase=codebase)
             ret.append({
                 'campaign': campaign,
                 'codebase': codebase,
+                'bucket': bucket,
                 'change_set': change_set,
                 'offset': offset,
                 'estimated_duration': estimated_duration.total_seconds()
