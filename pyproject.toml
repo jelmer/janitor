@@ -18,7 +18,6 @@ module = [
     "launchpadlib.*",
     "klaus.*",
     "aiohttp_debugtoolbar.*",
-    "buildlog_consultant.*",
     "fakeredis.*",
     "aiohttp_wsgi.*",
     # https://github.com/MagicStack/asyncpg/issues/387

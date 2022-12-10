@@ -9,20 +9,20 @@ import subprocess
 from janitor.config import read_config, get_distribution
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],
-                  setup_hooks=[]):
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006
+                  setup_hooks=[]):  # noqa: B006
     cmd = ["mmdebstrap", "--variant=buildd", distro.name, sbuild_path,
            distro.archive_mirror_uri, '--mode=unshare',
            '--arch=%s' % sbuild_arch]
-    cmd.append("--components=%s" % ','.join(distro.component))
+    cmd.append("--components=" + ','.join(distro.component))
     if include:
-        cmd.append("--include=%s" % ','.join(include))
+        cmd.append("--include=" + ','.join(include))
     for name in distro.extra:
         cmd.append("--extra-repository=deb %s %s %s" % (
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
     for setup_hook in setup_hooks:
-        cmd.append('--setup-hook=%s' % setup_hook)
+        cmd.append('--setup-hook=' + setup_hook)
 
     print(shlex.join(cmd))
     subprocess.check_call(cmd)

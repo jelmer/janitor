@@ -541,7 +541,7 @@ async def create_web_app(
             "/git/{codebase}/info/refs",
             dulwich_refs, name='dulwich-refs-public')
     else:
-        for (method, regex), fn in HTTPGitApplication.services.items():
+        for method, regex in HTTPGitApplication.services.keys():
             app.router.add_route(
                 method, "/{codebase}{subpath:" + regex.pattern + "}",
                 cgit_backend,

@@ -321,8 +321,8 @@ class LocalGitVcsManager(VcsManager):
         new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
         try:
             walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
-        except MissingCommitError:
-            raise KeyError
+        except MissingCommitError as e:
+            raise KeyError from e
         for entry in walker:
             ret.append({
                 'commit-id': entry.commit.id.decode('ascii'),

@@ -468,7 +468,7 @@ def import_branches_git(
 
     def get_changed_refs(refs):
         changed_refs: Dict[bytes, Tuple[bytes, Optional[bytes]]] = {}
-        for (fn, n, br, r) in (branches or []):
+        for (fn, _n, _br, r) in (branches or []):
             tagname = ("refs/tags/run/%s/%s" % (log_id, fn)).encode("utf-8")
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
@@ -499,7 +499,7 @@ def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches, tags,
         update_current: bool = True
 ):
-    for fn, n, br, r in branches:
+    for fn, _n, _br, r in branches:
         target_branch_path = urlutils.join(repo_url, campaign)
         if fn is not None:
             target_branch_path = urlutils.join_segment_parameters(
@@ -517,11 +517,11 @@ def import_branches_bzr(
             target_branch = ControlDir.create_branch_convenience(
                 target_branch_path, possible_transports=[transport])
         if update_current:
-            local_branch.push(target_branch, overwrite=True)
+            local_branch.push(target_branch, overwrite=True, stop_revision=r)
         else:
-            target_branch.repository.fetch(revision_id=local_branch.last_revision())
+            target_branch.repository.fetch(revision_id=r)
 
-        target_branch.tags.set_tag(log_id, local_branch.last_revision())
+        target_branch.tags.set_tag(log_id, r)
 
         graph = target_branch.repository.get_graph()
         for name, revision in tags:
@@ -1266,8 +1266,8 @@ async def handle_artifact_index(request):
     try:
         names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
                  if not entry.name.endswith('.log') and entry.is_file()]
-    except FileNotFoundError:
-        raise web.HTTPNotFound(text="Output directory does not exist")
+    except FileNotFoundError as e:
+        raise web.HTTPNotFound(text="Output directory does not exist") from e
     return web.Response(
         text=ARTIFACT_INDEX_TEMPLATE.render(names=names), content_type='text/html',
         status=200)
@@ -1403,7 +1403,7 @@ async def process_single_item(
 
         vendor = build_environment.get('DEB_VENDOR', 'debian')
 
-        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor'))
+        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor-worker'))
         workitem['directory'] = output_directory
         loop = asyncio.get_running_loop()
 
