@@ -331,11 +331,10 @@ async def handle_diffoscope(request):
                 )
 
             try:
-                diffoscope_diff = await asyncio.wait_for(
-                    run_diffoscope(
-                        old_binaries, new_binaries,
-                        lambda: _set_limits(request.app['task_memory_limit'])),
-                    request.app['task_timeout'])
+                diffoscope_diff = await run_diffoscope(
+                    old_binaries, new_binaries,
+                    timeout=request.app['task_timeout'],
+                    preexec_fn=lambda: _set_limits(request.app['task_memory_limit'])) 
             except MemoryError as e:
                 raise web.HTTPServiceUnavailable(
                     text="diffoscope used too much memory") from e
@@ -434,10 +433,10 @@ async def precache(app, old_id, new_id):
         diffoscope_cache_path = app['diffoscope_cache_path'](old_id, new_id)
         if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
             try:
-                diffoscope_diff = await asyncio.wait_for(
-                    run_diffoscope(
-                        old_binaries, new_binaries,
-                        lambda: _set_limits(app['task_memory_limit'])), app['task_timeout'])
+                diffoscope_diff = await run_diffoscope(
+                    old_binaries, new_binaries,
+                    preexec_fn=lambda: _set_limits(app['task_memory_limit']),
+                    timeout=app['task_timeout'])
             except MemoryError as e:
                 raise DiffCommandMemoryError(
                     "diffoscope", app['task_memory_limit']) from e
