@@ -18,6 +18,7 @@
 """Manage VCS repositories."""
 
 import asyncio
+from contextlib import suppress
 from io import BytesIO
 import logging
 import os
@@ -73,6 +74,8 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
     try:
         (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
     except asyncio.TimeoutError as e:
+        with suppress(ProcessLookupError):
+            p.kill()
         raise web.HTTPRequestTimeout(text='diff generation timed out') from e
 
     if p.returncode != 3:
