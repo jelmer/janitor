@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
+env:
+  PG_MAJOR: "14"
+
 jobs:
   build:
 
@@ -20,7 +23,7 @@ jobs:
           submodules: recursive
       - name: Install dependencies
         run: |
-          sudo apt install postgresql-12 postgresql-common postgresql-12-debversion
+          sudo apt install postgresql-${PG_MAJOR} postgresql-common postgresql-${PG_MAJOR}-debversion
       - name: Load SQL
         run: |
-          pg_virtualenv -v12 psql -v ON_ERROR_STOP=1 < state.sql
+          pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1 < state.sql
