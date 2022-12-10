@@ -39,7 +39,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Dry run.")
     args = parser.parse_args()
 
-    for name, forge_cls in forges.items():
+    for forge_cls in forges.values():
         for instance in forge_cls.iter_instances():
             for project in projects_to_remove(instance):
                 print("Deleting %s from %r" % (project, instance))

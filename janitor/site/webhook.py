@@ -72,8 +72,8 @@ def subscribe_webhook_gitlab(branch, gitlab, callback_url):
     try:
         (host, project_name, branch_name) = (
             parse_gitlab_branch_url(branch))
-    except NotGitLabUrl:
-        raise UnsupportedForge(branch.user_url)
+    except NotGitLabUrl as e:
+        raise UnsupportedForge(branch.user_url) from e
 
     project = gitlab._get_project(project_name)
     path = 'projects/%s/hooks' % (
@@ -183,7 +183,7 @@ def get_git_changes_from_launchpad_webhook(body):
     for ref, changes in body['ref_changes'].items():
         urls = []
         for base_url in base_urls:
-            urls.append(git_url_to_bzr_url(base_url, ref=body["ref"].encode()))
+            urls.append(git_url_to_bzr_url(base_url, ref=ref.encode()))
         ret.append(GitChange(urls, after=changes['new']['commit_sha1']))
     # No idea what the default branch is, so let's trigger on everything
     # for now:

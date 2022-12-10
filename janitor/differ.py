@@ -50,6 +50,8 @@ from .diffoscope import (
 from aiohttp_openmetrics import setup_metrics
 
 
+# Common prefix for temporary directories
+TMP_PREFIX = 'janitor-differ'
 PRECACHE_RETRIEVE_TIMEOUT = 300
 routes = web.RouteTableDef()
 
@@ -119,8 +121,8 @@ async def handle_debdiff(request):
             new_run['campaign'],
         )
         with ExitStack() as es:
-            old_dir = es.enter_context(TemporaryDirectory())
-            new_dir = es.enter_context(TemporaryDirectory())
+            old_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
+            new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
             try:
                 await asyncio.gather(
@@ -295,8 +297,8 @@ async def handle_diffoscope(request):
             new_run['campaign'],
         )
         with ExitStack() as es:
-            old_dir = es.enter_context(TemporaryDirectory())
-            new_dir = es.enter_context(TemporaryDirectory())
+            old_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
+            new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
             try:
                 await asyncio.gather(
@@ -399,8 +401,8 @@ async def precache(app, old_id, new_id):
       DiffCommandError: if a diff command failed
     """
     with ExitStack() as es:
-        old_dir = es.enter_context(TemporaryDirectory())
-        new_dir = es.enter_context(TemporaryDirectory())
+        old_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
+        new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
         await asyncio.gather(
             app['artifact_manager'].retrieve_artifacts(

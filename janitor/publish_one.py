@@ -438,12 +438,12 @@ def publish_one(
             forge = None
         except UnexpectedHttpStatus as e:
             if e.code == 502:
-                raise PublishFailure("bad-gateway", str(e))
+                raise PublishFailure("bad-gateway", str(e)) from e
             elif e.code == 429:
-                raise PublishFailure("too-many-requests", str(e))
+                raise PublishFailure("too-many-requests", str(e)) from e
             else:
                 traceback.print_exc()
-                raise PublishFailure("http-%s" % e.code, str(e))
+                raise PublishFailure("http-%s" % e.code, str(e)) from e
         else:
             try:
                 (resume_branch, overwrite, existing_proposals) = find_existing_proposed(

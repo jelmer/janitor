@@ -152,7 +152,7 @@ async def handle_schedule(request):
                 queue_position = await resp.json()
         except ClientResponseError as e:
             if e.status == 400:
-                raise web.HTTPBadRequest(text=e.message)
+                raise web.HTTPBadRequest(text=e.message) from e
             raise
     return web.json_response({
         "package": ret['package'],
@@ -852,10 +852,10 @@ async def handle_needs_review(request):
                 run_id,
                 command,
                 package,
-                campaign,
-                vcs_type,
+                _campaign,
+                _vcs_type,
                 result_branches,
-                main_branch_revision,
+                _main_branch_revision,
                 value,
                 finish_time
             ) in await iter_needs_review(

@@ -424,10 +424,10 @@ def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=No
         try:
             distribution = get_distribution(
                 config, campaign_config.debian_build.base_distribution)
-        except KeyError:
+        except KeyError as e:
             raise NotImplementedError(
                 "Unsupported distribution: "
-                f"{campaign_config.debian_build.base_distribution}")
+                f"{campaign_config.debian_build.base_distribution}") from e
         return DebianBuilder(
             distribution,
             apt_archive_url,
@@ -1745,8 +1745,8 @@ async def handle_schedule(request):
                     codebase=codebase,
                     command=command,
                     bucket=bucket)
-        except CandidateUnavailable:
-            raise web.HTTPBadRequest(text="Candidate not available")
+        except CandidateUnavailable as e:
+            raise web.HTTPBadRequest(text="Candidate not available") from e
 
     response_obj = {
         "package": package,
@@ -2234,7 +2234,7 @@ async def next_item(
                 logging.warning('Rate limiting for %s: %r', host, e)
                 await queue_processor.rate_limited(host, e.retry_after)
                 await abort(active_run, 'pull-rate-limited', str(e))
-                raise QueueRateLimiting(e.retry_after)
+                raise QueueRateLimiting(e.retry_after) from e
             except BranchOpenFailure as e:
                 logging.debug(
                     'Error opening branch %s: %s', vcs_info['branch_url'],
@@ -2269,7 +2269,7 @@ async def next_item(
                             logging.warning('Rate limiting for %s: %r', host, e)
                             await queue_processor.rate_limited(host, e.retry_after)
                             await abort(active_run, 'resume-rate-limited', str(e))
-                            raise QueueRateLimiting(e.retry_after)
+                            raise QueueRateLimiting(e.retry_after) from e
                         except asyncio.TimeoutError:
                             logging.debug('Timeout opening resume branch')
                             resume_branch = None
@@ -2415,7 +2415,7 @@ async def handle_finish(request):
     worker_result = None
 
     filenames = []
-    with tempfile.TemporaryDirectory() as output_directory:
+    with tempfile.TemporaryDirectory(prefix='janitor-run') as output_directory:
         with span.new_child('read-files'):
             while True:
                 part = await reader.next()
