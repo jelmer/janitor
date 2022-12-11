@@ -474,12 +474,11 @@ ARCHES: List[str] = ["amd64"]
 @routes.post("/publish", name="publish")
 async def handle_publish(request):
     post = await request.post()
-    suite = post.get("suite")
+    campaign = post.get("campaign")
     for campaign_config in request.app['config'].campaign:
         if not campaign_config.HasField('debian_build'):
             continue
-        build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
-        if suite is not None and build_distribution != suite:
+        if campaign is not None and campaign != campaign_config.name:
             continue
         request.app['generator_manager'].trigger(campaign_config)
 
@@ -504,9 +503,8 @@ async def handle_ready(request):
     for campaign_config in request.app['config'].campaign:
         if not campaign_config.HasField('debian_build'):
             continue
-        build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
-        if build_distribution not in last_publish_time:
-            missing.append(build_distribution)
+        if campaign_config.name not in last_publish_time:
+            missing.append(campaign_config.name)
     if missing:
         return web.Response(text='missing: %s' % ', '.join(missing), status=500)
     return web.Response(text='ok')
