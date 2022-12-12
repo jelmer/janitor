@@ -28,5 +28,22 @@
                 </li>
             {% endfor %}
         </ul>
+        <h2>APT Repository</h2>
+        <p>
+                To install the packages from this changeset, use the following
+                sources configuration (with <a
+                href="/archive-keyring.gpg">archive keyring</a> stored in
+                /etc/apt/keyrings/debian-janitor.gpg):
+        </p>
+	<p>
+            <div class="highlight-default notranslate">
+                <div class="highlight">
+                    <pre>
+deb "[arch=amd64 signed-by=/etc/apt/keyrings/debian-janitor.gpg]" {{ url.join(URL('/')) }} cs/{{ changeset.id }} main
+deb-src "[arch=amd64 signed-by=/etc/apt/keyrings/debian-janitor.gpg]" {{ url.join(URL('/')) }} cs/{{ changeset.id }} main
+</pre>
+                </div>
+            </div>
+        </p>
     </div>
 {% endblock body %}
