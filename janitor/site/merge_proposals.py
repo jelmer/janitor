@@ -43,6 +43,7 @@ async def write_merge_proposals(db, suite):
     )
     return {
         "suite": suite,
+        "campaign": suite,
         "open_proposals": proposals_by_status.get("open", []),
         "merged_proposals": merged,
         "closed_proposals": proposals_by_status.get("closed", []),
