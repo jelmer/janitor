@@ -94,7 +94,7 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, codebase))
+        repo = Repository.open(os.path.join(request.app["local_path"], codebase))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -113,7 +113,7 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, codebase))
+        repo = Repository.open(os.path.join(request.app["local_path"], codebase))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -137,7 +137,7 @@ async def handle_set_bzr_remote(request):
     post = await request.post()
 
     try:
-        local_branch = Branch.open(os.path.join(request.app.local_path, codebase, remote))
+        local_branch = Branch.open(os.path.join(request.app["local_path"], codebase, remote))
     except NotBranchError as e:
         raise web.HTTPNotFound() from e
     local_branch.set_parent(post["url"])
@@ -167,19 +167,19 @@ async def _bzr_open_repo(local_path, db, codebase):
 async def bzr_backend(request):
     codebase = request.match_info["codebase"]
     branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app.local_path, request.app.db, codebase)
+    repo = await _bzr_open_repo(request.app["local_path"], request.app["db"], codebase)
     if branch_name:
         try:
-            get_campaign_config(request.app.config, branch_name)
+            get_campaign_config(request.app["config"], branch_name)
         except KeyError as e:
             raise web.HTTPNotFound(text='no such campaign: %s' % branch_name) from e
         transport = repo.user_transport.clone(branch_name)
     else:
         transport = repo.user_transport
     transport.ensure_base()
-    allow_writes = request.app.allow_writes
+    allow_writes = request.app["allow_writes"]
     if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
+        allow_writes = await is_worker(request.app["db"], request)
     if allow_writes:
         backing_transport = transport
     else:
@@ -220,7 +220,7 @@ async def handle_repo_list(request):
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.local_path))]
+                 for entry in os.scandir(os.path.join(request.app["local_path"]))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -260,10 +260,10 @@ async def create_web_app(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
         client_max_size=(client_max_size or 0)
     )
-    app.local_path = local_path
-    app.db = db
-    app.allow_writes = True
-    app.config = config
+    app["local_path"] = local_path
+    app["db"] = db
+    app["allow_writes"] = True
+    app["config"] = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
         client_max_size=(client_max_size or 0)
@@ -271,10 +271,10 @@ async def create_web_app(
     aiohttp_jinja2.setup(
         public_app, loader=template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
-    public_app.local_path = local_path
-    public_app.db = db
-    public_app.allow_writes = None
-    public_app.config = config
+    public_app["local_path"] = local_path
+    public_app["db"] = db
+    public_app["allow_writes"] = None
+    public_app["config"] = config
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
