@@ -28,7 +28,6 @@ import warnings
 
 import aiohttp_jinja2
 import aiozipkin
-import asyncpg.pool
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
@@ -167,21 +166,23 @@ async def _bzr_open_repo(local_path, codebase_exists, codebase):
 
 async def bzr_backend(request):
     codebase = request.match_info["codebase"]
-    branch_name = request.match_info.get("branch")
+    campaign_name = request.match_info.get("campaign")
+    role_name = request.match_info.get("role")
     repo = await _bzr_open_repo(request.app["local_path"], request.app["codebase_exists"], codebase)
-    if branch_name:
+    transport = repo.user_transport
+    if campaign_name:
         try:
-            get_campaign_config(request.app["config"], branch_name)
+            get_campaign_config(request.app["config"], campaign_name)
         except KeyError as e:
-            raise web.HTTPNotFound(text='no such campaign: %s' % branch_name) from e
-        transport = repo.user_transport.clone(branch_name)
-    else:
-        transport = repo.user_transport
-    transport.ensure_base()
+            raise web.HTTPNotFound(text='no such campaign: %s' % campaign_name) from e
+        transport = transport.clone(campaign_name)
+        if role_name:
+            transport = transport.clone(role_name)
     allow_writes = request.app["allow_writes"]
     if callable(allow_writes):
         allow_writes = await allow_writes(request)
     if allow_writes:
+        transport.clone('..').ensure_base()
         backing_transport = transport
     else:
         backing_transport = get_transport_from_url("readonly+" + transport.base)
@@ -252,7 +253,8 @@ async def create_web_app(
     listen_addr: str,
     port: int,
     local_path: str,
-    db: asyncpg.pool.Pool,
+    codebase_exists,
+    allow_writes,
     config,
     client_max_size: Optional[int] = None,
 ):
@@ -263,7 +265,7 @@ async def create_web_app(
     )
     app["local_path"] = local_path
     app["allow_writes"] = True
-    app["codebase_exists"] = partial(codebase_exists, db)
+    app["codebase_exists"] = codebase_exists
     app["config"] = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
@@ -273,7 +275,8 @@ async def create_web_app(
         public_app, loader=template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     public_app["local_path"] = local_path
-    public_app["allow_writes"] = partial(is_worker, db)
+    public_app["allow_writes"] = allow_writes
+    public_app["codebase_exists"] = codebase_exists
     public_app["config"] = config
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
@@ -285,10 +288,12 @@ async def create_web_app(
     app.router.add_get("/ready", handle_ready, name='ready')
     app.router.add_get("/{codebase}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_get("/{codebase}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
-    public_app.router.add_post("/bzr/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo-public')
+    public_app.router.add_post("/bzr/{codebase}/{campaign}/.bzr/smart", bzr_backend, name='bzr-branch-public')
+    public_app.router.add_post("/bzr/{codebase}/{campaign}/{role}/.bzr/smart", bzr_backend, name='bzr-role-public')
     app.router.add_post("/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo')
-    app.router.add_post("/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/{codebase}/{campaign}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/{codebase}/{campaign}/{role}/.bzr/smart", bzr_backend, name='bzr-role')
     app.router.add_post("/{codebase}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     endpoint = aiozipkin.create_endpoint("janitor.bzr_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
@@ -358,7 +363,8 @@ async def main(argv=None):
         args.listen_address,
         args.port,
         args.vcs_path,
-        db,
+        partial(codebase_exists, db),
+        partial(is_worker, db),
         config,
         client_max_size=args.client_max_size,
     )
