@@ -6,7 +6,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor runner is down
@@ -15,7 +15,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor publisher is down
@@ -24,7 +24,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor site is down
@@ -33,7 +33,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor differ is down
@@ -42,7 +42,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor archiver is down
@@ -51,7 +51,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor archiver is down
@@ -65,25 +65,16 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Prometheus IRC relay is down
-  - alert: JanitorIrcNotifyDown
-    expr: up{job="irc_notify"} == 0
-    for: 1h
-    labels:
-      severity: critical
-      project: debian-janitor
-    annotations:
-      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
-      summary: Janitor IRC notifier is down
   - alert: JanitorGitStoreDown
     expr: up{job="janitor.git_store"} == 0
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor git store is down
@@ -93,7 +84,7 @@ groups:
     for: 1h
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor bzr store is down
@@ -103,7 +94,7 @@ groups:
     for: 0m
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: Finish requests to the runner {{ $labels.instance }} are failing.
       summary: Run finish requests are failing
@@ -113,7 +104,7 @@ groups:
     for: 0m
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
     annotations:
       description: "Assign requests to the runner {{ $labels.instance }} are failing."
       summary: Run assign requests are failing
@@ -123,7 +114,7 @@ groups:
 #    for: 0m
 #    labels:
 #      severity: critical
-#      project: debian-janitor
+#      project: janitor
 #    annotations:
 #      description: "{{ $labels.route }} requests to {{ $labels.instance }} are failing."
 #      summary: {{ $labels.route }} requests are failing
@@ -133,7 +124,7 @@ groups:
 #    for: 0m
 #    labels:
 #      severity: warning
-#      project: debian-janitor
+#      project: janitor
 #    annotations:
 #      description: "{{ $labels.route }} requests to {{ $labels.instance }} are failing."
 #      summary: {{ $labels.route }} requests are failing
@@ -143,27 +134,27 @@ groups:
     for: 10m
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
 
   - alert: SiteDown
     expr: probe_http_status_code{job="blackbox_https"} != 200
     for: 5m
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
 
   - alert: WorkerCrashing
     expr: avg without(instance)(changes(run{result_code="worker-failure"}[10m])) > 5
     for: 10m
     labels:
       severity: critical
-      project: debian-janitor
+      project: janitor
 
 #  - alert: UploadsFailing
 #    expr: increase(upload_failed_total) > 0
 #    labels:
 #      severity: warning
-#      project: debian-janitor
+#      project: janitor
 #    annotations:
 #      description: "Some uploads are failing {{ $labels.instance }}"
 #      summary: "Some uploads are failing"
@@ -172,7 +163,7 @@ groups:
 #    expr: increase(debsign_failed_total) > 0
 #    labels:
 #      severity: warning
-#      project: debian-janitor
+#      project: janitor
 #    annotations:
 #      description: "Some debsign commands are failing {{ $labels.instance }}"
 #      summary: "Some debsign commands are failing"
