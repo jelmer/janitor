@@ -1606,7 +1606,9 @@ class QueueProcessor(object):
         await self.redis.hset(
             'rate-limit-hosts', host, retry_after.isoformat())
 
-    async def next_queue_item(self, conn, package=None, campaign=None):
+    async def next_queue_item(
+            self, conn, package: Optional[str] = None,
+            campaign: Optional[str] = None) -> QueueItem:
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
         async for host, retry_after in self.rate_limited_hosts():

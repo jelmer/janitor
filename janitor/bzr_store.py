@@ -19,6 +19,7 @@
 
 import asyncio
 from contextlib import suppress
+from functools import partial
 from io import BytesIO
 import logging
 import os
@@ -27,7 +28,6 @@ import warnings
 
 import aiohttp_jinja2
 import aiozipkin
-import asyncpg.pool
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
@@ -94,7 +94,7 @@ async def bzr_diff_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, codebase))
+        repo = Repository.open(os.path.join(request.app["local_path"], codebase))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -113,7 +113,7 @@ async def bzr_revision_info_request(request):
     if new_revid is not None:
         new_revid = new_revid.encode('utf-8')
     try:
-        repo = Repository.open(os.path.join(request.app.local_path, codebase))
+        repo = Repository.open(os.path.join(request.app["local_path"], codebase))
     except NotBranchError:
         repo = None
     if repo is None:
@@ -137,7 +137,7 @@ async def handle_set_bzr_remote(request):
     post = await request.post()
 
     try:
-        local_branch = Branch.open(os.path.join(request.app.local_path, codebase, remote))
+        local_branch = Branch.open(os.path.join(request.app["local_path"], codebase, remote))
     except NotBranchError as e:
         raise web.HTTPNotFound() from e
     local_branch.set_parent(post["url"])
@@ -147,14 +147,14 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def codebase_exists(conn, codebase):
-    return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
-
-
-async def _bzr_open_repo(local_path, db, codebase):
+async def codebase_exists(db, codebase):
     async with db.acquire() as conn:
-        if not await codebase_exists(conn, codebase):
-            raise web.HTTPNotFound(text='no such codebase: %s' % codebase)
+        return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
+
+
+async def _bzr_open_repo(local_path, codebase_exists, codebase):
+    if not await codebase_exists(codebase):
+        raise web.HTTPNotFound(text='no such codebase: %s' % codebase)
     repo_path = os.path.join(local_path, codebase)
     try:
         repo = Repository.open(repo_path)
@@ -166,21 +166,23 @@ async def _bzr_open_repo(local_path, db, codebase):
 
 async def bzr_backend(request):
     codebase = request.match_info["codebase"]
-    branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app.local_path, request.app.db, codebase)
-    if branch_name:
+    campaign_name = request.match_info.get("campaign")
+    role_name = request.match_info.get("role")
+    repo = await _bzr_open_repo(request.app["local_path"], request.app["codebase_exists"], codebase)
+    transport = repo.user_transport
+    if campaign_name:
         try:
-            get_campaign_config(request.app.config, branch_name)
+            get_campaign_config(request.app["config"], campaign_name)
         except KeyError as e:
-            raise web.HTTPNotFound(text='no such campaign: %s' % branch_name) from e
-        transport = repo.user_transport.clone(branch_name)
-    else:
-        transport = repo.user_transport
-    transport.ensure_base()
-    allow_writes = request.app.allow_writes
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app.db, request)
+            raise web.HTTPNotFound(text='no such campaign: %s' % campaign_name) from e
+        transport = transport.clone(campaign_name)
+        if role_name:
+            transport = transport.clone(role_name)
+    allow_writes = request.app["allow_writes"]
+    if callable(allow_writes):
+        allow_writes = await allow_writes(request)
     if allow_writes:
+        transport.clone('..').ensure_base()
         backing_transport = transport
     else:
         backing_transport = get_transport_from_url("readonly+" + transport.base)
@@ -220,7 +222,7 @@ async def handle_repo_list(request):
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app.local_path))]
+                 for entry in os.scandir(os.path.join(request.app["local_path"]))]
         names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -251,7 +253,8 @@ async def create_web_app(
     listen_addr: str,
     port: int,
     local_path: str,
-    db: asyncpg.pool.Pool,
+    codebase_exists,
+    allow_writes,
     config,
     client_max_size: Optional[int] = None,
 ):
@@ -260,10 +263,10 @@ async def create_web_app(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
         client_max_size=(client_max_size or 0)
     )
-    app.local_path = local_path
-    app.db = db
-    app.allow_writes = True
-    app.config = config
+    app["local_path"] = local_path
+    app["allow_writes"] = True
+    app["codebase_exists"] = codebase_exists
+    app["config"] = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
         client_max_size=(client_max_size or 0)
@@ -271,10 +274,10 @@ async def create_web_app(
     aiohttp_jinja2.setup(
         public_app, loader=template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
-    public_app.local_path = local_path
-    public_app.db = db
-    public_app.allow_writes = None
-    public_app.config = config
+    public_app["local_path"] = local_path
+    public_app["allow_writes"] = allow_writes
+    public_app["codebase_exists"] = codebase_exists
+    public_app["config"] = config
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
@@ -285,10 +288,12 @@ async def create_web_app(
     app.router.add_get("/ready", handle_ready, name='ready')
     app.router.add_get("/{codebase}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_get("/{codebase}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
-    public_app.router.add_post("/bzr/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo-public')
+    public_app.router.add_post("/bzr/{codebase}/{campaign}/.bzr/smart", bzr_backend, name='bzr-branch-public')
+    public_app.router.add_post("/bzr/{codebase}/{campaign}/{role}/.bzr/smart", bzr_backend, name='bzr-role-public')
     app.router.add_post("/{codebase}/.bzr/smart", bzr_backend, name='bzr-repo')
-    app.router.add_post("/{codebase}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/{codebase}/{campaign}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/{codebase}/{campaign}/{role}/.bzr/smart", bzr_backend, name='bzr-role')
     app.router.add_post("/{codebase}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     endpoint = aiozipkin.create_endpoint("janitor.bzr_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
@@ -358,7 +363,8 @@ async def main(argv=None):
         args.listen_address,
         args.port,
         args.vcs_path,
-        db,
+        partial(codebase_exists, db),
+        partial(is_worker, db),
         config,
         client_max_size=args.client_max_size,
     )
