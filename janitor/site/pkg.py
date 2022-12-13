@@ -446,4 +446,4 @@ async def generate_ready_list(
         query += " ORDER BY package ASC"
 
         runs = await conn.fetch(query, *args)
-    return {"runs": runs, "suite": suite}
+    return {"runs": runs, "suite": suite, "campaign": suite}
