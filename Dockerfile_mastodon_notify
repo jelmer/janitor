@@ -1,8 +1,0 @@
-FROM docker.io/debian:testing-slim
-MAINTAINER Jelmer Vernooij <jelmer@debian.org>
-EXPOSE 9919
-RUN apt -y update && apt --no-install-recommends -y install python3-mastodon python3-aiohttp python3-aiohttp-openmetrics python3-pip && pip3 install google-cloud-logging
-ADD notifiers /code/notifiers
-ADD janitor_client /code/janitor_client
-ENV PYTHONPATH=/code
-ENTRYPOINT ["python3", "/code/notifiers/mastodon_notify.py", "--prometheus-port=9919", "--prometheus-listen-address=0.0.0.0"]

@@ -78,16 +78,6 @@ groups:
     annotations:
       description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
       summary: Janitor IRC notifier is down
-  - alert: JanitorMastodonNotifyDown
-    expr: up{job="mastodon_notify"} == 0
-    for: 1h
-    labels:
-      severity: critical
-      project: debian-janitor
-    annotations:
-      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
-      summary: Janitor Mastodon notifier is down
-
   - alert: JanitorGitStoreDown
     expr: up{job="janitor.git_store"} == 0
     for: 1h
