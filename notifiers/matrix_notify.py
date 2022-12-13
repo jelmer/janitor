@@ -24,8 +24,7 @@ from janitor_client import JanitorClient
 from aiohttp_openmetrics import setup_metrics
 
 import asyncio
-from nio import AsyncClient
-from nio.exceptions import LocalProtocolError
+from mautrix.client import Client as MatrixClient
 
 
 async def main(args):
@@ -37,10 +36,9 @@ async def main(args):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    matrix_client = AsyncClient(args.homeserver_url, args.user)
-    logging.info('%s', await matrix_client.login(
-        password=args.password, token=args.token))
-    await matrix_client.join(args.room)
+    matrix_client = MatrixClient(base_url=args.homeserver_url)
+    logging.info('%s', await matrix_client.login(args.user, password=args.password))
+    await matrix_client.join_room(args.room)
 
     async def message(msg, formatted_msg):
         try:
@@ -69,7 +67,7 @@ async def main(args):
         runner, args.prometheus_listen_address, args.prometheus_port)
     await site.start()
 
-    asyncio.ensure_future(matrix_client.sync_forever(30000, full_state=True))
+    await matrix_client.sync()
 
     async with JanitorClient(args.janitor_url) as janitor_client:
         async for msg in janitor_client._iter_notifications():
@@ -115,9 +113,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--password", help="Matrix password", type=str,
         default=os.environ.get('MATRIX_PASSWORD'))
-    parser.add_argument(
-        "--token", help="Matrix token", type=str,
-        default=os.environ.get('MATRIX_TOKEN'))
     parser.add_argument(
         "--homeserver-url", type=str, default=os.environ.get('HOMESERVER_URL'),
         help="Matrix homeserver URL")
