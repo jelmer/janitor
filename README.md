@@ -101,7 +101,6 @@ notification of accepted merge proposals and pushes.
 
  * ghcr.io/jelmer/janitor/irc_notify - IRC notification bot
  * ghcr.io/jelmer/janitor/mastodon_notify - Mastodon notification bot
- * ghcr.io/jelmer/janitor/matrix_notify - Mastodon notification bot
  * ghcr.io/jelmer/janitor/xmpp_notify - XMPP Notification Bot
 
 Contributing
