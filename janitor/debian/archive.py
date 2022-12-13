@@ -506,9 +506,14 @@ async def handle_ready(request):
             continue
         if campaign_config.name not in last_publish_time:
             missing.append(campaign_config.name)
+    status = ''.join(
+        [f'{name}: {dt.isoformat()}\n'
+         for (name, dt) in last_publish_time.items()])
     if missing:
-        return web.Response(text='missing: %s' % ', '.join(missing), status=500)
-    return web.Response(text='ok')
+        return web.Response(text=(
+            'missing: %s' % ', '.join(missing) + '\n\n'
+            'present:\n' + status), status=500)
+    return web.Response(text=status)
 
 
 @routes.get("/", name="index")
