@@ -96,12 +96,6 @@ Several docker images are provided
  * ghcr.io/jelmer/janitor/bzr_store - storage for Bazaar
  * ghcr.io/jelmer/janitor/worker - Base for workers
 
-The notifiers/ directory contains a couple of convenience scripts for sending
-notification of accepted merge proposals and pushes.
-
- * ghcr.io/jelmer/janitor/irc_notify - IRC notification bot
- * ghcr.io/jelmer/janitor/xmpp_notify - XMPP Notification Bot
-
 Contributing
 ============
 
