@@ -31,8 +31,9 @@ from janitor.debian.archive import (
 )
 
 
-async def create_client(aiohttp_client):
-    config = Config()
+async def create_client(aiohttp_client, config=None):
+    if config is None:
+        config = Config()
     return await aiohttp_client(await create_app(None, config, "/tmp", None))
 
 
@@ -51,7 +52,7 @@ async def test_ready(aiohttp_client):
     resp = await client.get("/ready")
     assert resp.status == 200
     text = await resp.text()
-    assert text == "ok"
+    assert text == ""
 
 
 def test_hash_file_writer():
