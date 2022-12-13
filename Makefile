@@ -48,7 +48,7 @@ docker-%: core
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
-docker-all: docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-mastodon_notify docker-xmpp_notify docker-differ docker-ognibuild_dep
+docker-all: docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-irc_notify docker-xmpp_notify docker-differ docker-ognibuild_dep
 
 reformat:: reformat-html
 
