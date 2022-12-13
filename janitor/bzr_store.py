@@ -19,6 +19,7 @@
 
 import asyncio
 from contextlib import suppress
+from functools import partial
 from io import BytesIO
 import logging
 import os
@@ -147,14 +148,14 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def codebase_exists(conn, codebase):
-    return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
-
-
-async def _bzr_open_repo(local_path, db, codebase):
+async def codebase_exists(db, codebase):
     async with db.acquire() as conn:
-        if not await codebase_exists(conn, codebase):
-            raise web.HTTPNotFound(text='no such codebase: %s' % codebase)
+        return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
+
+
+async def _bzr_open_repo(local_path, codebase_exists, codebase):
+    if not await codebase_exists(codebase):
+        raise web.HTTPNotFound(text='no such codebase: %s' % codebase)
     repo_path = os.path.join(local_path, codebase)
     try:
         repo = Repository.open(repo_path)
@@ -167,7 +168,7 @@ async def _bzr_open_repo(local_path, db, codebase):
 async def bzr_backend(request):
     codebase = request.match_info["codebase"]
     branch_name = request.match_info.get("branch")
-    repo = await _bzr_open_repo(request.app["local_path"], request.app["db"], codebase)
+    repo = await _bzr_open_repo(request.app["local_path"], request.app["codebase_exists"], codebase)
     if branch_name:
         try:
             get_campaign_config(request.app["config"], branch_name)
@@ -178,8 +179,8 @@ async def bzr_backend(request):
         transport = repo.user_transport
     transport.ensure_base()
     allow_writes = request.app["allow_writes"]
-    if allow_writes is None:
-        allow_writes = await is_worker(request.app["db"], request)
+    if callable(allow_writes):
+        allow_writes = await allow_writes(request)
     if allow_writes:
         backing_transport = transport
     else:
@@ -261,8 +262,8 @@ async def create_web_app(
         client_max_size=(client_max_size or 0)
     )
     app["local_path"] = local_path
-    app["db"] = db
     app["allow_writes"] = True
+    app["codebase_exists"] = partial(codebase_exists, db)
     app["config"] = config
     public_app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
@@ -272,8 +273,7 @@ async def create_web_app(
         public_app, loader=template_loader, enable_async=True,
         autoescape=select_autoescape(["html", "xml"]))
     public_app["local_path"] = local_path
-    public_app["db"] = db
-    public_app["allow_writes"] = None
+    public_app["allow_writes"] = partial(is_worker, db)
     public_app["config"] = config
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
