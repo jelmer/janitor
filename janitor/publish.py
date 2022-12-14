@@ -59,6 +59,7 @@ from breezy.forge import (
     Forge,
     forges,
     ForgeLoginRequired,
+    get_proposal_by_url,
     UnsupportedForge,
     iter_forge_instances,
 )
@@ -197,6 +198,15 @@ logger = logging.getLogger('janitor.publish')
 
 
 routes = web.RouteTableDef()
+
+
+def get_merged_by_user_url(url, user):
+    hostname = URL(url).host
+    try:
+        forges = get_forge_by_hostname(hostname)
+    except UnsupportedForge:
+        return None
+    return forge.get_user_url(user)
 
 
 class RateLimited(Exception):
@@ -1395,7 +1405,8 @@ SELECT
    result,
    id,
    absorbed_at,
-   merged_by
+   merged_by,
+   merge_proposal_url
 FROM absorbed_runs
 """
         for row in await conn.fetch(query + extra, *args):
@@ -1405,6 +1416,8 @@ FROM absorbed_runs
                 'delay': row['delay'].total_seconds,
                 'campaign': row['campaign'],
                 'merged-by': row['merged_by'],
+                'merged-by-url': await asyncio.to_thread(get_merged_by_user_url(
+                    row['merge_proposal_url'], row['merged_by'])),
                 'absorbed-at': row['absorbed-at'],
                 'id': row['id'],
                 'result': row['result'],
@@ -2265,11 +2278,14 @@ class ProposalInfoManager(object):
             pass
         if status == "merged":
             merged_by = await asyncio.to_thread(mp.get_merged_by)
+            merged_by_url = await asyncio.to_thread(
+                get_merged_by_user_url, mp.url, merged_by)
             merged_at = await asyncio.to_thread(mp.get_merged_at)
             if merged_at is not None:
                 merged_at = merged_at.replace(tzinfo=None)
         else:
             merged_by = None
+            merged_by_url = None
             merged_at = None
         if not dry_run:
             async with self.conn.transaction():
@@ -2307,6 +2323,7 @@ class ProposalInfoManager(object):
                 "status": status,
                 "package": package_name,
                 "merged_by": merged_by,
+                "merged_by_url": merged_by_url,
                 "merged_at": str(merged_at),
                 "campaign": campaign,
             }))
