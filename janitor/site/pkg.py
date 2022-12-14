@@ -169,6 +169,14 @@ async def generate_run_file(
         with span.new_child('sql:success-probability'):
             kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
                 conn, run['package'], run['suite'])
+        with span.new_child('sql:followups'):
+            kwargs['followups'] = await conn.fetch("""SELECT \
+    candidate.package AS package,
+    candidate.codebase AS codebase,
+    candidate.suite AS campaign
+FROM followup LEFT JOIN candidate ON candidate.id = followup.candidate
+WHERE followup.origin = $1""", run['id'])
+
     kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
