@@ -54,29 +54,27 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
 
 async def iter_candidates(
         conn: asyncpg.Connection,
-        packages: Optional[List[str]] = None,
-        suite: Optional[str] = None):
+        codebases: Optional[List[str]] = None,
+        campaign: Optional[str] = None):
     query = """
 SELECT
-  candidate.package AS package,
-  candidate.suite AS suite,
-  candidate.context AS context,
-  candidate.value AS value,
-  candidate.success_chance AS success_chance
+  package AS package,
+  suite AS suite,
+  context AS context,
+  value AS value,
+  success_chance AS success_chance
 FROM candidate
-INNER JOIN package on package.name = candidate.package
-WHERE NOT package.removed
 """
     args = []
-    if suite is not None and packages is not None:
-        query += " AND package.name = ANY($1::text[]) AND suite = $2"
-        args.extend([packages, suite])
-    elif suite is not None:
+    if campaign is not None and codebases is not None:
+        query += " AND codebase = ANY($1::text[]) AND campaign = $2"
+        args.extend([codebases, campaign])
+    elif campaign is not None:
         query += " AND suite = $1"
-        args.append(suite)
-    elif packages is not None:
-        query += " AND package.name = ANY($1::text[])"
-        args.append(packages)
+        args.append(campaign)
+    elif codebases is not None:
+        query += " AND codebase = ANY($1::text[])"
+        args.append(codebases)
     return await conn.fetch(query, *args)
 
 
@@ -339,7 +337,7 @@ WHERE run.package = $1 AND run.suite = $2
 async def generate_candidates(db, suite):
     candidates = []
     async with db.acquire() as conn:
-        for row in await iter_candidates(conn, suite=suite):
+        for row in await iter_candidates(conn, campaign=suite):
             candidates.append((row['package'], row['value']))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite, "campaign": suite}
