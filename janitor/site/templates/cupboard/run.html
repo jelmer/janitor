@@ -154,6 +154,15 @@
             <h2>Lintian Result</h2>
             {{ display_lintian_result(lintian_result) }}
         {% endif %}
+	{% if followups %}
+	    <h2>Follow ups</h2>
+	    <ul>
+	    {% for followup in followups %}
+		    <li><a href="/cupboard/pkg/{{ followup['campaign'] }}/{{ followup['package'] }}">
+		    {{ followup['campaign'] }} for {{ followup['package'] }}</a></li>
+	    {% endfor %}
+	    </ul>
+	{% endif %}
         {% if reviews or (is_qa_reviewer and run.result_code == 'success') %}
             <h2>
                 Reviews
