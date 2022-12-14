@@ -19,7 +19,6 @@
 from datetime import datetime
 from io import BytesIO
 import logging
-from yarl import URL
 
 from typing import Optional, List, Dict
 
