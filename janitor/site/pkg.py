@@ -365,7 +365,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
         with span.new_child('sql:candidates'):
             kwargs["candidates"] = {
                 row['suite']: (row['context'], row['value'], row['success_chance'])
-                for row in await iter_candidates(conn, packages=[package['name']])
+                for row in await iter_candidates(conn, codebases=[package['codebase']])
             }
     return kwargs
 
