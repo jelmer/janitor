@@ -19,6 +19,7 @@
 from datetime import datetime
 from io import BytesIO
 import logging
+from yarl import URL
 
 from typing import Optional, List, Dict
 
@@ -34,7 +35,6 @@ from aiohttp import (
 
 from breezy.revision import NULL_REVISION
 from breezy.forge import get_forge_by_hostname, UnsupportedForge
-from breezy import urlutils
 
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
@@ -411,7 +411,7 @@ class MergeProposalUserUrlResolver(object):
         self._forges = {}
 
     def resolve(self, url, user):
-        hostname = urlutils.URL.from_string(url).host
+        hostname = URL(url).host
         if hostname not in self._forges:
             try:
                 self._forges[hostname] = get_forge_by_hostname(hostname)
