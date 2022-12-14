@@ -29,6 +29,7 @@ import time
 from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterator
 import uuid
 import warnings
+from yarl import URL
 
 
 import aioredlock
@@ -55,13 +56,22 @@ from breezy import urlutils
 import gpg
 from redis.asyncio import Redis
 
+from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.forge import (
     Forge,
     forges,
     ForgeLoginRequired,
+    get_forge_by_hostname,
+    get_proposal_by_url,
     UnsupportedForge,
+    MergeProposal,
     iter_forge_instances,
 )
+from breezy.transport import Transport
+import breezy.plugins.gitlab  # noqa: F401
+import breezy.plugins.launchpad  # noqa: F401
+import breezy.plugins.github  # noqa: F401
+
 from silver_platter.utils import (
     open_branch,
     BranchMissing,
@@ -69,15 +79,7 @@ from silver_platter.utils import (
     BranchRateLimited,
 )
 
-from breezy.errors import PermissionDenied, UnexpectedHttpStatus
-from breezy.forge import (
-    get_proposal_by_url,
-    MergeProposal,
-)
-from breezy.transport import Transport
-import breezy.plugins.gitlab  # noqa: F401
-import breezy.plugins.launchpad  # noqa: F401
-import breezy.plugins.github  # noqa: F401
+
 
 from . import (
     state,
@@ -197,6 +199,17 @@ logger = logging.getLogger('janitor.publish')
 
 
 routes = web.RouteTableDef()
+
+
+def get_merged_by_user_url(url, user):
+    hostname = URL(url).host
+    if hostname is None:
+        return None
+    try:
+        forge = get_forge_by_hostname(hostname)
+    except UnsupportedForge:
+        return None
+    return forge.get_user_url(user)
 
 
 class RateLimited(Exception):
@@ -1395,7 +1408,8 @@ SELECT
    result,
    id,
    absorbed_at,
-   merged_by
+   merged_by,
+   merge_proposal_url
 FROM absorbed_runs
 """
         for row in await conn.fetch(query + extra, *args):
@@ -1405,6 +1419,8 @@ FROM absorbed_runs
                 'delay': row['delay'].total_seconds,
                 'campaign': row['campaign'],
                 'merged-by': row['merged_by'],
+                'merged-by-url': await asyncio.to_thread(get_merged_by_user_url(
+                    row['merge_proposal_url'], row['merged_by'])),
                 'absorbed-at': row['absorbed-at'],
                 'id': row['id'],
                 'result': row['result'],
@@ -2265,11 +2281,14 @@ class ProposalInfoManager(object):
             pass
         if status == "merged":
             merged_by = await asyncio.to_thread(mp.get_merged_by)
+            merged_by_url = await asyncio.to_thread(
+                get_merged_by_user_url, mp.url, merged_by)
             merged_at = await asyncio.to_thread(mp.get_merged_at)
             if merged_at is not None:
                 merged_at = merged_at.replace(tzinfo=None)
         else:
             merged_by = None
+            merged_by_url = None
             merged_at = None
         if not dry_run:
             async with self.conn.transaction():
@@ -2307,6 +2326,7 @@ class ProposalInfoManager(object):
                 "status": status,
                 "package": package_name,
                 "merged_by": merged_by,
+                "merged_by_url": merged_by_url,
                 "merged_at": str(merged_at),
                 "campaign": campaign,
             }))
