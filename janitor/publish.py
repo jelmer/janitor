@@ -1829,6 +1829,22 @@ async def scan_request(request):
     return web.Response(status=202, text="Scan started.")
 
 
+@routes.post("/check-stragglers", name='check-stragglers')
+async def refresh_stragglers(request):
+    async def scan(db, redis, urls):
+        async with db.acquire() as conn:
+            proposal_info_manager = ProposalInfoManager(conn, redis)
+            for url in urls:
+                await check_straggler(proposal_info_manager, url)
+
+    ndays = int(request.query.get('ndays', 5))
+    async with request.app['db'].acquire() as conn:
+        proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
+        ret = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
+    create_background_task(scan(request.app['db'], request.app['redis'], ret), 'Refresh of straggling merge proposals')
+    return web.json_response(ret)
+
+
 @routes.post("/refresh-status", name='refresh-status')
 async def refresh_proposal_status_request(request):
     post = await request.post()
@@ -2063,6 +2079,7 @@ async def process_queue_loop(
                 dry_run=dry_run,
                 modify_limit=modify_mp_limit,
             )
+            await check_stragglers(conn, redis)
         if auto_publish:
             await publish_pending_ready(
                 db=db,
@@ -2074,8 +2091,7 @@ async def process_queue_loop(
                 dry_run=dry_run,
                 reviewed_only=reviewed_only,
                 push_limit=push_limit,
-                require_binary_diff=require_binary_diff,
-            )
+                require_binary_diff=require_binary_diff)
         cycle_duration = datetime.utcnow() - cycle_start
         to_wait = max(0, interval - cycle_duration.total_seconds())
         logger.info("Waiting %d seconds for next cycle." % to_wait)
@@ -2243,6 +2259,11 @@ class ProposalInfoManager(object):
         self.conn = conn
         self.redis = redis
 
+    async def iter_outdated_proposal_info_urls(self, days):
+        return await self.conn.fetch(
+            "SELECT url FROM merge_proposal WHERE "
+            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)
+
     async def get_proposal_info(self, url) -> Optional[ProposalInfo]:
         row = await self.conn.fetchrow(
             """\
@@ -2270,6 +2291,21 @@ class ProposalInfoManager(object):
             target_branch_url=row['target_branch_url'],
             package_name=row['package'],
             can_be_merged=row['can_be_merged'])
+
+    async def update_canonical_url(self, old_url: str, canonical_url: str):
+        async with self.conn.transaction():
+            old_url = await self.conn.fetchval(
+                'UPDATE merge_proposal canonical SET package = COALESCE(canonical.package, old.package), '
+                'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
+                'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
+                old_url, canonical_url)
+            if old_url:
+                await self.conn.execute(
+                    'DELETE FROM merge_proposal WHERE url = $1', old_url)
+            else:
+                await self.conn.execute(
+                    "UPDATE merge_proposal SET url = $1 WHERE url = $2",
+                    canonical_url, old_url)
 
     async def update_proposal_info(
             self, mp, *, status, revision, package_name, target_branch_url,
@@ -2387,6 +2423,28 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
             "Permission denied closing merge request %s: %s", mp.url, e
         )
         raise
+
+
+async def check_stragglers(conn, redis):
+    proposal_info_manager = ProposalInfoManager(conn, redis)
+    stragglers = await proposal_info_manager.iter_outdated_proposal_info_urls(5)
+    for url in stragglers:
+        await check_straggler(proposal_info_manager, url)
+
+
+async def check_straggler(proposal_info_manager, url):
+    try:
+        mp = get_proposal_by_url(url)
+    except UnsupportedForge:
+        logger.warning(
+            'Unsupported forge while trying to refresh straggler at %s', url)
+        return
+
+    if mp.get_web_url() != url:
+        await proposal_info_manager.update_canonical_url(url, mp.get_web_url())
+        return
+
+    logger.warning('Not sure what to do with straggler %s', url)
 
 
 async def check_existing_mp(
