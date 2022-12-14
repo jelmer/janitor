@@ -29,6 +29,7 @@ import time
 from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterator
 import uuid
 import warnings
+from yarl import URL
 
 
 import aioredlock
@@ -55,14 +56,22 @@ from breezy import urlutils
 import gpg
 from redis.asyncio import Redis
 
+from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.forge import (
     Forge,
     forges,
     ForgeLoginRequired,
+    get_forge_by_hostname,
     get_proposal_by_url,
     UnsupportedForge,
+    MergeProposal,
     iter_forge_instances,
 )
+from breezy.transport import Transport
+import breezy.plugins.gitlab  # noqa: F401
+import breezy.plugins.launchpad  # noqa: F401
+import breezy.plugins.github  # noqa: F401
+
 from silver_platter.utils import (
     open_branch,
     BranchMissing,
@@ -70,15 +79,7 @@ from silver_platter.utils import (
     BranchRateLimited,
 )
 
-from breezy.errors import PermissionDenied, UnexpectedHttpStatus
-from breezy.forge import (
-    get_proposal_by_url,
-    MergeProposal,
-)
-from breezy.transport import Transport
-import breezy.plugins.gitlab  # noqa: F401
-import breezy.plugins.launchpad  # noqa: F401
-import breezy.plugins.github  # noqa: F401
+
 
 from . import (
     state,
@@ -202,8 +203,10 @@ routes = web.RouteTableDef()
 
 def get_merged_by_user_url(url, user):
     hostname = URL(url).host
+    if hostname is None:
+        return None
     try:
-        forges = get_forge_by_hostname(hostname)
+        forge = get_forge_by_hostname(hostname)
     except UnsupportedForge:
         return None
     return forge.get_user_url(user)
