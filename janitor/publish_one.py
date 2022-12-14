@@ -154,7 +154,6 @@ def publish(
     log_id: Optional[str] = None,
     existing_proposal: Optional[MergeProposal] = None,
     allow_create_proposal: bool = False,
-    derived_owner: Optional[str] = None,
     debdiff: Optional[bytes] = None,
     reviewers: Optional[List[str]] = None,
     result_tags: Optional[Dict[str, bytes]] = None,
@@ -222,7 +221,6 @@ def publish(
             forge=forge,
             allow_create_proposal=allow_create_proposal,
             overwrite_existing=True,
-            derived_owner=derived_owner,
             existing_proposal=existing_proposal,
             labels=labels,
             tags=result_tags,
@@ -352,7 +350,6 @@ def publish_one(
     derived_branch_name: str,
     dry_run: bool = False,
     require_binary_diff: bool = False,
-    derived_owner: Optional[str] = None,
     possible_forges: Optional[List[Forge]] = None,
     possible_transports: Optional[List[Transport]] = None,
     allow_create_proposal: bool = False,
@@ -424,7 +421,7 @@ def publish_one(
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
-                    description="Forge %s supported but not login known." % netloc,
+                    description="Forge %s supported but no login known." % netloc,
                     code="hoster-no-login") from e
             # We can't figure out what branch to resume from when there's no forge
             # that can tell us.
@@ -445,40 +442,59 @@ def publish_one(
                 traceback.print_exc()
                 raise PublishFailure("http-%s" % e.code, str(e)) from e
         else:
-            try:
-                (resume_branch, overwrite, existing_proposals) = find_existing_proposed(
-                    target_branch, forge, derived_branch_name, owner=derived_owner
-                )
-            except NoSuchProject as e:
-                if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
-                    raise PublishFailure(
-                        description="Project %s not found." % e.project,
-                        code="project-not-found",
-                    ) from e
-                resume_branch = None
-                existing_proposal = None
-            except ForgeLoginRequired as e:
-                raise PublishFailure(
-                    description="Forge %s supported but not login known." % forge,
-                    code="hoster-no-login") from e
-            except PermissionDenied as e:
-                raise PublishFailure(
-                    description=(
-                        "Permission denied while finding existing proposal: %s" % e.extra
-                    ),
-                    code="permission-denied",
-                ) from e
+            if existing_mp_url is not None:
+                try:
+                    existing_proposal = forge.get_proposal_by_url(existing_mp_url)
+                except UnsupportedForge as e:
+                    raise PublishFailure("forge-mp-url-mismatch", str(e)) from e
+                overwrite: Optional[bool] = True
+                try:
+                    resume_branch = open_branch(
+                        existing_proposal.get_source_branch_url(),
+                        possible_transports=possible_transports
+                    )
+                except BranchRateLimited as e:
+                    raise PublishFailure('resume-branch-rate-limited', str(e)) from e
+                except BranchTemporarilyUnavailable as e:
+                    raise PublishFailure("resume-branch-temporarily-unavailable", str(e)) from e
+                except BranchUnavailable as e:
+                    raise PublishFailure("resume-branch-unavailable", str(e)) from e
+                except BranchMissing as e:
+                    raise PublishFailure("resume-branch-missing", str(e)) from e
             else:
-                for mp in existing_proposals or []:
-                    if mp.url == existing_mp_url:
-                        existing_proposal = mp
-                        break
-                else:
-                    if existing_mp_url:
-                        logging.warning(
-                            'Unable to find back original merge proposal %r',
-                            existing_mp_url)
+                try:
+                    (resume_branch, overwrite, existing_proposals) = find_existing_proposed(
+                        target_branch, forge, derived_branch_name
+                    )
+                except NoSuchProject as e:
+                    if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
+                        raise PublishFailure(
+                            description="Project %s not found." % e.project,
+                            code="project-not-found",
+                        ) from e
+                    resume_branch = None
                     existing_proposal = None
+                except ForgeLoginRequired as e:
+                    raise PublishFailure(
+                        description="Forge %s supported but no login known." % forge,
+                        code="hoster-no-login") from e
+                except PermissionDenied as e:
+                    raise PublishFailure(
+                        description=(
+                            "Permission denied while finding existing proposal: %s" % e.extra
+                        ),
+                        code="permission-denied",
+                    ) from e
+                else:
+                    if existing_proposals and len(existing_proposals) > 1:
+                        existing_proposal = existing_proposals[0]
+                        logging.warning(
+                            'Multiple existing proposals: %r. Using %r',
+                            existing_proposals, existing_proposal)
+                    elif existing_proposals and len(existing_proposals) > 0:
+                        existing_proposal = existing_proposals[0]
+                    else:
+                        existing_proposal = None
 
         debdiff: Optional[bytes]
         try:
@@ -533,7 +549,6 @@ def publish_one(
                 existing_proposal=existing_proposal,
                 allow_create_proposal=allow_create_proposal,
                 debdiff=debdiff,
-                derived_owner=derived_owner,
                 reviewers=reviewers,
                 result_tags=result_tags,
                 stop_revision=revision,
@@ -604,7 +619,6 @@ if __name__ == "__main__":
             unchanged_id=request["unchanged_id"],
             source_branch_url=request["source_branch_url"],
             dry_run=request["dry-run"],
-            derived_owner=request.get("derived-owner"),
             require_binary_diff=request["require-binary-diff"],
             possible_forges=None,
             possible_transports=None,
