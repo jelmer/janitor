@@ -1815,17 +1815,17 @@ async def scan_request(request):
 
 @routes.post("/check-stragglers", name='check-stragglers')
 async def refresh_stragglers(request):
-    async def scan(url):
-        async with request.app['db'].acquire() as conn:
-            proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
-            await check_straggler(proposal_info_manager, url)
+    async def scan(db, redis, urls):
+        async with db.acquire() as conn:
+            proposal_info_manager = ProposalInfoManager(conn, redis)
+            for url in urls:
+                await check_straggler(proposal_info_manager, url)
 
     ndays = int(request.query.get('ndays', 5))
-    ret = []
     async with request.app['db'].acquire() as conn:
-        stragglers = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
-        ret.append(url)
-        create_background_task(scan(url), f'Refresh of straggling merge proposal {url}')
+        proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
+        ret = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
+    create_background_task(scan(request.app['db'], request.app['redis'], ret), 'Refresh of straggling merge proposals')
     return web.json_response(ret)
 
 
@@ -2244,7 +2244,7 @@ class ProposalInfoManager(object):
         self.redis = redis
 
     async def iter_outdated_proposal_info_urls(self, days):
-        return await conn.fetch(
+        return await self.conn.fetch(
             "SELECT url FROM merge_proposal WHERE "
             "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)
 
@@ -2278,9 +2278,9 @@ class ProposalInfoManager(object):
 
     async def update_canonical_url(self, old_url: str, canonical_url: str):
         async with self.conn.transaction():
-            old_url = await conn.fetchval(
-                'UPDATE merge_proposal canonical SET package = coalesce(canonical.package, old.package), '
-                'rate_limit_bucket = coalesce(canonical.rate_limit_bucket, old.rate_limit_bucket) '
+            old_url = await self.conn.fetchval(
+                'UPDATE merge_proposal canonical SET package = COALESCE(canonical.package, old.package), '
+                'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
                 'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
                 old_url, canonical_url)
             if old_url:
@@ -2415,7 +2415,7 @@ async def check_stragglers(conn, redis):
 async def check_straggler(proposal_info_manager, url):
     try:
         mp = get_proposal_by_url(url)
-    except UnsupportedForge as e:
+    except UnsupportedForge:
         logger.warning(
             'Unsupported forge while trying to refresh straggler at %s', url)
         return
