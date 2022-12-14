@@ -411,6 +411,8 @@ class MergeProposalUserUrlResolver(object):
 
     def resolve(self, url, user):
         hostname = URL(url).host
+        if hostname is None:
+            return None
         if hostname not in self._forges:
             try:
                 self._forges[hostname] = get_forge_by_hostname(hostname)
