@@ -67,13 +67,13 @@ FROM candidate
 """
     args = []
     if campaign is not None and codebases is not None:
-        query += " AND codebase = ANY($1::text[]) AND campaign = $2"
+        query += " WHERE codebase = ANY($1::text[]) AND suite = $2"
         args.extend([codebases, campaign])
     elif campaign is not None:
-        query += " AND suite = $1"
+        query += " WHERE suite = $1"
         args.append(campaign)
     elif codebases is not None:
-        query += " AND codebase = ANY($1::text[])"
+        query += " WHERE codebase = ANY($1::text[])"
         args.append(codebases)
     return await conn.fetch(query, *args)
 
