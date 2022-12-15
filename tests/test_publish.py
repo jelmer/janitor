@@ -109,7 +109,6 @@ async def test_publish_worker():
                 'allow_create_proposal': False,
                 'external_url': None,
                 'differ_url': None,
-                'derived-owner': None,
                 'revision': 'main-revid',
                 'reviewers': None,
                 'commit_message_template': None,
