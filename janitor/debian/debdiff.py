@@ -161,7 +161,7 @@ async def run_debdiff(old_binaries: List[str], new_binaries: List[str]) -> bytes
 
 
 def debdiff_is_empty(debdiff: str) -> bool:
-    return any([title is not None for (title, paragraph) in iter_sections(debdiff)])
+    return not any([title is not None for (title, paragraph) in iter_sections(debdiff)])
 
 
 def section_is_wdiff(title: str) -> Tuple[bool, Optional[str]]:
