@@ -2258,9 +2258,9 @@ class ProposalInfoManager(object):
         self.redis = redis
 
     async def iter_outdated_proposal_info_urls(self, days):
-        return await self.conn.fetch(
+        return [row['url'] for row in await self.conn.fetch(
             "SELECT url FROM merge_proposal WHERE "
-            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)
+            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)]
 
     async def get_proposal_info(self, url) -> Optional[ProposalInfo]:
         row = await self.conn.fetchrow(
