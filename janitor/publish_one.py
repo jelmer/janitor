@@ -70,6 +70,7 @@ from breezy.forge import (
     get_forge,
     ForgeLoginRequired,
     UnsupportedForge,
+    determine_title,
 )
 from breezy.git.remote import RemoteGitBranch, RemoteGitError
 from breezy.transport import Transport
@@ -190,7 +191,8 @@ def publish(
             template = Template(title_template)
             return template.render(codemod_result or {})
         else:
-            return None
+            description = get_proposal_description('text', existing_proposal)
+            return determine_title(description)
 
     with target_branch.lock_read(), source_branch.lock_read():
         try:
