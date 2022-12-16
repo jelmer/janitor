@@ -574,6 +574,8 @@ def publish_one(
 def load_template_env(path):
     env = Environment(
         loader=FileSystemLoader(path),
+        trim_blocks=True,
+        lstrip_blocks=True,
         autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False))
     env.globals.update({
         'debdiff_is_empty': debdiff_is_empty,
