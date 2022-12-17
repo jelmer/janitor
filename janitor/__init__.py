@@ -25,14 +25,9 @@ __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))
 
 
-def user_agent() -> str:
-    return "Debian-Janitor/%s Bot (+https://janitor.debian.net/contact/)" % (
-        version_string
-    )
-
-
-_mod_http.default_user_agent = user_agent
-_mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent()
+def set_user_agent(user_agent):
+    _mod_http.default_user_agent = lambda: user_agent
+    _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
 
 
 CAMPAIGN_REGEX = "[a-z0-9-]+"

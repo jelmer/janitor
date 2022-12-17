@@ -80,6 +80,7 @@ import breezy.plugins.launchpad  # noqa: F401
 import breezy.plugins.github  # noqa: F401
 
 from . import (
+    set_user_agent,
     state,
 )
 from .config import read_config, get_campaign_config, Campaign, Config
@@ -3298,6 +3299,8 @@ async def main(argv=None):
 
     with open(args.config, "r") as f:
         config = read_config(f)
+
+    set_user_agent(config.user_agent)
 
     bucket_rate_limiter: RateLimiter
     if args.slowstart:
