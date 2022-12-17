@@ -60,6 +60,7 @@ from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.forge import (
     Forge,
     forges,
+    NoSuchProject,
     ForgeLoginRequired,
     get_forge_by_hostname,
     get_proposal_by_url,
@@ -2107,7 +2108,6 @@ class NoRunForMergeProposal(Exception):
 
 
 async def get_last_effective_run(conn, package, campaign):
-    last_success = False
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -2120,23 +2120,11 @@ SELECT
     result_tags, target_branch_url, change_set AS change_set,
     failure_transient, failure_stage, codebase
 FROM
-    run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id
+    last_effective_runs
 WHERE package = $1 AND suite = $2
-ORDER BY finish_time DESC
+LIMIT 1
 """
-    for row in await conn.fetch(query, package, campaign):
-        run = state.Run.from_row(row)
-        if run.result_code in ("success", "nothing-to-do"):
-            return run
-        elif run.result_code == "nothing-new-to-do":
-            last_success = True
-            continue
-        elif not last_success:
-            return run
-    else:
-        return None
+    return state.Run.from_row(await conn.fetchrow(query, package, campaign))
 
 
 async def get_merge_proposal_run(
@@ -2442,6 +2430,14 @@ async def check_straggler(proposal_info_manager, url):
         # TODO(jelmer): Mark as "disappeared" if e.code == 404?
         logger.warning(
             "HTTP Error trying to get proposal status of %s: %s",
+            url, e)
+        return
+    except ForgeLoginRequired as e:
+        logger.warning('Login required for forge %s, skipping.', e)
+        return
+    except NoSuchProject as e:
+        logger.warning(
+            'No such project while trying to refresh straggler at %s: %s',
             url, e)
         return
 
