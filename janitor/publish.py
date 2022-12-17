@@ -2124,7 +2124,10 @@ FROM
 WHERE package = $1 AND suite = $2
 LIMIT 1
 """
-    return state.Run.from_row(await conn.fetchrow(query, package, campaign))
+    row = await conn.fetchrow(query, package, campaign)
+    if row is None:
+        return None
+    return state.Run.from_row(row)
 
 
 async def get_merge_proposal_run(
