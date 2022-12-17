@@ -28,6 +28,7 @@ from debian.changelog import Version
 
 import asyncpg
 
+from . import set_user_agent
 from .config import read_config
 from .queue import Queue
 
@@ -369,6 +370,8 @@ async def main():
     logging.info('Reading configuration')
     with open(args.config, "r") as f:
         config = read_config(f)
+
+    set_user_agent(config.user_agent)
 
     async with state.create_pool(config.database_location) as conn:
         logging.info('Finding candidates with policy')

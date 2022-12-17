@@ -81,6 +81,7 @@ from silver_platter.utils import (
 )
 
 from . import (
+    set_user_agent,
     state,
     splitout_env,
 )
@@ -2606,6 +2607,8 @@ async def main(argv=None):
 
     with open(args.config, "r") as f:
         config = read_config(f)
+
+    set_user_agent(config.user_agent)
 
     try:
         public_vcs_managers = get_vcs_managers(args.public_vcs_location)
