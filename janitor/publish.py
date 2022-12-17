@@ -2437,6 +2437,12 @@ async def check_straggler(proposal_info_manager, url):
         logger.warning(
             'Unsupported forge while trying to refresh straggler at %s', url)
         return
+    except UnexpectedHttpStatus as e:
+        # TODO(jelmer): Mark as "disappeared" if e.code == 404?
+        logger.warning(
+            "HTTP Error trying to get proposal status of %s: %s",
+            url, e)
+        return
 
     if mp.get_web_url() != url:
         await proposal_info_manager.update_canonical_url(url, mp.get_web_url())
