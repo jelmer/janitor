@@ -60,6 +60,9 @@ message Config {
   // Location of the redis server
   optional string redis_location = 16;
 
+  // User agent string
+  optional string user_agent = 18;
+
   repeated BugTracker bugtracker = 17;
 }
 
