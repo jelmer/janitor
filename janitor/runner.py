@@ -1859,12 +1859,13 @@ async def handle_codebases_upload(request):
                 entry['branch_url'])
             if 'branch' in params:
                 entry['branch'] = urlutils.unescape(params['branch'])
+        elif 'branch' in entry:
+            entry['branch_url'] = urlutils.join_segment_parameters(
+                entry['url'], {'branch': urlutils.escape(entry['branch'])})
+        elif 'url' in entry:
+            entry['branch_url'] = entry['url']
         else:
-            if 'branch' in entry:
-                entry['branch_url'] = urlutils.join_segment_parameters(
-                    entry['url'], {'branch': urlutils.escape(entry['branch'])})
-            else:
-                entry['branch_url'] = entry['url']
+            entry['branch_url'] = entry['url'] = None
 
         codebases.append((
             entry.get('name'),
