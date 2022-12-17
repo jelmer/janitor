@@ -30,7 +30,7 @@ import traceback
 
 from aiohttp import web
 
-from . import state
+from . import set_user_agent, state
 from .artifacts import ArtifactsMissing, get_artifact_manager
 from .config import read_config
 from .debian.debdiff import (
@@ -696,6 +696,8 @@ async def main(argv=None):
 
     with open(args.config, "r") as f:
         config = read_config(f)
+
+    set_user_agent(config.user_agent)
 
     endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
