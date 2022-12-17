@@ -1838,9 +1838,9 @@ async def refresh_stragglers(request):
     ndays = int(request.query.get('ndays', 5))
     async with request.app['db'].acquire() as conn:
         proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
-        ret = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
-    create_background_task(scan(request.app['db'], request.app['redis'], ret), 'Refresh of straggling merge proposals')
-    return web.json_response(ret)
+        urls = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
+    create_background_task(scan(request.app['db'], request.app['redis'], urls), 'Refresh of straggling merge proposals')
+    return web.json_response(urls)
 
 
 @routes.post("/refresh-status", name='refresh-status')
@@ -2258,9 +2258,9 @@ class ProposalInfoManager(object):
         self.redis = redis
 
     async def iter_outdated_proposal_info_urls(self, days):
-        return await self.conn.fetch(
+        return [row['url'] for row in await self.conn.fetch(
             "SELECT url FROM merge_proposal WHERE "
-            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)
+            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)]
 
     async def get_proposal_info(self, url) -> Optional[ProposalInfo]:
         row = await self.conn.fetchrow(

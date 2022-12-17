@@ -2017,6 +2017,7 @@ async def handle_candidates_upload(request):
                     candidate.get('change_set'),
                     command,
                     bucket,
+                    candidate.get('requestor'),
                 ))
 
             await conn.executemany(
@@ -2035,14 +2036,14 @@ async def handle_candidates_upload(request):
 
         ret = []
 
-        for (package, codebase, campaign, change_set, command, bucket) in to_schedule:
+        for (package, codebase, campaign, change_set, command, bucket, requestor) in to_schedule:
             offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
                 campaign,
                 change_set=change_set,
                 bucket=bucket,
-                requestor="candidate trigger",
+                requestor=(requestor or "triggered by candidate update"),
                 command=command,
                 codebase=codebase)
             ret.append({
