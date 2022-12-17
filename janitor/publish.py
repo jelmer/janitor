@@ -2440,6 +2440,11 @@ async def check_straggler(proposal_info_manager, url):
             'No such project while trying to refresh straggler at %s: %s',
             url, e)
         return
+    except PermissionDenied as e:
+        logger.warning(
+            'Permission denied access merge proposal %s: %s',
+            url, e)
+        return
 
     if mp.get_web_url() != url:
         await proposal_info_manager.update_canonical_url(url, mp.get_web_url())
