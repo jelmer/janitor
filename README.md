@@ -8,7 +8,7 @@ specific codemod (such as [lintian-brush](https://salsa.debian.org/jelmer/lintia
 
 There are currently several instances of the Janitor running. For their configuration, see:
 
-* [Debian Janitor](https://janitor.debian.net/) - Setup at https://salsa.debian.org/jelmer/janitor.debian.net
+* [Debian Janitor](https://janitor.debian.net/) - Setup at https://salsa.debian.org/janitor-team/janitor.debian.net
 * [Kali Janitor](https://janitor.kali.org/) - Configuration repository is private
 * [Upstream Janitor aka ``Scruffy``](https://www.scruffy.dev/) - Setup at https://github.com/scruffy-team/scruffy
 
