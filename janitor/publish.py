@@ -60,6 +60,7 @@ from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.forge import (
     Forge,
     forges,
+    NoSuchProject,
     ForgeLoginRequired,
     get_forge_by_hostname,
     get_proposal_by_url,
@@ -2430,7 +2431,7 @@ async def check_straggler(proposal_info_manager, url):
             "HTTP Error trying to get proposal status of %s: %s",
             url, e)
         return
-    except ForgeLoginRequired:
+    except ForgeLoginRequired as e:
         logger.warning('Login required for forge %s, skipping.', e)
         return
     except NoSuchProject as e:
