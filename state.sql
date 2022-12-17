@@ -7,8 +7,8 @@ CREATE DOMAIN codebase_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]
 CREATE TABLE IF NOT EXISTS codebase (
    -- Name is intentionally optional
    name codebase_name,
-   branch_url text not null, -- DEPRECATED
-   url text not null,
+   branch_url text, -- DEPRECATED
+   url text,
    branch text,
    -- the subpath may be unknown; it should be an empty string if it's the root
    -- path.
@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS codebase (
    inactive boolean not null default false,
    hostname text generated always as (substring(branch_url, '.*://(?:[^/@]*@)?([^/]*)'::text)) stored,
    unique(branch_url, subpath),
-   unique(name)
+   unique(name),
+   check(name is not null or branch_url is not null),
+   check((branch_url is null) = (url is null))
 );
 CREATE INDEX ON codebase (branch_url);
 CREATE INDEX ON codebase (name);
