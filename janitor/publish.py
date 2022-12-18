@@ -927,6 +927,7 @@ async def store_publish(
     target_branch_url=None,
     publish_id=None,
     requestor=None,
+    run_id=None,
 ):
     if isinstance(revision, bytes):
         revision = revision.decode("utf-8")  # type: ignore
@@ -958,8 +959,8 @@ async def store_publish(
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
-            "description, merge_proposal_url, id, requestor, change_set) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ",
+            "description, merge_proposal_url, id, requestor, change_set, run_id) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ",
             package,
             branch_name,
             main_branch_revision,
@@ -972,6 +973,7 @@ async def store_publish(
             publish_id,
             requestor,
             change_set_id,
+            run_id,
         )
         if result_code == 'success':
             await conn.execute(
@@ -1161,6 +1163,7 @@ async def publish_from_policy(
         publish_id=publish_id,
         target_branch_url=main_branch_url,
         requestor=requestor,
+        run_id=run.id,
     )
 
     if code == "success" and mode == MODE_PUSH:
@@ -1299,6 +1302,7 @@ async def publish_and_store(
                 description=e.description,
                 publish_id=publish_id,
                 requestor=requestor,
+                run_id=run.id,
             )
             publish_entry = {
                 "id": publish_id,
@@ -1338,6 +1342,7 @@ async def publish_and_store(
             target_branch_url=run.branch_url,
             publish_id=publish_id,
             requestor=requestor,
+            run_id=run.id,
         )
 
         publish_delay = datetime.utcnow() - run.finish_time
@@ -2957,6 +2962,7 @@ applied independently.
                     merge_proposal_url=mp.url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
+                    run_id=last_run.id,
                 )
         else:
             if not dry_run:
@@ -2975,6 +2981,7 @@ applied independently.
                     target_branch_url=target_branch_url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
+                    run_id=last_run.id,
                 )
 
             if publish_result.is_new:
