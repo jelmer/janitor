@@ -2289,6 +2289,9 @@ class ProposalInfoManager(object):
                 'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
                 'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
                 old_url, canonical_url)
+            await self.conn.execute(
+                'UPDATE publish SET merge_proposal_url = $1 WHERE merge_proposal_url = $2',
+                canonical_url, old_url)
             if old_url:
                 await self.conn.execute(
                     'DELETE FROM merge_proposal WHERE url = $1', old_url)
