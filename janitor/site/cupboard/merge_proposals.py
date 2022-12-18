@@ -6,7 +6,7 @@ import asyncpg
 
 
 async def get_proposals_with_run(
-    conn: asyncpg.Connection, suite: Optional[str]
+    conn: asyncpg.Connection, campaign: Optional[str]
 ):
     query = """
 SELECT
@@ -21,8 +21,8 @@ LEFT JOIN new_result_branch ON new_result_branch.revision = merge_proposal.revis
 LEFT JOIN run ON run.id = new_result_branch.run_id
 """
     args = []
-    if suite:
-        args.append(suite)
+    if campaign:
+        args.append(campaign)
         query += """
 WHERE suite = $1
 """
@@ -35,7 +35,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
 async def write_merge_proposals(db, suite):
     async with db.acquire() as conn:
         proposals_by_status: Dict[str, List[asyncpg.Record]] = {}
-        for row in await get_proposals_with_run(conn, suite=suite):
+        for row in await get_proposals_with_run(conn, campaign=suite):
             proposals_by_status.setdefault(row['status'], []).append(row)
 
     merged = proposals_by_status.get("merged", []) + proposals_by_status.get(
@@ -74,7 +74,7 @@ WHERE url = $1
 async def get_publishes(conn, url):
     return await conn.fetch("""
 SELECT * FROM publish WHERE merge_proposal_url = $1
-ORDER BY timestamp ASC
+ORDER BY timestamp DESC
 """, url)
 
 
