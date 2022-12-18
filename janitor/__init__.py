@@ -20,6 +20,7 @@ from breezy.transport import http as _mod_http
 from breezy.transport.http import urllib as _mod_urllib
 
 import shlex
+from urllib.request import URLopener, build_opener, install_opener
 
 __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))
@@ -28,6 +29,10 @@ version_string = ".".join(map(str, __version__))
 def set_user_agent(user_agent):
     _mod_http.default_user_agent = lambda: user_agent
     _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
+    URLopener.version = user_agent
+    opener = build_opener()
+    opener.addheaders = [('User-agent', user_agent)]
+    install_opener(opener)
 
 
 CAMPAIGN_REGEX = "[a-z0-9-]+"
