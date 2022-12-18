@@ -84,7 +84,13 @@
                     {% if '\n' in publish.description %}
                         <pre>{{ publish.description }}</pre>
                     {% else %}
+		    	{% if publish.run_id %}
+			<a href="/cupboard/pkg/{{ proposal.package }}/{{ publish.run_id }}">
+			{% endif %}
                         {{ publish.description }}<!-- {{ publish.revision }} -->
+		    	{% if publish.run_id %}
+			</a>
+			{% endif %}
                     {% endif %}
                 </li>
             {% endfor %}
