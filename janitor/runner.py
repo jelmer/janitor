@@ -2003,11 +2003,13 @@ async def handle_candidates_upload(request):
                 # Adjust bucket if there are any open merge proposals with a
                 # different command
                 existing_mps = await conn.fetch(
-                    "SELECT url FROM merge_proposal WHERE "
-                    "status = 'open' AND revision in ("
-                    "SELECT revision FROM last_effective_runs WHERE "
-                    "codebase = $1 AND suite = $2 AND command != $3) "
-                    "RETURNING command",
+                    "SELECT url, command FROM merge_proposal "
+                    "INNER JOIN last_effective_runs "
+                    "ON last_effective_runs.revision = merge_proposal.revision "
+                    "WHERE status = 'open' "
+                    "AND last_effective_runs.codebase = $1 "
+                    "AND last_effective_runs.suite = $2 "
+                    "AND last_effective_runs.command != $3",
                     candidate['codebase'], candidate['campaign'], command)
                 if any(existing_mps):
                     bucket = 'update-existing-mp'
