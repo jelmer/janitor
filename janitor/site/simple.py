@@ -614,7 +614,7 @@ async def main(argv=None):
         "--archiver-url",
         type=str,
         default="http://localhost:9914/",
-        help="URL for runner.",
+        help="URL for archiver.",
     )
     parser.add_argument(
         "--differ-url",
