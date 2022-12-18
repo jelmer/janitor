@@ -177,6 +177,7 @@ async def generate_review(
         "show_diff": show_diff,
         "show_debdiff": show_debdiff,
         "get_revision_info": get_revision_info,
+        "review_instructions_url": request.app.get("review_instructions_url"),
         "package_name": package,
         "run_id": run_id,
         "command": command,
