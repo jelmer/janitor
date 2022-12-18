@@ -2000,8 +2000,6 @@ async def handle_candidates_upload(request):
                     candidate.get('value'), candidate.get('success_chance'),
                     publish_policy, candidate['codebase']))
 
-                requestor = candidate.get('requestor')
-
                 # Adjust bucket if there are any open merge proposals with a
                 # different command
                 existing_mps = await conn.fetch(
@@ -2014,13 +2012,13 @@ async def handle_candidates_upload(request):
                 if any(existing_mps):
                     bucket = 'update-existing-mp'
                     requestor = 'command changed for existing mp: %r ⇒ %r' % (
-                        existing_mps[0]['command'])
+                        existing_mps[0]['command'], command)
                 else:
                     bucket = candidate.get('bucket')
-                    if requestor is None:
-                        requestor = "triggered by candidate update"
-                    else:
-                        requestor = "triggered by candidate update (%s)" % requestor
+                    requestor = "candidate update"
+
+                if candidate.get('requestor'):
+                    requestor += f' {candidate["requestor"]}' 
 
                 to_schedule.append((
                     candidate['package'],
