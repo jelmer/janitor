@@ -2000,17 +2000,25 @@ async def handle_candidates_upload(request):
                     candidate.get('value'), candidate.get('success_chance'),
                     publish_policy, candidate['codebase']))
 
-                # Bump priority if there are any open merge proposals with a
+                # Adjust bucket if there are any open merge proposals with a
                 # different command
-                if any(await conn.fetch(
-                        "SELECT url FROM merge_proposal WHERE "
-                        "status = 'open' AND revision in ("
-                        "SELECT revision FROM last_effective_runs WHERE "
-                        "codebase = $1 AND suite = $2 AND command != $3)",
-                        candidate['codebase'], candidate['campaign'], command)):
+                existing_mps = await conn.fetch(
+                    "SELECT url FROM merge_proposal WHERE "
+                    "status = 'open' AND revision in ("
+                    "SELECT revision FROM last_effective_runs WHERE "
+                    "codebase = $1 AND suite = $2 AND command != $3) "
+                    "RETURNING command",
+                    candidate['codebase'], candidate['campaign'], command)
+                if any(existing_mps):
                     bucket = 'update-existing-mp'
+                    requestor = 'command changed for existing mp: %r ⇒ %r' % (
+                        existing_mps[0]['command'], command)
                 else:
-                    bucket = None
+                    bucket = candidate.get('bucket')
+                    requestor = "candidate update"
+
+                if candidate.get('requestor'):
+                    requestor += f' {candidate["requestor"]}' 
 
                 to_schedule.append((
                     candidate['package'],
@@ -2019,7 +2027,7 @@ async def handle_candidates_upload(request):
                     candidate.get('change_set'),
                     command,
                     bucket,
-                    candidate.get('requestor'),
+                    requestor,
                 ))
 
             await conn.executemany(
@@ -2045,7 +2053,7 @@ async def handle_candidates_upload(request):
                 campaign,
                 change_set=change_set,
                 bucket=bucket,
-                requestor=(requestor or "triggered by candidate update"),
+                requestor=requestor,
                 command=command,
                 codebase=codebase)
             ret.append({
