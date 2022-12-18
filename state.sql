@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS publish (
    description text,
    requestor text,
    timestamp timestamp default now(),
+   run_id text references run(id),
    foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
 );
 CREATE INDEX ON publish (revision);
