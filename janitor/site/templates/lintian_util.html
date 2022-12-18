@@ -16,7 +16,7 @@
 {% macro display_lintian_result(lintian_result) %}
     {% for group in lintian_result['groups'] %}
         <ul class="lintian-filelist">
-            {% for file in group['input-files'] %}
+            {% for file in group.get('input-files') or group.get('input_files', []) %}
                 <li class="lintian-fileitem">
                     <a href="{{ file.path.split('/')[-1] }}">{{ file.path.split('/')[-1] }}</a>
                 </li>
@@ -30,4 +30,5 @@
         </ul>
     {% endfor %}
     {% if 'lintian-version' in lintian_result %}<!-- lintian version {{ lintian_result['lintian-version'] }} -->{% endif %}
+    {% if 'lintian_version' in lintian_result %}<!-- lintian version {{ lintian_result['lintian_version'] }} -->{% endif %}
 {% endmacro %}
