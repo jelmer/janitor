@@ -11,6 +11,9 @@
         <p>
             <a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}"
                id="full-run-link">Full Run</a>
+	    {% if review_instructions_url %}
+	    <a href="{{ review_instructions_url }}">Review Instructions</a>
+	    {% endif %}
         </p>
         <div class="score">
             Score: <span id="score">{{ value }}</span>
