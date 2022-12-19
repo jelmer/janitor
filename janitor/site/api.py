@@ -53,7 +53,6 @@ from . import (
     check_admin,
     is_qa_reviewer,
     check_logged_in,
-    check_worker_creds,
     highlight_diff,
     get_archive_diff,
     iter_accept,
@@ -65,6 +64,7 @@ from .common import (
 )
 from .setup import setup_postgres, setup_logfile_manager
 from ..vcs import VcsManager
+from ..worker_creds import check_worker_creds
 
 routes = web.RouteTableDef()
 
