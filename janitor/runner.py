@@ -2641,8 +2641,8 @@ async def create_public_app(queue_processor, config, db, tracer=None):
     app['database'] = db
     app['queue_processor'] = queue_processor
     app.middlewares.insert(0, metrics_middleware)
-    app.router.add_post('/active-runs', handle_public_assign)
-    app.router.add_post('/active-runs/{run_id}/finish', handle_public_finish)
+    app.router.add_post('/runner/active-runs', handle_public_assign)
+    app.router.add_post('/runner/active-runs/{run_id}/finish', handle_public_finish)
     aiozipkin.setup(app, tracer)
     return app
 
