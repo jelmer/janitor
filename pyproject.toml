@@ -16,6 +16,7 @@ module = [
     "ruamel.*",
     "aiohttp_apispec.*",
     "launchpadlib.*",
+    "mimeparse.*",
     "klaus.*",
     "aiohttp_debugtoolbar.*",
     "fakeredis.*",
