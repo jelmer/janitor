@@ -2002,21 +2002,30 @@ async def handle_candidates_upload(request):
 
                 # Adjust bucket if there are any open merge proposals with a
                 # different command
-                existing_mps = await conn.fetch(
-                    "SELECT url, command FROM merge_proposal "
-                    "INNER JOIN last_effective_runs "
+                existing_runs = await conn.fetch(
+                    "SELECT merge_proposal.url AS mp_url, "
+                    "last_effective_runs.command AS command "
+                    "FROM last_effective_runs "
+                    "LEFT JOIN merge_proposal "
                     "ON last_effective_runs.revision = merge_proposal.revision "
-                    "WHERE status = 'open' "
+                    "WHERE merge_proposal.status = 'open' "
                     "AND last_effective_runs.codebase = $1 "
                     "AND last_effective_runs.suite = $2 "
                     "AND last_effective_runs.command != $3",
                     candidate['codebase'], candidate['campaign'], command)
-                if any(existing_mps):
-                    bucket = 'update-existing-mp'
-                    requestor = 'command changed for existing mp: %r ⇒ %r' % (
-                        existing_mps[0]['command'], command)
+                if any(existing_runs):
+                    refresh = True
+                    if existing_runs[0]['mp_url']:
+                        bucket = 'update-existing-mp'
+                        requestor = 'command changed for existing mp: %r ⇒ %r' % (
+                            existing_runs[0]['command'], command)
+                    else:
+                        bucket = None
+                        requestor = 'command changed: %r ⇒ %r' % (
+                            existing_runs[0]['command'], command)
                 else:
                     bucket = candidate.get('bucket')
+                    refresh = False
                     requestor = "candidate update"
 
                 if candidate.get('requestor'):
@@ -2030,6 +2039,7 @@ async def handle_candidates_upload(request):
                     command,
                     bucket,
                     requestor,
+                    refresh,
                 ))
 
             await conn.executemany(
@@ -2048,7 +2058,8 @@ async def handle_candidates_upload(request):
 
         ret = []
 
-        for (package, codebase, campaign, change_set, command, bucket, requestor) in to_schedule:
+        for (package, codebase, campaign, change_set, command, bucket,
+             requestor, refresh) in to_schedule:
             offset, estimated_duration, queue_id, = await do_schedule(
                 conn,
                 package,
@@ -2057,7 +2068,8 @@ async def handle_candidates_upload(request):
                 bucket=bucket,
                 requestor=requestor,
                 command=command,
-                codebase=codebase)
+                codebase=codebase,
+                refresh=refresh)
             ret.append({
                 'campaign': campaign,
                 'codebase': codebase,
@@ -2066,7 +2078,8 @@ async def handle_candidates_upload(request):
                 'offset': offset,
                 'estimated_duration': estimated_duration.total_seconds()
                 if estimated_duration is not None else None,
-                'queue-id': queue_id
+                'queue-id': queue_id,
+                'refresh': refresh
             })
 
     return web.json_response({
