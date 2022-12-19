@@ -2104,7 +2104,7 @@ async def handle_get_active_run(request):
     run_id = request.match_info['run_id']
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+        raise web.HTTPNotFound(text='no such run %s' % run_id)
     return web.json_response(active_run.json())
 
 
@@ -2583,7 +2583,7 @@ async def handle_finish(request):
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+        raise web.HTTPNotFound(text='no such run %s' % run_id)
     try:
         (filenames, logfilenames, artifact_names, result) = await finish(
             active_run, queue_processor, request)
@@ -2604,16 +2604,25 @@ async def handle_finish(request):
     )
 
 
+async def handle_public_get_active_run(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info['run_id']
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text='no such run %s' % run_id)
+    return web.json_response(active_run.json())
+
+
 async def handle_public_finish(request):
     span = aiozipkin.request_span(request)
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+        raise web.HTTPNotFound(text='no such run %s' % run_id)
 
     with span.new_child('check-worker-creds'):
-        await check_worker_creds(request.app['pool'], request)
+        await check_worker_creds(request.app['database'], request)
 
     try:
         (filenames, logfilenames, artifact_names, result) = await finish(
@@ -2647,7 +2656,12 @@ async def create_public_app(queue_processor, config, db, tracer=None):
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get('/', handle_public_root)
     app.router.add_post('/runner/active-runs', handle_public_assign)
-    app.router.add_post('/runner/active-runs/{run_id}/finish', handle_public_finish)
+    app.router.add_post(
+        '/runner/active-runs/{run_id}/finish', handle_public_finish)
+    app.router.add_get(
+        '/runner/active-runs/{run_id}',
+        handle_public_get_active_run,
+        name='get-active-run')
     aiozipkin.setup(app, tracer)
     return app
 
