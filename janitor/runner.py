@@ -104,7 +104,6 @@ from .logs import (
 )
 from .queue import QueueItem, Queue
 from .schedule import do_schedule_control, do_schedule, CandidateUnavailable
-from .site import check_worker_creds
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -114,6 +113,7 @@ from .vcs import (
     UnsupportedVcs,
     VcsManager,
 )
+from .worker_creds import check_worker_creds
 
 from ._launchpad import override_launchpad_consumer_name
 override_launchpad_consumer_name()

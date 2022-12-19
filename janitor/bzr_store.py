@@ -45,7 +45,8 @@ from . import (
 )
 
 from .config import read_config, get_campaign_config
-from .site import is_worker, iter_accept, template_loader
+from .site import iter_accept, template_loader
+from .worker_creds import is_worker
 
 
 async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
