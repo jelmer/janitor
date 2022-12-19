@@ -15,9 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import aiohttp
 from datetime import datetime
-from aiohttp import ClientConnectorError, web, BasicAuth
+from aiohttp import ClientConnectorError, web
 from jinja2 import PackageLoader
 from typing import Optional
 from yarl import URL
@@ -220,38 +219,6 @@ def check_admin(request: web.Request) -> None:
 def check_logged_in(request: web.Request) -> None:
     if not request['user']:
         raise web.HTTPUnauthorized()
-
-
-async def is_worker(db, request: web.Request) -> Optional[str]:
-    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
-    if not auth_header:
-        return None
-    auth = BasicAuth.decode(auth_header=auth_header)
-    async with db.acquire() as conn:
-        val = await conn.fetchval(
-            "select 1 from worker where name = $1 " "AND password = crypt($2, password)",
-            auth.login, auth.password,
-        )
-        if val:
-            return auth.login
-    return None
-
-
-async def check_worker_creds(db, request: web.Request) -> Optional[str]:
-    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
-    if not auth_header:
-        raise web.HTTPUnauthorized(
-            text="worker login required",
-            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
-        )
-    login = await is_worker(db, request)
-    if not login:
-        raise web.HTTPUnauthorized(
-            text="worker login required",
-            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
-        )
-
-    return login
 
 
 def iter_accept(request):
