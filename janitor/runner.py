@@ -104,6 +104,7 @@ from .logs import (
 )
 from .queue import QueueItem, Queue
 from .schedule import do_schedule_control, do_schedule, CandidateUnavailable
+from .site import check_worker_creds
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -2135,6 +2136,35 @@ async def handle_assign(request):
         })
 
 
+async def handle_public_assign(request):
+    json = await request.json()
+    span = aiozipkin.request_span(request)
+    with span.new_child('check-worker-creds'):
+        worker_name = await check_worker_creds(request.app['database'], request)
+    assignment_count.labels(worker=worker_name).inc()
+    queue_processor = request.app['queue_processor']
+    try:
+        assignment = await next_item(
+            queue_processor, request.app['config'],
+            span, 'assign', worker=worker_name,
+            worker_link=json.get("worker_link"),
+            backchannel=json.get('backchannel'),
+            package=json.get('package'),
+            campaign=json.get('campaign')
+        )
+    except QueueEmpty:
+        return web.json_response({'reason': 'queue empty'}, status=503)
+    except QueueRateLimiting as e:
+        return web.json_response(
+            {'reason': str(e)}, status=429, headers={
+                'Retry-After': str(e.retry_after or DEFAULT_RETRY_AFTER)})
+    return web.json_response(
+        assignment, status=201, headers={
+            'Location': str(request.app.router['get-active-run'].url_for(
+                run_id=assignment['id']))
+        })
+
+
 @routes.get("/active-runs/+peek", name="peek")
 async def handle_peek(request):
     span = aiozipkin.request_span(request)
@@ -2445,14 +2475,8 @@ async def handle_ready(request):
     return web.Response(text="ok")
 
 
-@routes.post("/active-runs/{run_id}/finish", name="finish")
-async def handle_finish(request):
+async def finish(active_run, queue_processor, request):
     span = aiozipkin.request_span(request)
-    queue_processor = request.app['queue_processor']
-    run_id = request.match_info["run_id"]
-    active_run = await queue_processor.get_run(run_id)
-    if not active_run:
-        raise web.HTTPNotFound(text=' no such run %s' % run_id)
     worker_name = active_run.worker_name
     main_branch_url = active_run.vcs_info.get('branch_url')
     vcs_type = active_run.vcs_type
@@ -2502,7 +2526,7 @@ async def handle_finish(request):
         result = JanitorResult(
             pkg=active_run.package,
             campaign=active_run.campaign,
-            log_id=run_id,
+            log_id=active_run.log_id,
             code='success',
             worker_name=worker_name,
             branch_url=main_branch_url,
@@ -2521,7 +2545,7 @@ async def handle_finish(request):
                 queue_processor.logfile_manager,
                 queue_processor.backup_logfile_manager,
                 active_run.package,
-                run_id,
+                active_run.log_id,
                 mtime=result.finish_time.timestamp(),
             )
 
@@ -2535,7 +2559,7 @@ async def handle_finish(request):
                         queue_processor.artifact_manager,
                         queue_processor.backup_artifact_manager,
                         output_directory,
-                        run_id,
+                        active_run.log_id,
                         artifact_names,
                     )
                 except BaseException as e:
@@ -2548,15 +2572,28 @@ async def handle_finish(request):
             artifact_names = None
 
     with span.new_child('finish-run'):
-        try:
-            await queue_processor.finish_run(active_run, result)
-        except RunExists as e:
-            return web.json_response(
-                {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
-                 "logs": logfilenames,
-                 "result": result.json(), 'reason': str(e)},
-                status=409,
-            )
+        await queue_processor.finish_run(active_run, result)
+
+    return (filenames, logfilenames, artifact_names, result)
+
+
+@routes.post("/active-runs/{run_id}/finish", name="finish")
+async def handle_finish(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info["run_id"]
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+    try:
+        (filenames, logfilenames, artifact_names, result) = await finish(
+            active_run, queue_processor, request)
+    except RunExists as e:
+        return web.json_response(
+            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
+             "logs": logfilenames,
+             "result": result.json(), 'reason': str(e)},
+            status=409,
+        )
 
     # TODO(jelmer): Set Location header to something; /runs/{run_id}= ?
     return web.json_response(
@@ -2567,14 +2604,55 @@ async def handle_finish(request):
     )
 
 
+async def handle_public_finish(request):
+    span = aiozipkin.request_span(request)
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info["run_id"]
+    active_run = await queue_processor.get_run(run_id)
+    if not active_run:
+        raise web.HTTPNotFound(text=' no such run %s' % run_id)
+
+    with span.new_child('check-worker-creds'):
+        await check_worker_creds(request.app['pool'], request)
+
+    try:
+        (filenames, logfilenames, artifact_names, result) = await finish(
+            active_run, queue_processor, request)
+    except RunExists as e:
+        return web.json_response(
+            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
+             "logs": logfilenames,
+             "result": result.json(), 'reason': str(e)},
+            status=409,
+        )
+
+    return web.json_response(
+        {"id": run_id, "filenames": filenames,
+         "logs": logfilenames,
+         "artifacts": artifact_names, "result": result.json()},
+        status=201,
+    )
+
+
+async def create_public_app(queue_processor, config, db, tracer=None):
+    app = web.Application(middlewares=[
+        state.asyncpg_error_middleware])
+    app['config'] = config
+    app['database'] = db
+    app['queue_processor'] = queue_processor
+    app.middlewares.insert(0, metrics_middleware)
+    app.router.add_post('/active-runs', handle_public_assign)
+    app.router.add_post('/active-runs/{run_id}/finish', handle_public_finish)
+    aiozipkin.setup(app, tracer)
+    return app
+
+
 async def create_app(queue_processor, config, db, tracer=None):
     app = web.Application(middlewares=[
-        state.asyncpg_error_middleware,
         state.asyncpg_error_middleware])
     app.router.add_routes(routes)
     app['config'] = config
     app['database'] = db
-    app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     app.middlewares.insert(0, metrics_middleware)
     metrics_route = app.router.add_get("/metrics", metrics, name="metrics")
@@ -2590,6 +2668,7 @@ async def main(argv=None):
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
     parser.add_argument("--port", type=int, help="Listen port", default=9911)
+    parser.add_argument("--public-port", type=int, help="Listen port", default=9919)
     parser.add_argument(
         "--pre-check",
         help="Command to run to check whether to process package.",
@@ -2715,6 +2794,15 @@ async def main(argv=None):
         )
 
         queue_processor.start_watchdog()
+
+        if args.public_port:
+            public_app = await create_public_app(
+                queue_processor, config, db, tracer=tracer)
+            public_runner = web.AppRunner(public_app)
+            await public_runner.setup()
+            public_site = web.TCPSite(
+                public_runner, args.listen_address, port=args.public_port)
+            await public_site.start()
 
         app = await create_app(queue_processor, config, db, tracer=tracer)
         runner = web.AppRunner(app)
