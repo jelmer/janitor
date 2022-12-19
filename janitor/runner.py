@@ -2634,6 +2634,10 @@ async def handle_public_finish(request):
     )
 
 
+async def handle_public_root(request):
+    return web.Response(text='')
+
+
 async def create_public_app(queue_processor, config, db, tracer=None):
     app = web.Application(middlewares=[
         state.asyncpg_error_middleware])
@@ -2641,6 +2645,7 @@ async def create_public_app(queue_processor, config, db, tracer=None):
     app['database'] = db
     app['queue_processor'] = queue_processor
     app.middlewares.insert(0, metrics_middleware)
+    app.router.add_get('/', handle_public_root)
     app.router.add_post('/runner/active-runs', handle_public_assign)
     app.router.add_post('/runner/active-runs/{run_id}/finish', handle_public_finish)
     aiozipkin.setup(app, tracer)
