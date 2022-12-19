@@ -32,6 +32,7 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics_middleware, metrics
 from jinja2 import select_autoescape
+import mimeparse
 
 from breezy import urlutils
 from breezy.branch import Branch
@@ -45,7 +46,7 @@ from . import (
 )
 
 from .config import read_config, get_campaign_config
-from .site import iter_accept, template_loader
+from .site import template_loader
 from .worker_creds import is_worker
 
 
@@ -225,17 +226,20 @@ async def handle_repo_list(request):
         names = [entry.name
                  for entry in os.scandir(os.path.join(request.app["local_path"]))]
         names.sort()
-    for accept in iter_accept(request):
-        if accept in ('application/json', ):
-            return web.json_response(names)
-        elif accept in ('text/plain', ):
-            return web.Response(
-                text=''.join([line + '\n' for line in names]),
-                content_type='text/plain')
-        elif accept in ('text/html', ):
-            return await aiohttp_jinja2.render_template_async(
-                'repo-list.html', request, {'vcs': "bzr", 'repositories': names})
-    return web.json_response(names)
+    best_match = mimeparse.best_match(
+        ['text/html', 'application/json', 'text/plain'],
+        request.headers.get('Accept', '*/*'))
+    if best_match == 'application/json':
+        return web.json_response(names)
+    elif best_match == 'text/plain':
+        return web.Response(
+            text=''.join([line + '\n' for line in names]),
+            content_type='text/plain')
+    elif best_match == 'text/html':
+        return await aiohttp_jinja2.render_template_async(
+            'repo-list.html', request, {'vcs': "bzr", 'repositories': names})
+    else:
+        raise web.HTTPNotAcceptable()
 
 
 async def handle_health(request):
