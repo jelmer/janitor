@@ -48,7 +48,8 @@ from . import (
 )
 
 from .config import read_config
-from .site import is_worker, iter_accept, template_loader
+from .site import iter_accept, template_loader
+from .worker_creds import is_worker
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
