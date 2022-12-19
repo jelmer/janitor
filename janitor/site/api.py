@@ -15,12 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import aiohttp
 from aiohttp import (
     web,
     ClientResponseError,
     ClientSession,
-    ClientTimeout,
     ContentTypeError,
     ClientConnectorError,
     ClientOSError,
@@ -65,7 +63,6 @@ from .common import (
 )
 from .setup import setup_postgres, setup_logfile_manager
 from ..vcs import VcsManager
-from ..worker_creds import check_worker_creds
 
 routes = web.RouteTableDef()
 
@@ -902,115 +899,6 @@ async def handle_run_peek(request):
             return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
         except asyncio.TimeoutError as e:
             return web.json_response({"reason": "timeout contacting runner: %s" % e}, status=502)
-
-
-@docs()
-@routes.post("/active-runs", name="run-assign")
-async def handle_run_assign(request):
-    json = await request.json()
-    span = aiozipkin.request_span(request)
-    with span.new_child('check-worker-creds'):
-        worker_name = await check_worker_creds(request.app['pool'], request)
-    with span.new_child('forward-runner'):
-        url = URL(request.app['runner_url']) / "active-runs"
-        try:
-            json["worker"] = worker_name
-            async with request.app['http_client_session'].post(
-                    url, json=json, timeout=ClientTimeout(60)
-            ) as resp:
-                if resp.status != 201:
-                    try:
-                        internal_error = await resp.json()
-                    except ContentTypeError:
-                        internal_error = await resp.text()
-                    ret = {"internal-status": resp.status, "internal-result": internal_error}
-                    if 'reason' in internal_error:
-                        ret['reason'] = internal_error['reason']
-                    return web.json_response(ret, status=400)
-                assignment = await resp.json()
-                return web.json_response(assignment, status=201)
-        except (ClientConnectorError, ServerDisconnectedError) as e:
-            return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
-        except asyncio.TimeoutError as e:
-            return web.json_response({"reason": "timeout contacting runner: %s" % e}, status=502)
-
-
-@docs()
-@routes.post("/active-runs/{run_id}/finish", name="run-finish")
-async def handle_run_finish(request: web.Request) -> web.Response:
-    span = aiozipkin.request_span(request)
-    with span.new_child('check-worker-creds'):
-        worker_name = await check_worker_creds(request.app['pool'], request)
-    run_id = request.match_info["run_id"]
-    with span.new_child('multipart-init'):
-        reader: aiohttp.MultipartReader = await request.multipart()
-        result = None
-        with aiohttp.MultipartWriter("mixed") as runner_writer:
-            while True:
-                part = await reader.next()
-                if part is None:
-                    break
-                if part.filename is None:  # type: ignore
-                    logging.warning(
-                        "No filename for part with headers %r", part.headers)
-                    return web.json_response(
-                        {
-                            "reason": "missing filename for part",
-                            "content_type": part.headers.get(aiohttp.hdrs.CONTENT_TYPE),
-                        },
-                        status=400,
-                    )
-                if part.filename == "result.json":  # type: ignore
-                    result = await part.json()  # type: ignore
-                else:
-                    runner_writer.append(await part.read(), headers=part.headers)  # type: ignore
-
-    if result is None:
-        return web.json_response({"reason": "missing result.json"}, status=400)
-
-    result["worker_name"] = worker_name
-
-    part = runner_writer.append_json(  # type: ignore
-        result,
-        headers=[  # type: ignore
-            ("Content-Disposition",
-             'attachment; filename="result.json"; ' "filename*=utf-8''result.json")]
-    )
-
-    runner_url = URL(request.app['runner_url']) / "active-runs" / run_id / 'finish'
-    with span.new_child('runner:finish'):
-        try:
-            async with request.app['http_client_session'].post(
-                runner_url, data=runner_writer
-            ) as resp:
-                if resp.status == 404:
-                    json = await resp.json()
-                    return web.json_response({"reason": json["reason"]}, status=404)
-                if resp.status == 409:
-                    result = await resp.json()
-                    result["api_url"] = str(request.app.router["run"].url_for(run_id=result['id']))
-                    return web.json_response(result, status=409)
-                if resp.status not in (201, 200):
-                    try:
-                        internal_error = await resp.json()
-                    except ContentTypeError:
-                        internal_error = await resp.text()
-                    return web.json_response(
-                        {
-                            "internal-status": resp.status,
-                            "internal-reporter": "runner",
-                            "internal-result": internal_error,
-                        },
-                        status=400,
-                    )
-                result = await resp.json()
-        except ClientConnectorError:
-            return web.Response(text="unable to contact runner", status=502)
-        except ServerDisconnectedError:
-            return web.Response(text="server disconnected", status=502)
-
-    result["api_url"] = str(request.app.router["run"].url_for(run_id=run_id))
-    return web.json_response(result, status=201)
 
 
 def create_background_task(fn, title):
