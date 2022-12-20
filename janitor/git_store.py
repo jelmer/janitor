@@ -20,6 +20,7 @@
 import aiozipkin
 import asyncpg.pool
 import asyncio
+from contextlib import suppress
 from io import BytesIO
 import logging
 import os
@@ -96,6 +97,8 @@ async def git_diff_request(request):
         with span.new_child('subprocess:communicate'):
             (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
     except asyncio.TimeoutError as e:
+        with suppress(ProcessLookupError):
+            p.kill()
         raise web.HTTPRequestTimeout(text='diff generation timed out') from e
 
     if p.returncode == 0:
@@ -354,7 +357,12 @@ async def cgit_backend(request):
 
             chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
             while chunk:
-                await response.write(chunk)
+                try:
+                    await response.write(chunk)
+                except ConnectionResetError:
+                    with suppress(ProcessLookupError):
+                        p.kill()
+                    raise
                 chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
 
             await response.write_eof()
@@ -503,6 +511,7 @@ async def create_web_app(
     local_path: str,
     db: asyncpg.pool.Pool,
     config,
+    *,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
 ):
@@ -631,7 +640,7 @@ async def main(argv=None):
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
-        raise RuntimeError('vcs path %s does not exist' % args.vcs_path)
+        parser.error('vcs path %s does not exist' % args.vcs_path)
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
