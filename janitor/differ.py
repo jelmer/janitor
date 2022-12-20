@@ -632,7 +632,8 @@ async def listen_to_runner(redis, db, app):
         # for large packages.
         for old_id, new_id in to_precache:
             try:
-                await precache(app['artifact_manager'], old_id, new_id,
+                await precache(
+                    app['artifact_manager'], old_id, new_id,
                     task_memory_limit=app['task_memory_limit'],
                     task_timeout=app['task_timeout'],
                     diffoscope_cache_path=app['diffoscope_cache_path'],
