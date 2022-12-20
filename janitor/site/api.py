@@ -1168,7 +1168,7 @@ WHERE
 async def handle_mass_reschedule(request):
     check_admin(request)
     post = await request.post()
-    include_transient = request.query.get('include_transient', 'off') == 'on'
+    include_transient = post.get('include_transient', 'off') == 'on'
     try:
         result_code = post['result_code']
     except KeyError as e:
