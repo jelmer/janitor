@@ -1901,9 +1901,12 @@ async def handle_codebases_upload(request):
 @routes.delete("/candidates/{id}", name="delete-candidate")
 async def handle_candidate_delete(request):
     queue_processor = request.app['queue_processor']
+    candidate_id = int(request.match_info['id'])
     async with queue_processor.database.acquire() as conn, conn.transaction():
+        await conn.fetchrow(
+            'DELETE FROM followup WHERE candidate = $1', candidate_id)
         (suite, codebase) = await conn.fetchrow(
-            'DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase', int(request.match_info['id']))
+            'DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase', candidate_id)
         await conn.execute(
             'DELETE FROM queue WHERE suite = $1 AND codebase = $2',
             suite, codebase)
@@ -1958,7 +1961,8 @@ async def handle_candidates_upload(request):
                     'SELECT name FROM named_publish_policy')):
                 known_publish_policies.add(record[0])
 
-            entries = []
+            candidate_rows = []
+            followups = []
             for candidate in (await request.json()):
                 if candidate['package'] not in known_packages:
                     logging.warning(
@@ -1995,12 +1999,14 @@ async def handle_candidates_upload(request):
                     unknown_publish_policies.append(publish_policy)
                     continue
 
-                entries.append((
+                candidate_rows.append((
                     candidate['package'], candidate['campaign'],
                     command,
                     candidate.get('change_set'), candidate.get('context'),
                     candidate.get('value'), candidate.get('success_chance'),
                     publish_policy, candidate['codebase']))
+
+                followups.append(candidate.get('followup_for', []))
 
                 # Adjust bucket if there are any open merge proposals with a
                 # different command
@@ -2044,7 +2050,7 @@ async def handle_candidates_upload(request):
                     refresh,
                 ))
 
-            await conn.executemany(
+            candidates = await conn.fetch(
                 "INSERT INTO candidate "
                 "(package, suite, command, change_set, context, value, "
                 "success_chance, publish_policy, codebase) "
@@ -2054,9 +2060,22 @@ async def handle_candidates_upload(request):
                 "success_chance = EXCLUDED.success_chance, "
                 "command = EXCLUDED.command, "
                 "publish_policy = EXCLUDED.publish_policy, "
-                "codebase = EXCLUDED.codebase",
-                entries,
+                "codebase = EXCLUDED.codebase RETURNING id",
+                candidate_rows,
             )
+
+            followup_rows = []
+            for candidate, followup_ids in zip(candidates, followups):
+                if not followup_ids:
+                    continue
+                for followup_id in followup_ids:
+                    followup_rows.append((candidate['id'], followup_id))
+
+            if followup_rows:
+                await conn.executemany(
+                    "INSERT INTO followup (origin, candidate) VALUES ($1, $2) "
+                    "ON CONFLICT DO NOTHING",
+                    followup_rows)
 
         ret = []
 
