@@ -60,7 +60,6 @@ from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.forge import (
     Forge,
     forges,
-    NoSuchProject,
     ForgeLoginRequired,
     get_forge_by_hostname,
     get_proposal_by_url,
@@ -2287,6 +2286,9 @@ class ProposalInfoManager(object):
             package_name=row['package'],
             can_be_merged=row['can_be_merged'])
 
+    async def delete_proposal_info(self, url):
+        await self.conn.execute('DELETE FROM merge_proposal WHERE url = $1', url)
+
     async def update_canonical_url(self, old_url: str, canonical_url: str):
         async with self.conn.transaction():
             old_url = await self.conn.fetchval(
@@ -2436,7 +2438,10 @@ async def check_straggler(proposal_info_manager, url):
         async with session.get(url) as resp:
             if resp.status == 200 and resp.url != url:
                 await proposal_info_manager.update_canonical_url(
-                    url, mp.get_web_url())
+                    url, resp.url)
+            if resp.status == 404:
+                # TODO(jelmer): Keep it but leave a tumbestone around?
+                await proposal_info_manager.delete_proposal_info(url)
             else:
                 logging.warning(
                     'Got status %d loading straggler %r', url)
