@@ -35,7 +35,7 @@ from yarl import URL
 import aioredlock
 import aiozipkin
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp import web
+from aiohttp import web, ClientSession
 import asyncpg
 import asyncpg.pool
 
@@ -2431,37 +2431,15 @@ async def check_stragglers(conn, redis):
 
 
 async def check_straggler(proposal_info_manager, url):
-    try:
-        mp = get_proposal_by_url(url)
-    except UnsupportedForge:
-        logger.warning(
-            'Unsupported forge while trying to refresh straggler at %s', url)
-        return
-    except UnexpectedHttpStatus as e:
-        # TODO(jelmer): Mark as "disappeared" if e.code == 404?
-        logger.warning(
-            "HTTP Error trying to get proposal status of %s: %s",
-            url, e)
-        return
-    except ForgeLoginRequired as e:
-        logger.warning('Login required for forge %s, skipping.', e)
-        return
-    except NoSuchProject as e:
-        logger.warning(
-            'No such project while trying to refresh straggler at %s: %s',
-            url, e)
-        return
-    except PermissionDenied as e:
-        logger.warning(
-            'Permission denied access merge proposal %s: %s',
-            url, e)
-        return
-
-    if mp.get_web_url() != url:
-        await proposal_info_manager.update_canonical_url(url, mp.get_web_url())
-        return
-
-    logger.warning('Not sure what to do with straggler %s', url)
+    # Find the canonical URL
+    async with ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 200 and resp.url != url:
+                await proposal_info_manager.update_canonical_url(
+                    url, mp.get_web_url())
+            else:
+                logging.warning(
+                    'Got status %d loading straggler %r', url)
 
 
 async def check_existing_mp(
