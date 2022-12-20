@@ -28,6 +28,7 @@ from aiohttp import (
 )
 import aiozipkin
 import asyncio
+import asyncpg
 from datetime import datetime, timedelta
 import logging
 from typing import Optional
@@ -1233,7 +1234,11 @@ AND """ % table
     query += " AND ".join(where)
 
     async with request.app['pool'].acquire() as conn:
-        runs = await conn.fetch(query, *params)
+        try:
+            runs = await conn.fetch(query, *params)
+        except asyncpg.InvalidRegularExpressionError as e:
+            raise web.HTTPBadRequest(
+                text="Invalid regex: %s" % e.message) from e
 
     session = request.app['http_client_session']
 
