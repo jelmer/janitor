@@ -21,6 +21,7 @@ from io import StringIO
 import os
 import json
 import logging
+import shlex
 import sys
 from typing import Dict, Any
 
@@ -158,8 +159,12 @@ async def format_diffoscope(
     raise AssertionError("unknown content type %r" % content_type)
 
 
-async def _run_diffoscope(old_binary, new_binary, *, timeout=None, preexec_fn=None):
-    args = ["diffoscope", "--json=-", "--exclude-directory-metadata=yes"]
+async def _run_diffoscope(
+        old_binary, new_binary, *,
+        diffoscope_command=None, timeout=None, preexec_fn=None):
+    if diffoscope_command is None:
+        diffoscope_command = "diffoscope"
+    args = shlex.split(diffoscope_command) + ["--json=-", "--exclude-directory-metadata=yes"]
     args.extend([old_binary, new_binary])
     logging.debug("running %r", args)
     p = await asyncio.create_subprocess_exec(
@@ -188,7 +193,9 @@ async def _run_diffoscope(old_binary, new_binary, *, timeout=None, preexec_fn=No
         raise DiffoscopeError("Error parsing JSON: %s" % e) from e
 
 
-async def run_diffoscope(old_binaries, new_binaries, *, preexec_fn=None, timeout=None):
+async def run_diffoscope(
+        old_binaries, new_binaries, *, preexec_fn=None, timeout=None,
+        diffoscope_command=None):
     ret: Dict[str, Any] = {
         "diffoscope-json-version": 1,
         "source1": "old version",
@@ -200,7 +207,8 @@ async def run_diffoscope(old_binaries, new_binaries, *, preexec_fn=None, timeout
     for (old_name, old_path), (new_name, new_path) in zip(
             old_binaries, new_binaries):
         sub = await _run_diffoscope(
-            old_path, new_path, preexec_fn=preexec_fn, timeout=timeout)
+            old_path, new_path, preexec_fn=preexec_fn, timeout=timeout,
+            diffoscope_command=diffoscope_command)
         if sub is None:
             continue
         sub["source1"] = old_name
