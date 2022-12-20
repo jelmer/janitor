@@ -336,7 +336,8 @@ async def handle_diffoscope(request):
                 diffoscope_diff = await run_diffoscope(
                     old_binaries, new_binaries,
                     timeout=request.app['task_timeout'],
-                    preexec_fn=lambda: _set_limits(request.app['task_memory_limit'])) 
+                    preexec_fn=lambda: _set_limits(request.app['task_memory_limit']),
+                    diffoscope_command=request.app['diffoscope_command'])
             except MemoryError as e:
                 raise web.HTTPServiceUnavailable(
                     text="diffoscope used too much memory") from e
@@ -390,7 +391,8 @@ async def precache(
         artifact_manager, old_id, new_id, *,
         task_memory_limit=None, task_timeout=None,
         diffoscope_cache_path=None,
-        debdiff_cache_path=None):
+        debdiff_cache_path=None,
+        diffoscope_command=None):
     """Precache the diff between two runs.
 
     Args:
@@ -448,7 +450,8 @@ async def precache(
                 diffoscope_diff = await run_diffoscope(
                     old_binaries, new_binaries,
                     preexec_fn=lambda: _set_limits(task_memory_limit),
-                    timeout=task_timeout)
+                    timeout=task_timeout,
+                    diffoscope_command=diffoscope_command)
             except MemoryError as e:
                 raise DiffCommandMemoryError(
                     "diffoscope", task_memory_limit) from e
@@ -495,7 +498,8 @@ async def handle_precache(request):
                 task_memory_limit=request.app['task_memory_limit'],
                 task_timeout=request.app['task_timeout'],
                 diffoscope_cache_path=request.app['diffoscope_cache_path'],
-                debdiff_cache_path=request.app['debdiff_cache_path'])
+                debdiff_cache_path=request.app['debdiff_cache_path'],
+                diffoscope_command=request.app['diffoscope_command'])
         except ArtifactsMissing as e:
             raise web.HTTPNotFound(
                 text="No artifacts for run id: %r" % e,
@@ -543,7 +547,8 @@ where
                 task_memory_limit=request.app['task_memory_limit'],
                 task_timeout=request.app['task_timeout'],
                 diffoscope_cache_path=request.app['diffoscope_cache_path'],
-                debdiff_cache_path=request.app['debdiff_cache_path']))
+                debdiff_cache_path=request.app['debdiff_cache_path'],
+                diffoscope_command=request.app['diffoscope_command']))
 
 
     async def _precache_all():
@@ -637,7 +642,8 @@ async def listen_to_runner(redis, db, app):
                     task_memory_limit=app['task_memory_limit'],
                     task_timeout=app['task_timeout'],
                     diffoscope_cache_path=app['diffoscope_cache_path'],
-                    debdiff_cache_path=app['debdiff_cache_path'])
+                    debdiff_cache_path=app['debdiff_cache_path'],
+                    diffoscope_command=app['diffoscope_command'])
             except ArtifactsMissing as e:
                 logging.info(
                     "Artifacts missing while precaching diff for "
@@ -667,7 +673,9 @@ async def listen_to_runner(redis, db, app):
         await redis.close()
 
 
-def create_app(cache_path, artifact_manager, database_location, *, task_memory_limit=None, task_timeout=None):
+def create_app(cache_path, artifact_manager, database_location, *,
+               task_memory_limit=None, task_timeout=None,
+               diffoscope_command=None):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[
         trailing_slash_redirect, state.asyncpg_error_middleware])
@@ -677,6 +685,7 @@ def create_app(cache_path, artifact_manager, database_location, *, task_memory_l
     app['task_timeout'] = task_timeout
     app['diffoscope_cache_path'] = partial(diffoscope_cache_path, cache_path)
     app['debdiff_cache_path'] = partial(debdiff_cache_path, cache_path)
+    app['diffoscope_command'] = diffoscope_command
 
     async def connect_artifact_manager(app):
         await app['artifact_manager'].__aenter__()
@@ -710,6 +719,7 @@ async def main(argv=None):
         '--task-timeout', help='Task timeout (in seconds)',
         type=int, default=60)
     parser.add_argument('--gcp-logging', action='store_true')
+    parser.add_argument('--diffoscope-command', type=str, default='diffoscope')
 
     args = parser.parse_args()
 
@@ -746,7 +756,8 @@ async def main(argv=None):
     app = create_app(
         args.cache_path, artifact_manager, config.database_location,
         task_memory_limit=args.task_memory_limit,
-        task_timeout=args.task_timeout)
+        task_timeout=args.task_timeout,
+        diffoscope_command=args.diffoscope_command)
     setup_metrics(app)
     aiozipkin.setup(app, tracer)
 
