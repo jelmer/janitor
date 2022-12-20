@@ -43,12 +43,13 @@ from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
     DictBackend,
 )
+import mimeparse
 from . import (
     state,
 )
 
 from .config import read_config
-from .site import iter_accept, template_loader
+from .site import template_loader
 from .worker_creds import is_worker
 
 
@@ -469,17 +470,19 @@ async def handle_repo_list(request):
         names = [entry.name
                  for entry in os.scandir(os.path.join(request.app['local_path']))]
         names.sort()
-    for accept in iter_accept(request):
-        if accept in ('application/json', ):
-            return web.json_response(names)
-        elif accept in ('text/plain', ):
-            return web.Response(
-                text=''.join([line + '\n' for line in names]),
-                content_type='text/plain')
-        elif accept in ('text/html', ):
-            return await aiohttp_jinja2.render_template_async(
-                'repo-list.html', request, {'vcs': "git", 'repositories': names})
-    return web.json_response(names)
+    best_match = mimeparse.best_match(
+        ['text/html', 'text/plain', 'application/json'],
+        request.headers.get('Accept', '*/*'))
+    if best_match == 'application/json':
+        return web.json_response(names)
+    elif best_match == 'text/plain':
+        return web.Response(
+            text=''.join([line + '\n' for line in names]),
+            content_type='text/plain')
+    elif best_match == 'text/html':
+        return await aiohttp_jinja2.render_template_async(
+            'repo-list.html', request, {'vcs': "git", 'repositories': names})
+    raise web.HTTPNotAcceptable()
 
 
 async def handle_health(request):

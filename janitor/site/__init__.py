@@ -221,10 +221,6 @@ def check_logged_in(request: web.Request) -> None:
         raise web.HTTPUnauthorized()
 
 
-def iter_accept(request):
-    return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
-
-
 TEMPLATE_ENV = {
     'utcnow': datetime.utcnow,
     'enumerate': enumerate,

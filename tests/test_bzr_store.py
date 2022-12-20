@@ -66,7 +66,7 @@ async def test_home(aiohttp_client):
         resp = await client.get("/")
         assert resp.status == 200
         text = await resp.text()
-        assert text == "[]"
+        assert text == ""
 
 
 async def test_fetch_format(aiohttp_client):

@@ -41,6 +41,7 @@ from aiohttp_apispec import (
 
 from breezy.revision import NULL_REVISION
 
+import mimeparse
 from marshmallow import Schema, fields
 from yarl import URL
 
@@ -55,7 +56,6 @@ from . import (
     check_logged_in,
     highlight_diff,
     get_archive_diff,
-    iter_accept,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
@@ -455,21 +455,21 @@ async def handle_diff(request):
                 ),
             )
 
-        for accept in iter_accept(request):
-            if accept in ("text/x-diff", "text/plain", "*/*"):
-                return web.Response(
-                    body=diff,
-                    content_type="text/x-diff",
-                    headers={"Vary": "Accept"},
-                )
-            if accept == "text/html":
-                return web.Response(
-                    text=highlight_diff(diff.decode("utf-8", "replace")),
-                    content_type="text/html",
-                    headers={"Vary": "Accept"},
-                )
+        best_match = mimeparse.best_match(
+            ['text/x-diff', 'text/plain', 'text/html'],
+            request.headers.get('Accept', '*/*'))
+        if best_match in ("text/x-diff", "text/plain"):
+            return web.Response(
+                body=diff,
+                content_type="text/x-diff",
+                headers={"Vary": "Accept"})
+        elif best_match == "text/html":
+            return web.Response(
+                text=highlight_diff(diff.decode("utf-8", "replace")),
+                content_type="text/html",
+                headers={"Vary": "Accept"})
         raise web.HTTPNotAcceptable(
-            text="Acceptable content types: " "text/html, text/x-diff"
+            text="Acceptable content types: text/html, text/x-diff"
         )
     except ContentTypeError as e:
         return web.Response(text="publisher returned error %d" % e.code, status=400)
@@ -704,19 +704,21 @@ async def handle_runner_log_index(request):
         except asyncio.TimeoutError:
             return web.json_response({"reason": "timeout contacting runner"}, status=502)
 
-    for accept in iter_accept(request):
-        if accept in ('application/json', ):
-            return web.json_response(ret)
-        elif accept in ('text/plain', ):
-            return web.Response(
-                text=''.join([line + '\n' for line in ret]),
-                content_type='text/plain')
-        elif accept in ('text/html', ):
-            text = await render_template_for_request(
-                "log-index.html", request, {'contents': ret})
-            return web.Response(text=text, content_type="text/html")
+    best_match = mimeparse.best_match(
+        ['text/html', 'application/json', 'text/plain'],
+        request.headers.get('Accept', '*/*'))
+    if best_match == 'application/json':
+        return web.json_response(ret)
+    elif best_match == 'text/plain':
+        return web.Response(
+            text=''.join([line + '\n' for line in ret]),
+            content_type='text/plain')
+    elif best_match == 'text/html':
+        text = await render_template_for_request(
+            "log-index.html", request, {'contents': ret})
+        return web.Response(text=text, content_type="text/html")
 
-    return web.json_response(ret)
+    raise web.HTTPNotAcceptable()
 
 
 @docs(
