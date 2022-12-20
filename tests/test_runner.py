@@ -18,8 +18,11 @@
 
 import aiozipkin
 from datetime import datetime, timedelta
+from io import BytesIO
+import os
 from fakeredis.aioredis import FakeRedis
 from janitor.queue import QueueItem
+from janitor.logs import LogFileManager
 from janitor.runner import (
     create_app,
     is_log_filename,
@@ -29,6 +32,41 @@ from janitor.runner import (
     Backchannel,
     queue_item_env,
 )
+
+
+class MemoryLogFileManager(LogFileManager):
+
+    def __init__(self):
+        self.m = {}
+
+    async def has_log(self, pkg, run_id, name, timeout=None):
+        return name in self.m.get((pkg, run_id), {})
+
+    async def get_log(self, pkg, run_id, name, timeout=None):
+        try:
+            return BytesIO(self.m.get((pkg, run_id), {})[name])
+        except KeyError as e:
+            raise FileNotFoundError from e
+
+    async def get_ctime(self, pkg, run_id, name):
+        if self.has_log(pkg, run_id, name):
+            return datetime.utcnow()
+        raise FileNotFoundError
+
+    async def import_log(self, pkg, run_id, orig_path, timeout=None, mtime=None):
+        with open(orig_path, 'rb') as f:
+            self.m.setdefault((pkg, run_id), {})[os.path.basename(orig_path)] = f.read()
+
+    async def delete_log(self, pkg, run_id, name):
+        try:
+            del self.m.setdefault((pkg, run_id), {})[name]
+        except KeyError as e:
+            raise FileNotFoundError from e
+
+    async def iter_logs(self):
+        for (pkg, run_id), logs in self.m.items():
+            for name in logs:
+                yield (pkg, run_id, name)
 
 
 async def create_client(aiohttp_client, queue_processor=None):
@@ -94,7 +132,8 @@ def test_is_log_filename():
 
 async def create_queue_processor():
     redis = FakeRedis()
-    return QueueProcessor(None, redis, run_timeout=30)
+    return QueueProcessor(
+        None, redis, run_timeout=30, logfile_manager=MemoryLogFileManager())
 
 
 async def test_watch_dog():

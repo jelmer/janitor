@@ -51,6 +51,7 @@ from aiohttp import (
     ClientTimeout,
     ClientConnectorError,
     ClientResponseError,
+    MultipartReader,
     ServerDisconnectedError,
 )
 from redis.asyncio import Redis
@@ -1344,7 +1345,7 @@ class QueueProcessor(object):
         database: asyncpg.pool.Pool,
         redis,
         run_timeout: int,
-        logfile_manager: Optional[LogFileManager] = None,
+        logfile_manager: LogFileManager,
         artifact_manager: Optional[ArtifactManager] = None,
         public_vcs_managers: Optional[Dict[str, VcsManager]] = None,
         use_cached_only: bool = False,
@@ -2475,10 +2476,13 @@ async def handle_ready(request):
     return web.Response(text="ok")
 
 
-async def finish(active_run, queue_processor, request):
+async def finish(
+        active_run: ActiveRun, queue_processor: QueueProcessor,
+        request: web.Request) -> Tuple[
+            List[str], List[str], List[str], JanitorResult]:
     span = aiozipkin.request_span(request)
     worker_name = active_run.worker_name
-    main_branch_url = active_run.vcs_info.get('branch_url')
+    main_branch_url = active_run.main_branch_url
     vcs_type = active_run.vcs_type
     subpath = active_run.subpath
     resume_from = active_run.resume_from
@@ -2493,13 +2497,12 @@ async def finish(active_run, queue_processor, request):
                 part = await reader.next()
                 if part is None:
                     break
+                if isinstance(part, MultipartReader):
+                    raise web.HTTPBadRequest(text='nested multi-part')
                 if part.filename == "result.json":
                     worker_result = WorkerResult.from_json(await part.json())
                 elif part.filename is None:
-                    return web.json_response(
-                        {"reason": "Part without filename",
-                         "headers": dict(part.headers)},
-                        status=400)
+                    raise web.HTTPBadRequest(text="Part without filename")
                 else:
                     filenames.append(part.filename)
                     output_path = os.path.join(output_directory, part.filename)
@@ -2507,11 +2510,10 @@ async def finish(active_run, queue_processor, request):
                         try:
                             f.write(await part.read())
                         except ConnectionResetError as e:
-                            return web.json_response(
-                                {"reason": str(e)}, status=400)
+                            raise web.HTTPBadRequest(text=str(e)) from e
 
         if worker_result is None:
-            return web.json_response({"reason": "Missing result JSON"}, status=400)
+            raise web.HTTPBadRequest(text="Missing result JSON")
 
         logging.debug('worker result: %r', worker_result)
 
