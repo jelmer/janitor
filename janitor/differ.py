@@ -386,11 +386,14 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
-async def precache(app, old_id, new_id):
+async def precache(
+        artifact_manager, old_id, new_id, *,
+        task_memory_limit=None, task_timeout=None,
+        diffoscope_cache_path=None,
+        debdiff_cache_path=None):
     """Precache the diff between two runs.
 
     Args:
-      app: Web App
       old_id: Run id for old run
       new_id: Run id for new run
     Raises:
@@ -405,10 +408,10 @@ async def precache(app, old_id, new_id):
         new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
         await asyncio.gather(
-            app['artifact_manager'].retrieve_artifacts(
+            artifact_manager.retrieve_artifacts(
                 old_id, old_dir, filter_fn=is_binary, timeout=PRECACHE_RETRIEVE_TIMEOUT
             ),
-            app['artifact_manager'].retrieve_artifacts(
+            artifact_manager.retrieve_artifacts(
                 new_id, new_dir, filter_fn=is_binary, timeout=PRECACHE_RETRIEVE_TIMEOUT
             ),
         )
@@ -421,10 +424,13 @@ async def precache(app, old_id, new_id):
         if not new_binaries:
             raise ArtifactsMissing(new_id)
 
-        debdiff_cache_path = app['debdiff_cache_path'](old_id, new_id)
+        if debdiff_cache_path:
+            p = debdiff_cache_path(old_id, new_id)
+        else:
+            p = None
 
-        if debdiff_cache_path and not os.path.exists(debdiff_cache_path):
-            with open(debdiff_cache_path, "wb") as f:
+        if p and not os.path.exists(p):
+            with open(p, "wb") as f:
                 f.write(
                     await run_debdiff(
                         [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
@@ -432,24 +438,27 @@ async def precache(app, old_id, new_id):
                 )
             logging.info("Precached debdiff result for %s/%s", old_id, new_id)
 
-        diffoscope_cache_path = app['diffoscope_cache_path'](old_id, new_id)
-        if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
+        if diffoscope_cache_path:
+            p = diffoscope_cache_path(old_id, new_id)
+        else:
+            p = None
+
+        if p and not os.path.exists(p):
             try:
                 diffoscope_diff = await run_diffoscope(
                     old_binaries, new_binaries,
-                    preexec_fn=lambda: _set_limits(app['task_memory_limit']),
-                    timeout=app['task_timeout'])
+                    preexec_fn=lambda: _set_limits(task_memory_limit),
+                    timeout=task_timeout)
             except MemoryError as e:
                 raise DiffCommandMemoryError(
-                    "diffoscope", app['task_memory_limit']) from e
+                    "diffoscope", task_memory_limit) from e
             except asyncio.TimeoutError as e:
-                raise DiffCommandTimeout(
-                    "diffoscope", app['task_timeout']) from e
+                raise DiffCommandTimeout("diffoscope", task_timeout) from e
             except DiffoscopeError as e:
                 raise DiffCommandError("diffoscope", e.args[0]) from e
 
             try:
-                with open(diffoscope_cache_path, "w") as f:
+                with open(p, "w") as f:
                     json.dump(diffoscope_diff, f)
             except json.JSONDecodeError as e:
                 raise web.HTTPServerError(text=str(e)) from e
@@ -480,7 +489,13 @@ async def handle_precache(request):
 
     async def _precache():
         try:
-            return precache(request.app, old_run['id'], new_run['id'])
+            return precache(
+                request.app['artifact_manager'],
+                old_run['id'], new_run['id'],
+                task_memory_limit=request.app['task_memory_limit'],
+                task_timeout=request.app['task_timeout'],
+                diffoscope_cache_path=request.app['diffoscope_cache_path'],
+                debdiff_cache_path=request.app['debdiff_cache_path'])
         except ArtifactsMissing as e:
             raise web.HTTPNotFound(
                 text="No artifacts for run id: %r" % e,
@@ -522,7 +537,14 @@ where
 """
         )
         for row in rows:
-            todo.append(precache(request.app, row[1], row[0]))
+            todo.append(precache(
+                request.app['artifact_manager'],
+                row[1], row[0],
+                task_memory_limit=request.app['task_memory_limit'],
+                task_timeout=request.app['task_timeout'],
+                diffoscope_cache_path=request.app['diffoscope_cache_path'],
+                debdiff_cache_path=request.app['debdiff_cache_path']))
+
 
     async def _precache_all():
         for i in range(0, len(todo), 100):
@@ -585,12 +607,12 @@ async def run_web_server(app, listen_addr, port):
         await runner.cleanup()
 
 
-async def listen_to_runner(redis, app):
+async def listen_to_runner(redis, db, app):
     async def handle_result_message(msg):
         result = json.loads(msg['data'])
         if result["code"] != "success":
             return
-        async with app['pool'].acquire() as conn:
+        async with db.acquire() as conn:
             to_precache = []
             if result["revision"] == result["main_branch_revision"]:
                 for row in await conn.fetch(
@@ -610,7 +632,11 @@ async def listen_to_runner(redis, app):
         # for large packages.
         for old_id, new_id in to_precache:
             try:
-                await precache(app, old_id, new_id)
+                await precache(app['artifact_manager'], old_id, new_id,
+                    task_memory_limit=app['task_memory_limit'],
+                    task_timeout=app['task_timeout'],
+                    diffoscope_cache_path=app['diffoscope_cache_path'],
+                    debdiff_cache_path=app['debdiff_cache_path'])
             except ArtifactsMissing as e:
                 logging.info(
                     "Artifacts missing while precaching diff for "
@@ -725,7 +751,9 @@ async def main(argv=None):
 
     tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port))]
 
-    tasks.append(loop.create_task(listen_to_runner(redis, app)))
+    db = await state.create_pool(config.database_location)
+
+    tasks.append(loop.create_task(listen_to_runner(redis, db, app)))
 
     await asyncio.gather(*tasks)
 
