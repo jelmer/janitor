@@ -1095,6 +1095,20 @@ class PollingBackchannel(Backchannel):
         }
 
 
+def _parse_unexpected_http_status(e):
+    if e.code == 429:
+        try:
+            retry_after = int(e.headers['Retry-After'])  # type: ignore
+        except TypeError:
+            logging.warning(
+                'Unable to parse retry-after header: %s',
+                e.headers['Retry-After'])  # type: ignore
+            retry_after = None
+        else:
+            retry_after = None
+        raise BranchRateLimited(e.path, str(e), retry_after=retry_after) from e
+
+
 def open_resume_branch(
         main_branch: Branch, campaign_name: str, package: str,
         possible_forges: Optional[List[Forge]] = None) -> Optional[Branch]:
@@ -1114,6 +1128,9 @@ def open_resume_branch(
     except ConnectionError as e:
         logging.warning("Connection error opening resume branch (%s)", e)
         return None
+    except UnexpectedHttpStatus as e:
+        _parse_unexpected_http_status(e)
+        raise e
     else:
         try:
             for option in [campaign_name, ('%s/main' % campaign_name), ('%s/main/%s' % (campaign_name, package))]:
@@ -1136,17 +1153,7 @@ def open_resume_branch(
             logging.warning("Unable to list existing proposals: %s", e)
             return None
         except UnexpectedHttpStatus as e:
-            if e.code == 429:
-                try:
-                    retry_after = int(e.headers['Retry-After'])  # type: ignore
-                except TypeError:
-                    logging.warning(
-                        'Unable to parse retry-after header: %s',
-                        e.headers['Retry-After'])  # type: ignore
-                    retry_after = None
-                else:
-                    retry_after = None
-                raise BranchRateLimited(e.path, str(e), retry_after=retry_after) from e
+            _parse_unexpected_http_status(e)
             logging.warning(
                 'Unexpected HTTP status for %s: %s %s', e.path,
                 e.code, e.extra)
