@@ -405,6 +405,16 @@ cd {{ package }}
                     {%- else -%}
                         change set <a href="/cupboard/cs/{{ d.change_set_id }}">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
                     {%- endif -%}
+		{%- elif k == 'previous_mp' -%}
+		    {%- if r -%}
+		    	{%- if d -%}no relevant previous merge proposals
+			{%- else -%}merge proposals for previous run were not rejected:
+		        {% for (url, status) in d %}<a href="{{ url }}">{{ status }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+			{%- endif -%}
+		    {%- else -%}
+		        merge proposals for previous run were rejected:
+		        {% for (url, status) in d %}<a href="{{ url }}">{{ status }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+		    {%- endif -%}
                 {%- else -%}
                     {{ k }}
                 {%- endif -%}
