@@ -973,6 +973,10 @@ def run_worker(
                     continue
                 result_branches.append((role, name, base_revision, revision))
 
+            result_branch_roles = [role for (role, remote_name, br, r) in result_branches]
+            assert len(result_branch_roles) == len(set(result_branch_roles)), \
+                "Duplicate result branches: %r" % result_branches
+
             try:
                 if vcs_type.lower() == "git":
                     import_branches_git(
