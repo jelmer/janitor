@@ -17,6 +17,7 @@ module = [
     "aiohttp_apispec.*",
     "launchpadlib.*",
     "mimeparse.*",
+    "google.cloud.logging.*",
     "klaus.*",
     "aiohttp_debugtoolbar.*",
     "fakeredis.*",
