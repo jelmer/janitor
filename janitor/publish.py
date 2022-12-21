@@ -94,7 +94,6 @@ from .schedule import (
 from .vcs import (
     VcsManager,
     get_vcs_managers_from_config,
-    bzr_to_browse_url,
 )
 
 
@@ -387,9 +386,11 @@ def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
 class PublishResult:
 
     description: str
+    target_branch_url: Optional[str] = None
     is_new: bool = False
     proposal_url: Optional[str] = None
     proposal_web_url: Optional[str] = None
+    target_branch_web_url: Optional[str] = None
     branch_name: Optional[str] = None
 
 
@@ -539,6 +540,8 @@ class PublishWorker(object):
             branch_name = response.get("branch_name")
             is_new = response.get("is_new")
             description = response.get('description')
+            target_branch_url = response.get("target_branch_url")
+            target_branch_web_url = response.get("target_branch_web_url")
 
             if proposal_url and is_new:
                 if self.redis:
@@ -548,7 +551,8 @@ class PublishWorker(object):
                             "url": proposal_url, "web_url": proposal_web_url,
                             "status": "open", "package": pkg,
                             "campaign": campaign,
-                            "target_branch_url": main_branch_url.rstrip("/")}))
+                            "target_branch_url": target_branch_url,
+                            "target_branch_web_url": target_branch_web_url}))
 
                 merge_proposal_count.labels(status="open").inc()
                 open_proposal_count.inc()
@@ -561,6 +565,8 @@ class PublishWorker(object):
                 proposal_url=proposal_url,
                 proposal_web_url=proposal_web_url,
                 branch_name=branch_name, is_new=is_new,
+                target_branch_url=target_branch_url,
+                target_branch_web_url=target_branch_web_url,
                 description=description)
 
         raise AssertionError
@@ -1183,7 +1189,7 @@ async def publish_from_policy(
         "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
         "main_branch_url": main_branch_url,
-        "main_branch_browse_url": bzr_to_browse_url(main_branch_url),
+        "main_branch_browse_url": publish_result.target_branch_web_url,
         "branch_name": publish_result.branch_name,
         "result_code": code,
         "result": run.result,
@@ -1311,7 +1317,6 @@ async def publish_and_store(
                 "package": run.package,
                 "campaign": run.campaign,
                 "main_branch_url": run.branch_url,
-                "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
                 "result": run.result,
             }
 
@@ -1354,7 +1359,7 @@ async def publish_and_store(
             "proposal_url": publish_result.proposal_url or None,
             "mode": mode,
             "main_branch_url": run.branch_url,
-            "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
+            "main_branch_browse_url": publish_result.target_branch_web_url,
             "branch_name": publish_result.branch_name,
             "result_code": "success",
             "result": run.result,
@@ -2822,7 +2827,7 @@ has changed from %s to %s.
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""\
 This merge proposal will be closed, since the branch has moved to %s.
-""" % (bzr_to_browse_url(last_run.branch_url),), dry_run=dry_run)
+""" % (last_run.branch_url, ), dry_run=dry_run)
         except PermissionDenied:
             return False
         return True
