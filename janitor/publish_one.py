@@ -648,6 +648,10 @@ if __name__ == "__main__":
         result["proposal_web_url"] = publish_result.proposal.get_web_url()
         result["is_new"] = publish_result.is_new
     result["branch_name"] = branch_name
+    result["target_branch_url"] = publish_result.target_branch.user_url.rstrip('/')
+    if publish_result.forge:
+        result["target_branch_web_url"] = publish_result.forge.get_web_url(
+            publish_result.target_branch)
 
     json.dump(result, sys.stdout)
 

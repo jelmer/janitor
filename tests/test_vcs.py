@@ -16,7 +16,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from janitor.vcs import (
-    bzr_to_browse_url,
     LocalBzrVcsManager,
     get_run_diff,
     is_authenticated_url,
@@ -28,24 +27,6 @@ from janitor.vcs import (
 from breezy.tests import TestCaseWithTransport
 
 from breezy import controldir
-
-
-def test_simple():
-    assert (
-        "https://github.com/jelmer/dulwich"
-        == bzr_to_browse_url("https://github.com/jelmer/dulwich")
-    )
-
-
-def test_branch():
-    assert (
-        "https://github.com/jelmer/dulwich/tree/master"
-        == bzr_to_browse_url("https://github.com/jelmer/dulwich,branch=master")
-    )
-    assert (
-        "https://github.com/jelmer/dulwich/tree/debian/master"
-        == bzr_to_browse_url("https://github.com/jelmer/dulwich,branch=debian%2Fmaster")
-    )
 
 
 class GetRunDiffsTests(TestCaseWithTransport):
