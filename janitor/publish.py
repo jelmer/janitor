@@ -160,6 +160,10 @@ missing_branch_url_count = Counter(
     "Number of runs that weren't published because they had a "
     "missing branch URL")
 
+rejected_last_mp_count = Counter(
+    "rejected_last_mp",
+    "Last merge proposal was rejected")
+
 missing_publish_mode_count = Counter(
     "missing_publish_mode_count",
     "Number of runs not published due to missing publish mode",
@@ -602,6 +606,7 @@ async def consider_publish_run(
         )
         exponential_backoff_count.inc()
         return {}
+
     ms = [b[4] for b in unpublished_branches]
     if push_limit is not None and (
             MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
@@ -618,7 +623,18 @@ async def consider_publish_run(
             '%s: considering publishing for branch without branch url',
             run.id)
         missing_branch_url_count.inc()
+        # TODO(jelmer): Support target_branch_url ?
         return {}
+
+    last_mps = await get_previous_mp_status(conn, run.codebase, run.campaign)
+    if any(last_mp[1] not in ('rejected', 'closed')
+           for last_mp in last_mps):
+        logger.warning(
+            '%s: last merge proposal was rejected by maintainer: %r', run.id,
+            last_mps)
+        rejected_last_mp_count.inc()
+        return {}
+
     actual_modes: Dict[str, Optional[str]] = {}
     for (
         role,
@@ -1925,6 +1941,24 @@ async def bucket_rate_limits_request(request):
     return web.json_response(ret)
 
 
+async def get_previous_mp_status(conn, codebase, campaign):
+    rows = await conn.fetch("""\
+SELECT run.id, ARRAY_AGG((merge_proposal.url, merge_proposal.status))
+FROM run
+INNER JOIN merge_proposal ON run.revision = merge_proposal.revision
+WHERE run.codebase = $1
+AND run.suite = $2
+AND run.result_code = 'success'
+AND merge_proposal.status NOT IN ('open', 'abandoned')
+GROUP BY run.id
+ORDER BY run.finish_time DESC
+""", codebase, campaign)
+    if len(rows) == 0:
+        return []
+
+    return rows[0]
+
+
 @routes.get("/rate-limits", name="rate-limits")
 async def rate_limits_request(request):
     bucket_rate_limiter = request.app['bucket_rate_limiter']
@@ -1955,6 +1989,8 @@ async def blockers_request(request):
             run = await conn.fetchrow("""\
 SELECT
   run.id AS id,
+  run.codebase AS codebase,
+  run.campaign AS campaign,
   run.finish_time AS finish_time,
   run.review_status AS review_status,
   run.command AS run_command,
@@ -1990,6 +2026,10 @@ WHERE run.id = $1
                     {"differ-unreachable"})
         else:
             attempt_count = 0
+
+        with span.new_child('sql:last-mp'):
+            last_mps = await get_previous_mp_status(
+                conn, run['codebase'], run['campaign'])
     ret = {}
     ret['success'] = {
         'result': (run['result_code'] == 'success'),
@@ -2048,6 +2088,15 @@ WHERE run.id = $1
         'details': {
             'change_set_id': run['change_set'],
             'change_set_state': run['change_set_state']}}
+
+    ret['previous_mp'] = {
+        'result': any(last_mp[1] not in ('rejected', 'closed')
+                      for last_mp in last_mps),
+        'details': [{
+            'url': last_mp[0],
+            'status': last_mp[1]
+        } for last_mp in last_mps]
+    }
 
     return web.json_response(ret)
 
