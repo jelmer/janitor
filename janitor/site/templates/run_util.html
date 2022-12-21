@@ -67,10 +67,7 @@ cd {{ package }}
                    id="issue_description"
                    name="issue[description]"
                    value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
-            <button id="filebug"
-                    {%- if accesskey -%}
-                    accesskey="{{ accesskey }}"
-                    {%- endif -%}>
+            <button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}" {% endif %}>
                 File a Bug against {{ bugtracker.name }}
             </button>
         </form>
@@ -93,10 +90,7 @@ cd {{ package }}
 	    <input type="hidden" name="title" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
             <input type="hidden" name="body"
                    value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
-            <button id="filebug"
-                    {%- if accesskey -%}
-                    accesskey="{{ accesskey }}"
-                    {%- endif -%}>
+            <button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>
                 File a Bug against {{ bugtracker.name }}
             </button>
     </form>
