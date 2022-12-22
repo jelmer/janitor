@@ -669,5 +669,8 @@ async def main(argv=None):
 
 if __name__ == "__main__":
     import sys
+    import uvloop
+
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
     sys.exit(asyncio.run(main(sys.argv)))

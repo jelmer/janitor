@@ -31,6 +31,7 @@ import uuid
 import warnings
 from yarl import URL
 
+import uvloop
 
 import aioredlock
 import aiozipkin
@@ -3533,4 +3534,5 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main(sys.argv)))
