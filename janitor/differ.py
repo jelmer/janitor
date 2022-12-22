@@ -704,6 +704,7 @@ async def main(argv=None):
         type=int, default=60)
     parser.add_argument('--gcp-logging', action='store_true')
     parser.add_argument('--diffoscope-command', type=str, default='diffoscope')
+    parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
 
@@ -712,6 +713,8 @@ async def main(argv=None):
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
+    elif args.debug:
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
