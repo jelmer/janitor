@@ -1943,172 +1943,156 @@ async def handle_candidate_download(request):
 
 @routes.post("/candidates", name="upload-candidates")
 async def handle_candidates_upload(request):
+    span = aiozipkin.request_span(request)
     unknown_packages = []
     unknown_codebases = []
     unknown_campaigns = []
     invalid_command = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
-    to_schedule = []
     async with queue_processor.database.acquire() as conn:
+        existing_runs_stmt = await conn.prepare(
+            "SELECT merge_proposal.url AS mp_url, "
+            "last_effective_runs.command AS command "
+            "FROM last_effective_runs "
+            "LEFT JOIN merge_proposal "
+            "ON last_effective_runs.revision = merge_proposal.revision "
+            "WHERE merge_proposal.status = 'open' "
+            "AND last_effective_runs.codebase = $1 "
+            "AND last_effective_runs.suite = $2 "
+            "AND last_effective_runs.command != $3")
+        insert_candidate_stmt = await conn.prepare(
+            "INSERT INTO candidate "
+            "(package, suite, command, change_set, context, value, "
+            "success_chance, publish_policy, codebase) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+            "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+            "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+            "success_chance = EXCLUDED.success_chance, "
+            "command = EXCLUDED.command, "
+            "publish_policy = EXCLUDED.publish_policy, "
+            "codebase = EXCLUDED.codebase RETURNING id")
+        insert_followup_stmt = await conn.prepare(
+            "INSERT INTO followup (origin, candidate) VALUES ($1, $2) "
+            "ON CONFLICT DO NOTHING")
         async with conn.transaction():
-            known_packages = set()
-            for record in (await conn.fetch('SELECT name FROM package')):
-                known_packages.add(record[0])
+            with span.new_child('sql:known-packages'):
+                known_packages = set()
+                for record in (await conn.fetch('SELECT name FROM package')):
+                    known_packages.add(record[0])
 
-            known_codebases = set()
-            for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
-                known_codebases.add(record[0])
+            with span.new_child('sql:known-codebases'):
+                known_codebases = set()
+                for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
+                    known_codebases.add(record[0])
 
             known_campaign_names = [
                 campaign.name for campaign in request.app['config'].campaign]
 
-            known_publish_policies = set()
-            for record in (await conn.fetch(
-                    'SELECT name FROM named_publish_policy')):
-                known_publish_policies.add(record[0])
+            with span.new_child('sql:known-named-policies'):
+                known_publish_policies = set()
+                for record in (await conn.fetch(
+                        'SELECT name FROM named_publish_policy')):
+                    known_publish_policies.add(record[0])
 
-            candidate_rows = []
-            followups = []
-            for candidate in (await request.json()):
-                if candidate['package'] not in known_packages:
-                    logging.warning(
-                        'ignoring candidate %s/%s; package unknown',
-                        candidate['package'], candidate['campaign'])
-                    unknown_packages.append(candidate['package'])
-                    continue
-                if candidate['codebase'] not in known_codebases:
-                    logging.warning(
-                        'ignoring candidate %s/%s; codebase unknown',
-                        candidate['codebase'], candidate['campaign'])
-                    unknown_codebases.append(candidate['codebase'])
-                    continue
-                if candidate['campaign'] not in known_campaign_names:
-                    logging.warning('unknown suite %r', candidate['campaign'])
-                    unknown_campaigns.append(candidate['campaign'])
-                    continue
-
-                command = candidate.get('command')
-                if not command:
-                    campaign_config = get_campaign_config(
-                        request.app['config'], candidate['campaign'])
-                    command = campaign_config.command
-                    if not command:
+            ret = []
+            with span.new_child('process-candidates'):
+                for candidate in (await request.json()):
+                    if candidate['package'] not in known_packages:
                         logging.warning(
-                            'No command in candidate or campaign config')
-                        invalid_command.append(command)
+                            'ignoring candidate %s/%s; package unknown',
+                            candidate['package'], candidate['campaign'])
+                        unknown_packages.append(candidate['package'])
+                        continue
+                    if candidate['codebase'] not in known_codebases:
+                        logging.warning(
+                            'ignoring candidate %s/%s; codebase unknown',
+                            candidate['codebase'], candidate['campaign'])
+                        unknown_codebases.append(candidate['codebase'])
+                        continue
+                    if candidate['campaign'] not in known_campaign_names:
+                        logging.warning('unknown suite %r', candidate['campaign'])
+                        unknown_campaigns.append(candidate['campaign'])
                         continue
 
-                publish_policy = candidate.get('publish-policy')
-                if (publish_policy is not None
-                        and publish_policy not in known_publish_policies):
-                    logging.warning('unknown publish policy %s', publish_policy)
-                    unknown_publish_policies.append(publish_policy)
-                    continue
+                    command = candidate.get('command')
+                    if not command:
+                        campaign_config = get_campaign_config(
+                            request.app['config'], candidate['campaign'])
+                        command = campaign_config.command
+                        if not command:
+                            logging.warning(
+                                'No command in candidate or campaign config')
+                            invalid_command.append(command)
+                            continue
 
-                candidate_rows.append((
-                    candidate['package'], candidate['campaign'],
-                    command,
-                    candidate.get('change_set'), candidate.get('context'),
-                    candidate.get('value'), candidate.get('success_chance'),
-                    publish_policy, candidate['codebase']))
+                    publish_policy = candidate.get('publish-policy')
+                    if (publish_policy is not None
+                            and publish_policy not in known_publish_policies):
+                        logging.warning('unknown publish policy %s', publish_policy)
+                        unknown_publish_policies.append(publish_policy)
+                        continue
 
-                followups.append(candidate.get('followup_for', []))
+                    with span.new_child('sql:insert-candidates'):
+                        candidate_id = await insert_candidate_stmt.fetchval(
+                            candidate['package'], candidate['campaign'],
+                            command,
+                            candidate.get('change_set'), candidate.get('context'),
+                            candidate.get('value'), candidate.get('success_chance'),
+                            publish_policy, candidate['codebase'])
 
-                # Adjust bucket if there are any open merge proposals with a
-                # different command
-                existing_runs = await conn.fetch(
-                    "SELECT merge_proposal.url AS mp_url, "
-                    "last_effective_runs.command AS command "
-                    "FROM last_effective_runs "
-                    "LEFT JOIN merge_proposal "
-                    "ON last_effective_runs.revision = merge_proposal.revision "
-                    "WHERE merge_proposal.status = 'open' "
-                    "AND last_effective_runs.codebase = $1 "
-                    "AND last_effective_runs.suite = $2 "
-                    "AND last_effective_runs.command != $3",
-                    candidate['codebase'], candidate['campaign'], command)
-                if any(existing_runs):
-                    refresh = True
-                    if existing_runs[0]['mp_url']:
-                        bucket = 'update-existing-mp'
-                        requestor = 'command changed for existing mp: %r ⇒ %r' % (
-                            existing_runs[0]['command'], command)
+                    # Adjust bucket if there are any open merge proposals with a
+                    # different command
+
+                    with span.new_child('sql:existing-runs'):
+                        existing_runs = await existing_runs_stmt.fetch(
+                            candidate['codebase'], candidate['campaign'], command)
+
+                    if any(existing_runs):
+                        refresh = True
+                        if existing_runs[0]['mp_url']:
+                            bucket = 'update-existing-mp'
+                            requestor = 'command changed for existing mp: %r ⇒ %r' % (
+                                existing_runs[0]['command'], command)
+                        else:
+                            bucket = None
+                            requestor = 'command changed: %r ⇒ %r' % (
+                                existing_runs[0]['command'], command)
                     else:
-                        bucket = None
-                        requestor = 'command changed: %r ⇒ %r' % (
-                            existing_runs[0]['command'], command)
-                else:
-                    bucket = candidate.get('bucket')
-                    refresh = False
-                    requestor = "candidate update"
+                        bucket = candidate.get('bucket')
+                        refresh = False
+                        requestor = "candidate update"
 
-                if candidate.get('requestor'):
-                    requestor += f' {candidate["requestor"]}' 
+                    if candidate.get('requestor'):
+                        requestor += f' {candidate["requestor"]}' 
 
-                to_schedule.append((
-                    candidate['package'],
-                    candidate['codebase'],
-                    candidate['campaign'],
-                    candidate.get('change_set'),
-                    command,
-                    bucket,
-                    requestor,
-                    refresh,
-                ))
+                    with span.new_child('sql:insert-followups'):
+                        for origin in candidate.get('followup_for', []):
+                            await insert_followup_stmt.execute(candidate_id, origin)
 
-            candidates = await conn.fetch(
-                "INSERT INTO candidate "
-                "(package, suite, command, change_set, context, value, "
-                "success_chance, publish_policy, codebase) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
-                "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
-                "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
-                "success_chance = EXCLUDED.success_chance, "
-                "command = EXCLUDED.command, "
-                "publish_policy = EXCLUDED.publish_policy, "
-                "codebase = EXCLUDED.codebase RETURNING id",
-                candidate_rows,
-            )
+                    with span.new_child('schedule'):
+                        offset, estimated_duration, queue_id, = await do_schedule(
+                            conn,
+                            candidate['package'],
+                            candidate['campaign'],
+                            change_set=candidate.get('change_set'),
+                            bucket=bucket,
+                            requestor=requestor,
+                            command=command,
+                            codebase=candidate['codebase'],
+                            refresh=refresh)
 
-            followup_rows = []
-            for candidate, followup_ids in zip(candidates, followups):
-                if not followup_ids:
-                    continue
-                for followup_id in followup_ids:
-                    followup_rows.append((candidate['id'], followup_id))
-
-            if followup_rows:
-                await conn.executemany(
-                    "INSERT INTO followup (origin, candidate) VALUES ($1, $2) "
-                    "ON CONFLICT DO NOTHING",
-                    followup_rows)
-
-        ret = []
-
-        for (package, codebase, campaign, change_set, command, bucket,
-             requestor, refresh) in to_schedule:
-            offset, estimated_duration, queue_id, = await do_schedule(
-                conn,
-                package,
-                campaign,
-                change_set=change_set,
-                bucket=bucket,
-                requestor=requestor,
-                command=command,
-                codebase=codebase,
-                refresh=refresh)
-            ret.append({
-                'campaign': campaign,
-                'codebase': codebase,
-                'bucket': bucket,
-                'change_set': change_set,
-                'offset': offset,
-                'estimated_duration': estimated_duration.total_seconds()
-                if estimated_duration is not None else None,
-                'queue-id': queue_id,
-                'refresh': refresh
-            })
+                    ret.append({
+                        'campaign': candidate['campaign'],
+                        'codebase': candidate['codebase'],
+                        'bucket': bucket,
+                        'change_set': candidate.get('change_set'),
+                        'offset': offset,
+                        'estimated_duration': estimated_duration.total_seconds()
+                        if estimated_duration is not None else None,
+                        'queue-id': queue_id,
+                        'refresh': refresh
+                    })
 
     return web.json_response({
         'success': ret,
