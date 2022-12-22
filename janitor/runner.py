@@ -2762,18 +2762,19 @@ async def main(argv=None):
 
     set_user_agent(config.user_agent)
 
-    try:
-        public_vcs_managers = get_vcs_managers(args.public_vcs_location)
-    except UnsupportedProtocol as e:
-        parser.error(
-            'Unsupported protocol in --public-vcs-location: %s' % e.path)
-
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
+
+    try:
+        public_vcs_managers = get_vcs_managers(
+            args.public_vcs_location, trace_configs=trace_configs)
+    except UnsupportedProtocol as e:
+        parser.error(
+            'Unsupported protocol in --public-vcs-location: %s' % e.path)
 
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)

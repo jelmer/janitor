@@ -416,8 +416,9 @@ class LocalBzrVcsManager(VcsManager):
 
 
 class RemoteGitVcsManager(VcsManager):
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, trace_configs=None):
         self.base_url = base_url
+        self.trace_configs = trace_configs
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and self.base_url == other.base_url
@@ -427,7 +428,7 @@ class RemoteGitVcsManager(VcsManager):
             return b""
 
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
     def _lookup_revid(self, revid, default):
@@ -441,7 +442,7 @@ class RemoteGitVcsManager(VcsManager):
             codebase,
             self._lookup_revid(old_revid, ZERO_SHA).decode('utf-8'),
             self._lookup_revid(new_revid, ZERO_SHA).decode('utf-8')))
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
     def __repr__(self):
@@ -467,8 +468,9 @@ class RemoteGitVcsManager(VcsManager):
 
 
 class RemoteBzrVcsManager(VcsManager):
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, *, trace_configs=None):
         self.base_url = base_url
+        self.trace_configs = trace_configs
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and self.base_url == other.base_url
@@ -477,14 +479,14 @@ class RemoteBzrVcsManager(VcsManager):
         if old_revid == new_revid:
             return b""
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         url = urllib.parse.urljoin(self.base_url, "%s/revision-info?old=%s&new=%s" % (
             codebase, old_revid.decode('utf-8'),
             new_revid.decode('utf-8')))
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
     def __repr__(self):
@@ -536,38 +538,45 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     return f.getvalue()
 
 
-def get_vcs_managers(location):
+def get_vcs_managers(location, *, trace_configs=None):
     if '=' not in location:
         return {
-            'git': RemoteGitVcsManager(str(URL(location) / "git")),
-            'bzr': RemoteBzrVcsManager(str(URL(location) / "bzr")),
+            'git': RemoteGitVcsManager(
+                str(URL(location) / "git"), trace_configs=trace_configs),
+            'bzr': RemoteBzrVcsManager(
+                str(URL(location) / "bzr"), trace_configs=trace_configs),
         }
     ret: Dict[str, VcsManager] = {}
     for p in location.split(','):
         (k, v) = p.split('=', 1)
         if k == 'git':
-            ret[k] = RemoteGitVcsManager(str(URL(v)))
+            ret[k] = RemoteGitVcsManager(
+                str(URL(v)), trace_configs=trace_configs)
         elif k == 'bzr':
-            ret[k] = RemoteBzrVcsManager(str(URL(v)))
+            ret[k] = RemoteBzrVcsManager(
+                str(URL(v)), trace_configs=trace_configs)
         else:
             raise ValueError('unsupported vcs %s' % k)
     return ret
 
 
-def get_vcs_managers_from_config(config) -> Dict[str, VcsManager]:
+def get_vcs_managers_from_config(
+        config, *, trace_configs=None) -> Dict[str, VcsManager]:
     ret: Dict[str, VcsManager] = {}
     if config.git_location:
         parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
             ret['git'] = LocalGitVcsManager(parsed.path)
         else:
-            ret['git'] = RemoteGitVcsManager(config.git_location)
+            ret['git'] = RemoteGitVcsManager(
+                config.git_location, trace_configs=trace_configs)
     if config.bzr_location:
         parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
             ret['bzr'] = LocalBzrVcsManager(parsed.path)
         else:
-            ret['bzr'] = RemoteBzrVcsManager(config.git_location)
+            ret['bzr'] = RemoteBzrVcsManager(
+                config.git_location, trace_configs=trace_configs)
     return ret
 
 
