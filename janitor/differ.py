@@ -604,7 +604,10 @@ async def run_web_server(app, listen_addr, port):
         await runner.cleanup()
 
 
-async def listen_to_runner(redis, db, app):
+async def listen_to_runner(redis, db_location, app):
+
+    db = await state.create_pool(db_location)
+
     async def handle_result_message(msg):
         result = json.loads(msg['data'])
         if result["code"] != "success":
@@ -698,7 +701,7 @@ def create_app(cache_path, artifact_manager, database_location, *,
     return app
 
 
-async def main(argv=None):
+def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.differ")
@@ -737,22 +740,22 @@ async def main(argv=None):
 
     set_user_agent(config.user_agent)
 
-    endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
-    if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
-    else:
-        tracer = await aiozipkin.create_custom(endpoint)
-    trace_configs = [aiozipkin.make_trace_config(tracer)]
-
-    artifact_manager = get_artifact_manager(
-        config.artifact_location, trace_configs=trace_configs)
-
     loop = asyncio.get_event_loop()
 
     if args.debug:
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
+
+    endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
+    if config.zipkin_address:
+        tracer = loop.run_until_complete(aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1))
+    else:
+        tracer = loop.run_until_complete(aiozipkin.create_custom(endpoint))
+    trace_configs = [aiozipkin.make_trace_config(tracer)]
+
+    artifact_manager = get_artifact_manager(
+        config.artifact_location, trace_configs=trace_configs)
 
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
@@ -765,17 +768,18 @@ async def main(argv=None):
     setup_metrics(app)
     aiozipkin.setup(app, tracer)
 
-    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port))]
-
-    db = await state.create_pool(config.database_location)
+    runner = web.AppRunner(app)
+    loop.run_until_complete(runner.setup())
+    site = web.TCPSite(runner, args.listen_address, port=args.port)
+    loop.run_until_complete(site.start())
 
     if config.redis_location:
         redis = Redis.from_url(config.redis_location)
-        tasks.append(loop.create_task(listen_to_runner(redis, db, app)))
+        loop.create_task(listen_to_runner(redis, config.database_location, app))
 
-    await asyncio.gather(*tasks)
+    loop.run_forever()
 
 
 if __name__ == "__main__":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    sys.exit(asyncio.run(main(sys.argv)))
+    sys.exit(main(sys.argv))
