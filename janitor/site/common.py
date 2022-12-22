@@ -184,18 +184,19 @@ ORDER BY finish_time DESC
 
 
 async def generate_pkg_context(
-    db, config, suite, client, differ_url, vcs_managers, package, span, run_id=None
+    db, config, suite, client, differ_url, vcs_managers, package_name, span, run_id=None
 ):
     async with db.acquire() as conn:
+        # TODO(jelmer): Run these in parallel with gather()
         with span.new_child('sql:package'):
             package = await conn.fetchrow("""\
 SELECT package.*, named_publish_policy.per_branch_policy AS publish_policy
 FROM package
 LEFT JOIN candidate ON package.name = candidate.package AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE package.name = $1""", package, suite)
+WHERE package.name = $1""", package_name, suite)
         if package is None:
-            raise web.HTTPNotFound(text='no such package: %s' % package)
+            raise web.HTTPNotFound(text='no such package: %s' % package_name)
         if run_id is not None:
             with span.new_child('sql:run'):
                 run = await get_run(conn, run_id)
@@ -204,7 +205,7 @@ WHERE package.name = $1""", package, suite)
             merge_proposals = []
         else:
             with span.new_child('sql:unchanged-run'):
-                run = await get_last_unabsorbed_run(conn, package['name'], suite)
+                run = await get_last_unabsorbed_run(conn, package_name, suite)
             with span.new_child('sql:merge-proposals'):
                 merge_proposals = await conn.fetch("""\
 SELECT
