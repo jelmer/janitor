@@ -27,6 +27,8 @@ import re
 import time
 from typing import Dict, Any, List
 
+import uvloop
+
 import aiohttp_jinja2
 import aiozipkin
 from aiohttp.web_urldispatcher import (
@@ -675,4 +677,5 @@ async def main(argv=None):
 if __name__ == "__main__":
     import sys
 
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main(sys.argv)))
