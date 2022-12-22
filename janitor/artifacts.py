@@ -162,18 +162,14 @@ class GCSArtifactManager(ArtifactManager):
             names = os.listdir(local_path)
         if not names:
             return
-        todo = []
-        for name in names:
-            todo.append(
+        try:
+            await asyncio.gather(*[
                 self.storage.upload_from_filename(
                     self.bucket_name,
                     "%s/%s" % (run_id, name),
                     os.path.join(local_path, name),
                     timeout=timeout,
-                )
-            )
-        try:
-            await asyncio.gather(*todo)
+                ) for name in names])
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable() from e
