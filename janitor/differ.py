@@ -28,6 +28,7 @@ from redis.asyncio import Redis
 import sys
 from tempfile import TemporaryDirectory
 import traceback
+import uvloop
 import warnings
 
 from aiohttp import web
@@ -763,4 +764,5 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main(sys.argv)))

@@ -36,6 +36,7 @@ from email.utils import formatdate, parsedate_to_datetime
 from datetime import datetime
 from time import mktime
 
+import uvloop
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -940,4 +941,5 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main(sys.argv)))

@@ -22,9 +22,12 @@ This script parses e-mails on stdin and triggers a poll of the status
 of any merge request mentioned in the body.
 """
 
+
 import logging
 import sys
 from typing import cast, Optional
+
+import uvloop
 
 
 def parse_plain_text_body(text):
@@ -106,9 +109,8 @@ async def refresh_merge_proposal(api_url, merge_proposal_url):
                     resp.status, api_url))
 
 
-def main(argv):
+async def main(argv):
     import argparse
-    import asyncio
     import logging
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -125,9 +127,11 @@ def main(argv):
     if merge_proposal_url is None:
         sys.exit(0)
     logging.info('Found merge proposal URL: %s', merge_proposal_url)
-    asyncio.run(refresh_merge_proposal(args.refresh_url, merge_proposal_url))
+    await refresh_merge_proposal(args.refresh_url, merge_proposal_url)
     return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    import asyncio
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    sys.exit(asyncio.run(main(sys.argv[1:])))
