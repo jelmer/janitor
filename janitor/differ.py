@@ -22,11 +22,13 @@ from contextlib import ExitStack
 from functools import partial
 import json
 import logging
+import mimeparse
 import os
 from redis.asyncio import Redis
 import sys
 from tempfile import TemporaryDirectory
 import traceback
+import warnings
 
 from aiohttp import web
 
@@ -93,6 +95,7 @@ class DiffCommandMemoryError(Exception):
 
 @routes.get("/debdiff/{old_id}/{new_id}", name="debdiff")
 async def handle_debdiff(request):
+    span = aiozipkin.request_span(request)
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
 
@@ -125,14 +128,15 @@ async def handle_debdiff(request):
             new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
             try:
-                await asyncio.gather(
-                    request.app['artifact_manager'].retrieve_artifacts(
-                        old_run['id'], old_dir, filter_fn=is_binary
-                    ),
-                    request.app['artifact_manager'].retrieve_artifacts(
-                        new_run['id'], new_dir, filter_fn=is_binary
-                    ),
-                )
+                with span.new_child('fetch-artifacts'):
+                    await asyncio.gather(
+                        request.app['artifact_manager'].retrieve_artifacts(
+                            old_run['id'], old_dir, filter_fn=is_binary
+                        ),
+                        request.app['artifact_manager'].retrieve_artifacts(
+                            new_run['id'], new_dir, filter_fn=is_binary
+                        ),
+                    )
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
                     text="No artifacts for run id: %r" % e,
@@ -157,9 +161,10 @@ async def handle_debdiff(request):
                 )
 
             try:
-                debdiff = await run_debdiff(
-                    [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
-                )
+                with span.new_child('run-debdiff'):
+                    debdiff = await run_debdiff(
+                        [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
+                    )
             except DebdiffError as e:
                 return web.Response(status=400, text=e.args[0])
             except asyncio.TimeoutError as e:
@@ -176,21 +181,23 @@ async def handle_debdiff(request):
             debdiff.decode(), str(old_run['build_version']), str(new_run['build_version'])
         ).encode()
 
-    for accept in request.headers.get("ACCEPT", "*/*").split(","):
-        if accept in ("text/x-diff", "text/plain", "*/*"):
-            return web.Response(body=debdiff, content_type="text/plain")
-        if accept == "text/markdown":
-            return web.Response(
-                text=markdownify_debdiff(debdiff.decode("utf-8", "replace")),
-                content_type="text/markdown",
-            )
-        if accept == "text/html":
-            return web.Response(
-                text=htmlize_debdiff(debdiff.decode("utf-8", "replace")),
-                content_type="text/html",
-            )
+    content_type = mimeparse.best_match(
+        ['text/x-diff', 'text/plain', 'text/markdown', 'text/html'],
+        request.headers.get("Accept", "*/*"))
+    if content_type in ("text/x-diff", "text/plain"):
+        return web.Response(body=debdiff, content_type="text/plain")
+    if content_type == "text/markdown":
+        return web.Response(
+            text=markdownify_debdiff(debdiff.decode("utf-8", "replace")),
+            content_type="text/markdown",
+        )
+    if content_type == "text/html":
+        return web.Response(
+            text=htmlize_debdiff(debdiff.decode("utf-8", "replace")),
+            content_type="text/html",
+        )
     raise web.HTTPNotAcceptable(
-        text="Acceptable content types: " "text/html, text/plain, text/markdown"
+        text="Acceptable content types: text/html, text/plain, text/markdown"
     )
 
 
@@ -249,20 +256,13 @@ def _set_limits(limit_mb):
 
 @routes.get("/diffoscope/{old_id}/{new_id}", name="diffoscope")
 async def handle_diffoscope(request):
-    for accept in request.headers.get("ACCEPT", "*/*").split(","):
-        if accept in ("text/plain", "*/*"):
-            content_type = "text/plain"
-            break
-        elif accept in ("text/html",):
-            content_type = "text/html"
-            break
-        elif accept in ("application/json",):
-            content_type = "application/json"
-            break
-        elif accept in ("text/markdown",):
-            content_type = "text/markdown"
-            break
-    else:
+    span = aiozipkin.request_span(request)
+
+    content_type = mimeparse.best_match(
+        ['text/plain', 'text/html', 'application/json', 'text/markdown'],
+        request.headers.get('Accept', '*/*'))
+
+    if content_type is None:
         raise web.HTTPNotAcceptable(
             text="Acceptable content types: "
             "text/html, text/plain, application/json, "
@@ -301,14 +301,15 @@ async def handle_diffoscope(request):
             new_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
 
             try:
-                await asyncio.gather(
-                    request.app['artifact_manager'].retrieve_artifacts(
-                        old_run['id'], old_dir, filter_fn=is_binary
-                    ),
-                    request.app['artifact_manager'].retrieve_artifacts(
-                        new_run['id'], new_dir, filter_fn=is_binary
-                    ),
-                )
+                with span.new_child('fetch-artifacts'):
+                    await asyncio.gather(
+                        request.app['artifact_manager'].retrieve_artifacts(
+                            old_run['id'], old_dir, filter_fn=is_binary
+                        ),
+                        request.app['artifact_manager'].retrieve_artifacts(
+                            new_run['id'], new_dir, filter_fn=is_binary
+                        ),
+                    )
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
                     text="No artifacts for run id: %r" % e,
@@ -333,11 +334,12 @@ async def handle_diffoscope(request):
                 )
 
             try:
-                diffoscope_diff = await run_diffoscope(
-                    old_binaries, new_binaries,
-                    timeout=request.app['task_timeout'],
-                    preexec_fn=lambda: _set_limits(request.app['task_memory_limit']),
-                    diffoscope_command=request.app['diffoscope_command'])
+                with span.new_child('run-diffoscope'):
+                    diffoscope_diff = await run_diffoscope(
+                        old_binaries, new_binaries,
+                        timeout=request.app['task_timeout'],
+                        preexec_fn=lambda: _set_limits(request.app['task_memory_limit']),
+                        diffoscope_command=request.app['diffoscope_command'])
             except MemoryError as e:
                 raise web.HTTPServiceUnavailable(
                     text="diffoscope used too much memory") from e
@@ -377,12 +379,13 @@ async def handle_diffoscope(request):
         )
         title += " (filtered)"
 
-    debdiff = await format_diffoscope(
-        diffoscope_diff,
-        content_type,
-        title=title,
-        css_url=request.query.get("css_url"),
-    )
+    with span.new_child('format-diffoscope'):
+        debdiff = await format_diffoscope(
+            diffoscope_diff,
+            content_type,
+            title=title,
+            css_url=request.query.get("css_url"),
+        )
 
     return web.Response(text=debdiff, content_type=content_type)
 
@@ -484,39 +487,20 @@ def create_background_task(fn, title):
 
 @routes.post("/precache/{old_id}/{new_id}", name="precache")
 async def handle_precache(request):
-
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
     async def _precache():
-        try:
-            return precache(
-                request.app['artifact_manager'],
-                old_run['id'], new_run['id'],
-                task_memory_limit=request.app['task_memory_limit'],
-                task_timeout=request.app['task_timeout'],
-                diffoscope_cache_path=request.app['diffoscope_cache_path'],
-                debdiff_cache_path=request.app['debdiff_cache_path'],
-                diffoscope_command=request.app['diffoscope_command'])
-        except ArtifactsMissing as e:
-            raise web.HTTPNotFound(
-                text="No artifacts for run id: %r" % e,
-                headers={"unavailable_run_id": e.args[0]},
-            ) from e
-        except ArtifactRetrievalTimeout as e:
-            raise web.HTTPGatewayTimeout(
-                text="Timeout retrieving artifacts") from e
-        except DiffCommandTimeout as e:
-            raise web.HTTPGatewayTimeout(
-                text="Timeout diffing artifacts") from e
-        except DiffCommandMemoryError as e:
-            raise web.HTTPServiceUnavailable(
-                text="diffing used too much memory") from e
-        except DiffCommandError as e:
-            raise web.HTTPInternalServerError(
-                reason='diff command error', text=e.args[0]) from e
+        return precache(
+            request.app['artifact_manager'],
+            old_run['id'], new_run['id'],
+            task_memory_limit=request.app['task_memory_limit'],
+            task_timeout=request.app['task_timeout'],
+            diffoscope_cache_path=request.app['diffoscope_cache_path'],
+            debdiff_cache_path=request.app['debdiff_cache_path'],
+            diffoscope_command=request.app['diffoscope_command'])
 
     create_background_task(_precache(), 'precaching')
 
@@ -747,6 +731,11 @@ async def main(argv=None):
         config.artifact_location, trace_configs=trace_configs)
 
     loop = asyncio.get_event_loop()
+
+    if args.debug:
+        loop.set_debug(True)
+        loop.slow_callback_duration = 0.001
+        warnings.simplefilter('always', ResourceWarning)
 
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
