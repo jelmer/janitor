@@ -102,7 +102,10 @@ async def handle_debdiff(request):
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
-    cache_path = request.app['debdiff_cache_path'](old_run['id'], new_run['id'])
+    if request.app['debdiff_cache_path']:
+        cache_path = request.app['debdiff_cache_path'](old_run['id'], new_run['id'])
+    else:
+        cache_path = None
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -275,7 +278,11 @@ async def handle_diffoscope(request):
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
-    cache_path = request.app['diffoscope_cache_path'](old_run['id'], new_run['id'])
+    if request.app['diffoscope_cache_path']:
+        cache_path = request.app['diffoscope_cache_path'](old_run['id'], new_run['id'])
+    else:
+        cache_path = None
+
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -668,8 +675,14 @@ def create_app(cache_path, artifact_manager, database_location, *,
     app['artifact_manager'] = artifact_manager
     app['task_memory_limit'] = task_memory_limit
     app['task_timeout'] = task_timeout
-    app['diffoscope_cache_path'] = partial(diffoscope_cache_path, cache_path)
-    app['debdiff_cache_path'] = partial(debdiff_cache_path, cache_path)
+    if cache_path is not None:
+        app['diffoscope_cache_path'] = partial(diffoscope_cache_path, cache_path)
+    else:
+        app['diffoscope_cache_path'] = None
+    if cache_path is not None:
+        app['debdiff_cache_path'] = partial(debdiff_cache_path, cache_path)
+    else:
+        app['debdiff_cache_path'] = None
     app['diffoscope_command'] = diffoscope_command
 
     async def connect_artifact_manager(app):
@@ -744,8 +757,6 @@ async def main(argv=None):
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
 
-    redis = Redis.from_url(config.redis_location)
-
     app = create_app(
         args.cache_path, artifact_manager, config.database_location,
         task_memory_limit=args.task_memory_limit,
@@ -758,7 +769,9 @@ async def main(argv=None):
 
     db = await state.create_pool(config.database_location)
 
-    tasks.append(loop.create_task(listen_to_runner(redis, db, app)))
+    if config.redis_location:
+        redis = Redis.from_url(config.redis_location)
+        tasks.append(loop.create_task(listen_to_runner(redis, db, app)))
 
     await asyncio.gather(*tasks)
 
