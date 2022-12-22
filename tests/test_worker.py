@@ -180,7 +180,7 @@ def test_convert_codemod_script_failed():
         'Command foobar not found',
         stage=("codemod", ))
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)) == WorkerFailure(
-        'out-of-memory', 'Ran out of memory running command', stage=('codemod', ))
+        'killed', 'Process was killed (by OOM killer?)', stage=('codemod', ))
     assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
         'command-failed', 'Script foobar failed to run with code 1',
         stage=('codemod', ))
