@@ -245,8 +245,8 @@ def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
             stage=("codemod", ))
     elif e.args[1] == 137:
         return WorkerFailure(
-            'out-of-memory',
-            'Ran out of memory running command',
+            'killed',
+            'Process was killed (by OOM killer?)',
             stage=("codemod", ))
     return WorkerFailure(
         'command-failed',
