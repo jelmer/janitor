@@ -1041,7 +1041,7 @@ async def publish_from_policy(
             command=command,
             bucket="update-new-mp",
             refresh=True,
-            requestor="publisher (changed policy: %r => %r)" % (
+            requestor="publisher (changed policy: %r ⇒ %r)" % (
                 run.command, command),
             codebase=run.codebase,
         )
@@ -2816,7 +2816,7 @@ applied independently.
         and last_run_remote_branch_name is not None
     ):
         logger.warning(
-            "%s: Remote branch name has changed: %s => %s ",
+            "%s: Remote branch name has changed: %s ⇒ %s ",
             mp.url,
             mp_remote_branch_name,
             last_run_remote_branch_name,
@@ -2858,7 +2858,7 @@ has changed from %s to %s.
     if not await asyncio.to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
         logger.warning(
             "%s: Remote branch URL appears to have have changed: "
-            "%s => %s, skipping.",
+            "%s ⇒ %s, skipping.",
             mp.url,
             mp_run['branch_url'],
             last_run.branch_url,
@@ -2882,7 +2882,7 @@ This merge proposal will be closed, since the branch has moved to %s.
     if last_run.id != mp_run['id']:
         publish_id = str(uuid.uuid4())
         logger.info(
-            "%s (%s) needs to be updated (%s => %s).",
+            "%s (%s) needs to be updated (%s ⇒ %s).",
             mp.url,
             mp_run['package'],
             mp_run['id'],
