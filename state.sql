@@ -140,7 +140,9 @@ CREATE TABLE IF NOT EXISTS run (
    codebase text references codebase(name),
    foreign key (package) references package(name),
    check(finish_time >= start_time),
-   check(branch_url is null or vcs_type is not null)
+   check(branch_url is null or vcs_type is not null),
+   -- nothing-new-to-do always requires resume_from
+   check(result_code != 'nothing-new-to-do' or resume_from is not null)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
@@ -359,7 +361,7 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_change_set_state()
     END;
 $$;
 
-CREATE TRIGGER new_result_branch_refresh_change_set_state
+CREATE OR REPLACE TRIGGER new_result_branch_refresh_change_set_state
   AFTER INSERT OR UPDATE OR DELETE
   ON new_result_branch
   FOR EACH ROW
@@ -387,7 +389,7 @@ CREATE OR REPLACE FUNCTION new_result_branch_trigger_refresh_last_run()
     END;
 $$;
 
-CREATE TRIGGER new_result_branch_refresh_last_run
+CREATE OR REPLACE TRIGGER new_result_branch_refresh_last_run
   AFTER INSERT OR UPDATE OR DELETE
   ON new_result_branch
   FOR EACH ROW
@@ -415,7 +417,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     DECLARE last_unabsorbed_run_id TEXT;
 
     BEGIN
-    SELECT id, result_code, failure_transient INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    SELECT id, result_code, failure_transient, resume_from INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
     IF FOUND THEN
         last_run_id := last_run.id;
     ELSE
@@ -423,7 +425,10 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
         RETURN;
     END IF;
 
-    IF last_run.result_code = 'nothing-new-to-do' OR last_run.failure_transient IS TRUE THEN
+    IF last_run.result_code = 'nothing-new-to-do' THEN
+        last_effective_run_id := last_run.resume_from;
+        last_effective_run_result_code := 'success';
+    ELSIF last_run.failure_transient IS TRUE THEN
         SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND not coalesce(failure_transient, False) ORDER BY start_time DESC limit 1;
         IF FOUND THEN
            last_effective_run_id := last_effective_run.id;
@@ -475,7 +480,7 @@ CREATE OR REPLACE FUNCTION run_trigger_refresh_last_run()
     END;
 $$;
 
-CREATE TRIGGER run_refresh_last_run
+CREATE OR REPLACE TRIGGER run_refresh_last_run
   AFTER INSERT OR UPDATE OR DELETE
   ON run
   FOR EACH ROW
@@ -501,7 +506,7 @@ CREATE OR REPLACE FUNCTION run_trigger_refresh_change_set_state()
     END;
 $$;
 
-CREATE TRIGGER run_refresh_change_set_state
+CREATE OR REPLACE TRIGGER run_refresh_change_set_state
   AFTER INSERT OR UPDATE OR DELETE
   ON run
   FOR EACH ROW
@@ -544,13 +549,13 @@ CREATE OR REPLACE FUNCTION publish_trigger_refresh_change_set_state()
     END;
 $$;
 
-CREATE TRIGGER publish_refresh_change_set_state
+CREATE OR REPLACE TRIGGER publish_refresh_change_set_state
   AFTER INSERT OR UPDATE
   ON publish
   FOR EACH ROW
   EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
 
-CREATE TRIGGER drop_candidates_when_removed
+CREATE OR REPLACE TRIGGER drop_candidates_when_removed
   AFTER UPDATE OF removed
   ON package
   FOR EACH ROW
@@ -573,7 +578,7 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER expire_site_session_delete_old_rows_trigger
+CREATE OR REPLACE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
    EXECUTE FUNCTION expire_site_session_delete_old_rows();
 

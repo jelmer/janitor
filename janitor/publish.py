@@ -884,14 +884,14 @@ async def handle_publish_failure(e, conn, run, bucket):
 
 
 async def already_published(
-    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, mode: str
+    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, modes: List[str]
 ) -> bool:
     row = await conn.fetchrow(
         """\
 SELECT * FROM publish
-WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
+WHERE mode = ANY($1::text[]) AND revision = $2 AND package = $3 AND branch_name = $4
 """,
-        mode,
+        modes,
         revision.decode("utf-8"),
         package,
         branch_name,
@@ -903,10 +903,11 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 
 async def get_open_merge_proposal(
     conn: asyncpg.Connection, package: str, branch_name: str
-) -> bytes:
+):
     query = """\
 SELECT
-    merge_proposal.revision
+    merge_proposal.revision,
+    merge_proposal.url
 FROM
     merge_proposal
 INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
@@ -1063,7 +1064,8 @@ async def publish_from_policy(
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
     if not force and await already_published(
-        conn, run.package, campaign_config.branch_name, revision, mode
+        conn, run.package, campaign_config.branch_name, revision,
+        [MODE_PROPOSE, MODE_PUSH] if mode == MODE_ATTEMPT_PUSH else [mode]
     ):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
