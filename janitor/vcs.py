@@ -580,15 +580,6 @@ def get_vcs_managers_from_config(
     return ret
 
 
-def bzr_to_browse_url(url: str) -> Optional[str]:
-    from upstream_ontologist.vcs import browse_url_from_repo_url
-    (url, params) = urlutils.split_segment_parameters(url)
-    branch = params.get("branch")
-    if branch:
-        branch = urllib.parse.unquote(branch)
-    return browse_url_from_repo_url(url, branch=branch)
-
-
 def is_authenticated_url(url: str):
     return (url.startswith('git+ssh://') or url.startswith('bzr+ssh://'))
 
