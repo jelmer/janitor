@@ -1032,7 +1032,7 @@ async def publish_from_policy(
     if command != run.command:
         command_changed_count.inc()
         logger.warning(
-            "Not publishing %s/%s: command is different (policy changed?). "
+            "Not publishing %s/%s: command has changed. "
             "Build used %r, now: %r. Rescheduling.",
             run.package,
             run.campaign,
