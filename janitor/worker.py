@@ -440,7 +440,7 @@ class GenericTarget(Target):
 @backoff.on_exception(
     backoff.expo,
     (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
-    max_tries=5,
+    max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
@@ -495,7 +495,7 @@ def import_branches_git(
 @backoff.on_exception(
     backoff.expo,
     (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
-    max_tries=5,
+    max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches, tags,
@@ -596,7 +596,7 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
 @backoff.on_exception(
     backoff.expo,
     (ClientConnectorError, RetriableResultUploadFailure),
-    max_tries=5,
+    max_tries=10,
     on_backoff=lambda m: upload_result_retries.inc())
 async def upload_results(
     session: ClientSession,
@@ -661,7 +661,7 @@ def copy_output(output_log: str, tee: bool = False):
     backoff.expo,
     (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
      ConnectionError, ConnectionReset, ssl.SSLEOFError),
-    max_tries=5,
+    max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
     source_branch: Branch,
@@ -1102,7 +1102,7 @@ class AssignmentFailure(Exception):
 @backoff.on_exception(
     backoff.expo,
     AssignmentFailure,
-    max_tries=5,
+    max_tries=10,
     on_backoff=lambda m: assignment_failed_count.inc())
 async def get_assignment(
     session: ClientSession,
