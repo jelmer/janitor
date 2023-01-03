@@ -228,11 +228,9 @@ class GCSArtifactManager(ArtifactManager):
             raise
 
     def public_artifact_url(self, run_id, filename):
-        from gcloud.aio.storage.storage import API_ROOT
         from urllib.parse import quote
-        return "%s/%s/o/%s" % (
-            API_ROOT, self.bucket_name,
-            quote("%s/%s" % (run_id, filename), safe=''))
+        encoded_object_name = quote("%s/%s" % (run_id, filename), safe='')
+        return f'{self.storage._api_root_read}/{self.bucket_name}/o/{encoded_object_name}'
 
 
 def get_artifact_manager(location, trace_configs=None):

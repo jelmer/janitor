@@ -634,8 +634,7 @@ async def consider_publish_run(
         return {}
 
     last_mps = await get_previous_mp_status(conn, run.codebase, run.campaign)
-    if any(last_mp[1] not in ('rejected', 'closed')
-           for last_mp in last_mps):
+    if any(last_mp[1] in ('rejected', 'closed') for last_mp in last_mps):
         logger.warning(
             '%s: last merge proposal was rejected by maintainer: %r', run.id,
             last_mps)
@@ -2098,7 +2097,7 @@ WHERE run.id = $1
             'change_set_state': run['change_set_state']}}
 
     ret['previous_mp'] = {
-        'result': any(last_mp[1] not in ('rejected', 'closed')
+        'result': all(last_mp[1] not in ('rejected', 'closed')
                       for last_mp in last_mps),
         'details': [{
             'url': last_mp[0],
