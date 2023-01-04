@@ -865,7 +865,7 @@ def run_worker(
                 path=os.path.join(output_directory, directory_name),
                 additional_colocated_branches=[b for (r, b) in (additional_colocated_branches or {}).items()],
                 resume_branch_additional_colocated_branches=(
-                    [name for (role, name, base_revision, revision) in resume_branches] if resume_branches else None
+                    [name for (role, name, base_revision, revision) in resume_branches if role != 'main'] if resume_branches else None
                 ),
             )
 
