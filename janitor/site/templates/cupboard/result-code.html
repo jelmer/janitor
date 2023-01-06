@@ -12,7 +12,7 @@
         <h1>{{ code }}</h1>
         {{ result_code_explanation(code) }}
         {% if is_admin %}
-            <form id="mass_reschedule" method="post" action="/api/mass-reschedule">
+            <form id="mass_reschedule" method="post" action="/cupboard/api/mass-reschedule">
                 Description regex:
                 <input type="text" name="description_re"/>
                 {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
@@ -34,7 +34,7 @@
                 window.mass_reschedule.onsubmit = function(e) {
                     $('form').submit(function(e) {
                         e.preventDefault();
-                        $.post("/api/mass-reschedule", $('form').serializeArray(), function(receivedData) {
+                        $.post("/cupboard/api/mass-reschedule", $('form').serializeArray(), function(receivedData) {
                             alert('Rescheduled ' + receivedData);
                         });
                     });
