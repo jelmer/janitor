@@ -124,7 +124,7 @@
             function refreshData(cb) {
                 console.log("Updating backlog of todo items");
                 $.ajax({
-                    url: '/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
+                    url: '/cupboard/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
                     dataType: 'json',
                     success: function(data) {
                         data.forEach(function(entry) {
