@@ -62,7 +62,7 @@ async def main(
         params['rejected'] = '1'
     if min_age:
         params['min_age'] = str(min_age)
-    url = URL(base_url) / 'api/mass-reschedule'
+    url = URL(base_url) / 'cupboard/api/mass-reschedule'
     async with ClientSession() as session, \
             session.post(url, params=params) as resp:
         if resp.status != 200:
