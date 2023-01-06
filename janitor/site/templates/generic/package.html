@@ -2,7 +2,7 @@
 {% block sidebar %}
     {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
 {% endblock sidebar %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, describe_publish_policy, publish_buttons, result_code_explanation, display_result_code, display_vcs_diffs, display_branch_url, reprocess_logs_button with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, describe_publish_policy, publish_buttons, result_code_explanation, display_result_code, display_vcs_diffs, display_branch_url with context %}
 {% block page_title %}
     {{ suite }} Packages - {{ package }}
 {% endblock page_title %}

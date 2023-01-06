@@ -1414,6 +1414,40 @@ async def get_publish_attempt_count(
     )
 
 
+@routes.get("/{campaign}/merge-proposals", name="campaign-merge-proposals")
+@routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
+@routes.get("/merge-proposals", name="merge-proposals")
+async def handle_merge_proposal_list(request):
+    response_obj = []
+    package = request.match_info.get("package")
+    campaign = request.match_info.get("campaign")
+    async with request.app['db'].acquire() as conn:
+        args = []
+        query = """
+    SELECT
+        DISTINCT ON (merge_proposal.url)
+        merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
+        run.suite
+    FROM
+        merge_proposal
+    LEFT JOIN run
+    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+    """
+        cond = []
+        if package is not None:
+            args.append(package)
+            cond.append("run.package = $%d" % (len(args), ))
+        if campaign:
+            args.append(campaign)
+            cond.append("run.suite = $%d" % (len(args), ))
+        if cond:
+            query += "WHERE " + " AND ".join(cond)
+        query += " ORDER BY merge_proposal.url, run.finish_time DESC"
+        for row in await conn.fetch(query, *args):
+            response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
+    return web.json_response(response_obj)
+
+
 @routes.get("/absorbed")
 async def handle_absorbed(request):
     try:

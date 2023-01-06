@@ -60,7 +60,7 @@ async def reprocess_logs(base_url, run_ids=None, dry_run=False,
         params['reschedule'] = '1'
     if run_ids:
         params['run_ids'] = run_ids
-    url = URL(base_url) / 'api/mass-reschedule'
+    url = URL(base_url) / 'cupboard/api/mass-reschedule'
     async with ClientSession() as session, \
             session.post(url, params=params) as resp:
         if resp.status != 200:

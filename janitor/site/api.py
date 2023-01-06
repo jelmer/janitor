@@ -26,8 +26,6 @@ from aiohttp import (
 )
 import aiozipkin
 import asyncio
-import asyncpg
-from datetime import datetime, timedelta
 import logging
 from typing import Optional
 
@@ -35,7 +33,6 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_apispec import (
     docs,
     response_schema,
-    setup_aiohttp_apispec,
 )
 
 from breezy.revision import NULL_REVISION
@@ -43,9 +40,6 @@ from breezy.revision import NULL_REVISION
 import mimeparse
 from marshmallow import Schema, fields
 from yarl import URL
-
-from ognibuild.build import BUILD_LOG_FILENAME
-from ognibuild.dist import DIST_LOG_FILENAME
 
 from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
@@ -58,9 +52,7 @@ from . import (
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
-from .common import (
-    render_template_for_request,
-)
+from .common import render_template_for_request
 from .setup import setup_postgres, setup_logfile_manager
 from ..vcs import VcsManager
 
@@ -252,39 +244,29 @@ class MergeProposalSchema(Schema):
     status = fields.Str(metadata={'description': 'status'})
 
 
-@docs()
 @routes.get("/{campaign}/merge-proposals", name="campaign-merge-proposals")
+async def handle_campaign_merge_proposal_list(request):
+    campaign = request.match_info["campaign"]
+
+    url = URL(request.app['publisher_url']) / campaign / "merge-proposals"
+    async with request.app['http_client_session'].get(url, raise_for_status=True):
+        return web.json_response({})
+
+
 @routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
+async def handle_package_merge_proposal_list(request):
+    package = request.match_info["package"]
+    url = URL(request.app['publisher_url']) / "pkg" / package / "merge-proposals"
+    async with request.app['http_client_session'].get(url, raise_for_status=True):
+        return web.json_response({})
+
+
+@docs()
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
-    response_obj = []
-    package = request.match_info.get("package")
-    campaign = request.match_info.get("campaign")
-    async with request.app['pool'].acquire() as conn:
-        args = []
-        query = """
-    SELECT
-        DISTINCT ON (merge_proposal.url)
-        merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
-        run.suite
-    FROM
-        merge_proposal
-    LEFT JOIN run
-    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-    """
-        if package is not None:
-            args.append(package)
-            query += " WHERE run.package = $1"
-            if campaign:
-                query += " AND run.suite = $2"
-                args.append(campaign)
-        elif campaign:
-            args.append(campaign)
-            query += " WHERE run.suite = $1"
-        query += " ORDER BY merge_proposal.url, run.finish_time DESC"
-        for row in await conn.fetch(query, *args):
-            response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
-    return web.json_response(response_obj)
+    url = URL(request.app['publisher_url']) / "merge-proposals"
+    async with request.app['http_client_session'].get(url, raise_for_status=True):
+        return web.json_response({})
 
 
 @docs()
@@ -486,7 +468,7 @@ async def handle_archive_diff(request):
     with span.new_child('sql:get-run'):
         async with request.app['pool'].acquire() as conn:
             run = await conn.fetchrow(
-                'select id, package, suite AS campaign, main_branch_revision, result_code from run where id = $1',
+                'SELECT id, package, suite AS campaign, main_branch_revision, result_code FROM run WHERE id = $1',
                 run_id)
             if run is None:
                 raise web.HTTPNotFound(text="No such run: %s" % run_id)
@@ -613,60 +595,6 @@ class RunSchema(Schema):
     package = fields.Str(metadata={'description': "Package name"})
     build_info = BuildInfoSchema()
     result_code = fields.Str(metadata={'description': "Result code"})
-
-
-@docs()
-@routes.get("/run/+index", name="run-list")
-@routes.get("/pkg/{package}/run", name="package-run-list")
-async def handle_run_list(request):
-    query = 'SELECT id FROM run'
-    limit = request.query.get("limit")
-    package = request.match_info.get('package')
-    args = []
-    if package is not None:
-        query += ' WHERE package = $1'
-        args.append(package)
-    if limit is not None:
-        query += ' LIMIT %d' % int(limit)
-    response_obj = []
-    async with request.app['pool'].acquire() as conn:
-        for row in await conn.fetch(query, *args):
-            response_obj.append({'run_id': row['id']})
-    return web.json_response(response_obj)
-
-
-@docs()
-@routes.get("/run/+success", name="run-success-list")
-async def handle_run_success_list(request):
-    query = (
-        'select id, '
-        'array(select role from new_result_branch where run_id = id) as branches, '
-        'result, review_status from run where result_code = \'success\'')
-    limit = request.query.get("limit")
-    if limit is not None:
-        query += ' limit %d' % int(limit)
-    response_obj = []
-    async with request.app['pool'].acquire() as conn:
-        for row in await conn.fetch(query):
-            response_obj.append({
-                'run_id': row['id'],
-                'result': row['result'],
-                'branches': row['branches'],
-                'review_status': row['review_status']})
-    return web.json_response(response_obj)
-
-
-@docs()
-@routes.post("/publish/autopublish", name="publish-autopublish")
-async def handle_publish_autopublish(request):
-    check_admin(request)
-    publisher_url = request.app['publisher_url']
-    url = URL(publisher_url) / "autopublish"
-    try:
-        async with request.app['http_client_session'].post(url) as resp:
-            return web.Response(body=await resp.read(), status=resp.status)
-    except ClientConnectorError:
-        return web.Response(text="unable to contact publisher", status=400)
 
 
 @docs()
@@ -825,58 +753,6 @@ ORDER BY package, suite, start_time DESC
 
 
 @docs()
-@routes.get("/needs-review", name="needs-review")
-@routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/needs-review", name="needs-review-campaign")
-async def handle_needs_review(request):
-    from ..review import iter_needs_review
-    campaign = request.match_info.get("campaign")
-    reviewer = request.query.get("reviewer")
-    if reviewer is None and request.get('user'):
-        reviewer = request['user'].get('email')
-    span = aiozipkin.request_span(request)
-    publishable_only = request.query.get("publishable_only", "true") == "true"
-    if 'required_only' in request.query:
-        required_only = (request.query['required_only'] == 'true')
-    else:
-        required_only = None
-    limit = request.query.get("limit", '200')
-    if limit:
-        limit = int(limit)
-    else:
-        limit = None
-    ret = []
-    async with request.app['pool'].acquire() as conn:
-        with span.new_child('sql:needs-review'):
-            for (
-                run_id,
-                command,
-                package,
-                _campaign,
-                _vcs_type,
-                result_branches,
-                _main_branch_revision,
-                value,
-                finish_time
-            ) in await iter_needs_review(
-                conn,
-                campaigns=([campaign] if campaign else None),
-                required_only=required_only,
-                publishable_only=publishable_only,
-                reviewer=reviewer,
-                limit=limit
-            ):
-                ret.append({
-                    'package': package,
-                    'command': command,
-                    'id': run_id,
-                    'branches': [rb[0] for rb in result_branches],
-                    'value': value,
-                    'finish_time': finish_time.isoformat(),
-                })
-    return web.json_response(ret, status=200)
-
-
-@docs()
 @routes.get("/active-runs/+peek")
 async def handle_run_peek(request):
     span = aiozipkin.request_span(request)
@@ -901,269 +777,6 @@ async def handle_run_peek(request):
             return web.json_response({"reason": "timeout contacting runner: %s" % e}, status=502)
 
 
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except BaseException:
-            logging.exception('%s failed', title)
-        else:
-            logging.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-    return task
-
-
-@docs()
-@routes.post('/run/{run_id}/reprocess-logs', name='admin-reprocess-logs-run')
-async def handle_run_reprocess_logs(request):
-    from ..reprocess_logs import (
-        reprocess_run_logs,
-        process_sbuild_log,
-        process_dist_log,
-    )
-    check_admin(request)
-    post = await request.post()
-    run_id = request.match_info['run_id']
-    dry_run = 'dry_run' in post
-    reschedule = 'reschedule' in post
-    async with request.app['pool'].acquire() as conn:
-        run = await conn.fetchrow(
-            'SELECT package, suite AS campaign, command, '
-            'finish_time - start_time as duration, codebase, '
-            'result_code, description, failure_details, change_set FROM run WHERE id = $1',
-            run_id)
-
-    result = await reprocess_run_logs(
-        db=request.app['pool'],
-        codebase=run['codebase'],
-        logfile_manager=request.app['logfile_manager'],
-        package=run['package'], campaign=run['campaign'], log_id=run_id,
-        command=run['command'], change_set=run['change_set'], duration=run['duration'],
-        result_code=run['result_code'],
-        description=run['description'], failure_details=run['failure_details'],
-        process_fns=[
-            ('dist-', DIST_LOG_FILENAME, process_dist_log),
-            ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
-        dry_run=dry_run, reschedule=reschedule)
-
-    if result:
-        (new_code, new_description, new_failure_details) = result
-        return web.json_response(
-            {'changed': True,
-             'result_code': new_code,
-             'description': new_description,
-             'failure_details': new_failure_details})
-    else:
-        return web.json_response({
-            'changed': False,
-            'result_code': run['result_code'],
-            'description': run['description'],
-            'failure_details': run['failure_details']})
-
-
-@docs()
-@routes.post('/reprocess-logs', name='admin-reprocess-logs')
-async def handle_reprocess_logs(request):
-    from ..reprocess_logs import (
-        reprocess_run_logs,
-        process_sbuild_log,
-        process_dist_log,
-    )
-
-    check_admin(request)
-    post = await request.post()
-    dry_run = 'dry_run' in post
-    reschedule = 'reschedule' in post
-    try:
-        run_ids = post.getall('run_id')
-    except KeyError:
-        run_ids = None
-
-    if not run_ids:
-        args = []
-        query = """
-SELECT
-  package,
-  suite AS campaign,
-  id,
-  command,
-  finish_time - start_time as duration,
-  result_code,
-  description,
-  failure_details
-FROM run
-WHERE
-  (result_code = 'build-failed' OR
-   result_code LIKE 'build-failed-stage-%' OR
-   result_code LIKE 'autopkgtest-%' OR
-   result_code LIKE 'build-%' OR
-   result_code LIKE 'dist-%' OR
-   result_code LIKE 'unpack-%s' OR
-   result_code LIKE 'create-session-%' OR
-   result_code LIKE 'missing-%')
-"""
-    else:
-        args = [run_ids]
-        query = """
-SELECT
-  package,
-  suite AS campaign,
-  id,
-  command,
-  finish_time - start_time as duration,
-  result_code,
-  description,
-  failure_details,
-  change_set,
-  codebase
-FROM run
-WHERE
-  id = ANY($1::text[])
-"""
-    async with request.app['pool'].acquire() as conn:
-        rows = await conn.fetch(query, *args)
-
-    async def do_reprocess():
-        todo = [
-            reprocess_run_logs(
-                db=request.app['pool'],
-                logfile_manager=request.app['logfile_manager'],
-                package=row['package'], campaign=row['campaign'], log_id=row['id'],
-                command=row['command'], change_set=row['change_set'],
-                duration=row['duration'], result_code=row['result_code'],
-                description=row['description'], failure_details=row['failure_details'],
-                codebase=row['codebase'],
-                process_fns=[
-                    ('dist-', DIST_LOG_FILENAME, process_dist_log),
-                    ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
-                dry_run=dry_run, reschedule=reschedule)
-            for row in rows]
-        for i in range(0, len(todo), 100):
-            await asyncio.wait(set(todo[i : i + 100]))
-
-    create_background_task(do_reprocess(), 'reprocess logs')
-
-    return web.json_response([
-        {'package': row['package'],
-         'campaign': row['campaign'],
-         'log_id': row['id']}
-        for row in rows])
-
-
-@docs()
-@routes.post('/mass-reschedule', name='admin-reschedule')
-async def handle_mass_reschedule(request):
-    check_admin(request)
-    post = await request.post()
-    include_transient = post.get('include_transient', 'off') == 'on'
-    try:
-        result_code = post['result_code']
-    except KeyError as e:
-        raise web.HTTPBadRequest(text='result_code not specified') from e
-    campaign = post.get('campaign')
-    description_re = post.get('description_re')
-    min_age = int(post.get('min_age', '0'))
-    rejected = 'rejected' in post
-    offset = int(post.get('offset', '0'))
-    refresh = 'refresh' in post
-    config = request.app['config']
-    all_campaigns = [c.name for c in config.campaign]
-    if result_code == 'never-processed':
-        query = "select c.package AS package, c.suite AS campaign from candidate c WHERE "
-        params = []
-        where = [
-            "not exists (SELECT FROM run WHERE run.package = c.package AND c.suite = suite)"]
-        if campaign:
-            params.append(campaign)
-            where.append("c.suite = $%d" % len(params))
-        else:
-            params.append(all_campaigns)
-            where.append("c.suite = ANY($%d::text[])" % len(params))
-    else:
-        if include_transient:
-            table = "last_runs"
-        else:
-            table = "last_effective_runs"
-        query = """
-SELECT
-package,
-suite AS campaign,
-finish_time - start_time as duration
-FROM %s AS run
-WHERE
-EXISTS (SELECT FROM candidate WHERE
-run.package = candidate.package AND
-run.suite = candidate.suite AND
-(run.change_set = candidate.change_set OR candidate.change_set IS NULL))
-AND """ % table
-        where = []
-        params = []
-        if result_code is not None:
-            params.append(result_code)
-            where.append("result_code = $%d" % len(params))
-        if campaign:
-            params.append(campaign)
-            where.append("suite = $%d" % len(params))
-        else:
-            params.append(all_campaigns)
-            where.append("suite = ANY($%d::text[])" % len(params))
-        if rejected:
-            where.append("review_status = 'rejected'")
-        if description_re:
-            params.append(description_re)
-            where.append("description ~ $%d" % len(params))
-        if min_age:
-            params.append(datetime.utcnow() - timedelta(days=min_age))
-            where.append("finish_time < $%d" % len(params))
-    query += " AND ".join(where)
-
-    async with request.app['pool'].acquire() as conn:
-        try:
-            runs = await conn.fetch(query, *params)
-        except asyncpg.InvalidRegularExpressionError as e:
-            raise web.HTTPBadRequest(
-                text="Invalid regex: %s" % e.message) from e
-
-    session = request.app['http_client_session']
-
-    async def do_reschedule():
-        schedule_url = URL(request.app['runner_url']) / "schedule"
-        for run in runs:
-            logging.info(
-                "Rescheduling %s, %s", run['package'], run['campaign'])
-            try:
-                async with session.post(schedule_url, json={
-                        'package': run['package'],
-                        'campaign': run['campaign'],
-                        'requestor': "reschedule",
-                        'refresh': refresh,
-                        'offset': offset,
-                        'bucket': "reschedule",
-                        'estimated_duration': (
-                            run['duration'].total_seconds()
-                            if run.get('duration') else None),
-                }, raise_for_status=True):
-                    pass
-            except ClientResponseError as e:
-                if e.status == 400:
-                    logging.debug(
-                        'Not rescheduling %s/%s: candidate unavailable',
-                        run['package'], run['campaign'])
-                else:
-                    logging.exception(
-                        "Unable to reschedule %s/%s: %d: %s",
-                        run['package'], run['campaign'],
-                        e.status, e.message)
-
-    create_background_task(do_reschedule(), 'mass-reschedule')
-    return web.json_response([
-        {'package': run['package'], 'campaign': run['campaign']}
-        for run in runs])
-
-
 @docs()
 @routes.get("/active-runs", name="active-runs-list")
 async def handle_list_active_runs(request):
@@ -1175,24 +788,6 @@ async def handle_list_active_runs(request):
                 return web.json_response(await resp.json(), status=resp.status)
             status = await resp.json()
             return web.json_response(status["processing"], status=200)
-
-
-@docs()
-@routes.get("/result-codes/{result_code}", name="result-code")
-async def handle_result_code(request):
-    result_code = request.match_info["result_code"]
-    ret = []
-    async with request.app['pool'].acquire() as conn:
-        for row in await conn.fetch(
-                'SELECT id, package, vcs_type, branch_url FROM last_runs '
-                'WHERE result_code = $1', result_code):
-            ret.append({
-                'run_id': row['id'],
-                'package': row['package'],
-                'vcs_type': row['vcs_type'],
-                'branch_url': row['branch_url'],
-            })
-    return web.json_response(ret)
 
 
 @docs()
@@ -1210,11 +805,6 @@ async def handle_get_active_run(request):
                 if entry["id"] == run_id:
                     return web.json_response(entry, status=200)
             return web.json_response({}, status=404)
-
-
-@routes.get('/', name='redirect-docs')
-async def redirect_docs(req):
-    raise web.HTTPFound(location='docs')
 
 
 def create_app(
@@ -1246,13 +836,6 @@ def create_app(
     app['differ_url'] = differ_url
 
     setup_postgres(app)
-    setup_aiohttp_apispec(
-        app=app,
-        title="Janitor API Documentation",
-        version=None,
-        url="/swagger.json",
-        swagger_path="/docs",
-    )
 
     # app.middlewares.append(apispec_validation_middleware)
     return app
