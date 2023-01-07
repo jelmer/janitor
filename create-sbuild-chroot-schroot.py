@@ -27,7 +27,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
     if aliases is None:
         aliases = []
     aliases = list(aliases) + [
-        sbuild_schroot_name(suite, sbuild_arch)) for suite in suites]
+        sbuild_schroot_name(suite, sbuild_arch) for suite in suites]
     for alias in aliases:
         cmd.append("--alias=%s" % alias)
     if make_sbuild_tarball:
