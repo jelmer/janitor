@@ -439,9 +439,13 @@ async def generate_ready_list(
         query = 'SELECT package, suite, id, command, result FROM publish_ready'
 
         conditions = [
-            "EXISTS (SELECT * FROM unnest(unpublished_branches) "
+            "EXISTS (SELECT * FROM unnest(unpublished_branches) upb "
             "WHERE mode in "
-            "('propose', 'attempt-push', 'push-derived', 'push'))"]
+            "('propose', 'attempt-push', 'push-derived', 'push') "
+            "AND NOT EXISTS "
+            "(SELECT FROM merge_proposal WHERE revision = upb.revision) "
+            ")"]
+
         args = []
         if suite:
             args.append(suite)
