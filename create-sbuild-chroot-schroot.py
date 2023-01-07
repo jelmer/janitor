@@ -15,7 +15,7 @@ def sbuild_schroot_name(suite, arch):
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006
-                  eatmydata=True, make_sbuild_tarball=None):
+                  eatmydata=True, make_sbuild_tarball=None, aliases=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
            distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
@@ -24,8 +24,12 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
         include = list(include) + ["eatmydata"]
     if include:
         cmd.append("--include=%s" % ','.join(include))
-    for suite in suites:
-        cmd.append("--alias=%s" % sbuild_schroot_name(suite, sbuild_arch))
+    if aliases is None:
+        aliases = []
+    aliases = list(aliases) + [
+        sbuild_schroot_name(suite, sbuild_arch)) for suite in suites]
+    for alias in aliases:
+        cmd.append("--alias=%s" % alias)
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     for name in distro.extra:
@@ -111,7 +115,7 @@ for distribution in args.distribution:
     create_chroot(
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
         make_sbuild_tarball=make_sbuild_tarball,
-        eatmydata=True)
+        eatmydata=True, aliases=distro_config.chroot_alias)
 
     if args.user:
         subprocess.check_call(
