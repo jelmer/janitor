@@ -1,7 +1,7 @@
 ---
 name: Python package
 
-on:
+"on":
   push:
     branches:
       - main
@@ -30,8 +30,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt -y update
-          sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel libpcre3-dev libjs-jquery-datatables
-          python -m pip install --upgrade pip setuptools setuptools-protobuf wheel mypy-protobuf \
+          sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
+            libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
+            libpcre3-dev libjs-jquery-datatables
+          python -m pip install --upgrade pip setuptools setuptools-protobuf \
+            wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
           pip install -U -e .[dev,debian]
           python setup.py develop
@@ -63,5 +66,7 @@ jobs:
       - name: Config compat test
         if: always()
         run: |
-          git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ janitor.debian.net
-          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+          git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ \
+            janitor.debian.net
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. \
+            python3 -m janitor.config janitor.debian.net/k8s/janitor.conf

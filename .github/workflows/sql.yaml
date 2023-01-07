@@ -1,7 +1,7 @@
 ---
 name: SQL
 
-on:
+"on":
   push:
     branches:
       - main
@@ -23,7 +23,8 @@ jobs:
           submodules: recursive
       - name: Install dependencies
         run: |
-          sudo apt install postgresql-${PG_MAJOR} postgresql-common postgresql-${PG_MAJOR}-debversion
+          sudo apt install postgresql-${PG_MAJOR} postgresql-common \
+            postgresql-${PG_MAJOR}-debversion
       - name: Load SQL
         run: |
           pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1 < state.sql
