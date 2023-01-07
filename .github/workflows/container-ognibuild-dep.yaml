@@ -1,7 +1,7 @@
 ---
 name: Build and Publish Ognibuild Dep Server Container Images
 
-on:
+"on":
   # run it on push to the default repository branch
   push:
   pull_request:
