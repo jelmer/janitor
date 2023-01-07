@@ -1021,13 +1021,13 @@ class JenkinsBackchannel(Backchannel):
                 await self._get_job(session)
             except (ClientConnectorError, ServerDisconnectedError,
                     asyncio.TimeoutError, ClientOSError) as e:
-                logging.warning('Failed to ping client %s: %r', self.my_url, e)
+                logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
                 return False
             except ClientResponseError as e:
                 if e.status == 404:
                     raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url) from e
                 else:
-                    logging.warning('Failed to ping client %s: %r', self.my_url, e)
+                    logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
                     return False
             else:
                 return True
@@ -1081,7 +1081,7 @@ class PollingBackchannel(Backchannel):
 
     async def ping(self, expected_log_id):
         health_url = self.my_url / 'log-id'
-        logging.info('Pinging URL %s', health_url)
+        logging.info('Pinging URL %s', health_url, extra={'run_id': expected_log_id})
         async with ClientSession() as session:
             try:
                 async with session.get(
@@ -1092,7 +1092,7 @@ class PollingBackchannel(Backchannel):
                     asyncio.TimeoutError, ClientOSError,
                     ServerDisconnectedError) as err:
                 logging.warning(
-                    'Failed to ping client %s: %r', self.my_url, err)
+                    'Failed to ping client %s: %r', self.my_url, err, extra={'run_id': expected_log_id})
                 return False
 
             if log_id != expected_log_id:
@@ -1423,7 +1423,7 @@ class QueueProcessor(object):
                     await self.abort_run(
                         active_run, 'run-disappeared', "no support for ping", transient=True)
                 except RunExists:
-                    logging.warning('Run exists. Not properly cleaned up?')
+                    logging.warning('Run exists. Not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
         except ActiveRunDisappeared as e:
             if keepalive_age > timedelta(minutes=self.run_timeout):
@@ -1431,14 +1431,14 @@ class QueueProcessor(object):
                     await self.abort_run(active_run, 'run-disappeared', e.reason,
                                          transient=True)
                 except RunExists:
-                    logging.warning('Run not properly cleaned up?')
+                    logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
         if keepalive_age > timedelta(minutes=self.run_timeout):
             logging.warning(
                 "No keepalives received from %s for %s in %s, aborting.",
                 active_run.worker_name,
                 active_run.log_id,
-                keepalive_age,
+                keepalive_age, extra={'run_id': active_run.log_id}
             )
             try:
                 await self.abort_run(
@@ -1446,7 +1446,7 @@ class QueueProcessor(object):
                     description=("No keepalives received in %s." % keepalive_age),
                     transient=True)
             except RunExists:
-                logging.warning('Run exists. Not properly cleaned up?')
+                logging.warning('Run exists. Not properly cleaned up?', extra={'run_id': active_run.log_id})
             return
 
     async def _watchdog(self):
@@ -1609,7 +1609,7 @@ class QueueProcessor(object):
             except asyncpg.UniqueViolationError as e:
                 if ((e.table_name == 'run' and e.column_name == 'id')
                         or e.constraint_name == 'run_pkey'):
-                    logging.info('Unique violation error creating run: %r', e)
+                    logging.info('Unique violation error creating run: %r', e, extra={'run_id': active_run.log_id})
                     await self.unclaim_run(result.log_id)
                     raise RunExists(result.log_id) from e
                 raise
