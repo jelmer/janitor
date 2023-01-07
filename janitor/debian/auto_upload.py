@@ -93,7 +93,7 @@ async def dput(directory, changes_filename, dput_host):
 
 
 async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None, source_only: bool = False):
-    logging.info('Uploading results for %s', log_id)
+    logging.info('Uploading results for %s', log_id, extra={'run_id': log_id})
     with tempfile.TemporaryDirectory(prefix='janitor-auto-upload') as td:
         try:
             await artifact_manager.retrieve_artifacts(
@@ -101,7 +101,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
         except ArtifactsMissing:
             logging.error(
                 'artifacts for build %s are missing',
-                log_id)
+                log_id, extra={'run_id': log_id})
             return
         changes_filenames = []
         # Work around https://bugs.debian.org/389908:
@@ -116,27 +116,27 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
             changes_filenames.append(entry.name)
 
         if not changes_filenames:
-            logging.error('no changes filename in build artifacts')
+            logging.error('no changes filename in build artifacts', extra={'run_id': log_id})
             return
 
         failures = False
         for changes_filename in changes_filenames:
-            logging.info('Running debsign')
+            logging.info('Running debsign', extra={'run_id': log_id})
             try:
                 await debsign(td, changes_filename, debsign_keyid)
             except DebsignFailure as e:
                 logging.error(
                     'Error (exit code %d) signing %s for %s: %s',
                     e.returncode, changes_filename,
-                    log_id, e.reason)
+                    log_id, e.reason, extra={'run_id': log_id})
                 failures = True
                 debsign_failed_count.inc()
             else:
                 logging.info(
                     'Successfully signed %s for %s',
-                    changes_filename, log_id)
+                    changes_filename, log_id, extra={'run_id': log_id})
 
-            logging.debug('Running dput.')
+            logging.debug('Running dput.', extra={'run_id': log_id})
             try:
                 await dput(td, changes_filename, dput_host)
             except DputFailure as e:
@@ -144,11 +144,11 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
                 logging.error(
                     'Error (exit code %d) uploading %s for %s: %s',
                     e.returncode, changes_filename,
-                    log_id, e.reason)
+                    log_id, e.reason, extra={'run_id': log_id})
                 failures = True
 
         if not failures:
-            logging.info('Successfully uploaded run %s', log_id)
+            logging.info('Successfully uploaded run %s', log_id, extra={'run_id': log_id})
 
 
 async def listen_to_runner(

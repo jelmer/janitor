@@ -617,7 +617,7 @@ async def refresh_on_demand_dists(
             description = f"Campaign {kind} for {id}"
     if stamp is not None and max_finish_time and max_finish_time.astimezone() < stamp:
         return
-    logging.info("Generating metadata for %s/%s", kind, id)
+    logging.info("Generating metadata for %s/%s", kind, id, extra={'run_id': id})
     distribution = get_distribution(
         config, campaign_config.debian_build.base_distribution)
     await write_suite_files(
