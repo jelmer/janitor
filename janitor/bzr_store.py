@@ -380,7 +380,7 @@ async def main(argv=None):
     await public_runner.setup()
     site = web.TCPSite(runner, args.listen_address, port=args.port)
     await site.start()
-    logging.info("Listening on %s:%s", args.listen_address, args.port)
+    logging.info("Listening (private server) on %s:%s", args.listen_address, args.port)
     site = web.TCPSite(public_runner, args.listen_address, port=args.public_port)
     await site.start()
     logging.info("Listening on %s:%s", args.listen_address, args.public_port)
