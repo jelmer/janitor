@@ -303,6 +303,7 @@ async def handle_diffoscope(request):
             new_run['package'],
             new_run['build_version'],
             new_run['campaign'],
+            extra={'old_run_id': old_run['id'], 'new_run_id': new_run['id']}
         )
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory(prefix=TMP_PREFIX))
@@ -449,7 +450,9 @@ async def precache(
                         [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
                     )
                 )
-            logging.info("Precached debdiff result for %s/%s", old_id, new_id)
+            logging.info(
+                "Precached debdiff result for %s/%s", old_id, new_id,
+                extra={'old_run_id': old_id, 'new_run_id': new_id})
 
         if diffoscope_cache_path:
             p = diffoscope_cache_path(old_id, new_id)
@@ -476,7 +479,9 @@ async def precache(
                     json.dump(diffoscope_diff, f)
             except json.JSONDecodeError as e:
                 raise web.HTTPServerError(text=str(e)) from e
-            logging.info("Precached diffoscope result for %s/%s", old_id, new_id)
+            logging.info(
+                "Precached diffoscope result for %s/%s", old_id, new_id,
+                extra={'old_run_id': old_id, 'new_run_id': new_id})
 
 
 def create_background_task(fn, title):

@@ -21,6 +21,8 @@ import logging
 import sys
 from typing import Optional, Any
 
+from breezy.workingtree import WorkingTree
+
 from ognibuild.debian.apt import AptManager
 from ognibuild.debian.fix_build import build_incrementally
 from ognibuild.session import SessionSetupFailure, Session
@@ -62,7 +64,7 @@ class BuildFailure(Exception):
         return ret
 
 
-def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
+def build(local_tree: WorkingTree, subpath: str, output_directory: str, *, chroot=None, command=None,
           suffix=None, distribution=None, last_build_version=None,
           lintian_profile=None, lintian_suppress_tags=None, committer=None,
           apt_repository=None, apt_repository_key=None, extra_repositories=None,
@@ -163,7 +165,8 @@ def build(local_tree, subpath, output_directory, *, chroot=None, command=None,
     return {'lintian': lintian_result}
 
 
-def build_from_config(local_tree, subpath, output_directory, config, env):
+def build_from_config(
+        local_tree: WorkingTree, subpath: str, output_directory: str, config, env):
     build_distribution = config.get("build-distribution")
     build_command = config.get("build-command", DEFAULT_BUILD_COMMAND)
     build_suffix = config.get("build-suffix")
@@ -214,7 +217,6 @@ def main():
 
     import breezy.bzr  # noqa: F401
     import breezy.git  # noqa: F401
-    from breezy.workingtree import WorkingTree
 
     wt, subpath = WorkingTree.open_containing('.')
 

@@ -175,7 +175,8 @@ class GCSArtifactManager(ArtifactManager):
                 raise ServiceUnavailable() from e
             raise
         logging.info(
-            "Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name
+            "Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name,
+            extra={'run_id': run_id}
         )
 
     async def iter_ids(self):
@@ -257,7 +258,8 @@ async def upload_backup_artifacts(
                 await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
             except Exception as e:
                 logging.warning(
-                    "Unable to upload backup artifacts (%r): %s", run_id, e
+                    "Unable to upload backup artifacts (%r): %s", run_id, e,
+                    extra={'run_id': run_id}
                 )
             else:
                 await backup_artifact_manager.delete_artifacts(run_id)
@@ -267,14 +269,19 @@ async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id,
     try:
         await manager.store_artifacts(run_id, from_dir, names)
     except Exception as e:
-        logging.warning("Unable to upload artifacts for %r: %r", run_id, e)
+        logging.warning(
+            "Unable to upload artifacts for %r: %r", run_id, e,
+            extra={'run_id': run_id})
         if backup_manager:
             await backup_manager.store_artifacts(run_id, from_dir, names)
             logging.info(
-                "Uploading results to backup artifact " "location %r.", backup_manager
+                "Uploading results to backup artifact " "location %r.", backup_manager,
+                extra={'run_id': run_id}
             )
         else:
-            logging.warning("No backup artifact manager set. ")
+            logging.warning(
+                "No backup artifact manager set. ",
+                extra={'run_id': run_id})
             raise
 
 
