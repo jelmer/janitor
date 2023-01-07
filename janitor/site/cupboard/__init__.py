@@ -570,6 +570,6 @@ def register_cupboard_endpoints(
         router, *, config, publisher_url, runner_url, trace_configs=None):
     router.add_routes(routes)
     from .api import create_app
-    router.add_get('/api', create_app(
+    router.add_get('/cupboard/api', create_app(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
         trace_configs=trace_configs))
