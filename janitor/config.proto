@@ -12,6 +12,8 @@ message Distribution {
   // Chroot name to use in sbuild
   optional string chroot = 5;
 
+  repeated string chroot_alias = 12;
+
   repeated string component = 4;
 
   optional string lintian_profile = 6;
