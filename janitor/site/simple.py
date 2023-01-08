@@ -477,7 +477,7 @@ async def create_app(
 
     from .cupboard import register_cupboard_endpoints
     register_cupboard_endpoints(
-        app.router, config=config, publisher_url=publisher_url,
+        app, config=config, publisher_url=publisher_url,
         runner_url=runner_url, trace_configs=trace_configs)
     app.router.add_get(
         "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}/{filename:.+}",
