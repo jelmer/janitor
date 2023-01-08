@@ -15,79 +15,14 @@
 	    <a href="{{ review_instructions_url }}">Review Instructions</a>
 	    {% endif %}
         </p>
-        <div class="score">
-            Score: <span id="score">{{ value }}</span>
-        </div>
-        <div class="command">
-            Command: <span id="command">{{ command }}</span>
-        </div>
-        <div class="finish_time">
-            Finish Time: <span id="finish_time">{{ format_timestamp(finish_time) }}</span>
-        </div>
-        {% for role, remote_branch_name, base_revision, revision in branches %}
-            <div class="branch" id="branch-{{ role }}">
-                <h2>{{ role }}</h2>
-                <div class="revisions" id="revisions-{{ role }}">
-                    <ul>
-                        {% for rev in get_revision_info(role) %}
-                            <li>
-                                {% if rev['link'] %}<a href="{{ rev['link'] }}">{% endif %}
-                                {{ rev['revision-id'] }}
-                                {% if rev['link'] %}</a>{% endif %}
-                                : <pre>{{ rev['message'] }}</pre>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                <div class="diff" id="diff-{{ role }}">{{ highlight_diff(show_diff(role))|safe }}</div>
-            </div>
-        {% endfor %}
-        <div id="debdiff">{{ show_debdiff()|safe }}</div>
+	<div id="evaluate">{{ evaluate }}</div>
         <script type="text/javascript">
-            function loadRun(package, command, run_id, roles, value, finish_time) {
+            function loadRun(package, run_id) {
                 $('.review-button').blur()
                 $('.review-button').disabled = "disabled";
-                $('.branch').remove();
-                var deferreds = [];
-                roles.forEach(function(role) {
-                    var diff_url = '/api/run/' + run_id + '/diff?role=' + role;
-                    $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2>' +
-                        '<div class="revisions" id="revisions-' + role + '">Loading revisions...</div>' +
-                        '<div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div>' +
-                        '</div>').insertBefore('#debdiff');
-                    deferreds.push($('#diff-' + role).load(diff_url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function(responseText, textStatus, req) {
-                        if (req.status == 413) {
-                            $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + diff_url + '">' + url + '</a></p>');
-                        }
-                    }));
-                    var revisions_url = '/api/run/' + run_id + '/revision-info?role=' + role;
-                    $.getJSON(revisions_url, function(data) {
-                        var items = [];
-                        data.forEach(function(rev) {
-                            items.push("<li>");
-                            if (rev['link']) {
-                                items.push("<a href=" + rev['link'] + ">" + rev['revision-id'] + "</a>");
-                            } else {
-                                items.push(rev['revision-id']);
-                            }
-                            items.push(": <pre>" + rev['message'] + "</pre></li>");
-                        });
-                        $('#revisions-' + role).html("<ul>" + items.join("") + "</ul>");
-                    });
-                });
-                deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
-                    undefined,
-                    function(responseText, textStatus, req) {
-                        if (req.status == 404) {
-                            $('#debdiff').html('<p>No debdiff generated</p>');
-                        }
-                    }));
-                $.when.apply($, deferreds).done(function() {
+		$('.evaluate').load(evaluate_url.replace('{run_id}', run_id)).done(function() {
                     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
                     $('#run-id').attr('value', run_id);
-                    $('#score').text(value);
-                    $('#command').text(command);
-                    $('#finish_time').text(moment(finish_time).format("YYYY-MM-DDTHH:mm"));
                     $('#package-name').attr('value', package);
                     $('.review-button').disabled = "enabled";
                 });
@@ -105,19 +40,16 @@
 
             function loadNewJob() {
                 if ((newJob = todo.shift()) !== undefined) {
-                    loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value, newJob.finish_time);
+                    loadRun(newJob.package, newJob.id);
                 } else {
                     {% if not publishable_only %}
                         $('.branch').replaceWith('All done!');
                     {% else %}
                         $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
                     {% endif %}
-                    $('#debdiff').replaceWith('');
+                    $('#evaluate').replaceWith('');
                     $('#options').remove();
                     $('#full-run-link').remove();
-                    $('#score').remove();
-                    $('#command').remove();
-                    $('#finish_time').remove();
                 }
             }
 
