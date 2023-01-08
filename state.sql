@@ -692,9 +692,6 @@ CREATE OR REPLACE VIEW change_set_unpublished AS
   WHERE not coalesce(new_result_branch.absorbed, False) and result_code = 'success';
 
 
-create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
-COMMIT;
-
 CREATE VIEW absorbed_runs AS
     SELECT
        'propose' AS mode,

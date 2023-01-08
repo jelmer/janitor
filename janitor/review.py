@@ -15,9 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncpg
-
-from typing import Optional, List, Any
+from typing import Optional
 
 from .schedule import do_schedule
 
@@ -50,54 +48,3 @@ async def store_review(
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
             "DO UPDATE SET verdict = EXCLUDED.verdict, comment = EXCLUDED.comment, "
             "reviewed_at = NOW()", run_id, comment, reviewer, verdict)
-
-
-async def iter_needs_review(
-        conn: asyncpg.Connection,
-        campaigns: Optional[List[str]] = None,
-        limit: Optional[int] = None,
-        publishable_only: bool = False,
-        required_only: Optional[bool] = None,
-        reviewer: Optional[str] = None):
-    args: List[Any] = []
-    query = """
-SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value, finish_time FROM publish_ready
-"""
-    conditions = []
-    if campaigns is not None:
-        args.append(campaigns)
-        conditions.append("suite = ANY($%d::text[])" % len(args))
-
-    publishable_condition = (
-        "exists (select from unnest(unpublished_branches) where "
-        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
-    )
-
-    order_by = []
-
-    order_by.append("(SELECT COUNT(*) FROM review WHERE run_id = id) ASC")
-
-    if publishable_only:
-        conditions.append(publishable_condition)
-    else:
-        order_by.append(publishable_condition + " DESC")
-
-    if required_only is not None:
-        args.append(required_only)
-        conditions.append('needs_review = $%d' % (len(args)))
-
-    if reviewer is not None:
-        args.append(reviewer)
-        conditions.append('not exists (select from review where reviewer = $%d and run_id = id)' % (len(args)))
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-
-    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
-
-    if order_by:
-        query += " ORDER BY " + ", ".join(order_by) + " "
-
-    if limit is not None:
-        query += " LIMIT %d" % limit
-    return await conn.fetch(query, *args)

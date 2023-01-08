@@ -173,8 +173,8 @@ AND """ % table
 @routes.get("/needs-review", name="needs-review")
 @routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/needs-review", name="needs-review-campaign")
 async def handle_needs_review(request):
-    from ...review import iter_needs_review
-    campaign = request.match_info.get("campaign")
+    from . import iter_needs_review
+    requested_campaign = request.match_info.get("campaign")
     reviewer = request.query.get("reviewer")
     if reviewer is None and request.get('user'):
         reviewer = request['user'].get('email')
@@ -194,17 +194,11 @@ async def handle_needs_review(request):
         with span.new_child('sql:needs-review'):
             for (
                 run_id,
-                command,
                 package,
-                _campaign,
-                _vcs_type,
-                result_branches,
-                _main_branch_revision,
-                value,
-                finish_time
+                campaign
             ) in await iter_needs_review(
                 conn,
-                campaigns=([campaign] if campaign else None),
+                campaigns=([requested_campaign] if requested_campaign else None),
                 required_only=required_only,
                 publishable_only=publishable_only,
                 reviewer=reviewer,
@@ -212,11 +206,8 @@ async def handle_needs_review(request):
             ):
                 ret.append({
                     'package': package,
-                    'command': command,
                     'id': run_id,
-                    'branches': [rb[0] for rb in result_branches],
-                    'value': value,
-                    'finish_time': finish_time.isoformat(),
+                    'campaign': campaign
                 })
     return web.json_response(ret, status=200)
 
