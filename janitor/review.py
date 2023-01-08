@@ -17,15 +17,17 @@
 
 import asyncpg
 
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 
 from .schedule import do_schedule
 
 
-async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
+async def store_review(
+        conn, run_id: str, verdict: Literal["rejected", "reschedule", "approved", "abstained"],
+        comment: Optional[str], reviewer: Optional[str], is_qa_reviewer: bool):
     async with conn.transaction():
-        if status == "reschedule":
-            status = "rejected"
+        if verdict == "reschedule":
+            verdict = "rejected"
 
             run = await conn.fetchrow(
                 'SELECT package, suite, codebase FROM run WHERE id = $1', run_id)
@@ -39,15 +41,15 @@ async def store_review(conn, run_id, status, comment, reviewer, is_qa_reviewer):
                 codebase=run['codebase']
             )
 
-        if status != 'abstained' and is_qa_reviewer:
+        if verdict != 'abstained' and is_qa_reviewer:
             await conn.execute(
                 "UPDATE run SET review_status = $1 WHERE id = $2",
-                status, run_id)
+                verdict, run_id)
         await conn.execute(
-            "INSERT INTO review (run_id, comment, reviewer, review_status) VALUES "
+            "INSERT INTO review (run_id, comment, reviewer, verdict) VALUES "
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
-            "DO UPDATE SET review_status = EXCLUDED.review_status, comment = EXCLUDED.comment, "
-            "reviewed_at = NOW()", run_id, comment, reviewer, status)
+            "DO UPDATE SET verdict = EXCLUDED.verdict, comment = EXCLUDED.comment, "
+            "reviewed_at = NOW()", run_id, comment, reviewer, verdict)
 
 
 async def iter_needs_review(
