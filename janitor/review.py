@@ -17,13 +17,13 @@
 
 import asyncpg
 
-from typing import Optional, List, Any, Literal
+from typing import Optional, List, Any
 
 from .schedule import do_schedule
 
 
 async def store_review(
-        conn, run_id: str, verdict: Literal["rejected", "reschedule", "approved", "abstained"],
+        conn, run_id: str, verdict: str,
         comment: Optional[str], reviewer: Optional[str], is_qa_reviewer: bool):
     async with conn.transaction():
         if verdict == "reschedule":
