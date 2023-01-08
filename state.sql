@@ -1,4 +1,3 @@
-BEGIN;
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
