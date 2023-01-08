@@ -2093,7 +2093,7 @@ WHERE run.id = $1
             'reviews': {review['reviewer']: {
                 'timestamp': review['reviewed_at'].isoformat(),
                 'comment': review['comment'],
-                'status': review['review_status']} for review in reviews},
+                'verdict': review['verdict']} for review in reviews},
             'needs_review': (
                 run['qa_review_policy'] == 'required'
                 and run['review_status'] == 'unreviewed'),
