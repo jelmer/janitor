@@ -162,7 +162,7 @@ async def generate_run_file(
                 publish_history = []
         with span.new_child('sql:reviews'):
             kwargs['reviews'] = await conn.fetch(
-                'SELECT review_status, comment, reviewer, reviewed_at '
+                'SELECT verdict, comment, reviewer, reviewed_at '
                 'FROM review WHERE run_id = $1',
                 run['id'])
         with span.new_child('sql:success-probability'):

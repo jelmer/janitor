@@ -13,7 +13,7 @@
                 <li>
 		    <a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a><ul>
 			{% for review in reviews[run.id] %}
-				<li>{{ review.reviewer }}: <b>{{ review.review_status }}</b>: {{ review.comment }}</li>
+				<li>{{ review.reviewer }}: <b>{{ review.verdict }}</b>: {{ review.comment }}</li>
 			    {% endfor %}
 		    </ul>
                 </li>

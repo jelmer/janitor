@@ -558,24 +558,24 @@ async def handle_run_post(request):
         check_logged_in(request)
         span = aiozipkin.request_span(request)
         post = await request.post()
-        review_status = post.get("review-status")
+        verdict = post.get("verdict")
         review_comment = post.get("review-comment")
-        if review_status:
-            review_status = review_status.lower()
+        if verdict:
+            verdict = verdict.lower()
             with span.new_child('sql:update-run'):
                 try:
                     user = request['user']['email']
                 except KeyError:
                     user = request['user']['name']
                 await store_review(
-                    conn, run_id, status=review_status, comment=review_comment,
+                    conn, run_id, verdict=verdict, comment=review_comment,
                     reviewer=user, is_qa_reviewer=is_qa_reviewer(request))
-            if review_status == 'approved':
+            if verdict == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app['publisher_url'],
                     run_id)
         return web.json_response(
-            {"review-status": review_status, "review-comment": review_comment}
+            {"verdict": verdict, "review-comment": review_comment}
         )
 
 

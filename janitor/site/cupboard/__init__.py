@@ -264,15 +264,15 @@ async def handle_review_post(request):
     post = await request.post()
     publishable_only = post.get("publishable_only", "true") == "true"
     async with request.app.database.acquire() as conn:
-        if "review_status" in post:
-            review_status = {
+        if "verdict" in post:
+            verdict = {
                 'approve': 'approved',
                 'reject': 'rejected',
                 'reschedule': 'rescheduled',
-                'abstain': 'abstained'}[post["review_status"].lower()]
+                'abstain': 'abstained'}[post["verdict"].lower()]
             review_comment = post.get("review_comment")
             await store_review(
-                conn, post["run_id"], status=review_status,
+                conn, post["run_id"], verdict=verdict,
                 comment=review_comment,
                 reviewer=request['user'],
                 is_qa_reviewer=is_qa_reviewer(request))

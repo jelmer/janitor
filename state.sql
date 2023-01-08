@@ -1,4 +1,3 @@
-BEGIN;
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
@@ -79,7 +78,8 @@ CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'abstained');
+CREATE TYPE verdict AS ENUM('approved', 'rejected', 'abstained');
+CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'needs-manual-review');
 CREATE TABLE result_tag (
  actual_name text,
  revision text not null
@@ -672,7 +672,7 @@ CREATE TABLE IF NOT EXISTS review (
  run_id text not null references run (id),
  comment text,
  reviewer text,
- review_status review_status not null default 'unreviewed',
+ verdict verdict not null,
  reviewed_at timestamp not null default now()
 );
 CREATE INDEX ON review (run_id);
