@@ -262,6 +262,7 @@ WHERE followup.origin = $1""", run['id'])
     kwargs["suite"] = run['suite']
     kwargs["campaign"] = get_campaign_config(config, run['suite'])
     kwargs["resume_from"] = run['resume_from']
+    kwargs['codemod_result'] = run['result']
 
     def read_file(f):
         return [line.decode("utf-8", "replace") for line in f.readlines()]
