@@ -567,9 +567,9 @@ def register_cupboard_link(title, shortlink):
 
 
 def register_cupboard_endpoints(
-        router, *, config, publisher_url, runner_url, trace_configs=None):
-    router.add_routes(routes)
+        app, *, config, publisher_url, runner_url, trace_configs=None):
+    app.router.add_routes(routes)
     from .api import create_app
-    router.add_get('/cupboard/api', create_app(
+    app.add_subapp('/cupboard/api', create_app(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
         trace_configs=trace_configs))
