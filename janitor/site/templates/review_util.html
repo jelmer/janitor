@@ -23,7 +23,7 @@
             {{ review['reviewer'] }}
         </td>
         <td>
-            <span class="review-{{ review['review_status'] }}">{{ review['review_status'] }}</span>
+            <span class="review-{{ review['verdict'] }}">{{ review['verdict'] }}</span>
         </td>
         <td>
             {{ review['review_comment'] }}
@@ -35,36 +35,36 @@
 <tr>
 <td>Your review</td>
 <td>
-    <select id="review-status" name="review-status" onchange="submit_review(this.value)">
+    <select id="verdict" name="verdict" onchange="submit_review(this.value)">
 	<option value="unreviewed"
-		{% if ns.my_review and ns.my_review.review_status == 'unreviewed' %} selected="true"{% endif %}>
+		{% if ns.my_review and ns.my_review.verdict == 'unreviewed' %} selected="true"{% endif %}>
 	    Unreviewed
 	</option>
 	<option value="approved"
-		{% if ns.my_review and ns.my_review.review_status == 'approved' %} selected="true"{% endif %}>
+		{% if ns.my_review and ns.my_review.verdict == 'approved' %} selected="true"{% endif %}>
 	    Approved
 	</option>
 	<option value="abstained"
-		{% if ns.my_review and ns.my_review_status == 'abstained' %} selected="true"{% endif %}>
+		{% if ns.my_review and ns.my_review.verdict == 'abstained' %} selected="true"{% endif %}>
 	    Abstained
 	</option>
 	<option value="rejected"
-		{% if ns.my_review and ns.my_review.review_status == 'rejected' %} selected="true"{% endif %}>
+		{% if ns.my_review and ns.my_review.verdict == 'rejected' %} selected="true"{% endif %}>
 	    Rejected
 	</option>
     </select>
     <script>
-	function submit_review(status) {
+	function submit_review(verdict) {
 	    var comment = undefined;
-	    if (status == 'rejected') {
+	    if (verdict == 'rejected') {
 		comment = window.prompt('Please specify a comment for the rejection');
 		$("#my-review-comment").html(comment);
 	    } else {
 		$("#my-review-comment").html("");
 	    }
-	    console.log("Submitting review " + status + " for run {{ run_id }} ");
+	    console.log("Submitting review " + verdict + " for run {{ run_id }} ");
 	    $.post('/api/run/{{ run_id }}', {
-		'review-status': status,
+		'verdict': verdict,
 		'review-comment': comment
 	    });
 	}

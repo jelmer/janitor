@@ -138,18 +138,18 @@
                 });
             }
 
-            function submitReview(elem, status) {
+            function submitReview(elem, verdict) {
                 var comment = undefined;
-                if (status == 'rejected') {
+                if (verdict == 'rejected') {
                     comment = window.prompt('Please specify a comment for the rejection');
                 }
                 var run_id = $('#run-id').val();
                 var package = $('#package-name').val();
-                console.log("Submitting review " + status + " for run " + package + "/" + run_id);
+                console.log("Submitting review " + verdict + " for run " + package + "/" + run_id);
                 $.ajax('/api/run/' + run_id, {
                     type: "POST",
                     data: {
-                        'review-status': status,
+                        'verdict': verdict,
                         'review-comment': comment
                     },
                     statusCode: {
@@ -182,25 +182,25 @@
             {% endif %}
             <input class="review-button"
                    type="submit"
-                   name="review_status"
+                   name="verdict"
                    value="Approve"
                    accesskey="a"
                    onclick="submitReview(this, 'approved')"/>
             <input class="review-button"
                    type="submit"
-                   name="review_status"
+                   name="verdict"
                    value="Reject"
                    accesskey="r"
                    onclick="submitReview(this, 'rejected')"/>
             <input class="review-button"
                    type="submit"
-                   name="review_status"
+                   name="verdict"
                    value="Reschedule"
                    accesskey="s"
                    onclick="submitReview(this, 'reschedule')"/>
             <input class="review-button"
                    type="submit"
-                   name="review_status"
+                   name="verdict"
                    value="Abstain"
                    accesskey="n"
                    onclick="submitReview(this, 'abstained')"/>
