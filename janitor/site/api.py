@@ -570,7 +570,7 @@ async def handle_run_post(request):
                 await store_review(
                     conn, run_id, verdict=verdict, comment=review_comment,
                     reviewer=user, is_qa_reviewer=is_qa_reviewer(request))
-            if verdict== 'approved':
+            if verdict == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app['publisher_url'],
                     run_id)

@@ -79,7 +79,7 @@ CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE verdict AS ENUM('approved', 'rejected', 'abstained');
-CREATE TYPE review_status AS ENUM('waiting', 'approved', 'rejected', 'needs-manual-review');
+CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'needs-manual-review');
 CREATE TABLE result_tag (
  actual_name text,
  revision text not null
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS run (
    vcs_type vcs_type,
    branch_url text,
    logfilenames text[] not null,
-   review_status review_status not null default 'waiting',
+   review_status review_status not null default 'unreviewed',
    value integer,
    -- Name of the worker that executed this run.
    worker text references worker(name),
