@@ -260,7 +260,10 @@ WHERE followup.origin = $1""", run['id'])
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
-    kwargs["campaign"] = get_campaign_config(config, run['suite'])
+    try:
+        kwargs["campaign"] = get_campaign_config(config, run['suite'])
+    except KeyError:
+        kwargs["campaign"] = None
     kwargs["resume_from"] = run['resume_from']
     kwargs['codemod_result'] = run['result']
 
