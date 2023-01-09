@@ -2031,7 +2031,7 @@ async def blockers_request(request):
 SELECT
   run.id AS id,
   run.codebase AS codebase,
-  run.campaign AS campaign,
+  run.suite AS campaign,
   run.finish_time AS finish_time,
   run.review_status AS review_status,
   run.command AS run_command,
