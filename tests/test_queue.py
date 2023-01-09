@@ -1,4 +1,3 @@
-import pytest
 from janitor.queue import Queue
 
 
