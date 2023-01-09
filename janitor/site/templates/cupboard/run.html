@@ -25,7 +25,7 @@
                 Package: <a class="reference external" href="..">{{ package }}</a>
             </li>
             <li>
-                Change set: <a href="/cupboard/cs/{{ run.change_set }}">{{ run.change_set }}</a>
+                Change set: <a href="/cupboard/cs/{{ run.change_set }}/">{{ run.change_set }}</a>
             </li>
             {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
             {% if run.result and 'upstream_branch_url' in run.result %}
@@ -37,11 +37,11 @@
             <li>
                 Status: {{ display_result_code(result_code, failure_transient)|safe }}
                 {% if unchanged_run and suite not in ('unchanged', 'control') %}
-                    (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(unchanged_run.result_code, unchanged_run.failure_transient)|safe }})
+                    (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}/">run</a> without changes: {{ display_result_code(unchanged_run.result_code, unchanged_run.failure_transient)|safe }})
                 {% elif suite not in ('unchanged', 'control') %}
                     ({{ schedule_control_button(run.id, "schedule control run", id="schedule-control") }})
                 {% endif %}
-                {% if run.resume_from %}(<a href="/cupboard/pkg/{{ run.package }}/{{ run.resume_from }}">base run</a>){% endif %}
+                {% if run.resume_from %}(<a href="/cupboard/pkg/{{ run.package }}/{{ run.resume_from }}/">base run</a>){% endif %}
             </li>
             <li>Description: {{ description }}</li>
             {% if result_code == 'success' %}

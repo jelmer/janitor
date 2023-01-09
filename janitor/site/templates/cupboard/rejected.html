@@ -11,7 +11,7 @@
         <ul>
             {% for run in runs %}
                 <li>
-		    <a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a><ul>
+		    <a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}/">{{ run.suite }} for {{ run.package }}</a><ul>
 			{% for review in reviews[run.id] %}
 				<li>{{ review.reviewer }}: <b>{{ review.verdict }}</b>: {{ review.comment }}</li>
 			    {% endfor %}
