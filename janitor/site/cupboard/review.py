@@ -120,7 +120,7 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
         run = await conn.fetchrow(
             'SELECT package, array(SELECT row(role, remote_name, base_revision, revision) '
             'FROM new_result_branch WHERE run_id = id) AS result_branches, vcs_type, main_branch_revision, '
-            'finish_time, value, command FROM run WHERE id = $1', run_id)
+            'finish_time, value, command, suite AS campaign FROM run WHERE id = $1', run_id)
 
     async def show_diff(role):
         try:
