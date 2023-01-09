@@ -3,6 +3,7 @@ import asyncpg_engine
 import pytest
 import testing.postgresql
 from typing import Type
+import importlib.resources
 
 from janitor.state import init_types
 
@@ -16,7 +17,7 @@ async def postgres_url():
         conn = await asyncpg.connect(postgresql.url())
         try:
             for n in ['state.sql', 'debian.sql']:
-                with open(n, 'r') as f:
+                with importlib.resources.open_text('janitor', n) as f:
                     await conn.execute(f.read())
         finally:
             await conn.close()

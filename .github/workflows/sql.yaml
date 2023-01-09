@@ -27,4 +27,5 @@ jobs:
             postgresql-${PG_MAJOR}-debversion
       - name: Load SQL
         run: |
-          pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1 < state.sql
+          cat janitor/state.sql janitor/debian.sql | \
+            pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1
