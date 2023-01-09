@@ -21,9 +21,7 @@ from ..common import (
     get_unchanged_run,
     render_template_for_request,
 )
-from ...review import iter_needs_review
-
-MAX_DIFF_SIZE = 200 * 1024
+from . import iter_needs_review
 
 
 async def generate_rejected(conn, config, campaign=None):
@@ -82,30 +80,61 @@ async def generate_review(
 
     (
         run_id,
-        command,
         package,
-        suite,
-        vcs_type,
-        result_branches,
-        main_branch_revision,
-        value,
-        finish_time,
+        campaign,
     ) = entries.pop(0)
+
+    evaluate_url = request.app.get("evaluate_url")
+
+    try:
+        async with request.app['http_client_session'].get(evaluate_url.replace('{run_id}', run_id), raise_for_status=True) as resp:
+            evaluate = await resp.text()
+    except (ClientConnectorError, ClientResponseError) as e:
+        evaluate = "Unable to retrieve evaluation: %s" % e
+
+    kwargs = {
+        "review_instructions_url": request.app.get("review_instructions_url"),
+        "package_name": package,
+        "run_id": run_id,
+        "suite": campaign,
+        "suites": campaigns,
+        "campaign": campaign,
+        "campaigns": campaigns,
+        "evaluate": evaluate,
+        "evaluate_url": evaluate_url,
+        "publishable_only": publishable_only,
+        "todo": [
+            {
+                'package': entry['package'],
+                'id': entry['id'],
+            } for entry in entries
+        ],
+    }
+    return await render_template_for_request("cupboard/review.html", request, kwargs)
+
+
+async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, run_id, span):
+    MAX_DIFF_SIZE = 200 * 1024
+
+    async with db.acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT package, result_branches, vcs_type, main_branch_revision, '
+            'finish_time, value, command FROM run WHERE id = $1', run_id)
 
     async def show_diff(role):
         try:
-            (remote_name, base_revid, revid) = state.get_result_branch(result_branches, role)
+            (remote_name, base_revid, revid) = state.get_result_branch(run['result_branches'], role)
         except KeyError:
             return ""
         external_url = f"/api/run/{run_id}/diff?role={role}"
-        if vcs_type is None:
+        if run['vcs_type'] is None:
             return "no vcs known"
         if revid is None:
             return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
-                diff = (await vcs_managers[vcs_type].get_diff(
-                    package,
+                diff = (await vcs_managers[run['vcs_type']].get_diff(
+                    run['package'],
                     base_revid.encode('utf-8') if base_revid else NULL_REVISION,
                     revid.encode('utf-8'))
                 ).decode("utf-8", "replace")
@@ -124,13 +153,13 @@ async def generate_review(
 
     async def get_revision_info(role):
         try:
-            (remote_name, base_revid, revid) = state.get_result_branch(result_branches, role)
+            (remote_name, base_revid, revid) = state.get_result_branch(run['result_branches'], role)
         except KeyError:
             return []
 
         if base_revid == revid:
             return []
-        if vcs_type is None:
+        if run['vcs_type'] is None:
             logging.warning("No vcs known for run %s", run_id)
             return []
         if revid is None:
@@ -138,7 +167,7 @@ async def generate_review(
         old_revid = base_revid.encode('utf-8') if base_revid else NULL_REVISION
         new_revid = revid.encode('utf-8')
         try:
-            return await vcs_managers[vcs_type].get_revision_info(package, old_revid, new_revid)
+            return await vcs_managers[run['vcs_type']].get_revision_info(run['package'], old_revid, new_revid)
         except ClientResponseError as e:
             logging.warning("Unable to retrieve commit info; error code %d", e.status)
             return []
@@ -152,14 +181,14 @@ async def generate_review(
     async def show_debdiff():
         with span.new_child("sql:unchanged-run"):
             unchanged_run = await get_unchanged_run(
-                conn, package, main_branch_revision.encode('utf-8')
+                conn, run['package'], run['main_branch_revision'].encode('utf-8')
             )
         if unchanged_run is None:
             return "<p>No control run</p>"
         try:
             with span.new_child('archive-diff'):
                 text, unused_content_type = await get_archive_diff(
-                    client,
+                    http_client_session,
                     differ_url,
                     run_id,
                     unchanged_run['id'],
@@ -173,31 +202,15 @@ async def generate_review(
         except BuildDiffUnavailable:
             return "<p>No build diff generated</p>"
 
-    kwargs = {
-        "show_diff": show_diff,
-        "show_debdiff": show_debdiff,
+    return {
+        'run_id': run_id,
+        'MAX_DIFF_SIZE': MAX_DIFF_SIZE,
+        'finish_time': run['finish_time'],
+        'campaign': run['campaign'],
+        'branches': run['result_branches'],
+        'value': run['value'],
+        'command': run['command'],
+        'show_diff': show_diff,
+        'show_debdiff': show_debdiff,
         "get_revision_info": get_revision_info,
-        "review_instructions_url": request.app.get("review_instructions_url"),
-        "package_name": package,
-        "run_id": run_id,
-        "command": command,
-        "branches": result_branches,
-        "suite": suite,
-        "suites": campaigns,
-        "campaigns": campaigns,
-        "value": value,
-        'finish_time': finish_time,
-        "publishable_only": publishable_only,
-        "MAX_DIFF_SIZE": MAX_DIFF_SIZE,
-        "todo": [
-            {
-                'package': entry['package'],
-                'command': entry['command'],
-                'id': entry['id'],
-                'branches': [rb[0] for rb in entry['result_branches']],
-                'value': entry['value'],
-                'finish_time': entry['finish_time'].isoformat(),
-            } for entry in entries
-        ],
     }
-    return await render_template_for_request("cupboard/review.html", request, kwargs)
