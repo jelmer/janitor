@@ -20,7 +20,7 @@
             function loadRun(package, run_id) {
                 $('.review-button').blur()
                 $('.review-button').disabled = "disabled";
-		$('.evaluate').load(evaluate_url.replace('{run_id}', run_id)).done(function() {
+		$('.evaluate').load(evaluate_url.replace('RUN_ID', run_id)).done(function() {
                     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
                     $('#run-id').attr('value', run_id);
                     $('#package-name').attr('value', package);
