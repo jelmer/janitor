@@ -24,5 +24,7 @@ module = [
     "aiohttp_wsgi.*",
     # https://github.com/MagicStack/asyncpg/issues/387
     "asyncpg.*",
+    "asyncpg_engine.*",
+    "testing.*",
 ]
 ignore_missing_imports = true

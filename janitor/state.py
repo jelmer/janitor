@@ -51,8 +51,7 @@ async def init_types(conn):
 
 
 def create_pool(uri, *args, **kwargs) -> asyncpg.pool.Pool:
-    kwargs['init'] = init_types
-    return asyncpg.create_pool(uri, *args, **kwargs)
+    return asyncpg.create_pool(uri, init=init_types)
 
 
 def get_result_branch(result_branches, role):
