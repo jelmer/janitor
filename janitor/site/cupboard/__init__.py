@@ -19,8 +19,9 @@
 
 from datetime import datetime
 import re
-from typing import Optional
+from typing import Optional, List, Any
 
+import asyncpg
 import aiozipkin
 
 from aiohttp import web
@@ -566,6 +567,22 @@ def register_cupboard_link(title, shortlink):
     _extra_cupboard_links.append((title, shortlink))
 
 
+@routes.get("/cupboard/evaluate/{run_id}", name="cupboard-evaluate")
+@html_template("cupboard/evaluate.html")
+async def handle_cupboard_evaluate(request):
+    run_id = request.match_info['run_id']
+    span = aiozipkin.request_span(request)
+
+    from .review import generate_evaluate
+
+    return await generate_evaluate(
+        request.app['pool'], 
+        request.app['vcs_managers'],
+        request.app['http_client_session'],
+        request.app['differ_url'],
+        run_id, span)
+
+
 def register_cupboard_endpoints(
         app, *, config, publisher_url, runner_url, trace_configs=None):
     app.router.add_routes(routes)
@@ -573,3 +590,53 @@ def register_cupboard_endpoints(
     app.add_subapp('/cupboard/api', create_app(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
         trace_configs=trace_configs))
+    app['evaluate_url'] = app.router['cupboard-evaluate'].url_for(run_id='{run_id}')
+
+
+async def iter_needs_review(
+        conn: asyncpg.Connection,
+        campaigns: Optional[List[str]] = None,
+        limit: Optional[int] = None,
+        publishable_only: bool = False,
+        required_only: Optional[bool] = None,
+        reviewer: Optional[str] = None):
+    args: List[Any] = []
+    query = "SELECT id, package, suite FROM publish_ready"
+    conditions = []
+    if campaigns is not None:
+        args.append(campaigns)
+        conditions.append("suite = ANY($%d::text[])" % len(args))
+
+    publishable_condition = (
+        "exists (select from unnest(unpublished_branches) where "
+        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
+    )
+
+    order_by = []
+
+    order_by.append("(SELECT COUNT(*) FROM review WHERE run_id = id) ASC")
+
+    if publishable_only:
+        conditions.append(publishable_condition)
+    else:
+        order_by.append(publishable_condition + " DESC")
+
+    if required_only is not None:
+        args.append(required_only)
+        conditions.append('needs_review = $%d' % (len(args)))
+
+    if reviewer is not None:
+        args.append(reviewer)
+        conditions.append('not exists (select from review where reviewer = $%d and run_id = id)' % (len(args)))
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
+
+    if order_by:
+        query += " ORDER BY " + ", ".join(order_by) + " "
+
+    if limit is not None:
+        query += " LIMIT %d" % limit
+    return await conn.fetch(query, *args)
