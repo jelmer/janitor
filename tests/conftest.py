@@ -11,7 +11,7 @@ pytest_plugins = ["asyncpg_engine", "aiohttp"]
 
 
 @pytest.fixture()
-async def postgres_url() -> str:
+async def postgres_url():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
         try:

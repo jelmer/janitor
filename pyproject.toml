@@ -25,6 +25,6 @@ module = [
     # https://github.com/MagicStack/asyncpg/issues/387
     "asyncpg.*",
     "asyncpg_engine.*",
-    "testing.postgresql.*",
+    "testing.*",
 ]
 ignore_missing_imports = true
