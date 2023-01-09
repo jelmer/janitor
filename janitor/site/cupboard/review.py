@@ -87,7 +87,7 @@ async def generate_review(
     evaluate_url = request.app.get("evaluate_url")
 
     try:
-        async with request.app['http_client_session'].get(str(evaluate_url).replace('{run_id}', run_id), raise_for_status=True) as resp:
+        async with request.app['http_client_session'].get(str(evaluate_url).replace('RUN_ID', run_id), raise_for_status=True) as resp:
             evaluate = await resp.text()
     except (ClientConnectorError, ClientResponseError) as e:
         evaluate = "Unable to retrieve evaluation: %s" % e

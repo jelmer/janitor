@@ -590,7 +590,7 @@ def register_cupboard_endpoints(
     app.add_subapp('/cupboard/api', create_app(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
         trace_configs=trace_configs))
-    app['evaluate_url'] = app.router['cupboard-evaluate'].url_for(run_id='{run_id}')
+    app['evaluate_url'] = app.router['cupboard-evaluate'].url_for(run_id='RUN_ID')
 
 
 async def iter_needs_review(
