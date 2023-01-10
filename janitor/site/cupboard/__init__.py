@@ -272,10 +272,14 @@ async def handle_review_post(request):
                 'reschedule': 'rescheduled',
                 'abstain': 'abstained'}[post["verdict"].lower()]
             review_comment = post.get("review_comment")
+            try:
+                user = request['user']['email']
+            except KeyError:
+                user = request['user']['name']
             await store_review(
                 conn, post["run_id"], verdict=verdict,
                 comment=review_comment,
-                reviewer=request['user'],
+                reviewer=user,
                 is_qa_reviewer=is_qa_reviewer(request))
         text = await generate_review(
             conn,
