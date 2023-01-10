@@ -46,7 +46,7 @@
 		    return;
 	        }
                 $.ajax({
-		    url : "{{ evaluate_url }}".replace('RUN_ID', run_id)",
+		    url : "{{ evaluate_url }}".replace('RUN_ID', run_id),
 		    success : function(result) { preloaded[run_id] = result; }
                 });
 	    }
