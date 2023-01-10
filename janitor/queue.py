@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional, Set, List, Any
+from typing import Optional, Set, List, Any, Tuple
 
 
 import asyncpg
@@ -140,13 +140,13 @@ SELECT
     queue.refresh AS refresh,
     queue.requestor AS requestor,
     queue.change_set AS change_set,
-    package.vcs_type AS vcs_type,
-    package.branch_url AS branch_url,
-    package.subpath AS subpath,
+    codebase.vcs_type AS vcs_type,
+    codebase.branch_url AS branch_url,
+    codebase.subpath AS subpath,
     queue.codebase AS codebase
 FROM
     queue
-LEFT JOIN package ON package.name = queue.package
+LEFT JOIN codebase ON codebase.name = queue.codebase
 """
         conditions = []
         args: List[Any] = []
@@ -163,8 +163,8 @@ LEFT JOIN package ON package.name = queue.package
             args.append(exclude_hosts)
             # TODO(jelmer): Use package.hostname when kali upgrades to postgres 12+
             conditions.append(
-                "NOT (package.branch_url IS NOT NULL AND "
-                "SUBSTRING(package.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
+                "NOT (codebase.branch_url IS NOT NULL AND "
+                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -179,7 +179,7 @@ LIMIT 1
         row = await self.conn.fetchrow(query, *args)
         if row is None:
             return None, None
-        if row['vcs_type']:
+        if row['branch_url']:
             vcs_info = {
                 'vcs_type': row['vcs_type'],
                 'branch_url': row['branch_url'],
@@ -241,8 +241,8 @@ queue.id ASC
             context: Optional[str] = None,
             estimated_duration: Optional[timedelta] = None,
             refresh: bool = False,
-            requestor: Optional[str] = None) -> int:
-        return await self.conn.fetchval(
+            requestor: Optional[str] = None) -> Tuple[int, str]:
+        row = await self.conn.fetchrow(
             "INSERT INTO queue "
             "(package, command, priority, bucket, context, "
             "estimated_duration, suite, refresh, requestor, change_set, "
@@ -258,7 +258,7 @@ queue.id ASC
             "command = EXCLUDED.command, codebase = EXCLUDED.codebase "
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
-            "queue.priority >= EXCLUDED.priority) RETURNING id",
+            "queue.priority >= EXCLUDED.priority) RETURNING (id, bucket)",
             package,
             command,
             offset,
@@ -271,6 +271,7 @@ queue.id ASC
             change_set,
             codebase,
         )
+        return row[0]
 
     async def get_buckets(self):
         return await self.conn.fetch(

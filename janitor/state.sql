@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    check (command != '')
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
+CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, '')); -- DEPRECATE
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 
