@@ -101,7 +101,7 @@ async def generate_review(
         "campaign": campaign,
         "campaigns": campaigns,
         "evaluate": evaluate,
-        "evaluate_url": evaluate_url,
+        "evaluate_url": str(request.app["evaluate_url"]),
         "publishable_only": publishable_only,
         "todo": [
             {
