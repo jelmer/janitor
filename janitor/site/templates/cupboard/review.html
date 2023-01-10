@@ -18,9 +18,9 @@
 	<div id="evaluate">{{ evaluate|safe }}</div>
         <script type="text/javascript">
             function loadRun(package, run_id) {
-                $('.review-button').blur()
+                $('.review-button').blur();
                 $('.review-button').disabled = "disabled";
-                $('.evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() {
+                $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() {
                     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
                     $('#run-id').attr('value', run_id);
                     $('#package-name').attr('value', package);
