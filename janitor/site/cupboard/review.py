@@ -181,9 +181,10 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
 
     async def show_debdiff():
         with span.new_child("sql:unchanged-run"):
-            unchanged_run = await get_unchanged_run(
-                conn, run['package'], run['main_branch_revision'].encode('utf-8')
-            )
+            async with db.acquire() as conn:
+                unchanged_run = await get_unchanged_run(
+                    conn, run['package'], run['main_branch_revision'].encode('utf-8')
+                )
         if unchanged_run is None:
             return "<p>No control run</p>"
         try:
