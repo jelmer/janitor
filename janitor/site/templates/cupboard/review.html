@@ -17,22 +17,54 @@
         </p>
 	<div id="evaluate">{{ evaluate|safe }}</div>
         <script type="text/javascript">
-            function loadRun(package, run_id) {
+
+	    function disallowReview() {
                 $('.review-button').blur();
                 $('.review-button').disabled = "disabled";
-                $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() {
-                    $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
-                    $('#run-id').attr('value', run_id);
-                    $('#package-name').attr('value', package);
-                    $('.review-button').disabled = "enabled";
-                });
+	    }
+
+            function allowReview(package, run_id) {
+                $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
+                $('#run-id').attr('value', run_id);
+                $('#package-name').attr('value', package);
+                $('.review-button').disabled = "enabled";
+	    }
+
+            function loadRun(package, run_id) {
+	        disallowReview();
+		if (run_id in preloaded) {
+		    $('#evaluate').html(preloaded[run_id]);
+		    delete preloaded[run_id];
+		} else {
+                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(package, run_id); });
+		}
+	        preloadSome();
             }
 
+	    function preload(package, run_id) {
+	        if (run_id in preloaded) {
+		    return;
+	        }
+                $.ajax({
+		    url : "{{ evaluate_url }}".replace('RUN_ID', run_id)",
+		    success : function(result) { preloaded[run_id] = result; }
+                });
+	    }
+
+	    function preloadSome() {
+	        for (var job in slice(todo, 0, 5)) {
+                    preload(job.package, job.id);
+                }
+	    }
+
+	    var preloaded = {};
             var todo = {{ todo[1: ] | tojson }};
             var queued = new Set();
             todo.forEach(function(entry) {
                 queued.add(entry[1]);
             });
+
+	    preloadSome();
 
             $(function() {
                 $('.review-button').attr('type', 'button');
