@@ -381,7 +381,7 @@ cd {{ package }}
                     {%- endif -%}
 		{%- elif k == 'previous_mp' -%}
 		    {%- if r -%}
-		    	{%- if d -%}no relevant previous merge proposals
+		    	{%- if not d -%}no relevant previous merge proposals
 			{%- else -%}merge proposals for previous run were not rejected:
 		        {% for (url, status) in d %}<a href="{{ url }}">{{ status }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
 			{%- endif -%}

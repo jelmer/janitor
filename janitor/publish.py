@@ -894,7 +894,7 @@ async def already_published(
     row = await conn.fetchrow(
         """\
 SELECT * FROM publish
-WHERE mode = ANY($1::text[]) AND revision = $2 AND package = $3 AND branch_name = $4
+WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND package = $3 AND branch_name = $4
 """,
         modes,
         revision.decode("utf-8"),
