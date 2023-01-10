@@ -11,61 +11,61 @@
         <p>
             <a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}/"
                id="full-run-link">Full Run</a>
-	    {% if review_instructions_url %}
-	    <a href="{{ review_instructions_url }}">Review Instructions</a>
-	    {% endif %}
+            {% if review_instructions_url %}
+            <a href="{{ review_instructions_url }}">Review Instructions</a>
+            {% endif %}
         </p>
-	<div id="evaluate">{{ evaluate|safe }}</div>
+        <div id="evaluate">{{ evaluate|safe }}</div>
         <script type="text/javascript">
 
-	    function disallowReview() {
+            function disallowReview() {
                 $('.review-button').blur();
                 $('.review-button').disabled = "disabled";
-	    }
+            }
 
             function allowReview(package, run_id) {
                 $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
                 $('#run-id').attr('value', run_id);
                 $('#package-name').attr('value', package);
                 $('.review-button').disabled = "enabled";
-	    }
-
-            function loadRun(package, run_id) {
-	        disallowReview();
-		if (run_id in preloaded) {
-		    $('#evaluate').html(preloaded[run_id]);
-		    delete preloaded[run_id];
-		    allowReview(package, run_id);
-		} else {
-                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(package, run_id); });
-		}
-	        preloadSome();
             }
 
-	    function preload(package, run_id) {
-	        if (run_id in preloaded) {
-		    return;
-	        }
-                $.ajax({
-		    url : "{{ evaluate_url }}".replace('RUN_ID', run_id),
-		    success : function(result) { preloaded[run_id] = result; }
-                });
-	    }
+            function loadRun(package, run_id) {
+                disallowReview();
+                if (run_id in preloaded) {
+                    $('#evaluate').html(preloaded[run_id]);
+                    delete preloaded[run_id];
+                    allowReview(package, run_id);
+                } else {
+                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(package, run_id); });
+                }
+                preloadSome();
+            }
 
-	    function preloadSome() {
-	        for (i in todo.slice(0, 5)) {
+            function preload(package, run_id) {
+                if (run_id in preloaded) {
+                    return;
+                }
+                $.ajax({
+                    url : "{{ evaluate_url }}".replace('RUN_ID', run_id),
+                    success : function(result) { preloaded[run_id] = result; }
+                });
+            }
+
+            function preloadSome() {
+                for (i in todo.slice(0, 5)) {
                     preload(todo[i].package, todo[i].id);
                 }
-	    }
+            }
 
-	    var preloaded = {};
+            var preloaded = {};
             var todo = {{ todo[1: ] | tojson }};
             var queued = new Set();
             todo.forEach(function(entry) {
                 queued.add(entry[1]);
             });
 
-	    preloadSome();
+            preloadSome();
 
             $(function() {
                 $('.review-button').attr('type', 'button');
