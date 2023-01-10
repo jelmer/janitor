@@ -52,7 +52,7 @@
 	    }
 
 	    function preloadSome() {
-	        for (var job in slice(todo, 0, 5)) {
+	        for (var job in todo.slice(0, 5)) {
                     preload(job.package, job.id);
                 }
 	    }
