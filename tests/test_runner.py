@@ -15,11 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-
-import aiozipkin
 from datetime import datetime, timedelta
 from io import BytesIO
 import os
+
+from aiohttp import MultipartWriter
+import aiozipkin
 from fakeredis.aioredis import FakeRedis
 from janitor.config import Config
 from janitor.queue import QueueItem
@@ -33,6 +34,8 @@ from janitor.runner import (
     Backchannel,
     queue_item_env,
 )
+from janitor.debian import dpkg_vendor
+from janitor.vcs import get_vcs_managers
 
 
 class MemoryLogFileManager(LogFileManager):
@@ -70,10 +73,17 @@ class MemoryLogFileManager(LogFileManager):
                 yield (pkg, run_id, name)
 
 
-async def create_client(aiohttp_client, queue_processor=None):
+async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None):
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4='127.0.0.1', port=80)
     tracer = await aiozipkin.create_custom(endpoint)
     config = Config()
+    unstable = config.distribution.add()
+    unstable.name = "unstable"
+    if campaigns:
+        for name in campaigns:
+            campaign = config.campaign.add()
+            campaign.name = name
+            campaign.debian_build.base_distribution = "unstable"
     return await aiohttp_client(await create_app(queue_processor, config, None, tracer))
 
 
@@ -91,7 +101,6 @@ async def test_get_active_runs(aiohttp_client, db):
     resp = await client.get("/active-runs")
     assert resp.status == 200
     assert [] == await resp.json()
-
 
 
 async def test_health(aiohttp_client):
@@ -132,10 +141,11 @@ def test_is_log_filename():
     assert not is_log_filename("foo.deb")
 
 
-async def create_queue_processor(db=None):
+async def create_queue_processor(db=None, vcs_managers=None):
     redis = FakeRedis()
     return QueueProcessor(
-        db, redis, run_timeout=30, logfile_manager=MemoryLogFileManager())
+        db, redis, run_timeout=30, logfile_manager=MemoryLogFileManager(),
+        public_vcs_managers=vcs_managers)
 
 
 async def test_watch_dog():
@@ -220,20 +230,132 @@ async def test_submit_codebase(aiohttp_client, db):
     }] == await resp.json()
 
 
-async def test_submit_candidate(aiohttp_client, db):
-    qp = await create_queue_processor(db)
-    client = await create_client(aiohttp_client, qp)
+async def test_submit_candidate(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
     resp = await client.post("/codebases", json=[{
         "name": "foo",
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
+    async with db.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
+
     resp = await client.post("/candidates", json=[{
         "package": "foo",
         "campaign": "mycampaign",
+        "codebase": "foo",
+        "command": "true",
     }])
     assert resp.status == 200
-    assert ('unknown_packages', ['foo']) in (await resp.json()).items()
+    [result] = (await resp.json())['success']
+    assert result == {
+        'bucket': 'default',
+        'campaign': 'mycampaign',
+        'change_set': None,
+        'codebase': 'foo',
+        'estimated_duration': 15.0,
+        'offset': -1.0,
+        'queue-id': 1,
+        'refresh': False,
+    }
+
+    resp = await client.post("/active-runs", json={})
+    assert resp.status == 201
+    assignment = await resp.json()
+    assert assignment == {
+        'branch': {
+            'additional_colocated_branches': None,
+            'cached_url': None,
+            'default-empty': False,
+            'subpath': None,
+            'url': 'https://example.com/foo.git',
+            'vcs_type': None
+        },
+        'build': {
+            'config': {
+                'build-distribution': 'mycampaign',
+                'build-extra-repositories': [],
+                'build-suffix': '',
+                'dep_server_url': None,
+                'lintian': {'profile': ''}
+            },
+            'environment': {
+                'DEB_VENDOR': dpkg_vendor(),
+                'DISTRIBUTION': 'unstable',
+            },
+            'target': 'debian',
+        },
+        'campaign': 'mycampaign',
+        'codebase': 'foo',
+        'codemod': {'command': 'true', 'environment': {}},
+        'command': 'true',
+        'description': 'mycampaign on foo',
+        'env': {
+            'DEB_VENDOR': dpkg_vendor(),
+            'DISTRIBUTION': 'unstable',
+            'PACKAGE': 'foo'
+        },
+        'force-build': False,
+        'id': assignment['id'],
+        'queue_id': 1,
+        'resume': None,
+        'skip-setup-validation': False,
+        'target_repository': {'url': None, 'vcs_type': None},
+    }
+
+    ts = datetime.utcnow().isoformat()
+
+    with MultipartWriter("form-data") as mpwriter:
+        mpwriter.append_json(
+            {"finish_time": ts, "start_time": ts},
+            headers=[  # type: ignore
+                (
+                    "Content-Disposition",
+                    'attachment; filename="result.json"; '
+                    "filename*=utf-8''result.json",
+                )
+            ],
+        )  # type: ignore
+
+    resp = await client.post(f"/active-runs/{assignment['id']}/finish", data=mpwriter)
+    assert resp.status == 201
+    ret = await resp.json()
+    cs = ret['result']['change_set']
+    assert ret == {
+        "id": assignment["id"],
+        'artifacts': None,
+        'filenames': [],
+        'logs': [],
+        'result': {
+            'branches': None,
+            'campaign': 'mycampaign',
+            'change_set': cs,
+            'code': 'missing-result-code',
+            'codebase': None,
+            'codemod': None,
+            'description': None,
+            'duration': 0.0,
+            'failure_details': None,
+            'failure_stage': None,
+            'finish_time': ts,
+            'log_id': assignment['id'],
+            'logfilenames': [],
+            'main_branch_revision': None,
+            'package': 'foo',
+            'remotes': None,
+            'resume': None,
+            'revision': None,
+            'start_time': ts,
+            'tags': None,
+            'target': {},
+            'transient': None,
+            'value': None,
+        },
+    }
 
 
 async def test_submit_unknown_candidate(aiohttp_client, db):
@@ -245,3 +367,24 @@ async def test_submit_unknown_candidate(aiohttp_client, db):
     }])
     assert resp.status == 200
     assert ('unknown_packages', ['foo']) in (await resp.json()).items()
+
+
+async def test_submit_unknown_campaign(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    async with db.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
+
+    resp = await client.post("/candidates", json=[{
+        "package": "foo",
+        "campaign": "mycampaign",
+        "codebase": "foo"
+    }])
+    assert resp.status == 200
+    assert ('unknown_campaigns', ['mycampaign']) in (await resp.json()).items()

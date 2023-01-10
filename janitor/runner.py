@@ -376,12 +376,13 @@ class DebianBuilder(Builder):
         elif self.distro_config.chroot:
             config["chroot"] = self.distro_config.chroot
 
-        config["base-apt-repository"] = "%s %s %s" % (
-            self.distro_config.archive_mirror_uri,
-            self.distro_config.name,
-            " ".join(self.distro_config.component),
-        )
-        config["base-apt-repository-signed-by"] = self.distro_config.signed_by
+        if self.distro_config.archive_mirror_uri and self.distro_config.component:
+            config["base-apt-repository"] = "%s %s %s" % (
+                self.distro_config.archive_mirror_uri,
+                self.distro_config.name,
+                " ".join(self.distro_config.component),
+            )
+            config["base-apt-repository-signed-by"] = self.distro_config.signed_by or None
         config["dep_server_url"] = self.dep_server_url
 
         return config
@@ -399,11 +400,12 @@ class DebianBuilder(Builder):
         elif self.distro_config.chroot:
             env["CHROOT"] = self.distro_config.chroot
 
-        env["APT_REPOSITORY"] = "%s %s %s" % (
-            self.distro_config.archive_mirror_uri,
-            self.distro_config.name,
-            " ".join(self.distro_config.component),
-        )
+        if self.distro_config.archive_mirror_uri and self.distro_config.component:
+            env["APT_REPOSITORY"] = "%s %s %s" % (
+                self.distro_config.archive_mirror_uri,
+                self.distro_config.name,
+                " ".join(self.distro_config.component),
+            )
         # TODO(jelmer): Set env["APT_REPOSITORY_KEY"]
 
         upstream_branch_url = await conn.fetchval(
@@ -1641,7 +1643,8 @@ class QueueProcessor(object):
             for i in await self.redis.hkeys('assigned-queue-items')])
         return await queue.next_item(
             campaign=campaign, package=package,
-            assigned_queue_items=assigned_queue_items)
+            assigned_queue_items=assigned_queue_items,
+            exclude_hosts=exclude_hosts)
 
 
 @routes.get("/queue/position", name="queue-position")
@@ -1696,7 +1699,7 @@ async def handle_schedule_control(request):
             codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         with span.new_child('do-schedule-control'):
-            offset, estimated_duration, queue_id = await do_schedule_control(
+            offset, estimated_duration, queue_id, bucket = await do_schedule_control(
                 conn,
                 package=package,
                 change_set=change_set,
@@ -1763,7 +1766,7 @@ async def handle_schedule(request):
 
         try:
             with span.new_child('do-schedule'):
-                offset, estimated_duration, queue_id, = await do_schedule(
+                offset, estimated_duration, queue_id, bucket = await do_schedule(
                     conn,
                     package,
                     campaign,
@@ -2024,7 +2027,7 @@ async def handle_candidates_upload(request):
                         unknown_codebases.append(candidate['codebase'])
                         continue
                     if candidate['campaign'] not in known_campaign_names:
-                        logging.warning('unknown suite %r', candidate['campaign'])
+                        logging.warning('unknown campaign %r', candidate['campaign'])
                         unknown_campaigns.append(candidate['campaign'])
                         continue
 
@@ -2084,7 +2087,7 @@ async def handle_candidates_upload(request):
                             await insert_followup_stmt.execute(candidate_id, origin)
 
                     with span.new_child('schedule'):
-                        offset, estimated_duration, queue_id, = await do_schedule(
+                        offset, estimated_duration, queue_id, bucket = await do_schedule(
                             conn,
                             candidate['package'],
                             candidate['campaign'],
@@ -2387,7 +2390,7 @@ async def next_item(
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
 
-        if resume_branch is None and not item.refresh:
+        if resume_branch is None and not item.refresh and vcs_type is not None:
             with span.new_child('resume-branch:open'):
                 try:
                     vcs_manager = queue_processor.public_vcs_managers[vcs_type]
