@@ -595,8 +595,8 @@ async def consider_publish_run(
         dry_run=False):
     if run.revision is None:
         logger.warning(
-            "Run %s is publish ready, but does not have revision set.", run.id
-        )
+            "Run %s is publish ready, but does not have revision set.", run.id,
+            extra={'run_id': run.id})
         return {}
     campaign_config = get_campaign_config(config, run.campaign)
     attempt_count = await get_publish_attempt_count(
@@ -610,7 +610,7 @@ async def consider_publish_run(
             run.campaign,
             run.id,
             next_try_time - datetime.utcnow(),
-        )
+            extra={'run_id': run.id})
         exponential_backoff_count.inc()
         return {}
 
@@ -620,24 +620,23 @@ async def consider_publish_run(
         if push_limit == 0:
             logger.info(
                 "Not pushing %s / %s: push limit reached",
-                run.package,
-                run.campaign,
-            )
+                run.package, run.campaign, extra={'run_id': run.id})
             push_limit_count.inc()
             return {}
     if run.branch_url is None:
         logger.warning(
             '%s: considering publishing for branch without branch url',
-            run.id)
+            run.id, extra={'run_id': run.id})
         missing_branch_url_count.inc()
         # TODO(jelmer): Support target_branch_url ?
         return {}
 
-    last_mps = await get_previous_mp_status(conn, run.codebase, run.campaign)
+    last_mps: List[Tuple[str, str]] = await get_previous_mp_status(
+        conn, run.codebase, run.campaign)
     if any(last_mp[1] in ('rejected', 'closed') for last_mp in last_mps):
         logger.warning(
             '%s: last merge proposal was rejected by maintainer: %r', run.id,
-            last_mps)
+            last_mps, extra={'run_id': run.id})
         rejected_last_mp_count.inc()
         return {}
 
@@ -652,13 +651,15 @@ async def consider_publish_run(
     ) in unpublished_branches:
         if publish_mode is None:
             logger.warning(
-                "%s: No publish mode for branch with role %s", run.id, role)
+                "%s: No publish mode for branch with role %s", run.id, role,
+                extra={'run_id': run.id})
             missing_publish_mode_count.labels(role=role).inc()
             continue
         if role == 'main' and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
-                "auxiliary branches were published.", run.id, role)
+                "auxiliary branches were published.", run.id, role,
+                extra={'run_id': run.id})
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
@@ -1982,7 +1983,7 @@ async def bucket_rate_limits_request(request):
     return web.json_response(ret)
 
 
-async def get_previous_mp_status(conn, codebase, campaign):
+async def get_previous_mp_status(conn, codebase: str, campaign: str):
     rows = await conn.fetch("""\
 SELECT run.id, ARRAY_AGG((merge_proposal.url, merge_proposal.status))
 FROM run
@@ -1997,7 +1998,7 @@ ORDER BY run.finish_time DESC
     if len(rows) == 0:
         return []
 
-    return rows[0]
+    return rows[1]
 
 
 @routes.get("/rate-limits", name="rate-limits")
@@ -2069,7 +2070,7 @@ WHERE run.id = $1
             attempt_count = 0
 
         with span.new_child('sql:last-mp'):
-            last_mps = await get_previous_mp_status(
+            last_mps: List[Tuple[str, str]] = await get_previous_mp_status(
                 conn, run['codebase'], run['campaign'])
     ret = {}
     ret['success'] = {
