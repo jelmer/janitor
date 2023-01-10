@@ -375,7 +375,7 @@ async def handle_publish_scan(request):
         return web.Response(text="unable to contact publisher", status=400)
 
 
-def create_app(*, config, publisher_url, runner_url, trace_configs=None):
+def create_app(*, config, publisher_url, runner_url, trace_configs=None, db=None):
     app = web.Application()
     app['config'] = config
     app.router.add_routes(routes)
@@ -389,6 +389,9 @@ def create_app(*, config, publisher_url, runner_url, trace_configs=None):
 
     app['publisher_url'] = publisher_url
     app['runner_url'] = runner_url
-    setup_postgres(app)
+    if db is None:
+        setup_postgres(app)
+    else:
+        app['pool'] = db
     setup_logfile_manager(app, trace_configs=trace_configs)
     return app

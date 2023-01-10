@@ -584,12 +584,12 @@ async def handle_cupboard_evaluate(request):
 
 
 def register_cupboard_endpoints(
-        app, *, config, publisher_url, runner_url, trace_configs=None):
+        app, *, config, publisher_url, runner_url, trace_configs=None, db=None):
     app.router.add_routes(routes)
     from .api import create_app
     app.add_subapp('/cupboard/api', create_app(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
-        trace_configs=trace_configs))
+        trace_configs=trace_configs, db=db))
     app['evaluate_url'] = app.router['cupboard-evaluate'].url_for(run_id='RUN_ID')
 
 

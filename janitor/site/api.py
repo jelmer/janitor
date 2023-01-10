@@ -815,6 +815,7 @@ def create_app(
     config: Config,
     external_url: Optional[URL] = None,
     trace_configs=None,
+    db=None
 ) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -835,7 +836,10 @@ def create_app(
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
 
-    setup_postgres(app)
+    if db is None:
+        setup_postgres(app)
+    else:
+        app['pool'] = db
 
     # app.middlewares.append(apispec_validation_middleware)
     return app
