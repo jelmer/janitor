@@ -201,7 +201,7 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
         return False
 
     async def packages_for_run(self, run_id, suite_name, package, arch):
-        cache_path = os.path.join(self.cache_directory, arch, run_id)
+        cache_path = os.path.join(self.cache_directory, f"binary-{arch}", run_id)
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         try:
             with open(cache_path, "rb") as f:
