@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 import os
 from fakeredis.aioredis import FakeRedis
+from janitor.config import Config
 from janitor.queue import QueueItem
 from janitor.logs import LogFileManager
 from janitor.runner import (
@@ -72,19 +73,20 @@ class MemoryLogFileManager(LogFileManager):
 async def create_client(aiohttp_client, queue_processor=None):
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4='127.0.0.1', port=80)
     tracer = await aiozipkin.create_custom(endpoint)
-    return await aiohttp_client(await create_app(queue_processor, None, None, tracer))
+    config = Config()
+    return await aiohttp_client(await create_app(queue_processor, config, None, tracer))
 
 
-async def test_status(aiohttp_client):
-    qp = await create_queue_processor()
+async def test_status(aiohttp_client, db):
+    qp = await create_queue_processor(db)
     client = await create_client(aiohttp_client, qp)
     resp = await client.get("/status")
     assert resp.status == 200
     assert {'avoid_hosts': [], 'processing': [], 'rate_limit_hosts': {}} == await resp.json()
 
 
-async def test_get_active_runs(aiohttp_client):
-    qp = await create_queue_processor()
+async def test_get_active_runs(aiohttp_client, db):
+    qp = await create_queue_processor(db)
     client = await create_client(aiohttp_client, qp)
     resp = await client.get("/active-runs")
     assert resp.status == 200
@@ -130,10 +132,10 @@ def test_is_log_filename():
     assert not is_log_filename("foo.deb")
 
 
-async def create_queue_processor():
+async def create_queue_processor(db=None):
     redis = FakeRedis()
     return QueueProcessor(
-        None, redis, run_timeout=30, logfile_manager=MemoryLogFileManager())
+        db, redis, run_timeout=30, logfile_manager=MemoryLogFileManager())
 
 
 async def test_watch_dog():
@@ -192,3 +194,54 @@ async def test_register_run():
 def test_queue_item_env():
     item = QueueItem(id='some-id', package='package', context={}, command='ls', estimated_duration=timedelta(seconds=30), campaign='campaign', refresh=False, requestor='somebody', change_set=None, codebase='codebase')
     assert queue_item_env(item) == {'PACKAGE': 'package'}
+
+
+async def test_submit_codebase(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    assert {} == await resp.json()
+
+    resp = await client.get("/codebases")
+    assert resp.status == 200
+    assert [{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git",
+        'url': 'https://example.com/foo.git',
+        'branch': None,
+        'subpath': None,
+        'vcs_type': None,
+        'vcs_last_revision': None,
+        'value': None,
+    }] == await resp.json()
+
+
+async def test_submit_candidate(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    resp = await client.post("/candidates", json=[{
+        "package": "foo",
+        "campaign": "mycampaign",
+    }])
+    assert resp.status == 200
+    assert ('unknown_packages', ['foo']) in (await resp.json()).items()
+
+
+async def test_submit_unknown_candidate(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.post("/candidates", json=[{
+        "package": "foo",
+        "campaign": "mycampaign",
+    }])
+    assert resp.status == 200
+    assert ('unknown_packages', ['foo']) in (await resp.json()).items()
