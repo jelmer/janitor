@@ -34,6 +34,7 @@ from janitor.runner import (
     Backchannel,
     queue_item_env,
 )
+from janitor.debian import dpkg_vendor
 from janitor.vcs import get_vcs_managers
 
 
@@ -283,7 +284,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
                 'lintian': {'profile': ''}
             },
             'environment': {
-                'DEB_VENDOR': 'Debian',
+                'DEB_VENDOR': dpkg_vendor(),
                 'DISTRIBUTION': 'unstable',
             },
             'target': 'debian',
@@ -294,7 +295,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         'command': 'true',
         'description': 'mycampaign on foo',
         'env': {
-            'DEB_VENDOR': 'Debian',
+            'DEB_VENDOR': dpkg_vendor(),
             'DISTRIBUTION': 'unstable',
             'PACKAGE': 'foo'
         },
