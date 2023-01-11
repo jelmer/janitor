@@ -734,7 +734,7 @@ SELECT * FROM publish_ready
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    order_by = ["change_set_state = 'publishing' DESC", "change_set"]
+    order_by = ["change_set_state = 'publishing' DESC"]
 
     order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
 
