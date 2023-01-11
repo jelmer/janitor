@@ -659,7 +659,7 @@ async def handle_runner_kill(request):
     with span.new_child('runner:kill'):
         url = URL(request.app['runner_url']) / "kill" / run_id
         try:
-            async with request.app['http_client_session'].post(url) as resp:
+            async with request.app['http_client_session'].post(url, raise_for_status=True) as resp:
                 return web.json_response(await resp.json(), status=resp.status)
         except ContentTypeError as e:
             return web.json_response({"reason": "runner returned error %s" % e}, status=400)
@@ -667,6 +667,8 @@ async def handle_runner_kill(request):
             return web.json_response({"reason": "unable to contact runner"}, status=502)
         except asyncio.TimeoutError:
             return web.Response(text="timeout contacting runner", status=502)
+        except ClientResponseError as e:
+            return web.json_response({"reason": str(e)}, status=502)
 
 
 @docs()
