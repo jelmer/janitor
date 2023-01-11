@@ -11,11 +11,19 @@
     Merge Proposal Status - {{ proposal.url }}
 {% endblock page_title %}
 {% block body %}
+<script>
+$(document).ready(function() {
+    $("#refresh").click(function() {
+       $.post("/api/refresh-proposal-status", { url: "{{ proposal.url }}" } );
+    });
+});
+</script>
     <div class="section" id="merge-proposal-status">
         <h1>Merge Proposal Status</h1>
         <ul>
             <li>
                 URL: <a href="{{ proposal.url }}">{{ proposal.url }}</a>
+                <button id="refresh">Refresh</button>
             </li>
             {% if proposal.package %}
                 <li>
@@ -84,13 +92,13 @@
                     {% if '\n' in publish.description %}
                         <pre>{{ publish.description }}</pre>
                     {% else %}
-		    	{% if publish.run_id %}
-			<a href="/cupboard/pkg/{{ proposal.package }}/{{ publish.run_id }}">
-			{% endif %}
+                {% if publish.run_id %}
+            <a href="/cupboard/pkg/{{ proposal.package }}/{{ publish.run_id }}">
+            {% endif %}
                         {{ publish.description }}<!-- {{ publish.revision }} -->
-		    	{% if publish.run_id %}
-			</a>
-			{% endif %}
+                {% if publish.run_id %}
+            </a>
+            {% endif %}
                     {% endif %}
                 </li>
             {% endfor %}
