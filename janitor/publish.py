@@ -1985,20 +1985,22 @@ async def bucket_rate_limits_request(request):
 
 async def get_previous_mp_status(conn, codebase: str, campaign: str):
     rows = await conn.fetch("""\
-SELECT run.id, ARRAY_AGG((merge_proposal.url, merge_proposal.status))
-FROM run
-INNER JOIN merge_proposal ON run.revision = merge_proposal.revision
-WHERE run.codebase = $1
-AND run.suite = $2
-AND run.result_code = 'success'
-AND merge_proposal.status NOT IN ('open', 'abandoned')
-GROUP BY run.id
-ORDER BY run.finish_time DESC
+WITH per_run_mps AS (
+    SELECT run.id AS run_id, run.finish_time,
+    merge_proposal.url AS mp_url, merge_proposal.status AS mp_status
+    FROM run
+    LEFT JOIN merge_proposal ON run.revision = merge_proposal.revision
+    WHERE run.codebase = $1
+    AND run.suite = $2
+    AND run.result_code = 'success'
+    AND merge_proposal.status NOT IN ('open', 'abandoned')
+    GROUP BY run.id, merge_proposal.url
+)
+SELECT mp_url, mp_status FROM per_run_mps
+WHERE run_id = (
+    SELECT run_id FROM per_run_mps ORDER BY finish_time DESC LIMIT 1)
 """, codebase, campaign)
-    if len(rows) == 0:
-        return []
-
-    return rows[1]
+    return rows
 
 
 @routes.get("/rate-limits", name="rate-limits")
