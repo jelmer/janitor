@@ -1571,58 +1571,64 @@ class QueueProcessor(object):
         build_duration.labels(campaign=active_run.campaign).observe(
             result.duration.total_seconds()
         )
-        async with self.database.acquire() as conn, conn.transaction():
-            if not result.change_set:
-                result.change_set = result.log_id
-                await store_change_set(
-                    conn, result.change_set, campaign=result.campaign)
-            try:
-                await store_run(
-                    conn,
-                    run_id=result.log_id,
-                    name=active_run.package,
-                    vcs_type=result.vcs_type,
-                    subpath=result.subpath,
-                    branch_url=result.branch_url,
-                    start_time=result.start_time,
-                    finish_time=result.finish_time,
-                    command=active_run.command,
-                    description=result.description,
-                    instigated_context=active_run.instigated_context,
-                    context=result.context,
-                    main_branch_revision=result.main_branch_revision,
-                    result_code=result.code,
-                    revision=result.revision,
-                    codemod_result=result.codemod_result,
-                    campaign=active_run.campaign,
-                    logfilenames=result.logfilenames,
-                    value=result.value,
-                    worker_name=result.worker_name,
-                    result_branches=result.branches,
-                    result_tags=result.tags,
-                    failure_details=result.failure_details,
-                    failure_stage=result.failure_stage,
-                    resume_from=result.resume_from,
-                    target_branch_url=result.target_branch_url,
-                    change_set=result.change_set,
-                    failure_transient=result.transient,
-                    codebase=result.codebase,
-                )
-            except asyncpg.UniqueViolationError as e:
-                if ((e.table_name == 'run' and e.column_name == 'id')
-                        or e.constraint_name == 'run_pkey'):
-                    logging.info('Unique violation error creating run: %r', e, extra={'run_id': active_run.log_id})
-                    await self.unclaim_run(result.log_id)
-                    raise RunExists(result.log_id) from e
-                raise
-            if result.builder_result:
-                await result.builder_result.store(conn, result.log_id)
-            await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
+        async with self.database.acquire() as conn:
+            async with conn.transaction():
+                if not result.change_set:
+                    result.change_set = result.log_id
+                    await store_change_set(
+                        conn, result.change_set, campaign=result.campaign)
+                try:
+                    await store_run(
+                        conn,
+                        run_id=result.log_id,
+                        name=active_run.package,
+                        vcs_type=result.vcs_type,
+                        subpath=result.subpath,
+                        branch_url=result.branch_url,
+                        start_time=result.start_time,
+                        finish_time=result.finish_time,
+                        command=active_run.command,
+                        description=result.description,
+                        instigated_context=active_run.instigated_context,
+                        context=result.context,
+                        main_branch_revision=result.main_branch_revision,
+                        result_code=result.code,
+                        revision=result.revision,
+                        codemod_result=result.codemod_result,
+                        campaign=active_run.campaign,
+                        logfilenames=result.logfilenames,
+                        value=result.value,
+                        worker_name=result.worker_name,
+                        result_branches=result.branches,
+                        result_tags=result.tags,
+                        failure_details=result.failure_details,
+                        failure_stage=result.failure_stage,
+                        resume_from=result.resume_from,
+                        target_branch_url=result.target_branch_url,
+                        change_set=result.change_set,
+                        failure_transient=result.transient,
+                        codebase=result.codebase,
+                    )
+                except asyncpg.UniqueViolationError as e:
+                    if ((e.table_name == 'run' and e.column_name == 'id')
+                            or e.constraint_name == 'run_pkey'):
+                        logging.info('Unique violation error creating run: %r', e, extra={'run_id': active_run.log_id})
+                        await self.unclaim_run(result.log_id)
+                        raise RunExists(result.log_id) from e
+                    raise
+                if result.builder_result:
+                    await result.builder_result.store(conn, result.log_id)
+                await conn.execute("DELETE FROM queue WHERE id = $1", active_run.queue_id)
 
-        await self.redis.publish('result', json.dumps(result.json()))
-        await self.unclaim_run(result.log_id)
-        await self.redis.publish('queue', json.dumps(await self.status_json()))
-        last_success_gauge.set_to_current_time()
+            await self.redis.publish('result', json.dumps(result.json()))
+            await self.unclaim_run(result.log_id)
+            await self.redis.publish('queue', json.dumps(await self.status_json()))
+            last_success_gauge.set_to_current_time()
+
+            await do_schedule(
+                conn, package=active_run.package, campaign=active_run.campaign,
+                change_set=active_run.change_set,
+                requestor='after run schedule', codebase=result.codebase)
 
     async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
@@ -1877,35 +1883,10 @@ async def handle_codebases_download(request):
 async def handle_codebases_upload(request):
     queue_processor = request.app['queue_processor']
 
-    codebases = []
-    for entry in await request.json():
-        if 'branch_url' in entry:
-            entry['url'], params = urlutils.split_segment_parameters(
-                entry['branch_url'])
-            if 'branch' in params:
-                entry['branch'] = urlutils.unescape(params['branch'])
-        elif 'branch' in entry:
-            entry['branch_url'] = urlutils.join_segment_parameters(
-                entry['url'], {'branch': urlutils.escape(entry['branch'])})
-        elif 'url' in entry:
-            entry['branch_url'] = entry['url']
-        else:
-            entry['branch_url'] = entry['url'] = None
-
-        codebases.append((
-            entry.get('name'),
-            entry['branch_url'],
-            entry['url'],
-            entry.get('branch'),
-            entry.get('subpath'),
-            entry.get('vcs_type'),
-            entry.get('vcs_last_revision'),
-            entry.get('value')))
-
     async with queue_processor.database.acquire() as conn:
         # TODO(jelmer): When a codebase with a certain name already exists,
         # steal its name
-        await conn.executemany(
+        insert_codebase_stmt = await conn.prepare(
             "INSERT INTO codebase "
             "(name, branch_url, url, branch, subpath, vcs_type, "
             "vcs_last_revision, value) "
@@ -1915,8 +1896,31 @@ async def handle_codebases_upload(request):
             "vcs_type = EXCLUDED.vcs_type, "
             "vcs_last_revision = EXCLUDED.vcs_last_revision, "
             "value = EXCLUDED.value, url = EXCLUDED.url, "
-            "branch = EXCLUDED.branch",
-            codebases)
+            "branch = EXCLUDED.branch")
+
+        async with conn.transaction():
+            for entry in await request.json():
+                if 'branch_url' in entry:
+                    entry['url'], params = urlutils.split_segment_parameters(
+                        entry['branch_url'])
+                    if 'branch' in params:
+                        entry['branch'] = urlutils.unescape(params['branch'])
+                elif 'branch' in entry:
+                    entry['branch_url'] = urlutils.join_segment_parameters(
+                        entry['url'], {'branch': urlutils.escape(entry['branch'])})
+                elif 'url' in entry:
+                    entry['branch_url'] = entry['url']
+                else:
+                    entry['branch_url'] = entry['url'] = None
+
+            await insert_candidate_stmt.fetchrow(
+                entry.get('name'), entry['branch_url'], entry['url'],
+                entry.get('branch'), entry.get('subpath'),
+                entry.get('vcs_type'), entry.get('vcs_last_revision'),
+                entry.get('value')))
+
+            # TODO(jelmer): if anything meaningful has changed, reschedule all
+            # runs: https://github.com/jelmer/janitor/issues/107
 
     return web.json_response({})
 
