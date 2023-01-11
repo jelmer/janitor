@@ -17,7 +17,7 @@
 
 """Serve the janitor cupboard site."""
 
-from datetime import datetime
+from datetime import datetime, date
 import re
 from typing import Optional, List, Any
 
@@ -456,35 +456,6 @@ async def handle_merge_proposal(request):
     return await write_merge_proposal(request.app.database, url)
 
 
-async def generate_done_list(db, since: Optional[datetime] = None):
-    async with db.acquire() as conn:
-        oldest = await conn.fetchval(
-            "SELECT MIN(absorbed_at) FROM absorbed_runs")
-
-        if since:
-            orig_runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
-                "ORDER BY absorbed_at DESC NULLS LAST", since)
-        else:
-            orig_runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs "
-                "ORDER BY absorbed_at DESC NULLS LAST")
-
-    mp_user_url_resolver = MergeProposalUserUrlResolver()
-
-    runs = []
-    for orig_run in orig_runs:
-        run = dict(orig_run)
-        if not run['merged_by']:
-            run['merged_by_url'] = None
-        else:
-            run['merged_by_url'] = mp_user_url_resolver.resolve(
-                run['merge_proposal_url'], run['merged_by'])
-        runs.append(run)
-
-    return {"oldest": oldest, "runs": runs, "since": since}
-
-
 @routes.get(
     "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}", name="cupboard-result-file")
 async def handle_result_file(request):
@@ -559,9 +530,39 @@ async def handle_done_proposals(request):
         except ValueError as e:
             raise web.HTTPBadRequest(text="invalid since") from e
     else:
-        since = None
+        # Default to beginning of the month
+        since = datetime.fromisoformat('%04d-%02d-01' % (
+            date.today().year, date.today().month))
 
-    return await generate_done_list(request.app.database, since)
+    async with request.app['pool'].acquire() as conn:
+        oldest = await conn.fetchval(
+            "SELECT MIN(absorbed_at) FROM absorbed_runs")
+
+        if since:
+            orig_runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs WHERE absorbed_at >= $1 "
+                "ORDER BY absorbed_at DESC NULLS LAST", since)
+        else:
+            orig_runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs "
+                "ORDER BY absorbed_at DESC NULLS LAST")
+
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
+
+    return {"oldest": oldest, "runs": runs, "since": since}
+
+
+
 
 
 _extra_cupboard_links = []
