@@ -1313,7 +1313,7 @@ async def publish_and_store(
                     if campaign_config.merge_proposal else None),
             )
         except BranchBusy as e:
-            logging.debug("Branch %r was busy while publishing",
+            logger.debug("Branch %r was busy while publishing",
                           e.branch_url)
             return
         except PublishFailure as e:
@@ -2330,7 +2330,7 @@ ORDER BY length(branch_url) DESC
         possible_transports=possible_transports)
     if (source_branch.controldir.user_url.rstrip('/') != url.rstrip('/')
             and source_branch.name != branch):
-        logging.info(
+        logger.info(
             'Did not resolve branch URL to package: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
@@ -2540,7 +2540,7 @@ async def check_straggler(proposal_info_manager, url):
                 # TODO(jelmer): Keep it but leave a tumbestone around?
                 await proposal_info_manager.delete_proposal_info(url)
             else:
-                logging.warning(
+                logger.warning(
                     'Got status %d loading straggler %r', url)
 
 
@@ -2577,7 +2577,9 @@ async def check_existing_mp(
 
     if revision is None:
         if source_branch_url is None:
-            logger.warning("No source branch for %r", mp)
+            logger.warning(
+                "No source branch for %r", mp,
+                extra={'mp_url': mp.url})
             revision = None
             source_branch_name = None
         else:
@@ -2614,12 +2616,14 @@ async def check_existing_mp(
             if package_name is None:
                 logger.warning(
                     "No package known for %s (%s)", mp.url, target_branch_url
+                    extra={'mp_url': mp.url}
                 )
             else:
                 logger.info(
                     "Guessed package name (%s) for %s based on revision.",
                     package_name,
                     mp.url,
+                    extra={'mp_url': mp.url}
                 )
         else:
             if source_branch_name is not None:
@@ -2663,8 +2667,9 @@ async def check_existing_mp(
         if package_name and source_branch_name:
             campaign, role = find_campaign_by_branch_name(config, source_branch_name)
             if campaign:
-                logging.warning(
-                    'Recovered orphaned merge proposal %s', mp.url)
+                logger.warning(
+                    'Recovered orphaned merge proposal %s', mp.url,
+                    extra={'mp_url': mp.url})
                 last_run = await get_last_effective_run(
                     conn, package_name, campaign)
                 if last_run is None:
@@ -2681,13 +2686,14 @@ async def check_existing_mp(
                             codebase=None
                         )
                     except CandidateUnavailable as e:
-                        logging.warning(
+                        logger.warning(
                             'Candidate unavailable while attempting to reschedule '
                             'orphaned %s: %s/%s',
-                            mp.url, package_name, campaign)
+                            mp.url, package_name, campaign,
+                            extra={'mp_url': mp.url})
                         raise NoRunForMergeProposal(mp, revision) from e
                     else:
-                        logging.warning('Rescheduled')
+                        logger.warning('Rescheduled', extra={'mp_url': mp.url})
                         return False
                 else:
                     mp_run = {
@@ -2702,7 +2708,7 @@ async def check_existing_mp(
                         'revision': revision.decode('utf-8'),
                         'value': None,
                     }
-                    logging.warning('Going ahead with dummy old run')
+                    logger.warning('Going ahead with dummy old run', extra={'mp_url': mp.url})
             else:
                 raise NoRunForMergeProposal(mp, revision)
         else:
@@ -2712,7 +2718,7 @@ async def check_existing_mp(
 
     if mp_remote_branch_name is None:
         if target_branch_url is None:
-            logger.warning("No target branch for %r", mp)
+            logger.warning("No target branch for %r", mp, extra={'mp_url': mp.url})
         else:
             try:
                 mp_remote_branch_name = (await asyncio.to_thread(
@@ -2724,13 +2730,13 @@ async def check_existing_mp(
 
     last_run = await get_last_effective_run(conn, mp_run['package'], mp_run['campaign'])
     if last_run is None:
-        logger.warning("%s: Unable to find any relevant runs.", mp.url)
+        logger.warning("%s: Unable to find any relevant runs.", mp.url, extra={'mp_url': mp.url})
         return False
 
     removed = await conn.fetchval(
         'SELECT removed FROM package WHERE name = $1', mp_run['package'])
     if removed is None:
-        logger.warning("%s: Unable to find package.", mp.url)
+        logger.warning("%s: Unable to find package.", mp.url, extra={'mp_url': mp.url})
         return False
 
     if removed:
@@ -2755,7 +2761,7 @@ archive.
         # A new run happened since the last, but there was nothing to
         # do.
         logger.info(
-            "%s: Last run did not produce any changes, closing proposal.", mp.url
+            "%s: Last run did not produce any changes, closing proposal.", mp.url, extra={'mp_url': mp.url}
         )
 
         try:
@@ -2777,7 +2783,7 @@ applied independently.
             logger.info(
                 "%s: Last run failed with transient error (%s). Rescheduling.",
                 mp.url,
-                last_run.result_code,
+                last_run.result_code, extra={'mp_url': mp.url}
             )
             try:
                 await do_schedule(
@@ -2791,9 +2797,9 @@ applied independently.
                     codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:
-                logging.warning(
+                logger.warning(
                     'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.package, last_run.campaign, e)
+                    last_run.package, last_run.campaign, e, extra={'mp_url': mp.url})
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). Rescheduling.",
@@ -2814,14 +2820,14 @@ applied independently.
                     codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:
-                logging.warning(
+                logger.warning(
                     'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.package, last_run.campaign, e)
+                    last_run.package, last_run.campaign, e, extra={'mp_url': mp.url})
         else:
             logger.info(
                 "%s: Last run failed (%s). Not touching merge proposal.",
                 mp.url,
-                last_run.result_code,
+                last_run.result_code, extra={'mp_url': mp.url}
             )
         return False
 
@@ -2852,7 +2858,7 @@ applied independently.
             mp.url,
             mp_run['id'],
             mp_run['role'],
-            last_run.id,
+            last_run.id, extra={'mp_url': mp.url}
         )
         return False
 
@@ -2864,7 +2870,7 @@ applied independently.
             "%s: Remote branch name has changed: %s ⇒ %s ",
             mp.url,
             mp_remote_branch_name,
-            last_run_remote_branch_name,
+            last_run_remote_branch_name, extra={'mp_url': mp.url}
         )
         # Note that we require that mp_remote_branch_name is set.
         # For some old runs it is not set because we didn't track
@@ -2881,7 +2887,7 @@ applied independently.
                     mp.url,
                     mp_run['role'],
                     mp_remote_branch_name,
-                    last_run_remote_branch_name,
+                    last_run_remote_branch_name, extra={'mp_url': mp.url}
                 )
                 try:
                     await abandon_mp(
@@ -2906,7 +2912,7 @@ has changed from %s to %s.
             "%s ⇒ %s, skipping.",
             mp.url,
             mp_run['branch_url'],
-            last_run.branch_url,
+            last_run.branch_url, extra={'mp_url': mp.url}
         )
         return False
 
@@ -2931,7 +2937,7 @@ This merge proposal will be closed, since the branch has moved to %s.
             mp.url,
             mp_run['package'],
             mp_run['id'],
-            last_run.id,
+            last_run.id, extra={'mp_url': mp.url}
         )
         if last_run_revision == mp_run['revision'].encode('utf-8'):
             logger.warning(
@@ -2942,7 +2948,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 last_run.id,
                 mp_run['role'],
-                mp_run['revision'].encode('utf-8'),
+                mp_run['revision'].encode('utf-8'), extra={'mp_url': mp.url}
             )
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(
@@ -3011,7 +3017,7 @@ applied independently.
 """, dry_run=dry_run)
                 except PermissionDenied as f:
                     logger.warning(
-                        "Permission denied closing merge request %s: %s", mp.url, f
+                        "Permission denied closing merge request %s: %s", mp.url, f, extra={'mp_url': mp.url}
                     )
                     code = "empty-failed-to-close"
                     description = "Permission denied closing merge request: %s" % f
@@ -3025,7 +3031,7 @@ applied independently.
                     "%s: Updating merge proposal failed: %s (%s)",
                     mp.url,
                     code,
-                    description,
+                    description, extra={'mp_url': mp.url}
                 )
             if not dry_run:
                 await store_publish(
@@ -3067,7 +3073,7 @@ applied independently.
             if publish_result.is_new:
                 # This can happen when the default branch changes
                 logger.warning(
-                    "Intended to update proposal %r, but created %r", mp.url, publish_result.proposal_url
+                    "Intended to update proposal %r, but created %r", mp.url, publish_result.proposal_url, extra={'mp_url': mp.url}
                 )
         return True
     else:
@@ -3075,7 +3081,7 @@ applied independently.
         # be refreshed, so only check it if we haven't made any other
         # changes.
         if can_be_merged is False:
-            logger.info("%s can not be merged (conflict?). Rescheduling.", mp.url)
+            logger.info("%s can not be merged (conflict?). Rescheduling.", mp.url, extra={'mp_url': mp.url})
             if not dry_run:
                 try:
                     await do_schedule(
@@ -3089,10 +3095,10 @@ applied independently.
                         codebase=mp_run['codebase'],
                     )
                 except CandidateUnavailable:
-                    logging.warning(
+                    logger.warning(
                         'Candidate unavailable while attempting to reschedule '
                         'conflicted %s/%s',
-                        mp_run['package'], mp_run['campaign'])
+                        mp_run['package'], mp_run['campaign'], extra={'mp_url': mp.url})
         return False
 
 
@@ -3108,15 +3114,15 @@ def iter_all_mps(
                 for mp in instance.iter_my_proposals(status=status):
                     yield instance, mp, status
             except ForgeLoginRequired:
-                logging.info(
+                logger.info(
                     'Skipping %r, no credentials known.',
                     instance)
             except UnexpectedHttpStatus as e:
-                logging.warning(
+                logger.warning(
                     'Got unexpected HTTP status %s, skipping %r',
                     e, instance)
             except UnsupportedForge as e:
-                logging.warning(
+                logger.warning(
                     'Unsupported host instance, skipping %r: %s',
                     instance, e)
 
@@ -3198,15 +3204,15 @@ async def check_existing(
             forge_rate_limiter[forge] = datetime.utcnow() + retry_after
             continue
         except UnexpectedHttpStatus as e:
-            logging.warning(
+            logger.warning(
                 'Got unexpected HTTP status %s, skipping %r',
-                e, mp.url)
+                e, mp.url, extra={'mp_url': mp.url})
             # TODO(jelmer): print traceback?
             unexpected += 1
 
         if unexpected > unexpected_limit:
             unexpected_http_response_count.inc()
-            logging.warning(
+            logger.warning(
                 "Saw %d unexpected HTTP responses, over threshold of %d. "
                 "Giving up for now.", unexpected, unexpected_limit)
             return
@@ -3220,7 +3226,7 @@ async def check_existing(
                 )
                 check_only = True
 
-    logging.info('Successfully scanned existing merge proposals')
+    logger.info('Successfully scanned existing merge proposals')
     last_scan_existing_success.set_to_current_time()
 
     if not was_forge_ratelimited:
@@ -3235,7 +3241,7 @@ async def check_existing(
                 bucket_proposal_count.labels(bucket=bucket).set(count)
         open_proposal_count.set(total)
     else:
-        logging.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
+        logger.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
 
 
 async def get_run(conn: asyncpg.Connection, run_id):
@@ -3338,7 +3344,7 @@ async def listen_to_runner(
                 'SELECT branch_url FROM codebase WHERE name = $1',
                 result["codebase"])
             if codebase is None:
-                logging.warning('Codebase %s not in database?', result['codebase'])
+                logger.warning('Codebase %s not in database?', result['codebase'])
                 return
             run = await get_run(conn, result["log_id"])
             if run.campaign != "unchanged":
