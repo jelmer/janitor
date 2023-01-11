@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS change_set (
 );
 
 CREATE INDEX ON result_tag (revision);
+CREATE TYPE publish_status AS ENUM ('unknown', 'blocked', 'needs-manual-review', 'rejected', 'approved');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS run (
    branch_url text,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
+   publish_status publish_status not null default 'unknown',
    value integer,
    -- Name of the worker that executed this run.
    worker text references worker(name),
@@ -609,7 +611,8 @@ CREATE TYPE result_branch_with_policy AS (
   mode publish_mode,
   frequency_days integer);
 
-CREATE OR REPLACE VIEW publishable AS
+CREATE OR REPLACE VIEW publish_ready AS
+WITH publishable AS (
   SELECT
   run.id AS id,
   run.command AS command,
@@ -638,6 +641,7 @@ CREATE OR REPLACE VIEW publishable AS
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   named_publish_policy.qa_review AS qa_review_policy,
   (named_publish_policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
+  run.publish_status AS publish_status,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
@@ -660,9 +664,8 @@ INNER JOIN named_publish_policy ON
     candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
-  result_code = 'success' AND NOT package.removed;
-
-CREATE OR REPLACE VIEW publish_ready AS SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
+  result_code = 'success' AND NOT package.removed)
+SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
 
 CREATE VIEW upstream_branch_urls as (
     select package, result->>'upstream_branch_url' as url from run where suite in ('fresh-snapshots', 'fresh-releases') and result->>'upstream_branch_url' != '')
