@@ -609,7 +609,8 @@ CREATE TYPE result_branch_with_policy AS (
   mode publish_mode,
   frequency_days integer);
 
-CREATE OR REPLACE VIEW publishable AS
+CREATE VIEW publish_ready AS
+WITH publishable AS (
   SELECT
   run.id AS id,
   run.command AS command,
@@ -660,9 +661,8 @@ INNER JOIN named_publish_policy ON
     candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
-  result_code = 'success' AND NOT package.removed;
-
-CREATE OR REPLACE VIEW publish_ready AS SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
+  result_code = 'success' AND NOT package.removed)
+SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
 
 CREATE VIEW upstream_branch_urls as (
     select package, result->>'upstream_branch_url' as url from run where suite in ('fresh-snapshots', 'fresh-releases') and result->>'upstream_branch_url' != '')
