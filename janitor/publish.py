@@ -596,7 +596,7 @@ async def consider_publish_run(
         run, rate_limit_bucket,
         unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
-        dry_run=False):
+        dry_run=False) -> Dict[str, Optional[str]]:
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id,
@@ -798,6 +798,8 @@ async def publish_pending_ready(
                 require_binary_diff=require_binary_diff,
                 dry_run=dry_run)
             for actual_mode in actual_modes.values():
+                if actual_mode is None:
+                    continue
                 actions.setdefault(actual_mode, 0)
                 actions[actual_mode] += 1
             if MODE_PUSH in actual_modes.values() and push_limit is not None:
@@ -941,48 +943,53 @@ order by timestamp desc limit 1
 
 async def store_publish(
     conn: asyncpg.Connection,
-    change_set_id: str,
+    *,
+    change_set: str,
     package: str,
     branch_name: Optional[str],
     main_branch_revision: Optional[bytes],
     revision: Optional[bytes],
     role: str,
     mode: str,
-    result_code,
-    description,
-    merge_proposal_url=None,
-    target_branch_url=None,
-    publish_id=None,
-    requestor=None,
-    run_id=None,
-):
+    result_code: str,
+    description: str,
+    merge_proposal_url: Optional[str] = None,
+    target_branch_url: Optional[str] = None,
+    publish_id: Optional[str] = None,
+    requestor: Optional[str] = None,
+    run_id: Optional[str] = None,
+) -> None:
     if isinstance(revision, bytes):
         revision = revision.decode("utf-8")  # type: ignore
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode("utf-8")  # type: ignore
     async with conn.transaction():
-        if merge_proposal_url:
-            await conn.execute(
-                "INSERT INTO merge_proposal "
-                "(url, package, status, revision, last_scanned, "
-                " target_branch_url) "
-                "VALUES ($1, $2, 'open', $3, NOW(), $4) ON CONFLICT (url) "
-                "DO UPDATE SET package = EXCLUDED.package, "
-                "revision = EXCLUDED.revision, "
-                "last_scanned = EXCLUDED.last_scanned, "
-                "target_branch_url = EXCLUDED.target_branch_url",
-                merge_proposal_url,
-                package,
-                revision,
-                target_branch_url
-            )
-        else:
-            # TODO(jelmer): do something by branch instead?
-            if revision is None:
-                raise AssertionError
-            await conn.execute(
-                "UPDATE new_result_branch SET absorbed = true WHERE revision = $1",
-                revision)
+        if result_code == 'success':
+            if merge_proposal_url:
+                assert mode == 'propose'
+                await conn.execute(
+                    "INSERT INTO merge_proposal "
+                    "(url, package, status, revision, last_scanned, "
+                    " target_branch_url) "
+                    "VALUES ($1, $2, 'open', $3, NOW(), $4) ON CONFLICT (url) "
+                    "DO UPDATE SET package = EXCLUDED.package, "
+                    "revision = EXCLUDED.revision, "
+                    "last_scanned = EXCLUDED.last_scanned, "
+                    "target_branch_url = EXCLUDED.target_branch_url",
+                    merge_proposal_url,
+                    package,
+                    revision,
+                    target_branch_url
+                )
+            else:
+                if revision is None:
+                    raise AssertionError
+                assert mode == 'push'
+                assert run_id is not None
+                await conn.execute(
+                    "UPDATE new_result_branch "
+                    "SET absorbed = true WHERE run_id = $1 AND role = $2",
+                    run_id, role)
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
@@ -999,13 +1006,13 @@ async def store_publish(
             merge_proposal_url,
             publish_id,
             requestor,
-            change_set_id,
+            change_set,
             run_id,
         )
         if result_code == 'success':
             await conn.execute(
                 "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
-                change_set_id)
+                change_set)
             # TODO(jelmer): if there is nothing left to publish, then mark this
             # change_set as done
 
@@ -1029,10 +1036,10 @@ async def publish_from_policy(
     require_binary_diff: bool = False,
     force: bool = False,
     requestor: Optional[str] = None,
-):
+) -> Optional[str]:
     if not command:
         logger.warning("no command set for %s", run.id)
-        return
+        return None
     if command != run.command:
         command_changed_count.inc()
         logger.warning(
@@ -1042,6 +1049,7 @@ async def publish_from_policy(
             run.campaign,
             run.command,
             command,
+            extra={'run_id': run.id, 'role': role}
         )
         await do_schedule(
             conn,
@@ -1055,21 +1063,25 @@ async def publish_from_policy(
                 run.command, command),
             codebase=run.codebase,
         )
-        return
+        return None
 
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
-        return
+        return None
     if run.result_branches is None:
-        logger.warning("no result branches for %s", run.id)
+        logger.warning(
+            "no result branches for %s", run.id,
+            extra={'run_id': run.id, 'role': role})
         no_result_branches_count.inc()
-        return
+        return None
     try:
         (remote_branch_name, base_revision, revision) = run.get_result_branch(role)
     except KeyError:
         missing_main_result_branch_count.inc()
-        logger.warning("unable to find main branch: %s", run.id)
-        return
+        logger.warning(
+            "unable to find branch with role %s: %s",
+            role, run.id, extra={'run_id': run.id, 'role': role})
+        return None
 
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
@@ -1077,7 +1089,7 @@ async def publish_from_policy(
         conn, run.package, campaign_config.branch_name, revision,
         [MODE_PROPOSE, MODE_PUSH] if mode == MODE_ATTEMPT_PUSH else [mode]
     ):
-        return
+        return None
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await get_open_merge_proposal(
             conn, run.package, campaign_config.branch_name
@@ -1091,7 +1103,8 @@ async def publish_from_policy(
                     codebase=run.codebase, campaign=run.campaign
                 ).inc()
                 logger.debug(
-                    "Not creating proposal for %s/%s: %s", run.package, run.campaign, e
+                    "Not creating proposal for %s/%s: %s", run.package, run.campaign, e,
+                    extra={'run_id': run.id}
                 )
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
@@ -1102,10 +1115,11 @@ async def publish_from_policy(
                     logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
-                        run.package, run.campaign, max_frequency_days, last_published)
+                        run.package, run.campaign, max_frequency_days, last_published,
+                        extra={'run_id': run.id})
                     mode = MODE_BUILD_ONLY
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-        return
+        return None
 
     if base_revision is None:
         unchanged_run = None
@@ -1156,7 +1170,7 @@ async def publish_from_policy(
         )
     except BranchBusy as e:
         logger.info('Branch %r was busy', e.branch_url)
-        return
+        return None
     except PublishFailure as e:
         code, description = await handle_publish_failure(
             e, conn, run, bucket="update-new-mp"
@@ -1178,16 +1192,17 @@ async def publish_from_policy(
 
     await store_publish(
         conn,
-        run.change_set,
-        run.package,
-        publish_result.branch_name,
-        base_revision,
-        revision,
-        role,
-        mode,
-        code,
-        description,
-        publish_result.proposal_url if publish_result.proposal_url else None,
+        change_set=run.change_set,
+        package=run.package,
+        branch_name=publish_result.branch_name,
+        main_branch_revision=base_revision,
+        revision=revision,
+        role=role,
+        mode=mode,
+        result_code=code,
+        description=description,
+        merge_proposal_url=(
+            publish_result.proposal_url if publish_result.proposal_url else None),
         publish_id=publish_id,
         target_branch_url=main_branch_url,
         requestor=requestor,
@@ -1224,6 +1239,8 @@ async def publish_from_policy(
 
     if code == "success":
         return mode
+
+    return None
 
 
 async def pubsub_publish(redis, topic_entry):
@@ -1319,14 +1336,14 @@ async def publish_and_store(
         except PublishFailure as e:
             await store_publish(
                 conn,
-                run.change_set,
-                run.package,
-                campaign_config.branch_name,
-                run.main_branch_revision,
-                run.revision,
-                role,
-                e.mode,
-                e.code,
+                change_set=run.change_set,
+                package=run.package,
+                branch_name=campaign_config.branch_name,
+                main_branch_revision=run.main_branch_revision,
+                revision=run.revision,
+                role=role,
+                mode=e.mode,
+                result_code=e.code,
                 description=e.description,
                 publish_id=publish_id,
                 requestor=requestor,
@@ -1354,14 +1371,14 @@ async def publish_and_store(
 
         await store_publish(
             conn,
-            run.change_set,
-            run.package,
-            publish_result.branch_name,
-            run.main_branch_revision,
-            run.revision,
-            role,
-            mode,
-            "success",
+            change_set=run.change_set,
+            package=run.package,
+            branch_name=publish_result.branch_name,
+            main_branch_revision=run.main_branch_revision,
+            revision=run.revision,
+            role=role,
+            mode=mode,
+            result_code="success",
             description="Success",
             merge_proposal_url=(
                 publish_result.proposal_url
@@ -3040,7 +3057,7 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
-                    change_set_id=last_run.change_set,
+                    change_set=last_run.change_set,
                     package=last_run.package,
                     branch_name=campaign_config.branch_name,
                     main_branch_revision=last_run_base_revision,
@@ -3058,7 +3075,7 @@ applied independently.
             if not dry_run:
                 await store_publish(
                     conn,
-                    change_set_id=last_run.change_set,
+                    change_set=last_run.change_set,
                     package=last_run.package,
                     branch_name=publish_result.branch_name,
                     main_branch_revision=last_run_base_revision,
