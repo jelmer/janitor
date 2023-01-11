@@ -1612,6 +1612,7 @@ async def update_merge_proposal_request(request):
         await conn.execute(
             "UPDATE merge_proposal SET status = $1 WHERE url = $2",
             post['status'], post['url'])
+    return web.Response(text='updated')
 
 
 @routes.post("/consider/{run_id}", name="consider")
