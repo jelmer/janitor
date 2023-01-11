@@ -291,7 +291,7 @@ cd {{ package }}
 {% endmacro %}
 {% macro describe_publish_policy(publish_policy) %}
     {% for pp in publish_policy %}
-        {% if publish_policy|length > 1 %}{{ role }}:{% endif %}
+        {% if publish_policy|length > 1 %}{{ pp['role'] }}:{% endif %}
         <b>{{ pp['mode'] }}
             {% if pp['frequency_days'] %}(every {{ pp['frequency_days'] }} days){% endif %}
         </b>
