@@ -1061,14 +1061,15 @@ async def publish_from_policy(
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
     if run.result_branches is None:
-        logger.warning("no result branches for %s", run.id)
+        logger.warning("no result branches for %s", run.id, extra={'run_id': run.id})
         no_result_branches_count.inc()
         return
     try:
         (remote_branch_name, base_revision, revision) = run.get_result_branch(role)
     except KeyError:
         missing_main_result_branch_count.inc()
-        logger.warning("unable to find main branch: %s", run.id)
+        logger.warning(
+            "unable to find branch with role %s: %s", role, run.id, extra={'run_id': run.id})
         return
 
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
