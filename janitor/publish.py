@@ -1314,7 +1314,7 @@ async def publish_and_store(
             )
         except BranchBusy as e:
             logger.debug("Branch %r was busy while publishing",
-                          e.branch_url)
+                         e.branch_url)
             return
         except PublishFailure as e:
             await store_publish(
@@ -2615,7 +2615,7 @@ async def check_existing_mp(
                 ) = await guess_proposal_info_from_revision(conn, revision)
             if package_name is None:
                 logger.warning(
-                    "No package known for %s (%s)", mp.url, target_branch_url
+                    "No package known for %s (%s)", mp.url, target_branch_url,
                     extra={'mp_url': mp.url}
                 )
             else:
