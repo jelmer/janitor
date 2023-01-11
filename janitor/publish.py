@@ -136,6 +136,9 @@ merge_proposal_count = Gauge(
     "Number of merge proposals by status.",
     labelnames=("status",),
 )
+new_merge_proposal_count = Counter(
+    "new_merge_proposal_count",
+    "Number of new merge proposals opened.")
 last_publish_pending_success = Gauge(
     "last_publish_pending_success",
     "Last time pending changes were successfully published",
@@ -559,6 +562,7 @@ class PublishWorker(object):
                             "target_branch_url": target_branch_url,
                             "target_branch_web_url": target_branch_web_url}))
 
+                new_merge_proposal_count.inc()
                 merge_proposal_count.labels(status="open").inc()
                 open_proposal_count.inc()
                 if rate_limit_bucket:
