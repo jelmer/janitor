@@ -16,9 +16,10 @@ async def postgres_url():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
         try:
-            for n in ['state.sql', 'debian.sql']:
-                with importlib.resources.open_text('janitor', n) as f:
-                    await conn.execute(f.read())
+            with importlib.resources.open_text('janitor', 'state.sql') as f:
+                await conn.execute(f.read())
+            with importlib.resources.open_text('janitor.debian', 'debian.sql') as f:
+                await conn.execute(f.read())
         finally:
             await conn.close()
         yield postgresql.url()
