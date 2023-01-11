@@ -2944,6 +2944,10 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
+            # In some cases this can happen when we kick off two runs at
+            # exactly the same time.
+            return False
+
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(
                 conn, campaign_config, last_run, mp_run['role'])
