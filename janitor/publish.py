@@ -2073,7 +2073,7 @@ SELECT
   change_set.id AS change_set
 FROM run
 LEFT JOIN package ON package.name = run.package
-INNER JOIN candidate ON candidate.package = run.package AND candidate.suite = run.suite
+INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE run.id = $1
@@ -2295,7 +2295,7 @@ async def guess_proposal_info_from_revision(
 SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucket
 FROM run
 LEFT JOIN new_result_branch rb ON rb.run_id = run.id
-INNER JOIN candidate ON run.package = candidate.package AND run.suite = candidate.suite
+INNER JOIN candidate ON run.codebase = candidate.codebase AND run.suite = candidate.suite
 INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
 WHERE rb.revision = $1 AND run.package is not null
 """

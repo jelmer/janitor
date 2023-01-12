@@ -23,7 +23,6 @@ from aiohttp import MultipartWriter
 import aiozipkin
 from fakeredis.aioredis import FakeRedis
 from janitor.config import Config
-from janitor.queue import QueueItem
 from janitor.logs import LogFileManager
 from janitor.runner import (
     create_app,
@@ -32,7 +31,6 @@ from janitor.runner import (
     QueueProcessor,
     ActiveRun,
     Backchannel,
-    queue_item_env,
 )
 from janitor.debian import dpkg_vendor
 from janitor.vcs import get_vcs_managers

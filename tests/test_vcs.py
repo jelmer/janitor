@@ -65,7 +65,7 @@ File b
 
         class Run(object):
 
-            package = "pkg"
+            codebase = "pkg"
             main_branch_revision = old_revid
             revision = new_revid
             result_branches = [("main", "", old_revid, new_revid)]

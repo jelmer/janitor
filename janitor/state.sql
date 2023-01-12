@@ -656,7 +656,7 @@ FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
 INNER JOIN candidate ON
-    candidate.package = run.package AND candidate.suite = run.suite
+    candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON
     candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
@@ -683,7 +683,7 @@ CREATE OR REPLACE VIEW change_set_todo AS
   SELECT * FROM candidate WHERE change_set is not NULL AND NOT EXISTS (
         SELECT FROM last_effective_runs WHERE
                 change_set = candidate.change_set AND
-                package = candidate.package AND
+                codebase = candidate.codebase AND
                 suite = candidate.suite AND
                 result_code in ('success', 'nothing-to-do'));
 
