@@ -1914,8 +1914,9 @@ async def handle_codebases_upload(request):
                 entry.get('vcs_type'), entry.get('vcs_last_revision'),
                 entry.get('value'))
 
-            # TODO(jelmer): if anything meaningful has changed, reschedule all
-            # runs: https://github.com/jelmer/janitor/issues/107
+            # TODO(jelmer): if anything meaningful has changed (name,
+            # branch_url, subpath), reschedule all runs for this codebase:
+            # https://github.com/jelmer/janitor/issues/107
 
     return web.json_response({})
 

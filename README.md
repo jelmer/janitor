@@ -63,16 +63,12 @@ uploads the .debs and optionally proposes a change.
 The publisher is responsible for enforcing rate limiting, i.e. making sure
 that there are no more than X pull requests open per maintainer.
 
+See the various files in ``devnotes/`` for details.
+
 Worker
 ======
 The actual changes are made by various codemod scripts that implement
 the [silver-platter protocol](https://github.com/jelmer/silver-platter/blob/master/codemod-protocol.rst).
-
-Web site
-========
-
-The web site is served by the ``janitor.site`` module using jinja2 templates
-from the ``janitor/site/templates/`` subdirectory.
 
 Installation
 ============
@@ -91,7 +87,7 @@ Several docker images are provided
  * ghcr.io/jelmer/janitor/differ - diffoscope/debdiff generator
  * ghcr.io/jelmer/janitor/publish - VCS publisher
  * ghcr.io/jelmer/janitor/runner - Queue management & Run handling
- * ghcr.io/jelmer/janitor/site - Web site & public API
+ * ghcr.io/jelmer/janitor/site - Example web site & public API
  * ghcr.io/jelmer/janitor/git_store - storage for Git
  * ghcr.io/jelmer/janitor/bzr_store - storage for Bazaar
  * ghcr.io/jelmer/janitor/worker - Base for workers
