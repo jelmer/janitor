@@ -26,7 +26,8 @@ import logging
 import os
 import sys
 import time
-from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterator
+from typing import Optional, Any
+from collections.abc import AsyncIterable, Iterator
 import uuid
 import warnings
 from yarl import URL
@@ -228,7 +229,7 @@ class BucketRateLimited(RateLimited):
     """Per-bucket rate-limit was reached."""
 
     def __init__(self, bucket, open_mps, max_open_mps):
-        super(BucketRateLimited, self).__init__(
+        super().__init__(
             "Bucke %s already has %d merge proposal open (max: %d)" % (
                 bucket, open_mps, max_open_mps))
         self.bucket = bucket
@@ -236,9 +237,9 @@ class BucketRateLimited(RateLimited):
         self.max_open_mps = max_open_mps
 
 
-class RateLimiter(object):
+class RateLimiter:
     def set_mps_per_bucket(
-        self, mps_per_bucket: Dict[str, Dict[str, int]]
+        self, mps_per_bucket: dict[str, dict[str, int]]
     ) -> None:
         raise NotImplementedError(self.set_mps_per_bucket)
 
@@ -248,19 +249,19 @@ class RateLimiter(object):
     def inc(self, bucket: str) -> None:
         raise NotImplementedError(self.inc)
 
-    def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
+    def get_stats(self) -> dict[str, tuple[int, Optional[int]]]:
         raise NotImplementedError(self.get_stats)
 
 
 class FixedRateLimiter(RateLimiter):
 
-    _open_mps_per_bucket: Optional[Dict[str, int]]
+    _open_mps_per_bucket: Optional[dict[str, int]]
 
     def __init__(self, max_mps_per_bucket: Optional[int] = None):
         self._max_mps_per_bucket = max_mps_per_bucket
         self._open_mps_per_bucket = None
 
-    def set_mps_per_bucket(self, mps_per_bucket: Dict[str, Dict[str, int]]):
+    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]):
         self._open_mps_per_bucket = mps_per_bucket["open"]
 
     def check_allowed(self, bucket: str):
@@ -279,7 +280,7 @@ class FixedRateLimiter(RateLimiter):
         self._open_mps_per_bucket.setdefault(bucket, 0)
         self._open_mps_per_bucket[bucket] += 1
 
-    def get_stats(self) -> Dict[str, Tuple[int, Optional[int]]]:
+    def get_stats(self) -> dict[str, tuple[int, Optional[int]]]:
         if self._open_mps_per_bucket:
             return {
                 bucket: (current, self._max_mps_per_bucket)
@@ -305,8 +306,8 @@ class NonRateLimiter(RateLimiter):
 class SlowStartRateLimiter(RateLimiter):
     def __init__(self, max_mps_per_bucket=None):
         self._max_mps_per_bucket = max_mps_per_bucket
-        self._open_mps_per_bucket: Optional[Dict[str, int]] = None
-        self._absorbed_mps_per_bucket: Optional[Dict[str, int]] = None
+        self._open_mps_per_bucket: Optional[dict[str, int]] = None
+        self._absorbed_mps_per_bucket: Optional[dict[str, int]] = None
 
     def check_allowed(self, bucket: str) -> None:
         if (
@@ -333,9 +334,9 @@ class SlowStartRateLimiter(RateLimiter):
         self._open_mps_per_bucket.setdefault(bucket, 0)
         self._open_mps_per_bucket[bucket] += 1
 
-    def set_mps_per_bucket(self, mps_per_bucket: Dict[str, Dict[str, int]]):
+    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]):
         self._open_mps_per_bucket = mps_per_bucket.get("open", {})
-        ms: Dict[str, int] = {}
+        ms: dict[str, int] = {}
         for status in ['merged', 'applied']:
             for m, c in mps_per_bucket.get(status, {}).items():
                 ms.setdefault(m, 0)
@@ -364,7 +365,7 @@ async def derived_branch_name(conn, campaign_config, run, role):
     if len(run.result_branches) == 1:
         name = campaign_config.branch_name
     else:
-        name = "%s/%s" % (campaign_config.branch_name, role)
+        name = f"{campaign_config.branch_name}/{role}"
 
     if await state.has_cotenants(conn, run.codebase, run.branch_url):
         return name + "/" + run.package
@@ -441,7 +442,7 @@ async def run_worker_process(args, request, *, encoding='utf-8'):
     raise WorkerInvalidResponse(stderr.decode(encoding))
 
 
-class PublishWorker(object):
+class PublishWorker:
 
     def __init__(self, *,
                  lock_manager=None,
@@ -474,8 +475,8 @@ class PublishWorker(object):
         dry_run: bool = False,
         require_binary_diff: bool = False,
         allow_create_proposal: bool = False,
-        reviewers: Optional[List[str]] = None,
-        result_tags: Optional[List[Tuple[str, bytes]]] = None,
+        reviewers: Optional[list[str]] = None,
+        result_tags: Optional[list[tuple[str, bytes]]] = None,
         commit_message_template: Optional[str] = None,
         title_template: Optional[str] = None,
         codemod_result=None,
@@ -488,8 +489,8 @@ class PublishWorker(object):
           pkg: Package name
           command: Command that was run
         """
-        assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
-        local_branch_url = vcs_manager.get_branch_url(pkg, "%s/%s" % (campaign, role))
+        assert mode in SUPPORTED_MODES, f"mode is {mode!r}"
+        local_branch_url = vcs_manager.get_branch_url(pkg, f"{campaign}/{role}")
         target_branch_url = main_branch_url.rstrip("/")
 
         request = {
@@ -594,9 +595,9 @@ async def consider_publish_run(
         conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
         vcs_managers, bucket_rate_limiter,
         run, rate_limit_bucket,
-        unpublished_branches, command,
-        push_limit=None, require_binary_diff=False,
-        dry_run=False) -> Dict[str, Optional[str]]:
+        unpublished_branches, command: str,
+        push_limit: Optional[int] = None, require_binary_diff: bool = False,
+        dry_run: bool = False) -> dict[str, Optional[str]]:
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id,
@@ -635,7 +636,7 @@ async def consider_publish_run(
         # TODO(jelmer): Support target_branch_url ?
         return {}
 
-    last_mps: List[Tuple[str, str]] = await get_previous_mp_status(
+    last_mps: list[tuple[str, str]] = await get_previous_mp_status(
         conn, run.codebase, run.campaign)
     if any(last_mp[1] in ('rejected', 'closed') for last_mp in last_mps):
         logger.warning(
@@ -644,7 +645,7 @@ async def consider_publish_run(
         rejected_last_mp_count.inc()
         return {}
 
-    actual_modes: Dict[str, Optional[str]] = {}
+    actual_modes: dict[str, Optional[str]] = {}
     for (
         role,
         _remote_name,
@@ -656,14 +657,14 @@ async def consider_publish_run(
         if publish_mode is None:
             logger.warning(
                 "%s: No publish mode for branch with role %s", run.id, role,
-                extra={'run_id': run.id})
+                extra={'run_id': run.id, 'role': role})
             missing_publish_mode_count.labels(role=role).inc()
             continue
         if role == 'main' and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
                 "auxiliary branches were published.", run.id, role,
-                extra={'run_id': run.id})
+                extra={'run_id': run.id, 'role': role})
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
@@ -687,22 +688,22 @@ async def consider_publish_run(
 async def iter_publish_ready(
     conn: asyncpg.Connection,
     *,
-    campaigns: Optional[List[str]] = None,
-    review_status: Optional[List[str]] = None,
+    campaigns: Optional[list[str]] = None,
+    review_status: Optional[list[str]] = None,
     limit: Optional[int] = None,
     needs_review: Optional[bool] = None,
     run_id: Optional[str] = None,
-    change_set_state: Optional[List[str]] = None,
+    change_set_state: Optional[list[str]] = None,
 ) -> AsyncIterable[
-    Tuple[
+    tuple[
         state.Run,
         str,
         str,
-        List[Tuple[str, Optional[str], str, bytes, bytes, Optional[str],
+        list[tuple[str, Optional[str], str, bytes, bytes, Optional[str],
                    Optional[int], Optional[str]]],
     ]
 ]:
-    args: List[Any] = []
+    args: list[Any] = []
     query = """
 SELECT * FROM publish_ready
 """
@@ -767,7 +768,7 @@ async def publish_pending_ready(
     require_binary_diff: bool = False,
 ):
     start = time.time()
-    actions: Dict[str, int] = {}
+    actions: dict[Optional[str], int] = {}
 
     if reviewed_only:
         review_status = ["approved"]
@@ -813,7 +814,7 @@ async def publish_pending_ready(
     last_publish_pending_success.set_to_current_time()
 
 
-async def handle_publish_failure(e, conn, run, bucket):
+async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, package, revision FROM last_runs "
         "WHERE revision = $2 AND package = $1 and result_code = 'success'",
@@ -896,7 +897,7 @@ async def handle_publish_failure(e, conn, run, bucket):
 
 
 async def already_published(
-    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, modes: List[str]
+    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, modes: list[str]
 ) -> bool:
     row = await conn.fetchrow(
         """\
@@ -1024,7 +1025,7 @@ async def publish_from_policy(
     campaign_config: Campaign,
     publish_worker: PublishWorker,
     bucket_rate_limiter: RateLimiter,
-    vcs_managers: Dict[str, VcsManager],
+    vcs_managers: dict[str, VcsManager],
     run: state.Run,
     role: str,
     rate_limit_bucket: Optional[str],
@@ -1059,7 +1060,7 @@ async def publish_from_policy(
             command=command,
             bucket="update-new-mp",
             refresh=True,
-            requestor="publisher (changed policy: %r ⇒ %r)" % (
+            requestor="publisher (changed policy: {!r} ⇒ {!r})".format(
                 run.command, command),
             codebase=run.codebase,
         )
@@ -1220,7 +1221,7 @@ async def publish_from_policy(
     else:
         publish_delay = None
 
-    topic_entry: Dict[str, Any] = {
+    topic_entry: dict[str, Any] = {
         "id": publish_id,
         "package": run.package,
         "campaign": run.campaign,
@@ -1276,7 +1277,7 @@ async def publish_and_store(
     mode: str,
     role: str,
     rate_limit_bucket: Optional[str],
-    vcs_managers: Dict[str, VcsManager],
+    vcs_managers: dict[str, VcsManager],
     bucket_rate_limiter: RateLimiter,
     dry_run: bool,
     allow_create_proposal: bool = True,
@@ -1426,7 +1427,7 @@ def create_background_task(fn, title):
 
 
 async def get_publish_attempt_count(
-    conn: asyncpg.Connection, revision: bytes, transient_result_codes: Set[str]
+    conn: asyncpg.Connection, revision: bytes, transient_result_codes: set[str]
 ) -> int:
     return await conn.fetchval(
         "select count(*) from publish where revision = $1 "
@@ -1612,6 +1613,7 @@ async def update_merge_proposal_request(request):
         await conn.execute(
             "UPDATE merge_proposal SET status = $1 WHERE url = $2",
             post['status'], post['url'])
+    return web.Response(text='updated')
 
 
 @routes.post("/consider/{run_id}", name="consider")
@@ -1755,7 +1757,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), 'publish of %s/%s, role %s' % (package, campaign, role)
+            ), f'publish of {package}/{campaign}, role {role}'
         )
 
     if not publish_ids:
@@ -1773,7 +1775,7 @@ async def credentials_request(request):
     ssh_keys = []
     for entry in os.scandir(os.path.expanduser("~/.ssh")):
         if entry.name.endswith(".pub"):
-            with open(entry.path, "r") as f:
+            with open(entry.path) as f:
                 ssh_keys.extend([line.strip() for line in f.readlines()])
     pgp_keys = []
     for gpg_entry in list(request.app['gpg'].keylist(secret=True)):
@@ -1812,13 +1814,13 @@ async def credentials_request(request):
 
 async def create_app(
     *,
-    vcs_managers: Dict[str, VcsManager],
+    vcs_managers: dict[str, VcsManager],
     db: asyncpg.pool.Pool,
     redis,
     config,
     publish_worker: Optional[PublishWorker] = None,
     dry_run: bool = False,
-    forge_rate_limiter: Optional[Dict[str, datetime]] = None,
+    forge_rate_limiter: Optional[dict[str, datetime]] = None,
     bucket_rate_limiter: Optional[RateLimiter] = None,
     require_binary_diff: bool = False,
     push_limit: Optional[int] = None,
@@ -2093,7 +2095,7 @@ WHERE run.id = $1
             attempt_count = 0
 
         with span.new_child('sql:last-mp'):
-            last_mps: List[Tuple[str, str]] = await get_previous_mp_status(
+            last_mps: list[tuple[str, str]] = await get_previous_mp_status(
                 conn, run['codebase'], run['campaign'])
     ret = {}
     ret['success'] = {
@@ -2286,7 +2288,7 @@ class ProposalInfo:
 
 async def guess_proposal_info_from_revision(
     conn: asyncpg.Connection, revision: bytes
-) -> Tuple[Optional[str], Optional[str]]:
+) -> tuple[Optional[str], Optional[str]]:
     query = """\
 SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucket
 FROM run
@@ -2315,7 +2317,7 @@ WHERE candidate.suite = $1 AND candidate.package = $2
 
 async def guess_package_from_branch_url(
         conn: asyncpg.Connection, url: str,
-        possible_transports: Optional[List[Transport]] = None):
+        possible_transports: Optional[list[Transport]] = None):
     query = """
 SELECT
   name, branch_url
@@ -2361,7 +2363,7 @@ def find_campaign_by_branch_name(config, branch_name):
     return None, None
 
 
-class ProposalInfoManager(object):
+class ProposalInfoManager:
 
     def __init__(self, conn: asyncpg.Connection, redis):
         self.conn = conn
@@ -2572,7 +2574,7 @@ async def check_existing_mp(
     bucket_rate_limiter,
     dry_run: bool,
     mps_per_bucket=None,
-    possible_transports: Optional[List[Transport]] = None,
+    possible_transports: Optional[list[Transport]] = None,
     check_only: bool = False,
     close_below_threshold: bool = True,
 ) -> bool:
@@ -2911,9 +2913,9 @@ applied independently.
                         proposal_info_manager, mp, revision, package_name, target_branch_url,
                         rate_limit_bucket=rate_limit_bucket, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged, comment="""\
-This merge proposal will be closed, since the branch for the role '%s'
-has changed from %s to %s.
-""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run)
+This merge proposal will be closed, since the branch for the role '{}'
+has changed from {} to {}.
+""".format(mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run)
                 except PermissionDenied:
                     return False
                 return True
@@ -2941,8 +2943,8 @@ has changed from %s to %s.
                 proposal_info_manager, mp, revision, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""\
-This merge proposal will be closed, since the branch has moved to %s.
-""" % (last_run.branch_url, ), dry_run=dry_run)
+This merge proposal will be closed, since the branch has moved to {}.
+""".format(last_run.branch_url), dry_run=dry_run)
         except PermissionDenied:
             return False
         return True
@@ -3026,6 +3028,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                     "%s: Empty merge proposal, changes must have been merged "
                     "some other way. Closing.",
                     mp.url,
+                    extra={'mp_url': mp.url},
                 )
                 try:
                     await close_applied_mp(
@@ -3124,8 +3127,8 @@ applied independently.
 
 
 def iter_all_mps(
-    statuses: Optional[List[str]] = None,
-) -> Iterator[Tuple[Forge, MergeProposal, str]]:
+    statuses: Optional[list[str]] = None,
+) -> Iterator[tuple[Forge, MergeProposal, str]]:
     """iterate over all existing merge proposals."""
     if statuses is None:
         statuses = ["open", "merged", "closed"]
@@ -3155,13 +3158,13 @@ async def check_existing(
     config,
     publish_worker,
     bucket_rate_limiter,
-    forge_rate_limiter: Dict[Forge, datetime],
+    forge_rate_limiter: dict[Forge, datetime],
     vcs_managers,
     dry_run: bool,
     modify_limit=None,
     unexpected_limit: int = 5,
 ):
-    mps_per_bucket: Dict[str, Dict[str, int]] = {
+    mps_per_bucket: dict[str, dict[str, int]] = {
         "open": {},
         "closed": {},
         "merged": {},
@@ -3169,7 +3172,7 @@ async def check_existing(
         "abandoned": {},
         "rejected": {},
     }
-    possible_transports: List[Transport] = []
+    possible_transports: list[Transport] = []
     status_count = {
         "open": 0,
         "closed": 0,
@@ -3385,7 +3388,7 @@ async def listen_to_runner(
 
 
 async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
-    per_bucket: Dict[str, Dict[str, int]] = {}
+    per_bucket: dict[str, dict[str, int]] = {}
     async with db.acquire() as conn:
         for row in await conn.fetch("""
              SELECT
@@ -3500,7 +3503,7 @@ async def main(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     set_user_agent(config.user_agent)
@@ -3517,7 +3520,7 @@ async def main(argv=None):
         sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
         sys.exit(1)
 
-    forge_rate_limiter: Dict[Forge, datetime] = {}
+    forge_rate_limiter: dict[Forge, datetime] = {}
 
     vcs_managers = get_vcs_managers_from_config(config)
     db = await state.create_pool(config.database_location)

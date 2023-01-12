@@ -36,7 +36,7 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-with open(args.config, "r") as f:
+with open(args.config) as f:
     config = read_config(f)
 
 

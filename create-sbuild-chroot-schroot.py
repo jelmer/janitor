@@ -11,7 +11,7 @@ from janitor.config import read_config, get_distribution
 
 
 def sbuild_schroot_name(suite, arch):
-    return "%s-%s-sbuild" % (suite, arch)
+    return "{}-{}-sbuild".format(suite, arch)
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006
@@ -33,7 +33,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     for name in distro.extra:
-        cmd.append("--extra-repository=deb %s %s %s" % (
+        cmd.append("--extra-repository=deb {} {} {}".format(
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
     subprocess.check_call(cmd)
@@ -62,7 +62,7 @@ parser.add_argument(
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
-with open(args.config, "r") as f:
+with open(args.config) as f:
     config = read_config(f)
 
 if not args.distribution:
@@ -94,7 +94,7 @@ for distribution in args.distribution:
                     'directory')
                 if old_sbuild_path != sbuild_path:
                     raise AssertionError(
-                        'sbuild path has changed: %s != %s' % (
+                        'sbuild path has changed: {} != {}'.format(
                             old_sbuild_path, sbuild_path))
                 if os.path.isdir(old_sbuild_path):
                     shutil.rmtree(old_sbuild_path)
@@ -119,7 +119,7 @@ for distribution in args.distribution:
 
     if args.user:
         subprocess.check_call(
-            "install -d / --owner=%s \"~%s\" | sbuild-shell %s" % (
+            "install -d / --owner={} \"~{}\" | sbuild-shell {}".format(
                 args.user, args.user,
                 sbuild_schroot_name(distro_config.name, sbuild_arch)),
             shell=True)

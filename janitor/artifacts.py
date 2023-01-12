@@ -17,7 +17,7 @@
 
 """Artifacts."""
 
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 import asyncio
 
 from io import BytesIO
@@ -41,12 +41,12 @@ class ArtifactsMissing(Exception):
     """The specified artifacts are missing."""
 
 
-class ArtifactManager(object):
+class ArtifactManager:
     """Manage sets of per-run artifacts.
 
     Artifacts are named files; no other metadata is stored.
     """
-    async def store_artifacts(self, run_id: str, local_path: str, names: Optional[List[str]] = None):
+    async def store_artifacts(self, run_id: str, local_path: str, names: Optional[list[str]] = None):
         """Store a set of artifacts.
 
         Args:
@@ -85,7 +85,7 @@ class LocalArtifactManager(ArtifactManager):
             os.makedirs(self.path)
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.path)
+        return f"{type(self).__name__}({self.path!r})"
 
     async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
         run_dir = os.path.join(self.path, run_id)
@@ -141,7 +141,7 @@ class GCSArtifactManager(ArtifactManager):
         self.trace_configs = trace_configs
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, "gs://%s/" % self.bucket_name)
+        return "{}({!r})".format(type(self).__name__, "gs://%s/" % self.bucket_name)
 
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
@@ -166,7 +166,7 @@ class GCSArtifactManager(ArtifactManager):
             await asyncio.gather(*[
                 self.storage.upload_from_filename(
                     self.bucket_name,
-                    "%s/%s" % (run_id, name),
+                    f"{run_id}/{name}",
                     os.path.join(local_path, name),
                     timeout=timeout,
                 ) for name in names])
@@ -217,7 +217,7 @@ class GCSArtifactManager(ArtifactManager):
             return BytesIO(
                 await self.storage.download(
                     bucket=self.bucket_name,
-                    object_name="%s/%s" % (run_id, filename),
+                    object_name=f"{run_id}/{filename}",
                     timeout=timeout,
                 )
             )
@@ -230,7 +230,7 @@ class GCSArtifactManager(ArtifactManager):
 
     def public_artifact_url(self, run_id, filename):
         from urllib.parse import quote
-        encoded_object_name = quote("%s/%s" % (run_id, filename), safe='')
+        encoded_object_name = quote(f"{run_id}/{filename}", safe='')
         return f'{self.storage._api_root_read}/{self.bucket_name}/o/{encoded_object_name}'
 
 

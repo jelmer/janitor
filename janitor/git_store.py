@@ -136,7 +136,7 @@ async def git_revision_info_request(request):
         ret.append({
             'commit-id': entry.commit.id.decode('ascii'),
             'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-            'link': '/git/%s/commit/%s/' % (codebase, entry.commit.id.decode('ascii')),
+            'link': '/git/{}/commit/{}/'.format(codebase, entry.commit.id.decode('ascii')),
             'message': entry.commit.message.decode('utf-8', 'replace')})
         await asyncio.sleep(0)
     return web.json_response(ret)
@@ -185,7 +185,7 @@ async def handle_klaus(request):
 
     class Klaus(Flask):
         def __init__(self, codebase, repo):
-            super(Klaus, self).__init__("klaus")
+            super().__init__("klaus")
             self.codebase = codebase
             self.valid_repos = {codebase: FancyRepo(repo.path, namespace=None)}
 
@@ -194,7 +194,7 @@ async def handle_klaus(request):
 
         def create_jinja_environment(self):
             """Called by Flask.__init__"""
-            env = super(Klaus, self).create_jinja_environment()
+            env = super().create_jinja_environment()
             for func in [
                 "force_unicode",
                 "timesince",
@@ -636,7 +636,7 @@ async def main(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
