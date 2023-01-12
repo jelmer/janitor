@@ -512,12 +512,12 @@ class RemoteBzrVcsManager(VcsManager):
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     f = BytesIO()
     try:
-        repo = vcs_manager.get_repository(run.package)  # type: Optional[Repository]
+        repo = vcs_manager.get_repository(run.codebase)  # type: Optional[Repository]
     except NotBranchError:
         repo = None
     if repo is None:
         return b"Local VCS repository for %s temporarily inaccessible" % (
-            run.package.encode("ascii")
+            run.codebase.encode("ascii")
         )
     for actual_role, _, base_revision, revision in run.result_branches:
         if role == actual_role:

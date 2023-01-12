@@ -75,7 +75,7 @@ SELECT
   named_publish_policy.per_branch_policy AS publish,
   candidate.command AS command
 FROM candidate
-INNER JOIN package on package.name = candidate.package
+INNER JOIN package on package.codebase = candidate.codebase
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
 WHERE
