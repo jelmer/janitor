@@ -22,7 +22,7 @@ import logging
 import sys
 from redis.asyncio import Redis
 import tempfile
-from typing import Optional, List
+from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -154,7 +154,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
 async def listen_to_runner(
         redis, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
-        distributions: Optional[List[str]] = None,
+        distributions: Optional[list[str]] = None,
         source_only: bool = False):
 
     async def handle_result_message(msg):
@@ -218,7 +218,7 @@ async def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     artifact_manager = get_artifact_manager(config.artifact_location)

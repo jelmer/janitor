@@ -15,18 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-try:
-    from functools import cache  # type: ignore
-except ImportError:  # python < 3.9
-    from functools import lru_cache
-
-    def cache(user_function):  # type: ignore
-        return lru_cache(maxsize=None)(user_function)
-
+from functools import cache  # type: ignore
 
 import os
 import subprocess
-from typing import Tuple, List, Optional
+from typing import Optional
 
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
@@ -45,16 +38,16 @@ class InconsistentChangesFiles(Exception):
     """Inconsistent changes files."""
 
 
-def find_changes(path: str) -> Tuple[List[str], str, Version, str, List[str]]:
+def find_changes(path: str) -> tuple[list[str], str, Version, str, list[str]]:
     names = []
     source: Optional[str] = None
     version: Optional[Version] = None
     distribution: Optional[str] = None
-    binary_packages: List[str] = []
+    binary_packages: list[str] = []
     for entry in os.scandir(path):
         if not entry.name.endswith(".changes"):
             continue
-        with open(entry.path, "r") as f:
+        with open(entry.path) as f:
             changes = Changes(f)
             names.append(entry.name)
             if version is not None and changes["Version"] != version:

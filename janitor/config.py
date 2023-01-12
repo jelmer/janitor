@@ -62,5 +62,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('config_file', type=str, help='Configuration file to read')
     args = parser.parse_args()
-    with open(args.config_file, 'r') as f:
+    with open(args.config_file) as f:
         config = read_config(f)

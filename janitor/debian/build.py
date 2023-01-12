@@ -221,7 +221,7 @@ def main():
     wt, subpath = WorkingTree.open_containing('.')
 
     if args.config:
-        with open(args.config, 'r') as f:
+        with open(args.config) as f:
             config = json.load(f)
     else:
         config = {}

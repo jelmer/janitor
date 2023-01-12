@@ -19,15 +19,15 @@ import subprocess
 import json
 import os
 import logging
-from typing import Optional, List
+from typing import Optional
 
 
 logger = logging.getLogger(__name__)
 
 
-def run_lintian(output_directory: str, changes_names: List[str],
+def run_lintian(output_directory: str, changes_names: list[str],
                 profile: Optional[str] = None,
-                suppress_tags: Optional[List[str]] = None):
+                suppress_tags: Optional[list[str]] = None):
     logger.info('Running lintian')
     args = ['--exp-output=format=json', '--allow-root']
     if suppress_tags:
