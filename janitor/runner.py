@@ -555,6 +555,7 @@ class JanitorResult:
             "codemod": self.codemod_result,
             "value": self.value,
             "remotes": self.remotes,
+            "branch_url": self.branch_url,
             "resume": {"run_id": self.resume_from} if self.resume_from else None,
             "branches": (
                 [
