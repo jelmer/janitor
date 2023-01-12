@@ -448,7 +448,7 @@ class JanitorResult:
     subpath: str
     code: str
     transient: Optional[bool]
-    codebase: Optional[str]
+    codebase: str
 
     def __init__(
         self,
@@ -508,7 +508,7 @@ class JanitorResult:
             self.vcs_type = worker_result.vcs_type
             self.subpath = worker_result.subpath
             self.transient = worker_result.transient
-            self.codebase = worker_result.codebase
+            self.codebase = worker_result.codebase or codebase
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -1259,7 +1259,8 @@ async def store_run(
     conn: asyncpg.Connection,
     *,
     run_id: str,
-    name: str,
+    codebase: str,
+    package: str,
     vcs_type: Optional[str],
     branch_url: Optional[str],
     subpath: Optional[str],
@@ -1285,7 +1286,6 @@ async def store_run(
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
     failure_transient: Optional[bool] = None,
-    codebase: Optional[str] = None,
 ):
     """Store a run in the database."""
     if result_tags is None:
@@ -1310,7 +1310,7 @@ async def store_run(
         result_code,
         start_time,
         finish_time,
-        name,
+        package,
         instigated_context,
         context,
         main_branch_revision.decode("utf-8") if main_branch_revision else None,
@@ -1482,11 +1482,13 @@ class QueueProcessor:
     async def active_run_count(self):
         return await self.redis.hlen('active-runs')
 
-    async def estimate_wait(self, package, campaign):
+    async def estimate_wait(
+            self, codebase: str, campaign: str) -> tuple[
+                Optional[int], Optional[timedelta], Optional[timedelta]]:
         async with self.database.acquire() as conn:
             queue = Queue(conn)
             (position, wait_time) = await queue.get_position(
-                campaign, package)
+                campaign, codebase)
         active_run_count = await self.active_run_count()
         return (position,
                 (wait_time / active_run_count)
@@ -1577,7 +1579,7 @@ class QueueProcessor:
                     await store_run(
                         conn,
                         run_id=result.log_id,
-                        name=active_run.package,
+                        package=active_run.package,
                         vcs_type=result.vcs_type,
                         subpath=result.subpath,
                         branch_url=result.branch_url,
@@ -1634,7 +1636,7 @@ class QueueProcessor:
             'rate-limit-hosts', host, retry_after.isoformat())
 
     async def next_queue_item(
-            self, conn, package: Optional[str] = None,
+            self, conn, codebase: Optional[str] = None,
             campaign: Optional[str] = None) -> QueueItem:
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
@@ -1644,7 +1646,7 @@ class QueueProcessor:
             int(i.decode('utf-8'))
             for i in await self.redis.hkeys('assigned-queue-items')}
         return await queue.next_item(
-            campaign=campaign, package=package,
+            campaign=campaign, codebase=codebase,
             assigned_queue_items=assigned_queue_items,
             exclude_hosts=exclude_hosts)
 
@@ -1652,12 +1654,12 @@ class QueueProcessor:
 @routes.get("/queue/position", name="queue-position")
 async def handle_queue_position(request):
     span = aiozipkin.request_span(request)
-    package = request.query['package']
+    codebase = request.query['codebase']
     campaign = request.query['campaign']
     with span.new_child('sql:queue-position'):
         (position, wait_time,
          cum_wait_time) = await request.app['queue_processor'].estimate_wait(
-            package, campaign)
+            codebase, campaign)
 
     return web.json_response({
         "position": position,
@@ -2174,7 +2176,7 @@ async def handle_assign(request):
             span, 'assign', worker=json.get("worker"),
             worker_link=json.get("worker_link"),
             backchannel=json.get('backchannel'),
-            package=json.get('package'),
+            codebase=json.get('codebase'),
             campaign=json.get('campaign')
         )
     except QueueEmpty:
@@ -2203,7 +2205,7 @@ async def handle_public_assign(request):
             span, 'assign', worker=worker_name,
             worker_link=json.get("worker_link"),
             backchannel=json.get('backchannel'),
-            package=json.get('package'),
+            codebase=json.get('codebase'),
             campaign=json.get('campaign')
         )
     except QueueEmpty:
@@ -2276,7 +2278,7 @@ async def next_item(
         queue_processor, config, span, mode, *, worker=None,
         worker_link: Optional[str] = None,
         backchannel: Optional[dict[str, str]] = None,
-        package: Optional[str] = None, campaign: Optional[str] = None):
+        codebase: Optional[str] = None, campaign: Optional[str] = None):
     possible_transports: list[Transport] = []
     possible_forges: list[Forge] = []
 
@@ -2297,7 +2299,7 @@ async def next_item(
         while item is None:
             with span.new_child('sql:queue-item'):
                 item, vcs_info = await queue_processor.next_queue_item(
-                    conn, package=package, campaign=campaign)
+                    conn, codebase=codebase, campaign=campaign)
             if item is None:
                 queue_empty_count.inc()
                 raise QueueEmpty()
@@ -2574,6 +2576,7 @@ async def finish(
 
         result = JanitorResult(
             pkg=active_run.package,
+            codebase=active_run.codebase,
             campaign=active_run.campaign,
             log_id=active_run.log_id,
             code='success',
@@ -2585,7 +2588,6 @@ async def finish(
             logfilenames=logfilenames,
             resume_from=resume_from,
             change_set=active_run.change_set,
-            codebase=active_run.codebase,
         )
 
         with span.new_child('import-logs'):
