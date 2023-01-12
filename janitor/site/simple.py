@@ -347,7 +347,7 @@ async def process_webhook(request, db):
                 for suite in await state.iter_publishable_suites(conn, codebase):
                     if suite not in rescheduled.get(package['name'], []):
                         await do_schedule(
-                            conn, package['name'], suite, codebase=codebase,
+                            conn, package=package['name'], campaign=suite, codebase=codebase,
                             requestor=requestor, bucket="hook")
                         rescheduled.setdefault(package['name'], []).append(suite)
 

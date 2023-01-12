@@ -156,7 +156,7 @@ ORDER BY start_time DESC
 
 async def _estimate_duration(
     conn: asyncpg.Connection,
-    package: Optional[str] = None,
+    codebase: Optional[str] = None,
     campaign: Optional[str] = None,
     limit: Optional[int] = 1000,
 ) -> Optional[timedelta]:
@@ -165,11 +165,11 @@ SELECT AVG(duration) FROM
 (select finish_time - start_time as duration FROM run
 WHERE """
     args = []
-    if package is not None:
-        query += " package = $1"
-        args.append(package)
+    if codebase is not None:
+        query += " codebase = $1"
+        args.append(codebase)
     if campaign is not None:
-        if package:
+        if codebase:
             query += " AND"
         query += " suite = $%d" % (len(args) + 1)
         args.append(campaign)
@@ -181,16 +181,16 @@ WHERE """
 
 
 async def estimate_duration(
-    conn: asyncpg.Connection, package: str, campaign: str
+    conn: asyncpg.Connection, codebase: str, campaign: str
 ) -> timedelta:
-    """Estimate the duration of a package build for a certain campaign."""
+    """Estimate the duration of a codebase build for a certain campaign."""
     estimated_duration = await _estimate_duration(
-        conn, package=package, campaign=campaign
+        conn, codebase=codebase, campaign=campaign
     )
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await _estimate_duration(conn, package=package)
+    estimated_duration = await _estimate_duration(conn, codebase=codebase)
     if estimated_duration is not None:
         return estimated_duration
 
@@ -217,7 +217,7 @@ async def bulk_add_to_queue(
     else:
         max_value = None
     for package, codebase, context, command, campaign, value, success_chance in todo:
-        estimated_duration = await estimate_duration(conn, package, campaign)
+        estimated_duration = await estimate_duration(conn, codebase, campaign)
         assert estimated_duration >= timedelta(
             0
         ), "{}: estimated duration < 0.0: {!r}".format(package, estimated_duration)
@@ -391,9 +391,9 @@ async def main():
 
 async def do_schedule_control(
     conn: asyncpg.Connection,
-    package: str,
     codebase: str,
     *,
+    package: Optional[str] = None,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
@@ -409,8 +409,8 @@ async def do_schedule_control(
         bucket = "control"
     return await do_schedule(
         conn,
-        package,
-        "control",
+        package=package,
+        campaign="control",
         change_set=change_set,
         offset=offset,
         refresh=refresh,
@@ -422,17 +422,17 @@ async def do_schedule_control(
 
 
 class CandidateUnavailable(Exception):
-    def __init__(self, campaign: str, package: str):
+    def __init__(self, campaign: str, codebase: str):
         self.campaign = campaign
-        self.package = package
+        self.codebase = codebase
 
 
 async def do_schedule(
     conn: asyncpg.Connection,
-    package: str,
     campaign: str,
     codebase: str,
     *,
+    package: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     bucket: Optional[str] = None,
@@ -448,13 +448,13 @@ async def do_schedule(
     if command is None:
         candidate = await conn.fetchrow(
             "SELECT command "
-            "FROM candidate WHERE package = $1 AND suite = $2",
-            package, campaign)
+            "FROM candidate WHERE codebase = $1 AND suite = $2",
+            codebase, campaign)
         if not candidate:
-            raise CandidateUnavailable(campaign, package)
+            raise CandidateUnavailable(campaign, codebase)
         command = candidate['command']
     if estimated_duration is None:
-        estimated_duration = await estimate_duration(conn, package, campaign)
+        estimated_duration = await estimate_duration(conn, codebase, campaign)
     queue = Queue(conn)
     queue_id, bucket = await queue.add(
         package=package,

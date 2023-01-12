@@ -1766,8 +1766,8 @@ async def handle_schedule(request):
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, bucket = await do_schedule(
                     conn,
-                    package,
-                    campaign,
+                    package=package,
+                    campaign=campaign,
                     offset=offset,
                     change_set=change_set,
                     refresh=refresh,
@@ -2086,8 +2086,8 @@ async def handle_candidates_upload(request):
                     with span.new_child('schedule'):
                         offset, estimated_duration, queue_id, bucket = await do_schedule(
                             conn,
-                            candidate['package'],
-                            candidate['campaign'],
+                            package=candidate['package'],
+                            campaign=candidate['campaign'],
                             change_set=candidate.get('change_set'),
                             bucket=bucket,
                             requestor=requestor,
