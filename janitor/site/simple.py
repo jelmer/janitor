@@ -449,7 +449,6 @@ async def create_app(
 
     for path, templatename in [
         ("/", "index"),
-        ("/contact", "contact"),
         ("/about", "about"),
     ]:
         app.router.add_get(
