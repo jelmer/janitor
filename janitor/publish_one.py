@@ -140,7 +140,6 @@ def publish(
     *,
     template_env,
     campaign: str,
-    pkg: str,
     commit_message_template: Optional[str],
     title_template: Optional[str],
     codemod_result: Any,
@@ -159,15 +158,17 @@ def publish(
     reviewers: Optional[list[str]] = None,
     result_tags: Optional[dict[str, bytes]] = None,
     stop_revision: Optional[bytes] = None,
+    extra_context: Optional[dict[str, Any]] = None,
 ):
     def get_proposal_description(description_format, existing_proposal):
         vs = {
-            'package': pkg,
             'log_id': log_id,
             'campaign': campaign,
             'suite': campaign,   # TODO(jelmer): Backwards compatibility
             'role': role,
         }
+        if extra_context:
+            vs.update(extra_context)
         if codemod_result:
             vs.update(codemod_result)
             vs['codemod'] = codemod_result
@@ -338,7 +339,6 @@ def _drop_env(args):
 def publish_one(
     template_env,
     campaign: str,
-    pkg: str,
     command,
     codemod_result,
     target_branch_url: str,
@@ -360,6 +360,7 @@ def publish_one(
     commit_message_template: Optional[str] = None,
     title_template: Optional[str] = None,
     existing_mp_url: Optional[str] = None,
+    extra_context: Optional[dict[str, Any]] = None,
 ) -> tuple[PublishResult, str]:
 
     args = shlex.split(command)
@@ -535,7 +536,6 @@ def publish_one(
             publish_result = publish(
                 template_env=template_env,
                 campaign=campaign,
-                pkg=pkg,
                 commit_message_template=commit_message_template,
                 title_template=title_template,
                 codemod_result=codemod_result,
@@ -554,6 +554,7 @@ def publish_one(
                 reviewers=reviewers,
                 result_tags=result_tags,
                 stop_revision=revision,
+                extra_context=extra_context,
             )
         except EmptyMergeProposal as e:
             raise PublishFailure(
@@ -612,7 +613,6 @@ if __name__ == "__main__":
         publish_result, branch_name = publish_one(
             template_env,
             campaign=request["campaign"],
-            pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],
             command=request["command"],
             codemod_result=request["codemod_result"],
@@ -634,6 +634,7 @@ if __name__ == "__main__":
             commit_message_template=request.get("commit_message_template"),
             title_template=request.get("title_template"),
             existing_mp_url=request.get('existing_mp_url'),
+            extra_context=request.get('extra_context'),
         )
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)
