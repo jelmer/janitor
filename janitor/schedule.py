@@ -392,7 +392,7 @@ async def main():
 async def do_schedule_control(
     conn: asyncpg.Connection,
     package: str,
-    codebase: Optional[str],
+    codebase: str,
     *,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
@@ -431,7 +431,7 @@ async def do_schedule(
     conn: asyncpg.Connection,
     package: str,
     campaign: str,
-    codebase: Optional[str],
+    codebase: str,
     *,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
@@ -455,10 +455,6 @@ async def do_schedule(
         command = candidate['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, campaign)
-    # TODO(jelmer): Pass in codebase, not package
-    if codebase is None:
-        codebase = await conn.fetchval(
-            'SELECT codebase FROM package WHERE name = $1', package)
     queue = Queue(conn)
     queue_id, bucket = await queue.add(
         package=package,

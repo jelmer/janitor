@@ -85,7 +85,7 @@ class Run:
     change_set: str
     failure_transient: Optional[bool]
     failure_stage: Optional[str]
-    codebase: Optional[str]
+    codebase: str
 
     __slots__ = [
         "id",
