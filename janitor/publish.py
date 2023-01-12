@@ -594,9 +594,9 @@ async def consider_publish_run(
         conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
         vcs_managers, bucket_rate_limiter,
         run, rate_limit_bucket,
-        unpublished_branches, command,
-        push_limit=None, require_binary_diff=False,
-        dry_run=False):
+        unpublished_branches, command: str,
+        push_limit: Optional[int] = None, require_binary_diff: bool = False,
+        dry_run: bool = False) -> Dict[str, Optional[str]]:
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id,
@@ -656,14 +656,14 @@ async def consider_publish_run(
         if publish_mode is None:
             logger.warning(
                 "%s: No publish mode for branch with role %s", run.id, role,
-                extra={'run_id': run.id})
+                extra={'run_id': run.id, 'role': role})
             missing_publish_mode_count.labels(role=role).inc()
             continue
         if role == 'main' and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
                 "auxiliary branches were published.", run.id, role,
-                extra={'run_id': run.id})
+                extra={'run_id': run.id, 'role': role})
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
@@ -811,7 +811,7 @@ async def publish_pending_ready(
     last_publish_pending_success.set_to_current_time()
 
 
-async def handle_publish_failure(e, conn, run, bucket):
+async def handle_publish_failure(e, conn, run, bucket: str) -> Tuple[str, str]:
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, package, revision FROM last_runs "
         "WHERE revision = $2 AND package = $1 and result_code = 'success'",
@@ -3010,6 +3010,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                     "%s: Empty merge proposal, changes must have been merged "
                     "some other way. Closing.",
                     mp.url,
+                    extra={'mp_url': mp.url},
                 )
                 try:
                     await close_applied_mp(
