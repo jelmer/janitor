@@ -58,7 +58,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
         '-m',
         'breezy',
         "diff",
-        '-rrevid:%s..revid:%s' % (
+        '-rrevid:{}..revid:{}'.format(
             old_revid.decode(),
             new_revid.decode(),
         ),
@@ -357,7 +357,7 @@ async def main(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):

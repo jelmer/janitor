@@ -31,7 +31,7 @@ import shutil
 import sys
 import tempfile
 import time
-from typing import List, Dict, Optional, Any
+from typing import Optional, Any
 from email.utils import formatdate, parsedate_to_datetime
 from datetime import datetime
 from time import mktime
@@ -59,7 +59,7 @@ from ..config import read_config, get_distribution, Campaign, get_campaign_confi
 TMP_PREFIX = 'janitor-apt'
 DEFAULT_GCS_TIMEOUT = 60 * 30
 
-last_publish_time: Dict[str, datetime] = {}
+last_publish_time: dict[str, datetime] = {}
 
 
 last_publish_success = Gauge(
@@ -77,7 +77,7 @@ routes = web.RouteTableDef()
 # TODO(jelmer): Generate contents file
 
 
-class PackageInfoProvider(object):
+class PackageInfoProvider:
 
     async def __aenter__(self):
         return self
@@ -320,7 +320,7 @@ def cleanup_by_hash_files(base, number_to_keep):
             os.unlink(entry.path)
 
 
-class HashedFileWriter(object):
+class HashedFileWriter:
     """File write wrapper that writes by-hash files."""
 
     def __init__(self, release, base, path, open=open):
@@ -385,7 +385,7 @@ async def write_suite_files(
     components, arches, origin, gpg_context,
     timestamp: Optional[datetime] = None
 ):
-    SUFFIXES: Dict[str, Any] = {
+    SUFFIXES: dict[str, Any] = {
         "": open,
         ".gz": gzip.GzipFile,
         ".bz2": bz2.BZ2File,
@@ -470,7 +470,7 @@ async def write_suite_files(
 
 
 # TODO(jelmer): Don't hardcode this
-ARCHES: List[str] = ["amd64"]
+ARCHES: list[str] = ["amd64"]
 
 
 @routes.post("/publish", name="publish")
@@ -571,7 +571,7 @@ async def refresh_on_demand_dists(
     os.makedirs(os.path.join(dists_dir, kind, id), exist_ok=True)
     release_path = os.path.join(dists_dir, kind, id, 'Release')
     try:
-        with open(release_path, 'r') as f:
+        with open(release_path) as f:
             release = Release(f)
     except FileNotFoundError:
         stamp = None
@@ -810,7 +810,7 @@ def create_background_task(fn, title):
     return task
 
 
-class GeneratorManager(object):
+class GeneratorManager:
     def __init__(self, dists_dir, db, config, package_info_provider, gpg_context):
         self.dists_dir = dists_dir
         self.db = db
@@ -881,7 +881,7 @@ async def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     os.makedirs(args.dists_directory, exist_ok=True)

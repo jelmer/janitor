@@ -46,7 +46,7 @@ def main(argv=None):
     for instance in iter_forge_instances():
         try:
             for project in projects_to_remove(instance):
-                logging.info("Deleting %s from %r" % (project, instance))
+                logging.info("Deleting {} from {!r}".format(project, instance))
                 if not args.dry_run:
                     instance.delete_project(project)
         except UnsupportedForge as e:

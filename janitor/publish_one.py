@@ -25,7 +25,7 @@ request, and writes results to standard out as JSON.
 from contextlib import ExitStack
 from email.utils import parseaddr
 import os
-from typing import Optional, List, Any, Dict, Tuple
+from typing import Optional, Any
 
 import logging
 
@@ -156,8 +156,8 @@ def publish(
     existing_proposal: Optional[MergeProposal] = None,
     allow_create_proposal: bool = False,
     debdiff: Optional[bytes] = None,
-    reviewers: Optional[List[str]] = None,
-    result_tags: Optional[Dict[str, bytes]] = None,
+    reviewers: Optional[list[str]] = None,
+    result_tags: Optional[dict[str, bytes]] = None,
     stop_revision: Optional[bytes] = None,
 ):
     def get_proposal_description(description_format, existing_proposal):
@@ -203,7 +203,7 @@ def publish(
                 description="Revision missing: %s" % e.revision,  # type: ignore
                 code="revision-missing") from e
 
-    labels: Optional[List[str]]
+    labels: Optional[list[str]]
 
     if forge and forge.supports_merge_proposal_labels:
         labels = [campaign]
@@ -306,7 +306,7 @@ class DifferUnavailable(Exception):
 
 def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
     debdiff_url = urllib.parse.urljoin(
-        differ_url, "/debdiff/%s/%s?filter_boring=1" % (unchanged_id, log_id)
+        differ_url, f"/debdiff/{unchanged_id}/{log_id}?filter_boring=1"
     )
     headers = {"Accept": "text/plain"}
 
@@ -352,15 +352,15 @@ def publish_one(
     derived_branch_name: str,
     dry_run: bool = False,
     require_binary_diff: bool = False,
-    possible_forges: Optional[List[Forge]] = None,
-    possible_transports: Optional[List[Transport]] = None,
+    possible_forges: Optional[list[Forge]] = None,
+    possible_transports: Optional[list[Transport]] = None,
     allow_create_proposal: bool = False,
-    reviewers: Optional[List[str]] = None,
-    result_tags: Optional[Dict[str, bytes]] = None,
+    reviewers: Optional[list[str]] = None,
+    result_tags: Optional[dict[str, bytes]] = None,
     commit_message_template: Optional[str] = None,
     title_template: Optional[str] = None,
     existing_mp_url: Optional[str] = None,
-) -> Tuple[PublishResult, str]:
+) -> tuple[PublishResult, str]:
 
     args = shlex.split(command)
     _drop_env(args)

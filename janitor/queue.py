@@ -16,13 +16,13 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional, Set, List, Any, Tuple
+from typing import Optional, Any
 
 
 import asyncpg
 
 
-class QueueItem(object):
+class QueueItem:
 
     __slots__ = [
         "id",
@@ -89,7 +89,7 @@ class QueueItem(object):
         return hash((type(self), self.id))
 
 
-class Queue(object):
+class Queue:
 
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
@@ -127,8 +127,8 @@ WHERE queue.id = $1
 
     async def next_item(self, package: Optional[str] = None,
                         campaign: Optional[str] = None,
-                        exclude_hosts: Optional[Set[str]] = None,
-                        assigned_queue_items: Optional[Set[int]] = None):
+                        exclude_hosts: Optional[set[str]] = None,
+                        assigned_queue_items: Optional[set[int]] = None):
         query = """
 SELECT
     queue.package AS package,
@@ -149,7 +149,7 @@ FROM
 LEFT JOIN codebase ON codebase.name = queue.codebase
 """
         conditions = []
-        args: List[Any] = []
+        args: list[Any] = []
         if assigned_queue_items:
             args.append(assigned_queue_items)
             conditions.append("NOT (queue.id = ANY($%d::int[]))" % len(args))
@@ -207,7 +207,7 @@ FROM
     queue
 """
         conditions = []
-        args: List[Any] = []
+        args: list[Any] = []
         if package:
             args.append(package)
             conditions.append("queue.package = $%d" % len(args))
@@ -241,7 +241,7 @@ queue.id ASC
             context: Optional[str] = None,
             estimated_duration: Optional[timedelta] = None,
             refresh: bool = False,
-            requestor: Optional[str] = None) -> Tuple[int, str]:
+            requestor: Optional[str] = None) -> tuple[int, str]:
         row = await self.conn.fetchrow(
             "INSERT INTO queue "
             "(package, command, priority, bucket, context, "
