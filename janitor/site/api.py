@@ -116,7 +116,7 @@ async def handle_schedule(request):
             package = await conn.fetchrow(
                 'SELECT codebase FROM package WHERE name = $1', package_name)
             if package is None:
-                raise web.HTTPNotFound(text=f'no such package: {package_name}')
+                raise web.HTTPNotFound(text=f'no such package: {package_name}') from None
             codebase = package['codebase']
 
     campaign = request.match_info["campaign"]
