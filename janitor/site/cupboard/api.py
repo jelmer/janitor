@@ -80,7 +80,7 @@ async def handle_mass_reschedule(request):
         query = "select c.package AS package, c.suite AS campaign from candidate c WHERE "
         params = []
         where = [
-            "not exists (SELECT FROM run WHERE run.package = c.package AND c.suite = suite)"]
+            "not exists (SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)"]
         if campaign:
             params.append(campaign)
             where.append("c.suite = $%d" % len(params))
@@ -100,7 +100,7 @@ finish_time - start_time as duration
 FROM %s AS run
 WHERE
 EXISTS (SELECT FROM candidate WHERE
-run.package = candidate.package AND
+run.codebase = candidate.codebase AND
 run.suite = candidate.suite AND
 (run.change_set = candidate.change_set OR candidate.change_set IS NULL))
 AND """ % table

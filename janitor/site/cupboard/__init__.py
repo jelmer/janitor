@@ -107,7 +107,7 @@ async def handle_never_processed(request):
         query = """\
         select c.package, c.suite from candidate c
         where not exists (
-            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+            SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)
         """
         args = []
         if campaigns:
@@ -145,7 +145,7 @@ async def handle_result_codes(request):
         if not include_historical:
             query += (
                 " AND EXISTS (SELECT FROM candidate WHERE "
-                "run.package = candidate.package AND "
+                "run.codebase = candidate.codebase AND "
                 "run.suite = candidate.suite AND "
                 "(run.change_set = candidate.change_set OR candidate.change_set is NULL))")
         query += " group by 1"
@@ -153,7 +153,7 @@ async def handle_result_codes(request):
             query = """(%s) union
     select 'never-processed', count(*) from candidate c
         where not exists (
-            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+            SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)
         and suite = ANY($1::text[]) order by 2 desc
     """ % query
         return {
@@ -187,7 +187,7 @@ async def handle_failure_stages(request):
         if not include_historical:
             query += (
                 " AND EXISTS (SELECT FROM candidate WHERE "
-                "run.package = candidate.package AND "
+                "run.codebase = candidate.codebase AND "
                 "run.suite = candidate.suite AND "
                 "(run.change_set = candidate.change_set OR candidate.change_set is NULL))")
         query += " group by 1"
@@ -221,7 +221,7 @@ async def handle_result_code(request):
     if not include_historical:
         query += (
             " AND EXISTS (SELECT FROM candidate WHERE "
-            "run.package = candidate.package AND "
+            "run.codebase = candidate.codebase AND "
             "run.suite = candidate.suite AND "
             "(run.change_set = candidate.change_set OR candidate.change_set IS NULL))")
     all_campaigns = [c.name for c in request.app['config'].campaign]
@@ -374,7 +374,7 @@ from merge_proposal join run on
 as current_run left join last_runs last_run
 on
 current_run.suite = last_run.suite and
-current_run.package = last_run.package
+current_run.codebase = last_run.codebase
 where
 last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
 order by url, last_run.finish_time desc
