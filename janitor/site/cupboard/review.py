@@ -12,13 +12,7 @@ import asyncpg
 from breezy.revision import NULL_REVISION
 
 from janitor import state
-from .. import (
-    get_archive_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-)
 from ..common import (
-    get_unchanged_run,
     render_template_for_request,
 )
 from . import iter_needs_review
@@ -179,31 +173,6 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
             logging.warning("Timeout while retrieving commit info")
             return []
 
-    async def show_debdiff():
-        with span.new_child("sql:unchanged-run"):
-            async with db.acquire() as conn:
-                unchanged_run = await get_unchanged_run(
-                    conn, run['package'], run['main_branch_revision'].encode('utf-8')
-                )
-        if unchanged_run is None:
-            return "<p>No control run</p>"
-        try:
-            with span.new_child('archive-diff'):
-                text, unused_content_type = await get_archive_diff(
-                    http_client_session,
-                    differ_url,
-                    run_id,
-                    unchanged_run['id'],
-                    kind="debdiff",
-                    filter_boring=True,
-                    accept="text/html",
-                )
-                return text.decode("utf-8", "replace")
-        except DebdiffRetrievalError as e:
-            return "Unable to retrieve debdiff: %r" % e
-        except BuildDiffUnavailable:
-            return "<p>No build diff generated</p>"
-
     return {
         'run_id': run_id,
         'MAX_DIFF_SIZE': MAX_DIFF_SIZE,
@@ -213,6 +182,5 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
         'value': run['value'],
         'command': run['command'],
         'show_diff': show_diff,
-        'show_debdiff': show_debdiff,
         "get_revision_info": get_revision_info,
     }

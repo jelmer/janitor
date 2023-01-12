@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS upstream (
 
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   package text, -- TO BE REMOVED
+   package text references package(name), -- TO BE REMOVED
+   codebase text references codebase(name),
    url text not null,
    target_branch_url text,
    status merge_proposal_status NULL DEFAULT NULL,
@@ -71,7 +72,6 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    last_scanned timestamp,
    can_be_merged boolean,
    rate_limit_bucket text,
-   foreign key (package) references package(name),
    primary key(url)
 );
 CREATE INDEX ON merge_proposal (revision);
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
    duration interval generated always as (finish_time - start_time) stored,
-   package text not null, -- TO BE REMOVED
+   package text not null references package(name), -- TO BE REMOVED
    result_code text not null,
    instigated_context text,
    -- Some codemod-specific indication of what we attempted to do
@@ -139,8 +139,7 @@ CREATE TABLE IF NOT EXISTS run (
    -- The run this one resumed from
    resume_from text references run (id),
    change_set text not null references change_set(id),
-   codebase text references codebase(name),
-   foreign key (package) references package(name),
+   codebase text not null references codebase(name),
    check(finish_time >= start_time),
    check(branch_url is null or vcs_type is not null),
    -- nothing-new-to-do always requires resume_from
@@ -184,20 +183,18 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   package text not null,
-   codebase text,
+   package text not null references package(name),
+   codebase text not null references codebase(name),
    branch_url text,
    suite suite_name not null,
    command text,
    priority bigint default 0 not null,
-   foreign key (package) references package(name),
    -- Some codemod-specific indication of what we are expecting to do.
    context text,
    estimated_duration interval,
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   foreign key (codebase) references codebase(name),
    check (command != '')
 );
 CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));

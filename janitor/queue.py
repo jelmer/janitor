@@ -94,7 +94,7 @@ class Queue:
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
 
-    async def get_position(self, campaign, package):
+    async def get_position(self, campaign, package) -> tuple[Optional[int], Optional[timedelta]]:
         row = await self.conn.fetchrow(
             "SELECT position, wait_time FROM queue_positions "
             "WHERE package = $1 AND suite = $2",
@@ -106,7 +106,7 @@ class Queue:
     async def get_item(self, queue_id: int):
         query = """
 SELECT
-    queue.package AS package,
+    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -118,6 +118,7 @@ SELECT
     queue.codebase AS codebase
 FROM
     queue
+LEFT JOIN package ON package.codebase = queue.codebase
 WHERE queue.id = $1
 """
         row = await self.conn.fetchrow(query, queue_id)
@@ -125,13 +126,13 @@ WHERE queue.id = $1
             return QueueItem.from_row(row)
         return None
 
-    async def next_item(self, package: Optional[str] = None,
+    async def next_item(self, codebase: Optional[str] = None,
                         campaign: Optional[str] = None,
                         exclude_hosts: Optional[set[str]] = None,
                         assigned_queue_items: Optional[set[int]] = None):
         query = """
 SELECT
-    queue.package AS package,
+    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -147,15 +148,16 @@ SELECT
 FROM
     queue
 LEFT JOIN codebase ON codebase.name = queue.codebase
+LEFT JOIN package ON package.codebase = queue.codebase
 """
         conditions = []
         args: list[Any] = []
         if assigned_queue_items:
             args.append(assigned_queue_items)
             conditions.append("NOT (queue.id = ANY($%d::int[]))" % len(args))
-        if package:
-            args.append(package)
-            conditions.append("queue.package = $%d" % len(args))
+        if codebase:
+            args.append(codebase)
+            conditions.append("queue.codebase = $%d" % len(args))
         if campaign:
             args.append(campaign)
             conditions.append("queue.suite = $%d" % len(args))
@@ -190,10 +192,10 @@ LIMIT 1
         return QueueItem.from_row(row), vcs_info
 
     async def iter_queue(self, limit: Optional[int] = None,
-                         package: Optional[str] = None, campaign: Optional[str] = None):
+                         campaign: Optional[str] = None):
         query = """
 SELECT
-    queue.package AS package,
+    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -205,12 +207,10 @@ SELECT
     queue.codebase AS codebase
 FROM
     queue
+LEFT JOIN package ON package.codebase = queue.codebase
 """
         conditions = []
         args: list[Any] = []
-        if package:
-            args.append(package)
-            conditions.append("queue.package = $%d" % len(args))
         if campaign:
             args.append(campaign)
             conditions.append("queue.suite = $%d" % len(args))

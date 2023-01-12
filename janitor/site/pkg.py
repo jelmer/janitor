@@ -149,7 +149,7 @@ async def generate_run_file(
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
-                run['suite'], run['package']
+                run['suite'], run['codebase']
             )
         with span.new_child('sql:package'):
             package = await conn.fetchrow(

@@ -244,7 +244,7 @@ WHERE run.package = $1 AND run.suite = $2
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
-                suite, package['name'])
+                suite, package['codebase'])
         if run_id:
             with span.new_child('sql:reviews'):
                 reviews = await conn.fetch(
