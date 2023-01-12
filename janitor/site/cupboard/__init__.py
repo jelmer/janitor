@@ -572,8 +572,8 @@ def register_cupboard_link(title, shortlink):
     _extra_cupboard_links.append((title, shortlink))
 
 
-@routes.get("/cupboard/evaluate/{run_id}", name="cupboard-evaluate")
-@html_template("cupboard/evaluate.html")
+@routes.get("/cupboard/evaluate/{run_id}", name="cupboard-default-evaluate")
+@html_template("cupboard/default-evaluate.html")
 async def handle_cupboard_evaluate(request):
     run_id = request.match_info['run_id']
     span = aiozipkin.request_span(request)
@@ -597,7 +597,7 @@ def register_cupboard_endpoints(
         config=config, publisher_url=publisher_url, runner_url=runner_url,
         trace_configs=trace_configs, db=db))
     if evaluate_url is None:
-        evaluate_url = app.router['cupboard-evaluate'].url_for(run_id='RUN_ID')
+        evaluate_url = app.router['cupboard-default-evaluate'].url_for(run_id='RUN_ID')
     app['evaluate_url'] = evaluate_url
 
 
