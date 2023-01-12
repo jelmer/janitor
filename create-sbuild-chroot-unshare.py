@@ -18,7 +18,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
     if include:
         cmd.append("--include=" + ','.join(include))
     for name in distro.extra:
-        cmd.append("--extra-repository=deb %s %s %s" % (
+        cmd.append("--extra-repository=deb {} {} {}".format(
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
 
     for setup_hook in setup_hooks:
@@ -32,7 +32,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
     for suite in suites:
         os.symlink(
             basename,
-            os.path.join(dirname, "%s-%s-sbuild%s" % (suite, sbuild_arch, ext)))
+            os.path.join(dirname, "{}-{}-sbuild{}".format(suite, sbuild_arch, ext)))
 
 
 def get_sbuild_architecture():
@@ -56,7 +56,7 @@ parser.add_argument(
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
-with open(args.config, "r") as f:
+with open(args.config) as f:
     config = read_config(f)
 
 if not args.distribution:
@@ -82,7 +82,7 @@ for distribution in args.distribution:
     setup_hooks = []
     if args.user:
         setup_hooks.append(
-            'install -d --owner=%s %s' % (
+            'install -d --owner={} {}'.format(
                 args.user, pwd.getpwname(args.user).pw_dir))
     create_chroot(
         distro_config, sbuild_path, suites, sbuild_arch, args.include,

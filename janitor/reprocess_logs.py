@@ -29,7 +29,7 @@ def process_sbuild_log(logf):
     failure = worker_failure_from_sbuild_log(logf)
     if failure.error:
         if failure.stage and not failure.error.is_global:
-            new_code = "%s-%s" % (failure.stage, failure.error.kind)
+            new_code = f"{failure.stage}-{failure.error.kind}"
         else:
             new_code = failure.error.kind
         try:

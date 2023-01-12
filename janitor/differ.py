@@ -363,12 +363,12 @@ async def handle_diffoscope(request):
             with open(cache_path, "w") as f:
                 json.dump(diffoscope_diff, f)
 
-    diffoscope_diff["source1"] = "%s version %s (%s)" % (
+    diffoscope_diff["source1"] = "{} version {} ({})".format(
         old_run['package'],
         old_run['build_version'],
         old_run['campaign'],
     )
-    diffoscope_diff["source2"] = "%s version %s (%s)" % (
+    diffoscope_diff["source2"] = "{} version {} ({})".format(
         new_run['package'],
         new_run['build_version'],
         new_run['campaign'],
@@ -376,7 +376,7 @@ async def handle_diffoscope(request):
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = "diffoscope for %s applied to %s" % (new_run['campaign'], new_run['package'])
+    title = "diffoscope for {} applied to {}".format(new_run['campaign'], new_run['package'])
 
     if "filter_boring" in request.query:
         filter_diffoscope_boring(
@@ -586,7 +586,7 @@ def diffoscope_cache_path(cache_path, old_id, new_id):
     base_path = os.path.join(cache_path, "diffoscope")
     if not os.path.isdir(base_path):
         os.mkdir(base_path)
-    return os.path.join(base_path, "%s_%s.json" % (old_id, new_id))
+    return os.path.join(base_path, f"{old_id}_{new_id}.json")
 
 
 def debdiff_cache_path(cache_path, old_id, new_id):
@@ -594,7 +594,7 @@ def debdiff_cache_path(cache_path, old_id, new_id):
     # This can happen when the default branch changes
     if not os.path.isdir(base_path):
         os.mkdir(base_path)
-    return os.path.join(base_path, "%s_%s" % (old_id, new_id))
+    return os.path.join(base_path, f"{old_id}_{new_id}")
 
 
 async def run_web_server(app, listen_addr, port):
@@ -740,7 +740,7 @@ def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     set_user_agent(config.user_agent)

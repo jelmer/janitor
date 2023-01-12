@@ -23,7 +23,7 @@ import json
 import logging
 import shlex
 import sys
-from typing import Dict, Any
+from typing import Any
 
 from breezy.patches import (
     iter_hunks,
@@ -196,7 +196,7 @@ async def _run_diffoscope(
 async def run_diffoscope(
         old_binaries, new_binaries, *, preexec_fn=None, timeout=None,
         diffoscope_command=None):
-    ret: Dict[str, Any] = {
+    ret: dict[str, Any] = {
         "diffoscope-json-version": 1,
         "source1": "old version",
         "source2": "new version",
