@@ -183,20 +183,18 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   package text not null,
-   codebase text,
+   package text not null references package(name),
+   codebase text not null references codebase(name),
    branch_url text,
    suite suite_name not null,
    command text,
    priority bigint default 0 not null,
-   foreign key (package) references package(name),
    -- Some codemod-specific indication of what we are expecting to do.
    context text,
    estimated_duration interval,
    refresh boolean default false,
    requestor text,
    change_set text references change_set(id),
-   foreign key (codebase) references codebase(name),
    check (command != '')
 );
 CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));

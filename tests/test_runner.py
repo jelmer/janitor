@@ -336,7 +336,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             'campaign': 'mycampaign',
             'change_set': cs,
             'code': 'missing-result-code',
-            'codebase': None,
+            'codebase': 'foo',
             'codemod': None,
             'description': None,
             'duration': 0.0,
