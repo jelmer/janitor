@@ -332,6 +332,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         'logs': [],
         'result': {
             'branches': None,
+            'branch_url': None,
             'campaign': 'mycampaign',
             'change_set': cs,
             'code': 'missing-result-code',
