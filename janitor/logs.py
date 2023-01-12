@@ -26,7 +26,6 @@ from datetime import datetime
 import gzip
 from io import BytesIO
 import os
-from typing import Dict, List, Tuple
 from yarl import URL
 
 
@@ -152,10 +151,10 @@ class S3LogFileManager(LogFileManager):
         return False
 
     def _get_key(self, pkg, run_id, name):
-        return "logs/%s/%s/%s.gz" % (pkg, run_id, name)
+        return f"logs/{pkg}/{run_id}/{name}.gz"
 
     def _get_url(self, pkg, run_id, name):
-        return "%s%s" % (self.base_url, self._get_key(pkg, run_id, name))
+        return f"{self.base_url}{self._get_key(pkg, run_id, name)}"
 
     async def has_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
@@ -227,7 +226,7 @@ class GCSLogFileManager(LogFileManager):
         return False
 
     async def iter_logs(self):
-        seen: Dict[Tuple[str, str], List[str]] = {}
+        seen: dict[tuple[str, str], list[str]] = {}
         for name in await self.bucket.list_blobs():
             pkg, log_id, lfn = name.split("/")
             seen.setdefault((pkg, log_id), []).append(lfn)
@@ -235,7 +234,7 @@ class GCSLogFileManager(LogFileManager):
             yield pkg, log_id, lfns
 
     def _get_object_name(self, pkg, run_id, name):
-        return "%s/%s/%s.gz" % (pkg, run_id, name)
+        return f"{pkg}/{run_id}/{name}.gz"
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)

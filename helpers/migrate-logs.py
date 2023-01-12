@@ -23,7 +23,7 @@ parser.add_argument('from_location', type=str, nargs=1)
 parser.add_argument('to_location', type=str, nargs=1)
 args = parser.parse_args()
 
-with open(args.config, 'r') as f:
+with open(args.config) as f:
     config = read_config(f)
 
 from_manager = get_log_manager(args.from_location)
@@ -49,7 +49,7 @@ async def reprocess_run(pool, package, log_id, logfilenames):
                 'UPDATE run SET logfilenames = $1 WHERE id = $2', logfilenames,
                 log_id)
 
-    print('Processing %s (%r)' % (log_id, logfilenames))
+    print('Processing {} ({!r})'.format(log_id, logfilenames))
     with tempfile.TemporaryDirectory() as d:
         for name in logfilenames:
             try:

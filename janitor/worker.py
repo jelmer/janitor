@@ -32,7 +32,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, List, Dict, Tuple, cast
+from typing import Any, Optional, cast
 import warnings
 
 import uvloop
@@ -166,14 +166,14 @@ def gce_external_ip():
     return resp.read().decode()
 
 
-class WorkerResult(object):
+class WorkerResult:
     def __init__(
         self,
         *,
         description: Optional[str],
         value: Optional[int],
-        branches: Optional[List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
-        tags: Optional[Dict[str, bytes]],
+        branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
+        tags: Optional[dict[str, bytes]],
         target: str,
         target_details: Optional[Any],
         codemod: Any,
@@ -256,7 +256,7 @@ def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
         stage=("codemod", ))
 
 
-class Target(object):
+class Target:
     """A build target."""
 
     name: str
@@ -307,11 +307,11 @@ class DebianTarget(Target):
 
         logging.info('Running %r', argv)
         # TODO(jelmer): This is only necessary for deb-new-upstream
-        dist_command = 'PYTHONPATH=%s %s -m janitor.debian.dist --log-directory=%s ' % (
+        dist_command = 'PYTHONPATH={} {} -m janitor.debian.dist --log-directory={} '.format(
             ':'.join(sys.path), sys.executable, log_directory)
 
         try:
-            dist_command = "SCHROOT=%s %s" % (self.env["CHROOT"], dist_command)
+            dist_command = "SCHROOT={} {}".format(self.env["CHROOT"], dist_command)
         except KeyError:
             pass
 
@@ -444,8 +444,8 @@ class GenericTarget(Target):
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
-        branches: Optional[List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
-        tags: Optional[Dict[str, bytes]],
+        branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
+        tags: Optional[dict[str, bytes]],
         update_current: bool = True):
     from breezy.repository import InterRepository
     from breezy.git.repository import GitRepository
@@ -469,22 +469,22 @@ def import_branches_git(
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
     def get_changed_refs(refs):
-        changed_refs: Dict[bytes, Tuple[bytes, Optional[bytes]]] = {}
+        changed_refs: dict[bytes, tuple[bytes, Optional[bytes]]] = {}
         for (fn, _n, _br, r) in (branches or []):
-            tagname = ("refs/tags/run/%s/%s" % (log_id, fn)).encode("utf-8")
+            tagname = ("refs/tags/run/{}/{}".format(log_id, fn)).encode("utf-8")
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
             else:
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
-                branchname = ("refs/heads/%s/%s" % (campaign, fn)).encode("utf-8")
+                branchname = ("refs/heads/{}/{}".format(campaign, fn)).encode("utf-8")
                 # TODO(jelmer): Ideally this would be a symref:
                 changed_refs[branchname] = changed_refs[tagname]
         for n, r in (tags or {}).items():
-            tagname = ("refs/tags/%s/%s" % (log_id, n)).encode("utf-8")
+            tagname = ("refs/tags/{}/{}".format(log_id, n)).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
-                tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
+                tagname = ("refs/tags/{}".format(n)).encode("utf-8")
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
 
@@ -529,7 +529,7 @@ def import_branches_bzr(
         for name, revision in tags:
             # Only set tags on those branches where the revisions exist
             if graph.is_ancestor(revision, target_branch.last_revision()):
-                target_branch.tags.set_tag('%s/%s' % (log_id, name), revision)
+                target_branch.tags.set_tag('{}/{}'.format(log_id, name), revision)
                 if update_current:
                     target_branch.tags.set_tag(name, revision)
 
@@ -623,9 +623,9 @@ async def upload_results(
                 )
             result = await resp.json()
             if output_directory is not None:
-                local_filenames = set(
-                    [entry.name for entry in os.scandir(output_directory)
-                     if entry.is_file()])
+                local_filenames = {
+                    entry.name for entry in os.scandir(output_directory)
+                    if entry.is_file()}
                 runner_filenames = set(result.get('filenames', []))
                 if local_filenames != runner_filenames:
                     logging.warning(
@@ -670,7 +670,7 @@ def push_branch(
     overwrite=False,
     stop_revision=None,
     tag_selector=None,
-    possible_transports: Optional[List[Transport]] = None,
+    possible_transports: Optional[list[Transport]] = None,
 ) -> None:
     url, params = urlutils.split_segment_parameters(url)
     branch_name = params.get("branch")
@@ -743,8 +743,8 @@ def run_worker(
     subpath: str,
     vcs_type: str,
     build_config: Any,
-    env: Dict[str, str],
-    command: List[str],
+    env: dict[str, str],
+    command: list[str],
     output_directory: str,
     metadata: Any,
     target_repo_url: str,
@@ -755,11 +755,11 @@ def run_worker(
     cached_branch_url: Optional[str] = None,
     resume_codemod_result=None,
     resume_branches: Optional[
-        List[Tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
-    possible_transports: Optional[List[Transport]] = None,
+        list[tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
+    possible_transports: Optional[list[Transport]] = None,
     force_build: bool = False,
     tee: bool = False,
-    additional_colocated_branches: Optional[Dict[str, str]] = None,
+    additional_colocated_branches: Optional[dict[str, str]] = None,
     skip_setup_validation: bool = False,
     default_empty: bool = False,
 ):
@@ -850,7 +850,7 @@ def run_worker(
             else:
                 resume_branch = None
 
-            roles: Dict[Optional[str], str] = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
+            roles: dict[Optional[str], str] = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
 
             if main_branch:
                 roles[main_branch.name] = 'main'
@@ -964,7 +964,7 @@ def run_worker(
             finally:
                 metadata["revision"] = ws.local_tree.branch.last_revision().decode('utf-8')
 
-            result_branches: List[Tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
+            result_branches: list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
             for (name, base_revision, revision) in ws.result_branches():
                 try:
                     role = roles[name]
@@ -1032,7 +1032,7 @@ def run_worker(
             elif actual_vcs_type != vcs_type:
                 raise WorkerFailure(
                     'vcs-type-mismatch',
-                    'Expected VCS %s, got %s' % (vcs_type, actual_vcs_type),
+                    'Expected VCS {}, got {}'.format(vcs_type, actual_vcs_type),
                     stage=("result-push", ),
                     transient=False)
 
@@ -1395,7 +1395,7 @@ async def process_single_item(
 
         run_id = assignment["id"]
 
-        possible_transports: List[Transport] = []
+        possible_transports: list[Transport] = []
 
         env = assignment["env"]
 

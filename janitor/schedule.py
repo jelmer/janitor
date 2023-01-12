@@ -22,7 +22,7 @@ __all__ = [
 from datetime import datetime, timedelta
 import logging
 import shlex
-from typing import Optional, List, Tuple
+from typing import Optional
 
 from debian.changelog import Version
 
@@ -61,7 +61,7 @@ PUBLISH_MODE_VALUE = {
 
 async def iter_candidates_with_publish_policy(
         conn: asyncpg.Connection,
-        packages: Optional[List[str]] = None,
+        packages: Optional[list[str]] = None,
         campaign: Optional[str] = None):
     query = """
 SELECT
@@ -108,7 +108,7 @@ def queue_item_from_candidate_and_publish_policy(row):
 
 async def estimate_success_probability(
     conn: asyncpg.Connection, package: str, campaign: str, context: Optional[str] = None
-) -> Tuple[float, int]:
+) -> tuple[float, int]:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
@@ -220,7 +220,7 @@ async def bulk_add_to_queue(
         estimated_duration = await estimate_duration(conn, package, campaign)
         assert estimated_duration >= timedelta(
             0
-        ), "%s: estimated duration < 0.0: %r" % (package, estimated_duration)
+        ), "{}: estimated duration < 0.0: {!r}".format(package, estimated_duration)
         (
             estimated_probability_of_success,
             total_previous_runs,
@@ -237,7 +237,7 @@ async def bulk_add_to_queue(
             1.0 * estimated_duration.total_seconds() * 1000.0
             + estimated_duration.microseconds
         )
-        assert estimated_cost > 0.0, "%s: Estimated cost: %f" % (
+        assert estimated_cost > 0.0, "{}: Estimated cost: {:f}".format(
             package,
             estimated_cost,
         )
@@ -290,7 +290,7 @@ async def dep_available(
     archqual: Optional[str] = None,
     arch: Optional[str] = None,
     distribution: Optional[str] = None,
-    version: Optional[Tuple[str, Version]] = None,
+    version: Optional[tuple[str, Version]] = None,
     restrictions=None,
 ) -> bool:
     query = """\
@@ -303,7 +303,7 @@ WHERE
 """
     args = [name]
     if version:
-        version_match = "version %s $2" % (version[0],)
+        version_match = "version {} $2".format(version[0])
         args.append(str(version[1]))
     else:
         version_match = "True"
@@ -368,7 +368,7 @@ async def main():
     )
 
     logging.info('Reading configuration')
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     set_user_agent(config.user_agent)
@@ -401,7 +401,7 @@ async def do_schedule_control(
     bucket: Optional[str] = None,
     requestor: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None,
-) -> Tuple[float, Optional[timedelta], int, str]:
+) -> tuple[float, Optional[timedelta], int, str]:
     command = ["brz", "up"]
     if main_branch_revision is not None:
         command.append("--revision=%s" % main_branch_revision.decode("utf-8"))
@@ -440,7 +440,7 @@ async def do_schedule(
     requestor: Optional[str] = None,
     estimated_duration=None,
     command: Optional[str] = None,
-) -> Tuple[float, Optional[timedelta], int, str]:
+) -> tuple[float, Optional[timedelta], int, str]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if bucket is None:

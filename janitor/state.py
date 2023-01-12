@@ -26,7 +26,7 @@ import asyncpg
 import asyncpg.pool
 import logging
 import traceback
-from typing import Optional, Tuple, List, Any
+from typing import Optional, Any
 
 from aiohttp.web import middleware, HTTPServiceUnavailable
 from breezy import urlutils
@@ -61,7 +61,7 @@ def get_result_branch(result_branches, role):
     raise KeyError
 
 
-class Run(object):
+class Run:
 
     id: str
     command: str
@@ -76,11 +76,11 @@ class Run(object):
     instigated_context: Optional[str]
     vcs_type: str
     branch_url: str
-    logfilenames: Optional[List[str]]
+    logfilenames: Optional[list[str]]
     review_status: str
     worker_name: Optional[str]
-    result_branches: Optional[List[Tuple[str, str, bytes, bytes]]]
-    result_tags: Optional[List[Tuple[str, bytes]]]
+    result_branches: Optional[list[tuple[str, str, bytes, bytes]]]
+    result_tags: Optional[list[tuple[str, bytes]]]
     target_branch_url: Optional[str]
     change_set: str
     failure_transient: Optional[bool]
@@ -243,7 +243,7 @@ class Run(object):
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
     codebase: str
-) -> List[str]:
+) -> list[str]:
     query = """
 SELECT DISTINCT suite
 FROM publish_ready

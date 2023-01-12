@@ -29,15 +29,10 @@ import sys
 import tempfile
 import uvloop
 from typing import (
-    List,
     Any,
     Optional,
-    Dict,
-    Tuple,
-    Type,
-    Set,
-    Iterator,
 )
+from collections.abc import Iterator
 import uuid
 import warnings
 
@@ -154,7 +149,7 @@ async def to_thread_timeout(timeout, func, *args, **kwargs):
     return await cor
 
 
-class BuilderResult(object):
+class BuilderResult:
 
     kind: str
 
@@ -175,21 +170,21 @@ class BuilderResult(object):
         raise NotImplementedError(cls.from_json)
 
 
-class Builder(object):
+class Builder:
     """Abstract builder class."""
 
     kind: str
 
-    result_cls: Type[BuilderResult] = BuilderResult
+    result_cls: type[BuilderResult] = BuilderResult
 
     async def config(
             self, conn: asyncpg.Connection,
-            campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
+            campaign_config: Campaign, queue_item: QueueItem) -> dict[str, str]:
         raise NotImplementedError(self.config)
 
     async def build_env(
             self, conn: asyncpg.Connection,
-            campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
+            campaign_config: Campaign, queue_item: QueueItem) -> dict[str, str]:
         raise NotImplementedError(self.build_env)
 
     def additional_colocated_branches(self, main_branch):
@@ -335,7 +330,7 @@ class DebianBuilder(Builder):
         self.dep_server_url = dep_server_url
 
     async def config(self, conn, campaign_config, queue_item):
-        config: Dict[str, Any] = {}
+        config: dict[str, Any] = {}
         config['lintian'] = {'profile': self.distro_config.lintian_profile}
         if self.distro_config.lintian_suppress_tag:
             config['lintian']['suppress-tags'] = list(self.distro_config.lintian_suppress_tag)
@@ -348,7 +343,7 @@ class DebianBuilder(Builder):
         config['build-extra-repositories'] = []
         if self.apt_location:
             config['build-extra-repositories'].extend([
-                "deb [trusted=yes] %s %s main" % (self.apt_location, suite)
+                "deb [trusted=yes] {} {} main".format(self.apt_location, suite)
                 for suite in extra_janitor_distributions
             ])
 
@@ -377,7 +372,7 @@ class DebianBuilder(Builder):
             config["chroot"] = self.distro_config.chroot
 
         if self.distro_config.archive_mirror_uri and self.distro_config.component:
-            config["base-apt-repository"] = "%s %s %s" % (
+            config["base-apt-repository"] = "{} {} {}".format(
                 self.distro_config.archive_mirror_uri,
                 self.distro_config.name,
                 " ".join(self.distro_config.component),
@@ -401,7 +396,7 @@ class DebianBuilder(Builder):
             env["CHROOT"] = self.distro_config.chroot
 
         if self.distro_config.archive_mirror_uri and self.distro_config.component:
-            env["APT_REPOSITORY"] = "%s %s %s" % (
+            env["APT_REPOSITORY"] = "{} {} {}".format(
                 self.distro_config.archive_mirror_uri,
                 self.distro_config.name,
                 " ".join(self.distro_config.component),
@@ -421,7 +416,7 @@ class DebianBuilder(Builder):
         return pick_additional_colocated_branches(main_branch)
 
 
-BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
+BUILDER_CLASSES: list[type[Builder]] = [DebianBuilder, GenericBuilder]
 RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 
@@ -445,7 +440,7 @@ def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=No
         raise NotImplementedError('no supported build type')
 
 
-class JanitorResult(object):
+class JanitorResult:
 
     package: str
     log_id: str
@@ -582,8 +577,8 @@ class JanitorResult(object):
         }
 
 
-def committer_env(committer: str) -> Dict[str, str]:
-    env: Dict[str, str] = {}
+def committer_env(committer: str) -> dict[str, str]:
+    env: dict[str, str] = {}
     if not committer:
         return env
     (user, email) = parseaddr(committer)
@@ -602,7 +597,7 @@ def committer_env(committer: str) -> Dict[str, str]:
 
 
 @dataclass
-class WorkerResult(object):
+class WorkerResult:
     """The result from a worker."""
 
     code: str
@@ -612,11 +607,11 @@ class WorkerResult(object):
     main_branch_revision: Optional[bytes] = None
     revision: Optional[bytes] = None
     value: Optional[int] = None
-    branches: Optional[List[
-        Tuple[Optional[str], Optional[str],
+    branches: Optional[list[
+        tuple[Optional[str], Optional[str],
               Optional[bytes], Optional[bytes]]]] = None
-    tags: Optional[List[Tuple[str, Optional[bytes]]]] = None
-    remotes: Optional[Dict[str, Dict[str, Any]]] = None
+    tags: Optional[list[tuple[str, Optional[bytes]]]] = None
+    remotes: Optional[dict[str, dict[str, Any]]] = None
     details: Any = None
     stage: Optional[str] = None
     builder_result: Any = None
@@ -635,7 +630,7 @@ class WorkerResult(object):
     @classmethod
     def from_file(cls, path):
         """create a WorkerResult object from a JSON file."""
-        with open(path, "r") as f:
+        with open(path) as f:
             worker_result = json.load(f)
         return cls.from_json(worker_result)
 
@@ -788,7 +783,7 @@ class ActiveRunDisappeared(Exception):
         self.reason = reason
 
 
-class Backchannel(object):
+class Backchannel:
 
     async def kill(self) -> None:
         raise NotImplementedError(self.kill)
@@ -806,7 +801,7 @@ class Backchannel(object):
         return {}
 
 
-class ActiveRun(object):
+class ActiveRun:
 
     worker_name: str
     worker_link: Optional[str]
@@ -821,7 +816,7 @@ class ActiveRun(object):
     change_set: Optional[str]
     command: str
     backchannel: Backchannel
-    vcs_info: Optional[Dict[str, str]]
+    vcs_info: Optional[dict[str, str]]
 
     def __init__(
         self,
@@ -836,7 +831,7 @@ class ActiveRun(object):
         queue_id: int,
         log_id: str,
         start_time: datetime,
-        vcs_info: Optional[Dict[str, str]],
+        vcs_info: Optional[dict[str, str]],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -863,7 +858,7 @@ class ActiveRun(object):
     def from_queue_item(
         cls,
         queue_item: QueueItem,
-        vcs_info: Optional[Dict[str, str]],
+        vcs_info: Optional[dict[str, str]],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -992,7 +987,7 @@ class JenkinsBackchannel(Backchannel):
         )
 
     def __repr__(self):
-        return "<%s(%r)>" % (type(self).__name__, self.my_url)
+        return "<{}({!r})>".format(type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
         raise NotImplementedError(self.kill)
@@ -1055,7 +1050,7 @@ class PollingBackchannel(Backchannel):
         )
 
     def __repr__(self):
-        return "<%s(%r)>" % (type(self).__name__, self.my_url)
+        return "<{}({!r})>".format(type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
         async with ClientSession() as session, \
@@ -1126,7 +1121,7 @@ def _parse_unexpected_http_status(e):
 
 def open_resume_branch(
         main_branch: Branch, campaign_name: str, package: str,
-        possible_forges: Optional[List[Forge]] = None) -> Optional[Branch]:
+        possible_forges: Optional[list[Forge]] = None) -> Optional[Branch]:
     try:
         forge = get_forge(main_branch, possible_forges=possible_forges)
     except UnsupportedForge as e:
@@ -1148,7 +1143,7 @@ def open_resume_branch(
         raise e
     else:
         try:
-            for option in [campaign_name, ('%s/main' % campaign_name), ('%s/main/%s' % (campaign_name, package))]:
+            for option in [campaign_name, ('%s/main' % campaign_name), ('{}/main/{}'.format(campaign_name, package))]:
                 (
                     resume_branch,
                     unused_overwrite,
@@ -1213,7 +1208,7 @@ async def check_resume_result(
         resume_result_branches or [])
 
 
-class ResumeInfo(object):
+class ResumeInfo:
     def __init__(self, run_id, branch, result, resume_result_branches):
         self.run_id = run_id
         self.branch = branch
@@ -1278,11 +1273,11 @@ async def store_run(
     revision: Optional[bytes],
     codemod_result: Optional[Any],
     campaign: str,
-    logfilenames: List[str],
+    logfilenames: list[str],
     value: Optional[int],
     worker_name: str,
-    result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
-    result_tags: Optional[List[Tuple[str, bytes]]] = None,
+    result_branches: Optional[list[tuple[str, str, bytes, bytes]]] = None,
+    result_tags: Optional[list[tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
     failure_details: Optional[Any] = None,
     failure_stage: Optional[str] = None,
@@ -1358,9 +1353,9 @@ class RunExists(Exception):
         self.run_id = run_id
 
 
-class QueueProcessor(object):
+class QueueProcessor:
 
-    avoid_hosts: Set[str]
+    avoid_hosts: set[str]
 
     def __init__(
         self,
@@ -1369,12 +1364,12 @@ class QueueProcessor(object):
         run_timeout: int,
         logfile_manager: LogFileManager,
         artifact_manager: Optional[ArtifactManager] = None,
-        public_vcs_managers: Optional[Dict[str, VcsManager]] = None,
+        public_vcs_managers: Optional[dict[str, VcsManager]] = None,
         use_cached_only: bool = False,
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
         backup_logfile_manager: Optional[LogFileManager] = None,
-        avoid_hosts: Optional[Set[str]] = None,
+        avoid_hosts: Optional[set[str]] = None,
         dep_server_url: Optional[str] = None,
         apt_archive_url: Optional[str] = None,
     ):
@@ -1644,9 +1639,9 @@ class QueueProcessor(object):
         exclude_hosts = set(self.avoid_hosts)
         async for host, retry_after in self.rate_limited_hosts():
             exclude_hosts.add(host)
-        assigned_queue_items = set([
+        assigned_queue_items = {
             int(i.decode('utf-8'))
-            for i in await self.redis.hkeys('assigned-queue-items')])
+            for i in await self.redis.hkeys('assigned-queue-items')}
         return await queue.next_item(
             campaign=campaign, package=package,
             assigned_queue_items=assigned_queue_items,
@@ -1913,11 +1908,11 @@ async def handle_codebases_upload(request):
                 else:
                     entry['branch_url'] = entry['url'] = None
 
-            await insert_candidate_stmt.fetchrow(
+            await insert_codebase_stmt.fetchrow(
                 entry.get('name'), entry['branch_url'], entry['url'],
                 entry.get('branch'), entry.get('subpath'),
                 entry.get('vcs_type'), entry.get('vcs_last_revision'),
-                entry.get('value')))
+                entry.get('value'))
 
             # TODO(jelmer): if anything meaningful has changed, reschedule all
             # runs: https://github.com/jelmer/janitor/issues/107
@@ -2072,11 +2067,11 @@ async def handle_candidates_upload(request):
                         refresh = True
                         if existing_runs[0]['mp_url']:
                             bucket = 'update-existing-mp'
-                            requestor = 'command changed for existing mp: %r ⇒ %r' % (
+                            requestor = 'command changed for existing mp: {!r} ⇒ {!r}'.format(
                                 existing_runs[0]['command'], command)
                         else:
                             bucket = None
-                            requestor = 'command changed: %r ⇒ %r' % (
+                            requestor = 'command changed: {!r} ⇒ {!r}'.format(
                                 existing_runs[0]['command'], command)
                     else:
                         bucket = candidate.get('bucket')
@@ -2132,7 +2127,7 @@ async def handle_get_run(request):
             raise web.HTTPNotFound(text=f"no such run: {run_id}")
         return {
             'codebase': run['codebase'],
-            'campaign': run['campaign'],
+            'campaign': run['campaign']
         }
 
 
@@ -2253,16 +2248,14 @@ async def handle_queue(request):
     async with queue_processor.database.acquire() as conn:
         queue = Queue(conn)
         for entry in await queue.iter_queue(limit=limit):
-            response_obj.append(
-                {
-                    "queue_id": entry.id,
-                    "package": entry.package,
-                    "codebase": entry.codebase,
-                    "campaign": entry.campaign,
-                    "context": entry.context,
-                    "command": entry.command,
-                }
-            )
+            response_obj.append({
+                "queue_id": entry.id,
+                "package": entry.package,
+                "codebase": entry.codebase,
+                "campaign": entry.campaign,
+                "context": entry.context,
+                "command": entry.command,
+            })
     return web.json_response(response_obj)
 
 
@@ -2280,10 +2273,10 @@ class QueueRateLimiting(Exception):
 async def next_item(
         queue_processor, config, span, mode, *, worker=None,
         worker_link: Optional[str] = None,
-        backchannel: Optional[Dict[str, str]] = None,
+        backchannel: Optional[dict[str, str]] = None,
         package: Optional[str] = None, campaign: Optional[str] = None):
-    possible_transports: List[Transport] = []
-    possible_forges: List[Forge] = []
+    possible_transports: list[Transport] = []
+    possible_forges: list[Forge] = []
 
     async def abort(active_run, code, description):
         result = active_run.create_result(
@@ -2316,12 +2309,8 @@ async def next_item(
                 bc = Backchannel()
 
             active_run = ActiveRun.from_queue_item(
-                backchannel=bc,
-                worker_name=worker,
-                queue_item=item,
-                vcs_info=vcs_info,
-                worker_link=worker_link
-            )
+                backchannel=bc, worker_name=worker, queue_item=item,
+                vcs_info=vcs_info, worker_link=worker_link)
 
             await queue_processor.register_run(active_run)
 
@@ -2434,7 +2423,7 @@ async def next_item(
                         resume_branch = await to_thread_timeout(
                             VCS_STORE_BRANCH_OPEN_TIMEOUT,
                             vcs_manager.get_branch,
-                            item.package, '%s/%s' % (campaign_config.name, 'main'),
+                            item.package, '{}/{}'.format(campaign_config.name, 'main'),
                             trace_context=span.context)
                     except asyncio.TimeoutError:
                         logging.warning('Timeout opening resume branch')
@@ -2475,7 +2464,7 @@ async def next_item(
         cached_branch_url = None
         target_repository_url = None
 
-    env: Dict[str, str] = {}
+    env: dict[str, str] = {}
     env.update(build_env)
     env.update(queue_item_env(item))
     if queue_processor.committer:
@@ -2486,7 +2475,7 @@ async def next_item(
 
     assignment = {
         "id": active_run.log_id,
-        "description": "%s on %s" % (item.campaign, item.package),
+        "description": "{} on {}".format(item.campaign, item.package),
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,
@@ -2534,8 +2523,8 @@ async def handle_ready(request):
 
 async def finish(
         active_run: ActiveRun, queue_processor: QueueProcessor,
-        request: web.Request) -> Tuple[
-            List[str], List[str], List[str], JanitorResult]:
+        request: web.Request) -> tuple[
+            list[str], list[str], list[str], JanitorResult]:
     span = aiozipkin.request_span(request)
     worker_name = active_run.worker_name
     main_branch_url = active_run.main_branch_url
@@ -2807,7 +2796,7 @@ async def main(argv=None):
 
     debug.set_debug_flags_from_config()
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     set_user_agent(config.user_agent)
