@@ -12,13 +12,7 @@ import asyncpg
 from breezy.revision import NULL_REVISION
 
 from janitor import state
-from .. import (
-    get_archive_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-)
 from ..common import (
-    get_unchanged_run,
     render_template_for_request,
 )
 from . import iter_needs_review

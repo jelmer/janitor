@@ -96,7 +96,7 @@ async def handle_publish(request):
 
 class ScheduleResultSchema(Schema):
 
-    package = fields.Str(metadata={'description': "package name"})
+    codebase = fields.Str(metadata={'description': "codebase name"})
     campaign = fields.Str(metadata={'description': "campaign"})
     offset = fields.Int(metadata={'description': "offset from top of queue"})
     estimated_duration_seconds = fields.Int(metadata={'description': "estimated duration in seconds"})
@@ -108,7 +108,17 @@ class ScheduleResultSchema(Schema):
 @routes.post(
     "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{package}/schedule", name="package-schedule")
 async def handle_schedule(request):
-    package = request.match_info["package"]
+    try:
+        codebase = request.match_info["codebase"]
+    except KeyError:
+        package_name = request.match_info["package"]
+        async with request.app['pool'].acquire() as conn:
+            package = await conn.fetchrow(
+                'SELECT codebase FROM package WHERE name = $1', package_name)
+            if package is None:
+                raise web.HTTPNotFound(text=f'no such package: {package_name}')
+            codebase = package['codebase']
+
     campaign = request.match_info["campaign"]
     post = await request.post()
     offset = post.get("offset")
@@ -126,7 +136,7 @@ async def handle_schedule(request):
     schedule_url = URL(request.app['runner_url']) / "schedule"
     queue_position_url = URL(request.app['runner_url']) / "queue" / "position"
     async with request.app['http_client_session'].post(schedule_url, json={
-        'package': package,
+        'codebase': codebase,
         'campaign': campaign,
         'refresh': refresh,
         'offset': offset,
@@ -137,14 +147,14 @@ async def handle_schedule(request):
     try:
         async with request.app['http_client_session'].get(queue_position_url, params={
                 'campaign': campaign,
-                'package': package}, raise_for_status=True) as resp:
+                'codebase': codebase}, raise_for_status=True) as resp:
             queue_position = await resp.json()
     except ClientResponseError as e:
         if e.status == 400:
             raise web.HTTPBadRequest(text=e.message) from e
         raise
     return web.json_response({
-        "package": ret['package'],
+        "codebase": ret['codebase'],
         "campaign": ret['campaign'],
         "bucket": ret['bucket'],
         "offset": ret['offset'],
@@ -224,7 +234,7 @@ async def handle_schedule_control(request):
             ret = await resp.json()
         async with request.app['http_client_session'].get(queue_position_url, params={
                 'campaign': ret['campaign'],
-                'package': ret['package']}, raise_for_status=True) as resp:
+                'codebase': ret['codebase']}, raise_for_status=True) as resp:
             queue_position = await resp.json()
     except ContentTypeError as e:
         return web.json_response(
