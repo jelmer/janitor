@@ -41,7 +41,7 @@ async def store_review(
 
         if verdict != 'abstained' and is_qa_reviewer:
             await conn.execute(
-                "UPDATE run SET review_status = $1 WHERE id = $2",
+                "UPDATE run SET review_status = $1, publish_status = $1 WHERE id = $2",
                 verdict, run_id)
         await conn.execute(
             "INSERT INTO review (run_id, comment, reviewer, verdict) VALUES "
