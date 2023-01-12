@@ -613,7 +613,7 @@ async def consider_publish_run(
         logger.info(
             "Not attempting to push %s / %s (%s) due to "
             "exponential backoff. Next try in %s.",
-            run.package,
+            run.codebase,
             run.campaign,
             run.id,
             next_try_time - datetime.utcnow(),
@@ -627,7 +627,7 @@ async def consider_publish_run(
         if push_limit == 0:
             logger.info(
                 "Not pushing %s / %s: push limit reached",
-                run.package, run.campaign, extra={'run_id': run.id})
+                run.codebase, run.campaign, extra={'run_id': run.id})
             push_limit_count.inc()
             return {}
     if run.branch_url is None:
@@ -819,8 +819,8 @@ async def publish_pending_ready(
 async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, package, revision FROM last_runs "
-        "WHERE revision = $2 AND package = $1 and result_code = 'success'",
-        run.package, run.main_branch_revision.decode('utf-8')
+        "WHERE revision = $2 AND codebase = $1 and result_code = 'success'",
+        run.codebase, run.main_branch_revision.decode('utf-8')
     )
 
     code = e.code
@@ -2703,8 +2703,8 @@ async def check_existing_mp(
                             bucket="update-existing-mp",
                             refresh=True,
                             requestor="publisher (orphaned merge proposal)",
-                            # TODO(jelmer): Determine codebase
-                            codebase=None
+                            # TODO(jelmer): Determine actual codebase
+                            codebase=package_name
                         )
                     except CandidateUnavailable as e:
                         logger.warning(
