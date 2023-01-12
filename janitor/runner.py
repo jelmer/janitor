@@ -448,7 +448,7 @@ class JanitorResult:
     subpath: str
     code: str
     transient: Optional[bool]
-    codebase: Optional[str]
+    codebase: str
 
     def __init__(
         self,
@@ -508,7 +508,7 @@ class JanitorResult:
             self.vcs_type = worker_result.vcs_type
             self.subpath = worker_result.subpath
             self.transient = worker_result.transient
-            self.codebase = worker_result.codebase
+            self.codebase = worker_result.codebase or codebase
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -1259,6 +1259,7 @@ async def store_run(
     conn: asyncpg.Connection,
     *,
     run_id: str,
+    codebase: str,
     package: str,
     vcs_type: Optional[str],
     branch_url: Optional[str],
@@ -1285,7 +1286,6 @@ async def store_run(
     target_branch_url: Optional[str] = None,
     change_set: Optional[str] = None,
     failure_transient: Optional[bool] = None,
-    codebase: Optional[str] = None,
 ):
     """Store a run in the database."""
     if result_tags is None:
@@ -2576,6 +2576,7 @@ async def finish(
 
         result = JanitorResult(
             pkg=active_run.package,
+            codebase=active_run.codebase,
             campaign=active_run.campaign,
             log_id=active_run.log_id,
             code='success',
@@ -2587,7 +2588,6 @@ async def finish(
             logfilenames=logfilenames,
             resume_from=resume_from,
             change_set=active_run.change_set,
-            codebase=active_run.codebase,
         )
 
         with span.new_child('import-logs'):
