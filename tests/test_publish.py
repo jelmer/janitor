@@ -94,7 +94,9 @@ async def test_publish_worker():
             [sys.executable, '-m', 'janitor.publish_one'], {
                 'dry-run': False,
                 'campaign': 'test-campaign',
-                'package': 'pkg',
+                'extra_context': {
+                    'package': 'pkg',
+                },
                 'command': 'blah --foo',
                 'codemod_result': {},
                 'target_branch_url': 'https://example.com',

@@ -496,7 +496,6 @@ class PublishWorker:
         request = {
             "dry-run": dry_run,
             "campaign": campaign,
-            "package": pkg,
             "command": command,
             "codemod_result": codemod_result,
             "target_branch_url": target_branch_url,
@@ -515,6 +514,9 @@ class PublishWorker:
             "reviewers": reviewers,
             "commit_message_template": commit_message_template,
             "title_template": title_template,
+            "extra_context": {
+                "package": pkg,
+            },
         }
 
         if result_tags:
