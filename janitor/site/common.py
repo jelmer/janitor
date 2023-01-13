@@ -59,6 +59,7 @@ async def iter_candidates(
     query = """
 SELECT
   package AS package,
+  codebase AS codebase,
   suite AS suite,
   context AS context,
   value AS value,
@@ -111,7 +112,8 @@ SELECT
   result_tags,
   change_set,
   failure_stage,
-  failure_transient
+  failure_transient,
+  codebase
 FROM
   last_unabsorbed_runs
 LEFT JOIN worker ON worker.name = last_unabsorbed_runs.worker
@@ -143,7 +145,8 @@ SELECT
     resume_from,
     change_set,
     failure_stage,
-    failure_transient
+    failure_transient,
+    codebase
 FROM
     run
 LEFT JOIN worker ON worker.name = run.worker
