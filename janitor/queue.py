@@ -231,7 +231,8 @@ queue.id ASC
 
     async def add(
             self,
-            package: str,
+            *,
+            package: Optional[str],
             codebase: str,
             command: str,
             campaign: str,

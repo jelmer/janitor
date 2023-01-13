@@ -460,7 +460,7 @@ class PublishWorker:
         self,
         *,
         campaign: str,
-        pkg: str,
+        codebase: str,
         command,
         main_branch_url: str,
         mode: str,
@@ -481,16 +481,16 @@ class PublishWorker:
         title_template: Optional[str] = None,
         codemod_result=None,
         existing_mp_url: Optional[str] = None,
+        extra_context: Optional[dict[str, Any]] = None,
     ) -> PublishResult:
         """Publish a single run in some form.
 
         Args:
           campaign: The campaign name
-          pkg: Package name
           command: Command that was run
         """
         assert mode in SUPPORTED_MODES, f"mode is {mode!r}"
-        local_branch_url = vcs_manager.get_branch_url(pkg, f"{campaign}/{role}")
+        local_branch_url = vcs_manager.get_branch_url(codebase, f"{campaign}/{role}")
         target_branch_url = main_branch_url.rstrip("/")
 
         request = {
@@ -514,9 +514,7 @@ class PublishWorker:
             "reviewers": reviewers,
             "commit_message_template": commit_message_template,
             "title_template": title_template,
-            "extra_context": {
-                "package": pkg,
-            },
+            "extra_context": extra_context,
         }
 
         if result_tags:
@@ -560,7 +558,7 @@ class PublishWorker:
                         'merge-proposal',
                         json.dumps({
                             "url": proposal_url, "web_url": proposal_web_url,
-                            "status": "open", "package": pkg,
+                            "status": "open", "package": (extra_context or {}).get('package'),
                             "campaign": campaign,
                             "target_branch_url": target_branch_url,
                             "target_branch_web_url": target_branch_web_url}))
@@ -613,7 +611,7 @@ async def consider_publish_run(
         logger.info(
             "Not attempting to push %s / %s (%s) due to "
             "exponential backoff. Next try in %s.",
-            run.package,
+            run.codebase,
             run.campaign,
             run.id,
             next_try_time - datetime.utcnow(),
@@ -627,7 +625,7 @@ async def consider_publish_run(
         if push_limit == 0:
             logger.info(
                 "Not pushing %s / %s: push limit reached",
-                run.package, run.campaign, extra={'run_id': run.id})
+                run.codebase, run.campaign, extra={'run_id': run.id})
             push_limit_count.inc()
             return {}
     if run.branch_url is None:
@@ -819,8 +817,8 @@ async def publish_pending_ready(
 async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, package, revision FROM last_runs "
-        "WHERE revision = $2 AND package = $1 and result_code = 'success'",
-        run.package, run.main_branch_revision.decode('utf-8')
+        "WHERE revision = $2 AND codebase = $1 and result_code = 'success'",
+        run.codebase, run.main_branch_revision.decode('utf-8')
     )
 
     code = e.code
@@ -1147,7 +1145,10 @@ async def publish_from_policy(
     try:
         publish_result = await publish_worker.publish_one(
             campaign=run.campaign,
-            pkg=run.package,
+            codebase=run.codebase,
+            extra_context={
+                'package': run.package,
+            },
             command=run.command,
             codemod_result=run.result,
             main_branch_url=main_branch_url,
@@ -1308,7 +1309,10 @@ async def publish_and_store(
         try:
             publish_result = await publish_worker.publish_one(
                 campaign=run.campaign,
-                pkg=run.package,
+                codebase=run.codebase,
+                extra_context={
+                    'package': run.package,
+                },
                 command=run.command,
                 codemod_result=run.result,
                 main_branch_url=main_branch_url,
@@ -1652,14 +1656,14 @@ async def consider_request(request):
     return web.json_response({}, status=200)
 
 
-async def get_publish_policy(conn: asyncpg.Connection, package: str, campaign: str):
+async def get_publish_policy(conn: asyncpg.Connection, codebase: str, campaign: str):
     row = await conn.fetchrow(
         "SELECT per_branch_policy, command, rate_limit_bucket "
         "FROM candidate "
         "LEFT JOIN named_publish_policy "
         "ON named_publish_policy.name = candidate.publish_policy "
         "WHERE package = $1 AND suite = $2",
-        package,
+        codebase,
         campaign,
     )
     if row:
@@ -1677,6 +1681,7 @@ async def handle_publish_id(request):
         row = await conn.fetchrow("""
 SELECT
   package,
+  codebase,
   branch_name,
   main_branch_revision,
   revision,
@@ -1691,6 +1696,7 @@ FROM publish WHERE id = $1
     return web.json_response(
         {
             "package": row['package'],
+            "codebase": row['codebase'],
             "branch": row['branch_name'],
             "main_branch_revision": row['main_branch_revision'],
             "revision": row['revision'],
@@ -1702,25 +1708,25 @@ FROM publish WHERE id = $1
     )
 
 
-@routes.post("/{campaign}/{package}/publish", name='publish')
+@routes.post("/{campaign}/{codebase}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
     vcs_managers = request.app['vcs_managers']
     bucket_rate_limiter = request.app['bucket_rate_limiter']
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     campaign = request.match_info["campaign"]
     role = request.query.get("role")
     post = await request.post()
     mode = post.get("mode")
     async with request.app['db'].acquire() as conn:
-        run = await get_last_effective_run(conn, package, campaign)
+        run = await get_last_effective_run(conn, codebase, campaign)
         if run is None:
             return web.json_response({}, status=400)
 
         publish_policy, _, rate_limit_bucket = (
-            await get_publish_policy(conn, package, campaign))
+            await get_publish_policy(conn, codebase, campaign))
 
-        logger.info("Handling request to publish %s/%s", package, campaign)
+        logger.info("Handling request to publish %s/%s", codebase, campaign)
 
     if role is not None:
         roles = [role]
@@ -1759,7 +1765,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), f'publish of {package}/{campaign}, role {role}'
+            ), f'publish of {codebase}/{campaign}, role {role}'
         )
 
     if not publish_ids:
@@ -2073,7 +2079,7 @@ SELECT
   change_set.id AS change_set
 FROM run
 LEFT JOIN package ON package.name = run.package
-INNER JOIN candidate ON candidate.package = run.package AND candidate.suite = run.suite
+INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE run.id = $1
@@ -2229,7 +2235,7 @@ class NoRunForMergeProposal(Exception):
         self.revision = revision
 
 
-async def get_last_effective_run(conn, package, campaign):
+async def get_last_effective_run(conn, codebase, campaign):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -2243,10 +2249,10 @@ SELECT
     failure_transient, failure_stage, codebase
 FROM
     last_effective_runs
-WHERE package = $1 AND suite = $2
+WHERE codebase = $1 AND suite = $2
 LIMIT 1
 """
-    row = await conn.fetchrow(query, package, campaign)
+    row = await conn.fetchrow(query, codebase, campaign)
     if row is None:
         return None
     return state.Run.from_row(row)
@@ -2286,18 +2292,19 @@ class ProposalInfo:
     target_branch_url: Optional[str]
     rate_limit_bucket: Optional[str] = None
     package_name: Optional[str] = None
+    codebase: Optional[str] = None
 
 
 async def guess_proposal_info_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> tuple[Optional[str], Optional[str]]:
     query = """\
-SELECT DISTINCT run.package, named_publish_policy.rate_limit_bucket AS rate_limit_bucket
+SELECT DISTINCT run.codebase, named_publish_policy.rate_limit_bucket AS rate_limit_bucket
 FROM run
 LEFT JOIN new_result_branch rb ON rb.run_id = run.id
-INNER JOIN candidate ON run.package = candidate.package AND run.suite = candidate.suite
+INNER JOIN candidate ON run.codebase = candidate.codebase AND run.suite = candidate.suite
 INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE rb.revision = $1 AND run.package is not null
+WHERE rb.revision = $1 AND run.codebase is not null
 """
     rows = await conn.fetch(query, revision.decode("utf-8"))
     if len(rows) == 1:
@@ -2306,23 +2313,24 @@ WHERE rb.revision = $1 AND run.package is not null
 
 
 async def guess_rate_limit_bucket(
-        conn: asyncpg.Connection, package_name: str, source_branch_name: str):
+        conn: asyncpg.Connection, codebase: str, source_branch_name: str):
     # For now, just assume that source_branch_name is campaign
     campaign = source_branch_name.split('/')[0]
     query = """\
 SELECT named_publish_policy.rate_limit_bucket FROM candidate
 INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE candidate.suite = $1 AND candidate.package = $2
+WHERE candidate.suite = $1 AND candidate.codebase = $2
 """
-    return await conn.fetchval(query, campaign, package_name)
+    return await conn.fetchval(query, campaign, codebase)
 
 
-async def guess_package_from_branch_url(
+async def guess_codebase_from_branch_url(
         conn: asyncpg.Connection, url: str,
         possible_transports: Optional[list[Transport]] = None):
+    # TODO(jelmer): use codebase table
     query = """
 SELECT
-  name, branch_url
+  codebase, branch_url
 FROM
   package
 WHERE
@@ -2343,7 +2351,7 @@ ORDER BY length(branch_url) DESC
         return None
 
     if url.rstrip('/') == result['branch_url'].rstrip('/'):
-        return result['name']
+        return result['codebase']
 
     source_branch = await asyncio.to_thread(
         open_branch,
@@ -2355,7 +2363,7 @@ ORDER BY length(branch_url) DESC
             'Did not resolve branch URL to package: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
-    return result['name']
+    return result['codebase']
 
 
 def find_campaign_by_branch_name(config, branch_name):
@@ -2384,11 +2392,11 @@ class ProposalInfoManager:
         merge_proposal.revision,
         merge_proposal.status,
         merge_proposal.target_branch_url,
-        package.name AS package,
+        merge_proposal.codebase,
+        merge_proposal.package,
         can_be_merged
     FROM
         merge_proposal
-    LEFT JOIN package ON merge_proposal.package = package.name
     WHERE
         merge_proposal.url = $1
     """,
@@ -2402,7 +2410,8 @@ class ProposalInfoManager:
             status=row['status'],
             target_branch_url=row['target_branch_url'],
             package_name=row['package'],
-            can_be_merged=row['can_be_merged'])
+            can_be_merged=row['can_be_merged'],
+            codebase=row['codebase'])
 
     async def delete_proposal_info(self, url):
         await self.conn.execute('DELETE FROM merge_proposal WHERE url = $1', url)
@@ -2426,7 +2435,7 @@ class ProposalInfoManager:
                     canonical_url, old_url)
 
     async def update_proposal_info(
-            self, mp, *, status, revision, package_name, target_branch_url,
+            self, mp, *, status, revision, codebase, package_name, target_branch_url,
             campaign, can_be_merged: Optional[bool], rate_limit_bucket: Optional[str],
             dry_run: bool = False):
         if status == "closed":
@@ -2449,8 +2458,9 @@ class ProposalInfoManager:
                 await self.conn.execute(
                     """INSERT INTO merge_proposal (
                         url, status, revision, package, merged_by, merged_at,
-                        target_branch_url, last_scanned, can_be_merged, rate_limit_bucket)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9)
+                        target_branch_url, last_scanned, can_be_merged, rate_limit_bucket,
+                        codebase)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10)
                     ON CONFLICT (url)
                     DO UPDATE SET
                       status = EXCLUDED.status,
@@ -2461,11 +2471,12 @@ class ProposalInfoManager:
                       target_branch_url = EXCLUDED.target_branch_url,
                       last_scanned = EXCLUDED.last_scanned,
                       can_be_merged = EXCLUDED.can_be_merged,
-                      rate_limit_bucket = EXCLUDED.rate_limit_bucket
+                      rate_limit_bucket = EXCLUDED.rate_limit_bucket,
+                      codebase = EXCLUDED.codebase
                     """, mp.url, status,
                     revision.decode("utf-8") if revision is not None else None,
                     package_name, merged_by, merged_at, target_branch_url,
-                    can_be_merged, rate_limit_bucket)
+                    can_be_merged, rate_limit_bucket, codebase)
                 if revision:
                     await self.conn.execute("""
                     UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
@@ -2479,6 +2490,7 @@ class ProposalInfoManager:
                 "rate_limit_bucket": rate_limit_bucket,
                 "status": status,
                 "package": package_name,
+                "codebase": codebase,
                 "merged_by": merged_by,
                 "merged_by_url": merged_by_url,
                 "merged_at": str(merged_at),
@@ -2488,7 +2500,7 @@ class ProposalInfoManager:
 
 async def abandon_mp(proposal_info_manager: ProposalInfoManager,
                      mp: MergeProposal, revision: bytes,
-                     package_name: Optional[str], target_branch_url: str,
+                     codebase: Optional[str], package_name: Optional[str], target_branch_url: str,
                      campaign: Optional[str], can_be_merged: Optional[bool],
                      rate_limit_bucket: Optional[str],
                      comment: Optional[str], dry_run: bool = False):
@@ -2499,6 +2511,7 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
     await proposal_info_manager.update_proposal_info(
         mp, status="abandoned", revision=revision, package_name=package_name,
         target_branch_url=target_branch_url, campaign=campaign,
+        codebase=codebase,
         rate_limit_bucket=rate_limit_bucket, can_be_merged=can_be_merged)
     if comment:
         try:
@@ -2517,14 +2530,16 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
 
 
 async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
-                           revision: bytes, package_name: Optional[str],
+                           revision: bytes, codebase: Optional[str],
+                           package_name: Optional[str],
                            target_branch_url: str,
                            campaign: Optional[str], can_be_merged: Optional[bool],
                            rate_limit_bucket: Optional[str],
                            comment: Optional[str], dry_run=False):
 
     await proposal_info_manager.update_proposal_info(
-        mp, status="applied", revision=revision, package_name=package_name,
+        mp, status="applied", revision=revision, codebase=codebase,
+        package_name=package_name,
         target_branch_url=target_branch_url, campaign=campaign,
         can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
         dry_run=dry_run)
@@ -2584,9 +2599,11 @@ async def check_existing_mp(
     old_proposal_info = await proposal_info_manager.get_proposal_info(mp.url)
     if old_proposal_info:
         package_name = old_proposal_info.package_name
+        codebase = old_proposal_info.codebase
         rate_limit_bucket = old_proposal_info.rate_limit_bucket
     else:
         package_name = None
+        codebase = None
         rate_limit_bucket = None
     revision = await asyncio.to_thread(mp.get_source_revision)
     source_branch_url = await asyncio.to_thread(mp.get_source_branch_url)
@@ -2625,31 +2642,35 @@ async def check_existing_mp(
         revision = old_proposal_info.revision
     target_branch_url = await asyncio.to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
-        package_name = await guess_package_from_branch_url(
+        codebase = await guess_codebase_from_branch_url(
             conn, target_branch_url,
             possible_transports=possible_transports)
-        if package_name is None:
+        if codebase is None:
             if revision is not None:
                 (
-                    package_name,
+                    codebase,
                     rate_limit_bucket,
                 ) = await guess_proposal_info_from_revision(conn, revision)
-            if package_name is None:
+            if codebase is None:
                 logger.warning(
-                    "No package known for %s (%s)", mp.url, target_branch_url,
+                    "No codebase known for %s (%s)", mp.url, target_branch_url,
                     extra={'mp_url': mp.url}
                 )
             else:
                 logger.info(
-                    "Guessed package name (%s) for %s based on revision.",
-                    package_name,
+                    "Guessed codebase name (%s) for %s based on revision.",
+                    codebase,
                     mp.url,
                     extra={'mp_url': mp.url}
                 )
+                if package_name is None:
+                    # For now
+                    package_name = await conn.fetchval(
+                        'SELECT name FROM package WHERE codebase = $1', codebase)
         else:
             if source_branch_name is not None:
                 rate_limit_bucket = await guess_rate_limit_bucket(
-                    conn, package_name, source_branch_name)
+                    conn, codebase, source_branch_name)
     if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
         status = old_proposal_info.status
 
@@ -2662,6 +2683,7 @@ async def check_existing_mp(
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await proposal_info_manager.update_proposal_info(
             mp, status=status, revision=revision, package_name=package_name,
+            codebase=codebase,
             target_branch_url=target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
             can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
@@ -2685,14 +2707,14 @@ async def check_existing_mp(
     if mp_run is None:
         # If we don't have any information about this merge proposal, then
         # it might be one that we lost the data for. Let's reschedule.
-        if package_name and source_branch_name:
+        if codebase and source_branch_name:
             campaign, role = find_campaign_by_branch_name(config, source_branch_name)
             if campaign:
                 logger.warning(
                     'Recovered orphaned merge proposal %s', mp.url,
                     extra={'mp_url': mp.url})
                 last_run = await get_last_effective_run(
-                    conn, package_name, campaign)
+                    conn, codebase, campaign)
                 if last_run is None:
                     try:
                         await do_schedule(
@@ -2703,14 +2725,13 @@ async def check_existing_mp(
                             bucket="update-existing-mp",
                             refresh=True,
                             requestor="publisher (orphaned merge proposal)",
-                            # TODO(jelmer): Determine codebase
-                            codebase=None
+                            codebase=codebase,
                         )
                     except CandidateUnavailable as e:
                         logger.warning(
                             'Candidate unavailable while attempting to reschedule '
                             'orphaned %s: %s/%s',
-                            mp.url, package_name, campaign,
+                            mp.url, codebase, campaign,
                             extra={'mp_url': mp.url})
                         raise NoRunForMergeProposal(mp, revision) from e
                     else:
@@ -2722,7 +2743,7 @@ async def check_existing_mp(
                         'package': package_name,
                         'campaign': campaign,
                         'change_set': None,
-                        'codebase': None,
+                        'codebase': codebase,
                         'role': role,
                         'id': None,
                         'branch_url': target_branch_url,
@@ -2749,7 +2770,7 @@ async def check_existing_mp(
             except (BranchMissing, BranchUnavailable):
                 pass
 
-    last_run = await get_last_effective_run(conn, mp_run['package'], mp_run['campaign'])
+    last_run = await get_last_effective_run(conn, mp_run['codebase'], mp_run['campaign'])
     if last_run is None:
         logger.warning("%s: Unable to find any relevant runs.", mp.url, extra={'mp_url': mp.url})
         return False
@@ -2767,7 +2788,7 @@ async def check_existing_mp(
         )
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, package_name,
+                proposal_info_manager, mp, revision, codebase, package_name,
                 target_branch_url, campaign=mp_run['campaign'],
                 can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
                 comment="""\
@@ -2787,7 +2808,7 @@ archive.
 
         try:
             await close_applied_mp(
-                proposal_info_manager, mp, revision, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
                 mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""
 This merge proposal will be closed, since all remaining changes have been \
@@ -2820,7 +2841,7 @@ applied independently.
             except CandidateUnavailable as e:
                 logger.warning(
                     'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.package, last_run.campaign, e, extra={'mp_url': mp.url})
+                    last_run.codebase, last_run.campaign, e, extra={'mp_url': mp.url})
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). Rescheduling.",
@@ -2843,7 +2864,7 @@ applied independently.
             except CandidateUnavailable as e:
                 logger.warning(
                     'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.package, last_run.campaign, e, extra={'mp_url': mp.url})
+                    last_run.codebase, last_run.campaign, e, extra={'mp_url': mp.url})
         else:
             logger.info(
                 "%s: Last run failed (%s). Not touching merge proposal.",
@@ -2858,7 +2879,7 @@ applied independently.
             campaign_config, mp_run['value']):
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket,
                 comment="This merge proposal will be closed, since only trivial changes are left.",
@@ -2912,7 +2933,7 @@ applied independently.
                 )
                 try:
                     await abandon_mp(
-                        proposal_info_manager, mp, revision, package_name, target_branch_url,
+                        proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
                         rate_limit_bucket=rate_limit_bucket, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '{}'
@@ -2942,7 +2963,7 @@ has changed from {} to {}.
         # doesn't
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""\
 This merge proposal will be closed, since the branch has moved to {}.
@@ -2981,15 +3002,18 @@ This merge proposal will be closed, since the branch has moved to {}.
 
         unchanged_run_id = await conn.fetchval(
             "SELECT id FROM run "
-            "WHERE revision = $2 AND package = $1 and result_code = 'success' "
+            "WHERE revision = $2 AND codebase = $1 and result_code = 'success' "
             "ORDER BY finish_time DESC LIMIT 1",
-            last_run.package, last_run.main_branch_revision.decode('utf-8')
+            last_run.codebase, last_run.main_branch_revision.decode('utf-8')
         )
 
         try:
             publish_result = await publish_worker.publish_one(
                 campaign=last_run.campaign,
-                pkg=last_run.package,
+                codebase=last_run.codebase,
+                extra_context={
+                    'package': last_run.package,
+                },
                 command=last_run.command,
                 codemod_result=last_run.result,
                 main_branch_url=target_branch_url,
@@ -3034,7 +3058,7 @@ This merge proposal will be closed, since the branch has moved to {}.
                 )
                 try:
                     await close_applied_mp(
-                        proposal_info_manager, mp, revision, package_name,
+                        proposal_info_manager, mp, revision, codebase, package_name,
                         target_branch_url, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
                         comment="""
@@ -3338,7 +3362,7 @@ async def listen_to_runner(
 ):
     async def process_run(conn, run, branch_url):
         publish_policy, command, rate_limit_bucket = await get_publish_policy(
-            conn, run.package, run.campaign)
+            conn, run.codebase, run.campaign)
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn=conn,
