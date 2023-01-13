@@ -23,7 +23,6 @@ from aiohttp import MultipartWriter
 import aiozipkin
 from fakeredis.aioredis import FakeRedis
 from janitor.config import Config
-from janitor.queue import QueueItem
 from janitor.logs import LogFileManager
 from janitor.runner import (
     create_app,
@@ -32,7 +31,6 @@ from janitor.runner import (
     QueueProcessor,
     ActiveRun,
     Backchannel,
-    queue_item_env,
 )
 from janitor.debian import dpkg_vendor
 from janitor.vcs import get_vcs_managers
@@ -201,11 +199,6 @@ async def test_register_run():
     assert await qp.active_run_count() == 0
 
 
-def test_queue_item_env():
-    item = QueueItem(id='some-id', package='package', context={}, command='ls', estimated_duration=timedelta(seconds=30), campaign='campaign', refresh=False, requestor='somebody', change_set=None, codebase='codebase')
-    assert queue_item_env(item) == {'PACKAGE': 'package'}
-
-
 async def test_submit_codebase(aiohttp_client, db):
     qp = await create_queue_processor(db)
     client = await create_client(aiohttp_client, qp)
@@ -297,7 +290,6 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         'env': {
             'DEB_VENDOR': dpkg_vendor(),
             'DISTRIBUTION': 'unstable',
-            'PACKAGE': 'foo'
         },
         'force-build': False,
         'id': assignment['id'],

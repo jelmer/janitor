@@ -83,13 +83,13 @@ async def test_publish_worker():
     with mock.patch('janitor.publish.run_worker_process', return_value=(0, {})) as e:
         pw = PublishWorker()
         await pw.publish_one(
-            campaign='test-campaign', pkg='pkg', command='blah --foo',
+            campaign='test-campaign', codebase='pkg', command='blah --foo',
             codemod_result={}, main_branch_url='https://example.com/',
             mode='attempt-push', role='main', revision=b'main-revid',
             log_id='some-id', unchanged_id='unchanged-id',
             derived_branch_name='branch-name',
             rate_limit_bucket='jelmer@jelmer.uk',
-            vcs_manager=DummyVcsManager())
+            vcs_manager=DummyVcsManager(), extra_context={'package': 'pkg'})
         e.assert_called_with(
             [sys.executable, '-m', 'janitor.publish_one'], {
                 'dry-run': False,

@@ -1233,12 +1233,6 @@ class ResumeInfo:
         }
 
 
-def queue_item_env(queue_item):
-    env = {}
-    env["PACKAGE"] = queue_item.package
-    return env
-
-
 def cache_branch_name(distro_config, role):
     if role != 'main':
         raise ValueError(role)
@@ -1772,8 +1766,8 @@ async def handle_schedule(request):
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, bucket = await do_schedule(
                     conn,
-                    package,
-                    campaign,
+                    package=package,
+                    campaign=campaign,
                     offset=offset,
                     change_set=change_set,
                     refresh=refresh,
@@ -2092,8 +2086,8 @@ async def handle_candidates_upload(request):
                     with span.new_child('schedule'):
                         offset, estimated_duration, queue_id, bucket = await do_schedule(
                             conn,
-                            candidate['package'],
-                            candidate['campaign'],
+                            package=candidate['package'],
+                            campaign=candidate['campaign'],
                             change_set=candidate.get('change_set'),
                             bucket=bucket,
                             requestor=requestor,
@@ -2470,7 +2464,6 @@ async def next_item(
 
     env: dict[str, str] = {}
     env.update(build_env)
-    env.update(queue_item_env(item))
     if queue_processor.committer:
         env.update(committer_env(queue_processor.committer))
 
@@ -2594,7 +2587,7 @@ async def finish(
             await import_logs(
                 logfiles,
                 queue_processor.logfile_manager,
-                active_run.package,
+                active_run.codebase,
                 active_run.log_id,
                 mtime=result.finish_time.timestamp(),
                 backup_logfile_manager=queue_processor.backup_logfile_manager,
