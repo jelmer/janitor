@@ -271,47 +271,6 @@ async def handle_queue(request):
             return web.json_response(await resp.json(), status=resp.status)
 
 
-@docs()
-@routes.get("/{campaign}/pkg/{package}/revision-info", name="package-revision-info")
-@routes.get("/pkg/{package}/run/{run_id}/revision-info", name="package-run-revision-info")
-@routes.get("/run/{run_id}/revision-info", name="run-revision-info")
-async def handle_revision_info(request):
-    role = request.query.get("role", "main")
-    run_id = request.match_info.get('run_id')
-    package = request.match_info.get("package")
-    campaign = request.match_info.get("campaign")
-    run = await find_vcs_info(request.app['pool'], role, run_id, package, campaign)
-    if run is None:
-        if run_id is None:
-            return web.json_response(
-                {"error": "no unabsorbed run for %s/%s" % (package, campaign)},
-                status=404)
-        else:
-            return web.json_response(
-                {"error": "no run %s" % (run_id, )}, status=404)
-
-    if run['vcs_type'] is None:
-        return web.json_response({})
-
-    try:
-        revision_info = await request.app['vcs_managers'][run['vcs_type']].get_revision_info(
-            run['package'],
-            run['base_revision'].encode('utf-8')
-            if run['base_revision'] else NULL_REVISION,
-            run['revision'].encode('utf-8')
-            if run['revision'] else NULL_REVISION)
-        return web.json_response(revision_info)
-    except ContentTypeError as e:
-        return web.json_response(
-            {"error": "publisher returned error %d" % e.code}, status=400)
-    except ClientConnectorError:
-        return web.json_response(
-            {"error": "unable to contact publisher"}, status=502)
-    except ClientOSError:
-        return web.json_response(
-            {"error": "unable to contact publisher - oserror"}, status=502)
-
-
 async def find_vcs_info(db, role, run_id=None, package=None, campaign=None):
     async with db.acquire() as conn:
         if run_id is None:
@@ -659,49 +618,6 @@ async def handle_publish_id(request):
             return web.Response(text="unable to contact runner", status=502)
         except asyncio.TimeoutError:
             return web.Response(text="timeout contacting runner", status=502)
-
-
-@docs()
-@routes.get("/{campaign:" + CAMPAIGN_REGEX + "}/report", name="report")
-async def handle_report(request):
-    campaign = request.match_info["campaign"]
-    report = {}
-    merge_proposal = {}
-    async with request.app['pool'].acquire() as conn:
-        for package, url in await conn.fetch("""
-SELECT
-    DISTINCT ON (merge_proposal.url)
-    merge_proposal.package, merge_proposal.url
-FROM
-    merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-AND status = 'open'
-WHERE run.suite = $1
-""", campaign):
-            merge_proposal[package] = url
-        query = """
-SELECT DISTINCT ON (package)
-  result_code,
-  start_time,
-  package,
-  result
-FROM
-  last_unabsorbed_runs
-WHERE suite = $1
-ORDER BY package, suite, start_time DESC
-"""
-        for record in await conn.fetch(query, campaign):
-            if record['result_code'] not in ("success", "nothing-to-do"):
-                continue
-            data = {
-                "timestamp": record['start_time'].isoformat(),
-                "result": record['result'],
-            }
-            if record['package'] in merge_proposal:
-                data["merge-proposal"] = merge_proposal[record['package']]
-            report[record['package']] = data
-    return web.json_response(report)
 
 
 @docs()
