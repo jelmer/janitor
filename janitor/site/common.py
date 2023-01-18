@@ -183,7 +183,7 @@ WHERE
 ORDER BY finish_time DESC
 """
     return await conn.fetchrow(
-        query, main_branch_revision.decode('utf-8'), package)
+        query, main_branch_revision.decode('utf-8'), codebase)
 
 
 async def generate_pkg_context(
