@@ -1729,7 +1729,7 @@ async def handle_schedule(request):
         try:
             run_id = json['run_id']
         except KeyError:
-            package = json['package']
+            package = json.get('package')
             campaign = json['campaign']
             codebase = json['codebase']
             run = None
@@ -1739,7 +1739,7 @@ async def handle_schedule(request):
                 run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
-            package = run['package']
+            package = run.get('package')
             campaign = run['campaign']
             codebase = run['codebase']
         refresh = json.get('refresh', False)
@@ -1784,6 +1784,7 @@ async def handle_schedule(request):
         "campaign": campaign,
         "offset": offset,
         "bucket": bucket,
+        "codebase": codebase,
         "queue_id": queue_id,
         "estimated_duration_seconds":
             estimated_duration.total_seconds() if estimated_duration else None,
