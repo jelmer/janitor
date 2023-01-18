@@ -445,6 +445,7 @@ async def do_schedule(
         offset = DEFAULT_SCHEDULE_OFFSET
     if bucket is None:
         bucket = "default"
+    assert codebase is not None
     if command is None:
         candidate = await conn.fetchrow(
             "SELECT command "

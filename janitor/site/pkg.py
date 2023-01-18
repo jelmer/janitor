@@ -143,7 +143,7 @@ async def generate_run_file(
         if run['main_branch_revision']:
             with span.new_child('sql:unchanged-run'):
                 kwargs["unchanged_run"] = await get_unchanged_run(
-                    conn, run['package'],
+                    conn, run['codebase'],
                     run['main_branch_revision'].encode('utf-8')
                 )
         with span.new_child('sql:queue-position'):

@@ -105,66 +105,6 @@ class ScheduleResultSchema(Schema):
 
 
 @response_schema(ScheduleResultSchema())
-@routes.post(
-    "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{package}/schedule", name="package-schedule")
-async def handle_schedule(request):
-    try:
-        codebase = request.match_info["codebase"]
-    except KeyError:
-        package_name = request.match_info["package"]
-        async with request.app['pool'].acquire() as conn:
-            package = await conn.fetchrow(
-                'SELECT codebase FROM package WHERE name = $1', package_name)
-            if package is None:
-                raise web.HTTPNotFound(text=f'no such package: {package_name}') from None
-            codebase = package['codebase']
-
-    campaign = request.match_info["campaign"]
-    post = await request.post()
-    offset = post.get("offset")
-    try:
-        refresh = bool(int(post.get("refresh", "0")))
-    except ValueError:
-        return web.json_response({"error": "invalid boolean for refresh"}, status=400)
-    if request['user']:
-        try:
-            requestor = request['user']["email"]
-        except KeyError:
-            requestor = request['user']["name"]
-    else:
-        requestor = "user from web UI"
-    schedule_url = URL(request.app['runner_url']) / "schedule"
-    queue_position_url = URL(request.app['runner_url']) / "queue" / "position"
-    async with request.app['http_client_session'].post(schedule_url, json={
-        'codebase': codebase,
-        'campaign': campaign,
-        'refresh': refresh,
-        'offset': offset,
-        'requestor': requestor,
-        'bucket': "manual"
-    }, raise_for_status=True) as resp:
-        ret = await resp.json()
-    try:
-        async with request.app['http_client_session'].get(queue_position_url, params={
-                'campaign': campaign,
-                'codebase': codebase}, raise_for_status=True) as resp:
-            queue_position = await resp.json()
-    except ClientResponseError as e:
-        if e.status == 400:
-            raise web.HTTPBadRequest(text=e.message) from e
-        raise
-    return web.json_response({
-        "codebase": ret['codebase'],
-        "campaign": ret['campaign'],
-        "bucket": ret['bucket'],
-        "offset": ret['offset'],
-        "estimated_duration_seconds": ret['estimated_duration_seconds'],
-        "queue_position": queue_position['position'],
-        "queue_wait_time": queue_position['wait_time'],
-    })
-
-
-@response_schema(ScheduleResultSchema())
 @routes.post("/run/{run_id}/reschedule", name="run-reschedule")
 async def handle_run_reschedule(request):
     run_id = request.match_info["run_id"]
