@@ -158,7 +158,7 @@ WHERE id = $1
 
 
 async def get_unchanged_run(
-        conn: asyncpg.Connection, package: str, main_branch_revision: bytes):
+        conn: asyncpg.Connection, codebase: str, main_branch_revision: bytes):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -177,13 +177,13 @@ LEFT JOIN
     debian_build ON debian_build.run_id = last_runs.id
 WHERE
     suite in ('control', 'unchanged') AND revision = $1 AND
-    package = $2 AND
+    codebase = $2 AND
     result_code = 'success' AND
     change_set IS NULL
 ORDER BY finish_time DESC
 """
     return await conn.fetchrow(
-        query, main_branch_revision.decode('utf-8'), package)
+        query, main_branch_revision.decode('utf-8'), codebase)
 
 
 async def generate_pkg_context(
@@ -218,8 +218,8 @@ FROM
     merge_proposal
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE run.package = $1 AND run.suite = $2
-""", package['name'], suite)
+WHERE run.codebase = $1 AND run.suite = $2
+""", package['codebase'], suite)
         if run is None:
             # No runs recorded
             run_id = None
@@ -229,7 +229,7 @@ WHERE run.package = $1 AND run.suite = $2
             if run['main_branch_revision']:
                 with span.new_child('sql:unchanged-run'):
                     unchanged_run = await get_unchanged_run(
-                        conn, run['package'],
+                        conn, run['codebase'],
                         run['main_branch_revision'].encode('utf-8'))
             else:
                 unchanged_run = None
@@ -270,7 +270,7 @@ WHERE run.package = $1 AND run.suite = $2
         try:
             with span.new_child('vcs-diff'):
                 diff = await vcs_managers[run['vcs_type']].get_diff(
-                    run['package'],
+                    run['codebase'],
                     base_revid.encode('utf-8')
                     if base_revid is not None else NULL_REVISION,
                     revid.encode('utf-8'))
