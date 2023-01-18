@@ -1731,7 +1731,7 @@ async def handle_schedule(request):
         except KeyError:
             package = json['package']
             campaign = json['campaign']
-            codebase = json.get('codebase')
+            codebase = json['codebase']
             run = None
         else:
             run = await conn.fetchrow(
@@ -1741,7 +1741,7 @@ async def handle_schedule(request):
                 return web.json_response({"reason": "Run not found"}, status=404)
             package = run['package']
             campaign = run['campaign']
-            codebase = run.get('codebase')
+            codebase = run['codebase']
         refresh = json.get('refresh', False)
         change_set = json.get('change_set')
         requestor = json.get('requestor')
