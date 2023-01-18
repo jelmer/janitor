@@ -41,7 +41,6 @@ import mimeparse
 from marshmallow import Schema, fields
 from yarl import URL
 
-from janitor import CAMPAIGN_REGEX
 from janitor.config import Config
 from . import (
     check_admin,
