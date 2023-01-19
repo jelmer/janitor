@@ -1527,6 +1527,9 @@ class QueueProcessor:
         active_run_count.labels(worker=active_run.worker_name).inc()
         run_count.inc()
 
+    async def update_run(self, active_run: ActiveRun) -> None:
+        await self.redis.hset('active-runs', active_run.log_id, json.dumps(active_run.json()))
+
     async def get_run(self, log_id: str) -> Optional[ActiveRun]:
         serialized = await self.redis.hget('active-runs', log_id)
         if not serialized:
@@ -2439,6 +2442,10 @@ async def next_item(
                         resume.run_id)
         else:
             resume = None
+
+    # Refresh the serialized copy of the active run, since we may have changed
+    # it. Ideally we'd only do this once, but..
+    await queue_processor.update_run(active_run)
 
     try:
         with span.new_child('cache-branch:check'):
