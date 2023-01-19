@@ -613,8 +613,8 @@ async def upload_results(
             if resp.status == 404:
                 try:
                     resp_json = await resp.json()
-                except ContentTypeError:
-                    raise ResultUploadFailure("Runner returned 404")
+                except ContentTypeError as e:
+                    raise ResultUploadFailure("Runner returned 404") from e
                 else:
                     raise ResultUploadFailure(resp_json["reason"])
             if resp.status in (502, 503):
