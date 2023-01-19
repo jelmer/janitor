@@ -611,9 +611,13 @@ async def upload_results(
             finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
         ) as resp:
             if resp.status == 404:
-                resp_json = await resp.json()
-                raise ResultUploadFailure(resp_json["reason"])
-            if resp.status in (500, 502, 503):
+                try:
+                    resp_json = await resp.json()
+                except ContentTypeError:
+                    raise ResultUploadFailure("Runner returned 404")
+                else:
+                    raise ResultUploadFailure(resp_json["reason"])
+            if resp.status in (502, 503):
                 raise RetriableResultUploadFailure(
                     "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
                 )
