@@ -2015,17 +2015,27 @@ async def handle_candidates_upload(request):
             ret = []
             with span.new_child('process-candidates'):
                 for candidate in (await request.json()):
-                    if candidate['package'] not in known_packages:
+                    try:
+                        package = candidate['package']
+                    except KeyError:
+                        raise web.HTTPBadRequest(
+                            text='no package field for candidate %r' % candidate)
+                    if package not in known_packages:
                         logging.warning(
                             'ignoring candidate %s/%s; package unknown',
-                            candidate['package'], candidate['campaign'])
-                        unknown_packages.append(candidate['package'])
+                            package, candidate['campaign'])
+                        unknown_packages.append(package)
                         continue
-                    if candidate['codebase'] not in known_codebases:
+                    try:
+                        codebase = candidate['codebase']
+                    except KeyError:
+                        raise web.HTTPBadRequest(
+                            text='no codebase field for candidate %r' % candidate)
+                    if codebase not in known_codebases:
                         logging.warning(
                             'ignoring candidate %s/%s; codebase unknown',
-                            candidate['codebase'], candidate['campaign'])
-                        unknown_codebases.append(candidate['codebase'])
+                            codebase, candidate['campaign'])
+                        unknown_codebases.append(codebase)
                         continue
                     if candidate['campaign'] not in known_campaign_names:
                         logging.warning('unknown campaign %r', candidate['campaign'])
