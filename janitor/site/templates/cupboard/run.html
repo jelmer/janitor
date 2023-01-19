@@ -114,12 +114,12 @@
             {% endif %}
         {% endif %}
         {% macro display_log_link(name, description) %}
-        <a href="{{ name }}">{% if primary_log == name %}<b>{{ description }}{% if primary_log == name %}</b></a>
+        <a href="{{ name }}">{% if primary_log == name %}<b>{% endif %}{{ description }}{% if primary_log == name %}</b>{% endif %}</a>
         {% endmacro %}
         {% if worker_log_name %}{% display_log_link(worker_log_name, "Full worker log") %}{% endif %}
 
         <ul>
-	    {% if codemod_log_name %}<li>{% display_log_link(codemod_log_name, "Full codemod log") %}</li>{% endif %}
+            {% if codemod_log_name %}<li>{% display_log_link(codemod_log_name, "Full codemod log") %}</li>{% endif %}
             {% if build_log_name %}
                 <li>{% display_log_link(build_log_name, "Full build log") %}
                 {% if earlier_build_log_names %}
@@ -174,15 +174,15 @@
             <h2>Lintian Result</h2>
             {{ display_lintian_result(lintian_result) }}
         {% endif %}
-	{% if followups %}
-	    <h2>Follow ups</h2>
-	    <ul>
-	    {% for followup in followups %}
-		    <li><a href="/cupboard/pkg/{{ followup['campaign'] }}/{{ followup['package'] }}">
-		    {{ followup['campaign'] }} for {{ followup['package'] }}</a></li>
-	    {% endfor %}
-	    </ul>
-	{% endif %}
+        {% if followups %}
+            <h2>Follow ups</h2>
+            <ul>
+            {% for followup in followups %}
+                    <li><a href="/cupboard/pkg/{{ followup['campaign'] }}/{{ followup['package'] }}">
+                    {{ followup['campaign'] }} for {{ followup['package'] }}</a></li>
+            {% endfor %}
+            </ul>
+        {% endif %}
         {% if reviews or (is_qa_reviewer and run.result_code == 'success') %}
             <h2>
                 Reviews
