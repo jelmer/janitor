@@ -142,6 +142,7 @@ AND """ % table
             try:
                 async with session.post(schedule_url, json={
                         'package': run['package'],
+                        'codebase': run['codebase'],
                         'campaign': run['campaign'],
                         'requestor': "reschedule",
                         'refresh': refresh,
