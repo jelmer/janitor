@@ -1620,10 +1620,17 @@ class QueueProcessor:
             await self.redis.publish('queue', json.dumps(await self.status_json()))
             last_success_gauge.set_to_current_time()
 
-            await do_schedule(
-                conn, package=active_run.package, campaign=active_run.campaign,
-                change_set=active_run.change_set,
-                requestor='after run schedule', codebase=result.codebase)
+            try:
+                await do_schedule(
+                    conn, package=active_run.package, campaign=active_run.campaign,
+                    change_set=active_run.change_set,
+                    requestor='after run schedule', codebase=result.codebase)
+            except CandidateUnavailable:
+                # Maybe this was a one-off schedule without candidate, or
+                # the candidate has been removed. Either way, this is fine.
+                logging.debug(
+                    'not rescheduling %s/%s: no candidate available',
+                    active_run.package, active_run.campaign)
 
     async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
@@ -2098,6 +2105,8 @@ async def handle_candidates_upload(request):
                             await insert_followup_stmt.execute(candidate_id, origin)
 
                     with span.new_child('schedule'):
+                        # This shouldn't raise CandidateUnavailable, since
+                        # we just added the candidate
                         offset, estimated_duration, queue_id, bucket = await do_schedule(
                             conn,
                             package=candidate['package'],
