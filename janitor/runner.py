@@ -2024,9 +2024,9 @@ async def handle_candidates_upload(request):
                 for candidate in (await request.json()):
                     try:
                         package = candidate['package']
-                    except KeyError:
+                    except KeyError as e:
                         raise web.HTTPBadRequest(
-                            text='no package field for candidate %r' % candidate)
+                            text='no package field for candidate %r' % candidate) from e
                     if package not in known_packages:
                         logging.warning(
                             'ignoring candidate %s/%s; package unknown',
@@ -2035,9 +2035,9 @@ async def handle_candidates_upload(request):
                         continue
                     try:
                         codebase = candidate['codebase']
-                    except KeyError:
+                    except KeyError as e:
                         raise web.HTTPBadRequest(
-                            text='no codebase field for candidate %r' % candidate)
+                            text='no codebase field for candidate %r' % candidate) from e
                     if codebase not in known_codebases:
                         logging.warning(
                             'ignoring candidate %s/%s; codebase unknown',
