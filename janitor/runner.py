@@ -2437,6 +2437,15 @@ async def next_item(
                     logging.info(
                         'Resuming %s/%s from run %s', item.package, item.campaign,
                         resume.run_id)
+                else:
+                    # If we can't find the matching run, then there's not much point in
+                    # resuming.
+                    # TODO(jelmer): Ideally we'd scan the resume branch for the latest
+                    # revision that we have a run for and that's not on mainline,
+                    # but we don't have access to the history here (and the worker doesn't have access
+                    # to recent runs). Maybe we can provide the worker with a revision => run_id dict
+                    # and let it determine resume_from?
+                    resume = None
         else:
             resume = None
 
