@@ -150,7 +150,7 @@ async def _git_open_repo(local_path: str, db, codebase: str) -> Repo:
         async with db.acquire() as conn:
             if not await codebase_exists(conn, codebase):
                 raise web.HTTPNotFound(text='no such codebase: %s' % codebase) from e
-        repo = Repo.init_bare(repo_path, mkdir=True)
+        repo = Repo.init_bare(repo_path, mkdir=(not os.path.isdir(repo_path)))
         logging.info(
             "Created missing git repository for %s at %s", codebase, repo.path
         )

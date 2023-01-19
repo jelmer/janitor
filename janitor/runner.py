@@ -1620,10 +1620,17 @@ class QueueProcessor:
             await self.redis.publish('queue', json.dumps(await self.status_json()))
             last_success_gauge.set_to_current_time()
 
-            await do_schedule(
-                conn, package=active_run.package, campaign=active_run.campaign,
-                change_set=active_run.change_set,
-                requestor='after run schedule', codebase=result.codebase)
+            try:
+                await do_schedule(
+                    conn, package=active_run.package, campaign=active_run.campaign,
+                    change_set=active_run.change_set,
+                    requestor='after run schedule', codebase=result.codebase)
+            except CandidateUnavailable:
+                # Maybe this was a one-off schedule without candidate, or
+                # the candidate has been removed. Either way, this is fine.
+                logging.debug(
+                    'not rescheduling %s/%s: no candidate available',
+                    active_run.package, active_run.campaign)
 
     async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
@@ -2015,17 +2022,27 @@ async def handle_candidates_upload(request):
             ret = []
             with span.new_child('process-candidates'):
                 for candidate in (await request.json()):
-                    if candidate['package'] not in known_packages:
+                    try:
+                        package = candidate['package']
+                    except KeyError as e:
+                        raise web.HTTPBadRequest(
+                            text='no package field for candidate %r' % candidate) from e
+                    if package not in known_packages:
                         logging.warning(
                             'ignoring candidate %s/%s; package unknown',
-                            candidate['package'], candidate['campaign'])
-                        unknown_packages.append(candidate['package'])
+                            package, candidate['campaign'])
+                        unknown_packages.append(package)
                         continue
-                    if candidate['codebase'] not in known_codebases:
+                    try:
+                        codebase = candidate['codebase']
+                    except KeyError as e:
+                        raise web.HTTPBadRequest(
+                            text='no codebase field for candidate %r' % candidate) from e
+                    if codebase not in known_codebases:
                         logging.warning(
                             'ignoring candidate %s/%s; codebase unknown',
-                            candidate['codebase'], candidate['campaign'])
-                        unknown_codebases.append(candidate['codebase'])
+                            codebase, candidate['campaign'])
+                        unknown_codebases.append(codebase)
                         continue
                     if candidate['campaign'] not in known_campaign_names:
                         logging.warning('unknown campaign %r', candidate['campaign'])
@@ -2088,6 +2105,8 @@ async def handle_candidates_upload(request):
                             await insert_followup_stmt.execute(candidate_id, origin)
 
                     with span.new_child('schedule'):
+                        # This shouldn't raise CandidateUnavailable, since
+                        # we just added the candidate
                         offset, estimated_duration, queue_id, bucket = await do_schedule(
                             conn,
                             package=candidate['package'],

@@ -58,7 +58,7 @@ from breezy import urlutils
 import gpg
 from redis.asyncio import Redis
 
-from breezy.errors import PermissionDenied, UnexpectedHttpStatus
+from breezy.errors import PermissionDenied, UnexpectedHttpStatus, RedirectRequested
 from breezy.forge import (
     Forge,
     forges,
@@ -1798,6 +1798,10 @@ async def credentials_request(request):
             except UnsupportedForge:
                 # WTF? Well, whatever.
                 continue
+            except RedirectRequested:
+                # This should never happen; forge implementation is meant
+                # to either ignore or handle this redirect.
+                continue
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
@@ -2577,7 +2581,7 @@ async def check_straggler(proposal_info_manager, url):
                 await proposal_info_manager.delete_proposal_info(url)
             else:
                 logger.warning(
-                    'Got status %d loading straggler %r', url)
+                    'Got status %d loading straggler %r', resp.status, url)
 
 
 async def check_existing_mp(
