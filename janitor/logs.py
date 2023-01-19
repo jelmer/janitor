@@ -271,15 +271,21 @@ class GCSLogFileManager(LogFileManager):
     async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None):
         object_name = self._get_object_name(codebase, run_id, os.path.basename(orig_path))
         with open(orig_path, "rb") as f:
-            uploaded_data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
+            plain_data = f.read()
+        compressed_data = gzip.compress(plain_data, mtime=mtime)  # type: ignore
         try:
             await self.storage.upload(
-                self.bucket_name, object_name, uploaded_data, timeout=timeout
+                self.bucket_name, object_name, compressed_data, timeout=timeout
             )
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable() from e
             if e.status == 403:
+                data = await self.storage.download(
+                    self.bucket_name, object_name,
+                    session=self.session, timeout=timeout)  # type: ignore
+                if data == plain_data:
+                    return
                 raise PermissionError(e.message) from e
             raise
 
