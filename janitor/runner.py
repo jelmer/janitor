@@ -2635,7 +2635,7 @@ async def handle_finish(request):
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text='no such run %s' % run_id)
+        return web.json_response({'reason': f'no such run {run_id}'}, status=404)
     try:
         (filenames, logfilenames, artifact_names, result) = await finish(
             active_run, queue_processor, request)
@@ -2675,7 +2675,7 @@ async def handle_public_finish(request):
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text='no such run %s' % run_id)
+        return web.json_response({'reason': f'no such run {run_id}'}, status=404)
 
     with span.new_child('check-worker-creds'):
         await check_worker_creds(request.app['database'], request)
