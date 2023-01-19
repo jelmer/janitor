@@ -745,7 +745,7 @@ def run_worker(
     main_branch_url: str,
     run_id: str,
     subpath: str,
-    vcs_type: str,
+    vcs_type: Optional[str],
     build_config: Any,
     env: dict[str, str],
     command: list[str],
@@ -983,6 +983,17 @@ def run_worker(
             assert len(result_branch_roles) == len(set(result_branch_roles)), \
                 "Duplicate result branches: %r" % result_branches
 
+            actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
+
+            if vcs_type is None:
+                vcs_type = actual_vcs_type
+            elif actual_vcs_type != vcs_type:
+                raise WorkerFailure(
+                    'vcs-type-mismatch',
+                    'Expected VCS {}, got {}'.format(vcs_type, actual_vcs_type),
+                    stage=("result-push", ),
+                    transient=False)
+
             try:
                 if vcs_type.lower() == "git":
                     import_branches_git(
@@ -1028,17 +1039,6 @@ def run_worker(
             )
 
             logging.info("Pushing result branch to %r", target_repo_url)
-
-            actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
-
-            if vcs_type is None:
-                vcs_type = actual_vcs_type
-            elif actual_vcs_type != vcs_type:
-                raise WorkerFailure(
-                    'vcs-type-mismatch',
-                    'Expected VCS {}, got {}'.format(vcs_type, actual_vcs_type),
-                    stage=("result-push", ),
-                    transient=False)
 
             try:
                 if vcs_type.lower() == "git":
