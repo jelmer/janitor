@@ -670,7 +670,7 @@ def copy_output(output_log: str, tee: bool = False):
 def push_branch(
     source_branch: Branch,
     url: str,
-    vcs_type: str,
+    vcs_type: Optional[str],
     overwrite=False,
     stop_revision=None,
     tag_selector=None,
