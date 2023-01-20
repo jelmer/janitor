@@ -461,10 +461,10 @@ class JanitorResult:
         start_time=None,
         finish_time=None,
         worker_name=None,
-        vcs_type=None,
-        subpath=None,
-        resume_from=None,
-        change_set=None,
+        vcs_type: Optional[str] = None,
+        subpath: Optional[str] = None,
+        resume_from: Optional[str] = None,
+        change_set: Optional[str] = None,
         transient=None,
     ):
         self.package = pkg
