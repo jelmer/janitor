@@ -16,17 +16,30 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from abc import abstractmethod, ABC
+import asyncio
+from datetime import datetime
+import gzip
+from io import BytesIO
+import logging
+import os
+from typing import Optional
+
+from breezy.errors import PermissionDenied
+
 from aiohttp import (
     ClientSession,
     ClientResponseError,
     ClientTimeout,
     ServerDisconnectedError,
 )
-from datetime import datetime
-import gzip
-from io import BytesIO
-import os
+from aiohttp_openmetrics import Counter
 from yarl import URL
+
+
+primary_logfile_upload_failed_count = Counter(
+    "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
+logfile_uploaded_count = Counter(
+    "logfile_uploads", "Number of uploaded log files")
 
 
 class ServiceUnavailable(Exception):
@@ -290,3 +303,57 @@ def get_log_manager(location, trace_configs=None):
     if location.startswith("http:") or location.startswith("https:"):
         return S3LogFileManager(location, trace_configs=trace_configs)
     return FileSystemLogFileManager(location)
+
+
+async def import_log(
+        logfile_manager: LogFileManager, pkg: str, log_id: str, name: str,
+        path: str, *, mtime: Optional[int] = None,
+        backup_logfile_manager: Optional[LogFileManager] = None):
+
+    try:
+        await logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
+    except ServiceUnavailable as e:
+        logging.warning("Unable to upload logfile %s: %s", name, e)
+        primary_logfile_upload_failed_count.inc()
+        if backup_logfile_manager:
+            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
+    except asyncio.TimeoutError as e:
+        logging.warning("Timeout uploading logfile %s: %s", name, e)
+        primary_logfile_upload_failed_count.inc()
+        if backup_logfile_manager:
+            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
+    except PermissionDenied as e:
+        logging.warning(
+            "Permission denied error while uploading logfile %s: %s",
+            name, e)
+        # It may just be that the file already exists
+        try:
+            alternative_path = path + '.' + datetime.utcnow().isoformat(timespec='seconds')
+            await logfile_manager.import_log(
+                pkg, log_id, alternative_path, mtime=mtime)
+        except (asyncio.TimeoutError, PermissionDenied, ServiceUnavailable):
+            pass
+        else:
+            logfile_uploaded_count.inc()
+            return
+        primary_logfile_upload_failed_count.inc()
+        if backup_logfile_manager:
+            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
+    else:
+        logfile_uploaded_count.inc()
+
+
+async def import_logs(
+    entries,
+    logfile_manager: LogFileManager,
+    pkg: str,
+    log_id: str,
+    *,
+    backup_logfile_manager: Optional[LogFileManager] = None,
+    mtime: Optional[int] = None,
+):
+    await asyncio.gather(
+        *[import_log(
+            logfile_manager, pkg, log_id, entry.name, entry.path,
+            mtime=mtime, backup_logfile_manager=backup_logfile_manager)
+          for entry in entries])
