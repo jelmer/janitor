@@ -361,6 +361,7 @@ select
 url,
 last_run.suite,
 last_run.package,
+last_run.codebase,
 last_run.id,
 last_run.result_code,
 last_run.finish_time,
@@ -368,7 +369,7 @@ last_run.description
 from
 (select
  distinct on (url) url, run.suite, run.package, run.finish_time,
- merge_proposal.revision as current_revision
+ run.codebase, merge_proposal.revision as current_revision
 from merge_proposal join run on
  merge_proposal.revision = run.revision where status = 'open')
 as current_run left join last_runs last_run
