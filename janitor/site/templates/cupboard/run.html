@@ -31,8 +31,8 @@
             {% if run.result and 'upstream_branch_url' in run.result %}
                 <li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
             {% endif %}
-            <li>Start time: {{ format_timestamp(start_time) }}</li>
-            <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
+            <li>Start time: {{ format_timestamp(run.start_time) }}</li>
+            <li>Duration: {{ format_duration(run.finish_time - run.start_time) }}</li>
             <li>Success probability: {{ success_probability|round(2) }} (based on {{ total_previous_runs }} previous runs)</li>
             <li>
                 Status: {{ display_result_code(result_code, failure_transient)|safe }}
@@ -116,20 +116,20 @@
         {% macro display_log_link(name, description) %}
         <a href="{{ name }}">{% if primary_log == name %}<b>{% endif %}{{ description }}{% if primary_log == name %}</b>{% endif %}</a>
         {% endmacro %}
-        {% if worker_log_name %}{% display_log_link(worker_log_name, "Full worker log") %}{% endif %}
+        {% if worker_log_name %}{{ display_log_link(worker_log_name, "Full worker log") }}{% endif %}
 
         <ul>
-            {% if codemod_log_name %}<li>{% display_log_link(codemod_log_name, "Full codemod log") %}</li>{% endif %}
+            {% if codemod_log_name %}<li>{{ display_log_link(codemod_log_name, "Full codemod log") }}</li>{% endif %}
             {% if build_log_name %}
-                <li>{% display_log_link(build_log_name, "Full build log") %}
+                <li>{{ display_log_link(build_log_name, "Full build log") }}
                 {% if earlier_build_log_names %}
                     (
-                    {% for i, name in earlier_build_log_names %}{% display_log_link(name, i) %}{% if not loop.last %},{% endif %}{% endfor %}
+                    {% for i, name in earlier_build_log_names %}{{ display_log_link(name, i) }}{% if not loop.last %},{% endif %}{% endfor %}
                     )
                 {% endif %}
                 </li>
             {% endif %}
-            {% if dist_log_name %}<li>{% display_log_link(dist_log_name , "Full dist log") %}</li>{% endif %}
+            {% if dist_log_name %}<li>{{ display_log_link(dist_log_name , "Full dist log") }}</li>{% endif %}
         </ul>
 
         {% if result %}
@@ -163,8 +163,9 @@
             </ul>
         {% else %}
             <h2>Publish Blockers</h2>
-            <!-- {{ publish_blockers()|tojson }}<-->
-            {{ display_publish_blockers(publish_blockers()) }}
+	    {% set blockers = publish_blockers() %}
+            <!-- {{ blockers|tojson }}<-->
+            {{ display_publish_blockers(blockers) }}
         {% endif %}
         {% if binary_packages %}
             <h2>Resulting package</h2>
