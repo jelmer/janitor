@@ -95,7 +95,7 @@ from .debian import (
 )
 from .logs import (
     get_log_manager,
-    ServiceUnavailable,
+    import_logs,
     LogFileManager,
     FileSystemLogFileManager,
 )
@@ -133,10 +133,6 @@ assignment_count = Counter("assignments", "Number of assignments handed out", ["
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
 artifact_upload_failed_count = Counter(
     "artifact_upload_failed", "Number of failed artifact uploads")
-primary_logfile_upload_failed_count = Counter(
-    "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
-logfile_uploaded_count = Counter(
-    "logfile_uploads", "Number of uploaded log files")
 queue_empty_count = Counter(
     "queue_empty",
     "Number of times the queue was empty when an assignment was requested")
@@ -732,50 +728,6 @@ def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
             continue
         if is_log_filename(entry.name):
             yield entry
-
-
-async def import_log(
-        logfile_manager: LogFileManager, pkg: str, log_id: str, name: str,
-        path: str, *, mtime: Optional[int] = None,
-        backup_logfile_manager: Optional[LogFileManager] = None):
-
-    try:
-        await logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
-    except ServiceUnavailable as e:
-        logging.warning("Unable to upload logfile %s: %s", name, e)
-        primary_logfile_upload_failed_count.inc()
-        if backup_logfile_manager:
-            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
-    except asyncio.TimeoutError as e:
-        logging.warning("Timeout uploading logfile %s: %s", name, e)
-        primary_logfile_upload_failed_count.inc()
-        if backup_logfile_manager:
-            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
-    except PermissionDenied as e:
-        logging.warning(
-            "Permission denied error while uploading logfile %s: %s",
-            name, e)
-        primary_logfile_upload_failed_count.inc()
-        if backup_logfile_manager:
-            await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
-    else:
-        logfile_uploaded_count.inc()
-
-
-async def import_logs(
-    entries,
-    logfile_manager: LogFileManager,
-    pkg: str,
-    log_id: str,
-    *,
-    backup_logfile_manager: Optional[LogFileManager] = None,
-    mtime: Optional[int] = None,
-):
-    await asyncio.gather(
-        *[import_log(
-            logfile_manager, pkg, log_id, entry.name, entry.path,
-            mtime=mtime, backup_logfile_manager=backup_logfile_manager)
-          for entry in entries])
 
 
 class ActiveRunDisappeared(Exception):
