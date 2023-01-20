@@ -441,7 +441,7 @@ class JanitorResult:
     package: str
     log_id: str
     branch_url: str
-    subpath: str
+    subpath: Optional[str]
     code: str
     transient: Optional[bool]
     codebase: str
