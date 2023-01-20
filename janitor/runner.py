@@ -441,7 +441,7 @@ class JanitorResult:
     package: str
     log_id: str
     branch_url: str
-    subpath: str
+    subpath: Optional[str]
     code: str
     transient: Optional[bool]
     codebase: str
@@ -461,10 +461,10 @@ class JanitorResult:
         start_time=None,
         finish_time=None,
         worker_name=None,
-        vcs_type=None,
-        subpath=None,
-        resume_from=None,
-        change_set=None,
+        vcs_type: Optional[str] = None,
+        subpath: Optional[str] = None,
+        resume_from: Optional[str] = None,
+        change_set: Optional[str] = None,
         transient=None,
     ):
         self.package = pkg
@@ -2420,7 +2420,7 @@ async def next_item(
                     # but we don't have access to the history here (and the worker doesn't have access
                     # to recent runs). Maybe we can provide the worker with a revision => run_id dict
                     # and let it determine resume_from?
-                    resume = None
+                    resume_branch = None
         else:
             resume = None
 
