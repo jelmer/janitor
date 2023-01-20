@@ -16,9 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta, datetime
-from jinja2 import Environment
 
-from janitor.site import format_duration, template_loader, format_timestamp
+from janitor.site import format_duration, format_timestamp
 
 
 def test_duration():
@@ -31,12 +30,3 @@ def test_duration():
 
 def test_timestamp():
     assert "2022-10-01T11:10" == format_timestamp(datetime(2022, 10, 1, 11, 10, 22))
-
-
-def test_render_merge_proposal():
-    env = Environment(loader=template_loader)
-    template = env.get_template('cupboard/merge-proposal.html')
-    template.render(proposal={
-        'url': 'https://github.com/jelmer/example/pulls/1',
-        'package': 'zz',
-    })
