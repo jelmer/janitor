@@ -381,3 +381,30 @@ async def test_submit_unknown_campaign(aiohttp_client, db):
     }])
     assert resp.status == 200
     assert ('unknown_campaigns', ['mycampaign']) in (await resp.json()).items()
+
+
+def test_serialize_active_run():
+    run = ActiveRun(
+        worker_name='myworker',
+        worker_link='http://example.com/',
+        campaign='mycampaign',
+        codebase='foo',
+        change_set=None,
+        command='ls',
+        instigated_context='instigated-context',
+        estimated_duration=timedelta(seconds=2),
+        queue_id=4242,
+        log_id='some-log-id',
+        backchannel=Backchannel(),
+        package='pkg',
+        start_time=datetime.utcnow(),
+        vcs_info={
+            'vcs_type': 'git',
+            'branch_url': 'http://example.com/foo'
+        })
+    orig_json = run.json()
+    run_copy = ActiveRun.from_json(orig_json)
+    run_copy_json = run_copy.json()
+    run_copy_json['current_duration'] = orig_json['current_duration']
+    assert run_copy_json == orig_json
+    assert run_copy == run
