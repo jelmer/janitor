@@ -107,7 +107,7 @@ def queue_item_from_candidate_and_publish_policy(row):
 
 
 async def estimate_success_probability(
-    conn: asyncpg.Connection, package: str, campaign: str, context: Optional[str] = None
+    conn: asyncpg.Connection, codebase: str, campaign: str, context: Optional[str] = None
 ) -> tuple[float, int]:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
@@ -121,9 +121,9 @@ SELECT
   result_code, instigated_context, context, failure_details, failure_transient,
   start_time
 FROM run
-WHERE package = $1 AND suite = $2
+WHERE codebase = $1 AND suite = $2
 ORDER BY start_time DESC
-""", package, campaign):
+""", codebase, campaign):
         try:
             ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
         except KeyError:
@@ -201,6 +201,109 @@ async def estimate_duration(
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
+async def do_schedule_regular(
+        conn: asyncpg.Connection, *,
+        package: str, codebase: str, campaign: str,
+        command: Optional[str] = None, 
+        candidate_value: Optional[float] = None,
+        success_chance: Optional[float] = None,
+        normalized_codebase_value: Optional[float] = None,
+        requestor: Optional[str] = None,
+        default_offset: float = 0.0,
+        context: Optional[str] = None,
+        change_set: Optional[str] = None,
+        dry_run: bool = False,
+        refresh: bool = False,
+        bucket: Optional[str] = None) -> tuple[float, Optional[timedelta], int, str]:
+    if candidate_value is None or success_chance is None or command is None:
+        row = await conn.fetchrow(
+            'SELECT value, success_chance, command, context FROM candidate '
+            'WHERE codebase = $1 and suite = $2',
+            codebase, campaign)
+        if row is not None and candidate_value is None:
+            candidate_value = row['value']
+        if row is not None and success_chance is None:
+            success_chance = row['success_chance']
+        if row is not None and context is None:
+            context = row['context']
+        if row is not None and command is None:
+            command = row['command']
+    if candidate_value is None:
+        candidate_value = 0
+    estimated_duration = await estimate_duration(conn, codebase, campaign)
+    assert estimated_duration >= timedelta(
+        0
+    ), "{}: estimated duration < 0.0: {!r}".format(codebase, estimated_duration)
+    (
+        estimated_probability_of_success,
+        total_previous_runs,
+    ) = await estimate_success_probability(conn, codebase, campaign, context)
+    
+    if total_previous_runs == 0:
+        candidate_value += FIRST_RUN_BONUS
+    assert (
+        estimated_probability_of_success >= 0.0
+        and estimated_probability_of_success <= 1.0
+    ), ("Probability of success: %s" % estimated_probability_of_success)
+    if success_chance is not None:
+        success_chance *= estimated_probability_of_success
+    estimated_cost = 20000.0 + (
+        1.0 * estimated_duration.total_seconds() * 1000.0
+        + estimated_duration.microseconds
+    )
+    assert estimated_cost > 0.0, "{}: Estimated cost: {:f}".format(
+        codebase,
+        estimated_cost,
+    )
+    if normalized_codebase_value is None:
+        normalized_codebase_value = await conn.fetchval(
+            "select coalesce(min(1.0 * value / (select max(value) from codebase), 1.0), 1.0) "
+            "from codebase WHERE name = $1", codebase)
+    estimated_value = (
+        normalized_codebase_value * estimated_probability_of_success * candidate_value
+    )
+    assert estimated_value >= 0.0, "Estimated value: %s" % estimated_value
+    offset = estimated_cost / estimated_value
+    assert offset > 0.0
+    offset = default_offset + offset
+    logging.info(
+        "Codebase %s/%s: "
+        "normalized_codebase_value(%.2f) * "
+        "probability_of_success(%.2f) * candidate_value(%d) = "
+        "estimated_value(%.2f), estimated cost (%f)",
+        campaign, codebase,
+        normalized_codebase_value,
+        estimated_probability_of_success,
+        candidate_value,
+        estimated_value,
+        estimated_cost,
+    )
+
+    if bucket is None:
+        bucket = 'default'
+
+    assert command
+    if not dry_run:
+        queue = Queue(conn)
+        queue_id, bucket = await queue.add(
+            package=package,
+            codebase=codebase,
+            campaign=campaign,
+            change_set=change_set,
+            command=command,
+            offset=offset,
+            refresh=refresh,
+            bucket=bucket,
+            estimated_duration=estimated_duration,
+            context=context,
+            requestor=requestor or "scheduler",
+        )
+    else:
+        queue_id = -1
+    logging.info("Scheduled %s (%s) with offset %f", codebase, campaign, offset)
+    return offset, estimated_duration, queue_id, bucket
+
+
 async def bulk_add_to_queue(
     conn: asyncpg.Connection,
     todo,
@@ -208,80 +311,28 @@ async def bulk_add_to_queue(
     default_offset: float = 0.0,
     bucket: str = "default",
 ) -> None:
-    values = {k: (v or 0) for (k, v) in await conn.fetch(
+    codebase_values = {k: (v or 0) for (k, v) in await conn.fetch(
         "SELECT name, value FROM codebase WHERE name IS NOT NULL")}
-    if values:
-        max_value = max([(v or 0) for v in values.values()])
-        if max_value:
-            logging.info("Maximum value: %d", max_value)
+    if codebase_values:
+        max_codebase_value = max([(v or 0) for v in codebase_values.values()])
+        if max_codebase_value:
+            logging.info("Maximum value: %d", max_codebase_value)
     else:
-        max_value = None
+        max_codebase_value = None
     for package, codebase, context, command, campaign, value, success_chance in todo:
-        estimated_duration = await estimate_duration(conn, codebase, campaign)
-        assert estimated_duration >= timedelta(
-            0
-        ), "{}: estimated duration < 0.0: {!r}".format(package, estimated_duration)
-        (
-            estimated_probability_of_success,
-            total_previous_runs,
-        ) = await estimate_success_probability(conn, package, campaign, context)
-        if total_previous_runs == 0:
-            value += FIRST_RUN_BONUS
-        assert (
-            estimated_probability_of_success >= 0.0
-            and estimated_probability_of_success <= 1.0
-        ), ("Probability of success: %s" % estimated_probability_of_success)
-        if success_chance is not None:
-            success_chance *= estimated_probability_of_success
-        estimated_cost = 20000.0 + (
-            1.0 * estimated_duration.total_seconds() * 1000.0
-            + estimated_duration.microseconds
-        )
-        assert estimated_cost > 0.0, "{}: Estimated cost: {:f}".format(
-            package,
-            estimated_cost,
-        )
-        if max_value:
-            estimated_popularity = max(
-                values.get(codebase, 0.0) / float(max_value) * 5.0, 1.0
-            )
+        if max_codebase_value is not None:
+            normalized_codebase_value = min(
+                codebase_values.get(codebase, 0.0) / max_codebase_value, 1.0)
         else:
-            estimated_popularity = 1.0
-        estimated_value = (
-            estimated_popularity * estimated_probability_of_success * value
-        )
-        assert estimated_value >= 0.0, "Estimated value: %s" % estimated_value
-        offset = estimated_cost / estimated_value
-        assert offset > 0.0
-        offset = default_offset + offset
-        logging.info(
-            "Package %s/%s: "
-            "estimated_popularity(%.2f) * "
-            "probability_of_success(%.2f) * value(%d) = "
-            "estimated_value(%.2f), estimated cost (%f)",
-            campaign, package,
-            estimated_popularity,
-            estimated_probability_of_success,
-            value,
-            estimated_value,
-            estimated_cost,
-        )
-
-        if not dry_run:
-            queue = Queue(conn)
-            await queue.add(
-                package=package,
-                codebase=codebase,
-                campaign=campaign,
-                change_set=None,
-                command=command,
-                offset=offset,
-                bucket=bucket,
-                estimated_duration=estimated_duration,
-                context=context,
-                requestor="scheduler",
-            )
-        logging.info("Scheduled %s (%s) with offset %f", package, campaign, offset)
+            normalized_codebase_value = 1.0
+        await do_schedule_regular(
+            conn, package=package, codebase=codebase, context=context,
+            command=command, campaign=campaign, candidate_value=value,
+            success_chance=success_chance,
+            default_offset=default_offset,
+            normalized_codebase_value=normalized_codebase_value,
+            dry_run=dry_run,
+            bucket=bucket)
 
 
 async def dep_available(
@@ -431,11 +482,11 @@ async def do_schedule(
     conn: asyncpg.Connection,
     campaign: str,
     codebase: str,
+    bucket: str,
     *,
     package: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
-    bucket: Optional[str] = None,
     refresh: bool = False,
     requestor: Optional[str] = None,
     estimated_duration=None,
