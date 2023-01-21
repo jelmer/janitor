@@ -272,6 +272,13 @@ queue.id ASC
             change_set,
             codebase,
         )
+        if row is None:
+            # Nothing has changed? TODO(jelmer): Avoid a second query in
+            # this case.
+            return await self.conn.fetchrow(
+                'SELECT id, bucket FROM queue '
+                'WHERE codebase = $1 AND campaign = $2 AND change_set = $3',
+                codebase, campaign, change_set)
         return row[0]
 
     async def get_buckets(self):
