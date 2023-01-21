@@ -85,7 +85,7 @@ INNER JOIN named_publish_policy ON
     elif campaign is not None:
         query += " AND candidate.suite = $1"
         args.append(campaign)
-    elif codebase is not None:
+    elif codebases is not None:
         query += " AND codebase.name = ANY($1::text[])"
         args.append(codebases)
     return await conn.fetch(query, *args)

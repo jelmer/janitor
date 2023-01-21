@@ -554,6 +554,7 @@ CREATE OR REPLACE TRIGGER publish_refresh_change_set_state
   FOR EACH ROW
   EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
 
+
 CREATE OR REPLACE TRIGGER drop_candidates_when_removed
   AFTER UPDATE OF removed
   ON package
