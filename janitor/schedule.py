@@ -259,6 +259,10 @@ async def do_schedule_regular(
         normalized_codebase_value = await conn.fetchval(
             "select coalesce(least(1.0 * value / (select max(value) from codebase), 1.0), 1.0) "
             "from codebase WHERE name = $1", codebase)
+        if normalized_codebase_value is not None:
+            normalized_codebase_value = float(normalized_codebase_value)
+        else:
+            normalized_codebase_value = 1.0
     estimated_value = (
         normalized_codebase_value * estimated_probability_of_success * candidate_value
     )
