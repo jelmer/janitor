@@ -1114,7 +1114,7 @@ async def get_assignment(
     base_url: yarl.URL,
     node_name: str,
     jenkins_build_url: Optional[str],
-    package: Optional[str] = None,
+    codebase: Optional[str] = None,
     campaign: Optional[str] = None,
 ) -> Any:
     assign_url = base_url / "active-runs"
@@ -1136,8 +1136,8 @@ async def get_assignment(
         json["worker_link"] = str(my_url)
     else:
         json["worker_link"] = None
-    if package:
-        json["package"] = package
+    if codebase:
+        json["codebase"] = codebase
     if campaign:
         json["campaign"] = campaign
     logging.debug("Sending assignment request: %r", json)
@@ -1348,12 +1348,12 @@ async def handle_log_id(request):
 async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
         jenkins_build_url=None, prometheus: Optional[str] = None,
-        package: Optional[str] = None, campaign: Optional[str] = None,
+        codebase: Optional[str] = None, campaign: Optional[str] = None,
         tee: bool = False):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
         jenkins_build_url=jenkins_build_url,
-        package=package, campaign=campaign,
+        codebase=codebase, campaign=campaign,
     )
     workitem['assignment'] = assignment
 
@@ -1541,7 +1541,7 @@ async def main(argv=None):
     parser.add_argument(
         '--port', type=int, default=0, help="Port to use for diagnostics web server")
     parser.add_argument(
-        '--package', type=str, help='Request run for specified package')
+        '--codebase', type=str, help='Request run for specified codebase')
     parser.add_argument(
         '--campaign', type=str, help='Request run for specified campaign')
 
@@ -1680,7 +1680,7 @@ async def main(argv=None):
                     workitem=app['workitem'],
                     jenkins_build_url=jenkins_build_url,
                     prometheus=args.prometheus,
-                    package=args.package, campaign=args.campaign,
+                    codebase=args.codebase, campaign=args.campaign,
                     tee=args.tee)
             except AssignmentFailure as e:
                 logging.fatal("failed to get assignment: %s", e.reason)
