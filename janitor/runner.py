@@ -788,6 +788,7 @@ class ActiveRun:
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
+        resume_from: Optional[str] = None,
     ):
         self.campaign = campaign
         self.package = package
@@ -801,9 +802,8 @@ class ActiveRun:
         self.worker_name = worker_name
         self.vcs_info = vcs_info
         self.backchannel = backchannel or Backchannel()
-        self.resume_branch_name = None
         self.worker_link = worker_link
-        self.resume_from = None
+        self.resume_from = resume_from
         self._watch_dog = None
         self.codebase = codebase
 
@@ -858,6 +858,7 @@ class ActiveRun:
             worker_name=js['worker'],
             worker_link=js['worker_link'],
             codebase=js.get('codebase'),
+            resume_from=js.get('resume_from'),
         )
 
     @property
@@ -899,7 +900,13 @@ class ActiveRun:
         return self.vcs_info["subpath"]
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and self.json() == other.json()
+        if not isinstance(other, type(self)):
+            return False
+        this_json = self.json()
+        del this_json['current_duration']
+        other_json = other.json()
+        del other_json['current_duration']
+        return this_json == other_json
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -921,6 +928,7 @@ class ActiveRun:
             "vcs": self.vcs_info,
             "backchannel": self.backchannel.json(),
             "instigated_context": self.instigated_context,
+            "resume_from": self.resume_from,
         }
 
 
@@ -1130,7 +1138,7 @@ async def check_resume_result(
         conn: asyncpg.Connection, campaign: str,
         resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
-        "SELECT id, result, review_status, "
+        "SELECT id, result, review_status, publish_status, "
         "array(SELECT row(role, remote_name, base_revision, revision) "
         "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
         "FROM run "
@@ -1143,6 +1151,7 @@ async def check_resume_result(
         resume_run_id = row['id']
         resume_branch_result = row['result']
         resume_review_status = row['review_status']
+        resume_publish_status = row['publish_status']
         resume_result_branches = [
             (role, name,
              base_revision.encode("utf-8") if base_revision else None,
@@ -1156,17 +1165,20 @@ async def check_resume_result(
     if resume_review_status == "rejected":
         logging.info("Unsetting resume branch, since last run was rejected.")
         return None
+    if resume_publish_status == "rejected":
+        logging.info("Unsetting resume branch, since last run was rejected.")
+        return None
     return ResumeInfo(
-        resume_run_id, resume_branch, resume_branch_result,
-        resume_result_branches or [])
+        run_id=resume_run_id, branch=resume_branch, result=resume_branch_result,
+        result_branches=resume_result_branches or [])
 
 
 class ResumeInfo:
-    def __init__(self, run_id, branch, result, resume_result_branches):
+    def __init__(self, *, run_id, branch, result, result_branches):
         self.run_id = run_id
         self.branch = branch
         self.result = result
-        self.resume_result_branches = resume_result_branches
+        self.resume_result_branches = result_branches
 
     @property
     def resume_branch_url(self):
@@ -2396,7 +2408,7 @@ async def next_item(
                         resume_branch = await to_thread_timeout(
                             VCS_STORE_BRANCH_OPEN_TIMEOUT,
                             vcs_manager.get_branch,
-                            item.package, '{}/{}'.format(campaign_config.name, 'main'),
+                            item.package, f'{campaign_config.name}/main',
                             trace_context=span.context)
                     except asyncio.TimeoutError:
                         logging.warning('Timeout opening resume branch')
@@ -2406,8 +2418,7 @@ async def next_item(
                 resume = await check_resume_result(conn, item.campaign, resume_branch)
                 if resume is not None:
                     if is_authenticated_url(resume.branch.user_url):
-                        raise AssertionError('invalid resume branch %r' % (
-                            resume.branch))
+                        raise AssertionError(f'invalid resume branch {resume.branch}')
                     active_run.resume_from = resume.run_id
                     logging.info(
                         'Resuming %s/%s from run %s', item.package, item.campaign,
@@ -2460,7 +2471,7 @@ async def next_item(
 
     assignment = {
         "id": active_run.log_id,
-        "description": "{} on {}".format(item.campaign, item.package),
+        "description": f"{item.campaign} on {item.package}",
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,
