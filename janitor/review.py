@@ -31,7 +31,6 @@ async def store_review(
                 'SELECT package, suite, codebase FROM run WHERE id = $1', run_id)
             await do_schedule(
                 conn,
-                package=run['package'],
                 campaign=run['suite'],
                 refresh=True,
                 requestor="reviewer (%s)" % reviewer,

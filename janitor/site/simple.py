@@ -340,16 +340,13 @@ async def process_webhook(request, db):
 
     async with db.acquire() as conn:
         for codebase, branch_url in codebases.items():
-            package = await conn.fetchrow(
-                'SELECT name FROM package WHERE codebase = $1', codebase)
-            if package:
-                requestor = "Push hook for %s" % branch_url
-                for suite in await state.iter_publishable_suites(conn, codebase):
-                    if suite not in rescheduled.get(package['name'], []):
-                        await do_schedule(
-                            conn, package=package['name'], campaign=suite, codebase=codebase,
-                            requestor=requestor, bucket="hook")
-                        rescheduled.setdefault(package['name'], []).append(suite)
+            requestor = "Push hook for %s" % branch_url
+            for suite in await state.iter_publishable_suites(conn, codebase):
+                if suite not in rescheduled.get(codebase, []):
+                    await do_schedule(
+                        conn, campaign=suite, codebase=codebase,
+                        requestor=requestor, bucket="hook")
+                    rescheduled.setdefault(codebase, []).append(suite)
 
         return web.json_response({"rescheduled": rescheduled, "urls": urls})
 

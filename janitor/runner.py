@@ -1586,7 +1586,7 @@ class QueueProcessor:
 
             try:
                 await do_schedule_regular(
-                    conn, package=active_run.package, campaign=active_run.campaign,
+                    conn, campaign=active_run.campaign,
                     change_set=active_run.change_set, context=result.context,
                     requestor='after run schedule', codebase=result.codebase)
             except CandidateUnavailable:
@@ -1656,24 +1656,21 @@ async def handle_schedule_control(request):
         try:
             run_id = json['run_id']
         except KeyError:
-            package = json['package']
-            codebase = json.get('codebase')
+            codebase = json['codebase']
             main_branch_revision = json['main_branch_revision'].encode('utf-8')
         else:
             with span.new_child('sql:find-run'):
                 run = await conn.fetchrow(
-                    "SELECT main_branch_revision, package, codebase FROM run "
+                    "SELECT main_branch_revision, codebase FROM run "
                     "WHERE id = $1",
                     run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
-            package = run['package']
             codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         with span.new_child('do-schedule-control'):
             offset, estimated_duration, queue_id, bucket = await do_schedule_control(
                 conn,
-                package=package,
                 change_set=change_set,
                 main_branch_revision=main_branch_revision,
                 offset=offset,
@@ -1684,7 +1681,6 @@ async def handle_schedule_control(request):
                 estimated_duration=estimated_duration)
 
     response_obj = {
-        "package": package,
         "campaign": "control",
         "offset": offset,
         "bucket": bucket,
@@ -2073,7 +2069,6 @@ async def handle_candidates_upload(request):
                         # we just added the candidate
                         offset, estimated_duration, queue_id, bucket = await do_schedule_regular(
                             conn,
-                            package=candidate['package'],
                             campaign=candidate['campaign'],
                             change_set=candidate.get('change_set'),
                             bucket=bucket,
