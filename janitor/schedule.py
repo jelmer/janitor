@@ -101,7 +101,7 @@ def queue_item_from_candidate_and_publish_policy(row):
 
     command = row['command']
 
-    return (row['package'], row['codebase'],
+    return (row['codebase'],
             row['context'], command, row['campaign'],
             value, row['success_chance'])
 
@@ -264,7 +264,7 @@ def calculate_offset(
 
 async def do_schedule_regular(
         conn: asyncpg.Connection, *,
-        package: str, codebase: str, campaign: str,
+        codebase: str, campaign: str,
         command: Optional[str] = None,
         candidate_value: Optional[float] = None,
         success_chance: Optional[float] = None,
@@ -325,7 +325,6 @@ async def do_schedule_regular(
     if not dry_run:
         queue = Queue(conn)
         queue_id, bucket = await queue.add(
-            package=package,
             codebase=codebase,
             campaign=campaign,
             change_set=change_set,
@@ -358,14 +357,14 @@ async def bulk_add_to_queue(
             logging.info("Maximum value: %d", max_codebase_value)
     else:
         max_codebase_value = None
-    for package, codebase, context, command, campaign, value, success_chance in todo:
+    for codebase, context, command, campaign, value, success_chance in todo:
         if max_codebase_value is not None:
             normalized_codebase_value = min(
                 codebase_values.get(codebase, 0.0) / max_codebase_value, 1.0)
         else:
             normalized_codebase_value = 1.0
         await do_schedule_regular(
-            conn, package=package, codebase=codebase, context=context,
+            conn, codebase=codebase, context=context,
             command=command, campaign=campaign, candidate_value=value,
             success_chance=success_chance,
             default_offset=default_offset,
@@ -521,7 +520,6 @@ async def do_schedule(
     codebase: str,
     bucket: str,
     *,
-    package: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     refresh: bool = False,
@@ -546,7 +544,6 @@ async def do_schedule(
         estimated_duration = await estimate_duration(conn, codebase, campaign)
     queue = Queue(conn)
     queue_id, bucket = await queue.add(
-        package=package,
         command=command,
         campaign=campaign,
         change_set=change_set,
