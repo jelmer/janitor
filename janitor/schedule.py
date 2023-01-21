@@ -35,7 +35,7 @@ from .queue import Queue
 FIRST_RUN_BONUS = 100.0
 
 
-# Default estimation if there is no median for the campaign or the package.
+# Default estimation if there is no median for the campaign or the codebase.
 DEFAULT_ESTIMATED_DURATION = 15
 DEFAULT_SCHEDULE_OFFSET = -1.0
 
@@ -61,13 +61,12 @@ PUBLISH_MODE_VALUE = {
 
 async def iter_candidates_with_publish_policy(
         conn: asyncpg.Connection,
-        packages: Optional[list[str]] = None,
+        codebases: Optional[list[str]] = None,
         campaign: Optional[str] = None):
     query = """
 SELECT
-  package.name AS package,
-  package.codebase AS codebase,
-  package.branch_url AS branch_url,
+  codebase.name AS codebase,
+  codebase.branch_url AS branch_url,
   candidate.suite AS campaign,
   candidate.context AS context,
   candidate.value AS value,
@@ -75,22 +74,20 @@ SELECT
   named_publish_policy.per_branch_policy AS publish,
   candidate.command AS command
 FROM candidate
-INNER JOIN package on package.codebase = candidate.codebase
+INNER JOIN codebase on codebase.name = candidate.codebase
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
-WHERE
-  NOT package.removed
 """
     args = []
-    if campaign is not None and packages is not None:
-        query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
-        args.extend([packages, campaign])
+    if campaign is not None and codebases is not None:
+        query += " AND codebase.name = ANY($1::text[]) AND candidate.suite = $2"
+        args.extend([codebases, campaign])
     elif campaign is not None:
         query += " AND candidate.suite = $1"
         args.append(campaign)
-    elif packages is not None:
-        query += " AND package.name = ANY($1::text[])"
-        args.append(packages)
+    elif codebase is not None:
+        query += " AND codebase.name = ANY($1::text[])"
+        args.append(codebases)
     return await conn.fetch(query, *args)
 
 
@@ -435,7 +432,7 @@ async def main():
     )
     parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-    parser.add_argument("packages", help="Package to process.", nargs="*")
+    parser.add_argument("codebases", help="Codebase to process.", nargs="*")
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
@@ -469,7 +466,7 @@ async def main():
             queue_item_from_candidate_and_publish_policy(row)
             for row in
             await iter_candidates_with_publish_policy(
-                conn, packages=(args.packages or None), campaign=args.campaign)]
+                conn, codebases=(args.codebases or None), campaign=args.campaign)]
         logging.info('Adding %d items to queue', len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
