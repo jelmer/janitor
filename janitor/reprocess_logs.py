@@ -139,7 +139,6 @@ async def reprocess_run_logs(
                 if reschedule and new_code != result_code:
                     await do_schedule(
                         conn,
-                        package=package,
                         campaign=campaign,
                         change_set=change_set,
                         codebase=codebase,

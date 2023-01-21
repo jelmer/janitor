@@ -213,7 +213,6 @@ CREATE TABLE IF NOT EXISTS named_publish_policy (
    rate_limit_bucket text
 );
 
-
 CREATE TABLE IF NOT EXISTS candidate (
    package text not null,
    suite suite_name not null,

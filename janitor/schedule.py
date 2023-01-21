@@ -483,7 +483,6 @@ async def do_schedule_control(
     conn: asyncpg.Connection,
     codebase: str,
     *,
-    package: Optional[str] = None,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
@@ -499,7 +498,6 @@ async def do_schedule_control(
         bucket = "control"
     return await do_schedule(
         conn,
-        package=package,
         campaign="control",
         change_set=change_set,
         offset=offset,
