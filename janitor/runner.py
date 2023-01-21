@@ -2420,7 +2420,7 @@ async def next_item(
                     # but we don't have access to the history here (and the worker doesn't have access
                     # to recent runs). Maybe we can provide the worker with a revision => run_id dict
                     # and let it determine resume_from?
-                    resume_branch = None
+                    pass
         else:
             resume = None
 

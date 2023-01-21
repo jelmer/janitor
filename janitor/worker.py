@@ -953,6 +953,10 @@ def run_worker(
             except WorkerFailure as e:
                 if e.code == "nothing-to-do":
                     if ws.changes_since_main():
+                        # This should only ever happen if we were resuming
+                        assert ws.resume_branch is not None, \
+                            ("Found existing changes despite not having resumed. "
+                             f"Mainline: {ws.main_branch_revid!r}, local: {ws.local_tree.branch.last_revision()!r}")
                         raise WorkerFailure(
                             "nothing-new-to-do", e.description, stage=("codemod", ), transient=False) from e
                     elif force_build:
