@@ -119,11 +119,11 @@ async def handle_debdiff(request):
         logging.info(
             "Generating debdiff between %s (%s/%s/%s) and %s (%s/%s/%s)",
             old_run['id'],
-            old_run['package'],
+            old_run['build_source'],
             old_run['build_version'],
             old_run['campaign'],
             new_run['id'],
-            new_run['package'],
+            new_run['build_source'],
             new_run['build_version'],
             new_run['campaign'],
         )
@@ -207,27 +207,27 @@ async def handle_debdiff(request):
 
 async def get_run(conn, run_id):
     return await conn.fetchrow("""\
-SELECT result_code, package, suite AS campaign, id, debian_build.version AS build_version, main_branch_revision
+SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version, main_branch_revision
 FROM run
 LEFT JOIN debian_build ON debian_build.run_id = run.id
 WHERE id = $1""", run_id)
 
 
-async def get_unchanged_run(conn, package, main_branch_revision):
+async def get_unchanged_run(conn, codebase, main_branch_revision):
     query = """
-SELECT result_code, package, suite AS campaign, id, debian_build.version AS build_version
+SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version
 FROM
     run
 LEFT JOIN
     debian_build ON debian_build.run_id = run.id
 WHERE
     revision = $1 AND
-    package = $2 AND
+    codebase = $2 AND
     result_code = 'success' AND
     change_set IS NULL
 ORDER BY finish_time DESC
 """
-    return await conn.fetchrow(query, main_branch_revision, package)
+    return await conn.fetchrow(query, main_branch_revision, codebase)
 
 
 async def get_run_pair(pool, old_id, new_id):
@@ -296,11 +296,11 @@ async def handle_diffoscope(request):
         logging.info(
             "Generating diffoscope between %s (%s/%s/%s) and %s (%s/%s/%s)",
             old_run['id'],
-            old_run['package'],
+            old_run['build_source'],
             old_run['build_version'],
             old_run['campaign'],
             new_run['id'],
-            new_run['package'],
+            new_run['build_source'],
             new_run['build_version'],
             new_run['campaign'],
             extra={'old_run_id': old_run['id'], 'new_run_id': new_run['id']}
@@ -364,19 +364,19 @@ async def handle_diffoscope(request):
                 json.dump(diffoscope_diff, f)
 
     diffoscope_diff["source1"] = "{} version {} ({})".format(
-        old_run['package'],
+        old_run['build_source'],
         old_run['build_version'],
         old_run['campaign'],
     )
     diffoscope_diff["source2"] = "{} version {} ({})".format(
-        new_run['package'],
+        new_run['build_source'],
         new_run['build_version'],
         new_run['campaign'],
     )
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = "diffoscope for {} applied to {}".format(new_run['campaign'], new_run['package'])
+    title = "diffoscope for {} applied to {}".format(new_run['campaign'], new_run['build_source'])
 
     if "filter_boring" in request.query:
         filter_diffoscope_boring(
@@ -629,7 +629,7 @@ async def listen_to_runner(redis, db_location, app):
             else:
                 unchanged_run = await get_unchanged_run(
                     conn,
-                    result["package"],
+                    result["codebase"],
                     result["main_branch_revision"])
                 if unchanged_run:
                     to_precache.append((unchanged_run['id'], result["log_id"]))
