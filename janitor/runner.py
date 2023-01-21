@@ -1736,7 +1736,6 @@ async def handle_schedule(request):
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, bucket = await do_schedule(
                     conn,
-                    package=package,
                     campaign=campaign,
                     offset=offset,
                     change_set=change_set,
@@ -2396,14 +2395,14 @@ async def next_item(
                 except KeyError:
                     logging.warning(
                         'Unsupported vcs %s for resume branch of %s',
-                        vcs_type, item.package)
+                        vcs_type, item.codebase)
                     resume_branch = None
                 else:
                     try:
                         resume_branch = await to_thread_timeout(
                             VCS_STORE_BRANCH_OPEN_TIMEOUT,
                             vcs_manager.get_branch,
-                            item.package, f'{campaign_config.name}/main',
+                            item.codebase, f'{campaign_config.name}/main',
                             trace_context=span.context)
                     except asyncio.TimeoutError:
                         logging.warning('Timeout opening resume branch')
@@ -2416,7 +2415,7 @@ async def next_item(
                         raise AssertionError(f'invalid resume branch {resume.branch}')
                     active_run.resume_from = resume.run_id
                     logging.info(
-                        'Resuming %s/%s from run %s', item.package, item.campaign,
+                        'Resuming %s/%s from run %s', item.codebase, item.campaign,
                         resume.run_id)
                 else:
                     # If we can't find the matching run, then there's not much point in
@@ -2450,8 +2449,8 @@ async def next_item(
                 target_repository_url = None
             else:
                 cached_branch_url = vcs_manager.get_branch_url(
-                    item.package, branch_name)
-                target_repository_url = vcs_manager.get_repository_url(item.package)
+                    item.codebase, branch_name)
+                target_repository_url = vcs_manager.get_repository_url(item.codebase)
     except UnsupportedVcs:
         cached_branch_url = None
         target_repository_url = None
@@ -2466,7 +2465,7 @@ async def next_item(
 
     assignment = {
         "id": active_run.log_id,
-        "description": f"{item.campaign} on {item.package}",
+        "description": f"{item.campaign} on {item.codebase}",
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,
