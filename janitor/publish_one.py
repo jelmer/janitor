@@ -164,7 +164,6 @@ def publish(
         vs = {
             'log_id': log_id,
             'campaign': campaign,
-            'suite': campaign,   # TODO(jelmer): Backwards compatibility
             'role': role,
         }
         if extra_context:
@@ -192,7 +191,10 @@ def publish(
             template = Template(title_template)
             return template.render(codemod_result or {})
         else:
-            description = get_proposal_description('text', existing_proposal)
+            try:
+                description = get_proposal_description('text', existing_proposal)
+            except TemplateNotFound:
+                description = get_proposal_description('markdown', existing_proposal)
             return determine_title(description)
 
     with target_branch.lock_read(), source_branch.lock_read():
