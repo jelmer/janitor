@@ -201,10 +201,66 @@ async def estimate_duration(
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
+# Overhead of doing a run; estimated to be roughly 20s
+MINIMUM_COST = 20000.0
+
+
+def calculate_offset(
+        *, estimated_duration: timedelta,
+        normalized_codebase_value: Optional[float],
+        estimated_probability_of_success: float,
+        candidate_value: Optional[float], total_previous_runs: int,
+        success_chance: Optional[float]):
+    if normalized_codebase_value is None:
+        normalized_codebase_value = 1.0
+
+    if candidate_value is None:
+        candidate_value = 1.0
+    elif total_previous_runs == 0:
+        candidate_value += FIRST_RUN_BONUS
+    assert candidate_value > 0.0
+
+    assert (
+        estimated_probability_of_success >= 0.0
+        and estimated_probability_of_success <= 1.0
+    ), (f"Probability of success: {estimated_probability_of_success}")
+
+    if success_chance is not None:
+        success_chance *= estimated_probability_of_success
+
+    # Estimated cost of doing the run, in milliseconds
+    estimated_cost = MINIMUM_COST + (
+        1000.0 * estimated_duration.total_seconds()
+        + (estimated_duration.microseconds / 1000.0)
+    )
+    assert estimated_cost > 0.0, f"Estimated cost: {estimated_cost:f}"
+
+    estimated_value = (
+        normalized_codebase_value * estimated_probability_of_success * candidate_value
+    )
+    assert estimated_value > 0.0, \
+        (f"Estimated value: normalized_codebase_value({normalized_codebase_value}) * "
+         f"estimated_probability_of_success({estimated_probability_of_success}) * "
+         f"candidate_value({candidate_value})")
+
+    logging.debug(
+        "normalized_codebase_value(%.2f) * "
+        "probability_of_success(%.2f) * candidate_value(%d) = "
+        "estimated_value(%.2f), estimated cost (%f)",
+        normalized_codebase_value,
+        estimated_probability_of_success,
+        candidate_value,
+        estimated_value,
+        estimated_cost,
+    )
+
+    return estimated_cost / estimated_value
+
+
 async def do_schedule_regular(
         conn: asyncpg.Connection, *,
         package: str, codebase: str, campaign: str,
-        command: Optional[str] = None, 
+        command: Optional[str] = None,
         candidate_value: Optional[float] = None,
         success_chance: Optional[float] = None,
         normalized_codebase_value: Optional[float] = None,
@@ -228,8 +284,6 @@ async def do_schedule_regular(
             context = row['context']
         if row is not None and command is None:
             command = row['command']
-    if candidate_value is None:
-        candidate_value = 0
     estimated_duration = await estimate_duration(conn, codebase, campaign)
     assert estimated_duration >= timedelta(
         0
@@ -238,51 +292,22 @@ async def do_schedule_regular(
         estimated_probability_of_success,
         total_previous_runs,
     ) = await estimate_success_probability(conn, codebase, campaign, context)
-    
-    if total_previous_runs == 0:
-        candidate_value += FIRST_RUN_BONUS
-    assert (
-        estimated_probability_of_success >= 0.0
-        and estimated_probability_of_success <= 1.0
-    ), ("Probability of success: %s" % estimated_probability_of_success)
-    if success_chance is not None:
-        success_chance *= estimated_probability_of_success
-    estimated_cost = 20000.0 + (
-        1.0 * estimated_duration.total_seconds() * 1000.0
-        + estimated_duration.microseconds
-    )
-    assert estimated_cost > 0.0, "{}: Estimated cost: {:f}".format(
-        codebase,
-        estimated_cost,
-    )
+
     if normalized_codebase_value is None:
         normalized_codebase_value = await conn.fetchval(
             "select coalesce(least(1.0 * value / (select max(value) from codebase), 1.0), 1.0) "
             "from codebase WHERE name = $1", codebase)
         if normalized_codebase_value is not None:
             normalized_codebase_value = float(normalized_codebase_value)
-        else:
-            normalized_codebase_value = 1.0
-    estimated_value = (
-        normalized_codebase_value * estimated_probability_of_success * candidate_value
-    )
-    assert estimated_value >= 0.0, "Estimated value: %s" % estimated_value
-    offset = estimated_cost / estimated_value
+    offset = calculate_offset(
+        estimated_duration=estimated_duration,
+        normalized_codebase_value=normalized_codebase_value,
+        estimated_probability_of_success=estimated_probability_of_success,
+        candidate_value=candidate_value,
+        total_previous_runs=total_previous_runs,
+        success_chance=success_chance)
     assert offset > 0.0
     offset = default_offset + offset
-    logging.info(
-        "Codebase %s/%s: "
-        "normalized_codebase_value(%.2f) * "
-        "probability_of_success(%.2f) * candidate_value(%d) = "
-        "estimated_value(%.2f), estimated cost (%f)",
-        campaign, codebase,
-        normalized_codebase_value,
-        estimated_probability_of_success,
-        candidate_value,
-        estimated_value,
-        estimated_cost,
-    )
-
     if bucket is None:
         bucket = 'default'
 
@@ -304,7 +329,7 @@ async def do_schedule_regular(
         )
     else:
         queue_id = -1
-    logging.info("Scheduled %s (%s) with offset %f", codebase, campaign, offset)
+    logging.debug("Scheduled %s (%s) with offset %f", codebase, campaign, offset)
     return offset, estimated_duration, queue_id, bucket
 
 
