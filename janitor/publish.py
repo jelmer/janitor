@@ -816,7 +816,7 @@ async def publish_pending_ready(
 
 async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     unchanged_run = await conn.fetchrow(
-        "SELECT result_code, package, revision FROM last_runs "
+        "SELECT result_code, revision FROM last_runs "
         "WHERE revision = $2 AND codebase = $1 and result_code = 'success'",
         run.codebase, run.main_branch_revision.decode('utf-8')
     )
@@ -915,7 +915,7 @@ WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND package = $3 AND bran
 
 
 async def get_open_merge_proposal(
-    conn: asyncpg.Connection, package: str, branch_name: str
+    conn: asyncpg.Connection, codebase: str, branch_name: str
 ):
     query = """\
 SELECT
@@ -926,26 +926,27 @@ FROM
 INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
 WHERE
     merge_proposal.status = 'open' AND
-    merge_proposal.package = $1 AND
+    merge_proposal.codebase = $1 AND
     publish.branch_name = $2
 ORDER BY timestamp DESC
 """
-    return await conn.fetchrow(query, package, branch_name)
+    return await conn.fetchrow(query, codebase, branch_name)
 
 
 async def check_last_published(
-        conn: asyncpg.Connection, campaign: str, package: str) -> Optional[datetime]:
+        conn: asyncpg.Connection, campaign: str, codebase: str) -> Optional[datetime]:
     return await conn.fetchval("""
 SELECT timestamp from publish left join run on run.revision = publish.revision
-WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
+WHERE run.suite = $1 and run.codebase = $2 AND publish.result_code = 'success'
 order by timestamp desc limit 1
-""", campaign, package)
+""", campaign, codebase)
 
 
 async def store_publish(
     conn: asyncpg.Connection,
     *,
     change_set: str,
+    codebase: str,
     package: str,
     branch_name: Optional[str],
     main_branch_revision: Optional[bytes],
@@ -971,16 +972,18 @@ async def store_publish(
                 await conn.execute(
                     "INSERT INTO merge_proposal "
                     "(url, package, status, revision, last_scanned, "
-                    " target_branch_url) "
-                    "VALUES ($1, $2, 'open', $3, NOW(), $4) ON CONFLICT (url) "
+                    " target_branch_url, codebase) "
+                    "VALUES ($1, $2, 'open', $3, NOW(), $4, $5) ON CONFLICT (url) "
                     "DO UPDATE SET package = EXCLUDED.package, "
                     "revision = EXCLUDED.revision, "
                     "last_scanned = EXCLUDED.last_scanned, "
-                    "target_branch_url = EXCLUDED.target_branch_url",
+                    "target_branch_url = EXCLUDED.target_branch_url, "
+                    "codebase = EXCLUDED.codebase",
                     merge_proposal_url,
                     package,
                     revision,
-                    target_branch_url
+                    target_branch_url,
+                    codebase,
                 )
             else:
                 if revision is None:
@@ -1046,7 +1049,7 @@ async def publish_from_policy(
         logger.warning(
             "Not publishing %s/%s: command has changed. "
             "Build used %r, now: %r. Rescheduling.",
-            run.package,
+            run.codebase,
             run.campaign,
             run.command,
             command,
@@ -1093,7 +1096,7 @@ async def publish_from_policy(
         return None
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await get_open_merge_proposal(
-            conn, run.package, campaign_config.branch_name
+            conn, run.codebase, campaign_config.branch_name
         )
         if not open_mp:
             try:
@@ -1104,19 +1107,19 @@ async def publish_from_policy(
                     codebase=run.codebase, campaign=run.campaign
                 ).inc()
                 logger.debug(
-                    "Not creating proposal for %s/%s: %s", run.package, run.campaign, e,
+                    "Not creating proposal for %s/%s: %s", run.codebase, run.campaign, e,
                     extra={'run_id': run.id}
                 )
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
                 last_published = await check_last_published(
-                    conn, run.campaign, run.package)
+                    conn, run.campaign, run.codebase)
                 if (last_published is not None
                         and (datetime.utcnow() - last_published).days < max_frequency_days):
                     logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
-                        run.package, run.campaign, max_frequency_days, last_published,
+                        run.codebase, run.campaign, max_frequency_days, last_published,
                         extra={'run_id': run.id})
                     mode = MODE_BUILD_ONLY
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
@@ -1127,8 +1130,8 @@ async def publish_from_policy(
     else:
         unchanged_run = await conn.fetchrow(
             "SELECT id, result_code FROM last_runs "
-            "WHERE package = $1 AND revision = $2 AND result_code = 'success'",
-            run.package, base_revision.decode('utf-8'))
+            "WHERE codebase = $1 AND revision = $2 AND result_code = 'success'",
+            run.codebase, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
     if (
@@ -1140,7 +1143,7 @@ async def publish_from_policy(
         require_binary_diff = False
 
     logger.info(
-        "Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode
+        "Publishing %s / %r / %s (mode: %s)", run.codebase, run.command, role, mode
     )
     try:
         publish_result = await publish_worker.publish_one(
@@ -1197,6 +1200,7 @@ async def publish_from_policy(
     await store_publish(
         conn,
         change_set=run.change_set,
+        codebase=run.codebase,
         package=run.package,
         branch_name=publish_result.branch_name,
         main_branch_revision=base_revision,
@@ -1227,6 +1231,7 @@ async def publish_from_policy(
     topic_entry: dict[str, Any] = {
         "id": publish_id,
         "package": run.package,
+        "codebase": run.codebase,
         "campaign": run.campaign,
         "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
@@ -1299,9 +1304,9 @@ async def publish_and_store(
         if run.main_branch_revision:
             unchanged_run_id = await conn.fetchval(
                 "SELECT id FROM run "
-                "WHERE revision = $2 AND package = $1 and result_code = 'success' "
+                "WHERE revision = $2 AND codebase = $1 and result_code = 'success' "
                 "ORDER BY finish_time DESC LIMIT 1",
-                run.package, run.main_branch_revision.decode('utf-8')
+                run.codebase, run.main_branch_revision.decode('utf-8')
             )
         else:
             unchanged_run_id = None
@@ -1344,6 +1349,7 @@ async def publish_and_store(
             await store_publish(
                 conn,
                 change_set=run.change_set,
+                codebase=run.codebase,
                 package=run.package,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=run.main_branch_revision,
@@ -1365,6 +1371,7 @@ async def publish_and_store(
                 "campaign": run.campaign,
                 "main_branch_url": run.branch_url,
                 "result": run.result,
+                "codebase": run.codebase,
             }
 
             await pubsub_publish(redis, publish_entry)
@@ -1379,6 +1386,7 @@ async def publish_and_store(
         await store_publish(
             conn,
             change_set=run.change_set,
+            codebase=run.codebase,
             package=run.package,
             branch_name=publish_result.branch_name,
             main_branch_revision=run.main_branch_revision,
@@ -1413,6 +1421,7 @@ async def publish_and_store(
             "role": role,
             "publish_delay": publish_delay.total_seconds(),
             "run_id": run.id,
+            "codebase": run.codebase,
         }
 
         await pubsub_publish(redis, publish_entry)
@@ -3091,6 +3100,7 @@ applied independently.
                 await store_publish(
                     conn,
                     change_set=last_run.change_set,
+                    codebase=last_run.codebase,
                     package=last_run.package,
                     branch_name=campaign_config.branch_name,
                     main_branch_revision=last_run_base_revision,
@@ -3109,6 +3119,7 @@ applied independently.
                 await store_publish(
                     conn,
                     change_set=last_run.change_set,
+                    codebase=last_run.codebase,
                     package=last_run.package,
                     branch_name=publish_result.branch_name,
                     main_branch_revision=last_run_base_revision,
