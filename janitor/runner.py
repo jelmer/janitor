@@ -788,6 +788,7 @@ class ActiveRun:
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
+        resume_from: Optional[str] = None,
     ):
         self.campaign = campaign
         self.package = package
@@ -801,9 +802,8 @@ class ActiveRun:
         self.worker_name = worker_name
         self.vcs_info = vcs_info
         self.backchannel = backchannel or Backchannel()
-        self.resume_branch_name = None
         self.worker_link = worker_link
-        self.resume_from = None
+        self.resume_from = resume_from
         self._watch_dog = None
         self.codebase = codebase
 
@@ -858,6 +858,7 @@ class ActiveRun:
             worker_name=js['worker'],
             worker_link=js['worker_link'],
             codebase=js.get('codebase'),
+            resume_from=js.get('resume_from'),
         )
 
     @property
@@ -899,7 +900,13 @@ class ActiveRun:
         return self.vcs_info["subpath"]
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and self.json() == other.json()
+        if not isinstance(other, type(self)):
+            return False
+        this_json = self.json()
+        del this_json['current_duration']
+        other_json = other.json()
+        del other_json['current_duration']
+        return this_json == other_json
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -921,6 +928,7 @@ class ActiveRun:
             "vcs": self.vcs_info,
             "backchannel": self.backchannel.json(),
             "instigated_context": self.instigated_context,
+            "resume_from": self.resume_from,
         }
 
 
@@ -2463,7 +2471,7 @@ async def next_item(
 
     assignment = {
         "id": active_run.log_id,
-        "description": "{item.campaign} on {item.package}",
+        "description": f"{item.campaign} on {item.package}",
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,
