@@ -251,7 +251,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         'change_set': None,
         'codebase': 'foo',
         'estimated_duration': 15.0,
-        'offset': -1.0,
+        'offset': 350.0,
         'queue-id': 1,
         'refresh': False,
     }
