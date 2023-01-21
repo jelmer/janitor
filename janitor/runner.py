@@ -100,7 +100,7 @@ from .logs import (
     FileSystemLogFileManager,
 )
 from .queue import QueueItem, Queue
-from .schedule import do_schedule_control, do_schedule, CandidateUnavailable
+from .schedule import do_schedule_control, do_schedule, do_schedule_regular, CandidateUnavailable
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -1573,9 +1573,9 @@ class QueueProcessor:
             last_success_gauge.set_to_current_time()
 
             try:
-                await do_schedule(
+                await do_schedule_regular(
                     conn, package=active_run.package, campaign=active_run.campaign,
-                    change_set=active_run.change_set,
+                    change_set=active_run.change_set, context=result.context,
                     requestor='after run schedule', codebase=result.codebase)
             except CandidateUnavailable:
                 # Maybe this was a one-off schedule without candidate, or
@@ -2059,7 +2059,7 @@ async def handle_candidates_upload(request):
                     with span.new_child('schedule'):
                         # This shouldn't raise CandidateUnavailable, since
                         # we just added the candidate
-                        offset, estimated_duration, queue_id, bucket = await do_schedule(
+                        offset, estimated_duration, queue_id, bucket = await do_schedule_regular(
                             conn,
                             package=candidate['package'],
                             campaign=candidate['campaign'],
