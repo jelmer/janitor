@@ -94,11 +94,11 @@ class Queue:
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
 
-    async def get_position(self, campaign, package) -> tuple[Optional[int], Optional[timedelta]]:
+    async def get_position(self, campaign: str, codebase: str) -> tuple[Optional[int], Optional[timedelta]]:
         row = await self.conn.fetchrow(
             "SELECT position, wait_time FROM queue_positions "
-            "WHERE package = $1 AND suite = $2",
-            package, campaign)
+            "WHERE codebase = $1 AND suite = $2",
+            codebase, campaign)
         if not row:
             return (None, None)
         return row
@@ -232,7 +232,6 @@ queue.id ASC
     async def add(
             self,
             *,
-            package: Optional[str],
             codebase: str,
             command: str,
             campaign: str,
