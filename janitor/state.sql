@@ -182,7 +182,7 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   package text not null references package(name),
+   package text references package(name),
    codebase text not null references codebase(name),
    branch_url text,
    suite suite_name not null,
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS queue (
    change_set text references change_set(id),
    check (command != '')
 );
-CREATE UNIQUE INDEX queue_package_suite_set ON queue(package, suite, coalesce(change_set, ''));
+CREATE UNIQUE INDEX queue_codebase_suite_set ON queue(codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON queue (change_set);
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
@@ -234,24 +234,24 @@ CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 
 CREATE TABLE last_run (
-   package text not null references package (name),
+   codebase text not null references codebase(name),
    campaign campaign_name not null,
    last_run_id text references run (id),
    last_effective_run_id text references run (id),
    last_unabsorbed_run_id text references run (id),
-   unique (package, campaign)
+   unique (codebase, campaign)
 );
 
 
 
--- The last run per package/suite
+-- The last run per codebase/campaign
 CREATE OR REPLACE VIEW last_runs AS
   SELECT
   run.*
   FROM last_run
   INNER JOIN run on last_run.last_run_id = run.id;
 
--- The last effective run per package/suite; i.e. the last run that
+-- The last effective run per codebase/campaign; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
 -- changes.
 CREATE OR REPLACE VIEW last_effective_runs AS
@@ -280,9 +280,9 @@ CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
     DECLARE row RECORD;
     BEGIN
 
-    SELECT package, suite INTO row FROM run WHERE id = run_id;
+    SELECT codebase, suite INTO row FROM run WHERE id = run_id;
     IF FOUND THEN
-        perform refresh_last_run(row.package, row.suite);
+        perform refresh_last_run(row.codebase, row.suite);
     end if;
     END;
 $$;
@@ -403,7 +403,7 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   INNER JOIN run on last_run.last_unabsorbed_run_id = run.id;
 
 
-CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
+CREATE OR REPLACE FUNCTION refresh_last_run(_codebase text, _campaign text)
   RETURNS void
   LANGUAGE PLPGSQL
   AS $$
@@ -416,11 +416,11 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
     DECLARE last_unabsorbed_run_id TEXT;
 
     BEGIN
-    SELECT id, result_code, failure_transient, resume_from INTO STRICT last_run FROM run WHERE run.package = _package AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    SELECT id, result_code, failure_transient, resume_from INTO STRICT last_run FROM run WHERE run.codebase = _codebase AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
     IF FOUND THEN
         last_run_id := last_run.id;
     ELSE
-        DELETE FROM last_run WHERE package = _package AND campaign = _campaign;
+        DELETE FROM last_run WHERE codebase = _codebase AND campaign = _campaign;
         RETURN;
     END IF;
 
@@ -428,7 +428,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
         last_effective_run_id := last_run.resume_from;
         last_effective_run_result_code := 'success';
     ELSIF last_run.failure_transient IS TRUE THEN
-        SELECT id, result_code INTO last_effective_run FROM run WHERE run.package = _package AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND not coalesce(failure_transient, False) ORDER BY start_time DESC limit 1;
+        SELECT id, result_code INTO last_effective_run FROM run WHERE run.codebase = _codebase AND run.suite = _campaign AND result_code != 'nothing-new-to-do' AND not coalesce(failure_transient, False) ORDER BY start_time DESC limit 1;
         IF FOUND THEN
            last_effective_run_id := last_effective_run.id;
            last_effective_run_result_code := last_effective_run.result_code;
@@ -454,9 +454,9 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_package text, _campaign text)
        end if;
      END IF;
 
-    INSERT INTO last_run (package, campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id) VALUES (
-          _package, _campaign, last_run.id, last_effective_run_id, last_unabsorbed_run_id)
-         ON CONFLICT (package, campaign) DO UPDATE SET last_run_id = EXCLUDED.last_run_id, last_effective_run_id = EXCLUDED.last_effective_run_id, last_unabsorbed_run_id = EXCLUDED.last_unabsorbed_run_id;
+    INSERT INTO last_run (codebase, campaign, last_run_id, last_effective_run_id, last_unabsorbed_run_id) VALUES (
+          _codebase, _campaign, last_run.id, last_effective_run_id, last_unabsorbed_run_id)
+         ON CONFLICT (codebase, campaign) DO UPDATE SET last_run_id = EXCLUDED.last_run_id, last_effective_run_id = EXCLUDED.last_effective_run_id, last_unabsorbed_run_id = EXCLUDED.last_unabsorbed_run_id;
     END;
 $$;
 
@@ -474,7 +474,7 @@ CREATE OR REPLACE FUNCTION run_trigger_refresh_last_run()
       row = NEW;
     END IF;
 
-    PERFORM refresh_last_run(row.package, row.suite::text);
+    PERFORM refresh_last_run(row.codebase, row.suite::text);
     RETURN NEW;
     END;
 $$;
@@ -514,11 +514,11 @@ CREATE OR REPLACE TRIGGER run_refresh_change_set_state
 create or replace view campaigns as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW perpetual_candidates AS
-  select suite, package from candidate union select suite, package from run;
+  select suite, codebase from candidate union select suite, codebase from run;
 
 CREATE OR REPLACE VIEW first_run_time AS
- SELECT DISTINCT ON (run.package, run.suite) run.package, run.suite, run.start_time
- FROM run ORDER BY run.package, run.suite;
+ SELECT DISTINCT ON (run.codebase, run.suite) run.codebase, run.suite, run.start_time
+ FROM run ORDER BY run.codebase, run.suite;
 
 CREATE OR REPLACE FUNCTION drop_candidates_for_deleted_packages()
   RETURNS TRIGGER
