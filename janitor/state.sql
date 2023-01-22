@@ -475,7 +475,7 @@ CREATE OR REPLACE FUNCTION run_trigger_refresh_last_run()
       row = NEW;
     END IF;
 
-    PERFORM refresh_last_run(row.package, row.suite);
+    PERFORM refresh_last_run(row.package, row.suite::text);
     RETURN NEW;
     END;
 $$;

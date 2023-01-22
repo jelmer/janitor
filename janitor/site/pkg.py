@@ -176,7 +176,8 @@ async def generate_run_file(
 FROM followup LEFT JOIN candidate ON candidate.id = followup.candidate
 WHERE followup.origin = $1""", run['id'])
 
-    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
+    if package:
+        kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
     kwargs["is_admin"] = is_admin
@@ -365,11 +366,11 @@ WHERE followup.origin = $1""", run['id'])
 
 async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
     kwargs = {}
-    kwargs["package"] = package['name']
-    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
+    if package:
+        kwargs["package"] = package['name']
+        kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = runs
-    kwargs["removed"] = package['removed']
     kwargs["distributions"] = config.distribution
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:

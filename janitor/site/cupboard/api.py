@@ -77,7 +77,7 @@ async def handle_mass_reschedule(request):
     config = request.app['config']
     all_campaigns = [c.name for c in config.campaign]
     if result_code == 'never-processed':
-        query = "select c.package AS package, c.suite AS campaign from candidate c WHERE "
+        query = "select c.codebase AS codebase, c.package AS package, c.suite AS campaign from candidate c WHERE "
         params = []
         where = [
             "not exists (SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)"]
@@ -94,6 +94,7 @@ async def handle_mass_reschedule(request):
             table = "last_effective_runs"
         query = """
 SELECT
+codebase,
 package,
 suite AS campaign,
 finish_time - start_time as duration
@@ -138,11 +139,11 @@ AND """ % table
         schedule_url = URL(request.app['runner_url']) / "schedule"
         for run in runs:
             logging.info(
-                "Rescheduling %s, %s", run['package'], run['campaign'])
+                "Rescheduling %s, %s", run['codebase'], run['campaign'])
             try:
                 async with session.post(schedule_url, json={
-                        'package': run['package'],
                         'codebase': run['codebase'],
+                        'package': run['package'],
                         'campaign': run['campaign'],
                         'requestor': "reschedule",
                         'refresh': refresh,
@@ -157,16 +158,16 @@ AND """ % table
                 if e.status == 400:
                     logging.debug(
                         'Not rescheduling %s/%s: candidate unavailable',
-                        run['package'], run['campaign'])
+                        run['codebase'], run['campaign'])
                 else:
                     logging.exception(
                         "Unable to reschedule %s/%s: %d: %s",
-                        run['package'], run['campaign'],
+                        run['codebase'], run['campaign'],
                         e.status, e.message)
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([
-        {'package': run['package'], 'campaign': run['campaign']}
+        {'codebase': run['codebase'], 'campaign': run['campaign']}
         for run in runs])
 
 
@@ -195,7 +196,7 @@ async def handle_needs_review(request):
         with span.new_child('sql:needs-review'):
             for (
                 run_id,
-                package,
+                codebase,
                 campaign
             ) in await iter_needs_review(
                 conn,
@@ -206,7 +207,7 @@ async def handle_needs_review(request):
                 limit=limit
             ):
                 ret.append({
-                    'package': package,
+                    'codebase': codebase,
                     'id': run_id,
                     'campaign': campaign
                 })
