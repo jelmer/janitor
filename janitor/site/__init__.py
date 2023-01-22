@@ -221,6 +221,21 @@ def check_logged_in(request: web.Request) -> None:
         raise web.HTTPUnauthorized()
 
 
+def worker_link_is_global(url):
+    import ipaddress
+    from urllib.parse import urlparse
+    if not url:
+        return False
+    parsed_url = urlparse(url)
+    if not parsed_url.hostname:
+        return False
+    try:
+        return ipaddress.ip_address(parsed_url.hostname).is_global
+    except ValueError:
+        # Assume yes
+        return True
+
+
 TEMPLATE_ENV = {
     'utcnow': datetime.utcnow,
     'enumerate': enumerate,
@@ -229,4 +244,5 @@ TEMPLATE_ENV = {
     'highlight_diff': highlight_diff,
     'classify_result_code': classify_result_code,
     'URL': URL,
+    'worker_link_is_global': worker_link_is_global,
 }

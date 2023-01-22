@@ -20,7 +20,9 @@ from datetime import datetime
 from jinja2 import Environment
 
 from janitor.config import Campaign, Config
-from janitor.site import template_loader, format_timestamp, format_duration, classify_result_code
+from janitor.site import template_loader, format_timestamp, format_duration, classify_result_code, worker_link_is_global
+
+from yarl import URL
 
 
 def test_render_merge_proposal():
@@ -38,6 +40,7 @@ def test_render_run():
     campaign = Campaign()
     campaign.name = "some-fixes"
     template.render(
+        worker_link_is_global=worker_link_is_global,
         run={
             "start_time": datetime.utcnow(),
             "finish_time": datetime.utcnow(),
@@ -62,7 +65,11 @@ def test_render_queue():
 
 def test_render_changeset():
     env = Environment(loader=template_loader)
-    env.get_template('cupboard/changeset.html')
+    template = env.get_template('cupboard/changeset.html')
+    template.render(
+        changeset='changeset',
+        url=URL('https://example/com'),
+        URL=URL)
 
 
 def test_render_broken_mps():
@@ -82,7 +89,8 @@ def test_render_rejected():
 
 def test_workers():
     env = Environment(loader=template_loader)
-    env.get_template('cupboard/workers.html')
+    template = env.get_template('cupboard/workers.html')
+    template.render(worker_link_is_global=worker_link_is_global)
 
 
 def test_start():
