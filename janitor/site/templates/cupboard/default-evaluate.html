@@ -22,6 +22,12 @@
 		{% endfor %}
 	    </ul>
 	</div>
-	<div class="diff" id="diff-{{ role }}">{{ highlight_diff(show_diff(role))|safe }}</div>
+        {%- set DIFF_INLINE_THRESHOLD = 200 -%}
+        {%- set diff = show_diff(role) -%}
+        {% if diff.splitlines(False)|length < DIFF_INLINE_THRESHOLD %}
+	<div class="diff" id="diff-{{ role }}">{{ highlight_diff(diff)|safe }}</div>
+        {% else %}
+	<div class="diff" id="diff-{{ role }}">The <a href="/api/run/{{ run_id }}/diff?role={{ role }}">full diff</a> is too large to include here.</div>
+        {% endif %}
     </div>
 {% endfor %}
