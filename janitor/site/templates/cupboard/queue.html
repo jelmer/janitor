@@ -86,7 +86,7 @@
                             <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
                             <td>{{ format_duration(entry['current_duration']) }}</td>
                             <td>
-                                {% if entry.get('worker_link') %}
+                                {% if worker_link_is_global(entry.get('worker_link')) %}
                                     <a href="{{ entry['worker_link'] }}">{{ entry['worker'] or entry['worker_link'] }}</a>
                                 {% else %}
                                     {{ entry['worker'] }}

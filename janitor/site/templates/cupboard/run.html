@@ -17,9 +17,7 @@
         <ul class="metadata">
             <li>
                 Worker:
-                {% if worker_link %}<a href="{{ worker_link }}">{% endif %}
-                {{ worker_name }}
-                {% if worker_link %}</a>{% endif %}
+                {% if worker_link_is_global(worker_link) %}<a href="{{ worker_link }}">{{ worker_name }}</a>{% else %}{{ worker_name }}{% endif %}
             </li>
             <li>
                 Package: <a class="reference external" href="..">{{ package }}</a>
@@ -163,7 +161,7 @@
             </ul>
         {% else %}
             <h2>Publish Blockers</h2>
-	    {% set blockers = publish_blockers() %}
+            {% set blockers = publish_blockers() %}
             <!-- {{ blockers|tojson }}<-->
             {{ display_publish_blockers(blockers) }}
         {% endif %}
