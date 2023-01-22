@@ -2523,9 +2523,6 @@ async def finish(
             list[str], list[str], list[str], JanitorResult]:
     span = aiozipkin.request_span(request)
     worker_name = active_run.worker_name
-    main_branch_url = active_run.main_branch_url
-    vcs_type = active_run.vcs_type
-    subpath = active_run.subpath
     resume_from = active_run.resume_from
 
     reader = await request.multipart()
@@ -2573,9 +2570,9 @@ async def finish(
             log_id=active_run.log_id,
             code='success',
             worker_name=worker_name,
-            branch_url=main_branch_url,
-            vcs_type=vcs_type,
-            subpath=subpath,
+            branch_url=worker_result.branch_url,
+            vcs_type=worker_result.vcs_type,
+            subpath=worker_result.subpath,
             worker_result=worker_result,
             logfilenames=logfilenames,
             resume_from=resume_from,
