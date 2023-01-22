@@ -26,7 +26,7 @@ import aiozipkin
 
 from aiohttp import web
 
-from .. import is_admin, check_logged_in, is_qa_reviewer
+from .. import is_admin, check_logged_in, is_qa_reviewer, worker_link_is_global
 from ..common import html_template
 from ..pkg import MergeProposalUserUrlResolver
 
@@ -77,10 +77,14 @@ async def handle_reprocess_logs(request):
 @html_template("cupboard/workers.html", headers={"Vary": "Cookie"})
 async def handle_workers(request):
     async with request.app.database.acquire() as conn:
-        return {"workers": await conn.fetch(
+        workers = await conn.fetch(
             'select name, link, count(run.id) as run_count from worker '
             'left join run on run.worker = worker.name '
-            'group by worker.name, worker.link')}
+            'group by worker.name, worker.link')
+        for worker in workers:
+            if not worker_link_is_global(worker['link']):
+                worker['link'] = None
+        return {"workers": workers}
 
 
 @routes.get("/cupboard/queue", name="queue")
