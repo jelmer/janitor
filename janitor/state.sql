@@ -141,7 +141,6 @@ CREATE TABLE IF NOT EXISTS run (
    change_set text not null references change_set(id),
    codebase text not null references codebase(name),
    check(finish_time >= start_time),
-   check(branch_url is null or vcs_type is not null),
    -- nothing-new-to-do always requires resume_from
    check(result_code != 'nothing-new-to-do' or resume_from is not null)
 );
