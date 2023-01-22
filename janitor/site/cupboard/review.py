@@ -108,8 +108,6 @@ async def generate_review(
 
 
 async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, run_id, span):
-    MAX_DIFF_SIZE = 200 * 1024
-
     async with db.acquire() as conn:
         run = await conn.fetchrow(
             'SELECT package, array(SELECT row(role, remote_name, base_revision, revision) '
@@ -128,23 +126,19 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
             return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
-                diff = (await vcs_managers[run['vcs_type']].get_diff(
+                return (await vcs_managers[run['vcs_type']].get_diff(
                     run['package'],
                     base_revid.encode('utf-8') if base_revid else NULL_REVISION,
                     revid.encode('utf-8'))
                 ).decode("utf-8", "replace")
-                if len(diff) > MAX_DIFF_SIZE:
-                    return f"Diff too large ({len(diff)}). See it at {external_url}"
-                else:
-                    return diff
         except ClientResponseError as e:
-            return "Unable to retrieve diff; error code %d" % e.status
+            return f"Unable to retrieve diff; error code {e.status}"
         except NotImplementedError as e:
             return str(e)
         except ClientConnectorError as e:
-            return "Unable to retrieve diff; error %s" % e
+            return f"Unable to retrieve diff; error {e}"
         except TimeoutError:
-            return "Timeout while retrieving diff; see it at %s" % external_url
+            return f"Timeout while retrieving diff; see it at {external_url}"
 
     async def get_revision_info(role):
         try:
@@ -175,7 +169,6 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
 
     return {
         'run_id': run_id,
-        'MAX_DIFF_SIZE': MAX_DIFF_SIZE,
         'finish_time': run['finish_time'],
         'campaign': run['campaign'],
         'branches': run['result_branches'],
