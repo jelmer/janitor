@@ -45,7 +45,7 @@
                             <a href="/{{ run.suite }}">{{ run.suite }}</a>
                         </td>
                         <td>
-                            {% if run.worker_link %}
+                            {% if worker_link_is_global(run.worker_link) %}
                                 <a href="{{ run.worker_link }}">{{ run.worker_name }}</a>
                             {% else %}
                                 {{ run.worker_name }}
