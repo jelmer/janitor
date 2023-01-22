@@ -20,7 +20,7 @@
 import aiozipkin
 import asyncpg.pool
 import asyncio
-from contextlib import suppress
+from contextlib import suppress, closing
 from io import BytesIO
 import logging
 import os
@@ -66,13 +66,13 @@ async def git_diff_request(request):
     except KeyError as e:
         raise web.HTTPBadRequest(text='need both old and new') from e
     path = request.query.get('path')
-    try:
-        with span.new_child('open-repo'):
-            repo = Repo(os.path.join(request.app['local_path'], codebase))
-    except NotGitRepository as e:
+    repo_path = os.path.join(request.app['local_path'], codebase)
+
+    if not os.path.isdir(repo_path):
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            codebase) from e
+            codebase)
+
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
 
@@ -89,7 +89,7 @@ async def git_diff_request(request):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.PIPE,
-        cwd=repo.path,
+        cwd=repo_path,
     )
 
     # TODO(jelmer): Stream this
@@ -100,6 +100,10 @@ async def git_diff_request(request):
         with suppress(ProcessLookupError):
             p.kill()
         raise web.HTTPRequestTimeout(text='diff generation timed out') from e
+    except BaseException:
+        with suppress(ProcessLookupError):
+            p.kill()
+        raise
 
     if p.returncode == 0:
         return web.Response(body=stdout, content_type="text/x-diff")
@@ -122,24 +126,26 @@ async def git_revision_info_request(request):
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             codebase) from e
-    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-        raise web.HTTPBadRequest(text='invalid shas specified')
-    ret = []
-    try:
-        with span.new_child('get-walker'):
-            walker = repo.get_walker(
-                include=[new_sha],
-                exclude=([old_sha] if old_sha != ZERO_SHA else []))
-    except MissingCommitError:
-        return web.json_response({}, status=404)
-    for entry in walker:
-        ret.append({
-            'commit-id': entry.commit.id.decode('ascii'),
-            'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-            'link': '/git/{}/commit/{}/'.format(codebase, entry.commit.id.decode('ascii')),
-            'message': entry.commit.message.decode('utf-8', 'replace')})
-        await asyncio.sleep(0)
-    return web.json_response(ret)
+
+    with closing(repo):
+        if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
+            raise web.HTTPBadRequest(text='invalid shas specified')
+        ret = []
+        try:
+            with span.new_child('get-walker'):
+                walker = repo.get_walker(
+                    include=[new_sha],
+                    exclude=([old_sha] if old_sha != ZERO_SHA else []))
+        except MissingCommitError:
+            return web.json_response({}, status=404)
+        for entry in walker:
+            ret.append({
+                'commit-id': entry.commit.id.decode('ascii'),
+                'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
+                'link': '/git/{}/commit/{}/'.format(codebase, entry.commit.id.decode('ascii')),
+                'message': entry.commit.message.decode('utf-8', 'replace')})
+            await asyncio.sleep(0)
+        return web.json_response(ret)
 
 
 async def _git_open_repo(local_path: str, db, codebase: str) -> Repo:
@@ -252,12 +258,13 @@ async def handle_set_git_remote(request):
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
-    post = await request.post()
-    c = repo.get_config()
-    section = ("remote", remote)
-    c.set(section, "url", post["url"])
-    c.set(section, "fetch", "+refs/heads/*:refs/remotes/%s/*" % remote)
-    c.write_to_path()
+    with closing(repo):
+        post = await request.post()
+        c = repo.get_config()
+        section = ("remote", remote)
+        c.set(section, "url", post["url"])
+        c.set(section, "fetch", "+refs/heads/*:refs/remotes/%s/*" % remote)
+        c.write_to_path()
 
     # TODO(jelmer): Run 'git fetch $remote'?
 
@@ -285,6 +292,8 @@ async def cgit_backend(request):
         args.extend(["-c", "http.receivepack=1"])
     args.append("http-backend")
     full_path = os.path.join(repo.path, subpath.lstrip('/'))
+
+    repo.close()
     env = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
@@ -309,76 +318,82 @@ async def cgit_backend(request):
         stdin=asyncio.subprocess.PIPE,
     )
 
-    async def feed_stdin(stream):
-        async for chunk in request.content.iter_any():
-            stream.write(chunk)
-            await stream.drain()
-        stream.close()
+    try:
+        async def feed_stdin(stream):
+            async for chunk in request.content.iter_any():
+                stream.write(chunk)
+                await stream.drain()
+            stream.close()
 
-    async def read_stderr(stream):
-        line = await stream.readline()
-        while line:
-            logging.warning("git: %s", line.decode().rstrip('\n'))
+        async def read_stderr(stream):
             line = await stream.readline()
+            while line:
+                logging.warning("git: %s", line.decode().rstrip('\n'))
+                line = await stream.readline()
 
-    async def read_stdout(stream):
-        b = BytesIO()
-        line = await stream.readline()
-        while line != b'\r\n':
-            b.write(line)
+        async def read_stdout(stream):
+            b = BytesIO()
             line = await stream.readline()
-        b.seek(0)
-        headers = parse_headers(b)
-        status = headers.get("Status")
-        if status:
-            del headers["Status"]
-            (status_code, status_reason) = status.split(" ", 1)
-            status_code = int(status_code)
-            status_reason = status_reason
-        else:
-            status_code = 200
-            status_reason = "OK"
+            while line != b'\r\n':
+                b.write(line)
+                line = await stream.readline()
+            b.seek(0)
+            headers = parse_headers(b)
+            status = headers.get("Status")
+            if status:
+                del headers["Status"]
+                (status_code, status_reason) = status.split(" ", 1)
+                status_code = int(status_code)
+                status_reason = status_reason
+            else:
+                status_code = 200
+                status_reason = "OK"
 
-        if 'Content-Length' in headers:
-            content_length = int(headers['Content-Length'])
-            return web.Response(
-                headers=dict(headers), status=status_code, reason=status_reason,
-                body=await p.stdout.read(content_length))  # type: ignore
-        else:
-            response = web.StreamResponse(
-                headers=dict(headers),
-                status=status_code, reason=status_reason,
-            )
+            if 'Content-Length' in headers:
+                content_length = int(headers['Content-Length'])
+                return web.Response(
+                    headers=dict(headers), status=status_code, reason=status_reason,
+                    body=await p.stdout.read(content_length))  # type: ignore
+            else:
+                response = web.StreamResponse(
+                    headers=dict(headers),
+                    status=status_code, reason=status_reason,
+                )
 
-            if tuple(request.version) == (1, 1):
-                response.enable_chunked_encoding()
+                if tuple(request.version) == (1, 1):
+                    response.enable_chunked_encoding()
 
-            await response.prepare(request)
+                await response.prepare(request)
 
-            chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
-            while chunk:
-                try:
-                    await response.write(chunk)
-                except ConnectionResetError:
-                    with suppress(ProcessLookupError):
-                        p.kill()
-                    raise
                 chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
+                while chunk:
+                    try:
+                        await response.write(chunk)
+                    except ConnectionResetError:
+                        with suppress(ProcessLookupError):
+                            p.kill()
+                        raise
+                    chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)  # type: ignore
 
-            await response.write_eof()
+                await response.write_eof()
 
-            return response
+                return response
 
-    with span.new_child('git-backend'):
-        try:
-            unused_stderr, response, unused_stdin = await asyncio.gather(*[
-                read_stderr(p.stderr), read_stdout(p.stdout),
-                feed_stdin(p.stdin),
-            ], return_exceptions=False)
-        except asyncio.CancelledError:
-            p.terminate()
-            await p.wait()
-            raise
+        with span.new_child('git-backend'):
+            try:
+                unused_stderr, response, unused_stdin = await asyncio.gather(*[
+                    read_stderr(p.stderr), read_stdout(p.stdout),
+                    feed_stdin(p.stdin),
+                ], return_exceptions=False)
+            except asyncio.CancelledError:
+                p.terminate()
+                await p.wait()
+                raise
+
+    except BaseException:
+        with suppress(ProcessLookupError):
+            p.kill()
+        raise
 
     return response
 
@@ -394,35 +409,36 @@ async def dulwich_refs(request):
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
-    service = request.query.get("service")
-    _git_check_service(service, allow_writes)
+    with closing(repo):
+        service = request.query.get("service")
+        _git_check_service(service, allow_writes)
 
-    headers = {
-        "Content-Type": "application/x-%s-advertisement" % service,
-    }
-    headers.update(NO_CACHE_HEADERS)
+        headers = {
+            "Content-Type": "application/x-%s-advertisement" % service,
+        }
+        headers.update(NO_CACHE_HEADERS)
 
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
+        handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
-    response = web.StreamResponse(status=200, headers=headers)
+        response = web.StreamResponse(status=200, headers=headers)
 
-    await response.prepare(request)
+        await response.prepare(request)
 
-    out = BytesIO()
-    proto = ReceivableProtocol(BytesIO().read, out.write)
-    handler = handler_cls(
-        DictBackend({".": repo}), ["."], proto, stateless_rpc=True, advertise_refs=True
-    )
-    handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
-    handler.proto.write_pkt_line(None)
+        out = BytesIO()
+        proto = ReceivableProtocol(BytesIO().read, out.write)
+        handler = handler_cls(
+            DictBackend({".": repo}), ["."], proto, stateless_rpc=True, advertise_refs=True
+        )
+        handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
+        handler.proto.write_pkt_line(None)
 
-    await asyncio.to_thread(handler.handle)
+        await asyncio.to_thread(handler.handle)
 
-    await response.write(out.getvalue())
+        await response.write(out.getvalue())
 
-    await response.write_eof()
+        await response.write_eof()
 
-    return response
+        return response
 
 
 async def dulwich_service(request):
@@ -437,35 +453,36 @@ async def dulwich_service(request):
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
-    _git_check_service(service, allow_writes)
+    with closing(repo):
+        _git_check_service(service, allow_writes)
 
-    headers = {
-        'Content-Type': "application/x-%s-result" % service
-    }
-    headers.update(NO_CACHE_HEADERS)
-    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
+        headers = {
+            'Content-Type': "application/x-%s-result" % service
+        }
+        headers.update(NO_CACHE_HEADERS)
+        handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
-    response = web.StreamResponse(status=200, headers=headers)
+        response = web.StreamResponse(status=200, headers=headers)
 
-    await response.prepare(request)
+        await response.prepare(request)
 
-    inf = BytesIO(await request.read())
-    outf = BytesIO()
+        inf = BytesIO(await request.read())
+        outf = BytesIO()
 
-    def handle():
-        proto = ReceivableProtocol(inf.read, outf.write)
-        handler = handler_cls(DictBackend({".": repo}), ["."], proto, stateless_rpc=True)
-        try:
-            handler.handle()
-        except HangupException:
-            response.force_close()
+        def handle():
+            proto = ReceivableProtocol(inf.read, outf.write)
+            handler = handler_cls(DictBackend({".": repo}), ["."], proto, stateless_rpc=True)
+            try:
+                handler.handle()
+            except HangupException:
+                response.force_close()
 
-    await asyncio.to_thread(handle)
+        await asyncio.to_thread(handle)
 
-    await response.write(outf.getvalue())
+        await response.write(outf.getvalue())
 
-    await response.write_eof()
-    return response
+        await response.write_eof()
+        return response
 
 
 async def codebase_exists(conn, codebase):
