@@ -218,7 +218,7 @@ def calculate_offset(
         candidate_value = 1.0
     elif total_previous_runs == 0:
         candidate_value += FIRST_RUN_BONUS
-    assert candidate_value > 0.0
+    assert candidate_value > 0.0, f"candidate value is {candidate_value}"
 
     assert (
         estimated_probability_of_success >= 0.0
@@ -299,13 +299,16 @@ async def do_schedule_regular(
             "from codebase WHERE name = $1", codebase)
         if normalized_codebase_value is not None:
             normalized_codebase_value = float(normalized_codebase_value)
-    offset = calculate_offset(
-        estimated_duration=estimated_duration,
-        normalized_codebase_value=normalized_codebase_value,
-        estimated_probability_of_success=estimated_probability_of_success,
-        candidate_value=candidate_value,
-        total_previous_runs=total_previous_runs,
-        success_chance=success_chance)
+    try:
+        offset = calculate_offset(
+            estimated_duration=estimated_duration,
+            normalized_codebase_value=normalized_codebase_value,
+            estimated_probability_of_success=estimated_probability_of_success,
+            candidate_value=candidate_value,
+            total_previous_runs=total_previous_runs,
+            success_chance=success_chance)
+    except AssertionError as e:
+        raise AssertionError(f"During {campaign}/{codebase}: {e}") from e
     assert offset > 0.0
     offset = default_offset + offset
     if bucket is None:
