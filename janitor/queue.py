@@ -250,7 +250,7 @@ queue.id ASC
             "codebase) VALUES ($1, $2, "
             "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
             + " + $3, $4, $5, $6, $7, $8, $9, $10, $11) "
-            "ON CONFLICT (package, suite, coalesce(change_set, ''::text)) "
+            "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "bucket = EXCLUDED.bucket, "
