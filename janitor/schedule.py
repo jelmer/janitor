@@ -203,6 +203,8 @@ async def estimate_duration(
 
 # Overhead of doing a run; estimated to be roughly 20s
 MINIMUM_COST = 20000.0
+MINIMUM_NORMALIZED_CODEBASE_VALUE = 0.1
+DEFAULT_NORMALIZED_CODEBASE_VALUE = 0.5
 
 
 def calculate_offset(
@@ -212,7 +214,10 @@ def calculate_offset(
         candidate_value: Optional[float], total_previous_runs: int,
         success_chance: Optional[float]):
     if normalized_codebase_value is None:
-        normalized_codebase_value = 1.0
+        normalized_codebase_value = DEFAULT_NORMALIZED_CODEBASE_VALUE
+
+    normalized_codebase_value = max(MINIMUM_NORMALIZED_CODEBASE_VALUE, normalized_codebase_value)
+    assert normalized_codebase_value > 0.0, f"normalized codebase value is {normalized_codebase_value}"
 
     if candidate_value is None:
         candidate_value = 1.0
