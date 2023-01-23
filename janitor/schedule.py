@@ -281,6 +281,8 @@ async def do_schedule_regular(
             'SELECT value, success_chance, command, context FROM candidate '
             'WHERE codebase = $1 and suite = $2',
             codebase, campaign)
+        if row is None:
+            raise CandidateUnavailable(campaign, codebase)
         if row is not None and candidate_value is None:
             candidate_value = row['value']
         if row is not None and success_chance is None:
