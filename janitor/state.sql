@@ -417,7 +417,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_codebase text, _campaign text)
     DECLARE last_unabsorbed_run_id TEXT;
 
     BEGIN
-    SELECT id, result_code, failure_transient, resume_from INTO STRICT last_run FROM run WHERE run.codebase = _codebase AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    SELECT id, result_code, failure_transient, resume_from INTO last_run FROM run WHERE run.codebase = _codebase AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
     IF FOUND THEN
         last_run_id := last_run.id;
     ELSE
