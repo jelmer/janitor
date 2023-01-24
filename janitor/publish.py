@@ -691,7 +691,6 @@ async def iter_publish_ready(
     campaigns: Optional[list[str]] = None,
     review_status: Optional[list[str]] = None,
     limit: Optional[int] = None,
-    needs_review: Optional[bool] = None,
     run_id: Optional[str] = None,
     change_set_state: Optional[list[str]] = None,
 ) -> AsyncIterable[
@@ -721,16 +720,13 @@ SELECT * FROM publish_ready
         args.append(change_set_state)
         conditions.append("change_set_state = ANY($%d::change_set_state[])" % (len(args),))
 
-    publishable_condition = (
+    any_publishable_branches = (
         "exists (select from unnest(unpublished_branches) where "
         "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
     )
 
-    conditions.append(publishable_condition)
-
-    if needs_review is not None:
-        args.append(needs_review)
-        conditions.append('needs_review = $%d' % (len(args)))
+    conditions.append(any_publishable_branches)
+    conditions.append('needs_review = False')
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
@@ -783,7 +779,6 @@ async def publish_pending_ready(
             unpublished_branches,
         ) in iter_publish_ready(
             conn1, review_status=review_status,
-            needs_review=False,
             change_set_state=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
@@ -1643,7 +1638,7 @@ async def consider_request(request):
             async for (run, rate_limit_bucket,
                        command, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
-                    needs_review=False, run_id=run_id,
+                    run_id=run_id,
                     change_set_state=['ready', 'publishing']):
                 break
             else:
