@@ -584,7 +584,7 @@ CREATE OR REPLACE TRIGGER expire_site_session_delete_old_rows_trigger
 
 CREATE OR REPLACE VIEW queue_positions AS SELECT
     id,
-    package,
+    codebase,
     suite,
     row_number() OVER (ORDER BY bucket ASC, priority ASC, id ASC) AS position,
     SUM(estimated_duration) OVER (ORDER BY bucket ASC, priority ASC, id ASC)
