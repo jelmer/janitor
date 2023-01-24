@@ -77,10 +77,10 @@ async def handle_reprocess_logs(request):
 @html_template("cupboard/workers.html", headers={"Vary": "Cookie"})
 async def handle_workers(request):
     async with request.app.database.acquire() as conn:
-        workers = await conn.fetch(
+        workers = dict(await conn.fetch(
             'select name, link, count(run.id) as run_count from worker '
             'left join run on run.worker = worker.name '
-            'group by worker.name, worker.link')
+            'group by worker.name, worker.link'))
         for worker in workers:
             if not worker_link_is_global(worker['link']):
                 worker['link'] = None
