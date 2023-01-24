@@ -24,8 +24,6 @@ import logging
 import os
 from typing import Optional
 
-from breezy.errors import PermissionDenied
-
 from aiohttp import (
     ClientSession,
     ClientResponseError,
@@ -328,16 +326,17 @@ async def import_log(
         primary_logfile_upload_failed_count.inc()
         if backup_logfile_manager:
             await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
-    except PermissionDenied as e:
+    except PermissionError as e:
         logging.warning(
             "Permission denied error while uploading logfile %s: %s",
             name, e)
         # It may just be that the file already exists
         try:
-            alternative_path = path + '.' + datetime.utcnow().isoformat(timespec='seconds')
+            suffix = datetime.utcnow().isoformat(timespec='seconds')
+            alternative_path = path + '.' + suffix
             await logfile_manager.import_log(
                 pkg, log_id, alternative_path, mtime=mtime)
-        except (asyncio.TimeoutError, PermissionDenied, ServiceUnavailable):
+        except (asyncio.TimeoutError, PermissionError, ServiceUnavailable):
             pass
         else:
             logfile_uploaded_count.inc()
