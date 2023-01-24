@@ -183,7 +183,6 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   package text references package(name),
    codebase text not null references codebase(name),
    branch_url text,
    suite suite_name not null,
