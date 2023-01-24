@@ -338,15 +338,17 @@ cd {{ package }}
                     {%- else -%}
                         package has been removed from the archive
                     {%- endif -%}
-                {%- elif k == 'qa_review' -%}
-                    {%- if not d.needs_review and d.status == 'rejected' -%}
-                        review not required but run was rejected
+                {%- elif k == 'publish_status' -%}
+                    {%- if d.status == 'needs-manual-review' -%}
+                        manual review required
                     {%- elif d.status == 'approved' -%}
                         run was approved
-                    {%- elif not d.needs_review -%}
-                        review not required
-                    {%- else -%}
-                        not yet reviewed, but review needed
+                    {%- elif d.status == 'rejected' -%}
+                        run was rejected
+                    {%- elif d.status == 'unknown' -%}
+                        run not yet processed
+		    {%- else -%}
+		        unknown publish status {{ d.status }}
                     {%- endif -%}
                 {%- elif k == 'backoff' -%}
                     {{ d.attempt_count }} publish attempts so far.
