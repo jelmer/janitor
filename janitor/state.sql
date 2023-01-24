@@ -153,6 +153,7 @@ CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
 CREATE INDEX ON run (main_branch_revision);
 CREATE INDEX ON run (change_set);
+CREATE INDEX ON run (publish_status);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip', 'bts');
 CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
@@ -182,7 +183,6 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   package text references package(name),
    codebase text not null references codebase(name),
    branch_url text,
    suite suite_name not null,
@@ -417,7 +417,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(_codebase text, _campaign text)
     DECLARE last_unabsorbed_run_id TEXT;
 
     BEGIN
-    SELECT id, result_code, failure_transient, resume_from INTO STRICT last_run FROM run WHERE run.codebase = _codebase AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
+    SELECT id, result_code, failure_transient, resume_from INTO last_run FROM run WHERE run.codebase = _codebase AND suite = _campaign ORDER BY start_time DESC LIMIT 1;
     IF FOUND THEN
         last_run_id := last_run.id;
     ELSE
@@ -584,7 +584,7 @@ CREATE OR REPLACE TRIGGER expire_site_session_delete_old_rows_trigger
 
 CREATE OR REPLACE VIEW queue_positions AS SELECT
     id,
-    package,
+    codebase,
     suite,
     row_number() OVER (ORDER BY bucket ASC, priority ASC, id ASC) AS position,
     SUM(estimated_duration) OVER (ORDER BY bucket ASC, priority ASC, id ASC)

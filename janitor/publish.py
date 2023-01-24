@@ -687,13 +687,9 @@ async def consider_publish_run(
 
 async def iter_publish_ready(
     conn: asyncpg.Connection,
+    review_status: Optional[list[str]],
     *,
-    campaigns: Optional[list[str]] = None,
-    review_status: Optional[list[str]] = None,
-    limit: Optional[int] = None,
-    needs_review: Optional[bool] = None,
     run_id: Optional[str] = None,
-    change_set_state: Optional[list[str]] = None,
 ) -> AsyncIterable[
     tuple[
         state.Run,
@@ -708,29 +704,20 @@ async def iter_publish_ready(
 SELECT * FROM publish_ready
 """
     conditions = []
-    if campaigns is not None:
-        args.append(campaigns)
-        conditions.append("suite = ANY($%d::text[])" % len(args))
     if run_id is not None:
         args.append(run_id)
         conditions.append("id = $%d" % len(args))
-    if review_status is not None:
-        args.append(review_status)
-        conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
-    if change_set_state is not None:
-        args.append(change_set_state)
-        conditions.append("change_set_state = ANY($%d::change_set_state[])" % (len(args),))
+    args.append(review_status)
+    conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
+    conditions.append("change_set_state IN ('ready', 'publishing')")
 
-    publishable_condition = (
+    any_publishable_branches = (
         "exists (select from unnest(unpublished_branches) where "
         "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
     )
 
-    conditions.append(publishable_condition)
-
-    if needs_review is not None:
-        args.append(needs_review)
-        conditions.append('needs_review = $%d' % (len(args)))
+    conditions.append(any_publishable_branches)
+    conditions.append('needs_review = False')
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
@@ -742,8 +729,6 @@ SELECT * FROM publish_ready
     if order_by:
         query += " ORDER BY " + ", ".join(order_by) + " "
 
-    if limit is not None:
-        query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
             [state.Run.from_row(record),
@@ -783,8 +768,6 @@ async def publish_pending_ready(
             unpublished_branches,
         ) in iter_publish_ready(
             conn1, review_status=review_status,
-            needs_review=False,
-            change_set_state=['ready', 'publishing'],
         ):
             actual_modes = await consider_publish_run(
                 conn, redis=redis, config=config,
@@ -1643,8 +1626,7 @@ async def consider_request(request):
             async for (run, rate_limit_bucket,
                        command, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
-                    needs_review=False, run_id=run_id,
-                    change_set_state=['ready', 'publishing']):
+                    run_id=run_id):
                 break
             else:
                 return
