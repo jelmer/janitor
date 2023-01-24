@@ -245,7 +245,7 @@ queue.id ASC
             requestor: Optional[str] = None) -> tuple[int, str]:
         row = await self.conn.fetchrow(
             "INSERT INTO queue "
-            "(package, command, priority, bucket, context, "
+            "(command, priority, bucket, context, "
             "estimated_duration, suite, refresh, requestor, change_set, "
             "codebase) VALUES ($1, $2, "
             "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
@@ -260,7 +260,6 @@ queue.id ASC
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
             "queue.priority >= EXCLUDED.priority) RETURNING (id, bucket)",
-            package,
             command,
             offset,
             bucket,
