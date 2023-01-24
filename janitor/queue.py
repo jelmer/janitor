@@ -277,7 +277,7 @@ queue.id ASC
             # this case.
             return await self.conn.fetchrow(
                 'SELECT id, bucket FROM queue '
-                'WHERE codebase = $1 AND campaign = $2 AND change_set = $3',
+                'WHERE codebase = $1 AND suite = $2 AND change_set = $3',
                 codebase, campaign, change_set)
         return row[0]
 
