@@ -226,7 +226,8 @@ CREATE TABLE IF NOT EXISTS candidate (
    codebase text not null references codebase(name),
    foreign key (package) references package(name),
    id serial primary key not null,
-   check (command != '')
+   check (command != ''),
+   check (value > 0)
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, '')); -- DEPRECATE
