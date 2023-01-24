@@ -687,7 +687,6 @@ async def consider_publish_run(
 
 async def iter_publish_ready(
     conn: asyncpg.Connection,
-    review_status: Optional[list[str]],
     *,
     run_id: Optional[str] = None,
 ) -> AsyncIterable[
@@ -707,8 +706,7 @@ SELECT * FROM publish_ready
     if run_id is not None:
         args.append(run_id)
         conditions.append("id = $%d" % len(args))
-    args.append(review_status)
-    conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
+    conditions.append("publish_status = 'approved'")
     conditions.append("change_set_state IN ('ready', 'publishing')")
 
     any_publishable_branches = (
@@ -717,7 +715,7 @@ SELECT * FROM publish_ready
     )
 
     conditions.append(any_publishable_branches)
-    conditions.append('needs_review = False')
+    conditions.append("publish_status = 'approved'")
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
@@ -748,17 +746,11 @@ async def publish_pending_ready(
     bucket_rate_limiter,
     vcs_managers,
     dry_run: bool,
-    reviewed_only: bool = False,
     push_limit: Optional[int] = None,
     require_binary_diff: bool = False,
 ):
     start = time.time()
     actions: dict[Optional[str], int] = {}
-
-    if reviewed_only:
-        review_status = ["approved"]
-    else:
-        review_status = ["approved", "unreviewed"]
 
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (
@@ -766,9 +758,7 @@ async def publish_pending_ready(
             rate_limit_bucket,
             command,
             unpublished_branches,
-        ) in iter_publish_ready(
-            conn1, review_status=review_status,
-        ):
+        ) in iter_publish_ready(conn1):
             actual_modes = await consider_publish_run(
                 conn, redis=redis, config=config,
                 publish_worker=publish_worker,
@@ -1526,7 +1516,6 @@ async def handle_policy_get(request):
                 'mode': p['mode'],
                 'max_frequency_days': p['frequency_days'],
             } for p in row['publish']},
-        "qa_review": row['qa_review'],
     })
 
 
@@ -1541,7 +1530,6 @@ async def handle_full_policy_get(request):
                 'mode': p['mode'],
                 'max_frequency_days': p['frequency_days'],
             } for p in row['per_branch_policy']},
-        "qa_review": row['qa_review'],
     } for row in rows})
 
 
@@ -1552,14 +1540,13 @@ async def handle_policy_put(request):
     async with request.app['db'].acquire() as conn:
         await conn.execute(
             "INSERT INTO named_publish_policy "
-            "(name, qa_review, per_branch_policy, rate_limit_bucket) "
-            "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
-            "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
+            "(name, per_branch_policy, rate_limit_bucket) "
+            "VALUES ($1, $2, $3) ON CONFLICT (name) "
+            "DO UPDATE SET "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
             "rate_limit_bucket = EXCLUDED.rate_limit_bucket",
-            name, policy['qa_review'],
-            [(r, v['mode'], v.get('max_frequency_days'))
-             for (r, v) in policy['per_branch'].items()],
+            name, [(r, v['mode'], v.get('max_frequency_days'))
+                   for (r, v) in policy['per_branch'].items()],
             policy.get('rate_limit_bucket'))
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
@@ -1570,16 +1557,15 @@ async def handle_full_policy_put(request):
     policy = await request.json()
     async with request.app['db'].acquire() as conn, conn.transaction():
         entries = [
-            (name, v['qa_review'],
-             [(r, b['mode'], b.get('max_frequency_days'))
-              for (r, b) in v['per_branch'].items()],
+            (name, [(r, b['mode'], b.get('max_frequency_days'))
+                    for (r, b) in v['per_branch'].items()],
              v.get('rate_limit_bucket'))
             for (name, v) in policy.items()]
         await conn.executemany(
             "INSERT INTO named_publish_policy "
-            "(name, qa_review, per_branch_policy, rate_limit_bucket) "
-            "VALUES ($1, $2, $3, $4) ON CONFLICT (name) "
-            "DO UPDATE SET qa_review = EXCLUDED.qa_review, "
+            "(name, per_branch_policy, rate_limit_bucket) "
+            "VALUES ($1, $2, $3) ON CONFLICT (name) "
+            "DO UPDATE SET "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
             "rate_limit_bucket = EXCLUDED.rate_limit_bucket", entries)
         await conn.execute(
@@ -1618,14 +1604,11 @@ async def update_merge_proposal_request(request):
 async def consider_request(request):
     run_id = request.match_info['run_id']
 
-    # TODO(jelmer): Allow this to vary?
-    review_status = ["approved"]
-
     async def run():
         async with request.app['db'].acquire() as conn:
             async for (run, rate_limit_bucket,
                        command, unpublished_branches) in iter_publish_ready(
-                    conn, review_status=review_status,
+                    conn,
                     run_id=run_id):
                 break
             else:
@@ -1970,7 +1953,6 @@ async def refresh_proposal_status_request(request):
 
 @routes.post("/autopublish", name='autopublish')
 async def autopublish_request(request):
-    reviewed_only = "reviewed_only" in request.query
 
     async def autopublish():
         await publish_pending_ready(
@@ -1982,7 +1964,6 @@ async def autopublish_request(request):
             vcs_managers=request.app['vcs_managers'],
             dry_run=request.app['dry_run'],
             push_limit=request.app['push_limit'],
-            reviewed_only=reviewed_only,
             require_binary_diff=request.app['require_binary_diff'],
         )
 
@@ -2062,9 +2043,8 @@ SELECT
   run.codebase AS codebase,
   run.suite AS campaign,
   run.finish_time AS finish_time,
-  run.review_status AS review_status,
   run.command AS run_command,
-  named_publish_policy.qa_review AS qa_review_policy,
+  run.publish_status AS publish_status,
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   run.revision AS revision,
   candidate.command AS policy_command,
@@ -2112,21 +2092,14 @@ WHERE run.id = $1
         'details': {
             'correct': run['policy_command'],
             'actual': run['run_command']}}
-    ret['qa_review'] = {
-        'result': (
-            run['review_status'] != 'rejected'
-            and not (run['qa_review_policy'] == 'required'
-                     and run['review_status'] == 'unreviewed')),
+    ret['publish_status'] = {
+        'result': (run['publish_status'] == 'approved'),
         'details': {
-            'status': run['review_status'],
+            'status': run['publish_status'],
             'reviews': {review['reviewer']: {
                 'timestamp': review['reviewed_at'].isoformat(),
                 'comment': review['comment'],
-                'verdict': review['verdict']} for review in reviews},
-            'needs_review': (
-                run['qa_review_policy'] == 'required'
-                and run['review_status'] == 'unreviewed'),
-            'policy': run['qa_review_policy']}}
+                'verdict': review['verdict']} for review in reviews}}}
 
     next_try_time = calculate_next_try_time(
         run['finish_time'], attempt_count)
@@ -2183,7 +2156,6 @@ async def process_queue_loop(
     vcs_managers,
     interval,
     auto_publish: bool = True,
-    reviewed_only: bool = False,
     push_limit: Optional[int] = None,
     modify_mp_limit: Optional[int] = None,
     require_binary_diff: bool = False,
@@ -2212,7 +2184,6 @@ async def process_queue_loop(
                 bucket_rate_limiter=bucket_rate_limiter,
                 vcs_managers=vcs_managers,
                 dry_run=dry_run,
-                reviewed_only=reviewed_only,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff)
         cycle_duration = datetime.utcnow() - cycle_start
@@ -2236,7 +2207,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     result_code,
     value, main_branch_revision, revision, context, result, suite,
-    instigated_context, vcs_type, branch_url, logfilenames, review_status,
+    instigated_context, vcs_type, branch_url, logfilenames,
     worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
@@ -3297,7 +3268,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     result_code,
     value, main_branch_revision, revision, context, result, suite,
-    instigated_context, vcs_type, branch_url, logfilenames, review_status,
+    instigated_context, vcs_type, branch_url, logfilenames, 
     worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
@@ -3332,7 +3303,6 @@ SELECT
   instigated_context,
   branch_url,
   logfilenames,
-  review_status,
   worker,
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
@@ -3570,7 +3540,6 @@ async def main(argv=None):
                 bucket_rate_limiter=bucket_rate_limiter,
                 dry_run=args.dry_run,
                 vcs_managers=vcs_managers,
-                reviewed_only=args.reviewed_only,
                 require_binary_diff=args.require_binary_diff,
             )
             if args.prometheus:
@@ -3590,7 +3559,6 @@ async def main(argv=None):
                         vcs_managers=vcs_managers,
                         interval=args.interval,
                         auto_publish=not args.no_auto_publish,
-                        reviewed_only=args.reviewed_only,
                         push_limit=args.push_limit,
                         modify_mp_limit=args.modify_mp_limit,
                         require_binary_diff=args.require_binary_diff,
@@ -3615,7 +3583,7 @@ async def main(argv=None):
                     refresh_bucket_mp_counts(db, bucket_rate_limiter),
                 ),
             ]
-            if not args.reviewed_only and not args.no_auto_publish:
+            if not False and not args.no_auto_publish:
                 tasks.append(
                     loop.create_task(
                         listen_to_runner(
