@@ -245,11 +245,11 @@ queue.id ASC
             requestor: Optional[str] = None) -> tuple[int, str]:
         row = await self.conn.fetchrow(
             "INSERT INTO queue "
-            "(package, command, priority, bucket, context, "
+            "(command, priority, bucket, context, "
             "estimated_duration, suite, refresh, requestor, change_set, "
-            "codebase) VALUES ($1, $2, "
+            "codebase) VALUES ($1, "
             "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
-            + " + $3, $4, $5, $6, $7, $8, $9, $10, $11) "
+            + " + $2, $3, $4, $5, $6, $7, $8, $9, $10) "
             "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
@@ -260,7 +260,6 @@ queue.id ASC
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
             "queue.priority >= EXCLUDED.priority) RETURNING (id, bucket)",
-            package,
             command,
             offset,
             bucket,
@@ -275,10 +274,12 @@ queue.id ASC
         if row is None:
             # Nothing has changed? TODO(jelmer): Avoid a second query in
             # this case.
-            return await self.conn.fetchrow(
+            row = await self.conn.fetchrow(
                 'SELECT id, bucket FROM queue '
                 'WHERE codebase = $1 AND suite = $2 AND change_set = $3',
                 codebase, campaign, change_set)
+            assert row
+            return row
         return row[0]
 
     async def get_buckets(self):
