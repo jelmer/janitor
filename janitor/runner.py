@@ -1688,6 +1688,7 @@ async def handle_schedule_control(request):
         "campaign": "control",
         "offset": offset,
         "bucket": bucket,
+        "codebase": codebase,
         "queue_id": queue_id,
         "estimated_duration_seconds":
             estimated_duration.total_seconds() if estimated_duration else None,
