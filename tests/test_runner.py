@@ -223,6 +223,32 @@ async def test_submit_codebase(aiohttp_client, db):
     }] == await resp.json()
 
 
+
+async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    async with db.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
+
+    resp = await client.post("/candidates", json=[{
+        "package": "foo",
+        "campaign": "mycampaign",
+        "codebase": "foo",
+        "command": "true",
+        "value": 0,
+    }])
+    assert resp.status == 200
+    assert (await resp.json())['invalid_value'] == [0]
+
+
 async def test_submit_candidate(aiohttp_client, db, tmp_path):
     vcs = tmp_path / "vcs"
     vcs.mkdir()
