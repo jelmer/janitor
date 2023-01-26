@@ -1936,6 +1936,7 @@ async def handle_candidates_upload(request):
     unknown_codebases = []
     unknown_campaigns = []
     invalid_command = []
+    invalid_value = []
     unknown_publish_policies = []
     queue_processor = request.app['queue_processor']
     async with queue_processor.database.acquire() as conn:
@@ -2031,6 +2032,12 @@ async def handle_candidates_upload(request):
                         unknown_publish_policies.append(publish_policy)
                         continue
 
+                    if candidate.get('value') == 0:
+                        logging.warning(
+                            'invalid value for candidate: %r', candidate.get('value'))
+                        invalid_value.append(candidate.get('value'))
+                        continue
+
                     with span.new_child('sql:insert-candidates'):
                         candidate_id = await insert_candidate_stmt.fetchval(
                             candidate['package'], candidate['campaign'],
@@ -2097,6 +2104,7 @@ async def handle_candidates_upload(request):
     return web.json_response({
         'success': ret,
         'invalid_command': invalid_command,
+        'invalid_value': invalid_value,
         'unknown_campaigns': unknown_campaigns,
         'unknown_codebases': unknown_codebases,
         'unknown_publish_policies': unknown_publish_policies,
