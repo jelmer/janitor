@@ -1586,7 +1586,7 @@ class QueueProcessor:
 
             try:
                 await do_schedule_regular(
-                    conn, package=active_run.package, campaign=active_run.campaign,
+                    conn, campaign=active_run.campaign,
                     change_set=active_run.change_set, context=result.context,
                     requestor='after run schedule', codebase=result.codebase)
             except CandidateUnavailable:
@@ -1656,24 +1656,21 @@ async def handle_schedule_control(request):
         try:
             run_id = json['run_id']
         except KeyError:
-            package = json['package']
-            codebase = json.get('codebase')
+            codebase = json['codebase']
             main_branch_revision = json['main_branch_revision'].encode('utf-8')
         else:
             with span.new_child('sql:find-run'):
                 run = await conn.fetchrow(
-                    "SELECT main_branch_revision, package, codebase FROM run "
+                    "SELECT main_branch_revision, codebase FROM run "
                     "WHERE id = $1",
                     run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
-            package = run['package']
             codebase = run['codebase']
             main_branch_revision = run['main_branch_revision'].encode('utf-8')
         with span.new_child('do-schedule-control'):
             offset, estimated_duration, queue_id, bucket = await do_schedule_control(
                 conn,
-                package=package,
                 change_set=change_set,
                 main_branch_revision=main_branch_revision,
                 offset=offset,
@@ -1684,7 +1681,6 @@ async def handle_schedule_control(request):
                 estimated_duration=estimated_duration)
 
     response_obj = {
-        "package": package,
         "campaign": "control",
         "offset": offset,
         "bucket": bucket,
@@ -1740,7 +1736,6 @@ async def handle_schedule(request):
             with span.new_child('do-schedule'):
                 offset, estimated_duration, queue_id, bucket = await do_schedule(
                     conn,
-                    package=package,
                     campaign=campaign,
                     offset=offset,
                     change_set=change_set,
@@ -2073,7 +2068,6 @@ async def handle_candidates_upload(request):
                         # we just added the candidate
                         offset, estimated_duration, queue_id, bucket = await do_schedule_regular(
                             conn,
-                            package=candidate['package'],
                             campaign=candidate['campaign'],
                             change_set=candidate.get('change_set'),
                             bucket=bucket,
@@ -2401,14 +2395,14 @@ async def next_item(
                 except KeyError:
                     logging.warning(
                         'Unsupported vcs %s for resume branch of %s',
-                        vcs_type, item.package)
+                        vcs_type, item.codebase)
                     resume_branch = None
                 else:
                     try:
                         resume_branch = await to_thread_timeout(
                             VCS_STORE_BRANCH_OPEN_TIMEOUT,
                             vcs_manager.get_branch,
-                            item.package, f'{campaign_config.name}/main',
+                            item.codebase, f'{campaign_config.name}/main',
                             trace_context=span.context)
                     except asyncio.TimeoutError:
                         logging.warning('Timeout opening resume branch')
@@ -2421,7 +2415,7 @@ async def next_item(
                         raise AssertionError(f'invalid resume branch {resume.branch}')
                     active_run.resume_from = resume.run_id
                     logging.info(
-                        'Resuming %s/%s from run %s', item.package, item.campaign,
+                        'Resuming %s/%s from run %s', item.codebase, item.campaign,
                         resume.run_id)
                 else:
                     # If we can't find the matching run, then there's not much point in
@@ -2455,8 +2449,8 @@ async def next_item(
                 target_repository_url = None
             else:
                 cached_branch_url = vcs_manager.get_branch_url(
-                    item.package, branch_name)
-                target_repository_url = vcs_manager.get_repository_url(item.package)
+                    item.codebase, branch_name)
+                target_repository_url = vcs_manager.get_repository_url(item.codebase)
     except UnsupportedVcs:
         cached_branch_url = None
         target_repository_url = None
@@ -2471,7 +2465,7 @@ async def next_item(
 
     assignment = {
         "id": active_run.log_id,
-        "description": f"{item.campaign} on {item.package}",
+        "description": f"{item.campaign} on {item.codebase}",
         "queue_id": item.id,
         "branch": {
             "default-empty": campaign_config.default_empty,

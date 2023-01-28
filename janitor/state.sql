@@ -213,7 +213,6 @@ CREATE TABLE IF NOT EXISTS named_publish_policy (
    rate_limit_bucket text
 );
 
-
 CREATE TABLE IF NOT EXISTS candidate (
    package text not null,
    suite suite_name not null,
@@ -554,6 +553,7 @@ CREATE OR REPLACE TRIGGER publish_refresh_change_set_state
   ON publish
   FOR EACH ROW
   EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
+
 
 CREATE OR REPLACE TRIGGER drop_candidates_when_removed
   AFTER UPDATE OF removed
