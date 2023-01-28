@@ -504,7 +504,7 @@ async def handle_result_file(request):
 @routes.get("/cupboard/ready", name="cupboard-ready")
 @html_template("cupboard/ready-list.html", headers={"Vary": "Cookie"})
 async def handle_ready_proposals(request):
-    review_status = request.query.get("review_status")
+    publish_status = request.query.get("publish_status")
     async with request.app.database.acquire() as conn:
         query = 'SELECT package, suite, id, command, result FROM publish_ready'
 
@@ -513,9 +513,9 @@ async def handle_ready_proposals(request):
             "WHERE mode in "
             "('propose', 'attempt-push', 'push-derived', 'push'))"]
         args = []
-        if review_status:
-            args.append(review_status)
-            conditions.append('review_status = %d' % len(args))
+        if publish_status:
+            args.append(publish_status)
+            conditions.append('publish_status = $%d' % len(args))
 
         query += " WHERE " + " AND ".join(conditions)
 
@@ -635,8 +635,7 @@ async def iter_needs_review(
         order_by.append(publishable_condition + " DESC")
 
     if required_only is not None:
-        args.append(required_only)
-        conditions.append('needs_review = $%d' % (len(args)))
+        conditions.append("publish-status = 'needs-manual-review'")
 
     if reviewer is not None:
         args.append(reviewer)

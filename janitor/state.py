@@ -77,7 +77,6 @@ class Run:
     vcs_type: str
     branch_url: str
     logfilenames: Optional[list[str]]
-    review_status: str
     worker_name: Optional[str]
     result_branches: Optional[list[tuple[str, str, bytes, bytes]]]
     result_tags: Optional[list[tuple[str, bytes]]]
@@ -105,7 +104,6 @@ class Run:
         "vcs_type",
         "branch_url",
         "logfilenames",
-        "review_status",
         "worker_name",
         "result_branches",
         "result_tags",
@@ -136,7 +134,6 @@ class Run:
         vcs_type,
         branch_url,
         logfilenames,
-        review_status,
         worker_name,
         result_branches,
         result_tags,
@@ -163,7 +160,6 @@ class Run:
         self.vcs_type = vcs_type
         self.branch_url = branch_url
         self.logfilenames = logfilenames
-        self.review_status = review_status
         self.worker_name = worker_name
         if result_branches is None:
             self.result_branches = None
@@ -218,7 +214,6 @@ class Run:
             vcs_type=row['vcs_type'],
             branch_url=row['branch_url'],
             logfilenames=row['logfilenames'],
-            review_status=row['review_status'],
             worker_name=row['worker'],
             result_branches=row['result_branches'],
             result_tags=row['result_tags'],

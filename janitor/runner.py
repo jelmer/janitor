@@ -1138,7 +1138,7 @@ async def check_resume_result(
         conn: asyncpg.Connection, campaign: str,
         resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
-        "SELECT id, result, review_status, publish_status, "
+        "SELECT id, result, publish_status, "
         "array(SELECT row(role, remote_name, base_revision, revision) "
         "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
         "FROM run "
@@ -1150,7 +1150,6 @@ async def check_resume_result(
     if row is not None:
         resume_run_id = row['id']
         resume_branch_result = row['result']
-        resume_review_status = row['review_status']
         resume_publish_status = row['publish_status']
         resume_result_branches = [
             (role, name,
@@ -1161,9 +1160,6 @@ async def check_resume_result(
         logging.warning(
             'Unable to find resume branch %r in database',
             resume_branch)
-        return None
-    if resume_review_status == "rejected":
-        logging.info("Unsetting resume branch, since last run was rejected.")
         return None
     if resume_publish_status == "rejected":
         logging.info("Unsetting resume branch, since last run was rejected.")

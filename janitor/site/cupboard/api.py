@@ -117,7 +117,7 @@ AND """ % table
             params.append(all_campaigns)
             where.append("suite = ANY($%d::text[])" % len(params))
         if rejected:
-            where.append("review_status = 'rejected'")
+            where.append("publish_status = 'rejected'")
         if description_re:
             params.append(description_re)
             where.append("description ~ $%d" % len(params))
