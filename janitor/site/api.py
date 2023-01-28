@@ -26,7 +26,6 @@ from aiohttp import (
 )
 import aiozipkin
 import asyncio
-import logging
 from typing import Optional
 
 from aiohttp.web_middlewares import normalize_path_middleware

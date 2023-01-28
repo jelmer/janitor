@@ -17,6 +17,8 @@
 
 from typing import Optional
 
+from yarl import URL
+
 from .schedule import do_schedule
 
 
