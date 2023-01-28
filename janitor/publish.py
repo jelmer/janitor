@@ -3584,7 +3584,9 @@ async def main(argv=None):
                     refresh_bucket_mp_counts(db, bucket_rate_limiter),
                 ),
             ]
-            if not False and not args.no_auto_publish:
+            # TODO(jelmer): Disable auto-publish entirely for the moment
+            # This should ideally be triggered by publish-status changes
+            if False and not args.no_auto_publish:
                 tasks.append(
                     loop.create_task(
                         listen_to_runner(
