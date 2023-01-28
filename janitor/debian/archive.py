@@ -268,7 +268,7 @@ async def get_builds_for_suite(db, suite_name):
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
             "INNER JOIN run ON run.id = debian_build.run_id "
-            "WHERE debian_build.distribution = $1 AND run.review_status != 'rejected' "
+            "WHERE debian_build.distribution = $1 AND run.publish_status != 'rejected' "
             "ORDER BY debian_build.source, debian_build.version DESC",
             suite_name,
         )
@@ -281,7 +281,7 @@ async def get_builds_for_changeset(db, cs_id):
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
             "INNER JOIN run ON run.id = debian_build.run_id "
-            "WHERE run.change_set = $1 AND run.review_status != 'rejected' "
+            "WHERE run.change_set = $1 AND run.publish_status != 'rejected' "
             "ORDER BY debian_build.source, debian_build.version DESC",
             cs_id,
         )
@@ -294,7 +294,7 @@ async def get_builds_for_run(db, run_id):
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
             "INNER JOIN run ON run.id = debian_build.run_id "
-            "WHERE run.id = $1 AND run.review_status != 'rejected' "
+            "WHERE run.id = $1 AND run.publish_status != 'rejected' "
             "ORDER BY debian_build.source, debian_build.version DESC",
             run_id,
         )

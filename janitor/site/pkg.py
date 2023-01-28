@@ -438,7 +438,7 @@ class MergeProposalUserUrlResolver(object):
 
 
 async def generate_ready_list(
-    db, suite: Optional[str], review_status: Optional[str] = None
+    db, suite: Optional[str], publish_status: Optional[str] = None
 ):
     async with db.acquire() as conn:
         query = 'SELECT package, suite, id, command, result FROM publish_ready'
@@ -455,9 +455,9 @@ async def generate_ready_list(
         if suite:
             args.append(suite)
             conditions.append('suite = $%d' % len(args))
-        if review_status:
-            args.append(review_status)
-            conditions.append('review_status = %d' % len(args))
+        if publish_status:
+            args.append(publish_status)
+            conditions.append('publish_status = $%d' % len(args))
 
         query += " WHERE " + " AND ".join(conditions)
 

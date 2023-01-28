@@ -79,7 +79,6 @@ CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE verdict AS ENUM('approved', 'rejected', 'abstained');
-CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'needs-manual-review');
 CREATE TABLE result_tag (
  actual_name text,
  revision text not null
@@ -122,7 +121,6 @@ CREATE TABLE IF NOT EXISTS run (
    vcs_type vcs_type,
    branch_url text,
    logfilenames text[] not null,
-   review_status review_status not null default 'unreviewed',
    publish_status publish_status not null default 'unknown',
    value integer,
    -- Name of the worker that executed this run.
@@ -209,7 +207,6 @@ CREATE TABLE IF NOT EXISTS branch_publish_policy (
 CREATE TABLE IF NOT EXISTS named_publish_policy (
    name text not null primary key,
    per_branch_policy branch_publish_policy[],
-   qa_review review_policy,
    rate_limit_bucket text
 );
 
@@ -628,7 +625,6 @@ WITH publishable AS (
   run.vcs_type AS vcs_type,
   run.branch_url AS branch_url,
   run.logfilenames AS logfilenames,
-  run.review_status AS review_status,
   run.worker AS worker,
   array(SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE new_result_branch.run_id = run.id) as result_branches,
   run.result_tags AS result_tags,
@@ -636,8 +632,6 @@ WITH publishable AS (
   candidate.command AS policy_command,
   named_publish_policy.name AS publish_policy_name,
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
-  named_publish_policy.qa_review AS qa_review_policy,
-  (named_publish_policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
   run.publish_status AS publish_status,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
