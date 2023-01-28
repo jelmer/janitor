@@ -3369,7 +3369,9 @@ async def listen_to_runner(
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('publish-status', result=handle_publish_status_message)
+            await ch.subscribe(
+                'publish-status',
+                **{'publish-status': handle_publish_status_message})
             await ch.run()
     finally:
         await redis.close()
