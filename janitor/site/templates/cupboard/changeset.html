@@ -24,7 +24,7 @@
         <ul>
             {% for candidate in todo %}
                 <li>
-                    <a class="/cupboard/pkg/{{ candidate.package }}/">{{ candidate.package }}</a> / <a class="/{{ candidate.suite }}">{{ candidate.suite }}</a>
+                    <a class="/cupboard/pkg/{{ candidate.codebase }}/">{{ candidate.codebase }}</a> / <a class="/{{ candidate.suite }}">{{ candidate.suite }}</a>
                 </li>
             {% endfor %}
         </ul>

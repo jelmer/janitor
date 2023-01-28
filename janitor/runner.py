@@ -1924,7 +1924,6 @@ async def handle_candidate_download(request):
 @routes.post("/candidates", name="upload-candidates")
 async def handle_candidates_upload(request):
     span = aiozipkin.request_span(request)
-    unknown_packages = []
     unknown_codebases = []
     unknown_campaigns = []
     invalid_command = []
@@ -1944,9 +1943,9 @@ async def handle_candidates_upload(request):
             "AND last_effective_runs.command != $3")
         insert_candidate_stmt = await conn.prepare(
             "INSERT INTO candidate "
-            "(package, suite, command, change_set, context, value, "
+            "(suite, command, change_set, context, value, "
             "success_chance, publish_policy, codebase) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
             "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
             "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
             "success_chance = EXCLUDED.success_chance, "
@@ -1957,11 +1956,6 @@ async def handle_candidates_upload(request):
             "INSERT INTO followup (origin, candidate) VALUES ($1, $2) "
             "ON CONFLICT DO NOTHING")
         async with conn.transaction():
-            with span.new_child('sql:known-packages'):
-                known_packages = set()
-                for record in (await conn.fetch('SELECT name FROM package')):
-                    known_packages.add(record[0])
-
             with span.new_child('sql:known-codebases'):
                 known_codebases = set()
                 for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
@@ -1979,17 +1973,6 @@ async def handle_candidates_upload(request):
             ret = []
             with span.new_child('process-candidates'):
                 for candidate in (await request.json()):
-                    try:
-                        package = candidate['package']
-                    except KeyError as e:
-                        raise web.HTTPBadRequest(
-                            text='no package field for candidate %r' % candidate) from e
-                    if package not in known_packages:
-                        logging.warning(
-                            'ignoring candidate %s/%s; package unknown',
-                            package, candidate['campaign'])
-                        unknown_packages.append(package)
-                        continue
                     try:
                         codebase = candidate['codebase']
                     except KeyError as e:
@@ -2032,7 +2015,7 @@ async def handle_candidates_upload(request):
 
                     with span.new_child('sql:insert-candidates'):
                         candidate_id = await insert_candidate_stmt.fetchval(
-                            candidate['package'], candidate['campaign'],
+                            candidate['campaign'],
                             command,
                             candidate.get('change_set'), candidate.get('context'),
                             candidate.get('value'), candidate.get('success_chance'),
@@ -2098,8 +2081,7 @@ async def handle_candidates_upload(request):
         'invalid_value': invalid_value,
         'unknown_campaigns': unknown_campaigns,
         'unknown_codebases': unknown_codebases,
-        'unknown_publish_policies': unknown_publish_policies,
-        'unknown_packages': unknown_packages})
+        'unknown_publish_policies': unknown_publish_policies})
 
 
 @routes.get("/runs/{run_id}", name="get-run")
