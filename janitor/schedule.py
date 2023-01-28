@@ -35,7 +35,7 @@ from .queue import Queue
 FIRST_RUN_BONUS = 100.0
 
 
-# Default estimation if there is no median for the campaign or the package.
+# Default estimation if there is no median for the campaign or the codebase.
 DEFAULT_ESTIMATED_DURATION = 15
 DEFAULT_SCHEDULE_OFFSET = -1.0
 
@@ -61,13 +61,12 @@ PUBLISH_MODE_VALUE = {
 
 async def iter_candidates_with_publish_policy(
         conn: asyncpg.Connection,
-        packages: Optional[list[str]] = None,
+        codebases: Optional[list[str]] = None,
         campaign: Optional[str] = None):
     query = """
 SELECT
-  package.name AS package,
-  package.codebase AS codebase,
-  package.branch_url AS branch_url,
+  codebase.name AS codebase,
+  codebase.branch_url AS branch_url,
   candidate.suite AS campaign,
   candidate.context AS context,
   candidate.value AS value,
@@ -75,22 +74,20 @@ SELECT
   named_publish_policy.per_branch_policy AS publish,
   candidate.command AS command
 FROM candidate
-INNER JOIN package on package.codebase = candidate.codebase
+INNER JOIN codebase on codebase.name = candidate.codebase
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
-WHERE
-  NOT package.removed
 """
     args = []
-    if campaign is not None and packages is not None:
-        query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
-        args.extend([packages, campaign])
+    if campaign is not None and codebases is not None:
+        query += " AND codebase.name = ANY($1::text[]) AND candidate.suite = $2"
+        args.extend([codebases, campaign])
     elif campaign is not None:
         query += " AND candidate.suite = $1"
         args.append(campaign)
-    elif packages is not None:
-        query += " AND package.name = ANY($1::text[])"
-        args.append(packages)
+    elif codebases is not None:
+        query += " AND codebase.name = ANY($1::text[])"
+        args.append(codebases)
     return await conn.fetch(query, *args)
 
 
@@ -101,7 +98,7 @@ def queue_item_from_candidate_and_publish_policy(row):
 
     command = row['command']
 
-    return (row['package'], row['codebase'],
+    return (row['codebase'],
             row['context'], command, row['campaign'],
             value, row['success_chance'])
 
@@ -264,7 +261,7 @@ def calculate_offset(
 
 async def do_schedule_regular(
         conn: asyncpg.Connection, *,
-        package: str, codebase: str, campaign: str,
+        codebase: str, campaign: str,
         command: Optional[str] = None,
         candidate_value: Optional[float] = None,
         success_chance: Optional[float] = None,
@@ -325,7 +322,6 @@ async def do_schedule_regular(
     if not dry_run:
         queue = Queue(conn)
         queue_id, bucket = await queue.add(
-            package=package,
             codebase=codebase,
             campaign=campaign,
             change_set=change_set,
@@ -358,14 +354,14 @@ async def bulk_add_to_queue(
             logging.info("Maximum value: %d", max_codebase_value)
     else:
         max_codebase_value = None
-    for package, codebase, context, command, campaign, value, success_chance in todo:
+    for codebase, context, command, campaign, value, success_chance in todo:
         if max_codebase_value is not None:
             normalized_codebase_value = min(
                 codebase_values.get(codebase, 0.0) / max_codebase_value, 1.0)
         else:
             normalized_codebase_value = 1.0
         await do_schedule_regular(
-            conn, package=package, codebase=codebase, context=context,
+            conn, codebase=codebase, context=context,
             command=command, campaign=campaign, candidate_value=value,
             success_chance=success_chance,
             default_offset=default_offset,
@@ -436,7 +432,7 @@ async def main():
     )
     parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-    parser.add_argument("packages", help="Package to process.", nargs="*")
+    parser.add_argument("codebases", help="Codebase to process.", nargs="*")
     parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
@@ -470,7 +466,7 @@ async def main():
             queue_item_from_candidate_and_publish_policy(row)
             for row in
             await iter_candidates_with_publish_policy(
-                conn, packages=(args.packages or None), campaign=args.campaign)]
+                conn, codebases=(args.codebases or None), campaign=args.campaign)]
         logging.info('Adding %d items to queue', len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
@@ -483,7 +479,6 @@ async def do_schedule_control(
     conn: asyncpg.Connection,
     codebase: str,
     *,
-    package: Optional[str] = None,
     change_set: Optional[str] = None,
     main_branch_revision: Optional[bytes] = None,
     offset: Optional[float] = None,
@@ -499,7 +494,6 @@ async def do_schedule_control(
         bucket = "control"
     return await do_schedule(
         conn,
-        package=package,
         campaign="control",
         change_set=change_set,
         offset=offset,
@@ -523,7 +517,6 @@ async def do_schedule(
     codebase: str,
     bucket: str,
     *,
-    package: Optional[str] = None,
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     refresh: bool = False,
@@ -548,7 +541,6 @@ async def do_schedule(
         estimated_duration = await estimate_duration(conn, codebase, campaign)
     queue = Queue(conn)
     queue_id, bucket = await queue.add(
-        package=package,
         command=command,
         campaign=campaign,
         change_set=change_set,

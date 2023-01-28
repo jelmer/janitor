@@ -810,7 +810,6 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
         logger.info("Merge proposal would cause conflict; restarting.")
         await do_schedule(
             conn,
-            package=run.package,
             campaign=run.campaign,
             change_set=run.change_set,
             codebase=run.codebase,
@@ -821,7 +820,6 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
         logger.info("Branches have diverged; restarting.")
         await do_schedule(
             conn,
-            package=run.package,
             campaign=run.campaign,
             change_set=run.change_set,
             requestor="publisher (diverged branches)",
@@ -835,7 +833,6 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             description = "Missing build artifacts, rescheduling"
             await do_schedule(
                 conn,
-                package=run.package,
                 campaign=run.campaign,
                 change_set=run.change_set,
                 refresh=True,
@@ -855,7 +852,6 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             )
             await do_schedule_control(
                 conn,
-                package=unchanged_run['package'],
                 main_branch_revision=unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
@@ -866,7 +862,6 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             if run.main_branch_revision is not None:
                 await do_schedule_control(
                     conn,
-                    package=run.package,
                     main_branch_revision=run.main_branch_revision,
                     requestor="publisher (missing control run for diff)",
                     bucket=bucket, codebase=run.codebase,
@@ -1040,7 +1035,6 @@ async def publish_from_policy(
         )
         await do_schedule(
             conn,
-            package=run.package,
             campaign=run.campaign,
             change_set=run.change_set,
             command=command,
@@ -2714,7 +2708,6 @@ async def check_existing_mp(
                     try:
                         await do_schedule(
                             conn,
-                            package=package_name,
                             campaign=campaign,
                             change_set=None,
                             bucket="update-existing-mp",
@@ -2825,7 +2818,6 @@ applied independently.
             try:
                 await do_schedule(
                     conn,
-                    package=last_run.package,
                     campaign=last_run.campaign,
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
@@ -2847,7 +2839,6 @@ applied independently.
             try:
                 await do_schedule(
                     conn,
-                    package=last_run.package,
                     campaign=last_run.campaign,
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
@@ -3133,7 +3124,6 @@ applied independently.
                 try:
                     await do_schedule(
                         conn,
-                        package=mp_run['package'],
                         campaign=mp_run['campaign'],
                         change_set=mp_run['change_set'],
                         bucket="update-existing-mp",
