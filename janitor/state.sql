@@ -211,7 +211,6 @@ CREATE TABLE IF NOT EXISTS named_publish_policy (
 );
 
 CREATE TABLE IF NOT EXISTS candidate (
-   package text not null,
    suite suite_name not null,
    context text,
    value integer,
@@ -219,14 +218,13 @@ CREATE TABLE IF NOT EXISTS candidate (
    command text not null,
    publish_policy text references named_publish_policy (name),
    change_set text references change_set(id),
-   codebase text not null references codebase(name),
-   foreign key (package) references package(name),
+   codebase text not null,
    id serial primary key not null,
    check (command != ''),
-   check (value > 0)
+   check (value > 0),
+   constraint candidate_codebase_fkey foreign key(codebase) references codebase(name)
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
-CREATE UNIQUE INDEX candidate_package_suite_set ON candidate (package, suite, coalesce(change_set, '')); -- DEPRECATE
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 
