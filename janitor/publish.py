@@ -3327,6 +3327,10 @@ async def listen_to_runner(
     async def process_run(conn, run, branch_url):
         publish_policy, command, rate_limit_bucket = await get_publish_policy(
             conn, run.codebase, run.campaign)
+        if publish_policy is None:
+            logging.warning(
+                'No publish policy for %s/%s, skipping', run.codebase, run.campaign)
+            return
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn=conn,
