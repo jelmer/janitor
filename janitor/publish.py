@@ -3428,6 +3428,11 @@ async def main(argv=None):
         default=7200,
     )
     parser.add_argument(
+        "--no-auto-publish",
+        action="store_true",
+        help="Do not create merge proposals automatically.",
+    )
+    parser.add_argument(
         "--config",
         type=str,
         default="janitor.conf",
@@ -3500,6 +3505,10 @@ async def main(argv=None):
         bucket_rate_limiter = FixedRateLimiter(args.max_mps_per_bucket)
     else:
         bucket_rate_limiter = NonRateLimiter()
+
+    if args.no_auto_publish and args.once:
+        sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
+        sys.exit(1)
 
     forge_rate_limiter: dict[Forge, datetime] = {}
 
