@@ -3268,7 +3268,7 @@ FROM
     run
 WHERE id = $1
 """
-    row = await conn.fetch(query, run_id)
+    row = await conn.fetchrow(query, run_id)
     if row:
         return state.Run.from_row(row)
     return None
