@@ -1403,6 +1403,7 @@ class QueueProcessor:
 
     async def _watchdog(self):
         while True:
+            # TODO(jelmer): Use asyncio.TaskGroup when python >= 3.11
             tasks = []
             for serialized in (await self.redis.hgetall('active-runs')).values():
                 js = json.loads(serialized)
@@ -1415,8 +1416,8 @@ class QueueProcessor:
                 keepalive_age = datetime.utcnow() - last_keepalive
                 if keepalive_age < timedelta(minutes=(self.run_timeout // 3)):
                     continue
-                tasks.append(self._healthcheck_active_run(
-                    active_run, keepalive_age))
+                tasks.append(asyncio.create_task(self._healthcheck_active_run(
+                    active_run, keepalive_age)))
             if tasks:
                 done, _ = await asyncio.wait(tasks)
                 for task in done:

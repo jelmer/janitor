@@ -326,7 +326,7 @@ WHERE
 
     async def do_reprocess():
         todo = [
-            reprocess_run_logs(
+            asyncio.create_task(reprocess_run_logs(
                 db=request.app['pool'],
                 logfile_manager=request.app['logfile_manager'],
                 package=row['package'], campaign=row['campaign'], log_id=row['id'],
@@ -337,7 +337,7 @@ WHERE
                 process_fns=[
                     ('dist-', DIST_LOG_FILENAME, process_dist_log),
                     ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
-                dry_run=dry_run, reschedule=reschedule)
+                dry_run=dry_run, reschedule=reschedule))
             for row in rows]
         for i in range(0, len(todo), 100):
             await asyncio.wait(set(todo[i : i + 100]))
