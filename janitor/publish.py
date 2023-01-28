@@ -3301,7 +3301,8 @@ SELECT
   change_set,
   failure_transient,
   failure_stage,
-  codebase
+  codebase,
+  value
 FROM last_runs
 WHERE main_branch_revision = $1 AND codebase = $2 AND main_branch_revision != revision AND suite NOT in ('unchanged', 'control')
 ORDER BY start_time DESC
