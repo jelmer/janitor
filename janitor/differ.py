@@ -538,14 +538,14 @@ where
 """
         )
         for row in rows:
-            todo.append(precache(
+            todo.append(asyncio.create_task(precache(
                 request.app['artifact_manager'],
                 row[1], row[0],
                 task_memory_limit=request.app['task_memory_limit'],
                 task_timeout=request.app['task_timeout'],
                 diffoscope_cache_path=request.app['diffoscope_cache_path'],
                 debdiff_cache_path=request.app['debdiff_cache_path'],
-                diffoscope_command=request.app['diffoscope_command']))
+                diffoscope_command=request.app['diffoscope_command'])))
 
 
     async def _precache_all():
