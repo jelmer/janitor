@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
 );
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
+CREATE INDEX ON merge_proposal (status);
+CREATE INDEX ON merge_proposal (status, rate_limit_bucket);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE verdict AS ENUM('approved', 'rejected', 'abstained');
