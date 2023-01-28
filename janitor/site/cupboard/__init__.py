@@ -281,7 +281,9 @@ async def handle_review_post(request):
             except KeyError:
                 user = request['user']['name']
             await store_review(
-                conn, post["run_id"], verdict=verdict,
+                conn, request.app['http_client_session'],
+                request.app['runner_url'],
+                post["run_id"], verdict=verdict,
                 comment=review_comment,
                 reviewer=user,
                 is_qa_reviewer=is_qa_reviewer(request))
@@ -635,7 +637,7 @@ async def iter_needs_review(
         order_by.append(publishable_condition + " DESC")
 
     if required_only is not None:
-        conditions.append("publish-status = 'needs-manual-review'")
+        conditions.append("publish_status = 'needs-manual-review'")
 
     if reviewer is not None:
         args.append(reviewer)
