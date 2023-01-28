@@ -103,77 +103,21 @@ def queue_item_from_candidate_and_publish_policy(row):
             value, row['success_chance'])
 
 
-async def estimate_success_probability(
-    conn: asyncpg.Connection, codebase: str, campaign: str, context: Optional[str] = None
-) -> tuple[float, int]:
-    # TODO(jelmer): Bias this towards recent runs?
-    total = 0
-    success = 0
-    if context is None:
-        same_context_multiplier = 0.5
-    else:
-        same_context_multiplier = 1.0
-    for run in await conn.fetch("""
-SELECT
-  result_code, instigated_context, context, failure_details, failure_transient,
-  start_time
-FROM run
-WHERE codebase = $1 AND suite = $2
-ORDER BY start_time DESC
-""", codebase, campaign):
-        try:
-            ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
-        except KeyError:
-            def ignore_checker(run):
-                return run['failure_transient']
-
-        if ignore_checker(run):
-            continue
-        total += 1
-        if run['result_code'] == "success":
-            success += 1
-        same_context = False
-        if context and context in (run['instigated_context'], run['context']):
-            same_context = True
-        if (run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details']
-                and run['failure_details'].get('relations')):
-            if await deps_satisfied(conn, campaign, run['failure_details']['relations']):
-                success += 1
-                same_context = False
-        if same_context:
-            same_context_multiplier = 0.1
-
-    if total == 0:
-        # If there were no previous runs, then it doesn't really matter that
-        # we don't know the context.
-        same_context_multiplier = 1.0
-
-    return ((success * 10 + 1) / (total * 10 + 1) * same_context_multiplier), total
-
-
 async def _estimate_duration(
     conn: asyncpg.Connection,
     codebase: Optional[str] = None,
     campaign: Optional[str] = None,
-    limit: Optional[int] = 1000,
 ) -> Optional[timedelta]:
     query = """
-SELECT AVG(duration) FROM
-(select finish_time - start_time as duration FROM run
-WHERE """
-    args = []
+SELECT AVG(finish_time - start_time) FROM run
+WHERE failure_transient is not True """
+    args: list[str] = []
     if codebase is not None:
-        query += " codebase = $1"
+        query += " AND codebase = $%d" % (len(args) + 1)
         args.append(codebase)
     if campaign is not None:
-        if codebase:
-            query += " AND"
-        query += " suite = $%d" % (len(args) + 1)
+        query += " AND suite = $%d" % (len(args) + 1)
         args.append(campaign)
-    query += " ORDER BY finish_time DESC"
-    if limit is not None:
-        query += " LIMIT %d" % limit
-    query += ") as q"
     return await conn.fetchval(query, *args)
 
 
@@ -196,6 +140,68 @@ async def estimate_duration(
         return estimated_duration
 
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
+
+
+async def estimate_success_probability_and_duration(
+    conn: asyncpg.Connection, codebase: str, campaign: str, context: Optional[str] = None
+) -> tuple[float, timedelta, int]:
+    # TODO(jelmer): Bias this towards recent runs?
+    total = 0
+    success = 0
+    if context is None:
+        same_context_multiplier = 0.5
+    else:
+        same_context_multiplier = 1.0
+    durations = []
+    for run in await conn.fetch("""
+SELECT
+  result_code, instigated_context, context, failure_details,
+  finish_time - start_time AS duration
+FROM run
+WHERE codebase = $1 AND suite = $2 AND failure_transient IS NOT True
+ORDER BY start_time DESC
+""", codebase, campaign):
+        try:
+            ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
+        except KeyError:
+            def ignore_checker(run):
+                return False
+
+        if ignore_checker(run):
+            continue
+
+        durations.append(run['duration'])
+        total += 1
+        if run['result_code'] == "success":
+            success += 1
+        same_context = False
+        if context and context in (run['instigated_context'], run['context']):
+            same_context = True
+        if (run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details']
+                and run['failure_details'].get('relations')):
+            if await deps_satisfied(conn, campaign, run['failure_details']['relations']):
+                success += 1
+                same_context = False
+        if same_context:
+            same_context_multiplier = 0.1
+
+    if total == 0:
+        # If there were no previous runs, then it doesn't really matter that
+        # we don't know the context.
+        same_context_multiplier = 1.0
+
+        # It's going to be hard to estimate the duration, but other codemods
+        # might be a good candidate
+        estimated_duration = await _estimate_duration(conn, codebase=codebase)
+        if estimated_duration is None:
+            estimated_duration = await _estimate_duration(conn, campaign=campaign)
+        if estimated_duration is None:
+            estimated_duration = timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
+    else:
+        estimated_duration = timedelta(
+            seconds=(sum([d.total_seconds() for d in durations]) / len(durations)))
+
+    return ((success * 10 + 1) / (total * 10 + 1) * same_context_multiplier), estimated_duration, total
 
 
 # Overhead of doing a run; estimated to be roughly 20s
@@ -288,14 +294,14 @@ async def do_schedule_regular(
             context = row['context']
         if row is not None and command is None:
             command = row['command']
-    estimated_duration = await estimate_duration(conn, codebase, campaign)
-    assert estimated_duration >= timedelta(
-        0
-    ), "{}: estimated duration < 0.0: {!r}".format(codebase, estimated_duration)
     (
         estimated_probability_of_success,
+        estimated_duration,
         total_previous_runs,
-    ) = await estimate_success_probability(conn, codebase, campaign, context)
+    ) = await estimate_success_probability_and_duration(conn, codebase, campaign, context)
+
+    assert estimated_duration >= timedelta(0), \
+        f"{codebase}: estimated duration < 0.0: {estimated_duration!r}"
 
     if normalized_codebase_value is None:
         normalized_codebase_value = await conn.fetchval(
