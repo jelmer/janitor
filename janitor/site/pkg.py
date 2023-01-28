@@ -170,10 +170,12 @@ async def generate_run_file(
                 conn, run['package'], run['suite'])
         with span.new_child('sql:followups'):
             kwargs['followups'] = await conn.fetch("""SELECT \
-    candidate.package AS package,
+    package.name AS package,
     candidate.codebase AS codebase,
     candidate.suite AS campaign
-FROM followup LEFT JOIN candidate ON candidate.id = followup.candidate
+FROM followup
+LEFT JOIN candidate ON candidate.id = followup.candidate
+INNER JOIN package ON package.codebase = candidate.codebase
 WHERE followup.origin = $1""", run['id'])
 
     if package:
