@@ -3369,7 +3369,9 @@ async def listen_to_runner(
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('publish-status', result=handle_publish_status_message)
+            await ch.subscribe(
+                'publish-status',
+                **{'publish-status': handle_publish_status_message})
             await ch.run()
     finally:
         await redis.close()
@@ -3424,11 +3426,6 @@ async def main(argv=None):
         type=int,
         help=("Seconds to wait in between publishing pending proposals"),
         default=7200,
-    )
-    parser.add_argument(
-        "--no-auto-publish",
-        action="store_true",
-        help="Do not create merge proposals automatically.",
     )
     parser.add_argument(
         "--config",
@@ -3503,10 +3500,6 @@ async def main(argv=None):
         bucket_rate_limiter = FixedRateLimiter(args.max_mps_per_bucket)
     else:
         bucket_rate_limiter = NonRateLimiter()
-
-    if args.no_auto_publish and args.once:
-        sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
-        sys.exit(1)
 
     forge_rate_limiter: dict[Forge, datetime] = {}
 

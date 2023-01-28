@@ -17,11 +17,13 @@
 
 from typing import Optional
 
+from yarl import URL
+
 from .schedule import do_schedule
 
 
 async def store_review(
-        conn, run_id: str, verdict: str,
+        conn, session, runner_url, run_id: str, verdict: str,
         comment: Optional[str], reviewer: Optional[str], is_qa_reviewer: bool):
     async with conn.transaction():
         if verdict == "reschedule":
@@ -39,9 +41,11 @@ async def store_review(
             )
 
         if verdict != 'abstained' and is_qa_reviewer:
-            await conn.execute(
-                "UPDATE run SET publish_status = $1 WHERE id = $3",
-                verdict, run_id)
+            async with session.post(
+                    URL(runner_url) / "runs" / run_id,
+                    json={'publish_status': verdict},
+                    raise_for_status=True):
+                pass
         await conn.execute(
             "INSERT INTO review (run_id, comment, reviewer, verdict) VALUES "
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
