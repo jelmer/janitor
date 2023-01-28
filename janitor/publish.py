@@ -3285,6 +3285,7 @@ SELECT
   package,
   result_code,
   main_branch_revision,
+  vcs_type,
   revision,
   context,
   result,
@@ -3295,13 +3296,19 @@ SELECT
   worker,
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
+  result_tags,
+  target_branch_url,
+  change_set,
+  failure_transient,
+  failure_stage,
+  codebase
 FROM last_runs
 WHERE main_branch_revision = $1 AND codebase = $2 AND main_branch_revision != revision AND suite NOT in ('unchanged', 'control')
 ORDER BY start_time DESC
 """
-    return await conn.fetch(
-        query, main_branch_revision.decode('utf-8'), codebase)
+    return [
+        state.Run.from_row(row)
+        for row in await conn.fetch(query, main_branch_revision.decode('utf-8'), codebase)]
 
 
 
