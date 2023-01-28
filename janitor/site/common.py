@@ -20,7 +20,7 @@ from janitor.site import (
 
 
 async def get_previous_runs(
-        conn: asyncpg.Connection, package: str, suite: str):
+        conn: asyncpg.Connection, codebase: str, suite: str):
     return await conn.fetch(
         """
 SELECT
@@ -35,21 +35,16 @@ SELECT
 FROM
   run
 WHERE
-  package = $1 AND suite = $2
+  codebase = $1 AND suite = $2
 ORDER BY start_time DESC
-""",
-        package,
-        suite,
-    )
+""", codebase, suite)
 
 
-async def get_candidate(conn: asyncpg.Connection, package, suite):
+async def get_candidate(conn: asyncpg.Connection, codebase: str, campaign: str):
     return await conn.fetchrow(
         "SELECT context, value, success_chance FROM candidate "
-        "WHERE package = $1 AND suite = $2",
-        package,
-        suite,
-    )
+        "WHERE codebase = $1 AND suite = $2",
+        codebase, campaign)
 
 
 async def iter_candidates(
@@ -234,7 +229,7 @@ WHERE run.codebase = $1 AND run.suite = $2
                 unchanged_run = None
 
         with span.new_child('sql:candidate'):
-            candidate = await get_candidate(conn, package['name'], suite)
+            candidate = await get_candidate(conn, package['codebase'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
@@ -242,7 +237,7 @@ WHERE run.codebase = $1 AND run.suite = $2
             candidate_value = None
             candidate_success_chance = None
         with span.new_child('sql:previous-runs'):
-            previous_runs = await get_previous_runs(conn, package['name'], suite)
+            previous_runs = await get_previous_runs(conn, package['codebase'], suite)
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
