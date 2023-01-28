@@ -1630,7 +1630,7 @@ async def get_publish_policy(conn: asyncpg.Connection, codebase: str, campaign: 
         "FROM candidate "
         "LEFT JOIN named_publish_policy "
         "ON named_publish_policy.name = candidate.publish_policy "
-        "WHERE package = $1 AND suite = $2",
+        "WHERE codebase = $1 AND suite = $2",
         codebase,
         campaign,
     )
@@ -3284,7 +3284,6 @@ SELECT
   description,
   package,
   result_code,
-  branch_name,
   main_branch_revision,
   revision,
   context,
