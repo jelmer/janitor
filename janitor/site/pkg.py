@@ -134,7 +134,7 @@ async def generate_run_file(
         differ_url: Optional[str], publisher_url: Optional[str], logfile_manager, run,
         vcs_managers: Dict[str, VcsManager], is_admin, span
 ):
-    from ..schedule import estimate_success_probability
+    from ..schedule import estimate_success_probability_and_duration
     kwargs = {}
     kwargs["run"] = run
     kwargs["run_id"] = run['id']
@@ -166,7 +166,7 @@ async def generate_run_file(
                 'FROM review WHERE run_id = $1',
                 run['id'])
         with span.new_child('sql:success-probability'):
-            kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
+            kwargs["success_probability"], kwargs['estimated_duration'], kwargs["total_previous_runs"] = await estimate_success_probability_and_duration(
                 conn, run['package'], run['suite'])
         with span.new_child('sql:followups'):
             kwargs['followups'] = await conn.fetch("""SELECT \
