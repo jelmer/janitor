@@ -26,7 +26,6 @@ from aiohttp import (
 )
 import aiozipkin
 import asyncio
-import logging
 from typing import Optional
 
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -439,22 +438,6 @@ async def handle_archive_diff(request):
     )
 
 
-async def consider_publishing(session, publisher_url, run_id):
-    url = URL(publisher_url) / "consider" / run_id
-    try:
-        async with session.post(url) as resp:
-            if resp.status != 200:
-                logging.warning(
-                    'Failed to submit run %s for publish consideration: %s',
-                    run_id, await resp.read())
-                return False
-            return True
-    except ClientConnectorError:
-        logging.warning(
-            'Failed to submit %s for publish consideration', run_id)
-        return False
-
-
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
@@ -476,12 +459,10 @@ async def handle_run_post(request):
                 except KeyError:
                     user = request['user']['name']
                 await store_review(
-                    conn, run_id, verdict=verdict, comment=review_comment,
+                    conn, request.app['http_client_session'],
+                    request.app['runner_url'],
+                    run_id, verdict=verdict, comment=review_comment,
                     reviewer=user, is_qa_reviewer=is_qa_reviewer(request))
-            if verdict == 'approved':
-                await consider_publishing(
-                    request.app['http_client_session'], request.app['publisher_url'],
-                    run_id)
         return web.json_response(
             {"verdict": verdict, "review-comment": review_comment}
         )
