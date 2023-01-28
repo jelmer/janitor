@@ -239,7 +239,6 @@ async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
             "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
-        "package": "foo",
         "campaign": "mycampaign",
         "codebase": "foo",
         "command": "true",
@@ -264,7 +263,6 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
-        "package": "foo",
         "campaign": "mycampaign",
         "codebase": "foo",
         "command": "true",
@@ -381,11 +379,11 @@ async def test_submit_unknown_candidate(aiohttp_client, db):
     qp = await create_queue_processor(db)
     client = await create_client(aiohttp_client, qp)
     resp = await client.post("/candidates", json=[{
-        "package": "foo",
+        "codebase": "foo",
         "campaign": "mycampaign",
     }])
     assert resp.status == 200
-    assert ('unknown_packages', ['foo']) in (await resp.json()).items()
+    assert ('unknown_codebases', ['foo']) in (await resp.json()).items()
 
 
 async def test_submit_unknown_campaign(aiohttp_client, db):
@@ -401,7 +399,7 @@ async def test_submit_unknown_campaign(aiohttp_client, db):
             "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
-        "package": "foo",
+        "codebase": "foo",
         "campaign": "mycampaign",
         "codebase": "foo"
     }])

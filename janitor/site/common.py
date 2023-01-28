@@ -194,7 +194,7 @@ async def generate_pkg_context(
             package = await conn.fetchrow("""\
 SELECT package.*, named_publish_policy.per_branch_policy AS publish_policy
 FROM package
-LEFT JOIN candidate ON package.name = candidate.package AND candidate.suite = $2
+LEFT JOIN candidate ON package.codebase = candidate.codebase AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
 WHERE package.name = $1""", package_name, suite)
         if package is None:
