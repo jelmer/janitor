@@ -3352,9 +3352,9 @@ async def listen_to_runner(
                 requestor="runner",
             )
 
-    async def handle_result_message(msg):
+    async def handle_publish_status_message(msg):
         result = json.loads(msg['data'])
-        if result["code"] != "success":
+        if result["publish_status"] != "approved":
             return
         async with db.acquire() as conn:
             # TODO(jelmer): Fold these into a single query ?
@@ -3364,18 +3364,12 @@ async def listen_to_runner(
             if codebase is None:
                 logger.warning('Codebase %s not in database?', result['codebase'])
                 return
-            run = await get_run(conn, result["log_id"])
-            if run.campaign != "unchanged":
-                await process_run(conn, run, codebase['branch_url'])
-            else:
-                for dependent_run in await iter_control_matching_runs(
-                        conn, main_branch_revision=run.revision,
-                        codebase=run.codebase):
-                    await process_run(conn, dependent_run, codebase['branch_url'])
+            run = await get_run(conn, result["run_id"])
+            await process_run(conn, run, codebase['branch_url'])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe('result', result=handle_result_message)
+            await ch.subscribe('publish-status', result=handle_publish_status_message)
             await ch.run()
     finally:
         await redis.close()
@@ -3584,21 +3578,20 @@ async def main(argv=None):
                     refresh_bucket_mp_counts(db, bucket_rate_limiter),
                 ),
             ]
-            if not False and not args.no_auto_publish:
-                tasks.append(
-                    loop.create_task(
-                        listen_to_runner(
-                            db=db,
-                            redis=redis,
-                            config=config,
-                            publish_worker=publish_worker,
-                            bucket_rate_limiter=bucket_rate_limiter,
-                            vcs_managers=vcs_managers,
-                            dry_run=args.dry_run,
-                            require_binary_diff=args.require_binary_diff,
-                        )
+            tasks.append(
+                loop.create_task(
+                    listen_to_runner(
+                        db=db,
+                        redis=redis,
+                        config=config,
+                        publish_worker=publish_worker,
+                        bucket_rate_limiter=bucket_rate_limiter,
+                        vcs_managers=vcs_managers,
+                        dry_run=args.dry_run,
+                        require_binary_diff=args.require_binary_diff,
                     )
                 )
+            )
             await asyncio.gather(*tasks)
 
 
