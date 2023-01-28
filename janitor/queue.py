@@ -277,7 +277,7 @@ queue.id ASC
                 'SELECT id, bucket FROM queue '
                 'WHERE codebase = $1 AND suite = $2 AND change_set = $3',
                 codebase, campaign, change_set)
-            assert row
+            assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
             return row
         return row[0]
 
