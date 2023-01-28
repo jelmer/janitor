@@ -261,7 +261,7 @@ async def retrieve_sources(info_provider, rows, suite_name, component):
             continue
 
 
-async def get_builds_for_suite(db, suite_name):
+async def get_builds_for_suite(db, build_distribution):
     async with db.acquire() as conn:
         return await conn.fetch(
             "SELECT DISTINCT ON (source) "
@@ -270,8 +270,7 @@ async def get_builds_for_suite(db, suite_name):
             "INNER JOIN run ON run.id = debian_build.run_id "
             "WHERE debian_build.distribution = $1 AND run.publish_status != 'rejected' "
             "ORDER BY debian_build.source, debian_build.version DESC",
-            suite_name,
-        )
+            build_distribution)
 
 
 async def get_builds_for_changeset(db, cs_id):
@@ -775,7 +774,7 @@ async def publish_suite(
     logger.info("Publishing %s", suite.name)
     distribution = get_distribution(config, suite.debian_build.base_distribution)
     suite_path = os.path.join(dists_directory, suite.name)
-    builds = await get_builds_for_suite(db, suite.name)
+    builds = await get_builds_for_suite(db, suite.debian_build.build_distribution)
     await write_suite_files(
         suite_path,
         get_packages=partial(retrieve_packages, package_info_provider, builds),
