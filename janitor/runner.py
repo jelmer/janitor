@@ -2100,11 +2100,19 @@ async def handle_get_run(request):
 @routes.post("/runs/{run_id}", name="update-run")
 async def handle_update_run(request):
     run_id = request.match_info['run_id']
+    queue_processor = request.app['queue_processor']
     data = await request.json()
     async with request.app['pool'].acquire() as conn:
         row = await conn.fetchrow(
-            'UPDATE run SET publish_status = $2 WHERE id = $1 RETURNING (id)',
+            'UPDATE run SET publish_status = $2 WHERE id = $1 '
+            'RETURNING (id, codebase, suite)',
             run_id, data['publish_status'])
+        await queue_processor.redis.publish('publish-status', json.dumps({
+            'run_id': run_id,
+            'publish_status': data['publish_status'],
+            'codebase': row['codebase'],
+            'campaign': row['suite']
+        }))
         if row is None:
             raise web.HTTPNotFound(text=f"no such run: {run_id}")
         return web.json_response({})
