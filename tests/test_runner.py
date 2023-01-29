@@ -31,6 +31,8 @@ from janitor.runner import (
     QueueProcessor,
     ActiveRun,
     Backchannel,
+    store_run,
+    store_change_set,
 )
 from janitor.debian import dpkg_vendor
 from janitor.vcs import get_vcs_managers
@@ -82,7 +84,9 @@ async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None)
             campaign = config.campaign.add()
             campaign.name = name
             campaign.debian_build.base_distribution = "unstable"
-    return await aiohttp_client(await create_app(queue_processor, config, None, tracer))
+    return await aiohttp_client(await create_app(
+        queue_processor, config,
+        queue_processor.database if queue_processor else None, tracer))
 
 
 async def test_status(aiohttp_client, db):
@@ -421,3 +425,79 @@ def test_serialize_active_run():
     run_copy_json['current_duration'] = orig_json['current_duration']
     assert run_copy_json == orig_json
     assert run_copy == run
+
+
+async def test_tweak_run(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    resp = await client.post("/candidates", json=[{
+        "campaign": "mycampaign",
+        "codebase": "foo",
+        "command": "true",
+    }])
+    assert resp.status == 200
+    [result] = (await resp.json())['success']
+    assert result == {
+        'bucket': 'default',
+        'campaign': 'mycampaign',
+        'change_set': None,
+        'codebase': 'foo',
+        'estimated_duration': 15.0,
+        'offset': 35000.0,
+        'queue-id': 1,
+        'refresh': False,
+    }
+
+    async with db.acquire() as conn:
+        await store_change_set(conn, "run-id", campaign="mycampaign")
+        await store_run(
+            conn, run_id="run-id",
+            codebase="foo", campaign="mycampaign",
+            vcs_type="git", subpath="",
+            start_time=datetime.utcnow(),
+            finish_time=datetime.utcnow(),
+            command="true",
+            result_code="missing-result-code",
+            codemod_result={},
+            main_branch_revision=b'some-revid',
+            revision=b'revid',
+            description='Did a thing',
+            context=None,
+            instigated_context=None,
+            logfilenames=[],
+            value=1,
+            change_set="run-id",
+            worker_name=None,
+            branch_url='https://example.com/blah')
+
+    resp = await client.get("/runs/run-id")
+    assert resp.status == 200
+    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'unknown'} == await resp.json()
+
+    resp = await client.post("/runs/run-id", json={'publish_status': 'approved'})
+    assert resp.status == 200
+    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'approved', 'run_id': 'run-id'} == await resp.json()
+
+    resp = await client.get("/runs/run-id")
+    assert resp.status == 200
+    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'approved'} == await resp.json()
+
+
+async def test_tweak_unknown_run(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+
+    resp = await client.get("/runs/run-id")
+    assert resp.status == 404
+
+    resp = await client.post("/runs/run-id", json={'publish_status': 'approved'})
+    assert resp.status == 404
