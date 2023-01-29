@@ -2087,7 +2087,7 @@ async def handle_candidates_upload(request):
 @routes.get("/runs/{run_id}", name="get-run")
 async def handle_get_run(request):
     run_id = request.match_info['run_id']
-    async with request.app['pool'].acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         run = await conn.fetchrow('SELECT * FROM run WHERE id = $1', run_id)
         if run is None:
             raise web.HTTPNotFound(text=f"no such run: {run_id}")
@@ -2102,7 +2102,7 @@ async def handle_update_run(request):
     run_id = request.match_info['run_id']
     queue_processor = request.app['queue_processor']
     data = await request.json()
-    async with request.app['pool'].acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         row = await conn.fetchrow(
             'UPDATE run SET publish_status = $2 WHERE id = $1 '
             'RETURNING (id, codebase, suite)',
