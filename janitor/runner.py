@@ -730,10 +730,19 @@ def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
             yield entry
 
 
-class ActiveRunDisappeared(Exception):
+class PingFailure(Exception):
+    """Failure to ping the job"""
 
     def __init__(self, reason):
         self.reason = reason
+
+
+class PingTimeout(PingFailure):
+    """Timeout while pinging job."""
+
+
+class PingFatalFailure(PingFailure):
+    """Failure to ping the job that's not retriable."""
 
 
 class Backchannel:
@@ -747,7 +756,7 @@ class Backchannel:
     async def get_log_file(self, name):
         raise NotImplementedError(self.get_log_file)
 
-    async def ping(self, log_id):
+    async def ping(self, log_id: str) -> None:
         raise NotImplementedError(self.ping)
 
     def json(self):
@@ -879,7 +888,8 @@ class ActiveRun:
             **kwargs)
 
     async def ping(self):
-        return await self.backchannel.ping(self.log_id)
+        await self.backchannel.ping(self.log_id)
+        return True
 
     @property
     def vcs_type(self):
@@ -966,29 +976,30 @@ class JenkinsBackchannel(Backchannel):
             return BytesIO(await resp.read())
 
     async def _get_job(self, session):
+        url = self.my_url / 'api/json'
+        logging.info('Fetching Jenkins URL %s', url)
         async with session.get(
-                self.my_url / 'api/json', raise_for_status=True,
+                url, raise_for_status=True,
                 timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
     async def ping(self, expected_log_id):
-        health_url = self.my_url / 'log-id'
-        logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
             try:
-                await self._get_job(session)
+                job = await self._get_job(session)
             except (ClientConnectorError, ServerDisconnectedError,
                     asyncio.TimeoutError, ClientOSError) as e:
-                logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
-                return False
+                raise PingTimeout('Failed to ping client {self.my_url}: {e}')
             except ClientResponseError as e:
                 if e.status == 404:
-                    raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url) from e
+                    raise PingFatalFailure(f'Jenkins job {self.my_url} has disappeared') from e
                 else:
-                    logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
-                    return False
+                    raise PingFailure(f'Failed to ping client {self.my_url}: {e}')
             else:
-                return True
+                # If Jenkins has listed the job as having failed, then we can't
+                # expect anything to be uploaded
+                if job.get('result') == 'FAILURE':
+                    raise PingFatalFailure(f'Jenkins lists job {job["id"]} for run {expected_log_id} as failed')
 
     def json(self):
         return {
@@ -1049,16 +1060,12 @@ class PollingBackchannel(Backchannel):
             except (ClientConnectorError, ClientResponseError,
                     asyncio.TimeoutError, ClientOSError,
                     ServerDisconnectedError) as err:
-                logging.warning(
-                    'Failed to ping client %s: %r', self.my_url, err, extra={'run_id': expected_log_id})
-                return False
+                raise PingTimeout('Failed to ping client %s: %r', self.my_url, err)
 
             if log_id != expected_log_id:
-                raise ActiveRunDisappeared(
+                raise PingFatalFailure(
                     'Worker started processing new run %s rather than %s' %
                     (log_id, expected_log_id))
-
-        return True
 
     def json(self):
         return {
@@ -1364,20 +1371,18 @@ class QueueProcessor:
 
     async def _healthcheck_active_run(self, active_run, keepalive_age):
         try:
-            if await active_run.ping():
-                await self.redis.hset(
-                    'last-keepalive', active_run.log_id,
-                    datetime.utcnow().isoformat())
-                keepalive_age = timedelta(seconds=0)
+            await active_run.ping()
         except NotImplementedError:
             if keepalive_age > timedelta(days=1):
                 try:
                     await self.abort_run(
-                        active_run, 'run-disappeared', "no support for ping", transient=True)
+                        active_run, 'run-disappeared',
+                        "no support for ping, and haven't heard back in > 1 day", transient=True)
                 except RunExists:
                     logging.warning('Run exists. Not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
-        except ActiveRunDisappeared as e:
+        except PingFatalFailure as e:
+            # TODO(jelmer): do we really need this condition here?
             if keepalive_age > timedelta(minutes=self.run_timeout):
                 try:
                     await self.abort_run(active_run, 'run-disappeared', e.reason,
@@ -1385,6 +1390,15 @@ class QueueProcessor:
                 except RunExists:
                     logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
+        except PingFailure as e:
+            logging.warning(
+                'Failed to ping %s: %s', active_run.log_id, e, extra={'run_id': active_run.log_id})
+        else:
+            await self.redis.hset(
+                'last-keepalive', active_run.log_id,
+                datetime.utcnow().isoformat())
+            keepalive_age = timedelta(seconds=0)
+
         if keepalive_age > timedelta(minutes=self.run_timeout):
             logging.warning(
                 "No keepalives received from %s for %s in %s, aborting.",
