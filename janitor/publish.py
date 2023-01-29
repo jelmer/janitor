@@ -20,6 +20,10 @@
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from aiojobs.aiohttp import (
+    setup as setup_aiojobs,
+    spawn,
+)
 import asyncio
 import json
 import logging
@@ -1394,20 +1398,6 @@ async def publish_and_store(
         await pubsub_publish(redis, publish_entry)
 
 
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except BaseException:
-            logger.exception('%s failed', title)
-        else:
-            logger.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-
-
 async def get_publish_attempt_count(
     conn: asyncpg.Connection, revision: bytes, transient_result_codes: set[str]
 ) -> int:
@@ -1619,8 +1609,7 @@ async def consider_request(request):
                 unpublished_branches=unpublished_branches,
                 require_binary_diff=request.app['require_binary_diff'],
                 dry_run=request.app['dry_run'])
-    create_background_task(
-        run(), 'consider publishing %s' % run_id)
+    await spawn(request, run())
     return web.json_response({}, status=200)
 
 
@@ -1716,7 +1705,8 @@ async def publish_request(request):
         if mode in (MODE_SKIP, MODE_BUILD_ONLY):
             continue
 
-        create_background_task(
+        await spawn(
+            request,
             publish_and_store(
                 db=request.app['db'],
                 redis=request.app['redis'],
@@ -1733,8 +1723,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), f'publish of {codebase}/{campaign}, role {role}'
-        )
+            ))
 
     if not publish_ids:
         return web.json_response(
@@ -1834,6 +1823,7 @@ async def create_app(
         url="/swagger.json",
         swagger_path="/docs",
     )
+    setup_aiojobs(app)
     return app
 
 
@@ -1890,7 +1880,7 @@ async def scan_request(request):
                 modify_limit=request.app['modify_mp_limit'],
             )
 
-    create_background_task(scan(), 'merge proposal refresh scan')
+    await spawn(request, scan())
     return web.Response(status=202, text="Scan started.")
 
 
@@ -1906,7 +1896,7 @@ async def refresh_stragglers(request):
     async with request.app['db'].acquire() as conn:
         proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
         urls = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
-    create_background_task(scan(request.app['db'], request.app['redis'], urls), 'Refresh of straggling merge proposals')
+    await spawn(request, scan(request.app['db'], request.app['redis'], urls))
     return web.json_response(urls)
 
 
@@ -1941,7 +1931,7 @@ async def refresh_proposal_status_request(request):
                 )
             except BranchRateLimited:
                 logger.warning("Rate-limited accessing %s. ", mp.url)
-    create_background_task(scan(), 'Refresh of proposal %s' % url)
+    await spawn(request, scan())
     return web.Response(status=202, text="Refresh of proposal started.")
 
 
@@ -1961,7 +1951,7 @@ async def autopublish_request(request):
             require_binary_diff=request.app['require_binary_diff'],
         )
 
-    create_background_task(autopublish(), 'autopublish')
+    await spawn(request, autopublish())
     return web.Response(status=202, text="Autopublish started.")
 
 

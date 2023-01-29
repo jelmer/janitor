@@ -17,6 +17,10 @@
 
 from aiohttp.web_middlewares import normalize_path_middleware
 import aiozipkin
+from aiojobs.aiohttp import (
+    spawn,
+    setup as setup_aiojobs,
+)
 import asyncio
 from contextlib import ExitStack
 from functools import partial
@@ -484,20 +488,6 @@ async def precache(
                 extra={'old_run_id': old_id, 'new_run_id': new_id})
 
 
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except BaseException:
-            logging.exception('%s failed', title)
-        else:
-            logging.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-
-
 @routes.post("/precache/{old_id}/{new_id}", name="precache")
 async def handle_precache(request):
     old_id = request.match_info["old_id"]
@@ -515,7 +505,7 @@ async def handle_precache(request):
             debdiff_cache_path=request.app['debdiff_cache_path'],
             diffoscope_command=request.app['diffoscope_command'])
 
-    create_background_task(_precache(), 'precaching')
+    await spawn(request, _precache())
 
     return web.Response(status=202, text="Precaching started")
 
@@ -568,7 +558,7 @@ where
                     logging.info("Error precaching: %r", e)
                     traceback.print_exc()
 
-    create_background_task(_precache_all(), 'precache all')
+    await spawn(request, _precache_all())
     return web.Response(status=202, text="Precache started (todo: %d)" % len(todo))
 
 
@@ -702,6 +692,8 @@ def create_app(cache_path, artifact_manager, database_location, *,
         app['pool'] = await state.create_pool(database_location)
 
     app.on_startup.append(connect_postgres)
+
+    setup_aiojobs(app)
 
     return app
 
