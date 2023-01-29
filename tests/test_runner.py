@@ -31,6 +31,8 @@ from janitor.runner import (
     QueueProcessor,
     ActiveRun,
     Backchannel,
+    store_run,
+    store_change_set,
 )
 from janitor.debian import dpkg_vendor
 from janitor.vcs import get_vcs_managers
@@ -82,7 +84,9 @@ async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None)
             campaign = config.campaign.add()
             campaign.name = name
             campaign.debian_build.base_distribution = "unstable"
-    return await aiohttp_client(await create_app(queue_processor, config, None, tracer))
+    return await aiohttp_client(await create_app(
+        queue_processor, config,
+        queue_processor.database if queue_processor else None, tracer))
 
 
 async def test_status(aiohttp_client, db):
@@ -234,9 +238,6 @@ async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
         "campaign": "mycampaign",
@@ -258,10 +259,6 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
-
     resp = await client.post("/candidates", json=[{
         "campaign": "mycampaign",
         "codebase": "foo",
@@ -362,7 +359,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             'log_id': assignment['id'],
             'logfilenames': [],
             'main_branch_revision': None,
-            'package': 'foo',
+            'package': None,
             'remotes': None,
             'resume': None,
             'revision': None,
@@ -394,12 +391,8 @@ async def test_submit_unknown_campaign(aiohttp_client, db):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
-        "codebase": "foo",
         "campaign": "mycampaign",
         "codebase": "foo"
     }])
@@ -432,3 +425,69 @@ def test_serialize_active_run():
     run_copy_json['current_duration'] = orig_json['current_duration']
     assert run_copy_json == orig_json
     assert run_copy == run
+
+
+async def create_dummy_run(conn, campaign="mycampaign", run_id="run-id", codebase="foo"):
+    await store_change_set(conn, "run-id", campaign="mycampaign")
+    await store_run(
+        conn, run_id=run_id,
+        codebase=codebase, campaign=campaign,
+        vcs_type="git", subpath="",
+        start_time=datetime.utcnow(),
+        finish_time=datetime.utcnow(),
+        command="true",
+        result_code="missing-result-code",
+        codemod_result={},
+        main_branch_revision=b'some-revid',
+        revision=b'revid',
+        description='Did a thing',
+        context=None,
+        instigated_context=None,
+        logfilenames=[],
+        value=1,
+        change_set=run_id,
+        worker_name=None,
+        branch_url='https://example.com/blah')
+    return run_id
+
+
+async def test_tweak_run(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    campaign = "mycampaign"
+    codebase = "foo"
+    client = await create_client(aiohttp_client, qp, campaigns=[campaign])
+    resp = await client.post("/codebases", json=[{
+        "name": codebase,
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+
+    async with db.acquire() as conn:
+        run_id = await create_dummy_run(conn, campaign=campaign, codebase=codebase)
+
+    resp = await client.get(f"/runs/{run_id}")
+    assert resp.status == 200
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'unknown'} == await resp.json()
+
+    resp = await client.post(f"/runs/{run_id}", json={'publish_status': 'approved'})
+    assert resp.status == 200
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved', 'run_id': run_id} == await resp.json()
+
+    resp = await client.get(f"/runs/{run_id}")
+    assert resp.status == 200
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved'} == await resp.json()
+
+
+async def test_tweak_unknown_run(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+
+    resp = await client.get("/runs/run-id")
+    assert resp.status == 404
+
+    resp = await client.post("/runs/run-id", json={'publish_status': 'approved'})
+    assert resp.status == 404

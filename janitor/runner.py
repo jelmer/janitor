@@ -730,10 +730,19 @@ def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
             yield entry
 
 
-class ActiveRunDisappeared(Exception):
+class PingFailure(Exception):
+    """Failure to ping the job"""
 
     def __init__(self, reason):
         self.reason = reason
+
+
+class PingTimeout(PingFailure):
+    """Timeout while pinging job."""
+
+
+class PingFatalFailure(PingFailure):
+    """Failure to ping the job that's not retriable."""
 
 
 class Backchannel:
@@ -747,7 +756,7 @@ class Backchannel:
     async def get_log_file(self, name):
         raise NotImplementedError(self.get_log_file)
 
-    async def ping(self, log_id):
+    async def ping(self, log_id: str) -> None:
         raise NotImplementedError(self.ping)
 
     def json(self):
@@ -879,7 +888,8 @@ class ActiveRun:
             **kwargs)
 
     async def ping(self):
-        return await self.backchannel.ping(self.log_id)
+        await self.backchannel.ping(self.log_id)
+        return True
 
     @property
     def vcs_type(self):
@@ -966,29 +976,30 @@ class JenkinsBackchannel(Backchannel):
             return BytesIO(await resp.read())
 
     async def _get_job(self, session):
+        url = self.my_url / 'api/json'
+        logging.info('Fetching Jenkins URL %s', url)
         async with session.get(
-                self.my_url / 'api/json', raise_for_status=True,
+                url, raise_for_status=True,
                 timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
     async def ping(self, expected_log_id):
-        health_url = self.my_url / 'log-id'
-        logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
             try:
-                await self._get_job(session)
+                job = await self._get_job(session)
             except (ClientConnectorError, ServerDisconnectedError,
                     asyncio.TimeoutError, ClientOSError) as e:
-                logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
-                return False
+                raise PingTimeout(f'Failed to ping client {self.my_url}: {e}') from e
             except ClientResponseError as e:
                 if e.status == 404:
-                    raise ActiveRunDisappeared('Jenkins job %s has disappeared' % self.my_url) from e
+                    raise PingFatalFailure(f'Jenkins job {self.my_url} has disappeared') from e
                 else:
-                    logging.warning('Failed to ping client %s: %r', self.my_url, e, extra={'run_id': expected_log_id})
-                    return False
+                    raise PingFailure(f'Failed to ping client {self.my_url}: {e}') from e
             else:
-                return True
+                # If Jenkins has listed the job as having failed, then we can't
+                # expect anything to be uploaded
+                if job.get('result') == 'FAILURE':
+                    raise PingFatalFailure(f'Jenkins lists job {job["id"]} for run {expected_log_id} as failed')
 
     def json(self):
         return {
@@ -1049,16 +1060,12 @@ class PollingBackchannel(Backchannel):
             except (ClientConnectorError, ClientResponseError,
                     asyncio.TimeoutError, ClientOSError,
                     ServerDisconnectedError) as err:
-                logging.warning(
-                    'Failed to ping client %s: %r', self.my_url, err, extra={'run_id': expected_log_id})
-                return False
+                raise PingTimeout(f'Failed to ping client {self.my_url}: {err}') from err
 
             if log_id != expected_log_id:
-                raise ActiveRunDisappeared(
+                raise PingFatalFailure(
                     'Worker started processing new run %s rather than %s' %
                     (log_id, expected_log_id))
-
-        return True
 
     def json(self):
         return {
@@ -1214,10 +1221,8 @@ async def store_run(
     *,
     run_id: str,
     codebase: str,
-    package: str,
     vcs_type: Optional[str],
     branch_url: Optional[str],
-    subpath: Optional[str],
     start_time: datetime,
     finish_time: datetime,
     command: str,
@@ -1231,7 +1236,9 @@ async def store_run(
     campaign: str,
     logfilenames: list[str],
     value: Optional[int],
-    worker_name: str,
+    worker_name: Optional[str] = None,
+    package: Optional[str] = None,
+    subpath: Optional[str] = "",
     result_branches: Optional[list[tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[list[tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
@@ -1364,27 +1371,32 @@ class QueueProcessor:
 
     async def _healthcheck_active_run(self, active_run, keepalive_age):
         try:
-            if await active_run.ping():
-                await self.redis.hset(
-                    'last-keepalive', active_run.log_id,
-                    datetime.utcnow().isoformat())
-                keepalive_age = timedelta(seconds=0)
+            await active_run.ping()
         except NotImplementedError:
             if keepalive_age > timedelta(days=1):
                 try:
                     await self.abort_run(
-                        active_run, 'run-disappeared', "no support for ping", transient=True)
+                        active_run, 'run-disappeared',
+                        "no support for ping, and haven't heard back in > 1 day", transient=True)
                 except RunExists:
                     logging.warning('Run exists. Not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
-        except ActiveRunDisappeared as e:
-            if keepalive_age > timedelta(minutes=self.run_timeout):
-                try:
-                    await self.abort_run(active_run, 'run-disappeared', e.reason,
-                                         transient=True)
-                except RunExists:
-                    logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
-                return
+        except PingFatalFailure as e:
+            try:
+                await self.abort_run(active_run, 'run-disappeared', e.reason,
+                                     transient=True)
+            except RunExists:
+                logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
+            return
+        except PingFailure as e:
+            logging.warning(
+                'Failed to ping %s: %s', active_run.log_id, e, extra={'run_id': active_run.log_id})
+        else:
+            await self.redis.hset(
+                'last-keepalive', active_run.log_id,
+                datetime.utcnow().isoformat())
+            keepalive_age = timedelta(seconds=0)
+
         if keepalive_age > timedelta(minutes=self.run_timeout):
             logging.warning(
                 "No keepalives received from %s for %s in %s, aborting.",
@@ -2087,14 +2099,15 @@ async def handle_candidates_upload(request):
 @routes.get("/runs/{run_id}", name="get-run")
 async def handle_get_run(request):
     run_id = request.match_info['run_id']
-    async with request.app['pool'].acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         run = await conn.fetchrow('SELECT * FROM run WHERE id = $1', run_id)
         if run is None:
             raise web.HTTPNotFound(text=f"no such run: {run_id}")
-        return {
+        return web.json_response({
             'codebase': run['codebase'],
-            'campaign': run['campaign']
-        }
+            'campaign': run['suite'],
+            'publish_status': run['publish_status'],
+        })
 
 
 @routes.post("/runs/{run_id}", name="update-run")
@@ -2102,20 +2115,21 @@ async def handle_update_run(request):
     run_id = request.match_info['run_id']
     queue_processor = request.app['queue_processor']
     data = await request.json()
-    async with request.app['pool'].acquire() as conn:
+    async with request.app['database'].acquire() as conn:
         row = await conn.fetchrow(
             'UPDATE run SET publish_status = $2 WHERE id = $1 '
             'RETURNING (id, codebase, suite)',
             run_id, data['publish_status'])
-        await queue_processor.redis.publish('publish-status', json.dumps({
+        if row is None:
+            raise web.HTTPNotFound(text=f'no such run: {run_id}')
+        ret = {
             'run_id': run_id,
             'publish_status': data['publish_status'],
-            'codebase': row['codebase'],
-            'campaign': row['suite']
-        }))
-        if row is None:
-            raise web.HTTPNotFound(text=f"no such run: {run_id}")
-        return web.json_response({})
+            'codebase': row[0][1],
+            'campaign': row[0][2]
+        }
+        await queue_processor.redis.publish('publish-status', json.dumps(ret))
+        return web.json_response(ret)
 
 
 @routes.get("/active-runs", name="get-active-runs")
