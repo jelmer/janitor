@@ -469,15 +469,15 @@ async def test_tweak_run(aiohttp_client, db, tmp_path):
 
     resp = await client.get(f"/runs/{run_id}")
     assert resp.status == 200
-    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'unknown'} == await resp.json()
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'unknown'} == await resp.json()
 
     resp = await client.post(f"/runs/{run_id}", json={'publish_status': 'approved'})
     assert resp.status == 200
-    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved', 'run_id': run_id} == await resp.json()
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved', 'run_id': run_id} == await resp.json()
 
     resp = await client.get(f"/runs/{run_id}")
     assert resp.status == 200
-    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved'} == await resp.json()
+    assert {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved'} == await resp.json()
 
 
 async def test_tweak_unknown_run(aiohttp_client, db, tmp_path):

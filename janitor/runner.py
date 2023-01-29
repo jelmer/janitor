@@ -989,12 +989,12 @@ class JenkinsBackchannel(Backchannel):
                 job = await self._get_job(session)
             except (ClientConnectorError, ServerDisconnectedError,
                     asyncio.TimeoutError, ClientOSError) as e:
-                raise PingTimeout('Failed to ping client {self.my_url}: {e}')
+                raise PingTimeout(f'Failed to ping client {self.my_url}: {e}') from e
             except ClientResponseError as e:
                 if e.status == 404:
                     raise PingFatalFailure(f'Jenkins job {self.my_url} has disappeared') from e
                 else:
-                    raise PingFailure(f'Failed to ping client {self.my_url}: {e}')
+                    raise PingFailure(f'Failed to ping client {self.my_url}: {e}') from e
             else:
                 # If Jenkins has listed the job as having failed, then we can't
                 # expect anything to be uploaded
@@ -1060,7 +1060,7 @@ class PollingBackchannel(Backchannel):
             except (ClientConnectorError, ClientResponseError,
                     asyncio.TimeoutError, ClientOSError,
                     ServerDisconnectedError) as err:
-                raise PingTimeout('Failed to ping client %s: %r', self.my_url, err)
+                raise PingTimeout(f'Failed to ping client {self.my_url}: {err}') from err
 
             if log_id != expected_log_id:
                 raise PingFatalFailure(
@@ -1236,7 +1236,7 @@ async def store_run(
     campaign: str,
     logfilenames: list[str],
     value: Optional[int],
-    worker_name: str,
+    worker_name: Optional[str] = None,
     package: Optional[str] = None,
     subpath: Optional[str] = "",
     result_branches: Optional[list[tuple[str, str, bytes, bytes]]] = None,
@@ -1382,14 +1382,12 @@ class QueueProcessor:
                     logging.warning('Run exists. Not properly cleaned up?', extra={'run_id': active_run.log_id})
                 return
         except PingFatalFailure as e:
-            # TODO(jelmer): do we really need this condition here?
-            if keepalive_age > timedelta(minutes=self.run_timeout):
-                try:
-                    await self.abort_run(active_run, 'run-disappeared', e.reason,
-                                         transient=True)
-                except RunExists:
-                    logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
-                return
+            try:
+                await self.abort_run(active_run, 'run-disappeared', e.reason,
+                                     transient=True)
+            except RunExists:
+                logging.warning('Run not properly cleaned up?', extra={'run_id': active_run.log_id})
+            return
         except PingFailure as e:
             logging.warning(
                 'Failed to ping %s: %s', active_run.log_id, e, extra={'run_id': active_run.log_id})
