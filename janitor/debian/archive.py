@@ -40,6 +40,7 @@ import uvloop
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiojobs import Scheduler
 
 from debian.deb822 import Release, Packages, Sources
 
@@ -481,7 +482,7 @@ async def handle_publish(request):
             continue
         if campaign is not None and campaign != campaign_config.name:
             continue
-        request.app['generator_manager'].trigger(campaign_config)
+        await request.app['generator_manager'].trigger(campaign_config)
 
     return web.json_response({})
 
@@ -754,7 +755,7 @@ async def listen_to_runner(redis, generator_manager):
             return
         campaign = get_campaign_config(generator_manager.config, result["campaign"])
         if campaign:
-            generator_manager.trigger(campaign)
+            await generator_manager.trigger(campaign)
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
@@ -793,22 +794,6 @@ async def publish_suite(
     last_publish_time[suite.name] = datetime.utcnow()
 
 
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except BaseException:
-            logging.exception('%s failed', title)
-            raise
-        else:
-            logging.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-    return task
-
-
 class GeneratorManager:
     def __init__(self, dists_dir, db, config, package_info_provider, gpg_context):
         self.dists_dir = dists_dir
@@ -816,19 +801,20 @@ class GeneratorManager:
         self.config = config
         self.package_info_provider = package_info_provider
         self.gpg_context = gpg_context
-        self.generators = {}
+        self.scheduler = Scheduler()
+        self.jobs = {}
 
-    def trigger(self, campaign_config: Campaign):
+    async def trigger(self, campaign_config: Campaign):
         if not campaign_config.HasField('debian_build'):
             return
         try:
-            task = self.generators[campaign_config.name]
+            job = self.jobs[campaign_config.name]
         except KeyError:
             pass
         else:
-            if not task.done():
+            if not job.closed:
                 return
-        self.generators[campaign_config.name] = create_background_task(
+        self.jobs[campaign_config.name] = await self.scheduler.spawn(
             publish_suite(
                 self.dists_dir,
                 self.db,
@@ -836,14 +822,14 @@ class GeneratorManager:
                 self.config,
                 campaign_config,
                 self.gpg_context,
-            ), f'publish {campaign_config.name}'
+            )
         )
 
 
 async def loop_publish(config, generator_manager):
     while True:
         for suite in config.campaign:
-            generator_manager.trigger(suite)
+            await generator_manager.trigger(suite)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)
 
@@ -926,8 +912,7 @@ async def main(argv=None):
                 tracer,
             )
         ),
-        create_background_task(
-            loop_publish(config, generator_manager), 'regenerate suites'),
+        loop.create_task(loop_publish(config, generator_manager)),
     ]
 
     redis = Redis.from_url(config.redis_location)
