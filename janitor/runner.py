@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+
 import asyncio
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from collections.abc import Iterator
 import uuid
 import warnings
 
+import aiojobs
 import aiozipkin
 import asyncpg
 import asyncpg.pool
@@ -692,23 +694,6 @@ class WorkerResult:
         )
 
 
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except asyncio.CancelledError:
-            logging.debug('%s cancelled', title)
-        except BaseException:
-            logging.exception('%s failed', title)
-        else:
-            logging.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-    return task
-
-
 def is_log_filename(name):
     parts = name.split(".")
     return parts[-1] == "log" or (
@@ -1350,13 +1335,23 @@ class QueueProcessor:
         self.dep_server_url = dep_server_url
         self.avoid_hosts = avoid_hosts or set()
         self.apt_archive_url = apt_archive_url
-        self._watch_dog = None
+        self._jobs_scheduler = aiojobs.Scheduler(limit=2)
+        self._watch_dog: Optional[asyncio.Task] = None
 
     def start_watchdog(self):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        self._watch_dog = create_background_task(
-            self._watchdog(), 'watchdog for %r' % self)
+        loop = asyncio.get_event_loop()
+        self._watch_dog = loop.create_task(self._watchdog())
+
+        def log_result(future):
+            try:
+                future.result()
+            except BaseException:
+                logging.exception('watch dog failed')
+            else:
+                logging.error('watch dog completed?')
+        self._watch_dog.add_done_callback(log_result)
 
     def stop_watchdog(self):
         if self._watch_dog is None:
@@ -1366,6 +1361,10 @@ class QueueProcessor:
         except asyncio.CancelledError:
             pass
         self._watch_dog = None
+
+    async def stop(self):
+        self.stop_watchdog()
+        await self._jobs_scheduler.close()
 
     KEEPALIVE_INTERVAL = 10
 
@@ -1593,17 +1592,21 @@ class QueueProcessor:
             await self.redis.publish('queue', json.dumps(await self.status_json()))
             last_success_gauge.set_to_current_time()
 
-            try:
-                await do_schedule_regular(
-                    conn, campaign=active_run.campaign,
-                    change_set=active_run.change_set, context=result.context,
-                    requestor='after run schedule', codebase=result.codebase)
-            except CandidateUnavailable:
-                # Maybe this was a one-off schedule without candidate, or
-                # the candidate has been removed. Either way, this is fine.
-                logging.debug(
-                    'not rescheduling %s/%s: no candidate available',
-                    active_run.package, active_run.campaign)
+            async def reschedule():
+                async with self.database.acquire() as schedule_conn:
+                    try:
+                        await do_schedule_regular(
+                            schedule_conn, campaign=active_run.campaign,
+                            change_set=active_run.change_set, context=result.context,
+                            requestor='after run schedule', codebase=result.codebase)
+                    except CandidateUnavailable:
+                        # Maybe this was a one-off schedule without candidate, or
+                        # the candidate has been removed. Either way, this is fine.
+                        logging.debug(
+                            'not rescheduling %s/%s: no candidate available',
+                            active_run.package, active_run.campaign)
+
+            await self._jobs_scheduler.spawn(reschedule())
 
     async def rate_limited(self, host, retry_after):
         rate_limited_count.labels(host=host).inc()
@@ -2112,6 +2115,7 @@ async def handle_get_run(request):
 
 @routes.post("/runs/{run_id}", name="update-run")
 async def handle_update_run(request):
+    # TODO(jelmer): Move to publisher?
     run_id = request.match_info['run_id']
     queue_processor = request.app['queue_processor']
     data = await request.json()
