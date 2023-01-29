@@ -524,7 +524,7 @@ CREATE OR REPLACE FUNCTION drop_candidates_for_deleted_packages()
 $$
 BEGIN
     IF NEW.removed AND NOT OLD.removed THEN
-        DELETE FROM candidate WHERE package = NEW.name;
+        DELETE FROM candidate WHERE codebase = NEW.codebase;
     END IF;
 
     RETURN NEW;
