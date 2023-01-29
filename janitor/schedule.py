@@ -156,7 +156,8 @@ async def estimate_success_probability_and_duration(
     for run in await conn.fetch("""
 SELECT
   result_code, instigated_context, context, failure_details,
-  finish_time - start_time AS duration
+  finish_time - start_time AS duration,
+  start_time
 FROM run
 WHERE codebase = $1 AND suite = $2 AND failure_transient IS NOT True
 ORDER BY start_time DESC
