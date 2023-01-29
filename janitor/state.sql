@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS run (
    codebase text not null references codebase(name),
    check(finish_time >= start_time),
    -- nothing-new-to-do always requires resume_from
-   check(result_code != 'nothing-new-to-do' or resume_from is not null)
+   check(result_code != 'nothing-new-to-do' or resume_from is not null),
+   check(publish_status != 'approved' or revision is not null)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
