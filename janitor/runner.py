@@ -1577,8 +1577,7 @@ class QueueProcessor:
                         codebase=result.codebase,
                     )
                 except asyncpg.UniqueViolationError as e:
-                    if ((e.table_name == 'run' and e.column_name == 'id')
-                            or e.constraint_name == 'run_pkey'):
+                    if e.constraint_name == 'run_pkey':
                         logging.debug('Unique violation error creating run: %r', e, extra={'run_id': active_run.log_id})
                         await self.unclaim_run(result.log_id)
                         raise RunExists(result.log_id) from e
