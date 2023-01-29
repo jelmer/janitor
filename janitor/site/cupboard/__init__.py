@@ -109,7 +109,7 @@ async def handle_never_processed(request):
     campaigns = [campaign] if campaign else None
     async with request.app.database.acquire() as conn:
         query = """\
-        select c.package, c.suite from candidate c
+        select c.codebase, c.suite from candidate c
         where not exists (
             SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)
         """
