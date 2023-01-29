@@ -227,7 +227,6 @@ async def test_submit_codebase(aiohttp_client, db):
     }] == await resp.json()
 
 
-
 async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
     vcs = tmp_path / "vcs"
     vcs.mkdir()
@@ -370,6 +369,8 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             'value': None,
         },
     }
+
+    await qp.stop()
 
 
 async def test_submit_unknown_candidate(aiohttp_client, db):
