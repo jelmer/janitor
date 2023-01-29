@@ -1719,8 +1719,8 @@ async def handle_schedule(request):
             if json.get('estimated_duration') else None)
         command = await conn.fetchval(
             "SELECT command "
-            "FROM candidate WHERE package = $1 AND suite = $2",
-            package, campaign)
+            "FROM candidate WHERE codebase = $1 AND suite = $2",
+            codebase, campaign)
         if command is None:
             command = get_campaign_config(
                 request.app['config'], campaign).command
