@@ -21,6 +21,10 @@ from aiohttp import (
     ClientSession,
     ClientConnectorError,
 )
+from aiojobs.aiohttp import (
+    setup as setup_aiojobs,
+    spawn,
+)
 import aiozipkin
 import asyncio
 import asyncpg
@@ -41,21 +45,6 @@ from .. import check_admin
 from ..setup import setup_postgres, setup_logfile_manager
 
 routes = web.RouteTableDef()
-
-
-def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
-    task = loop.create_task(fn)
-
-    def log_result(future):
-        try:
-            future.result()
-        except BaseException:
-            logging.exception('%s failed', title)
-        else:
-            logging.debug('%s succeeded', title)
-    task.add_done_callback(log_result)
-    return task
 
 
 @docs()
@@ -165,7 +154,7 @@ AND """ % table
                         run['codebase'], run['campaign'],
                         e.status, e.message)
 
-    create_background_task(do_reschedule(), 'mass-reschedule')
+    await spawn(request, do_reschedule())
     return web.json_response([
         {'codebase': run['codebase'], 'campaign': run['campaign']}
         for run in runs])
@@ -342,7 +331,7 @@ WHERE
         for i in range(0, len(todo), 100):
             await asyncio.wait(set(todo[i : i + 100]))
 
-    create_background_task(do_reprocess(), 'reprocess logs')
+    await spawn(request, do_reprocess())
 
     return web.json_response([
         {'package': row['package'],
@@ -396,4 +385,5 @@ def create_app(*, config, publisher_url, runner_url, trace_configs=None, db=None
     else:
         app['pool'] = db
     setup_logfile_manager(app, trace_configs=trace_configs)
+    setup_aiojobs(app)
     return app
