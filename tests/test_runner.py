@@ -427,67 +427,57 @@ def test_serialize_active_run():
     assert run_copy == run
 
 
+async def create_dummy_run(conn, campaign="mycampaign", run_id="run-id", codebase="foo"):
+    await store_change_set(conn, "run-id", campaign="mycampaign")
+    await store_run(
+        conn, run_id=run_id,
+        codebase=codebase, campaign=campaign,
+        vcs_type="git", subpath="",
+        start_time=datetime.utcnow(),
+        finish_time=datetime.utcnow(),
+        command="true",
+        result_code="missing-result-code",
+        codemod_result={},
+        main_branch_revision=b'some-revid',
+        revision=b'revid',
+        description='Did a thing',
+        context=None,
+        instigated_context=None,
+        logfilenames=[],
+        value=1,
+        change_set=run_id,
+        worker_name=None,
+        branch_url='https://example.com/blah')
+    return run_id
+
+
 async def test_tweak_run(aiohttp_client, db, tmp_path):
     vcs = tmp_path / "vcs"
     vcs.mkdir()
     qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
-    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+    campaign = "mycampaign"
+    codebase = "foo"
+    client = await create_client(aiohttp_client, qp, campaigns=[campaign])
     resp = await client.post("/codebases", json=[{
-        "name": "foo",
+        "name": codebase,
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    resp = await client.post("/candidates", json=[{
-        "campaign": "mycampaign",
-        "codebase": "foo",
-        "command": "true",
-    }])
-    assert resp.status == 200
-    [result] = (await resp.json())['success']
-    assert result == {
-        'bucket': 'default',
-        'campaign': 'mycampaign',
-        'change_set': None,
-        'codebase': 'foo',
-        'estimated_duration': 15.0,
-        'offset': 35000.0,
-        'queue-id': 1,
-        'refresh': False,
-    }
 
     async with db.acquire() as conn:
-        await store_change_set(conn, "run-id", campaign="mycampaign")
-        await store_run(
-            conn, run_id="run-id",
-            codebase="foo", campaign="mycampaign",
-            vcs_type="git", subpath="",
-            start_time=datetime.utcnow(),
-            finish_time=datetime.utcnow(),
-            command="true",
-            result_code="missing-result-code",
-            codemod_result={},
-            main_branch_revision=b'some-revid',
-            revision=b'revid',
-            description='Did a thing',
-            context=None,
-            instigated_context=None,
-            logfilenames=[],
-            value=1,
-            change_set="run-id",
-            worker_name=None,
-            branch_url='https://example.com/blah')
+        run_id = await create_dummy_run(conn, campaign=campaign, codebase=codebase)
 
-    resp = await client.get("/runs/run-id")
+    resp = await client.get(f"/runs/{run_id}")
     assert resp.status == 200
-    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'unknown'} == await resp.json()
+    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'unknown'} == await resp.json()
 
-    resp = await client.post("/runs/run-id", json={'publish_status': 'approved'})
+    resp = await client.post(f"/runs/{run_id}", json={'publish_status': 'approved'})
     assert resp.status == 200
-    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'approved', 'run_id': 'run-id'} == await resp.json()
+    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved', 'run_id': run_id} == await resp.json()
 
-    resp = await client.get("/runs/run-id")
+    resp = await client.get(f"/runs/{run_id}")
     assert resp.status == 200
-    assert  {'campaign': 'mycampaign', 'codebase': 'foo', 'publish_status': 'approved'} == await resp.json()
+    assert  {'campaign': campaign, 'codebase': codebase, 'publish_status': 'approved'} == await resp.json()
 
 
 async def test_tweak_unknown_run(aiohttp_client, db, tmp_path):
