@@ -373,15 +373,34 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
     await qp.stop()
 
 
-async def test_submit_unknown_candidate(aiohttp_client, db):
+async def test_submit_unknown_candidate_codebase(aiohttp_client, db):
     qp = await create_queue_processor(db)
-    client = await create_client(aiohttp_client, qp)
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
     resp = await client.post("/candidates", json=[{
         "codebase": "foo",
+        "command": "true",
         "campaign": "mycampaign",
     }])
     assert resp.status == 200
     assert ('unknown_codebases', ['foo']) in (await resp.json()).items()
+
+
+async def test_submit_unknown_candidate_publish_policy(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "branch_url": "https://example.com/foo.git"
+    }])
+    assert resp.status == 200
+    resp = await client.post("/candidates", json=[{
+        "codebase": "foo",
+        "command": "true",
+        "campaign": "mycampaign",
+        "publish-policy": "some-policy",
+    }])
+    assert resp.status == 200
+    assert ('unknown_publish_policies', ['some-policy']) in (await resp.json()).items()
 
 
 async def test_submit_unknown_campaign(aiohttp_client, db):
