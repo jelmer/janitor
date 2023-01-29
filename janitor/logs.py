@@ -54,7 +54,8 @@ class LogFileManager(ABC):
         raise NotImplementedError(self.get_log)
 
     @abstractmethod
-    async def import_log(self, codebase: str, run_id: str, orig_path: str, timeout=None, mtime=None):
+    async def import_log(self, codebase: str, run_id: str, orig_path: str,
+                         timeout=None, mtime=None, basename: Optional[str] = None):
         raise NotImplementedError(self.import_log)
 
     @abstractmethod
@@ -120,11 +121,14 @@ class FileSystemLogFileManager(LogFileManager):
                 return open(path, "rb")
         raise FileNotFoundError(name)
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=None, mtime=None):
+    async def import_log(self, codebase, run_id, orig_path, timeout=None,
+                         mtime=None, basename: Optional[str] = None):
         dest_dir = os.path.join(self.log_directory, codebase, run_id)
         os.makedirs(dest_dir, exist_ok=True)
         with open(orig_path, "rb") as inf:
-            dest_path = os.path.join(dest_dir, os.path.basename(orig_path) + ".gz")
+            if basename is None:
+                basename = os.path.basename(orig_path)
+            dest_path = os.path.join(dest_dir, basename + ".gz")
             with gzip.GzipFile(dest_path, mode="wb", mtime=mtime) as outf:
                 outf.write(inf.read())
 
@@ -194,11 +198,13 @@ class S3LogFileManager(LogFileManager):
                 "Unexpected response code %d: %s" % (resp.status, await resp.text())
             )
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None):
+    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None, basename: Optional[str] = None):
         with open(orig_path, "rb") as f:
             data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
 
-        key = self._get_key(codebase, run_id, os.path.basename(orig_path))
+        if basename is None:
+            basename = os.path.basename(orig_path)
+        key = self._get_key(codebase, run_id, basename)
         self.s3_bucket.put_object(Key=key, Body=data, ACL="public-read")
 
     async def delete_log(self, codebase, run_id, name):
@@ -279,8 +285,10 @@ class GCSLogFileManager(LogFileManager):
         except ServerDisconnectedError as e:
             raise ServiceUnavailable() from e
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None):
-        object_name = self._get_object_name(codebase, run_id, os.path.basename(orig_path))
+    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None, basename: Optional[str] = None):
+        if basename is None:
+            basename = os.path.basename(orig_path)
+        object_name = self._get_object_name(codebase, run_id, basename)
         with open(orig_path, "rb") as f:
             plain_data = f.read()
         compressed_data = gzip.compress(plain_data, mtime=mtime)  # type: ignore
@@ -333,9 +341,9 @@ async def import_log(
         # It may just be that the file already exists
         try:
             suffix = datetime.utcnow().isoformat(timespec='seconds')
-            alternative_path = path + '.' + suffix
+            alternative_basename = os.path.basename(path) + '.' + suffix
             await logfile_manager.import_log(
-                pkg, log_id, alternative_path, mtime=mtime)
+                pkg, log_id, path, mtime=mtime, basename=alternative_basename)
         except (asyncio.TimeoutError, PermissionError, ServiceUnavailable):
             pass
         else:
