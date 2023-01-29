@@ -1214,10 +1214,8 @@ async def store_run(
     *,
     run_id: str,
     codebase: str,
-    package: str,
     vcs_type: Optional[str],
     branch_url: Optional[str],
-    subpath: Optional[str],
     start_time: datetime,
     finish_time: datetime,
     command: str,
@@ -1232,6 +1230,8 @@ async def store_run(
     logfilenames: list[str],
     value: Optional[int],
     worker_name: str,
+    package: Optional[str] = None,
+    subpath: Optional[str] = "",
     result_branches: Optional[list[tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[list[tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
@@ -2091,10 +2091,11 @@ async def handle_get_run(request):
         run = await conn.fetchrow('SELECT * FROM run WHERE id = $1', run_id)
         if run is None:
             raise web.HTTPNotFound(text=f"no such run: {run_id}")
-        return {
+        return web.json_response({
             'codebase': run['codebase'],
-            'campaign': run['campaign']
-        }
+            'campaign': run['suite'],
+            'publish_status': run['publish_status'],
+        })
 
 
 @routes.post("/runs/{run_id}", name="update-run")
@@ -2107,15 +2108,16 @@ async def handle_update_run(request):
             'UPDATE run SET publish_status = $2 WHERE id = $1 '
             'RETURNING (id, codebase, suite)',
             run_id, data['publish_status'])
-        await queue_processor.redis.publish('publish-status', json.dumps({
+        if row is None:
+            raise web.HTTPNotFound(text=f'no such run: {run_id}')
+        ret = {
             'run_id': run_id,
             'publish_status': data['publish_status'],
-            'codebase': row['codebase'],
-            'campaign': row['suite']
-        }))
-        if row is None:
-            raise web.HTTPNotFound(text=f"no such run: {run_id}")
-        return web.json_response({})
+            'codebase': row[0][1],
+            'campaign': row[0][2]
+        }
+        await queue_processor.redis.publish('publish-status', json.dumps(ret))
+        return web.json_response(ret)
 
 
 @routes.get("/active-runs", name="get-active-runs")
