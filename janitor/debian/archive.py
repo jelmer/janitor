@@ -235,6 +235,13 @@ class DiskCachingPackageInfoProvider(PackageInfoProvider):
                     f.write(chunk)
                     yield chunk
 
+    async def cache_run(self, run_id, suite_name, package, arches):
+        async for _ in self.sources_for_run(run_id, suite_name, package):
+            pass
+        for arch in arches:
+            async for _ in self.packages_for_run(run_id, suite_name, package, arch):
+                pass
+
 
 async def retrieve_packages(info_provider, rows, suite_name, component, arch):
     logger.debug('Need to process %d rows for %s/%s/%s',

@@ -132,6 +132,7 @@
 
         {% if result %}
             <h3>Summary</h3>
+            <!-- {{ result|tojson(indent=4) }} -->
             {% include [suite + "/summary.html", "generic/summary.html"] %}
         {% endif %}
         {% if revision and result_code in ('success', 'nothing-to-do') and suite not in ('unchanged', 'control') %}
@@ -162,7 +163,7 @@
         {% else %}
             <h2>Publish Blockers</h2>
             {% set blockers = publish_blockers() %}
-            <!-- {{ blockers|tojson }}<-->
+            <!-- {{ blockers|tojson(indent=4) }}<-->
             {{ display_publish_blockers(blockers) }}
         {% endif %}
         {% if binary_packages %}
