@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
    duration interval generated always as (finish_time - start_time) stored,
-   package text not null references package(name), -- TO BE REMOVED
+   package text references package(name), -- TO BE REMOVED
    result_code text not null,
    instigated_context text,
    -- Some codemod-specific indication of what we attempted to do
