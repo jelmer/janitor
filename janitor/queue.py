@@ -275,7 +275,8 @@ queue.id ASC
             # this case.
             row = await self.conn.fetchrow(
                 'SELECT id, bucket FROM queue '
-                'WHERE codebase = $1 AND suite = $2 AND change_set = $3',
+                'WHERE codebase = $1 AND suite = $2 '
+                'AND coalesce(change_set, '':text) = coalesce($3, ''::text)',
                 codebase, campaign, change_set)
             assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
             return row
