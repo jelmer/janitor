@@ -53,7 +53,6 @@ async def iter_candidates(
         campaign: Optional[str] = None):
     query = """
 SELECT
-  package AS package,
   codebase AS codebase,
   suite AS suite,
   context AS context,
