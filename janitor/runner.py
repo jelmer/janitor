@@ -1970,115 +1970,132 @@ async def handle_candidates_upload(request):
             "INSERT INTO followup (origin, candidate) VALUES ($1, $2) "
             "ON CONFLICT DO NOTHING")
         async with conn.transaction():
-            with span.new_child('sql:known-codebases'):
-                known_codebases = set()
-                for record in (await conn.fetch('SELECT name FROM codebase WHERE name IS NOT NULL')):
-                    known_codebases.add(record[0])
-
             known_campaign_names = [
                 campaign.name for campaign in request.app['config'].campaign]
-
-            with span.new_child('sql:known-named-policies'):
-                known_publish_policies = set()
-                for record in (await conn.fetch(
-                        'SELECT name FROM named_publish_policy')):
-                    known_publish_policies.add(record[0])
 
             ret = []
             with span.new_child('process-candidates'):
                 for candidate in (await request.json()):
+                    tr = conn.transaction()
+                    await tr.start()
                     try:
-                        codebase = candidate['codebase']
-                    except KeyError as e:
-                        raise web.HTTPBadRequest(
-                            text='no codebase field for candidate %r' % candidate) from e
-                    if codebase not in known_codebases:
-                        logging.warning(
-                            'ignoring candidate %s/%s; codebase unknown',
-                            codebase, candidate['campaign'])
-                        unknown_codebases.append(codebase)
-                        continue
-                    if candidate['campaign'] not in known_campaign_names:
-                        logging.warning('unknown campaign %r', candidate['campaign'])
-                        unknown_campaigns.append(candidate['campaign'])
-                        continue
+                        try:
+                            codebase = candidate['codebase']
+                        except KeyError as e:
+                            raise web.HTTPBadRequest(
+                                text=f'no codebase field for candidate {candidate}') from e
+                        try:
+                            campaign = candidate['campaign']
+                        except KeyError as e:
+                            raise web.HTTPBadRequest(
+                                text=f'no campaign field for candidate {candidate}') from e
 
-                    command = candidate.get('command')
-                    if not command:
-                        campaign_config = get_campaign_config(
-                            request.app['config'], candidate['campaign'])
-                        command = campaign_config.command
-                        if not command:
-                            logging.warning(
-                                'No command in candidate or campaign config')
-                            invalid_command.append(command)
+                        if campaign not in known_campaign_names:
+                            logging.warning('unknown campaign %r', campaign)
+                            unknown_campaigns.append(campaign)
+                            await tr.rollback()
                             continue
 
-                    publish_policy = candidate.get('publish-policy')
-                    if (publish_policy is not None
-                            and publish_policy not in known_publish_policies):
-                        logging.warning('unknown publish policy %s', publish_policy)
-                        unknown_publish_policies.append(publish_policy)
-                        continue
+                        command = candidate.get('command')
+                        if not command:
+                            try:
+                                campaign_config = get_campaign_config(
+                                    request.app['config'], campaign)
+                            except KeyError:
+                                logging.warning('unknown campaign %r', campaign)
+                                unknown_campaigns.append(campaign)
+                                await tr.rollback()
+                                continue
+                            command = campaign_config.command
+                            if not command:
+                                logging.warning(
+                                    'No command in candidate or campaign config')
+                                invalid_command.append(command)
+                                await tr.rollback()
+                                continue
 
-                    if candidate.get('value') == 0:
-                        logging.warning(
-                            'invalid value for candidate: %r', candidate.get('value'))
-                        invalid_value.append(candidate.get('value'))
-                        continue
+                        publish_policy = candidate.get('publish-policy')
 
-                    with span.new_child('sql:insert-candidates'):
-                        candidate_id = await insert_candidate_stmt.fetchval(
-                            candidate['campaign'],
-                            command,
-                            candidate.get('change_set'), candidate.get('context'),
-                            candidate.get('value'), candidate.get('success_chance'),
-                            publish_policy, candidate['codebase'])
+                        if candidate.get('value') == 0:
+                            logging.warning(
+                                'invalid value for candidate: %r', candidate.get('value'))
+                            invalid_value.append(candidate.get('value'))
+                            await tr.rollback()
+                            continue
 
-                    # Adjust bucket if there are any open merge proposals with a
-                    # different command
+                        with span.new_child('sql:insert-candidates'):
+                            try:
+                                candidate_id = await insert_candidate_stmt.fetchval(
+                                    campaign,
+                                    command,
+                                    candidate.get('change_set'), candidate.get('context'),
+                                    candidate.get('value'), candidate.get('success_chance'),
+                                    publish_policy, candidate['codebase'])
+                            except asyncpg.ForeignKeyViolationError as e:
+                                if e.constraint_name == 'candidate_codebase_fkey':
+                                    logging.warning(
+                                        'ignoring candidate %s/%s; codebase unknown',
+                                        codebase, candidate['campaign'])
+                                    unknown_codebases.append(codebase)
+                                    await tr.rollback()
+                                    continue
+                                elif e.constraint_name == 'candidate_publish_policy_fkey':
+                                    logging.warning('unknown publish policy %s', publish_policy)
+                                    unknown_publish_policies.append(publish_policy)
+                                    await tr.rollback()
+                                    continue
+                                else:
+                                    raise
 
-                    with span.new_child('sql:existing-runs'):
-                        existing_runs = await existing_runs_stmt.fetch(
-                            candidate['codebase'], candidate['campaign'], command)
+                        # Adjust bucket if there are any open merge proposals with a
+                        # different command
 
-                    if any(existing_runs):
-                        refresh = True
-                        if existing_runs[0]['mp_url']:
-                            bucket = 'update-existing-mp'
-                            requestor = 'command changed for existing mp: {!r} ⇒ {!r}'.format(
-                                existing_runs[0]['command'], command)
+                        with span.new_child('sql:existing-runs'):
+                            existing_runs = await existing_runs_stmt.fetch(
+                                candidate['codebase'], campaign, command)
+
+                        if any(existing_runs):
+                            refresh = True
+                            if existing_runs[0]['mp_url']:
+                                bucket = 'update-existing-mp'
+                                requestor = 'command changed for existing mp: {!r} ⇒ {!r}'.format(
+                                    existing_runs[0]['command'], command)
+                            else:
+                                bucket = None
+                                requestor = 'command changed: {!r} ⇒ {!r}'.format(
+                                    existing_runs[0]['command'], command)
                         else:
-                            bucket = None
-                            requestor = 'command changed: {!r} ⇒ {!r}'.format(
-                                existing_runs[0]['command'], command)
+                            bucket = candidate.get('bucket')
+                            refresh = False
+                            requestor = "candidate update"
+
+                        if candidate.get('requestor'):
+                            requestor += f' {candidate["requestor"]}'
+
+                        with span.new_child('sql:insert-followups'):
+                            for origin in candidate.get('followup_for', []):
+                                await insert_followup_stmt.execute(candidate_id, origin)
+
+                        with span.new_child('schedule'):
+                            # This shouldn't raise CandidateUnavailable, since
+                            # we just added the candidate
+                            offset, estimated_duration, queue_id, bucket = await do_schedule_regular(
+                                conn,
+                                campaign=campaign,
+                                change_set=candidate.get('change_set'),
+                                bucket=bucket,
+                                requestor=requestor,
+                                command=command,
+                                codebase=candidate['codebase'],
+                                refresh=refresh)
+                    except BaseException:
+                        await tr.rollback()
+                        raise
                     else:
-                        bucket = candidate.get('bucket')
-                        refresh = False
-                        requestor = "candidate update"
-
-                    if candidate.get('requestor'):
-                        requestor += f' {candidate["requestor"]}' 
-
-                    with span.new_child('sql:insert-followups'):
-                        for origin in candidate.get('followup_for', []):
-                            await insert_followup_stmt.execute(candidate_id, origin)
-
-                    with span.new_child('schedule'):
-                        # This shouldn't raise CandidateUnavailable, since
-                        # we just added the candidate
-                        offset, estimated_duration, queue_id, bucket = await do_schedule_regular(
-                            conn,
-                            campaign=candidate['campaign'],
-                            change_set=candidate.get('change_set'),
-                            bucket=bucket,
-                            requestor=requestor,
-                            command=command,
-                            codebase=candidate['codebase'],
-                            refresh=refresh)
+                        await tr.commit()
 
                     ret.append({
-                        'campaign': candidate['campaign'],
+                        'campaign': campaign,
                         'codebase': candidate['codebase'],
                         'bucket': bucket,
                         'change_set': candidate.get('change_set'),
