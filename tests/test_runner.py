@@ -234,9 +234,6 @@ async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
         "campaign": "mycampaign",
@@ -258,10 +255,6 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
-
     resp = await client.post("/candidates", json=[{
         "campaign": "mycampaign",
         "codebase": "foo",
@@ -362,7 +355,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             'log_id': assignment['id'],
             'logfilenames': [],
             'main_branch_revision': None,
-            'package': 'foo',
+            'package': None,
             'remotes': None,
             'resume': None,
             'revision': None,
@@ -394,12 +387,8 @@ async def test_submit_unknown_campaign(aiohttp_client, db):
         "branch_url": "https://example.com/foo.git"
     }])
     assert resp.status == 200
-    async with db.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO package (name, codebase, distribution) VALUES ('foo', 'foo', 'test')")
 
     resp = await client.post("/candidates", json=[{
-        "codebase": "foo",
         "campaign": "mycampaign",
         "codebase": "foo"
     }])
