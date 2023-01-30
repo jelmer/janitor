@@ -129,7 +129,7 @@ WHERE queue.id = $1
     async def next_item(self, codebase: Optional[str] = None,
                         campaign: Optional[str] = None,
                         exclude_hosts: Optional[set[str]] = None,
-                        assigned_queue_items: Optional[set[int]] = None):
+                        assigned_queue_items: Optional[set[int]] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
         query = """
 SELECT
     package.name AS package,
@@ -180,15 +180,14 @@ LIMIT 1
 """
         row = await self.conn.fetchrow(query, *args)
         if row is None:
-            return None, None
+            return None, {}
+        vcs_info = {}
         if row['branch_url']:
-            vcs_info = {
-                'vcs_type': row['vcs_type'],
-                'branch_url': row['branch_url'],
-                'subpath': row['subpath'],
-            }
-        else:
-            vcs_info = None
+            vcs_info['branch_url'] = row['branch_url']
+        if row['subpath'] is not None:
+            vcs_info['subpath'] = row['subpath']
+        if row['vcs_type']:
+            vcs_info['vcs_type'] = row['vcs_type']
         return QueueItem.from_row(row), vcs_info
 
     async def iter_queue(self, limit: Optional[int] = None,

@@ -763,7 +763,7 @@ class ActiveRun:
     change_set: Optional[str]
     command: str
     backchannel: Backchannel
-    vcs_info: Optional[dict[str, str]]
+    vcs_info: dict[str, str]
 
     def __init__(
         self,
@@ -778,7 +778,7 @@ class ActiveRun:
         queue_id: int,
         log_id: str,
         start_time: datetime,
-        vcs_info: Optional[dict[str, str]],
+        vcs_info: dict[str, str],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -805,7 +805,7 @@ class ActiveRun:
     def from_queue_item(
         cls,
         queue_item: QueueItem,
-        vcs_info: Optional[dict[str, str]],
+        vcs_info: dict[str, str],
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -878,21 +878,15 @@ class ActiveRun:
 
     @property
     def vcs_type(self):
-        if self.vcs_info is None:
-            return None
-        return self.vcs_info["vcs_type"]
+        return self.vcs_info.get("vcs_type")
 
     @property
     def main_branch_url(self):
-        if self.vcs_info is None:
-            return None
-        return self.vcs_info["branch_url"]
+        return self.vcs_info.get("branch_url")
 
     @property
     def subpath(self):
-        if self.vcs_info is None:
-            return None
-        return self.vcs_info["subpath"]
+        return self.vcs_info.get("subpath")
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
@@ -1616,7 +1610,7 @@ class QueueProcessor:
 
     async def next_queue_item(
             self, conn, codebase: Optional[str] = None,
-            campaign: Optional[str] = None) -> QueueItem:
+            campaign: Optional[str] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
         async for host, retry_after in self.rate_limited_hosts():
@@ -2333,7 +2327,7 @@ async def next_item(
                 continue
 
             if not campaign_config.default_empty and (
-                    vcs_info is None or vcs_info["branch_url"] is None):
+                    vcs_info.get("branch_url") is None):
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
                 continue
@@ -2350,10 +2344,10 @@ async def next_item(
         with span.new_child('config'):
             build_config = await builder.config(conn, campaign_config, item)
 
-        if vcs_info and vcs_info["branch_url"] is not None:
+        if vcs_info.get("branch_url") is not None:
             try:
                 with span.new_child('branch:open'):
-                    probers = select_preferred_probers(vcs_info['vcs_type'])
+                    probers = select_preferred_probers(vcs_info.get('vcs_type'))
                     logging.info(
                         'Opening branch %s with %r', vcs_info['branch_url'],
                         [p.__name__ for p in probers])
@@ -2373,12 +2367,12 @@ async def next_item(
                     e)
                 resume_branch = None
                 additional_colocated_branches = None
-                vcs_type = vcs_info['vcs_type']
+                vcs_type = vcs_info.get('vcs_type')
             except asyncio.TimeoutError:
                 logging.debug('Timeout opening branch %s', vcs_info['branch_url'])
                 resume_branch = None
                 additional_colocated_branches = None
-                vcs_type = vcs_info['vcs_type']
+                vcs_type = vcs_info.get('vcs_type')
             else:
                 # We try the public branch first, since perhaps a maintainer
                 # has made changes to the branch there.
@@ -2408,11 +2402,9 @@ async def next_item(
                 else:
                     resume_branch = None
         else:
-            active_run.vcs_info = None
-            vcs_type = None
+            vcs_type = vcs_info.get('vcs_type')
             resume_branch = None
             additional_colocated_branches = None
-            vcs_info = {}
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
