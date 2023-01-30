@@ -850,7 +850,7 @@ class ActiveRun:
             queue_id=js['queue_id'],
             log_id=js['id'],
             backchannel=backchannel,
-            vcs_info=js['vcs'],
+            vcs_info=(js['vcs'] or {}),
             worker_name=js['worker'],
             worker_link=js['worker_link'],
             codebase=js.get('codebase'),
