@@ -280,11 +280,13 @@ async def do_schedule_regular(
         dry_run: bool = False,
         refresh: bool = False,
         bucket: Optional[str] = None) -> tuple[float, Optional[timedelta], int, str]:
+    assert codebase is not None
+    assert campaign is not None
     if candidate_value is None or success_chance is None or command is None:
         row = await conn.fetchrow(
-            'SELECT value, success_chance, command, context FROM candidate '
-            'WHERE codebase = $1 and suite = $2',
-            codebase, campaign)
+            "SELECT value, success_chance, command, context FROM candidate "
+            "WHERE codebase = $1 and suite = $2 and coalesce(change_set, '') = $3",
+            codebase, campaign, change_set or '')
         if row is None:
             raise CandidateUnavailable(campaign, codebase)
         if row is not None and candidate_value is None:
