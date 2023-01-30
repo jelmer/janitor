@@ -273,9 +273,9 @@ queue.id ASC
             # Nothing has changed? TODO(jelmer): Avoid a second query in
             # this case.
             row = await self.conn.fetchrow(
-                'SELECT id, bucket FROM queue '
-                'WHERE codebase = $1 AND suite = $2 '
-                'AND coalesce(change_set, '')::text = $3',
+                "SELECT id, bucket FROM queue "
+                "WHERE codebase = $1 AND suite = $2 "
+                "AND coalesce(change_set, '') = $3",
                 codebase, campaign, change_set or '')
             assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
             return row
