@@ -870,7 +870,8 @@ def run_worker(
                 roles[main_branch.name] = 'main'
                 directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rstrip('/').rsplit('/')[-1]
             else:
-                directory_name = 'work'
+                roles[''] = 'main'
+                directory_name = codebase
 
             ws = Workspace(
                 main_branch,
