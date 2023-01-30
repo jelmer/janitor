@@ -84,6 +84,7 @@ async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None)
             campaign = config.campaign.add()
             campaign.name = name
             campaign.debian_build.base_distribution = "unstable"
+            campaign.default_empty = True
     return await aiohttp_client(await create_app(
         queue_processor, config,
         queue_processor.database if queue_processor else None, tracer))
@@ -283,7 +284,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
         'branch': {
             'additional_colocated_branches': None,
             'cached_url': None,
-            'default-empty': False,
+            'default-empty': True,
             'subpath': None,
             'url': 'https://example.com/foo.git',
             'vcs_type': None
@@ -511,3 +512,76 @@ async def test_tweak_unknown_run(aiohttp_client, db, tmp_path):
 
     resp = await client.post("/runs/run-id", json={'publish_status': 'approved'})
     assert resp.status == 404
+
+
+async def test_assignment_with_only_vcs(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=['mycampaign'])
+    resp = await client.post("/codebases", json=[{
+        "name": "foo",
+        "vcs_type": "hg",
+    }])
+    assert resp.status == 200
+    resp = await client.post("/candidates", json=[{
+        "campaign": "mycampaign",
+        "codebase": "foo",
+        "command": "true",
+    }])
+    assert resp.status == 200
+    [result] = (await resp.json())['success']
+    assert result == {
+        'bucket': 'default',
+        'campaign': 'mycampaign',
+        'change_set': None,
+        'codebase': 'foo',
+        'estimated_duration': 15.0,
+        'offset': 35000.0,
+        'queue-id': 1,
+        'refresh': False,
+    }
+
+    resp = await client.post("/active-runs", json={})
+    assert resp.status == 201, await resp.json()
+    assignment = await resp.json()
+    assert assignment == {
+        'branch': {
+            'additional_colocated_branches': None,
+            'cached_url': None,
+            'default-empty': True,
+            'subpath': None,
+            'url': None,
+            'vcs_type': "hg",
+        },
+        'build': {
+            'config': {
+                'build-distribution': 'mycampaign',
+                'build-extra-repositories': [],
+                'build-suffix': '',
+                'dep_server_url': None,
+                'lintian': {'profile': ''}
+            },
+            'environment': {
+                'DEB_VENDOR': dpkg_vendor(),
+                'DISTRIBUTION': 'unstable',
+            },
+            'target': 'debian',
+        },
+        'campaign': 'mycampaign',
+        'codebase': 'foo',
+        'codemod': {'command': 'true', 'environment': {}},
+        'command': 'true',
+        'description': 'mycampaign on foo',
+        'env': {
+            'DEB_VENDOR': dpkg_vendor(),
+            'DISTRIBUTION': 'unstable',
+        },
+        'force-build': False,
+        'id': assignment['id'],
+        'queue_id': 1,
+        'resume': None,
+        'skip-setup-validation': False,
+        'target_repository': {'url': None, 'vcs_type': 'hg'},
+    }
+    await qp.stop()

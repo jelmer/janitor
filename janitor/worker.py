@@ -86,6 +86,7 @@ from breezy.config import (
     GlobalStack,
     PlainTextCredentialStore,
 )
+from breezy.controldir import format_registry
 from breezy.errors import (
     ConnectionError,
     ConnectionReset,
@@ -797,11 +798,20 @@ def run_worker(
                 metadata["branch_url"] = main_branch.user_url
                 metadata["vcs_type"] = get_branch_vcs_type(main_branch)
                 metadata["subpath"] = subpath
+                empty_format = None
             else:
                 main_branch = None
                 metadata["branch_url"] = None
-                metadata["vcs_type"] = None
+                metadata["vcs_type"] = vcs_type
                 metadata["subpath"] = None
+                try:
+                    empty_format = format_registry.make_controldir(vcs_type)
+                except KeyError as e:
+                    raise WorkerFailure(
+                        "vcs-type-unsupported", f"Unable to find format for vcs type {vcs_type}",
+                        stage=("setup", ),
+                        transient=False,
+                        details={'vcs_type': vcs_type}) from e
 
             if cached_branch_url:
                 try:
@@ -871,6 +881,7 @@ def run_worker(
                 resume_branch_additional_colocated_branches=(
                     [name for (role, name, base_revision, revision) in resume_branches if role != 'main'] if resume_branches else None
                 ),
+                format=empty_format,
             )
 
             try:
