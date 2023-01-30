@@ -121,6 +121,8 @@ override_launchpad_consumer_name()
 DEFAULT_RETRY_AFTER = 120
 REMOTE_BRANCH_OPEN_TIMEOUT = 10.0
 VCS_STORE_BRANCH_OPEN_TIMEOUT = 5.0
+# Maybe this should be configurable somewhere?
+DEFAULT_VCS_TYPE = 'git'
 
 
 routes = web.RouteTableDef()
@@ -848,7 +850,7 @@ class ActiveRun:
             queue_id=js['queue_id'],
             log_id=js['id'],
             backchannel=backchannel,
-            vcs_info=js['vcs'],
+            vcs_info=(js['vcs'] or {}),
             worker_name=js['worker'],
             worker_link=js['worker_link'],
             codebase=js.get('codebase'),
@@ -2403,7 +2405,7 @@ async def next_item(
                 else:
                     resume_branch = None
         else:
-            vcs_type = vcs_info.get('vcs_type')
+            vcs_type = vcs_info.get('vcs_type', DEFAULT_VCS_TYPE)
             resume_branch = None
             additional_colocated_branches = None
 
