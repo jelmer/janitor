@@ -32,7 +32,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, cast
+from typing import Any, Optional, cast, TypedDict, NotRequired
 import warnings
 
 import uvloop
@@ -694,22 +694,41 @@ def _push_error_to_worker_failure(e, stage):
     return e
 
 
+class Metadata(TypedDict, total=False):
+    codebase: str
+    command: list[str]
+    description: str
+    revision: str
+    main_branch_revision: str
+    subpath: str
+    target_branch_url: str
+    refreshed: bool
+    codemod: Any
+    branch_url: Optional[str]
+    vcs_type: str
+    branches: list[tuple[str, Optional[str], Optional[str], Optional[str]]]
+    tags: list[tuple[str, bytes]]
+    value: int
+    target: dict[str, Any]
+    remotes: dict[str, dict[str, str]]
+
+
 def run_worker(
     *,
     codebase: str,
+    campaign: str,
     main_branch_url: str,
     run_id: str,
-    subpath: str,
-    vcs_type: Optional[str],
     build_config: Any,
     env: dict[str, str],
     command: list[str],
     output_directory: str,
-    metadata: Any,
+    metadata: Metadata,
     target_repo_url: str,
     vendor: str,
-    campaign: str,
     target: str,
+    vcs_type: Optional[str] = None,
+    subpath: str = '',
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
     resume_codemod_result=None,
@@ -754,10 +773,11 @@ def run_worker(
                 metadata["subpath"] = subpath
                 empty_format = None
             else:
+                assert vcs_type is not None
                 main_branch = None
                 metadata["branch_url"] = None
                 metadata["vcs_type"] = vcs_type
-                metadata["subpath"] = None
+                metadata["subpath"] = ""
                 try:
                     empty_format = format_registry.make_controldir(vcs_type)
                 except KeyError as e:
