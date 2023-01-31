@@ -18,9 +18,7 @@
 import tempfile
 
 from janitor import config_pb2
-from janitor.bzr_store import (
-    create_web_app,
-)
+from janitor.bzr_store import create_web_app
 
 
 async def create_client(aiohttp_client, codebases=None):

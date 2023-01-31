@@ -5,13 +5,15 @@ import asyncio
 import logging
 import os
 import sys
-from janitor.publish_one import load_template_env
+
 from janitor.config import read_config
+from janitor.publish_one import load_template_env
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.debian.debdiff import markdownify_debdiff, debdiff_is_empty  # noqa: E402
+from janitor.debian.debdiff import (debdiff_is_empty,  # noqa: E402
+                                    markdownify_debdiff)
 
 loop = asyncio.get_event_loop()
 

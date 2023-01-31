@@ -1,22 +1,17 @@
 #!/usr/bin/python3
 
-from aiohttp import ClientConnectorError, ClientResponseError
-from aiohttp import web
+from typing import Any, Dict, List, Optional
+
 import aiohttp_jinja2
 import asyncpg
-from typing import Optional, List, Dict, Any
-
+from aiohttp import ClientConnectorError, ClientResponseError, web
 from breezy.revision import NULL_REVISION
 
-from janitor import state, splitout_env
+from janitor import splitout_env, state
 from janitor.config import get_campaign_config
 from janitor.queue import Queue
-from janitor.site import (
-    get_archive_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-    update_vars_from_request,
-)
+from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
+                          get_archive_diff, update_vars_from_request)
 
 
 async def get_previous_runs(

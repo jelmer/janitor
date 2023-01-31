@@ -15,26 +15,20 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import os
 from datetime import datetime, timedelta
 from io import BytesIO
-import os
 
-from aiohttp import MultipartWriter
 import aiozipkin
+from aiohttp import MultipartWriter
 from fakeredis.aioredis import FakeRedis
+
 from janitor.config import Config
-from janitor.logs import LogFileManager
-from janitor.runner import (
-    create_app,
-    is_log_filename,
-    committer_env,
-    QueueProcessor,
-    ActiveRun,
-    Backchannel,
-    store_run,
-    store_change_set,
-)
 from janitor.debian import dpkg_vendor
+from janitor.logs import LogFileManager
+from janitor.runner import (ActiveRun, Backchannel, QueueProcessor,
+                            committer_env, create_app, is_log_filename,
+                            store_change_set, store_run)
 from janitor.vcs import get_vcs_managers
 
 

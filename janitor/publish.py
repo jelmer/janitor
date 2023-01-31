@@ -17,94 +17,54 @@
 
 """Publishing VCS changes."""
 
-from contextlib import AsyncExitStack
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 import asyncio
 import json
 import logging
 import os
 import sys
 import time
-from typing import Optional, Any
-from collections.abc import AsyncIterable, Iterator
 import uuid
 import warnings
-
-from aiojobs.aiohttp import (
-    setup as setup_aiojobs,
-    spawn,
-)
-from yarl import URL
-
-import uvloop
+from collections.abc import AsyncIterable, Iterator
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Optional
 
 import aioredlock
 import aiozipkin
-from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp import web, ClientSession
 import asyncpg
 import asyncpg.pool
-
-from aiohttp_apispec import (
-    setup_aiohttp_apispec,
-)
-
-from aiohttp_openmetrics import (
-    Counter,
-    Gauge,
-    Histogram,
-    REGISTRY,
-    setup_metrics,
-    push_to_gateway
-)
-
-from breezy import urlutils
-import gpg
-from redis.asyncio import Redis
-
-from breezy.errors import PermissionDenied, UnexpectedHttpStatus, RedirectRequested
-from breezy.forge import (
-    Forge,
-    forges,
-    ForgeLoginRequired,
-    get_forge_by_hostname,
-    get_proposal_by_url,
-    UnsupportedForge,
-    MergeProposal,
-    iter_forge_instances,
-)
-from breezy.transport import Transport
+import breezy.plugins.github  # noqa: F401
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
-import breezy.plugins.github  # noqa: F401
+import gpg
+import uvloop
+from aiohttp import ClientSession, web
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_apispec import setup_aiohttp_apispec
+from aiohttp_openmetrics import (REGISTRY, Counter, Gauge, Histogram,
+                                 push_to_gateway, setup_metrics)
+from aiojobs.aiohttp import setup as setup_aiojobs
+from aiojobs.aiohttp import spawn
+from breezy import urlutils
+from breezy.errors import (PermissionDenied, RedirectRequested,
+                           UnexpectedHttpStatus)
+from breezy.forge import (Forge, ForgeLoginRequired, MergeProposal,
+                          UnsupportedForge, forges, get_forge_by_hostname,
+                          get_proposal_by_url, iter_forge_instances)
+from breezy.transport import Transport
+from redis.asyncio import Redis
+from silver_platter.utils import (BranchMissing, BranchRateLimited,
+                                  BranchUnavailable, open_branch)
+from yarl import URL
 
-from silver_platter.utils import (
-    open_branch,
-    BranchMissing,
-    BranchUnavailable,
-    BranchRateLimited,
-)
-
-
-
-from . import (
-    set_user_agent,
-    state,
-)
-from .config import read_config, get_campaign_config, Campaign, Config
-from .schedule import (
-    do_schedule,
-    do_schedule_control,
-    CandidateUnavailable,
-)
-from .vcs import (
-    VcsManager,
-    get_vcs_managers_from_config,
-)
-
-
+from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
+from .config import Campaign, Config, get_campaign_config, read_config
+from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
+from .vcs import VcsManager, get_vcs_managers_from_config
+
 override_launchpad_consumer_name()
 
 

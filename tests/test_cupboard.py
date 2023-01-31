@@ -18,11 +18,12 @@
 from datetime import datetime
 
 from jinja2 import Environment
+from yarl import URL
 
 from janitor.config import Campaign, Config
-from janitor.site import template_loader, format_timestamp, format_duration, classify_result_code, worker_link_is_global
-
-from yarl import URL
+from janitor.site import (classify_result_code, format_duration,
+                          format_timestamp, template_loader,
+                          worker_link_is_global)
 
 
 def test_render_merge_proposal():

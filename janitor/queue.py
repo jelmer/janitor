@@ -16,8 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import timedelta
-from typing import Optional, Any
-
+from typing import Any, Optional
 
 import asyncpg
 

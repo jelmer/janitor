@@ -15,44 +15,28 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import (
-    web,
-    ClientResponseError,
-    ClientSession,
-    ContentTypeError,
-    ClientConnectorError,
-    ClientOSError,
-    ServerDisconnectedError,
-)
-import aiozipkin
 import asyncio
 from typing import Optional
 
-from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp_apispec import (
-    docs,
-    response_schema,
-)
-
-from breezy.revision import NULL_REVISION
-
+import aiozipkin
 import mimeparse
+from aiohttp import (ClientConnectorError, ClientOSError, ClientResponseError,
+                     ClientSession, ContentTypeError, ServerDisconnectedError,
+                     web)
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_apispec import docs, response_schema
+from breezy.revision import NULL_REVISION
 from marshmallow import Schema, fields
 from yarl import URL
 
 from janitor.config import Config
-from . import (
-    check_admin,
-    is_qa_reviewer,
-    check_logged_in,
-    highlight_diff,
-    get_archive_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-)
-from .common import render_template_for_request
-from .setup import setup_postgres, setup_logfile_manager
+
 from ..vcs import VcsManager
+from . import (BuildDiffUnavailable, DebdiffRetrievalError, check_admin,
+               check_logged_in, get_archive_diff, highlight_diff,
+               is_qa_reviewer)
+from .common import render_template_for_request
+from .setup import setup_logfile_manager, setup_postgres
 
 routes = web.RouteTableDef()
 

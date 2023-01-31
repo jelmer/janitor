@@ -20,15 +20,10 @@ import hashlib
 import os
 from tempfile import TemporaryDirectory
 
-
 from debian.deb822 import Release
 
-
 from janitor.config import Config
-from janitor.debian.archive import (
-    create_app,
-    HashedFileWriter,
-)
+from janitor.debian.archive import HashedFileWriter, create_app
 
 
 async def create_client(aiohttp_client, config=None):

@@ -17,14 +17,10 @@
 
 
 from io import BytesIO
+
 import pytest
 
-
-from janitor.config import (
-    read_config,
-    get_distribution,
-    get_campaign_config,
-)
+from janitor.config import get_campaign_config, get_distribution, read_config
 
 
 def test_config():

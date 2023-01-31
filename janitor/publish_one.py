@@ -22,79 +22,43 @@ to be published, this module gets invoked. It accepts some JSON on stdin with a
 request, and writes results to standard out as JSON.
 """
 
-from contextlib import ExitStack
-from email.utils import parseaddr
-import os
-from typing import Optional, Any
-
 import logging
-
+import os
 import shlex
 import traceback
-
 import urllib.error
 import urllib.parse
 import urllib.request
-
-from silver_platter.utils import (
-    open_branch,
-    BranchMissing,
-    BranchUnavailable,
-    BranchTemporarilyUnavailable,
-    BranchRateLimited,
-    full_branch_url,
-)
-from silver_platter.publish import (
-    EmptyMergeProposal,
-    MergeProposal,
-    merge_conflicts,
-    find_existing_proposed,
-    NoSuchProject,
-    PermissionDenied,
-    SourceNotDerivedFromTarget,
-    publish_changes,
-    InsufficientChangesForNewProposal,
-    MergeProposalExists,
-    PublishResult,
-)
-from silver_platter.utils import create_temp_sprout
+from contextlib import ExitStack
+from email.utils import parseaddr
+from typing import Any, Optional
 
 from breezy.branch import Branch
-from breezy.errors import (
-    DivergedBranches,
-    NoSuchRevision,
-    UnexpectedHttpStatus,
-)
-from breezy.forge import (
-    Forge,
-    get_forge,
-    ForgeLoginRequired,
-    UnsupportedForge,
-    determine_title,
-)
+from breezy.errors import (DivergedBranches, NoSuchRevision,
+                           UnexpectedHttpStatus)
+from breezy.forge import (Forge, ForgeLoginRequired, UnsupportedForge,
+                          determine_title, get_forge)
 from breezy.git.remote import RemoteGitBranch, RemoteGitError
+from breezy.plugins.gitlab.forge import (ForkingDisabled, GitLabConflict,
+                                         ProjectCreationTimeout)
 from breezy.transport import Transport
-from breezy.plugins.gitlab.forge import (
-    ForkingDisabled,
-    GitLabConflict,
-    ProjectCreationTimeout,
-)
-
-from jinja2 import (
-    Environment,
-    FileSystemLoader,
-    select_autoescape,
-    TemplateSyntaxError,
-    Template,
-    TemplateNotFound,
-)
-
-from .debian.debdiff import (
-    debdiff_is_empty,
-    markdownify_debdiff,
-)
+from jinja2 import (Environment, FileSystemLoader, Template, TemplateNotFound,
+                    TemplateSyntaxError, select_autoescape)
+from silver_platter.publish import (EmptyMergeProposal,
+                                    InsufficientChangesForNewProposal,
+                                    MergeProposal, MergeProposalExists,
+                                    NoSuchProject, PermissionDenied,
+                                    PublishResult, SourceNotDerivedFromTarget,
+                                    find_existing_proposed, merge_conflicts,
+                                    publish_changes)
+from silver_platter.utils import (BranchMissing, BranchRateLimited,
+                                  BranchTemporarilyUnavailable,
+                                  BranchUnavailable, create_temp_sprout,
+                                  full_branch_url, open_branch)
 
 from ._launchpad import override_launchpad_consumer_name
+from .debian.debdiff import debdiff_is_empty, markdownify_debdiff
+
 override_launchpad_consumer_name()
 
 

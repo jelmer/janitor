@@ -18,14 +18,12 @@
 import logging
 import os
 
-from breezy.plugins.debian.vcs_up_to_date import (
-    check_up_to_date,
-    PackageMissingInArchive,
-    MissingChangelogError,
-    TreeVersionNotInArchive,
-    NewArchiveVersion,
-)
 from breezy.plugins.debian.apt_repo import RemoteApt
+from breezy.plugins.debian.vcs_up_to_date import (MissingChangelogError,
+                                                  NewArchiveVersion,
+                                                  PackageMissingInArchive,
+                                                  TreeVersionNotInArchive,
+                                                  check_up_to_date)
 
 
 class ValidateError(Exception):

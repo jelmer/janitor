@@ -18,34 +18,31 @@
 """Manage VCS repositories."""
 
 import asyncio
+import logging
+import os
+import warnings
 from contextlib import suppress
 from functools import partial
 from io import BytesIO
-import logging
-import os
 from typing import Optional
-import warnings
 
 import aiohttp_jinja2
 import aiozipkin
+import mimeparse
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp_openmetrics import metrics_middleware, metrics
-from jinja2 import select_autoescape
-import mimeparse
-
+from aiohttp_openmetrics import metrics, metrics_middleware
 from breezy import urlutils
 from breezy.branch import Branch
+from breezy.bzr.smart import medium
 from breezy.controldir import ControlDir
 from breezy.errors import NotBranchError
-from breezy.bzr.smart import medium
 from breezy.repository import Repository
 from breezy.transport import get_transport_from_url
-from . import (
-    state,
-)
+from jinja2 import select_autoescape
 
-from .config import read_config, get_campaign_config
+from . import state
+from .config import get_campaign_config, read_config
 from .site import template_loader
 from .worker_creds import is_worker
 
@@ -390,6 +387,7 @@ async def main(argv=None):
 
 if __name__ == "__main__":
     import sys
+
     import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

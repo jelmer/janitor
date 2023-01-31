@@ -17,18 +17,16 @@
 
 """Artifacts."""
 
-from typing import Optional, TYPE_CHECKING
 import asyncio
-
-from io import BytesIO
 import logging
 import os
 import shutil
 import tempfile
+from io import BytesIO
+from typing import TYPE_CHECKING, Optional
 
-from aiohttp import ClientSession, ClientResponseError
+from aiohttp import ClientResponseError, ClientSession
 from yarl import URL
-
 
 DEFAULT_GCS_TIMEOUT = 60
 

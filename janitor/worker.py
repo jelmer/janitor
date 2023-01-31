@@ -15,12 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from contextlib import contextmanager, ExitStack
-from datetime import datetime
+import argparse
+import asyncio
 import errno
-from functools import partial
-from http.client import IncompleteRead
-from io import BytesIO
 import json
 import logging
 import os
@@ -30,89 +27,51 @@ import socket
 import ssl
 import subprocess
 import sys
-from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, cast, TypedDict
 import warnings
+from contextlib import ExitStack, contextmanager
+from datetime import datetime
+from functools import partial
+from http.client import IncompleteRead
+from io import BytesIO
+from tempfile import TemporaryDirectory
+from typing import Any, Optional, TypedDict, cast
 
-import uvloop
-
-from aiohttp import (
-    MultipartWriter,
-    BasicAuth,
-    ClientSession,
-    ClientTimeout,
-    ClientConnectorError,
-    ContentTypeError,
-    web,
-)
 import backoff
+import uvloop
 import yarl
-
-from jinja2 import Template
-
-from aiohttp_openmetrics import push_to_gateway, Counter
-
-import argparse
-import asyncio
-
-from silver_platter.workspace import Workspace
-
-from silver_platter.apply import (
-    script_runner as generic_script_runner,
-    CommandResult as GenericCommandResult,
-    DetailedFailure as GenericDetailedFailure,
-    ScriptFailed,
-    ScriptNotFound,
-    ScriptMadeNoChanges,
-    ResultFileFormatError,
-)
-from silver_platter.probers import (
-    select_probers,
-)
-from silver_platter.utils import (
-    full_branch_url,
-    open_branch,
-    BranchMissing,
-    BranchUnavailable,
-    BranchTemporarilyUnavailable,
-    get_branch_vcs_type,
-)
-
+from aiohttp import (BasicAuth, ClientConnectorError, ClientSession,
+                     ClientTimeout, ContentTypeError, MultipartWriter, web)
+from aiohttp_openmetrics import (REGISTRY, Counter, push_to_gateway,
+                                 setup_metrics)
 from breezy import urlutils
 from breezy.branch import Branch
-from breezy.config import (
-    credential_store_registry,
-    GlobalStack,
-    PlainTextCredentialStore,
-)
+from breezy.config import (GlobalStack, PlainTextCredentialStore,
+                           credential_store_registry)
 from breezy.controldir import ControlDir, format_registry
-from breezy.errors import (
-    ConnectionError,
-    ConnectionReset,
-    NotBranchError,
-    NoRepositoryPresent,
-    InvalidHttpResponse,
-    UnexpectedHttpStatus,
-    TransportError,
-    TransportNotPossible,
-)
+from breezy.errors import (ConnectionError, ConnectionReset,
+                           InvalidHttpResponse, NoRepositoryPresent,
+                           NotBranchError, TransportError,
+                           TransportNotPossible, UnexpectedHttpStatus)
 from breezy.git.remote import RemoteGitError
 from breezy.revision import NULL_REVISION
-from breezy.transform import (
-    MalformedTransform,
-    TransformRenameFailed,
-    ImmortalLimbo,
-)
-from breezy.transport import NoSuchFile, get_transport, Transport
+from breezy.transform import (ImmortalLimbo, MalformedTransform,
+                              TransformRenameFailed)
+from breezy.transport import NoSuchFile, Transport, get_transport
 from breezy.tree import MissingNestedTree
+from jinja2 import Template
+from silver_platter.apply import CommandResult as GenericCommandResult
+from silver_platter.apply import DetailedFailure as GenericDetailedFailure
+from silver_platter.apply import (ResultFileFormatError, ScriptFailed,
+                                  ScriptMadeNoChanges, ScriptNotFound)
+from silver_platter.apply import script_runner as generic_script_runner
+from silver_platter.probers import select_probers
+from silver_platter.utils import (BranchMissing, BranchTemporarilyUnavailable,
+                                  BranchUnavailable, full_branch_url,
+                                  get_branch_vcs_type, open_branch)
+from silver_platter.workspace import Workspace
 
-from aiohttp_openmetrics import setup_metrics, REGISTRY
-from .vcs import (
-    BranchOpenFailure,
-    open_branch_ext,
-)
-
+from .vcs import BranchOpenFailure, open_branch_ext
 
 push_branch_retries = Counter(
     "push_branch_retries", "Number of branch push retries.")
@@ -152,8 +111,8 @@ def is_gce_instance():
 
 
 def gce_external_ip():
-    from urllib.request import Request, urlopen
     from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
     req = Request(
         'http://metadata.google.internal/computeMetadata/v1'
         '/instance/network-interfaces/0/access-configs/0/external-ip',
@@ -250,11 +209,11 @@ class DebianTarget(Target):
 
     def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
-        from silver_platter.debian.apply import (
-            script_runner as debian_script_runner,
-            DetailedFailure as DebianDetailedFailure,
-            MissingChangelog,
-        )
+        from silver_platter.debian.apply import \
+            DetailedFailure as DebianDetailedFailure
+        from silver_platter.debian.apply import MissingChangelog
+        from silver_platter.debian.apply import \
+            script_runner as debian_script_runner
 
         if not argv:
             return GenericCommandResult(
@@ -317,7 +276,7 @@ class DebianTarget(Target):
                 'out-of-memory', str(e), stage=("codemod", )) from e
 
     def build(self, local_tree, subpath, output_directory, config):
-        from janitor.debian.build import build_from_config, BuildFailure
+        from janitor.debian.build import BuildFailure, build_from_config
         try:
             return build_from_config(
                 local_tree, subpath, output_directory, config, self.env)
@@ -328,7 +287,7 @@ class DebianTarget(Target):
                 details=e.details) from e
 
     def validate(self, local_tree, subpath, config):
-        from .debian.validate import validate_from_config, ValidateError
+        from .debian.validate import ValidateError, validate_from_config
         try:
             return validate_from_config(local_tree, subpath, config)
         except ValidateError as e:
@@ -381,7 +340,7 @@ class GenericTarget(Target):
             raise _convert_codemod_script_failed(e) from e
 
     def build(self, local_tree, subpath, output_directory, config):
-        from janitor.generic.build import build_from_config, BuildFailure
+        from janitor.generic.build import BuildFailure, build_from_config
         try:
             return build_from_config(
                 local_tree, subpath, output_directory, config, self.env)
@@ -402,9 +361,9 @@ def import_branches_git(
         branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
         tags: Optional[list[tuple[str, bytes]]],
         update_current: bool = True):
-    from breezy.repository import InterRepository
-    from breezy.git.repository import GitRepository
     from breezy.git.dir import BareLocalGitControlDirFormat
+    from breezy.git.repository import GitRepository
+    from breezy.repository import InterRepository
     from dulwich.objects import ZERO_SHA
 
     try:

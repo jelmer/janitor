@@ -15,47 +15,37 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp.web_middlewares import normalize_path_middleware
-import aiozipkin
-from aiojobs.aiohttp import (
-    spawn,
-    setup as setup_aiojobs,
-)
 import asyncio
-from contextlib import ExitStack
-from functools import partial
 import json
 import logging
-import mimeparse
 import os
-from redis.asyncio import Redis
 import sys
-from tempfile import TemporaryDirectory
 import traceback
-import uvloop
 import warnings
+from contextlib import ExitStack
+from functools import partial
+from tempfile import TemporaryDirectory
 
+import aiozipkin
+import mimeparse
+import uvloop
 from aiohttp import web
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_openmetrics import setup_metrics
+from aiojobs.aiohttp import setup as setup_aiojobs
+from aiojobs.aiohttp import spawn
+from redis.asyncio import Redis
 
 from . import set_user_agent, state
 from .artifacts import ArtifactsMissing, get_artifact_manager
 from .config import read_config
-from .debian.debdiff import (
-    run_debdiff,
-    DebdiffError,
-    filter_boring as filter_debdiff_boring,
-    htmlize_debdiff,
-    markdownify_debdiff,
-)
-from .diffoscope import (
-    filter_boring as filter_diffoscope_boring,
-    filter_irrelevant as filter_diffoscope_irrelevant,
-    run_diffoscope,
-    format_diffoscope,
-    DiffoscopeError,
-)
-from aiohttp_openmetrics import setup_metrics
-
+from .debian.debdiff import DebdiffError
+from .debian.debdiff import filter_boring as filter_debdiff_boring
+from .debian.debdiff import htmlize_debdiff, markdownify_debdiff, run_debdiff
+from .diffoscope import DiffoscopeError
+from .diffoscope import filter_boring as filter_diffoscope_boring
+from .diffoscope import filter_irrelevant as filter_diffoscope_irrelevant
+from .diffoscope import format_diffoscope, run_diffoscope
 
 # Common prefix for temporary directories
 TMP_PREFIX = 'janitor-differ'

@@ -15,28 +15,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from io import BytesIO
-
 import os
 import tempfile
+from io import BytesIO
 
-import pytest
-
-from janitor.worker import (
-    bundle_results,
-    create_app,
-    _convert_codemod_script_failed,
-    run_worker,
-    Metadata,
-    WorkerFailure,
-)
-from aiohttp.multipart import MultipartReader, BodyPartReader
-from silver_platter.apply import ScriptFailed
-
-from breezy.controldir import ControlDir, format_registry
-from breezy.config import GlobalStack
 import breezy.bzr  # noqa: F401
 import breezy.git  # noqa: F401
+import pytest
+from aiohttp.multipart import BodyPartReader, MultipartReader
+from breezy.config import GlobalStack
+from breezy.controldir import ControlDir, format_registry
+from silver_platter.apply import ScriptFailed
+
+from janitor.worker import (Metadata, WorkerFailure,
+                            _convert_codemod_script_failed, bundle_results,
+                            create_app, run_worker)
 
 
 @pytest.fixture
