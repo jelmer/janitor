@@ -15,21 +15,43 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from io import BytesIO
+
+import os
+import tempfile
+
+import pytest
+
 from janitor.worker import (
     bundle_results,
     create_app,
     _convert_codemod_script_failed,
+    run_worker,
+    Metadata,
     WorkerFailure,
-    WorkerResult,
 )
 from aiohttp.multipart import MultipartReader, BodyPartReader
 from silver_platter.apply import ScriptFailed
 
-from io import BytesIO
+from breezy.controldir import ControlDir, format_registry
+from breezy.config import GlobalStack
+import breezy.bzr  # noqa: F401
+import breezy.git  # noqa: F401
 
-import os
-import pytest
-import tempfile
+
+@pytest.fixture
+def brz_identity(tmp_path):
+    os.mkdir(tmp_path / "brz_home")
+    os.environ['BRZ_HOME'] = str(tmp_path / "brz_home")
+    identity = 'Joe Example <joe@example.com>'
+    os.environ['BRZ_EMAIL'] = identity
+    return identity
+
+
+def test_brz_identity(brz_identity):
+    assert brz_identity == 'Joe Example <joe@example.com>'
+    c = GlobalStack()
+    assert c.get('email') == brz_identity
 
 
 class AsyncBytesIO:
@@ -186,17 +208,163 @@ def test_convert_codemod_script_failed():
         stage=('codemod', ))
 
 
-def test_worker_result():
-    r = WorkerResult(
-        description='this is a description', value=42, branches=None, tags=None,
-        target='generic', target_details={}, codemod={}, refreshed=False)
-    assert r.json() == {
-        'branches': [],
+@pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
+def test_run_worker_existing(tmp_path, vcs_type, brz_identity):
+    wt = ControlDir.create_standalone_workingtree(
+        str(tmp_path / "main"),
+        format=format_registry.make_controldir(vcs_type))
+    (tmp_path / "main" / "Makefile").write_text("""\
+
+all:
+
+test:
+
+check:
+
+""")
+    wt.add("Makefile")
+    old_revid = wt.commit("Add makefile")
+    os.mkdir(tmp_path / "target")
+    output_dir = tmp_path / "output"
+    os.mkdir(output_dir)
+    metadata: Metadata = {}
+    run_worker(
+        codebase='mycodebase',
+        campaign='mycampaign',
+        run_id='run-id',
+        command=['sh', '-c', 'echo foo > bar'],
+        metadata=metadata,
+        main_branch_url=wt.controldir.user_url,
+        build_config={},
+        target="generic",
+        output_directory=output_dir,
+        target_repo_url=str(tmp_path / "target"),
+        vendor="foo",
+        env={})
+    assert {e.name for e in os.scandir(output_dir)} == {'codemod.log', 'worker.log', 'build.log', 'test.log'}
+    if vcs_type == 'git':
+        cd = ControlDir.open(str(tmp_path / "target"))
+        b = cd.open_branch(name='mycampaign/main')
+        branch_name = 'master'
+    elif vcs_type == 'bzr':
+        b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
+        branch_name = ''
+    assert metadata == {
+        'branch_url': wt.branch.user_url,
+        'branches': [('main', branch_name, old_revid.decode('utf-8'), b.last_revision().decode('utf-8'))],
+        'codebase': 'mycodebase',
         'codemod': {},
-        'description': 'this is a description',
+        'command': ['sh', '-c', 'echo foo > bar'],
+        'description': '',
+        'main_branch_revision': old_revid.decode('utf-8'),
         'refreshed': False,
+        'remotes': {'origin': {'url': wt.branch.user_url}},
+        'revision': b.last_revision().decode('utf-8'),
+        'subpath': '',
         'tags': [],
         'target': {'details': {}, 'name': 'generic'},
         'target_branch_url': None,
-        'value': 42,
+        'value': None,
+        'vcs_type': vcs_type
+    }
+
+
+@pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
+def test_run_worker_new(tmp_path, vcs_type, brz_identity):
+    os.mkdir(tmp_path / "target")
+    output_dir = tmp_path / "output"
+    os.mkdir(output_dir)
+    metadata: Metadata = {}
+    run_worker(
+        codebase='mycodebase',
+        campaign='mycampaign',
+        run_id='run-id',
+        command=['sh', '-c', 'echo all check test: > Makefile'],
+        metadata=metadata,
+        main_branch_url=None,
+        build_config={},
+        target="generic",
+        output_directory=output_dir,
+        target_repo_url=str(tmp_path / "target"),
+        vendor="foo",
+        vcs_type=vcs_type,
+        env={})
+    assert {e.name for e in os.scandir(output_dir)} == {'codemod.log', 'worker.log', 'build.log', 'test.log', 'mycodebase'}
+    if vcs_type == 'git':
+        cd = ControlDir.open(str(tmp_path / "target"))
+        b = cd.open_branch(name='mycampaign/main')
+        tags = b.tags.get_tag_dict()
+        assert tags == {'run/run-id/main': b.last_revision()}
+    elif vcs_type == 'bzr':
+        b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
+        tags = b.tags.get_tag_dict()
+        assert tags == {'run-id': b.last_revision()}
+    assert metadata == {
+        'branch_url': None,
+        'branches': [('main', '', 'null:', b.last_revision().decode('utf-8'))],
+        'codebase': 'mycodebase',
+        'codemod': {},
+        'command': ['sh', '-c', 'echo all check test: > Makefile'],
+        'description': '',
+        'main_branch_revision': 'null:',
+        'refreshed': False,
+        'remotes': {},
+        'revision': b.last_revision().decode('utf-8'),
+        'subpath': '',
+        'tags': [],
+        'target': {'details': {}, 'name': 'generic'},
+        'target_branch_url': None,
+        'value': None,
+        'vcs_type': vcs_type
+    }
+
+
+@pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
+def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
+    os.mkdir(tmp_path / "target")
+    output_dir = tmp_path / "output"
+    os.mkdir(output_dir)
+    metadata: Metadata = {}
+    with pytest.raises(WorkerFailure, match='.*no-build-tools.*'):
+        run_worker(
+            codebase='mycodebase',
+            campaign='mycampaign',
+            run_id='run-id',
+            command=['sh', '-c', 'echo foo > bar'],
+            metadata=metadata,
+            main_branch_url=None,
+            build_config={},
+            target="generic",
+            output_directory=output_dir,
+            target_repo_url=str(tmp_path / "target"),
+            vendor="foo",
+            vcs_type=vcs_type,
+            env={})
+    assert {e.name for e in os.scandir(output_dir)} == {'codemod.log', 'worker.log', 'mycodebase'}
+    if vcs_type == 'git':
+        repo = ControlDir.open(str(tmp_path / "target")).open_repository()
+        assert list(repo._git.get_refs().keys()) == [b'refs/tags/run/run-id/main']  # type: ignore
+        run_id_revid = repo.lookup_foreign_revision_id(repo._git.get_refs()[b'refs/tags/run/run-id/main'])  # type: ignore
+    elif vcs_type == 'bzr':
+        b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
+        tags = b.tags.get_tag_dict()
+        assert list(tags.keys()) == ['run-id']
+        run_id_revid = tags['run-id']
+    assert metadata == {
+        'branch_url': None,
+        'branches': [('main', '', 'null:', run_id_revid.decode('utf-8'))],
+        'codebase': 'mycodebase',
+        'codemod': {},
+        'command': ['sh', '-c', 'echo foo > bar'],
+        'description': '',
+        'main_branch_revision': 'null:',
+        'refreshed': False,
+        'remotes': {},
+        'revision': run_id_revid.decode('utf-8'),
+        'subpath': '',
+        'tags': [],
+        'target': {'details': None, 'name': 'generic'},
+        'target_branch_url': None,
+        'value': None,
+        'vcs_type': vcs_type
     }
