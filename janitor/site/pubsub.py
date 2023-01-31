@@ -19,10 +19,8 @@ import asyncio
 import json
 from typing import Set
 
-
 from aiohttp import web
 from aiohttp_openmetrics import Gauge
-
 
 subscription_count = Gauge(
     "subscriptions", "Subscriptions per topic", labelnames=("topic",)

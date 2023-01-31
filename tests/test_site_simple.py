@@ -15,8 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.site.simple import create_app
 from janitor.config import Config
+from janitor.site.simple import create_app
 
 
 def create_config():

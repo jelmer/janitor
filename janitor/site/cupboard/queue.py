@@ -15,11 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from datetime import datetime, timedelta
 import shlex
-from typing import AsyncIterator, Tuple, Dict, Any, Iterator
+from datetime import datetime, timedelta
+from typing import Any, AsyncIterator, Dict, Iterator, Tuple
 
 import asyncpg
+
 from ...queue import Queue, QueueItem
 
 

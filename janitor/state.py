@@ -20,18 +20,17 @@ __all__ = [
 ]
 
 import datetime
-from debian.changelog import Version
 import json
-import asyncpg
-import asyncpg.pool
 import logging
 import traceback
-from typing import Optional, Any
+from typing import Any, Optional
 
-from aiohttp.web import middleware, HTTPServiceUnavailable
-from breezy import urlutils
-
+import asyncpg
+import asyncpg.pool
+from aiohttp.web import HTTPServiceUnavailable, middleware
 from aiohttp_openmetrics import Counter
+from breezy import urlutils
+from debian.changelog import Version
 
 insufficient_resources_counter = Counter(
     "postgres_insufficient_resources",

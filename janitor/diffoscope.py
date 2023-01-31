@@ -16,22 +16,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from contextlib import suppress
-from io import StringIO
-import os
 import json
 import logging
+import os
 import shlex
 import sys
+from contextlib import suppress
+from io import StringIO
 from typing import Any
 
-from breezy.patches import (
-    iter_hunks,
-    InsertLine,
-    RemoveLine,
-    ContextLine,
-    MalformedHunkHeader,
-)
+from breezy.patches import (ContextLine, InsertLine, MalformedHunkHeader,
+                            RemoveLine, iter_hunks)
 
 
 class DiffoscopeError(Exception):

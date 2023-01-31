@@ -18,53 +18,35 @@
 """Serve the janitor site."""
 
 import asyncio
-from datetime import datetime
 import functools
-import logging
 import json
+import logging
 import os
 import re
 import time
-from typing import Dict, Any, List
-
-import uvloop
+from datetime import datetime
+from typing import Any, Dict, List
 
 import aiohttp_jinja2
 import aiozipkin
-from aiohttp.web_urldispatcher import (
-    URL,
-)
-from aiohttp import web, ClientSession, ClientConnectorError
-from aiohttp_openmetrics import metrics, metrics_middleware
-from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
+import uvloop
+from aiohttp import ClientConnectorError, ClientSession, web
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp.web_urldispatcher import URL
+from aiohttp_openmetrics import metrics, metrics_middleware
 from jinja2 import select_autoescape
 
 from .. import state
-from ..vcs import get_vcs_managers_from_config
-
-from . import (
-    template_loader,
-    TEMPLATE_ENV,
-)
-
-from .common import (
-    html_template,
-    render_template_for_request,
-)
-from .openid import setup_openid
-from .pubsub import pubsub_handler, Topic
-from .setup import (
-    setup_logfile_manager,
-    setup_artifact_manager,
-    setup_gpg,
-    setup_redis,
-    setup_postgres,
-)
-from .webhook import parse_webhook, is_webhook_request
-
 from ..schedule import do_schedule
-
+from ..vcs import get_vcs_managers_from_config
+from . import TEMPLATE_ENV, template_loader
+from .common import html_template, render_template_for_request
+from .openid import setup_openid
+from .pubsub import Topic, pubsub_handler
+from .setup import (setup_artifact_manager, setup_gpg, setup_logfile_manager,
+                    setup_postgres, setup_redis)
+from .webhook import is_webhook_request, parse_webhook
 
 routes = web.RouteTableDef()
 private_routes = web.RouteTableDef()
@@ -575,6 +557,7 @@ async def create_app(
 
     if debugtoolbar:
         import aiohttp_debugtoolbar
+
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
 
@@ -584,6 +567,7 @@ async def create_app(
 
 async def main(argv=None):
     import argparse
+
     from janitor.config import read_config
 
     parser = argparse.ArgumentParser()

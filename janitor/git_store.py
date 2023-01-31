@@ -17,42 +17,35 @@
 
 """Manage VCS repositories."""
 
-import aiozipkin
-import asyncpg.pool
 import asyncio
-from contextlib import suppress, closing
-from io import BytesIO
 import logging
 import os
-from typing import Optional
 import warnings
+from contextlib import closing, suppress
+from http.client import parse_headers  # type: ignore
+from io import BytesIO
+from typing import Optional
 
 import aiohttp_jinja2
+import aiozipkin
+import asyncpg.pool
+import mimeparse
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp_openmetrics import metrics_middleware, metrics
-from http.client import parse_headers  # type: ignore
+from aiohttp_openmetrics import metrics, metrics_middleware
+from dulwich.errors import HangupException, MissingCommitError
+from dulwich.objects import ZERO_SHA, valid_hexsha
+from dulwich.protocol import ReceivableProtocol
+from dulwich.repo import NotGitRepository, Repo
+from dulwich.server import DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS
+from dulwich.server import DictBackend
+from dulwich.web import NO_CACHE_HEADERS, HTTPGitApplication
 from jinja2 import select_autoescape
 
-from dulwich.errors import HangupException, MissingCommitError
-from dulwich.objects import valid_hexsha, ZERO_SHA
-from dulwich.repo import Repo, NotGitRepository
-from dulwich.web import HTTPGitApplication, NO_CACHE_HEADERS
-
-from dulwich.protocol import ReceivableProtocol
-from dulwich.server import (
-    DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
-    DictBackend,
-)
-import mimeparse
-from . import (
-    state,
-)
-
+from . import state
 from .config import read_config
 from .site import template_loader
 from .worker_creds import is_worker
-
 
 GIT_BACKEND_CHUNK_SIZE = 4096
 
@@ -185,8 +178,8 @@ async def handle_klaus(request):
     with span.new_child('open-repo'):
         repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
 
-    from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
+    from klaus import KLAUS_VERSION, utils, views
     from klaus.repo import FancyRepo
 
     class Klaus(Flask):
@@ -686,6 +679,7 @@ async def main(argv=None):
 
 if __name__ == "__main__":
     import sys
+
     import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

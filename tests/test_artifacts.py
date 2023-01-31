@@ -19,10 +19,11 @@ import asyncio
 import os
 import shutil
 import tempfile
-from typing import Callable
 import unittest
+from typing import Callable
 
-from janitor.artifacts import LocalArtifactManager, ArtifactManager, ArtifactsMissing
+from janitor.artifacts import (ArtifactManager, ArtifactsMissing,
+                               LocalArtifactManager)
 
 
 class ArtifactManagerTests:

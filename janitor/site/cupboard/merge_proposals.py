@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
 import asyncpg
 

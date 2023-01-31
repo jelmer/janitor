@@ -15,19 +15,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from typing import List, Set, Union
 import json
 import logging
+from typing import List, Set, Union
 
-from aiohttp import web, ClientSession
 import asyncpg
-from yarl import URL
-
+from aiohttp import ClientSession, web
 from breezy import urlutils
 from breezy.forge import UnsupportedForge, get_forge
 from breezy.git.mapping import default_mapping
 from breezy.git.refs import ref_to_branch_name
 from breezy.git.urls import git_url_to_bzr_url
+from yarl import URL
 
 
 def subscribe_webhook_github(branch, github, callback_url):
@@ -68,7 +67,8 @@ def subscribe_webhook_github(branch, github, callback_url):
 
 
 def subscribe_webhook_gitlab(branch, gitlab, callback_url):
-    from breezy.plugins.gitlab.forge import NotGitLabUrl, parse_gitlab_branch_url
+    from breezy.plugins.gitlab.forge import (NotGitLabUrl,
+                                             parse_gitlab_branch_url)
     try:
         (host, project_name, branch_name) = (
             parse_gitlab_branch_url(branch))
@@ -289,11 +289,13 @@ async def get_codebases(runner_url):
 
 def main(argv=None):
     import argparse
-    import logging
-    import breezy.git  # noqa: F401
-    import breezy.bzr  # noqa: F401
     import asyncio
-    from janitor.vcs import BranchUnavailable, BranchMissing, open_branch
+    import logging
+
+    import breezy.bzr  # noqa: F401
+    import breezy.git  # noqa: F401
+
+    from janitor.vcs import BranchMissing, BranchUnavailable, open_branch
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner-url', type=str)

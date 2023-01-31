@@ -10,17 +10,13 @@ import logging
 import sys
 
 import breezy
-import breezy.plugins
 import breezy.bzr
 import breezy.git  # noqa: F401
-
-from breezy.forge import (
-    iter_forge_instances,
-    UnsupportedForge,
-)
-import breezy.plugins.gitlab  # noqa: F401
+import breezy.plugins
 import breezy.plugins.github  # noqa: F401
+import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
+from breezy.forge import UnsupportedForge, iter_forge_instances
 
 
 def projects_to_remove(instance):

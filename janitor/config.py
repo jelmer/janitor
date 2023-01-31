@@ -23,8 +23,9 @@ __all__ = [
     "get_distribution",
 ]
 
-from google.protobuf import text_format  # type: ignore
 import sys
+
+from google.protobuf import text_format  # type: ignore
 
 from . import config_pb2
 

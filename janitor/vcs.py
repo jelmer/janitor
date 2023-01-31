@@ -15,46 +15,37 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientTimeout
-from aiozipkin.helpers import TraceContext
 import asyncio
-from contextlib import suppress
-from io import BytesIO
 import logging
 import os
 import ssl
 import sys
-from typing import Optional
-from collections.abc import Iterable
-from yarl import URL
-
 import urllib.parse
-import breezy.git  # noqa: F401
+from collections.abc import Iterable
+from contextlib import suppress
+from io import BytesIO
+from typing import Optional
+
 import breezy.bzr  # noqa: F401
+import breezy.git  # noqa: F401
+from aiohttp import ClientSession, ClientTimeout
+from aiozipkin.helpers import TraceContext
 from breezy import urlutils
 from breezy.branch import Branch
 from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
-from breezy.errors import (
-    ConnectionError,
-    NotBranchError,
-    NoSuchRevision,
-    InvalidHttpResponse,
-)
+from breezy.errors import (ConnectionError, InvalidHttpResponse,
+                           NoSuchRevision, NotBranchError)
 from breezy.git.remote import RemoteGitError
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
 from breezy.transport import Transport, get_transport_from_url
 from dulwich.objects import ZERO_SHA
-from silver_platter.utils import (
-    open_branch,
-    BranchMissing,
-    BranchUnavailable,
-    BranchTemporarilyUnavailable,
-    BranchRateLimited,
-    BranchUnsupported,
-)
-
+from silver_platter.utils import (BranchMissing, BranchRateLimited,
+                                  BranchTemporarilyUnavailable,
+                                  BranchUnavailable, BranchUnsupported,
+                                  open_branch)
+from yarl import URL
 
 EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 

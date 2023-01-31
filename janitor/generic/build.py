@@ -19,21 +19,18 @@ import logging
 import os
 import sys
 import traceback
-from typing import Optional, Any
+from typing import Any, Optional
 
-from ognibuild.build import run_build, BUILD_LOG_FILENAME
-from ognibuild.test import run_test
+from ognibuild import DetailedFailure, UnidentifiedError
+from ognibuild.build import BUILD_LOG_FILENAME, run_build
 from ognibuild.buildlog import InstallFixer
+from ognibuild.buildsystem import NoBuildToolsFound, detect_buildsystems
 from ognibuild.logs import DirectoryLogManager
-from ognibuild.session import SessionSetupFailure, Session
+from ognibuild.resolver import auto_resolver
+from ognibuild.session import Session, SessionSetupFailure
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
-from ognibuild.resolver import auto_resolver
-from ognibuild import UnidentifiedError, DetailedFailure
-from ognibuild.buildsystem import (
-    NoBuildToolsFound,
-    detect_buildsystems,
-)
+from ognibuild.test import run_test
 
 
 class BuildFailure(Exception):

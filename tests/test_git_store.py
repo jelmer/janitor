@@ -16,14 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-from janitor import config_pb2
-from janitor.git_store import (
-    create_web_app,
-)
-
-
 from dulwich.repo import Repo
 
+from janitor import config_pb2
+from janitor.git_store import create_web_app
 
 try:
     from dulwich.test_utils import build_commit_graph  # type: ignore
