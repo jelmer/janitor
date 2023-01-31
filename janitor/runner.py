@@ -1981,6 +1981,9 @@ async def handle_candidates_upload(request):
                         except KeyError as e:
                             raise web.HTTPBadRequest(
                                 text=f'no codebase field for candidate {candidate}') from e
+                        if codebase is None:
+                            raise web.HTTPBadRequest(
+                                text=f'codebase field is None for candidate {candidate}')
                         try:
                             campaign = candidate['campaign']
                         except KeyError as e:

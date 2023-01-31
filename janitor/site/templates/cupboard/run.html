@@ -42,11 +42,9 @@
                 {% if run.resume_from %}(<a href="/cupboard/pkg/{{ run.package }}/{{ run.resume_from }}/">base run</a>){% endif %}
             </li>
             <li>Description: {{ description }}</li>
-            {% if result_code == 'success' %}
-                <li>
-                    Publish Status: {{ run.publish_status }}
-                </li>
-            {% endif %}
+            <li>
+                Publish Status: {{ run.publish_status }}
+            </li>
             {% if queue_position %}
                 <li class="queue-position.{{ package }}">
                     <a href="/cupboard/queue">Queue</a> position: {{ queue_position }}
