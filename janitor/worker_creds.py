@@ -18,7 +18,7 @@
 from typing import Optional
 
 import aiohttp
-from aiohttp import web, BasicAuth
+from aiohttp import BasicAuth, web
 
 
 async def is_worker(db, request: web.Request) -> Optional[str]:

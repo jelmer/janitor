@@ -15,16 +15,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from datetime import datetime
 import os
-import pytest
 import tempfile
+from datetime import datetime
 
-from janitor.logs import (
-    FileSystemLogFileManager,
-    S3LogFileManager,
-    GCSLogFileManager,
-)
+import pytest
+
+from janitor.logs import (FileSystemLogFileManager, GCSLogFileManager,
+                          S3LogFileManager)
 
 
 def test_s3_log_file_manager():

@@ -15,34 +15,25 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import (
-    web,
-    ClientResponseError,
-    ClientSession,
-    ClientConnectorError,
-)
-from aiojobs.aiohttp import (
-    setup as setup_aiojobs,
-    spawn,
-)
-import aiozipkin
 import asyncio
-import asyncpg
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
 
-from aiohttp_apispec import (
-    docs,
-)
-
-from yarl import URL
-
+import aiozipkin
+import asyncpg
+from aiohttp import (ClientConnectorError, ClientResponseError, ClientSession,
+                     web)
+from aiohttp_apispec import docs
+from aiojobs.aiohttp import setup as setup_aiojobs
+from aiojobs.aiohttp import spawn
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
+from yarl import URL
 
 from janitor import CAMPAIGN_REGEX
+
 from .. import check_admin
-from ..setup import setup_postgres, setup_logfile_manager
+from ..setup import setup_logfile_manager, setup_postgres
 
 routes = web.RouteTableDef()
 
@@ -204,11 +195,8 @@ async def handle_needs_review(request):
 @docs()
 @routes.post('/run/{run_id}/reprocess-logs', name='admin-reprocess-logs-run')
 async def handle_run_reprocess_logs(request):
-    from ...reprocess_logs import (
-        reprocess_run_logs,
-        process_sbuild_log,
-        process_dist_log,
-    )
+    from ...reprocess_logs import (process_dist_log, process_sbuild_log,
+                                   reprocess_run_logs)
     check_admin(request)
     post = await request.post()
     run_id = request.match_info['run_id']
@@ -252,11 +240,8 @@ async def handle_run_reprocess_logs(request):
 @docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
 async def handle_reprocess_logs(request):
-    from ...reprocess_logs import (
-        reprocess_run_logs,
-        process_sbuild_log,
-        process_dist_log,
-    )
+    from ...reprocess_logs import (process_dist_log, process_sbuild_log,
+                                   reprocess_run_logs)
 
     check_admin(request)
     post = await request.post()

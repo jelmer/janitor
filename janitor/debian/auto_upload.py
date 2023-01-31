@@ -16,25 +16,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-import os
 import json
 import logging
+import os
 import sys
-from redis.asyncio import Redis
 import tempfile
 from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_openmetrics import Counter, setup_metrics
+from redis.asyncio import Redis
 
-from aiohttp_openmetrics import (
-    Counter,
-    setup_metrics,
-)
-
-from ..artifacts import get_artifact_manager, ArtifactsMissing
+from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
-
 
 logger = logging.getLogger('janitor.debian.auto_upload')
 debsign_failed_count = Counter("debsign_failed", "Number of packages for which signing failed.")

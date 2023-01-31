@@ -17,7 +17,6 @@
 
 import unittest
 
-
 from breezy.tests import TestCaseWithTransport  # noqa: F401
 
 

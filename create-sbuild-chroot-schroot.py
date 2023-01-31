@@ -7,7 +7,8 @@ import subprocess
 import tempfile
 
 from iniparse import RawConfigParser
-from janitor.config import read_config, get_distribution
+
+from janitor.config import get_distribution, read_config
 
 
 def sbuild_schroot_name(suite, arch):

@@ -19,8 +19,8 @@
 
 import logging
 import os
-from typing import Optional
 import uuid
+from typing import Optional
 
 from aiohttp import web
 from yarl import URL

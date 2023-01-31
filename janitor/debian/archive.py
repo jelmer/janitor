@@ -15,47 +15,40 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import aiozipkin
 import asyncio
-from contextlib import ExitStack
-from functools import partial
-import hashlib
-import logging
-import gzip
-import json
 import bz2
+import gzip
+import hashlib
 import io
+import json
+import logging
 import os
 import re
 import shutil
 import sys
 import tempfile
 import time
-from typing import Optional, Any
-from email.utils import formatdate, parsedate_to_datetime
+from contextlib import ExitStack
 from datetime import datetime
+from email.utils import formatdate, parsedate_to_datetime
+from functools import partial
 from time import mktime
+from typing import Any, Optional
 
+import aiozipkin
+import gpg
 import uvloop
-
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_openmetrics import Gauge, setup_metrics
 from aiojobs import Scheduler
-
-from debian.deb822 import Release, Packages, Sources
-
-import gpg
+from debian.deb822 import Packages, Release, Sources
 from gpg.constants.sig import mode as gpg_mode
 
-from aiohttp_openmetrics import (
-    Gauge,
-    setup_metrics,
-)
-
 from .. import state
-from ..artifacts import get_artifact_manager, ArtifactsMissing
-from ..config import read_config, get_distribution, Campaign, get_campaign_config
-
+from ..artifacts import ArtifactsMissing, get_artifact_manager
+from ..config import (Campaign, get_campaign_config, get_distribution,
+                      read_config)
 
 TMP_PREFIX = 'janitor-apt'
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -843,6 +836,7 @@ async def loop_publish(config, generator_manager):
 
 async def main(argv=None):
     import argparse
+
     from redis.asyncio import Redis
 
     parser = argparse.ArgumentParser(prog="janitor.debian.archive")

@@ -15,24 +15,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import mock
 import sys
 
-
-from janitor.config import Config
-from janitor.publish import (
-    create_app,
-    find_campaign_by_branch_name,
-    PublishWorker,
-)
-from janitor.publish_one import (
-    _drop_env,
-)
-from janitor.vcs import VcsManager
-
+import mock
+from fakeredis.aioredis import FakeRedis
 from google.protobuf import text_format  # type: ignore
 
-from fakeredis.aioredis import FakeRedis
+from janitor.config import Config
+from janitor.publish import (PublishWorker, create_app,
+                             find_campaign_by_branch_name)
+from janitor.publish_one import _drop_env
+from janitor.vcs import VcsManager
 
 
 async def create_client(aiohttp_client):

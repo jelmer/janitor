@@ -15,24 +15,19 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from abc import abstractmethod, ABC
 import asyncio
-from datetime import datetime
 import gzip
-from io import BytesIO
 import logging
 import os
+from abc import ABC, abstractmethod
+from datetime import datetime
+from io import BytesIO
 from typing import Optional
 
-from aiohttp import (
-    ClientSession,
-    ClientResponseError,
-    ClientTimeout,
-    ServerDisconnectedError,
-)
+from aiohttp import (ClientResponseError, ClientSession, ClientTimeout,
+                     ServerDisconnectedError)
 from aiohttp_openmetrics import Counter
 from yarl import URL
-
 
 primary_logfile_upload_failed_count = Counter(
     "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")

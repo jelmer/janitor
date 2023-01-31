@@ -19,8 +19,8 @@
 def override_launchpad_consumer_name():
     from breezy.forge import ForgeLoginRequired
     from breezy.plugins.launchpad import lp_api
-    from launchpadlib.launchpad import Launchpad
     from launchpadlib.credentials import RequestTokenAuthorizationEngine
+    from launchpadlib.launchpad import Launchpad
 
     class LoginRequiredAuthorizationEngine(RequestTokenAuthorizationEngine):
 

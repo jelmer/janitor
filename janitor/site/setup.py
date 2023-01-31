@@ -30,6 +30,7 @@ def setup_redis(app):
 
 def setup_gpg(app):
     import tempfile
+
     import gpg
 
     async def start_gpg_context(app):

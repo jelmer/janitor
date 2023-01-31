@@ -15,18 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.vcs import (
-    LocalBzrVcsManager,
-    get_run_diff,
-    is_authenticated_url,
-    is_alioth_url,
-    get_vcs_managers,
-    RemoteBzrVcsManager,
-    RemoteGitVcsManager,
-)
+from breezy import controldir
 from breezy.tests import TestCaseWithTransport
 
-from breezy import controldir
+from janitor.vcs import (LocalBzrVcsManager, RemoteBzrVcsManager,
+                         RemoteGitVcsManager, get_run_diff, get_vcs_managers,
+                         is_alioth_url, is_authenticated_url)
 
 
 class GetRunDiffsTests(TestCaseWithTransport):

@@ -19,14 +19,13 @@ __all__ = [
     "bulk_add_to_queue",
 ]
 
-from datetime import datetime, timedelta
 import logging
 import shlex
+from datetime import datetime, timedelta
 from typing import Optional
 
-from debian.changelog import Version
-
 import asyncpg
+from debian.changelog import Version
 
 from . import set_user_agent
 from .config import read_config
@@ -419,12 +418,10 @@ async def deps_satisfied(conn: asyncpg.Connection, campaign: str, dependencies) 
 
 async def main():
     import argparse
+
+    from aiohttp_openmetrics import REGISTRY, Gauge, push_to_gateway
+
     from janitor import state
-    from aiohttp_openmetrics import (
-        Gauge,
-        push_to_gateway,
-        REGISTRY,
-    )
 
     parser = argparse.ArgumentParser(prog="janitor.schedule")
     parser.add_argument(

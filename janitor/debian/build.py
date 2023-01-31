@@ -16,29 +16,24 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import errno
-import os
 import logging
+import os
 import sys
-from typing import Optional, Any
+from typing import Any, Optional
 
 from breezy.workingtree import WorkingTree
-
 from ognibuild.debian.apt import AptManager
+from ognibuild.debian.build import (ChangelogNotEditable,
+                                    DetailedDebianBuildFailure,
+                                    MissingChangesFile,
+                                    UnidentifiedDebianBuildError, build_once)
 from ognibuild.debian.fix_build import build_incrementally
-from ognibuild.session import SessionSetupFailure, Session
+from ognibuild.session import Session, SessionSetupFailure
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
-from ognibuild.debian.build import (
-    build_once,
-    ChangelogNotEditable,
-    MissingChangesFile,
-    DetailedDebianBuildFailure,
-    UnidentifiedDebianBuildError,
-)
 from silver_platter.debian import MissingUpstreamTarball
 
 from . import tree_set_changelog_version
-
 
 MAX_BUILD_ITERATIONS = 50
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'

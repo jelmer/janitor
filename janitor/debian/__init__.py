@@ -15,19 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from functools import cache  # type: ignore
-
 import os
 import subprocess
+from functools import cache  # type: ignore
 from typing import Optional
 
+from breezy import osutils
+from breezy.workingtree import WorkingTree
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
-
-from breezy import (
-    osutils,
-)
-from breezy.workingtree import WorkingTree
 
 
 class NoChangesFile(Exception):

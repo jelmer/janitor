@@ -1,12 +1,12 @@
+import importlib.resources
+from typing import Type
+
 import asyncpg
 import asyncpg_engine
 import pytest
 import testing.postgresql
-from typing import Type
-import importlib.resources
 
 from janitor.state import init_types
-
 
 pytest_plugins = ["asyncpg_engine", "aiohttp"]
 

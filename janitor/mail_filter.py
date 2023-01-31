@@ -25,7 +25,7 @@ of any merge request mentioned in the body.
 
 import logging
 import sys
-from typing import cast, Optional
+from typing import Optional, cast
 
 import uvloop
 
@@ -72,8 +72,9 @@ def parse_json_ld(ld):
 
 
 def parse_html_body(contents):
-    from bs4 import BeautifulSoup
     import json
+
+    from bs4 import BeautifulSoup
     soup = BeautifulSoup(contents, 'html.parser')
     ld = soup.find('script', type='application/ld+json')
     if not ld:

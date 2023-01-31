@@ -17,104 +17,63 @@
 
 
 import asyncio
-from contextlib import AsyncExitStack
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from email.utils import parseaddr
 import json
-from io import BytesIO
 import logging
 import os
 import ssl
 import sys
 import tempfile
-import uvloop
-from typing import (
-    Any,
-    Optional,
-)
-from collections.abc import Iterator
 import uuid
 import warnings
+from collections.abc import Iterator
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from email.utils import parseaddr
+from io import BytesIO
+from typing import Any, Optional
 
 import aiojobs
 import aiozipkin
 import asyncpg
 import asyncpg.pool
-
-from aiohttp import (
-    web,
-    ClientOSError,
-    ClientSession,
-    ClientTimeout,
-    ClientConnectorError,
-    ClientResponseError,
-    MultipartReader,
-    ServerDisconnectedError,
-)
-from redis.asyncio import Redis
-
-from yarl import URL
-
-from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics_middleware, metrics
-
+import uvloop
+from aiohttp import (ClientConnectorError, ClientOSError, ClientResponseError,
+                     ClientSession, ClientTimeout, MultipartReader,
+                     ServerDisconnectedError, web)
+from aiohttp_openmetrics import (Counter, Gauge, Histogram, metrics,
+                                 metrics_middleware)
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import ConnectionError, UnexpectedHttpStatus, PermissionDenied
-from breezy.transport import UnusableRedirect, UnsupportedProtocol, Transport
+from breezy.errors import (ConnectionError, PermissionDenied,
+                           UnexpectedHttpStatus)
+from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
+from redis.asyncio import Redis
+from silver_platter.probers import select_preferred_probers
+from silver_platter.proposal import (Forge, ForgeLoginRequired, NoSuchProject,
+                                     UnsupportedForge, find_existing_proposed,
+                                     get_forge)
+from silver_platter.utils import BranchRateLimited, full_branch_url
+from yarl import URL
 
-from silver_platter.probers import (
-    select_preferred_probers,
-)
-from silver_platter.proposal import (
-    Forge,
-    find_existing_proposed,
-    UnsupportedForge,
-    ForgeLoginRequired,
-    NoSuchProject,
-    get_forge,
-)
-from silver_platter.utils import (
-    BranchRateLimited,
-    full_branch_url,
-)
-
-from . import (
-    set_user_agent,
-    state,
-    splitout_env,
-)
-from .artifacts import (
-    ArtifactManager,
-    get_artifact_manager,
-    LocalArtifactManager,
-    store_artifacts_with_backup,
-    upload_backup_artifacts,
-)
-from .config import read_config, get_campaign_config, get_distribution, Campaign
-from .debian import (
-    dpkg_vendor,
-)
-from .logs import (
-    get_log_manager,
-    import_logs,
-    LogFileManager,
-    FileSystemLogFileManager,
-)
-from .queue import QueueItem, Queue
-from .schedule import do_schedule_control, do_schedule, do_schedule_regular, CandidateUnavailable
-from .vcs import (
-    get_vcs_abbreviation,
-    is_authenticated_url,
-    open_branch_ext,
-    BranchOpenFailure,
-    get_vcs_managers,
-    UnsupportedVcs,
-    VcsManager,
-)
+from . import set_user_agent, splitout_env, state
+from ._launchpad import override_launchpad_consumer_name
+from .artifacts import (ArtifactManager, LocalArtifactManager,
+                        get_artifact_manager, store_artifacts_with_backup,
+                        upload_backup_artifacts)
+from .config import (Campaign, get_campaign_config, get_distribution,
+                     read_config)
+from .debian import dpkg_vendor
+from .logs import (FileSystemLogFileManager, LogFileManager, get_log_manager,
+                   import_logs)
+from .queue import Queue, QueueItem
+from .schedule import (CandidateUnavailable, do_schedule, do_schedule_control,
+                       do_schedule_regular)
+from .vcs import (BranchOpenFailure, UnsupportedVcs, VcsManager,
+                  get_vcs_abbreviation, get_vcs_managers, is_authenticated_url,
+                  open_branch_ext)
 from .worker_creds import check_worker_creds
 
-from ._launchpad import override_launchpad_consumer_name
 override_launchpad_consumer_name()
 
 
@@ -253,10 +212,7 @@ class DebianResult(BuilderResult):
         self.lintian_result = lintian_result
 
     def from_directory(self, path):
-        from .debian import (
-            find_changes,
-            NoChangesFile,
-        )
+        from .debian import NoChangesFile, find_changes
         try:
             self.output_directory = path
             (

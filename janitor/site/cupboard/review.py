@@ -1,20 +1,17 @@
 #!/usr/bin/python3
 
 import logging
-
+from asyncio import TimeoutError
 from typing import Dict, List
 
 import aiozipkin
-from asyncio import TimeoutError
-from aiohttp import ClientConnectorError, ClientResponseError
 import asyncpg
-
+from aiohttp import ClientConnectorError, ClientResponseError
 from breezy.revision import NULL_REVISION
 
 from janitor import state
-from ..common import (
-    render_template_for_request,
-)
+
+from ..common import render_template_for_request
 from . import iter_needs_review
 
 

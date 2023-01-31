@@ -17,8 +17,8 @@
 
 import asyncio
 import re
+from collections.abc import Iterable, Iterator
 from typing import Optional
-from collections.abc import Iterator, Iterable
 
 
 def iter_sections(text: str) -> Iterator[tuple[Optional[str], list[str]]]:

@@ -16,12 +16,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-import mock
 import tempfile
+
+import mock
+
 from janitor.artifacts import LocalArtifactManager
-from janitor.differ import (
-    create_app,
-)
+from janitor.differ import create_app
 
 
 class DummyPool:

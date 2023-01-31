@@ -15,12 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import subprocess
 import json
-import os
 import logging
+import os
+import subprocess
 from typing import Optional
-
 
 logger = logging.getLogger(__name__)
 
