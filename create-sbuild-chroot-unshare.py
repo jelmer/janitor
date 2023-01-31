@@ -6,7 +6,7 @@ import pwd
 import shlex
 import subprocess
 
-from janitor.config import read_config, get_distribution
+from janitor.config import get_distribution, read_config
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006

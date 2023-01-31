@@ -16,46 +16,31 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+import logging
 from datetime import datetime
 from io import BytesIO
-import logging
-
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 import asyncpg
-
-from yarl import URL
-
-from aiohttp import (
-    ClientConnectorError,
-    ClientResponseError,
-    ClientTimeout,
-)
-
+from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
+from breezy.forge import UnsupportedForge, get_forge_by_hostname
 from breezy.revision import NULL_REVISION
-from breezy.forge import get_forge_by_hostname, UnsupportedForge
-
+from buildlog_consultant.sbuild import (SbuildLog,
+                                        find_build_failure_description,
+                                        worker_failure_from_sbuild_log)
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
+from yarl import URL
 
-from janitor.queue import Queue
 from janitor import state
-from buildlog_consultant.sbuild import (
-    SbuildLog,
-    find_build_failure_description,
-    worker_failure_from_sbuild_log,
-)
 from janitor.logs import LogRetrievalError
-from janitor.site import (
-    get_archive_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-)
+from janitor.queue import Queue
+from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
+                          get_archive_diff)
 
-from .common import iter_candidates, get_unchanged_run
 from ..config import get_campaign_config
 from ..vcs import VcsManager
-
+from .common import get_unchanged_run, iter_candidates
 
 FAIL_BUILD_LOG_LEN = 15
 

@@ -16,14 +16,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import datetime
+from typing import Optional
+
 from aiohttp import ClientConnectorError, web
 from jinja2 import PackageLoader
-from typing import Optional
 from yarl import URL
 
 from janitor import config_pb2
-from janitor.vcs import RemoteGitVcsManager, RemoteBzrVcsManager
-
+from janitor.vcs import RemoteBzrVcsManager, RemoteGitVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
@@ -135,8 +135,8 @@ template_loader = PackageLoader("janitor.site")
 
 def highlight_diff(diff):
     from pygments import highlight
-    from pygments.lexers.diff import DiffLexer
     from pygments.formatters import HtmlFormatter
+    from pygments.lexers.diff import DiffLexer
 
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 

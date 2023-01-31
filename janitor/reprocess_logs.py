@@ -15,13 +15,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Optional
 
 import silver_platter  # noqa: E402, F401
-from buildlog_consultant.common import find_build_failure_description  # noqa: E402
-from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
+from buildlog_consultant.common import \
+    find_build_failure_description  # noqa: E402
+from buildlog_consultant.sbuild import \
+    worker_failure_from_sbuild_log  # noqa: E402
+
 from janitor.schedule import do_schedule
 
 

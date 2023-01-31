@@ -16,11 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-from breezy.transport import http as _mod_http
-from breezy.transport.http import urllib as _mod_urllib
-
 import shlex
 from urllib.request import URLopener, build_opener, install_opener
+
+from breezy.transport import http as _mod_http
+from breezy.transport.http import urllib as _mod_urllib
 
 __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))

@@ -17,19 +17,17 @@
 
 """Serve the janitor cupboard site."""
 
-from datetime import datetime, date
 import re
-from typing import Optional, List, Any
+from datetime import date, datetime
+from typing import Any, List, Optional
 
-import asyncpg
 import aiozipkin
-
+import asyncpg
 from aiohttp import web
 
-from .. import is_admin, check_logged_in, is_qa_reviewer, worker_link_is_global
+from .. import check_logged_in, is_admin, is_qa_reviewer, worker_link_is_global
 from ..common import html_template
 from ..pkg import MergeProposalUserUrlResolver
-
 
 routes = web.RouteTableDef()
 
@@ -262,8 +260,8 @@ async def handle_publish_history(request):
 
 @routes.post("/cupboard/review", name="cupboard-review-post")
 async def handle_review_post(request):
-    from .review import generate_review
     from ...review import store_review
+    from .review import generate_review
     check_logged_in(request)
 
     post = await request.post()

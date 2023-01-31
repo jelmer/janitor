@@ -15,11 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from breezy.tests import TestCaseWithTransport
 from debian.changelog import Version
 
-from janitor.debian import tree_set_changelog_version, dpkg_vendor
-
-from breezy.tests import TestCaseWithTransport
+from janitor.debian import dpkg_vendor, tree_set_changelog_version
 
 
 class TreeSetChangelogVersionTests(TestCaseWithTransport):

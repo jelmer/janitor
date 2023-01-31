@@ -15,35 +15,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from contextlib import ExitStack
 import errno
 import logging
 import os
 import sys
 import traceback
+from contextlib import ExitStack
 from typing import Optional
 
-from ognibuild.session import SessionSetupFailure
-from ognibuild.dist import (
-    DIST_LOG_FILENAME,
-    dist,
-    DistNoTarball,
-)
-from ognibuild import (
-    DetailedFailure,
-    UnidentifiedError,
-)
-from ognibuild.buildsystem import (
-    NoBuildToolsFound,
-)
+from ognibuild import DetailedFailure, UnidentifiedError
+from ognibuild.buildsystem import NoBuildToolsFound
 from ognibuild.debian import satisfy_build_deps
 from ognibuild.debian.apt import run_apt
-from ognibuild.logs import (
-    DirectoryLogManager,
-    LogManager,
-    NoLogManager,
-)
-
+from ognibuild.dist import DIST_LOG_FILENAME, DistNoTarball, dist
+from ognibuild.logs import DirectoryLogManager, LogManager, NoLogManager
+from ognibuild.session import SessionSetupFailure
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +73,11 @@ if __name__ == '__main__':
         '--apt-dist-upgrade', action='store_true')
     args = parser.parse_args()
 
-    from ognibuild.session.schroot import SchrootSession
-
     import breezy.bzr  # noqa: F401
     import breezy.git  # noqa: F401
     from breezy.errors import NotBranchError
     from breezy.workingtree import WorkingTree
+    from ognibuild.session.schroot import SchrootSession
 
     logging.basicConfig(level=logging.INFO, format='%(message)s')
 
