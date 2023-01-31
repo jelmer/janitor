@@ -189,7 +189,7 @@ async def bzr_backend(request):
     request_data_bytes = await request.read()
 
     protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(
-        request_data_bytes
+        request_data_bytes, jail_root=repo.user_transport
     )
 
     smart_protocol_request = protocol_factory(
