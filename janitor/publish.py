@@ -20,10 +20,6 @@
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from aiojobs.aiohttp import (
-    setup as setup_aiojobs,
-    spawn,
-)
 import asyncio
 import json
 import logging
@@ -34,6 +30,11 @@ from typing import Optional, Any
 from collections.abc import AsyncIterable, Iterator
 import uuid
 import warnings
+
+from aiojobs.aiohttp import (
+    setup as setup_aiojobs,
+    spawn,
+)
 from yarl import URL
 
 import uvloop
@@ -466,7 +467,7 @@ class PublishWorker:
         campaign: str,
         codebase: str,
         command,
-        main_branch_url: str,
+        target_branch_url: str,
         mode: str,
         role: str,
         revision: bytes,
@@ -495,7 +496,7 @@ class PublishWorker:
         """
         assert mode in SUPPORTED_MODES, f"mode is {mode!r}"
         local_branch_url = vcs_manager.get_branch_url(codebase, f"{campaign}/{role}")
-        target_branch_url = main_branch_url.rstrip("/")
+        target_branch_url = target_branch_url.rstrip("/")
 
         request = {
             "dry-run": dry_run,
@@ -676,7 +677,8 @@ async def consider_publish_run(
             publish_worker=publish_worker,
             bucket_rate_limiter=bucket_rate_limiter,
             vcs_managers=vcs_managers, run=run, role=role,
-            rate_limit_bucket=rate_limit_bucket, main_branch_url=run.branch_url,
+            rate_limit_bucket=rate_limit_bucket,
+            target_branch_url=run.target_branch_url or run.branch_url,
             mode=publish_mode,
             max_frequency_days=max_frequency_days, command=command,
             dry_run=dry_run,
@@ -1005,7 +1007,7 @@ async def publish_from_policy(
     run: state.Run,
     role: str,
     rate_limit_bucket: Optional[str],
-    main_branch_url: str,
+    target_branch_url: str,
     mode: str,
     max_frequency_days: Optional[int],
     command: str,
@@ -1059,8 +1061,7 @@ async def publish_from_policy(
             role, run.id, extra={'run_id': run.id, 'role': role})
         return None
 
-    # TODO(jelmer): Use target_branch_url here rather than main_branch_url
-    main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
+    target_branch_url = role_branch_url(target_branch_url, remote_branch_name)
 
     if not force and await already_published(
         conn, run.package, campaign_config.branch_name, revision,
@@ -1127,7 +1128,7 @@ async def publish_from_policy(
             },
             command=run.command,
             codemod_result=run.result,
-            main_branch_url=main_branch_url,
+            target_branch_url=target_branch_url,
             mode=mode,
             role=role,
             revision=revision,
@@ -1185,7 +1186,7 @@ async def publish_from_policy(
         merge_proposal_url=(
             publish_result.proposal_url if publish_result.proposal_url else None),
         publish_id=publish_id,
-        target_branch_url=main_branch_url,
+        target_branch_url=target_branch_url,
         requestor=requestor,
         run_id=run.id,
     )
@@ -1208,7 +1209,7 @@ async def publish_from_policy(
         "campaign": run.campaign,
         "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
-        "main_branch_url": main_branch_url,
+        "main_branch_url": publish_result.target_branch_url,
         "main_branch_browse_url": publish_result.target_branch_web_url,
         "branch_name": publish_result.branch_name,
         "result_code": code,
@@ -1267,7 +1268,8 @@ async def publish_and_store(
 ):
     remote_branch_name, base_revision, revision = run.get_result_branch(role)
 
-    main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
+    target_branch_url = role_branch_url(
+        run.target_branch_url or run.branch_url, remote_branch_name)
 
     if allow_create_proposal is None:
         allow_create_proposal = run_sufficient_for_proposal(
@@ -1293,7 +1295,7 @@ async def publish_and_store(
                 },
                 command=run.command,
                 codemod_result=run.result,
-                main_branch_url=main_branch_url,
+                target_branch_url=target_branch_url,
                 mode=mode,
                 role=role,
                 revision=revision,
@@ -1342,7 +1344,7 @@ async def publish_and_store(
                 "description": e.description,
                 "package": run.package,
                 "campaign": run.campaign,
-                "main_branch_url": run.branch_url,
+                "main_branch_url": target_branch_url,
                 "result": run.result,
                 "codebase": run.codebase,
             }
@@ -1386,7 +1388,7 @@ async def publish_and_store(
             "campaign": run.campaign,
             "proposal_url": publish_result.proposal_url or None,
             "mode": mode,
-            "main_branch_url": run.branch_url,
+            "main_branch_url": publish_result.target_branch_url,
             "main_branch_browse_url": publish_result.target_branch_web_url,
             "branch_name": publish_result.branch_name,
             "result_code": "success",
@@ -2965,7 +2967,7 @@ This merge proposal will be closed, since the branch has moved to {}.
                 },
                 command=last_run.command,
                 codemod_result=last_run.result,
-                main_branch_url=target_branch_url,
+                target_branch_url=target_branch_url,
                 mode=MODE_PROPOSE,
                 role=mp_run['role'],
                 revision=last_run_revision,
@@ -3334,7 +3336,7 @@ async def listen_to_runner(
                 redis=redis,
                 role=role,
                 rate_limit_bucket=rate_limit_bucket,
-                main_branch_url=branch_url,
+                target_branch_url=branch_url,
                 mode=mode,
                 max_frequency_days=max_frequency_days,
                 command=command,
