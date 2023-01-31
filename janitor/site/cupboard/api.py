@@ -66,7 +66,7 @@ async def handle_mass_reschedule(request):
     config = request.app['config']
     all_campaigns = [c.name for c in config.campaign]
     if result_code == 'never-processed':
-        query = "select c.codebase AS codebase, c.package AS package, c.suite AS campaign from candidate c WHERE "
+        query = "select c.codebase AS codebase, c.suite AS campaign from candidate c WHERE "
         params = []
         where = [
             "not exists (SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)"]
@@ -84,7 +84,6 @@ async def handle_mass_reschedule(request):
         query = """
 SELECT
 codebase,
-package,
 suite AS campaign,
 finish_time - start_time as duration
 FROM %s AS run
@@ -132,7 +131,6 @@ AND """ % table
             try:
                 async with session.post(schedule_url, json={
                         'codebase': run['codebase'],
-                        'package': run['package'],
                         'campaign': run['campaign'],
                         'requestor': "reschedule",
                         'refresh': refresh,
