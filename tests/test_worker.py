@@ -40,10 +40,11 @@ import breezy.git  # noqa: F401
 
 
 @pytest.fixture
-def brz_identity():
-    c = GlobalStack()
+def brz_identity(tmp_path):
+    os.mkdir(tmp_path / "brz_home")
+    os.environ['BRZ_HOME'] = str(tmp_path / "brz_home")
     identity = 'Joe Example <joe@example.com>'
-    c.set('email', identity)
+    os.environ['BRZ_EMAIL'] = identity
     return identity
 
 
