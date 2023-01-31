@@ -34,8 +34,23 @@ from aiohttp.multipart import MultipartReader, BodyPartReader
 from silver_platter.apply import ScriptFailed
 
 from breezy.controldir import ControlDir, format_registry
+from breezy.config import GlobalStack
 import breezy.bzr  # noqa: F401
 import breezy.git  # noqa: F401
+
+
+@pytest.fixture
+def brz_identity():
+    c = GlobalStack()
+    identity = 'Joe Example <joe@example.com>'
+    c.set('email', identity)
+    return identity
+
+
+def test_brz_identity(brz_identity):
+    assert brz_identity == 'Joe Example <joe@example.com>'
+    c = GlobalStack()
+    assert c.get('email') == brz_identity
 
 
 class AsyncBytesIO:
@@ -193,7 +208,7 @@ def test_convert_codemod_script_failed():
 
 
 @pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
-def test_run_worker_existing(tmp_path, vcs_type):
+def test_run_worker_existing(tmp_path, vcs_type, brz_identity):
     wt = ControlDir.create_standalone_workingtree(
         str(tmp_path / "main"),
         format=format_registry.make_controldir(vcs_type))
@@ -254,7 +269,7 @@ check:
 
 
 @pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
-def test_run_worker_new(tmp_path, vcs_type):
+def test_run_worker_new(tmp_path, vcs_type, brz_identity):
     os.mkdir(tmp_path / "target")
     output_dir = tmp_path / "output"
     os.mkdir(output_dir)
@@ -304,7 +319,7 @@ def test_run_worker_new(tmp_path, vcs_type):
 
 
 @pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
-def test_run_worker_build_failure(tmp_path, vcs_type):
+def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
     os.mkdir(tmp_path / "target")
     output_dir = tmp_path / "output"
     os.mkdir(output_dir)
