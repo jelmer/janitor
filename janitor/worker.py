@@ -167,52 +167,6 @@ def gce_external_ip():
     return resp.read().decode()
 
 
-class WorkerResult:
-    def __init__(
-        self,
-        *,
-        description: Optional[str],
-        value: Optional[int],
-        branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
-        tags: Optional[dict[str, bytes]],
-        target: str,
-        target_details: Optional[Any],
-        codemod: Any,
-        refreshed: bool,
-        target_branch_url: Optional[str] = None
-    ) -> None:
-        self.description = description
-        self.value = value
-        self.branches = branches
-        self.tags = tags
-        self.target = target
-        self.target_details = target_details
-        self.target_branch_url = target_branch_url
-        self.codemod = codemod
-        self.refreshed = refreshed
-
-    def json(self):
-        return {
-            "value": self.value,
-            "codemod": self.codemod,
-            "description": self.description,
-            "branches": [
-                (f, n, br.decode("utf-8") if br else None,
-                 r.decode("utf-8") if r else None)
-                for (f, n, br, r) in (self.branches or [])
-            ],
-            "tags": [
-                (n, r.decode("utf-8") if r else None)
-                for (n, r) in (self.tags or {}).items()],
-            "target": {
-                "name": self.target,
-                "details": self.target_details,
-            },
-            "refreshed": self.refreshed,
-            "target_branch_url": self.target_branch_url,
-        }
-
-
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
@@ -244,7 +198,7 @@ def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
     if e.args[1] == 127:
         return WorkerFailure(
             'command-not-found',
-            'Command %s not found' % e.args[0],
+            f'Command {e.args[0]} not found',
             stage=("codemod", ))
     elif e.args[1] == 137:
         return WorkerFailure(
@@ -446,7 +400,7 @@ class GenericTarget(Target):
 def import_branches_git(
         repo_url, local_branch: Branch, campaign: str, log_id: str,
         branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
-        tags: Optional[dict[str, bytes]],
+        tags: Optional[list[tuple[str, bytes]]],
         update_current: bool = True):
     from breezy.repository import InterRepository
     from breezy.git.repository import GitRepository
@@ -481,7 +435,7 @@ def import_branches_git(
                 branchname = ("refs/heads/{}/{}".format(campaign, fn)).encode("utf-8")
                 # TODO(jelmer): Ideally this would be a symref:
                 changed_refs[branchname] = changed_refs[tagname]
-        for n, r in (tags or {}).items():
+        for n, r in (tags or []):
             tagname = ("refs/tags/{}/{}".format(log_id, n)).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
@@ -499,8 +453,8 @@ def import_branches_git(
     max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_bzr(
-        repo_url: str, local_branch, campaign: str, log_id: str, branches, tags,
-        update_current: bool = True
+        repo_url: str, local_branch, campaign: str, log_id: str, branches,
+        tags: Optional[list[tuple[str, bytes]]], update_current: bool = True
 ):
     for fn, _n, _br, r in branches:
         target_branch_path = urlutils.join(repo_url, campaign)
@@ -527,7 +481,7 @@ def import_branches_bzr(
         target_branch.tags.set_tag(log_id, r)
 
         graph = target_branch.repository.get_graph()
-        for name, revision in tags:
+        for name, revision in (tags or []):
             # Only set tags on those branches where the revisions exist
             if graph.is_ancestor(revision, target_branch.last_revision()):
                 target_branch.tags.set_tag('{}/{}'.format(log_id, name), revision)
@@ -984,6 +938,12 @@ def run_worker(
             finally:
                 metadata["revision"] = ws.local_tree.branch.last_revision().decode('utf-8')
 
+            metadata["refreshed"] = ws.refreshed
+            metadata["value"] = changer_result.value
+            metadata['codemod'] = changer_result.context
+            metadata["target_branch_url"] = changer_result.target_branch_url
+            metadata["description"] = changer_result.description
+
             result_branches: list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
             for (name, base_revision, revision) in ws.result_branches():
                 try:
@@ -998,6 +958,14 @@ def run_worker(
             result_branch_roles = [role for (role, remote_name, br, r) in result_branches]
             assert len(result_branch_roles) == len(set(result_branch_roles)), \
                 "Duplicate result branches: %r" % result_branches
+
+            metadata["branches"] = [
+                (f, n, br.decode("utf-8") if br else None,
+                 r.decode("utf-8") if r else None)
+                for (f, n, br, r) in (result_branches or [])]
+            metadata["tags"] = [
+                (n, r.decode("utf-8") if r else None)
+                for (n, r) in (changer_result.tags or [])]
 
             actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
 
@@ -1015,14 +983,14 @@ def run_worker(
                     import_branches_git(
                         target_repo_url, ws.local_tree.branch,
                         campaign, run_id, result_branches,
-                        dict(changer_result.tags) if changer_result.tags else None,
+                        changer_result.tags,
                         update_current=False
                     )
                 elif vcs_type.lower() == "bzr":
                     import_branches_bzr(
                         target_repo_url, ws.local_tree.branch,
                         campaign, run_id, result_branches,
-                        dict(changer_result.tags) if changer_result.tags else None,
+                        changer_result.tags,
                         update_current=False
                     )
                 else:
@@ -1043,16 +1011,10 @@ def run_worker(
             else:
                 build_target_details = None
 
-            result = WorkerResult(
-                description=changer_result.description,
-                value=changer_result.value,
-                branches=result_branches,
-                tags=(dict(changer_result.tags) if changer_result.tags else {}),
-                target=build_target.name, target_details=build_target_details,
-                codemod=changer_result.context,
-                target_branch_url=changer_result.target_branch_url,
-                refreshed=ws.refreshed
-            )
+            metadata['target'] = {
+                "name": build_target.name,
+                "details": build_target_details,
+            }
 
             logging.info("Pushing result branch to %r", target_repo_url)
 
@@ -1060,13 +1022,13 @@ def run_worker(
                 if vcs_type.lower() == "git":
                     import_branches_git(
                         target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result.branches, result.tags,
+                        campaign, run_id, result_branches, changer_result.tags,
                         update_current=True
                     )
                 elif vcs_type.lower() == "bzr":
                     import_branches_bzr(
                         target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result.branches, result.tags,
+                        campaign, run_id, result_branches, changer_result.tags,
                         update_current=True
                     )
                 else:
@@ -1104,7 +1066,6 @@ def run_worker(
                             cached_branch_url, e)
 
             logging.info("All done.")
-            return result
         except WorkerFailure:
             raise
         except BaseException:
