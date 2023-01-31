@@ -960,12 +960,13 @@ async def store_publish(
             else:
                 if revision is None:
                     raise AssertionError
-                assert mode == 'push'
+                assert mode in ('push', 'push-derived')
                 assert run_id is not None
-                await conn.execute(
-                    "UPDATE new_result_branch "
-                    "SET absorbed = true WHERE run_id = $1 AND role = $2",
-                    run_id, role)
+                if mode == 'push':
+                    await conn.execute(
+                        "UPDATE new_result_branch "
+                        "SET absorbed = true WHERE run_id = $1 AND role = $2",
+                        run_id, role)
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
@@ -1058,6 +1059,7 @@ async def publish_from_policy(
             role, run.id, extra={'run_id': run.id, 'role': role})
         return None
 
+    # TODO(jelmer): Use target_branch_url here rather than main_branch_url
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
     if not force and await already_published(
