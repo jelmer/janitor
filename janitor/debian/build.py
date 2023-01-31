@@ -109,18 +109,20 @@ def build(local_tree: WorkingTree, subpath: str, output_directory: str, *, chroo
                             dep_server_url=dep_server_url)
 
                         (changes_names, cl_entry) = build_incrementally(
-                            local_tree,
-                            apt, "~" + suffix,
-                            distribution,
-                            output_directory,
+                            local_tree=local_tree,
+                            suffix="~" + suffix,
+                            build_suite=distribution,
+                            output_directory=output_directory,
                             build_command=command,
                             build_changelog_entry="Build for debian-janitor apt repository.",
+                            fixers=fixers,
                             subpath=subpath,
                             source_date_epoch=source_date_epoch,
                             max_iterations=MAX_BUILD_ITERATIONS,
                             apt_repository=apt_repository,
                             apt_repository_key=apt_repository_key,
                             extra_repositories=extra_repositories,
+                            run_gbp_dch=(update_changelog is False),
                         )
                 except ChangelogNotEditable as e:
                     raise BuildFailure(
