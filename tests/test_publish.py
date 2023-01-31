@@ -84,7 +84,7 @@ async def test_publish_worker():
         pw = PublishWorker()
         await pw.publish_one(
             campaign='test-campaign', codebase='pkg', command='blah --foo',
-            codemod_result={}, main_branch_url='https://example.com/',
+            codemod_result={}, target_branch_url='https://example.com/',
             mode='attempt-push', role='main', revision=b'main-revid',
             log_id='some-id', unchanged_id='unchanged-id',
             derived_branch_name='branch-name',
