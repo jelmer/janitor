@@ -32,7 +32,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import traceback
-from typing import Any, Optional, cast, TypedDict, NotRequired
+from typing import Any, Optional, cast, TypedDict
 import warnings
 
 import uvloop
@@ -86,18 +86,18 @@ from breezy.config import (
     GlobalStack,
     PlainTextCredentialStore,
 )
-from breezy.controldir import format_registry
+from breezy.controldir import ControlDir, format_registry
 from breezy.errors import (
     ConnectionError,
     ConnectionReset,
     NotBranchError,
+    NoRepositoryPresent,
     InvalidHttpResponse,
     UnexpectedHttpStatus,
     TransportError,
     TransportNotPossible,
 )
 from breezy.git.remote import RemoteGitError
-from breezy.controldir import ControlDir
 from breezy.revision import NULL_REVISION
 from breezy.transform import (
     MalformedTransform,
@@ -419,7 +419,7 @@ def import_branches_git(
         # The server is expected to have repositories ready for us, unless
         # we're working locally.
         format = BareLocalGitControlDirFormat()
-        vcs_result_controldir = format.initialize_on_transport(repo_url)
+        vcs_result_controldir = format.initialize(repo_url)
 
     repo = cast("GitRepository", vcs_result_controldir.open_repository())
 
@@ -456,27 +456,36 @@ def import_branches_bzr(
         repo_url: str, local_branch, campaign: str, log_id: str, branches,
         tags: Optional[list[tuple[str, bytes]]], update_current: bool = True
 ):
+    format = format_registry.make_controldir('bzr')
     for fn, _n, _br, r in branches:
-        target_branch_path = urlutils.join(repo_url, campaign)
-        if fn is not None:
-            target_branch_path = urlutils.join_segment_parameters(
-                target_branch_path,
-                {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
-        transport = get_transport(target_branch_path)
+        try:
+            rootcd = ControlDir.open(repo_url)
+        except NotBranchError:
+            rootcd = ControlDir.create(repo_url)
+        try:
+            rootcd.find_repository()
+        except NoRepositoryPresent:
+            rootcd.create_repository(shared=True)
+        transport = rootcd.user_transport.clone(campaign)
+        name = (fn if fn != 'main' else '')
         if not transport.has('.'):
             try:
                 transport.ensure_base()
             except NoSuchFile:
                 transport.create_prefix()
         try:
-            target_branch = Branch.open_from_transport(transport)
+            branchcd = ControlDir.open_from_transport(transport)
         except NotBranchError:
-            target_branch = ControlDir.create_branch_convenience(
-                target_branch_path, possible_transports=[transport])
+            branchcd = format.initialize_on_transport(transport)
+
+        try:
+            target_branch = branchcd.open_branch(name=name)
+        except NotBranchError:
+            target_branch = branchcd.create_branch(name=name)
         if update_current:
             local_branch.push(target_branch, overwrite=True, stop_revision=r)
         else:
-            target_branch.repository.fetch(revision_id=r)
+            target_branch.repository.fetch(local_branch.repository, revision_id=r)
 
         target_branch.tags.set_tag(log_id, r)
 
@@ -717,7 +726,7 @@ def run_worker(
     *,
     codebase: str,
     campaign: str,
-    main_branch_url: str,
+    main_branch_url: Optional[str],
     run_id: str,
     build_config: Any,
     env: dict[str, str],
@@ -1026,15 +1035,17 @@ def run_worker(
                          for (role, name, br, r) in result_branches]))
 
             if should_build:
+                metadata['target'] = {
+                    "name": build_target.name,
+                    "details": None,
+                }
+
                 build_target_details = build_target.build(
                     ws.local_tree, subpath, output_directory, build_config)
+
+                metadata['target']['details'] = build_target_details
             else:
                 build_target_details = None
-
-            metadata['target'] = {
-                "name": build_target.name,
-                "details": build_target_details,
-            }
 
             logging.info("Pushing result branch to %r", target_repo_url)
 
