@@ -106,7 +106,8 @@ SELECT
   change_set,
   failure_stage,
   failure_transient,
-  codebase
+  codebase,
+  publish_status
 FROM
   last_unabsorbed_runs
 LEFT JOIN worker ON worker.name = last_unabsorbed_runs.worker
@@ -139,7 +140,8 @@ SELECT
     change_set,
     failure_stage,
     failure_transient,
-    codebase
+    codebase,
+    publish_status
 FROM
     run
 LEFT JOIN worker ON worker.name = run.worker
@@ -163,7 +165,7 @@ SELECT
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
     result_tags, target_branch_url, change_set AS change_set,
-    failure_transient AS failure_transient, failure_stage
+    failure_transient AS failure_transient, failure_stage, publish_status
 FROM
     last_runs
 LEFT JOIN
