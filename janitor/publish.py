@@ -3025,7 +3025,7 @@ applied independently.
                     role=mp_run['role'],
                     mode=MODE_PROPOSE,
                     result_code="success",
-                    description=(publish_result.description or "Succesfully updated"),
+                    description=(publish_result.description or "Successfully updated"),
                     merge_proposal_url=publish_result.proposal_url,
                     target_branch_url=target_branch_url,
                     publish_id=publish_id,
