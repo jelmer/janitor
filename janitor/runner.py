@@ -1447,12 +1447,14 @@ class QueueProcessor:
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
+        # Ideally we'd do this check *in* the transaction, but
+        # fakeredis doesn't seem to do Pipeline.hget()
+        run_id = await self.redis.hget('assigned-queue-items', str(active_run.queue_id))
+        if run_id:
+            raise QueueItemAlreadyClaimed(active_run.queue_id, run_id)
         async with self.redis.pipeline() as tr:
             tr.hset(
                 'active-runs', active_run.log_id, json.dumps(active_run.json()))
-            run_id = await tr.hget('assigned-queue-items', str(active_run.queue_id))
-            if run_id:
-                raise QueueItemAlreadyClaimed(active_run.queue_id, run_id)
             tr.hset(
                 'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
             tr.hset(
@@ -2112,8 +2114,8 @@ async def handle_update_run(request):
         ret = {
             'run_id': run_id,
             'publish_status': data['publish_status'],
-            'codebase': row[0][1],
-            'campaign': row[0][2]
+            'codebase': row[1],
+            'campaign': row[2]
         }
         await queue_processor.redis.publish('publish-status', json.dumps(ret))
         return web.json_response(ret)
