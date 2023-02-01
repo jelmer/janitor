@@ -27,7 +27,7 @@ from ognibuild.debian.build import (ChangelogNotEditable,
                                     DetailedDebianBuildFailure,
                                     MissingChangesFile,
                                     UnidentifiedDebianBuildError, build_once)
-from ognibuild.debian.fix_build import build_incrementally
+from ognibuild.debian.fix_build import build_incrementally, default_fixers
 from ognibuild.session import Session, SessionSetupFailure
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
@@ -103,22 +103,26 @@ def build(local_tree: WorkingTree, subpath: str, output_directory: str, *, chroo
                             extra_repositories=extra_repositories,
                         )
                     else:
+                        fixers = default_fixers(
+                            local_tree, subpath=subpath, apt=apt, committer=committer,
+                            update_changelog=update_changelog,
+                            dep_server_url=dep_server_url)
+
                         (changes_names, cl_entry) = build_incrementally(
-                            local_tree,
-                            apt, "~" + suffix,
-                            distribution,
-                            output_directory,
+                            local_tree=local_tree,
+                            suffix="~" + suffix,
+                            build_suite=distribution,
+                            output_directory=output_directory,
                             build_command=command,
                             build_changelog_entry="Build for debian-janitor apt repository.",
-                            committer=committer,
+                            fixers=fixers,
                             subpath=subpath,
                             source_date_epoch=source_date_epoch,
-                            update_changelog=update_changelog,
                             max_iterations=MAX_BUILD_ITERATIONS,
                             apt_repository=apt_repository,
                             apt_repository_key=apt_repository_key,
                             extra_repositories=extra_repositories,
-                            dep_server_url=dep_server_url,
+                            run_gbp_dch=(update_changelog is False),
                         )
                 except ChangelogNotEditable as e:
                     raise BuildFailure(
