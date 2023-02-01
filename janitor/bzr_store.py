@@ -167,7 +167,11 @@ async def bzr_backend(request):
     codebase = request.match_info["codebase"]
     campaign_name = request.match_info.get("campaign")
     role_name = request.match_info.get("role")
-    repo = await _bzr_open_repo(request.app["local_path"], request.app["codebase_exists"], codebase)
+    repo = await _bzr_open_repo(
+        request.app["local_path"], request.app["codebase_exists"], codebase)
+    allow_writes = request.app["allow_writes"]
+    if callable(allow_writes):
+        allow_writes = await allow_writes(request)
     transport = repo.user_transport
     if campaign_name:
         try:
@@ -175,25 +179,27 @@ async def bzr_backend(request):
         except KeyError as e:
             raise web.HTTPNotFound(text='no such campaign: %s' % campaign_name) from e
         transport = transport.clone(campaign_name)
-        if role_name:
-            transport = transport.clone(role_name)
-    allow_writes = request.app["allow_writes"]
-    if callable(allow_writes):
-        allow_writes = await allow_writes(request)
+        if allow_writes:
+            transport.ensure_base()
+
+    if role_name:
+        transport = transport.clone(role_name)
+        if allow_writes:
+            transport.ensure_base()
+
     if allow_writes:
-        transport.clone('..').ensure_base()
         backing_transport = transport
     else:
         backing_transport = get_transport_from_url("readonly+" + transport.base)
+
     out_buffer = BytesIO()
     request_data_bytes = await request.read()
 
     protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(
-        request_data_bytes
-    )
+        request_data_bytes)
 
     smart_protocol_request = protocol_factory(
-        transport, out_buffer.write, ".", backing_transport
+        backing_transport, out_buffer.write, ".", jail_root=repo.user_transport
     )
     smart_protocol_request.accept_bytes(unused_bytes)
     if smart_protocol_request.next_read_size() != 0:
