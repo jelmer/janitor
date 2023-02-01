@@ -15,13 +15,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
+import os
+from threading import Thread
 import tempfile
+
+from breezy.controldir import ControlDir
 
 from janitor import config_pb2
 from janitor.bzr_store import create_web_app
 
 
-async def create_client(aiohttp_client, codebases=None):
+async def create_client(aiohttp_client, tmp_path='/tmp', codebases=None):
     config = config_pb2.Config()
     campaign = config.campaign.add()
     campaign.name = 'campaign'
@@ -33,7 +38,7 @@ async def create_client(aiohttp_client, codebases=None):
         return n in codebases
 
     app, public_app = await create_web_app(
-        '127.0.0.1', 80, '/tmp', check_codebase, allow_writes=True, config=config)
+        '127.0.0.1', 80, tmp_path, check_codebase, allow_writes=True, config=config)
     return (
         await aiohttp_client(app),
         await aiohttp_client(public_app))
@@ -84,3 +89,70 @@ async def test_fetch_format(aiohttp_client):
 
     resp = await client.post("/foo/notcampaign/.bzr/smart")
     assert resp.status == 404
+
+
+async def test_index(aiohttp_client, tmp_path):
+    client, public_client = await create_client(aiohttp_client, tmp_path, codebases={'foo'})
+
+    resp = await client.post("/foo/campaign/main/.bzr/smart")
+    assert resp.status == 200
+
+    resp = await public_client.get('/bzr/', headers={'Accept': 'application/json'})
+    assert resp.status == 200
+    assert await resp.json() == ['foo']
+
+
+async def test_push(aiohttp_server, tmp_path):
+    server = None
+
+    done = False
+
+    def serve():
+        nonlocal server, done
+        loop = asyncio.new_event_loop()
+        config = config_pb2.Config()
+        campaign = config.campaign.add()
+        campaign.name = 'campaign'
+
+        codebases = {'foo'}
+
+        async def check_codebase(n):
+            return n in codebases
+
+        os.mkdir(tmp_path / "bzr")
+
+        app, public_app = loop.run_until_complete(create_web_app(
+            '127.0.0.1', 80, tmp_path / "bzr", check_codebase,
+            allow_writes=True, config=config))
+
+        server = loop.run_until_complete(aiohttp_server(public_app))
+        loop.run_until_complete(server.start_server())
+        while not done:
+            loop.run_until_complete(asyncio.sleep(.01))
+        loop.run_until_complete(server.close())
+
+    t = Thread(target=serve)
+    t.start()
+    try:
+        for _i in range(20):
+            await asyncio.sleep(0.1)
+            if server:
+                break
+        else:
+            raise Exception('server did not start')
+        wt = ControlDir.create_standalone_workingtree(str(tmp_path / "wt"))
+        (tmp_path / "wt" / "afile").write_text('foo')
+        wt.add('afile')
+        wt.commit('A change', committer='Joe Example <joe@example.com>')
+
+        cd = ControlDir.open(str(server.make_url('/bzr/foo/')))
+        cd.find_repository()
+
+        # Currently broken:
+        # url = 'bzr+' + str(server.make_url('/bzr/foo/campaign/'))
+        # branch_controldir = ControlDir.create(url, format=RemoteBzrDirFormat())
+        # branch = controldir.create_branch(name='')
+        # wt.branch.push(branch)
+    finally:
+        done = True
+        t.join()
