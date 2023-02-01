@@ -131,7 +131,10 @@
                            } else {
                                 loadNewJob();
                            }
-                       }
+                       },
+                       500: function(response) {
+			   alert('500 error submitting review: ' + response.responseText);
+		       }
                     }
                 });
             }
