@@ -256,7 +256,7 @@ queue.id ASC
             "command = EXCLUDED.command, codebase = EXCLUDED.codebase "
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
-            "queue.priority >= EXCLUDED.priority) RETURNING (id, bucket)",
+            "queue.priority >= EXCLUDED.priority) RETURNING id, bucket",
             command,
             offset,
             bucket,
@@ -278,7 +278,7 @@ queue.id ASC
                 codebase, campaign, change_set or '')
             assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
             return row
-        return row[0]
+        return row
 
     async def get_buckets(self):
         return await self.conn.fetch(
