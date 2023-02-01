@@ -124,3 +124,8 @@ for distribution in args.distribution:
                 args.user, args.user,
                 sbuild_schroot_name(distro_config.name, sbuild_arch)),
             shell=True)
+        subprocess.check_call(
+            "install -d / --owner={} /build | sbuild-shell {}".format(
+                args.user,
+                sbuild_schroot_name(distro_config.name, sbuild_arch)),
+            shell=True)
