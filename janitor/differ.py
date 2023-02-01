@@ -502,7 +502,6 @@ async def handle_precache(request):
 
 @routes.post("/precache-all", name="precache-all")
 async def handle_precache_all(request):
-    todo = []
     async with request.app['pool'].acquire() as conn:
         rows = await conn.fetch(
             """
@@ -518,38 +517,16 @@ where
 """
         )
         for row in rows:
-            todo.append(asyncio.create_task(precache(
+            await spawn(request, precache(
                 request.app['artifact_manager'],
                 row[1], row[0],
                 task_memory_limit=request.app['task_memory_limit'],
                 task_timeout=request.app['task_timeout'],
                 diffoscope_cache_path=request.app['diffoscope_cache_path'],
                 debdiff_cache_path=request.app['debdiff_cache_path'],
-                diffoscope_command=request.app['diffoscope_command'])))
+                diffoscope_command=request.app['diffoscope_command']))
 
-
-    async def _precache_all():
-        for i in range(0, len(todo), 100):
-            done, pending = await asyncio.wait(
-                set(todo[i : i + 100]), return_when=asyncio.ALL_COMPLETED
-            )
-            for x in done:
-                try:
-                    x.result()
-                except ArtifactRetrievalTimeout as e:
-                    logging.info("Timeout retrieving artifacts: %s", e)
-                except DiffCommandTimeout as e:
-                    logging.info("Timeout diffing artifacts: %s", e)
-                except DiffCommandMemoryError as e:
-                    logging.info("Memory error diffing artifacts: %s", e)
-                except DiffCommandError as e:
-                    logging.info("Error diff artifacts: %s", e)
-                except Exception as e:
-                    logging.info("Error precaching: %r", e)
-                    traceback.print_exc()
-
-    await spawn(request, _precache_all())
-    return web.Response(status=202, text="Precache started (todo: %d)" % len(todo))
+    return web.Response(status=202, text="Precache started (todo: %d)" % len(rows))
 
 
 @routes.get("/health", name="health")
