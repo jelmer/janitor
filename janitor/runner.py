@@ -1252,6 +1252,14 @@ class RunExists(Exception):
         self.run_id = run_id
 
 
+class QueueItemAlreadyClaimed(Exception):
+    """Queue item has been claimed by another run."""
+
+    def __init__(self, queue_id, run_id):
+        self.queue_id = queue_id
+        self.run_id = run_id
+
+
 class QueueProcessor:
 
     avoid_hosts: set[str]
@@ -1442,6 +1450,9 @@ class QueueProcessor:
         async with self.redis.pipeline() as tr:
             tr.hset(
                 'active-runs', active_run.log_id, json.dumps(active_run.json()))
+            run_id = await tr.hget('assigned-queue-items', str(active_run.queue_id))
+            if run_id:
+                raise QueueItemAlreadyClaimed(active_run.queue_id, run_id)
             tr.hset(
                 'assigned-queue-items', str(active_run.queue_id), active_run.log_id)
             tr.hset(
@@ -2276,13 +2287,21 @@ async def next_item(
                 backchannel=bc, worker_name=worker, queue_item=item,
                 vcs_info=vcs_info, worker_link=worker_link)
 
-            await queue_processor.register_run(active_run)
+            try:
+                await queue_processor.register_run(active_run)
+            except QueueItemAlreadyClaimed as e:
+                logging.debug(
+                    'Our queue item (%d) is already in progress by %s',
+                    e.queue_id, e.run_id, extra={'run_id': active_run.log_id})
+                item = None
+                continue
 
             try:
                 campaign_config = get_campaign_config(config, item.campaign)
             except KeyError:
                 logging.warning(
-                    'Unable to find details for campaign %r', item.campaign)
+                    'Unable to find details for campaign %r', item.campaign,
+                    extra={'run_id': active_run.log_id})
                 await abort(active_run, 'unknown-campaign',
                             "Campaign %s unknown" % item.campaign)
                 item = None
@@ -2606,9 +2625,7 @@ async def handle_finish(request):
             active_run, queue_processor, request)
     except RunExists as e:
         return web.json_response(
-            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
-             "logs": logfilenames,
-             "result": result.json(), 'reason': str(e)},
+            {"id": run_id, "result": result.json(), 'reason': str(e)},
             status=409,
         )
 
@@ -2650,10 +2667,7 @@ async def handle_public_finish(request):
             active_run, queue_processor, request)
     except RunExists as e:
         return web.json_response(
-            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
-             "logs": logfilenames,
-             "result": result.json(), 'reason': str(e)},
-            status=409,
+            {"id": run_id, 'reason': str(e)}, status=409,
         )
 
     return web.json_response(
