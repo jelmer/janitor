@@ -46,7 +46,7 @@ Several permanently running jobs:
 * a *site* job that renders the web site
 * the *differ* takes care of running e.g. debdiff or diffoscope between binary runs
 
-Each instance of the janitor should somehow upload "codebase" entires and
+Each instance of the janitor should somehow upload "codebase" entries and
 "candidates", which describe where to find code and what to do with it.
 
 There are no requirements that these jobs run on the same machine, but they are
