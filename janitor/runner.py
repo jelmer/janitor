@@ -2105,7 +2105,7 @@ async def handle_update_run(request):
     async with request.app['database'].acquire() as conn:
         row = await conn.fetchrow(
             'UPDATE run SET publish_status = $2 WHERE id = $1 '
-            'RETURNING (id, codebase, suite)',
+            'RETURNING id, codebase, suite',
             run_id, data['publish_status'])
         if row is None:
             raise web.HTTPNotFound(text=f'no such run: {run_id}')
