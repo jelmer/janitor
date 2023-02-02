@@ -57,7 +57,7 @@ File b
         )
         new_revid = tree.commit("actual")
 
-        class Run(object):
+        class Run:
 
             codebase = "pkg"
             main_branch_revision = old_revid
