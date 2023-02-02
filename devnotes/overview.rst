@@ -52,7 +52,7 @@ several factors:
    (so e.g. more impacting candidates are processed more frequently)
  * previous track record for the run
    (if it often generates new changes successfully, it's prioritized)
- * expected actions after a succesful run - priority is
+ * expected actions after a successful run - priority is
    given to runs that will be pushed or included in a merge proposal
 
 Items in the queue sit in various predefined buckets. These allow
@@ -65,7 +65,7 @@ possible artifacts (including logs), a description and some other
 metadata.
 
 Runs can be successful, be a no-op ("nothing-to-do") a continuation of
-a succesful run without additional changes ("nothing-new-to-do")
+a successful run without additional changes ("nothing-new-to-do")
 or have failed (any other result code). Some failures are classified
 as transient, which means that the expectation is that a repeat
 run will succeed. The scheduler takes this into account, and
@@ -170,4 +170,4 @@ The Auto-Uploader (optional)
 ============================
 
 This Debian specific component automatically uploads
-the artifacts of succesful runs using dput.
+the artifacts of successful runs using dput.
