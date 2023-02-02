@@ -120,12 +120,12 @@ for distribution in args.distribution:
 
     if args.user:
         subprocess.check_call(
-            "install -d / --owner={} \"~{}\" | sbuild-shell {}".format(
+            "install -d --owner={} \"~{}\" | sbuild-shell {}".format(
                 args.user, args.user,
                 sbuild_schroot_name(distro_config.name, sbuild_arch)),
             shell=True)
         subprocess.check_call(
-            "install -d / --owner={} /build | sbuild-shell {}".format(
-                args.user,
+            "install -d --owner={} --group=sbuild /build | sbuild-shell {}".format(
+                args.user, args.user
                 sbuild_schroot_name(distro_config.name, sbuild_arch)),
             shell=True)
