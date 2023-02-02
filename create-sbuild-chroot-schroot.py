@@ -59,6 +59,7 @@ parser.add_argument(
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
+parser.add_argument('--run-command', type=str, action='append')
 
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
@@ -118,14 +119,12 @@ for distribution in args.distribution:
         make_sbuild_tarball=make_sbuild_tarball,
         eatmydata=True, aliases=distro_config.chroot_alias)
 
-    if args.user:
-        subprocess.check_call(
-            "install -d --owner={} \"~{}\" | sbuild-shell {}".format(
-                args.user, args.user,
-                sbuild_schroot_name(distro_config.name, sbuild_arch)),
-            shell=True)
-        subprocess.check_call(
-            "install -d --owner={} --group=sbuild /build | sbuild-shell {}".format(
-                args.user, args.user
-                sbuild_schroot_name(distro_config.name, sbuild_arch)),
-            shell=True)
+    if args.run_command:
+        for cmd in args.run_command:
+            p = subprocess.Popen(
+                "sbuild-shell {}".format(
+                    args.user, args.user,
+                    sbuild_schroot_name(distro_config.name, sbuild_arch)),
+                shell=True,
+                stdin=subprocess.PIPE)
+            p.communicate(cmd)
