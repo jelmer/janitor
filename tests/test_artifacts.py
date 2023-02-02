@@ -63,7 +63,7 @@ class ArtifactManagerTests:
 class LocalArtifactManagerTests(ArtifactManagerTests, unittest.TestCase):
 
     def setUp(self):
-        super(LocalArtifactManagerTests, self).setUp()
+        super().setUp()
         self.path = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.path)
         self.manager = LocalArtifactManager(self.path)

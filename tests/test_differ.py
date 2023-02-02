@@ -18,7 +18,7 @@
 
 import tempfile
 
-import mock
+from unittest import mock
 
 from janitor.artifacts import LocalArtifactManager
 from janitor.differ import create_app
