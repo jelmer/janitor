@@ -17,7 +17,7 @@
 
 import sys
 
-import mock
+from unittest import mock
 from fakeredis.aioredis import FakeRedis
 from google.protobuf import text_format  # type: ignore
 
