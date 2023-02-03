@@ -127,4 +127,4 @@ for distribution in args.distribution:
                     sbuild_schroot_name(distro_config.name, sbuild_arch)),
                 shell=True,
                 stdin=subprocess.PIPE)
-            p.communicate(cmd)
+            p.communicate(cmd.encode())
