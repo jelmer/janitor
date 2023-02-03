@@ -123,8 +123,10 @@ for distribution in args.distribution:
         for cmd in args.run_command:
             p = subprocess.Popen(
                 "sbuild-shell {}".format(
-                    args.user, args.user,
                     sbuild_schroot_name(distro_config.name, sbuild_arch)),
                 shell=True,
                 stdin=subprocess.PIPE)
             p.communicate(cmd.encode())
+            if p.returncode != 0:
+                raise Exception(
+                    f'command {cmd} failed to run: {p.returncode}')
