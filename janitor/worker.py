@@ -1415,7 +1415,7 @@ async def process_single_item(
             ),
         )
         try:
-            result = await main_task
+            await main_task
         except WorkerFailure as e:
             metadata.update(e.json())
             logging.info("Worker failed in %r (%s): %s",
@@ -1438,8 +1438,7 @@ async def process_single_item(
             return
         else:
             metadata["code"] = None
-            metadata.update(result.json())
-            logging.info("%s", result.description)
+            logging.info("%s", metadata['description'])
             return
         finally:
             finish_time = datetime.utcnow()

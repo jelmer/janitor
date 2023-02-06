@@ -16,7 +16,8 @@ def sbuild_schroot_name(suite, arch):
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006
-                  eatmydata=True, make_sbuild_tarball=None, aliases=None):
+                  eatmydata=True, make_sbuild_tarball=None, aliases=None,
+                  chroot_mode: str | None = None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path,
            distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
@@ -33,6 +34,8 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa:
         cmd.append("--alias=%s" % alias)
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
+    if chroot_mode:
+        cmd.append(f'--chroot-mode={chroot_mode}')
     for name in distro.extra:
         cmd.append("--extra-repository=deb {} {} {}".format(
             distro.archive_mirror_uri, name, ' '.join(distro.component)))
@@ -59,6 +62,9 @@ parser.add_argument(
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
+parser.add_argument(
+    '--chroot-mode', type=str, choices=['schroot', 'sudo', 'unshare'],
+    default='schroot', help='sbuild chroot mode')
 parser.add_argument('--run-command', type=str, action='append')
 
 parser.add_argument("distribution", type=str, nargs="*")
@@ -109,6 +115,7 @@ for distribution in args.distribution:
         if campaign.debian_build.base_distribution != distro_config.name:
             continue
         suites.append(campaign.debian_build.build_distribution)
+    make_sbuild_tarball: str | None
     if args.make_sbuild_tarball:
         make_sbuild_tarball = os.path.join(
             args.base_directory, distro_config.chroot + '.tar.xz')
@@ -117,7 +124,8 @@ for distribution in args.distribution:
     create_chroot(
         distro_config, sbuild_path, suites, sbuild_arch, args.include,
         make_sbuild_tarball=make_sbuild_tarball,
-        eatmydata=True, aliases=distro_config.chroot_alias)
+        eatmydata=True, aliases=distro_config.chroot_alias,
+        chroot_mode=args.chroot_mode)
 
     if args.run_command:
         for cmd in args.run_command:
