@@ -219,6 +219,7 @@ async def test_submit_codebase(aiohttp_client, db):
         'vcs_type': None,
         'vcs_last_revision': None,
         'value': None,
+        'web_url': None,
     }] == await resp.json()
 
 

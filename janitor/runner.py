@@ -1568,7 +1568,7 @@ class QueueProcessor:
                         # the candidate has been removed. Either way, this is fine.
                         logging.debug(
                             'not rescheduling %s/%s: no candidate available',
-                            active_run.package, active_run.campaign)
+                            active_run.codebase, active_run.campaign)
 
             await self._jobs_scheduler.spawn(reschedule())
 
@@ -1812,7 +1812,7 @@ async def handle_codebases_download(request):
     async with queue_processor.database.acquire() as conn:
         for row in await conn.fetch(
                 'SELECT name, branch_url, url, branch, subpath, vcs_type, '
-                'vcs_last_revision, value FROM codebase'):
+                'web_url, vcs_last_revision, value FROM codebase'):
             codebases.append(dict(row))
 
     return web.json_response(codebases)
@@ -1828,14 +1828,14 @@ async def handle_codebases_upload(request):
         insert_codebase_stmt = await conn.prepare(
             "INSERT INTO codebase "
             "(name, branch_url, url, branch, subpath, vcs_type, "
-            "vcs_last_revision, value) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+            "vcs_last_revision, value, web_url) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
             "ON CONFLICT (name) DO UPDATE SET "
             "branch_url = EXCLUDED.branch_url, subpath = EXCLUDED.subpath, "
             "vcs_type = EXCLUDED.vcs_type, "
             "vcs_last_revision = EXCLUDED.vcs_last_revision, "
             "value = EXCLUDED.value, url = EXCLUDED.url, "
-            "branch = EXCLUDED.branch")
+            "branch = EXCLUDED.branch, web_url = EXCLUDED.web_url")
 
         async with conn.transaction():
             for entry in await request.json():
@@ -1856,7 +1856,7 @@ async def handle_codebases_upload(request):
                 entry.get('name'), entry['branch_url'], entry['url'],
                 entry.get('branch'), entry.get('subpath'),
                 entry.get('vcs_type'), entry.get('vcs_last_revision'),
-                entry.get('value'))
+                entry.get('value'), entry.get('web_url'))
 
             # TODO(jelmer): if anything meaningful has changed (name,
             # branch_url, subpath), reschedule all runs for this codebase:

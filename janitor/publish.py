@@ -169,6 +169,9 @@ unexpected_http_response_count = Counter(
     "proposals")
 
 
+CLOSED_STATUSES = ['closed', 'abandoned', 'rejected', 'applied']
+
+
 logger = logging.getLogger('janitor.publish')
 
 
@@ -559,7 +562,7 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
 async def consider_publish_run(
         conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
         vcs_managers, bucket_rate_limiter,
-        run, rate_limit_bucket,
+        run: state.Run, rate_limit_bucket,
         unpublished_branches, command: str,
         push_limit: Optional[int] = None, require_binary_diff: bool = False,
         dry_run: bool = False) -> dict[str, Optional[str]]:
@@ -831,16 +834,17 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
 
 
 async def already_published(
-    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, modes: list[str]
+    conn: asyncpg.Connection, target_branch_url: str, branch_name: str,
+    revision: bytes, modes: list[str]
 ) -> bool:
     row = await conn.fetchrow(
         """\
 SELECT * FROM publish
-WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND package = $3 AND branch_name = $4
+WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND target_branch_url = $3 AND branch_name = $4
 """,
         modes,
         revision.decode("utf-8"),
-        package,
+        target_branch_url,
         branch_name,
     )
     if row:
@@ -1024,7 +1028,7 @@ async def publish_from_policy(
     target_branch_url = role_branch_url(target_branch_url, remote_branch_name)
 
     if not force and await already_published(
-        conn, run.package, campaign_config.branch_name, revision,
+        conn, run.branch_url, campaign_config.branch_name, revision,
         [MODE_PROPOSE, MODE_PUSH] if mode == MODE_ATTEMPT_PUSH else [mode]
     ):
         return None
@@ -1374,11 +1378,11 @@ async def get_publish_attempt_count(
 
 
 @routes.get("/{campaign}/merge-proposals", name="campaign-merge-proposals")
-@routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
+@routes.get("/c/{codebase}/merge-proposals", name="package-merge-proposals")
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
-    package = request.match_info.get("package")
+    codebase = request.match_info.get("codebase")
     campaign = request.match_info.get("campaign")
     async with request.app['db'].acquire() as conn:
         args = []
@@ -1393,9 +1397,9 @@ async def handle_merge_proposal_list(request):
     ON merge_proposal.revision = run.revision AND run.result_code = 'success'
     """
         cond = []
-        if package is not None:
-            args.append(package)
-            cond.append("run.package = $%d" % (len(args), ))
+        if codebase is not None:
+            args.append(codebase)
+            cond.append("run.codebase = $%d" % (len(args), ))
         if campaign:
             args.append(campaign)
             cond.append("run.suite = $%d" % (len(args), ))
@@ -1542,9 +1546,37 @@ async def handle_policy_del(request):
 async def update_merge_proposal_request(request):
     post = await request.post()
     async with request.app['db'].acquire() as conn:
-        await conn.execute(
-            "UPDATE merge_proposal SET status = $1 WHERE url = $2",
-            post['status'], post['url'])
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                'SELECT status FROM merge_proposal WHERE url = $1', post['url'])
+            if row['status'] in CLOSED_STATUSES and post['status'] in CLOSED_STATUSES:
+                pass
+            elif row['status'] == 'open' and post['status'] in CLOSED_STATUSES:
+                mp = await asyncio.to_thread(get_proposal_by_url, post['url'])
+                if post.get('comment'):
+                    logger.info('%s: %s', mp.url, post['comment'], extra={'mp_url': mp.url})
+                    try:
+                        await asyncio.to_thread(mp.post_comment, post['comment'])
+                    except PermissionDenied as e:
+                        logger.warning(
+                            "Permission denied posting comment to %s: %s", mp.url, e,
+                            extra={'mp_url': mp.url})
+
+                try:
+                    await asyncio.to_thread(mp.close)
+                except PermissionDenied as e:
+                    logger.warning(
+                        "Permission denied closing merge request %s: %s", mp.url, e,
+                        extra={'mp_url': mp.url})
+                    raise
+            else:
+                raise web.HTTPBadRequest(
+                    text=f"no transition from {row['url']} to {post['url']}")
+
+            await conn.execute(
+                "UPDATE merge_proposal SET status = $1 WHERE url = $2",
+                post['status'], post['url'])
+
     return web.Response(text='updated')
 
 
@@ -1602,15 +1634,18 @@ async def handle_publish_id(request):
         row = await conn.fetchrow("""
 SELECT
   package,
-  codebase,
   branch_name,
   main_branch_revision,
   revision,
   mode,
   merge_proposal_url,
+  target_branch_url,
   result_code,
   description
-FROM publish WHERE id = $1
+FROM publish
+LEFT JOIN codebase
+ON codebase.branch_url = publish.target_branch_url
+WHERE id = $1
 """, publish_id)
         if row:
             raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
@@ -1618,6 +1653,7 @@ FROM publish WHERE id = $1
         {
             "package": row['package'],
             "codebase": row['codebase'],
+            "target_branch_url": row['target_branch_url'],
             "branch": row['branch_name'],
             "main_branch_revision": row['main_branch_revision'],
             "revision": row['revision'],
@@ -2001,7 +2037,7 @@ SELECT
   change_set.state AS change_set_state,
   change_set.id AS change_set
 FROM run
-LEFT JOIN package ON package.name = run.package
+LEFT JOIN package ON package.codebase = run.codebase
 INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
@@ -2136,7 +2172,7 @@ async def process_queue_loop(
                 require_binary_diff=require_binary_diff)
         cycle_duration = datetime.utcnow() - cycle_start
         to_wait = max(0, interval - cycle_duration.total_seconds())
-        logger.info("Waiting %d seconds for next cycle." % to_wait)
+        logger.info("Waiting %d seconds for next cycle.", to_wait)
         if to_wait > 0:
             await asyncio.sleep(to_wait)
 
@@ -2177,7 +2213,6 @@ async def get_merge_proposal_run(
     query = """
 SELECT
     run.id AS id,
-    run.package AS package,
     run.suite AS campaign,
     run.branch_url AS branch_url,
     run.command AS command,
@@ -2688,30 +2723,6 @@ async def check_existing_mp(
         logger.warning("%s: Unable to find any relevant runs.", mp.url, extra={'mp_url': mp.url})
         return False
 
-    removed = await conn.fetchval(
-        'SELECT removed FROM package WHERE name = $1', mp_run['package'])
-    if removed is None:
-        logger.warning("%s: Unable to find package.", mp.url, extra={'mp_url': mp.url})
-        return False
-
-    if removed:
-        logger.info(
-            "%s: package has been removed from the archive, closing proposal.",
-            mp.url,
-        )
-        try:
-            await abandon_mp(
-                proposal_info_manager, mp, revision, codebase, package_name,
-                target_branch_url, campaign=mp_run['campaign'],
-                can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
-                comment="""\
-This merge proposal will be closed, since the package has been removed from the \
-archive.
-""", dry_run=dry_run)
-        except PermissionDenied:
-            return False
-        return True
-
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
         # do.
@@ -2888,7 +2899,7 @@ This merge proposal will be closed, since the branch has moved to {}.
         logger.info(
             "%s (%s) needs to be updated (%s ⇒ %s).",
             mp.url,
-            mp_run['package'],
+            mp_run['codebase'],
             mp_run['id'],
             last_run.id, extra={'mp_url': mp.url}
         )
@@ -2896,7 +2907,7 @@ This merge proposal will be closed, since the branch has moved to {}.
             logger.warning(
                 "%s (%s): old run (%s/%s) has same revision as new run (%s/%s): %r",
                 mp.url,
-                mp_run['package'],
+                mp_run['codebase'],
                 mp_run['id'],
                 mp_run['role'],
                 last_run.id,
@@ -3060,7 +3071,7 @@ applied independently.
                     logger.warning(
                         'Candidate unavailable while attempting to reschedule '
                         'conflicted %s/%s',
-                        mp_run['package'], mp_run['campaign'], extra={'mp_url': mp.url})
+                        mp_run['codebase'], mp_run['campaign'], extra={'mp_url': mp.url})
         return False
 
 

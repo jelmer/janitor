@@ -187,7 +187,7 @@ SELECT package.*, named_publish_policy.per_branch_policy AS publish_policy
 FROM package
 LEFT JOIN candidate ON package.codebase = candidate.codebase AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE package.name = $1""", package_name, suite)
+WHERE package.name = $1 AND package.distribution = 'sid'""", package_name, suite)
         if package is None:
             raise web.HTTPNotFound(text='no such package: %s' % package_name)
         if run_id is not None:
