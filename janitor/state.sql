@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS codebase (
    -- last revision, if known
    vcs_last_revision text,
    last_scanned timestamp,
+
+   web_url text,
+
    -- vcs type, if known
    vcs_type vcs_type,
    value int,
@@ -538,7 +541,12 @@ CREATE OR REPLACE FUNCTION publish_trigger_refresh_change_set_state()
   AS $$
     BEGIN
 
-    if new.result_code = 'success' then
+    if old.result_code = 'success' and old.change_set is not null then
+        perform refresh_change_set_state(new.change_set);
+        if new.result_code = 'success' and new.change_set is not null then
+            perform refresh_change_set_state(new.change_set);
+        end if;
+    elsif new.result_code = 'success' and new.change_set is not null then
         perform refresh_change_set_state(new.change_set);
     end if;
 
@@ -615,7 +623,7 @@ WITH publishable AS (
   run.finish_time AS finish_time,
   run.finish_time - run.start_time AS duration,
   run.description AS description,
-  run.package AS package,
+  package.name AS package,
   run.result_code AS result_code,
   run.main_branch_revision AS main_branch_revision,
   run.revision AS revision,
@@ -649,7 +657,7 @@ WITH publishable AS (
   run.codebase AS codebase
 FROM
   last_effective_runs AS run
-INNER JOIN package ON package.name = run.package
+INNER JOIN package ON package.codebase = run.codebase
 INNER JOIN candidate ON
     candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON
