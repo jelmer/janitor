@@ -8,10 +8,10 @@ async def iter_publish_history(conn, limit=None):
 SELECT
     publish.id, publish.timestamp, publish.package, publish.branch_name,
     publish.mode, publish.merge_proposal_url, publish.result_code,
-    publish.description, package.vcs_browse
+    publish.description, codebase.web_url
 FROM
     publish
-JOIN package ON publish.package = package.name
+JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
 ORDER BY timestamp DESC
 """
     if limit:
@@ -37,10 +37,10 @@ SELECT
     publish.merge_proposal_url AS merge_proposal_url,
     publish.result_code AS result_code,
     publish.description AS description,
-    package.vcs_browse AS vcs_browse
+    codebase.web_url AS vcs_browse
 FROM
     publish
-JOIN package ON publish.package = package.name
+JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
 WHERE id = $1
 """
     return await conn.fetchrow(query, id)
