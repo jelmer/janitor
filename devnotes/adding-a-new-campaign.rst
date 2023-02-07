@@ -28,7 +28,6 @@ In janitor.conf, add a section for the campaign. E.g.::
       name: "some-name"
       branch_name: "some-name"
       debian_build {
-        archive_description: "Description for use in apt"
         build_suffix: "suf"
       }
     }

@@ -34,9 +34,11 @@ if sys.version_info >= (3, 10):
 
     Config: TypeAlias = config_pb2.Config
     Campaign: TypeAlias = config_pb2.Campaign
+    AptRepository: TypeAlias = config_pb2.AptRepository
 else:
     Config = config_pb2.Config
     Campaign = config_pb2.Campaign
+    AptRepository = config_pb2.AptRepository
 
 
 def read_config(f):
