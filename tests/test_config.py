@@ -59,7 +59,6 @@ campaign {
   command: "lintian-brush"
   branch_name: "lintian-fixes"
   debian_build {
-    archive_description: "Builds of lintian fixes"
     build_distribution: "lintian-fixes"
     build_suffix: "jan+lint"
     base_distribution: "unstable"
@@ -77,7 +76,6 @@ campaign {
   command: "true"
   branch_name: "master"
   debian_build {
-    archive_description: "Builds without any changes"
     build_distribution: "unchanged"
     build_suffix: "jan+unchanged"
     base_distribution: "unstable"
