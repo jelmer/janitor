@@ -47,8 +47,8 @@ from gpg.constants.sig import mode as gpg_mode
 
 from .. import state
 from ..artifacts import ArtifactsMissing, get_artifact_manager
-from ..config import (Campaign, get_campaign_config, get_distribution,
-                      read_config)
+from ..config import (get_campaign_config, get_distribution,
+                      read_config, AptRepository as AptRepositoryConfig)
 
 TMP_PREFIX = 'janitor-apt'
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -482,7 +482,7 @@ async def handle_publish(request):
             continue
         if campaign is not None and campaign != campaign_config.name:
             continue
-        await request.app['generator_manager'].trigger(campaign_config)
+        await request.app['generator_manager'].trigger_campaign(campaign_config.name)
 
     return web.json_response({})
 
@@ -753,9 +753,7 @@ async def listen_to_runner(redis, generator_manager):
             return
         if result['target']['name'] != 'debian':
             return
-        campaign = get_campaign_config(generator_manager.config, result["campaign"])
-        if campaign:
-            await generator_manager.trigger(campaign)
+        await generator_manager.trigger_campaign(result['campaign'])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
@@ -765,33 +763,36 @@ async def listen_to_runner(redis, generator_manager):
         await redis.close()
 
 
-async def publish_suite(
-    dists_directory, db, package_info_provider, config, suite, gpg_context
+async def publish_repository(
+    dists_directory, db, package_info_provider, config, apt_repository_config, gpg_context
 ):
-    if not suite.HasField('debian_build'):
-        logger.info("%s is not a Debian suite", suite.name)
-        return
     start_time = datetime.utcnow()
-    logger.info("Publishing %s", suite.name)
-    distribution = get_distribution(config, suite.debian_build.base_distribution)
-    suite_path = os.path.join(dists_directory, suite.name)
-    builds = await get_builds_for_suite(db, suite.debian_build.build_distribution)
+    logger.info("Publishing %s", apt_repository_config.name)
+    distribution = get_distribution(config, apt_repository_config.base)
+    assert distribution
+    suite_path = os.path.join(dists_directory, apt_repository_config.name)
+    builds = []
+    for select in apt_repository_config.select:
+        campaign_config = get_campaign_config(config, select.campaign)
+        assert campaign_config
+        assert campaign_config.debian_build
+        builds.extend(await get_builds_for_suite(db, campaign_config.debian_build.build_distribution))
     await write_suite_files(
         suite_path,
         get_packages=partial(retrieve_packages, package_info_provider, builds),
         get_sources=partial(retrieve_sources, package_info_provider, builds),
-        suite_name=suite.name,
-        archive_description=suite.debian_build.archive_description,
+        suite_name=apt_repository_config.name,
+        archive_description=apt_repository_config.description,
         components=distribution.component,
         arches=ARCHES,
         origin=config.origin,
         gpg_context=gpg_context)
 
     logger.info(
-        "Done publishing %s (took %s)", suite.name,
+        "Done publishing %s (took %s)", apt_repository_config.name,
         datetime.utcnow() - start_time)
-    last_publish_success.labels(suite=suite.name).set_to_current_time()
-    last_publish_time[suite.name] = datetime.utcnow()
+    last_publish_success.labels(suite=apt_repository_config.name).set_to_current_time()
+    last_publish_time[apt_repository_config.name] = datetime.utcnow()
 
 
 class GeneratorManager:
@@ -803,33 +804,40 @@ class GeneratorManager:
         self.gpg_context = gpg_context
         self.scheduler = Scheduler()
         self.jobs = {}
+        self._campaign_to_repository: dict[str, list[AptRepositoryConfig]] = {}
+        for apt_repo in self.config.apt_repository:
+            for select in apt_repo.select:
+                self._campaign_to_repository.setdefault(
+                    select.capmaign, []).append(apt_repo)
 
-    async def trigger(self, campaign_config: Campaign):
-        if not campaign_config.HasField('debian_build'):
-            return
+    async def trigger_campaign(self, campaign_name):
+        for apt_repo in self._campaign_to_repository.get(campaign_name, []):
+            await self.trigger(apt_repo)
+
+    async def trigger(self, apt_repository_config: AptRepositoryConfig):
         try:
-            job = self.jobs[campaign_config.name]
+            job = self.jobs[apt_repository_config.name]
         except KeyError:
             pass
         else:
             if not job.closed:
                 return
-        self.jobs[campaign_config.name] = await self.scheduler.spawn(
-            publish_suite(
+        self.jobs[apt_repository_config.name] = await self.scheduler.spawn(
+            publish_repository(
                 self.dists_dir,
                 self.db,
                 self.package_info_provider,
                 self.config,
-                campaign_config,
+                apt_repository_config,
                 self.gpg_context,
             )
         )
 
 
-async def loop_publish(config, generator_manager):
+async def loop_publish(config, generator_manager: GeneratorManager) -> None:
     while True:
-        for suite in config.campaign:
-            await generator_manager.trigger(suite)
+        for apt_repo in config.apt_repository:
+            await generator_manager.trigger(apt_repo)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)
 
