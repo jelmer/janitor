@@ -66,6 +66,8 @@ message Config {
   optional string user_agent = 18;
 
   repeated BugTracker bugtracker = 17;
+
+  repeated AptRepository apt_repository = 19;
 }
 
 message Env {
@@ -123,9 +125,6 @@ message DebianBuild {
   // Optional chroot, if different from that of base_distribution
   optional string chroot = 4;
 
-  // Human-readable description of the archive. Used in e.g. apt Release file.
-  optional string archive_description = 5;
-
   // Distribution to target when building
   optional string build_distribution = 6;
 
@@ -164,4 +163,17 @@ message BugTracker {
    optional string url = 2;
 
    optional string name = 3;
+};
+
+message Select {
+    optional string campaign = 1;
+};
+
+message AptRepository {
+    optional string name = 1;
+    optional string base = 3;
+    repeated Select select = 2;
+
+    // Human-readable description of the archive. Used in e.g. apt Release file.
+    optional string description = 5;
 };
