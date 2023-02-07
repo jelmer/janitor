@@ -613,7 +613,10 @@ class WorkerResult:
         for result_cls in RESULT_CLASSES:
             if target_kind == result_cls.kind:
                 target_details = worker_result["target"]["details"]
-                builder_result = result_cls.from_json(target_details)
+                if target_details is not None:
+                    builder_result = result_cls.from_json(target_details)
+                else:
+                    builder_result = None
                 break
         else:
             if target_kind is None:
