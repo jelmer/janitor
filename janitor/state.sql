@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
    distribution distribution_name not null,
 
-   codebase text references codebase(name),
+   codebase text not null references codebase(name),
 
    -- TODO(jelmer): Move these to codebase
    vcs_type vcs_type,
