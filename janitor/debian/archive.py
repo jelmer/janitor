@@ -808,7 +808,7 @@ class GeneratorManager:
         for apt_repo in self.config.apt_repository:
             for select in apt_repo.select:
                 self._campaign_to_repository.setdefault(
-                    select.capmaign, []).append(apt_repo)
+                    select.campaign, []).append(apt_repo)
 
     async def trigger_campaign(self, campaign_name):
         for apt_repo in self._campaign_to_repository.get(campaign_name, []):
