@@ -85,7 +85,6 @@ async def test_publish_worker():
             vcs_manager=DummyVcsManager(), extra_context={'package': 'pkg'})
         e.assert_called_with(
             [sys.executable, '-m', 'janitor.publish_one'], {
-                'dry-run': False,
                 'campaign': 'test-campaign',
                 'extra_context': {
                     'package': 'pkg',

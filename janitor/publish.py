@@ -440,7 +440,6 @@ class PublishWorker:
         rate_limit_bucket: Optional[str],
         vcs_manager: VcsManager,
         bucket_rate_limiter: Optional[RateLimiter] = None,
-        dry_run: bool = False,
         require_binary_diff: bool = False,
         allow_create_proposal: bool = False,
         reviewers: Optional[list[str]] = None,
@@ -462,7 +461,6 @@ class PublishWorker:
         target_branch_url = target_branch_url.rstrip("/")
 
         request = {
-            "dry-run": dry_run,
             "campaign": campaign,
             "command": command,
             "codemod_result": codemod_result,
@@ -564,8 +562,8 @@ async def consider_publish_run(
         vcs_managers, bucket_rate_limiter,
         run: state.Run, rate_limit_bucket,
         unpublished_branches, command: str,
-        push_limit: Optional[int] = None, require_binary_diff: bool = False,
-        dry_run: bool = False) -> dict[str, Optional[str]]:
+        push_limit: Optional[int] = None,
+        require_binary_diff: bool = False) -> dict[str, Optional[str]]:
     if run.revision is None:
         logger.warning(
             "Run %s is publish ready, but does not have revision set.", run.id,
@@ -644,7 +642,6 @@ async def consider_publish_run(
             target_branch_url=run.target_branch_url or run.branch_url,
             mode=publish_mode,
             max_frequency_days=max_frequency_days, command=command,
-            dry_run=dry_run,
             redis=redis,
             require_binary_diff=require_binary_diff,
             force=False,
@@ -714,7 +711,6 @@ async def publish_pending_ready(
     publish_worker,
     bucket_rate_limiter,
     vcs_managers,
-    dry_run: bool,
     push_limit: Optional[int] = None,
     require_binary_diff: bool = False,
 ):
@@ -738,8 +734,7 @@ async def publish_pending_ready(
                 rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
                 push_limit=push_limit,
-                require_binary_diff=require_binary_diff,
-                dry_run=dry_run)
+                require_binary_diff=require_binary_diff)
             for actual_mode in actual_modes.values():
                 if actual_mode is None:
                     continue
@@ -887,6 +882,7 @@ async def store_publish(
     codebase: str,
     package: str,
     branch_name: Optional[str],
+    target_branch_url: Optional[str],
     main_branch_revision: Optional[bytes],
     revision: Optional[bytes],
     role: str,
@@ -894,7 +890,6 @@ async def store_publish(
     result_code: str,
     description: str,
     merge_proposal_url: Optional[str] = None,
-    target_branch_url: Optional[str] = None,
     publish_id: Optional[str] = None,
     requestor: Optional[str] = None,
     run_id: Optional[str] = None,
@@ -936,8 +931,9 @@ async def store_publish(
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
-            "description, merge_proposal_url, id, requestor, change_set, run_id) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ",
+            "description, merge_proposal_url, id, requestor, change_set, run_id, "
+            "target_branch_url) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ",
             package,
             branch_name,
             main_branch_revision,
@@ -951,6 +947,7 @@ async def store_publish(
             requestor,
             change_set,
             run_id,
+            target_branch_url,
         )
         if result_code == 'success':
             await conn.execute(
@@ -975,7 +972,6 @@ async def publish_from_policy(
     mode: str,
     max_frequency_days: Optional[int],
     command: str,
-    dry_run: bool,
     require_binary_diff: bool = False,
     force: bool = False,
     requestor: Optional[str] = None,
@@ -1101,7 +1097,6 @@ async def publish_from_policy(
             derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
             rate_limit_bucket=rate_limit_bucket,
             vcs_manager=vcs_managers[run.vcs_type],
-            dry_run=dry_run,
             require_binary_diff=require_binary_diff,
             bucket_rate_limiter=bucket_rate_limiter,
             result_tags=run.result_tags,
@@ -1225,7 +1220,6 @@ async def publish_and_store(
     rate_limit_bucket: Optional[str],
     vcs_managers: dict[str, VcsManager],
     bucket_rate_limiter: RateLimiter,
-    dry_run: bool,
     allow_create_proposal: bool = True,
     require_binary_diff: bool = False,
     requestor: Optional[str] = None,
@@ -1268,7 +1262,6 @@ async def publish_and_store(
                 derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
                 rate_limit_bucket=rate_limit_bucket,
                 vcs_manager=vcs_managers[run.vcs_type],
-                dry_run=dry_run,
                 require_binary_diff=require_binary_diff,
                 allow_create_proposal=allow_create_proposal,
                 bucket_rate_limiter=bucket_rate_limiter,
@@ -1290,6 +1283,7 @@ async def publish_and_store(
                 change_set=run.change_set,
                 codebase=run.codebase,
                 package=run.package,
+                target_branch_url=target_branch_url,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=run.main_branch_revision,
                 revision=run.revision,
@@ -1337,7 +1331,7 @@ async def publish_and_store(
             merge_proposal_url=(
                 publish_result.proposal_url
                 if publish_result.proposal_url else None),
-            target_branch_url=run.branch_url,
+            target_branch_url=publish_result.target_branch_url,
             publish_id=publish_id,
             requestor=requestor,
             run_id=run.id,
@@ -1603,8 +1597,7 @@ async def consider_request(request):
                 command=command,
                 rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
-                require_binary_diff=request.app['require_binary_diff'],
-                dry_run=request.app['dry_run'])
+                require_binary_diff=request.app['require_binary_diff'])
     await spawn(request, run())
     return web.json_response({}, status=200)
 
@@ -1667,7 +1660,6 @@ WHERE id = $1
 
 @routes.post("/{campaign}/{codebase}/publish", name='publish')
 async def publish_request(request):
-    dry_run = request.app['dry_run']
     vcs_managers = request.app['vcs_managers']
     bucket_rate_limiter = request.app['bucket_rate_limiter']
     codebase = request.match_info["codebase"]
@@ -1719,7 +1711,6 @@ async def publish_request(request):
                 rate_limit_bucket=rate_limit_bucket,
                 vcs_managers=vcs_managers,
                 bucket_rate_limiter=bucket_rate_limiter,
-                dry_run=dry_run,
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
@@ -1788,7 +1779,6 @@ async def create_app(
     redis,
     config,
     publish_worker: Optional[PublishWorker] = None,
-    dry_run: bool = False,
     forge_rate_limiter: Optional[dict[str, datetime]] = None,
     bucket_rate_limiter: Optional[RateLimiter] = None,
     require_binary_diff: bool = False,
@@ -1812,7 +1802,6 @@ async def create_app(
         forge_rate_limiter = {}
     app['forge_rate_limiter'] = forge_rate_limiter
     app['modify_mp_limit'] = modify_mp_limit
-    app['dry_run'] = dry_run
     app['push_limit'] = push_limit
     app['require_binary_diff'] = require_binary_diff
     setup_metrics(app)
@@ -1876,7 +1865,6 @@ async def scan_request(request):
                 bucket_rate_limiter=request.app['bucket_rate_limiter'],
                 forge_rate_limiter=request.app['forge_rate_limiter'],
                 vcs_managers=request.app['vcs_managers'],
-                dry_run=request.app['dry_run'],
                 modify_limit=request.app['modify_mp_limit'],
             )
 
@@ -1923,7 +1911,6 @@ async def refresh_proposal_status_request(request):
                     status=status,
                     vcs_managers=request.app['vcs_managers'],
                     bucket_rate_limiter=request.app['bucket_rate_limiter'],
-                    dry_run=request.app['dry_run'],
                 )
             except NoRunForMergeProposal as e:
                 logger.warning(
@@ -1946,7 +1933,6 @@ async def autopublish_request(request):
             publish_worker=request.app['publish_worker'],
             bucket_rate_limiter=request.app['bucket_rate_limiter'],
             vcs_managers=request.app['vcs_managers'],
-            dry_run=request.app['dry_run'],
             push_limit=request.app['push_limit'],
             require_binary_diff=request.app['require_binary_diff'],
         )
@@ -2136,7 +2122,6 @@ async def process_queue_loop(
     publish_worker,
     bucket_rate_limiter,
     forge_rate_limiter,
-    dry_run,
     vcs_managers,
     interval,
     auto_publish: bool = True,
@@ -2155,7 +2140,6 @@ async def process_queue_loop(
                 bucket_rate_limiter=bucket_rate_limiter,
                 forge_rate_limiter=forge_rate_limiter,
                 vcs_managers=vcs_managers,
-                dry_run=dry_run,
                 modify_limit=modify_mp_limit,
             )
             await check_stragglers(conn, redis)
@@ -2167,7 +2151,6 @@ async def process_queue_loop(
                 publish_worker=publish_worker,
                 bucket_rate_limiter=bucket_rate_limiter,
                 vcs_managers=vcs_managers,
-                dry_run=dry_run,
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff)
         cycle_duration = datetime.utcnow() - cycle_start
@@ -2385,8 +2368,8 @@ class ProposalInfoManager:
 
     async def update_proposal_info(
             self, mp, *, status, revision, codebase, package_name, target_branch_url,
-            campaign, can_be_merged: Optional[bool], rate_limit_bucket: Optional[str],
-            dry_run: bool = False):
+            campaign, can_be_merged: Optional[bool],
+            rate_limit_bucket: Optional[str]):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2402,49 +2385,48 @@ class ProposalInfoManager:
             merged_by = None
             merged_by_url = None
             merged_at = None
-        if not dry_run:
-            async with self.conn.transaction():
-                await self.conn.execute(
-                    """INSERT INTO merge_proposal (
-                        url, status, revision, package, merged_by, merged_at,
-                        target_branch_url, last_scanned, can_be_merged, rate_limit_bucket,
-                        codebase)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10)
-                    ON CONFLICT (url)
-                    DO UPDATE SET
-                      status = EXCLUDED.status,
-                      revision = EXCLUDED.revision,
-                      package = EXCLUDED.package,
-                      merged_by = EXCLUDED.merged_by,
-                      merged_at = EXCLUDED.merged_at,
-                      target_branch_url = EXCLUDED.target_branch_url,
-                      last_scanned = EXCLUDED.last_scanned,
-                      can_be_merged = EXCLUDED.can_be_merged,
-                      rate_limit_bucket = EXCLUDED.rate_limit_bucket,
-                      codebase = EXCLUDED.codebase
-                    """, mp.url, status,
-                    revision.decode("utf-8") if revision is not None else None,
-                    package_name, merged_by, merged_at, target_branch_url,
-                    can_be_merged, rate_limit_bucket, codebase)
-                if revision:
-                    await self.conn.execute("""
-                    UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
-                    """, (status == 'merged'), revision.decode('utf-8'))
+        async with self.conn.transaction():
+            await self.conn.execute(
+                """INSERT INTO merge_proposal (
+                    url, status, revision, package, merged_by, merged_at,
+                    target_branch_url, last_scanned, can_be_merged, rate_limit_bucket,
+                    codebase)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10)
+                ON CONFLICT (url)
+                DO UPDATE SET
+                  status = EXCLUDED.status,
+                  revision = EXCLUDED.revision,
+                  package = EXCLUDED.package,
+                  merged_by = EXCLUDED.merged_by,
+                  merged_at = EXCLUDED.merged_at,
+                  target_branch_url = EXCLUDED.target_branch_url,
+                  last_scanned = EXCLUDED.last_scanned,
+                  can_be_merged = EXCLUDED.can_be_merged,
+                  rate_limit_bucket = EXCLUDED.rate_limit_bucket,
+                  codebase = EXCLUDED.codebase
+                """, mp.url, status,
+                revision.decode("utf-8") if revision is not None else None,
+                package_name, merged_by, merged_at, target_branch_url,
+                can_be_merged, rate_limit_bucket, codebase)
+            if revision:
+                await self.conn.execute("""
+                UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
+                """, (status == 'merged'), revision.decode('utf-8'))
 
-            # TODO(jelmer): Check if the change_set should be marked as published
+        # TODO(jelmer): Check if the change_set should be marked as published
 
-            await self.redis.publish('merge-proposal', json.dumps({
-                "url": mp.url,
-                "target_branch_url": target_branch_url,
-                "rate_limit_bucket": rate_limit_bucket,
-                "status": status,
-                "package": package_name,
-                "codebase": codebase,
-                "merged_by": merged_by,
-                "merged_by_url": merged_by_url,
-                "merged_at": str(merged_at),
-                "campaign": campaign,
-            }))
+        await self.redis.publish('merge-proposal', json.dumps({
+            "url": mp.url,
+            "target_branch_url": target_branch_url,
+            "rate_limit_bucket": rate_limit_bucket,
+            "status": status,
+            "package": package_name,
+            "codebase": codebase,
+            "merged_by": merged_by,
+            "merged_by_url": merged_by_url,
+            "merged_at": str(merged_at),
+            "campaign": campaign,
+        }))
 
 
 async def abandon_mp(proposal_info_manager: ProposalInfoManager,
@@ -2452,11 +2434,9 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
                      codebase: Optional[str], package_name: Optional[str], target_branch_url: str,
                      campaign: Optional[str], can_be_merged: Optional[bool],
                      rate_limit_bucket: Optional[str],
-                     comment: Optional[str], dry_run: bool = False):
+                     comment: Optional[str]):
     if comment:
         logger.info('%s: %s', mp.url, comment)
-    if dry_run:
-        return
     await proposal_info_manager.update_proposal_info(
         mp, status="abandoned", revision=revision, package_name=package_name,
         target_branch_url=target_branch_url, campaign=campaign,
@@ -2484,14 +2464,13 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
                            target_branch_url: str,
                            campaign: Optional[str], can_be_merged: Optional[bool],
                            rate_limit_bucket: Optional[str],
-                           comment: Optional[str], dry_run=False):
+                           comment: Optional[str]):
 
     await proposal_info_manager.update_proposal_info(
         mp, status="applied", revision=revision, codebase=codebase,
         package_name=package_name,
         target_branch_url=target_branch_url, campaign=campaign,
-        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
-        dry_run=dry_run)
+        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket)
     try:
         await asyncio.to_thread(mp.post_comment, comment)
     except PermissionDenied as e:
@@ -2538,7 +2517,6 @@ async def check_existing_mp(
     status,
     vcs_managers,
     bucket_rate_limiter,
-    dry_run: bool,
     mps_per_bucket=None,
     possible_transports: Optional[list[Transport]] = None,
     check_only: bool = False,
@@ -2635,8 +2613,7 @@ async def check_existing_mp(
             codebase=codebase,
             target_branch_url=target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
-            can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
-            dry_run=dry_run)
+            can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket)
     else:
         await conn.execute(
             'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
@@ -2737,7 +2714,7 @@ async def check_existing_mp(
                 rate_limit_bucket=rate_limit_bucket, comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""", dry_run=dry_run)
+""")
         except PermissionDenied:
             return False
         else:
@@ -2804,8 +2781,7 @@ applied independently.
                 proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket,
-                comment="This merge proposal will be closed, since only trivial changes are left.",
-                dry_run=dry_run)
+                comment="This merge proposal will be closed, since only trivial changes are left.")
         except PermissionDenied:
             return False
         return True
@@ -2839,7 +2815,7 @@ applied independently.
         # Note that we require that mp_remote_branch_name is set.
         # For some old runs it is not set because we didn't track
         # the default branch name.
-        if not dry_run and mp_remote_branch_name is not None:
+        if mp_remote_branch_name is not None:
             try:
                 await asyncio.to_thread(
                     mp.set_target_branch_name,
@@ -2860,7 +2836,7 @@ applied independently.
                         can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '{}'
 has changed from {} to {}.
-""".format(mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name), dry_run=dry_run)
+""".format(mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
                 except PermissionDenied:
                     return False
                 return True
@@ -2889,7 +2865,7 @@ has changed from {} to {}.
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""\
 This merge proposal will be closed, since the branch has moved to {}.
-""".format(last_run.branch_url), dry_run=dry_run)
+""".format(last_run.branch_url))
         except PermissionDenied:
             return False
         return True
@@ -2947,7 +2923,6 @@ This merge proposal will be closed, since the branch has moved to {}.
                 derived_branch_name=source_branch_name,
                 rate_limit_bucket=rate_limit_bucket,
                 vcs_manager=vcs_managers[last_run.vcs_type],
-                dry_run=dry_run,
                 require_binary_diff=False,
                 allow_create_proposal=True,
                 bucket_rate_limiter=bucket_rate_limiter,
@@ -2986,7 +2961,7 @@ This merge proposal will be closed, since the branch has moved to {}.
                         comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""", dry_run=dry_run)
+""")
                 except PermissionDenied as f:
                     logger.warning(
                         "Permission denied closing merge request %s: %s", mp.url, f, extra={'mp_url': mp.url}
@@ -3005,44 +2980,43 @@ applied independently.
                     code,
                     description, extra={'mp_url': mp.url}
                 )
-            if not dry_run:
-                await store_publish(
-                    conn,
-                    change_set=last_run.change_set,
-                    codebase=last_run.codebase,
-                    package=last_run.package,
-                    branch_name=campaign_config.branch_name,
-                    main_branch_revision=last_run_base_revision,
-                    revision=last_run_revision,
-                    role=mp_run['role'],
-                    mode=e.mode,
-                    result_code=code,
-                    description=description,
-                    merge_proposal_url=mp.url,
-                    publish_id=publish_id,
-                    requestor="publisher (regular refresh)",
-                    run_id=last_run.id,
-                )
+            await store_publish(
+                conn,
+                change_set=last_run.change_set,
+                codebase=last_run.codebase,
+                package=last_run.package,
+                branch_name=campaign_config.branch_name,
+                main_branch_revision=last_run_base_revision,
+                revision=last_run_revision,
+                role=mp_run['role'],
+                mode=e.mode,
+                result_code=code,
+                description=description,
+                merge_proposal_url=mp.url,
+                target_branch_url=target_branch_url,
+                publish_id=publish_id,
+                requestor="publisher (regular refresh)",
+                run_id=last_run.id,
+            )
         else:
-            if not dry_run:
-                await store_publish(
-                    conn,
-                    change_set=last_run.change_set,
-                    codebase=last_run.codebase,
-                    package=last_run.package,
-                    branch_name=publish_result.branch_name,
-                    main_branch_revision=last_run_base_revision,
-                    revision=last_run_revision,
-                    role=mp_run['role'],
-                    mode=MODE_PROPOSE,
-                    result_code="success",
-                    description=(publish_result.description or "Successfully updated"),
-                    merge_proposal_url=publish_result.proposal_url,
-                    target_branch_url=target_branch_url,
-                    publish_id=publish_id,
-                    requestor="publisher (regular refresh)",
-                    run_id=last_run.id,
-                )
+            await store_publish(
+                conn,
+                change_set=last_run.change_set,
+                codebase=last_run.codebase,
+                package=last_run.package,
+                branch_name=publish_result.branch_name,
+                main_branch_revision=last_run_base_revision,
+                revision=last_run_revision,
+                role=mp_run['role'],
+                mode=MODE_PROPOSE,
+                result_code="success",
+                description=(publish_result.description or "Successfully updated"),
+                merge_proposal_url=publish_result.proposal_url,
+                target_branch_url=target_branch_url,
+                publish_id=publish_id,
+                requestor="publisher (regular refresh)",
+                run_id=last_run.id,
+            )
 
             if publish_result.is_new:
                 # This can happen when the default branch changes
@@ -3056,22 +3030,21 @@ applied independently.
         # changes.
         if can_be_merged is False:
             logger.info("%s can not be merged (conflict?). Rescheduling.", mp.url, extra={'mp_url': mp.url})
-            if not dry_run:
-                try:
-                    await do_schedule(
-                        conn,
-                        campaign=mp_run['campaign'],
-                        change_set=mp_run['change_set'],
-                        bucket="update-existing-mp",
-                        refresh=True,
-                        requestor="publisher (merge conflict)",
-                        codebase=mp_run['codebase'],
-                    )
-                except CandidateUnavailable:
-                    logger.warning(
-                        'Candidate unavailable while attempting to reschedule '
-                        'conflicted %s/%s',
-                        mp_run['codebase'], mp_run['campaign'], extra={'mp_url': mp.url})
+            try:
+                await do_schedule(
+                    conn,
+                    campaign=mp_run['campaign'],
+                    change_set=mp_run['change_set'],
+                    bucket="update-existing-mp",
+                    refresh=True,
+                    requestor="publisher (merge conflict)",
+                    codebase=mp_run['codebase'],
+                )
+            except CandidateUnavailable:
+                logger.warning(
+                    'Candidate unavailable while attempting to reschedule '
+                    'conflicted %s/%s',
+                    mp_run['codebase'], mp_run['campaign'], extra={'mp_url': mp.url})
         return False
 
 
@@ -3109,7 +3082,6 @@ async def check_existing(
     bucket_rate_limiter,
     forge_rate_limiter: dict[Forge, datetime],
     vcs_managers,
-    dry_run: bool,
     modify_limit=None,
     unexpected_limit: int = 5,
 ):
@@ -3154,7 +3126,6 @@ async def check_existing(
                 mp=mp,
                 status=status,
                 vcs_managers=vcs_managers,
-                dry_run=dry_run,
                 bucket_rate_limiter=bucket_rate_limiter,
                 possible_transports=possible_transports,
                 mps_per_bucket=mps_per_bucket,
@@ -3286,7 +3257,6 @@ async def listen_to_runner(
     publish_worker,
     bucket_rate_limiter,
     vcs_managers,
-    dry_run: bool,
     require_binary_diff: bool = False,
 ):
     async def process_run(conn, run, branch_url):
@@ -3311,7 +3281,6 @@ async def listen_to_runner(
                 mode=mode,
                 max_frequency_days=max_frequency_days,
                 command=command,
-                dry_run=dry_run,
                 require_binary_diff=require_binary_diff,
                 force=True,
                 requestor="runner",
@@ -3367,12 +3336,6 @@ async def main(argv=None):
         default=0,
         type=int,
         help="Maximum number of open merge proposals per bucket.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        help="Create branches but don't push or propose anything.",
-        action="store_true",
-        default=False,
     )
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
@@ -3500,7 +3463,6 @@ async def main(argv=None):
                 config=config,
                 publish_worker=publish_worker,
                 bucket_rate_limiter=bucket_rate_limiter,
-                dry_run=args.dry_run,
                 vcs_managers=vcs_managers,
                 require_binary_diff=args.require_binary_diff,
             )
@@ -3517,7 +3479,6 @@ async def main(argv=None):
                         publish_worker=publish_worker,
                         bucket_rate_limiter=bucket_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
-                        dry_run=args.dry_run,
                         vcs_managers=vcs_managers,
                         interval=args.interval,
                         auto_publish=not args.no_auto_publish,
@@ -3535,7 +3496,6 @@ async def main(argv=None):
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
                         db=db, redis=redis, config=config,
-                        dry_run=args.dry_run,
                         require_binary_diff=args.require_binary_diff,
                         modify_mp_limit=args.modify_mp_limit,
                         push_limit=args.push_limit,
@@ -3554,7 +3514,6 @@ async def main(argv=None):
                         publish_worker=publish_worker,
                         bucket_rate_limiter=bucket_rate_limiter,
                         vcs_managers=vcs_managers,
-                        dry_run=args.dry_run,
                         require_binary_diff=args.require_binary_diff,
                     )
                 )
