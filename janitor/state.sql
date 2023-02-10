@@ -48,11 +48,9 @@ CREATE TABLE IF NOT EXISTS package (
    archive_version debversion,
    vcs_url text,
    vcs_browse text,
-   removed boolean default false,
    origin text,
    unique(distribution, name)
 );
-CREATE INDEX ON package (removed);
 CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 
@@ -521,20 +519,6 @@ CREATE OR REPLACE VIEW first_run_time AS
  SELECT DISTINCT ON (run.codebase, run.suite) run.codebase, run.suite, run.start_time
  FROM run ORDER BY run.codebase, run.suite;
 
-CREATE OR REPLACE FUNCTION drop_candidates_for_deleted_packages()
-  RETURNS TRIGGER
-  LANGUAGE PLPGSQL
-  AS
-$$
-BEGIN
-    IF NEW.removed AND NOT OLD.removed THEN
-        DELETE FROM candidate WHERE codebase = NEW.codebase;
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION publish_trigger_refresh_change_set_state()
   RETURNS TRIGGER
   LANGUAGE PLPGSQL
@@ -560,12 +544,6 @@ CREATE OR REPLACE TRIGGER publish_refresh_change_set_state
   FOR EACH ROW
   EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
 
-
-CREATE OR REPLACE TRIGGER drop_candidates_when_removed
-  AFTER UPDATE OF removed
-  ON package
-  FOR EACH ROW
-  EXECUTE FUNCTION drop_candidates_for_deleted_packages();
 
 CREATE TABLE site_session (
   id text primary key,
@@ -664,7 +642,7 @@ INNER JOIN named_publish_policy ON
     candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
-  result_code = 'success' AND NOT package.removed)
+  result_code = 'success')
 SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
 
 CREATE OR REPLACE VIEW upstream_branch_urls as (
