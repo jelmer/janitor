@@ -13,7 +13,6 @@
             {% if publish_policy %}<li>Automatic publish policy: {{ describe_publish_policy(publish_policy) }}</li>{% endif %}
             {% if changelog_policy != 'auto' %}<li>Changelog update policy: {{ changelog_policy }}</li>{% endif %}
             {% if compat_release %}<li>Release compatibility: {{ compat_release }}</li>{% endif %}
-            {% if removed %}<li class="not-in-archive">This package is not present in the archive.</li>{% endif %}
             {% if previous_runs %}
                 <li>
                     Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].start_time) }})
