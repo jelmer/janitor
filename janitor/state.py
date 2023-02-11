@@ -65,7 +65,6 @@ class Run:
     id: str
     command: str
     description: Optional[str]
-    package: str
     result_code: str
     main_branch_revision: Optional[bytes]
     revision: Optional[bytes]
@@ -91,7 +90,6 @@ class Run:
         "finish_time",
         "command",
         "description",
-        "package",
         "result_code",
         "value",
         "main_branch_revision",
@@ -121,7 +119,6 @@ class Run:
         finish_time,
         command,
         description,
-        package,
         result_code,
         value,
         main_branch_revision,
@@ -147,7 +144,6 @@ class Run:
         self.finish_time = finish_time
         self.command = command
         self.description = description
-        self.package = package
         self.result_code = result_code
         self.value = value
         self.main_branch_revision = main_branch_revision
@@ -201,7 +197,6 @@ class Run:
             finish_time=row['finish_time'],
             command=row['command'],
             description=row['description'],
-            package=row['package'],
             result_code=row['result_code'],
             main_branch_revision=(row['main_branch_revision'].encode("utf-8") if row['main_branch_revision'] else None),
             revision=(row['revision'].encode("utf-8") if row['revision'] else None),

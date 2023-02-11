@@ -204,16 +204,15 @@ async def handle_run_reprocess_logs(request):
     reschedule = 'reschedule' in post
     async with request.app['pool'].acquire() as conn:
         run = await conn.fetchrow(
-            'SELECT package, suite AS campaign, command, '
+            'SELECT codebase, suite AS campaign, command, '
             'finish_time - start_time as duration, codebase, '
             'result_code, description, failure_details, change_set FROM run WHERE id = $1',
             run_id)
 
     result = await reprocess_run_logs(
         db=request.app['pool'],
-        codebase=run['codebase'],
         logfile_manager=request.app['logfile_manager'],
-        package=run['package'], campaign=run['campaign'], log_id=run_id,
+        codebase=run['codebase'], campaign=run['campaign'], log_id=run_id,
         command=run['command'], change_set=run['change_set'], duration=run['duration'],
         result_code=run['result_code'],
         description=run['description'], failure_details=run['failure_details'],
@@ -256,7 +255,7 @@ async def handle_reprocess_logs(request):
         args = []
         query = """
 SELECT
-  package,
+  codebase,
   suite AS campaign,
   id,
   command,
@@ -279,7 +278,7 @@ WHERE
         args = [run_ids]
         query = """
 SELECT
-  package,
+  codebase,
   suite AS campaign,
   id,
   command,
@@ -301,11 +300,10 @@ WHERE
             asyncio.create_task(reprocess_run_logs(
                 db=request.app['pool'],
                 logfile_manager=request.app['logfile_manager'],
-                package=row['package'], campaign=row['campaign'], log_id=row['id'],
+                codebase=row['codebase'], campaign=row['campaign'], log_id=row['id'],
                 command=row['command'], change_set=row['change_set'],
                 duration=row['duration'], result_code=row['result_code'],
                 description=row['description'], failure_details=row['failure_details'],
-                codebase=row['codebase'],
                 process_fns=[
                     ('dist-', DIST_LOG_FILENAME, process_dist_log),
                     ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
@@ -317,7 +315,7 @@ WHERE
     await spawn(request, do_reprocess())
 
     return web.json_response([
-        {'package': row['package'],
+        {'codebase': row['codebase'],
          'campaign': row['campaign'],
          'log_id': row['id']}
         for row in rows])

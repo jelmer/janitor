@@ -3,7 +3,7 @@
     {% include "cupboard/sidebar.html" %}
 {% endblock sidebar %}
 {% block page_title %}
-    Never Processed packages
+    Never Processed
     {% if campaign %}- for {{ campaign }}{% endif %}
 {% endblock page_title %}
 {% block body %}
@@ -38,13 +38,13 @@
                 </tr>
             </thead>
             <tbody valign="top">
-                {% for package, campaign in never_processed %}
+                {% for codebase, campaign in never_processed %}
                     <tr>
                         <td>
-                            <a class="reference external" href="/cupboard/pkg/{{ package }}/">{{ package }}</a>
+                            <a class="reference external" href="/cupboard/c/{{ codebase }}/">{{ codebase }}</a>
                         </td>
                         <td>
-                            <a href="/{{ campaign }}/pkg/{{ package }}">{{ campaign }}</a>
+                            <a href="/{{ campaign }}/pkg/{{ codebase }}">{{ campaign }}</a>
                         </td>
                     </tr>
                 {% endfor %}

@@ -40,7 +40,7 @@ from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
 
 from ..config import get_campaign_config
 from ..vcs import VcsManager
-from .common import get_unchanged_run, iter_candidates
+from .common import get_unchanged_run
 
 FAIL_BUILD_LOG_LEN = 15
 
@@ -136,9 +136,6 @@ async def generate_run_file(
             (queue_position, queue_wait_time) = await queue.get_position(
                 run['suite'], run['codebase']
             )
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow(
-                'SELECT * FROM package WHERE name = $1', run['package'])
         with span.new_child('sql:publish-history'):
             publish_history: List[asyncpg.Record]
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
@@ -152,19 +149,15 @@ async def generate_run_file(
                 run['id'])
         with span.new_child('sql:success-probability'):
             kwargs["success_probability"], kwargs['estimated_duration'], kwargs["total_previous_runs"] = await estimate_success_probability_and_duration(
-                conn, run['package'], run['suite'])
+                conn, run['codebase'], run['suite'])
         with span.new_child('sql:followups'):
             kwargs['followups'] = await conn.fetch("""SELECT \
-    package.name AS package,
     candidate.codebase AS codebase,
     candidate.suite AS campaign
 FROM followup
 LEFT JOIN candidate ON candidate.id = followup.candidate
-INNER JOIN package ON package.codebase = candidate.codebase
 WHERE followup.origin = $1""", run['id'])
 
-    if package:
-        kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
     kwargs["is_admin"] = is_admin
@@ -209,7 +202,7 @@ WHERE followup.origin = $1""", run['id'])
         try:
             with span.new_child('vcs-diff'):
                 diff = await vcs_managers[run['vcs_type']].get_diff(
-                    run['package'],
+                    run['codebase'],
                     base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
                     revid.encode('utf-8'))
         except ClientResponseError as e:
@@ -266,7 +259,7 @@ WHERE followup.origin = $1""", run['id'])
 
     async def _get_log(name):
         try:
-            return (await logfile_manager.get_log(run['package'], run['id'], name)).read()
+            return (await logfile_manager.get_log(run['codebase'], run['id'], name)).read()
         except FileNotFoundError:
             return None
         except LogRetrievalError as e:
@@ -351,24 +344,6 @@ WHERE followup.origin = $1""", run['id'])
     return kwargs
 
 
-async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
-    kwargs = {}
-    if package:
-        kwargs["package"] = package['name']
-        kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
-    kwargs["merge_proposals"] = merge_proposals
-    kwargs["runs"] = runs
-    kwargs["distributions"] = config.distribution
-    kwargs["available_suites"] = available_suites
-    async with db.acquire() as conn:
-        with span.new_child('sql:candidates'):
-            kwargs["candidates"] = {
-                row['suite']: (row['context'], row['value'], row['success_chance'])
-                for row in await iter_candidates(conn, codebases=[package['codebase']])
-            }
-    return kwargs
-
-
 async def generate_done_list(
         db, campaign: Optional[str], since: Optional[datetime] = None):
 
@@ -428,7 +403,7 @@ async def generate_ready_list(
     db, suite: Optional[str], publish_status: Optional[str] = None
 ):
     async with db.acquire() as conn:
-        query = 'SELECT package, suite, id, command, result FROM publish_ready'
+        query = 'SELECT codebase, suite, id, command, result FROM publish_ready'
 
         conditions = [
             "EXISTS (SELECT * FROM unnest(unpublished_branches) upb "
@@ -448,7 +423,7 @@ async def generate_ready_list(
 
         query += " WHERE " + " AND ".join(conditions)
 
-        query += " ORDER BY package ASC"
+        query += " ORDER BY codebase ASC"
 
         runs = await conn.fetch(query, *args)
     return {"runs": runs, "suite": suite, "campaign": suite}

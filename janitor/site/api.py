@@ -42,16 +42,16 @@ routes = web.RouteTableDef()
 
 
 @docs()
-@routes.post("/{campaign}/pkg/{package}/publish", name="package-publish")
+@routes.post("/{campaign}/c/{codebase}/publish", name="codebase-publish")
 async def handle_publish(request):
     publisher_url = request.app['publisher_url']
-    package = request.match_info["package"]
+    codebase = request.match_info["codebase"]
     campaign = request.match_info["campaign"]
     post = await request.post()
     mode = post.get("mode")
     if mode not in (None, "push-derived", "push", "propose", "attempt-push"):
         return web.json_response({"error": "Invalid mode", "mode": mode}, status=400)
-    url = URL(publisher_url) / campaign / package / "publish"
+    url = URL(publisher_url) / campaign / codebase / "publish"
     if request['user']:
         try:
             requestor = request['user']["email"]
@@ -171,7 +171,6 @@ async def handle_schedule_control(request):
 
 class MergeProposalSchema(Schema):
 
-    package = fields.Str(metadata={'description': 'package name'})
     url = fields.Url(metadata={'description': 'merge proposal URL'})
     status = fields.Str(metadata={'description': 'status'})
 
@@ -185,10 +184,10 @@ async def handle_campaign_merge_proposal_list(request):
         return web.json_response({})
 
 
-@routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
-async def handle_package_merge_proposal_list(request):
-    package = request.match_info["package"]
-    url = URL(request.app['publisher_url']) / "pkg" / package / "merge-proposals"
+@routes.get("/c/{codebase}/merge-proposals", name="codebase-merge-proposals")
+async def handle_codebase_merge_proposal_list(request):
+    codebase = request.match_info["codebase"]
+    url = URL(request.app['publisher_url']) / "c" / codebase / "merge-proposals"
     async with request.app['http_client_session'].get(url, raise_for_status=True):
         return web.json_response({})
 
@@ -234,7 +233,6 @@ class QueueItemSchema(Schema):
 
     queue_id = fields.Int(metadata={'description': "Queue identifier"})
     branch_url = fields.Str(metadata={'description': "Branch URL"})
-    package = fields.Str(metadata={'description': "Package name"})
     context = fields.Str(metadata={'description': "Run context"})  # type: ignore
     command = fields.Str(metadata={'description': "Command"})
 
@@ -291,11 +289,6 @@ async def handle_diff(request):
             raise web.HTTPNotFound(
                 text="no unabsorbed run for %s/%s" % (package, campaign))
 
-    try:
-        max_diff_size = int(request.query["max_diff_size"])
-    except KeyError:
-        max_diff_size = None
-
     if run['vcs_type'] is None:
         return web.Response(
             status=404,
@@ -315,15 +308,6 @@ async def handle_diff(request):
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError as e:
             raise web.HTTPBadRequest(text="unsupported vcs %s" % run['vcs_type']) from e
-        if max_diff_size is not None and len(diff) > max_diff_size:
-            return web.Response(
-                status=413,
-                text="Diff too large (%d bytes). See it at %s"
-                % (
-                    len(diff),
-                    request.app.router["run-diff"].url_for(run_id=run_id),
-                ),
-            )
 
         best_match = mimeparse.best_match(
             ['text/x-diff', 'text/plain', 'text/html'],
@@ -424,7 +408,7 @@ async def handle_archive_diff(request):
 
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
-@routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
+@routes.post("/c/{codebase}/run/{run_id}", name="codebase-run-update")
 async def handle_run_post(request):
     from ..review import store_review
     async with request.app['pool'].acquire() as conn:
@@ -465,7 +449,6 @@ class RunSchema(Schema):
     finish_time = fields.DateTime(metadata={'description': "Run finish time"})
     command = fields.Str(metadata={'description': "Command to run"})
     description = fields.Str(metadata={'description': "Build result description"})
-    package = fields.Str(metadata={'description': "Package name"})
     build_info = BuildInfoSchema()
     result_code = fields.Str(metadata={'description': "Result code"})
 

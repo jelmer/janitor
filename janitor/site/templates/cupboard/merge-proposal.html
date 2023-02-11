@@ -27,7 +27,7 @@ $(document).ready(function() {
             </li>
             {% if proposal.package %}
                 <li>
-                    Package: <a href="/cupboard/pkg/{{ proposal.package }}/">{{ proposal.package }}</a>
+                    Codebase: <a href="/cupboard/c/{{ proposal.codebase }}/">{{ proposal.codebase }}</a>
                 </li>
             {% endif %}
             {% if proposal.can_be_merged is not none %}
@@ -93,7 +93,7 @@ $(document).ready(function() {
                         <pre>{{ publish.description }}</pre>
                     {% else %}
                 {% if publish.run_id %}
-            <a href="/cupboard/pkg/{{ proposal.package }}/{{ publish.run_id }}">
+            <a href="/cupboard/c/{{ proposal.codebase }}/{{ publish.run_id }}">
             {% endif %}
                         {{ publish.description }}<!-- {{ publish.revision }} -->
                 {% if publish.run_id %}

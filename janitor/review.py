@@ -30,7 +30,7 @@ async def store_review(
             verdict = "rejected"
 
             run = await conn.fetchrow(
-                'SELECT package, suite, codebase FROM run WHERE id = $1', run_id)
+                'SELECT suite, codebase FROM run WHERE id = $1', run_id)
             await do_schedule(
                 conn,
                 campaign=run['suite'],

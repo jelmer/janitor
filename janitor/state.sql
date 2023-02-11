@@ -31,35 +31,6 @@ CREATE TABLE IF NOT EXISTS codebase (
 CREATE INDEX ON codebase (branch_url);
 CREATE INDEX ON codebase (name);
 
--- TODO(jelmer): Move to Debian janitor
-CREATE EXTENSION IF NOT EXISTS debversion;
-CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TABLE IF NOT EXISTS package (
-   name debian_package_name not null primary key,
-   distribution distribution_name not null,
-
-   codebase text not null references codebase(name),
-
-   -- TODO(jelmer): Move these to codebase
-   vcs_type vcs_type,
-   branch_url text,
-   subpath text,
-
-   archive_version debversion,
-   vcs_url text,
-   vcs_browse text,
-   origin text,
-   unique(distribution, name)
-);
-CREATE INDEX ON package (vcs_url);
-CREATE INDEX ON package (branch_url);
-
-CREATE TABLE IF NOT EXISTS upstream (
-   name text,
-   upstream_branch_url text,
-   primary key(name)
-);
-
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    codebase text references codebase(name),
@@ -110,7 +81,6 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
    duration interval generated always as (finish_time - start_time) stored,
-   package text, -- DEPRECATED
    result_code text not null,
    instigated_context text,
    -- Some codemod-specific indication of what we attempted to do
@@ -599,7 +569,6 @@ WITH publishable AS (
   run.finish_time AS finish_time,
   run.finish_time - run.start_time AS duration,
   run.description AS description,
-  package.name AS package,
   run.result_code AS result_code,
   run.main_branch_revision AS main_branch_revision,
   run.revision AS revision,
@@ -633,7 +602,6 @@ WITH publishable AS (
   run.codebase AS codebase
 FROM
   last_effective_runs AS run
-INNER JOIN package ON package.codebase = run.codebase
 INNER JOIN candidate ON
     candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON
@@ -642,11 +610,6 @@ INNER JOIN change_set ON change_set.id = run.change_set
 WHERE
   result_code = 'success')
 SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
-
-CREATE OR REPLACE VIEW upstream_branch_urls as (
-    select package, result->>'upstream_branch_url' as url from run where suite in ('fresh-snapshots', 'fresh-releases') and result->>'upstream_branch_url' != '')
-union
-    (select name as package, upstream_branch_url as url from upstream);
 
 CREATE TABLE IF NOT EXISTS review (
  run_id text not null references run (id),
@@ -672,11 +635,11 @@ CREATE OR REPLACE VIEW change_set_unpublished AS
   WHERE not coalesce(new_result_branch.absorbed, False) and result_code = 'success';
 
 
-CREATE VIEW absorbed_runs AS
+CREATE OR REPLACE VIEW absorbed_runs AS
     SELECT
        'propose' AS mode,
        run.change_set,
-       run.package,
+       run.codebase,
        merge_proposal.merged_at - run.finish_time as delay,
        run.suite AS campaign,
        run.result::jsonb AS result,
@@ -693,7 +656,7 @@ CREATE VIEW absorbed_runs AS
     SELECT
         'push' AS mode,
         run.change_set,
-        run.package,
+       run.codebase,
         publish.timestamp - run.finish_time AS delay,
         run.suite AS campaign,
         run.result::jsonb AS result,

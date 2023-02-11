@@ -1,25 +1,23 @@
-{% macro local_command(command, command_package, package, vcs, vcs_url) %}
+{% macro local_command(command, codebase, vcs, vcs_url) %}
     {% if failure_stage and (failure_stage == 'validate' or (command and failure_stage.startswith('codemod/'))) %}
         <p>
-            Try this locally
-            {% if command_package %}
-                (using the <a href="https://packages.debian.org/{{ command_package }}">{{ command_package }}</a>
-            {% endif %}
-            package):
+            Try this locally:
         </p>
         <div class="highlight-default notranslate">
             <div class="highlight">
                 <pre>
+{% if vcs == 'git' %}
+git clone {{ vcs_url }} {{ codebase }}
+{% elif vcs == 'bzr' %}
+bzr branch {{ vcs_url }} {{ codebase }}
+{% else %}
+unsupported vcs {{ vcs }}
+{% endif %}
 {% if failure_stage == 'validate' %}
-debcheckout {{ package }}
+cd {{ codebase }}
 deb-vcs-up-to-date
-{% elif failure_stage == 'codemod/dist' %}
-git clone {{ result['upstream_branch_url'] }} {{ package }}
-cd {{ package }}
-ogni dist
-{% elif failure_stage.startswith('codemod/') or failure_stage == 'codemod' %}
-debcheckout {{ package }}
-cd {{ package }}
+{% else %}
+cd {{ codebase }}
 {{ command }}
 {% endif %}
 </pre>
@@ -27,13 +25,13 @@ cd {{ package }}
         </div>
     {% endif %}
 {% endmacro %}
-{% macro merge_command(package, suite, result_branches, vcs) %}
+{% macro merge_command(codebase, suite, result_branches, vcs) %}
     {% if vcs == 'git' %}
         <p>Merge these changes:</p>
         <div class="highlight-default notranslate">
             <div class="highlight">
                 {% for role, remote_name, base_revision, revision in result_branches %}
-                    <pre>git pull <a href="{{ git_vcs_manager.get_repository_url(package) }}">{{ git_vcs_manager.get_repository_url(package) }}</a> {{ suite }}/{{ role }}</pre>
+                    <pre>git pull <a href="{{ git_vcs_manager.get_repository_url(codebase) }}">{{ git_vcs_manager.get_repository_url(codebase) }}</a> {{ suite }}/{{ role }}</pre>
                 {% endfor %}
             </div>
         </div>
@@ -41,7 +39,7 @@ cd {{ package }}
         <p>Merge these changes:</p>
         <div class="highlight-default notranslate">
             <div class="highlight">
-                <pre>brz merge {{ bzr_vcs_manager.get_branch_url(package, suite) }}</pre>
+                <pre>brz merge {{ bzr_vcs_manager.get_branch_url(codebase, suite) }}</pre>
             </div>
         </div>
     {% else %}
@@ -112,17 +110,17 @@ cd {{ package }}
         <!-- unknown bugtracker kind {{ bugtracker.kind }} -->
     {% endif %}
 {% endmacro %}
-{% macro reschedule_button(suite, package, title="Reschedule", id="reschedule", data={}, accesskey="s") %}
+{% macro reschedule_button(suite, codebase, title="Reschedule", id="reschedule", data={}, accesskey="s") %}
     <button id="{{ id }}"
             {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
         $(function() {
             $("#{{ id }}").click(function() {
-                $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ data | tojson }}, function(data) {
+                $.post('/api/{{ suite }}/c/{{ codebase }}/schedule', {{ data | tojson }}, function(data) {
                         console.log('Scheduled: ' + data.offset);
                         $("#{{ id }}").replaceWith("<span>Scheduled new run at position " + data.queue_position + ".</span>");
-                        $('.queue-position.{{ package }}').replaceWith('<a href="/cupboard/queue">Queue</a> position: ' + data.queue_position);
-                        $('.queue-position.{{ package }}').attr('style', '')
+                        $('.queue-position.{{ codebase }}').replaceWith('<a href="/cupboard/queue">Queue</a> position: ' + data.queue_position);
+                        $('.queue-position.{{ codebase }}').attr('style', '')
                     }, 'json')
                     .fail(function(response) {
                         $("#{{ id }}").replaceWith("<span>Failed to schedule new run: " + response.responseText + "</span>");
@@ -148,7 +146,7 @@ cd {{ package }}
         });
     </script>
 {% endmacro %}
-{% macro publish_buttons(campaign, package, id_suffix="", accesskey="p") %}
+{% macro publish_buttons(campaign, codebase, id_suffix="", accesskey="p") %}
     {% set propose_id="propose" + id_suffix %}
     {% set fork_id="push-derived" + id_suffix %}
     {% set push_id="push" + id_suffix %}
@@ -163,7 +161,7 @@ cd {{ package }}
     <script>
         $(function() {
             $("#{{ publish_id }}").click(function() {
-                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {}, function(data) {
+                $.post('/api/{{ campaign }}/c/{{ codebase }}/publish', {}, function(data) {
                         if (data) {
                             $("#{{ publish_id }}").replaceWith("<span>Publishing...</span>");
                         }
@@ -175,7 +173,7 @@ cd {{ package }}
         
             {% if is_admin %}
             $("#{{ propose_id }}").click(function() {
-                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                $.post('/api/{{ campaign }}/c/{{ codebase }}/publish', {
                         'mode': 'propose'
                     }, function(data) {
                         if (data) {
@@ -188,7 +186,7 @@ cd {{ package }}
             });
         
             $("#{{ fork_id }}").click(function() {
-                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                $.post('/api/{{ campaign }}/c/{{ codebase }}/publish', {
                         'mode': 'push-derived'
                     }, function(data) {
                         $("#{{ fork_id }}").replaceWith("<span>Creating fork.</span>");
@@ -199,7 +197,7 @@ cd {{ package }}
             });
         
             $("#{{ push_id }}").click(function() {
-                $.post('/api/{{ campaign }}/pkg/{{ package }}/publish', {
+                $.post('/api/{{ campaign }}/c/{{ codebase }}/publish', {
                         'mode': 'push'
                     }, function(data) {
                         $("#{{ push_id }}").replaceWith("<span>Pushing.</span>");

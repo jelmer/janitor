@@ -313,10 +313,11 @@ class DebianBuilder(Builder):
             config["build-command"] = self.distro_config.build_command
 
         last_build_version = await conn.fetchval(
-            "SELECT version FROM debian_build WHERE "
-            "version IS NOT NULL AND source = $1 AND "
-            "distribution = $2 ORDER BY version DESC LIMIT 1",
-            queue_item.package, config['build-distribution']
+            "SELECT MAX(debian_build.version) FROM run "
+            "LEFT JOIN debian_build ON debian_build.run_id = run.id "
+            "WHERE debian_build.version IS NOT NULL AND run.codebase = $1 AND "
+            "debian_build.distribution = $2",
+            queue_item.codebase, config['build-distribution']
         )
 
         if last_build_version:
@@ -359,12 +360,6 @@ class DebianBuilder(Builder):
             )
         # TODO(jelmer): Set env["APT_REPOSITORY_KEY"]
 
-        upstream_branch_url = await conn.fetchval(
-            "SELECT upstream_branch_url FROM upstream WHERE name = $1",
-            queue_item.package)
-        if upstream_branch_url:
-            env["UPSTREAM_BRANCH_URL"] = upstream_branch_url
-
         return env
 
     def additional_colocated_branches(self, main_branch):
@@ -398,7 +393,6 @@ def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=No
 
 class JanitorResult:
 
-    package: str
     log_id: str
     branch_url: str
     subpath: Optional[str]
@@ -409,7 +403,6 @@ class JanitorResult:
     def __init__(
         self,
         *,
-        pkg: str,
         codebase: str,
         log_id: str,
         branch_url: str,
@@ -427,7 +420,6 @@ class JanitorResult:
         change_set: Optional[str] = None,
         transient=None,
     ):
-        self.package = pkg
         self.campaign = campaign
         self.log_id = log_id
         self.description = description
@@ -490,7 +482,6 @@ class JanitorResult:
 
     def json(self):
         return {
-            "package": self.package,
             "codebase": self.codebase,
             "campaign": self.campaign,
             "change_set": self.change_set,
@@ -720,7 +711,6 @@ class ActiveRun:
     finish_time: Optional[datetime]
     estimated_duration: Optional[timedelta]
     campaign: str
-    package: str
     change_set: Optional[str]
     command: str
     backchannel: Backchannel
@@ -730,7 +720,6 @@ class ActiveRun:
         self,
         *,
         campaign: str,
-        package: str,
         codebase: str,
         change_set: Optional[str],
         command: str,
@@ -746,7 +735,6 @@ class ActiveRun:
         resume_from: Optional[str] = None,
     ):
         self.campaign = campaign
-        self.package = package
         self.change_set = change_set
         self.command = command
         self.instigated_context = instigated_context
@@ -773,7 +761,6 @@ class ActiveRun:
     ):
         return cls(
             campaign=queue_item.campaign,
-            package=queue_item.package,
             codebase=queue_item.codebase,
             change_set=queue_item.change_set,
             command=queue_item.command,
@@ -799,7 +786,6 @@ class ActiveRun:
         return cls(
             campaign=js['campaign'],
             start_time=datetime.fromisoformat(js['start_time']),
-            package=js['package'],
             change_set=js['change_set'],
             command=js['command'],
             instigated_context=js['instigated_context'],
@@ -822,7 +808,6 @@ class ActiveRun:
 
     def create_result(self, **kwargs):
         return JanitorResult(
-            pkg=self.package,
             campaign=self.campaign,
             start_time=self.start_time,
             finish_time=datetime.utcnow(),
@@ -863,7 +848,6 @@ class ActiveRun:
         return {
             "queue_id": self.queue_id,
             "id": self.log_id,
-            "package": self.package,
             "codebase": self.codebase,
             "change_set": self.change_set,
             "campaign": self.campaign,
@@ -1177,7 +1161,6 @@ async def store_run(
     logfilenames: list[str],
     value: Optional[int],
     worker_name: Optional[str] = None,
-    package: Optional[str] = None,
     subpath: Optional[str] = "",
     result_branches: Optional[list[tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[list[tuple[str, bytes]]] = None,
@@ -1196,7 +1179,7 @@ async def store_run(
 
     await conn.execute(
         "INSERT INTO run (id, command, description, result_code, "
-        "start_time, finish_time, package, instigated_context, context, "
+        "start_time, finish_time, instigated_context, context, "
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, subpath, logfilenames, "
         "value, worker, result_tags, "
@@ -1204,14 +1187,13 @@ async def store_run(
         "failure_transient, codebase) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
         "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, "
-        "$24, $25, $26, $27)",
+        "$24, $25, $26)",
         run_id,
         command,
         description,
         result_code,
         start_time,
         finish_time,
-        package,
         instigated_context,
         context,
         main_branch_revision.decode("utf-8") if main_branch_revision else None,
@@ -1516,7 +1498,6 @@ class QueueProcessor:
                     await store_run(
                         conn,
                         run_id=result.log_id,
-                        package=active_run.package,
                         vcs_type=result.vcs_type,
                         subpath=result.subpath,
                         branch_url=result.branch_url,
@@ -1679,17 +1660,15 @@ async def handle_schedule(request):
         try:
             run_id = json['run_id']
         except KeyError:
-            package = json.get('package')
             campaign = json['campaign']
             codebase = json['codebase']
             run = None
         else:
             run = await conn.fetchrow(
-                "SELECT suite AS campaign, package, codebase, command FROM run WHERE id = $1",
+                "SELECT suite AS campaign, codebase, command FROM run WHERE id = $1",
                 run_id)
             if run is None:
                 return web.json_response({"reason": "Run not found"}, status=404)
-            package = run.get('package')
             campaign = run['campaign']
             codebase = run['codebase']
         refresh = json.get('refresh', False)
@@ -1729,7 +1708,6 @@ async def handle_schedule(request):
             raise web.HTTPBadRequest(text="Candidate not available") from e
 
     response_obj = {
-        "package": package,
         "campaign": campaign,
         "offset": offset,
         "bucket": bucket,
@@ -1891,7 +1869,6 @@ async def handle_candidate_download(request):
         for row in await conn.fetch('SELECT * FROM candidate'):
             ret.append({
                 'id': row['id'],
-                'package': row['package'],
                 'codebase': row['codebase'],
                 'campaign': row['suite'],
                 'command': row['command'],
@@ -2230,7 +2207,6 @@ async def handle_queue(request):
         for entry in await queue.iter_queue(limit=limit):
             response_obj.append({
                 "queue_id": entry.id,
-                "package": entry.package,
                 "codebase": entry.codebase,
                 "campaign": entry.campaign,
                 "context": entry.context,
@@ -2314,7 +2290,7 @@ async def next_item(
 
             if not campaign_config.default_empty and (
                     vcs_info.get("branch_url") is None):
-                await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
+                await abort(active_run, 'not-in-vcs', "No VCS URL known for codebase.")
                 item = None
                 continue
 
@@ -2323,12 +2299,6 @@ async def next_item(
             config, campaign_config,
             queue_processor.apt_archive_url,
             queue_processor.dep_server_url)
-
-        with span.new_child('build-env'):
-            build_env = await builder.build_env(conn, campaign_config, item)
-
-        with span.new_child('config'):
-            build_config = await builder.config(conn, campaign_config, item)
 
         if vcs_info.get("branch_url") is not None:
             try:
@@ -2374,7 +2344,7 @@ async def next_item(
                                 open_resume_branch,
                                 main_branch,
                                 campaign_config.branch_name,
-                                item.package,
+                                item.codebase,
                                 possible_forges=possible_forges)
                         except BranchRateLimited as e:
                             host = urlutils.URL.from_string(e.url).host
@@ -2435,6 +2405,12 @@ async def next_item(
                     pass
         else:
             resume = None
+
+        with span.new_child('build-env'):
+            build_env = await builder.build_env(conn, campaign_config, item)
+
+        with span.new_child('config'):
+            build_config = await builder.config(conn, campaign_config, item)
 
     # Refresh the serialized copy of the active run, since we may have changed
     # it. Ideally we'd only do this once, but..
@@ -2565,7 +2541,6 @@ async def finish(
         logfilenames = [entry.name for entry in logfiles]
 
         result = JanitorResult(
-            pkg=active_run.package,
             codebase=active_run.codebase,
             campaign=active_run.campaign,
             log_id=active_run.log_id,
@@ -2730,11 +2705,11 @@ async def main(argv=None):
     parser.add_argument("--public-port", type=int, help="Listen port", default=9919)
     parser.add_argument(
         "--pre-check",
-        help="Command to run to check whether to process package.",
+        help="Command to run to check whether to process codebase.",
         type=str,
     )
     parser.add_argument(
-        "--post-check", help="Command to run to check package before pushing.", type=str
+        "--post-check", help="Command to run to check codebase before pushing.", type=str
     )
     parser.add_argument(
         "--use-cached-only", action="store_true", help="Use cached branches only."
