@@ -336,7 +336,7 @@ async def derived_branch_name(conn, campaign_config, run, role):
         name = f"{campaign_config.branch_name}/{role}"
 
     if await state.has_cotenants(conn, run.codebase, run.branch_url):
-        return name + "/" + run.package
+        return name + "/" + run.codebase
     else:
         return name
 
@@ -2004,12 +2004,10 @@ SELECT
   named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
   run.revision AS revision,
   candidate.command AS policy_command,
-  package.removed AS removed,
   run.result_code AS result_code,
   change_set.state AS change_set_state,
   change_set.id AS change_set
 FROM run
-LEFT JOIN package ON package.codebase = run.codebase
 INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
@@ -2157,7 +2155,7 @@ class NoRunForMergeProposal(Exception):
 async def get_last_effective_run(conn, codebase, campaign):
     query = """
 SELECT
-    id, command, start_time, finish_time, description, package,
+    id, command, start_time, finish_time, description,
     result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames,
@@ -2334,7 +2332,7 @@ class ProposalInfoManager:
     async def update_canonical_url(self, old_url: str, canonical_url: str):
         async with self.conn.transaction():
             old_url = await self.conn.fetchval(
-                'UPDATE merge_proposal canonical SET package = COALESCE(canonical.package, old.package), '
+                'UPDATE merge_proposal canonical SET codebase = COALESCE(canonical.codebase, old.codebase), '
                 'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
                 'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
                 old_url, canonical_url)
@@ -3159,7 +3157,7 @@ async def check_existing(
 async def get_run(conn: asyncpg.Connection, run_id):
     query = """
 SELECT
-    id, command, start_time, finish_time, description, package,
+    id, command, start_time, finish_time, description,
     result_code,
     value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, 
@@ -3186,7 +3184,6 @@ SELECT
   start_time,
   finish_time,
   description,
-  package,
   result_code,
   main_branch_revision,
   vcs_type,

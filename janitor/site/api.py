@@ -251,43 +251,22 @@ async def handle_queue(request):
             return web.json_response(await resp.json(), status=resp.status)
 
 
-async def find_vcs_info(db, role, run_id=None, package=None, campaign=None):
-    async with db.acquire() as conn:
-        if run_id is None:
-            return await conn.fetchrow(
-                'SELECT id, package, vcs_type, new_result_branch.base_revision, '
-                'new_result_branch.revision FROM last_unabsorbed_runs '
-                'LEFT JOIN new_result_branch ON '
-                'new_result_branch.run_id = last_unabsorbed_runs.id '
-                'WHERE package = $1 AND suite = $2 AND role = $3',
-                package, campaign, role)
-        else:
-            return await conn.fetchrow(
-                'SELECT id, package, vcs_type, '
-                'new_result_branch.base_revision AS base_revision, '
-                'new_result_branch.revision AS revision FROM run '
-                'LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id '
-                'WHERE run.id = $1 AND role = $2', run_id, role)
-
-
-
 @docs()
-@routes.get("/{campaign}/pkg/{package}/diff", name="package-diff")
-@routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
 @routes.get("/run/{run_id}/diff", name="run-diff")
+@routes.get("/run/{run_id}/diff/{role}", name="run-diff-role")
 async def handle_diff(request):
     role = request.query.get("role", "main")
-    run_id = request.match_info.get('run_id')
-    package = request.match_info.get("package")
-    campaign = request.match_info.get("campaign")
-    run = await find_vcs_info(request.app['pool'], role, run_id, package, campaign)
+    run_id = request.match_info['run_id']
+    async with request.app['pool'].acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT id, codebase, vcs_type, '
+            'new_result_branch.base_revision AS base_revision, '
+            'new_result_branch.revision AS revision FROM run '
+            'LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id '
+            'WHERE run.id = $1 AND role = $2', run_id, role)
     span = aiozipkin.request_span(request)
     if run is None:
-        if run_id:
-            raise web.HTTPNotFound(text="no run %s" % (run_id, ))
-        else:
-            raise web.HTTPNotFound(
-                text="no unabsorbed run for %s/%s" % (package, campaign))
+        raise web.HTTPNotFound(text="no run %s" % (run_id, ))
 
     if run['vcs_type'] is None:
         return web.Response(
@@ -300,8 +279,7 @@ async def handle_diff(request):
         try:
             with span.new_child('vcs-diff'):
                 diff = await request.app['vcs_managers'][run['vcs_type']].get_diff(
-                    run['package'],
-                    run['base_revision'].encode('utf-8')
+                    run['codebase'], run['base_revision'].encode('utf-8')
                     if run['base_revision'] else NULL_REVISION,
                     run['revision'].encode('utf-8'))
         except ClientResponseError as e:
@@ -335,7 +313,6 @@ async def handle_diff(request):
 
 @docs()
 @routes.get("/run/{run_id}/{kind:debdiff|diffoscope}", name="run-archive-diff")
-@routes.get("/pkg/{package}/run/{run_id}/{kind:debdiff|diffoscope}", name="package-run-archive-diff")
 async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
@@ -343,15 +320,15 @@ async def handle_archive_diff(request):
     with span.new_child('sql:get-run'):
         async with request.app['pool'].acquire() as conn:
             run = await conn.fetchrow(
-                'SELECT id, package, suite AS campaign, main_branch_revision, result_code FROM run WHERE id = $1',
+                'SELECT id, codebase, suite AS campaign, main_branch_revision, result_code FROM run WHERE id = $1',
                 run_id)
             if run is None:
                 raise web.HTTPNotFound(text="No such run: %s" % run_id)
             unchanged_run_id = await conn.fetchval(
                 "SELECT id FROM run WHERE "
-                "package = $1 AND revision = $2 AND result_code = 'success' "
+                "codebase = $1 AND revision = $2 AND result_code = 'success' "
                 "ORDER BY finish_time DESC LIMIT 1",
-                run['package'], run['main_branch_revision'])
+                run['codebase'], run['main_branch_revision'])
             if unchanged_run_id is None:
                 return web.json_response(
                     {
