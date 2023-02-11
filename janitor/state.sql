@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time timestamp,
    -- Disabled for now: requires postgresql > 12
    duration interval generated always as (finish_time - start_time) stored,
-   package text references package(name), -- TO BE REMOVED
+   package text, -- DEPRECATED
    result_code text not null,
    instigated_context text,
    -- Some codemod-specific indication of what we attempted to do
@@ -145,10 +145,10 @@ CREATE TABLE IF NOT EXISTS run (
    check(result_code != 'nothing-new-to-do' or resume_from is not null),
    check(publish_status != 'approved' or revision is not null)
 );
-CREATE INDEX ON run (package, suite, start_time DESC);
+CREATE INDEX ON run (codebase, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
 CREATE INDEX ON run (suite, start_time);
-CREATE INDEX ON run (package, suite);
+CREATE INDEX ON run (codebase, suite);
 CREATE INDEX ON run (suite);
 CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
