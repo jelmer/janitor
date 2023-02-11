@@ -880,7 +880,6 @@ async def store_publish(
     *,
     change_set: str,
     codebase: str,
-    package: str,
     branch_name: Optional[str],
     target_branch_url: Optional[str],
     main_branch_revision: Optional[bytes],
@@ -904,16 +903,15 @@ async def store_publish(
                 assert mode == 'propose'
                 await conn.execute(
                     "INSERT INTO merge_proposal "
-                    "(url, package, status, revision, last_scanned, "
+                    "(url, status, revision, last_scanned, "
                     " target_branch_url, codebase) "
-                    "VALUES ($1, $2, 'open', $3, NOW(), $4, $5) ON CONFLICT (url) "
-                    "DO UPDATE SET package = EXCLUDED.package, "
+                    "VALUES ($1, 'open', $2, NOW(), $3, $4) ON CONFLICT (url) "
+                    "DO UPDATE "
                     "revision = EXCLUDED.revision, "
                     "last_scanned = EXCLUDED.last_scanned, "
                     "target_branch_url = EXCLUDED.target_branch_url, "
                     "codebase = EXCLUDED.codebase",
                     merge_proposal_url,
-                    package,
                     revision,
                     target_branch_url,
                     codebase,
@@ -929,12 +927,11 @@ async def store_publish(
                         "SET absorbed = true WHERE run_id = $1 AND role = $2",
                         run_id, role)
         await conn.execute(
-            "INSERT INTO publish (package, branch_name, "
+            "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
             "description, merge_proposal_url, id, requestor, change_set, run_id, "
             "target_branch_url) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ",
-            package,
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ",
             branch_name,
             main_branch_revision,
             revision,
@@ -1134,7 +1131,6 @@ async def publish_from_policy(
         conn,
         change_set=run.change_set,
         codebase=run.codebase,
-        package=run.package,
         branch_name=publish_result.branch_name,
         main_branch_revision=base_revision,
         revision=revision,
@@ -1282,7 +1278,6 @@ async def publish_and_store(
                 conn,
                 change_set=run.change_set,
                 codebase=run.codebase,
-                package=run.package,
                 target_branch_url=target_branch_url,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=run.main_branch_revision,
@@ -1320,7 +1315,6 @@ async def publish_and_store(
             conn,
             change_set=run.change_set,
             codebase=run.codebase,
-            package=run.package,
             branch_name=publish_result.branch_name,
             main_branch_revision=run.main_branch_revision,
             revision=run.revision,
@@ -2984,7 +2978,6 @@ applied independently.
                 conn,
                 change_set=last_run.change_set,
                 codebase=last_run.codebase,
-                package=last_run.package,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
@@ -3003,7 +2996,6 @@ applied independently.
                 conn,
                 change_set=last_run.change_set,
                 codebase=last_run.codebase,
-                package=last_run.package,
                 branch_name=publish_result.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
