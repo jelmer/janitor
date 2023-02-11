@@ -62,7 +62,6 @@ CREATE TABLE IF NOT EXISTS upstream (
 
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   package text references package(name), -- TO BE REMOVED
    codebase text references codebase(name),
    url text not null,
    target_branch_url text,
@@ -161,7 +160,6 @@ CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    change_set text not null references change_set(id),
-   package text not null references package(name),
    target_branch_url text,
    subpath text,
    branch_name text,
