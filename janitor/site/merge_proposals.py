@@ -11,7 +11,7 @@ async def get_proposals_with_run(
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    run.package AS package,
+    run.codebase AS codebase,
     run.suite AS suite,
     merge_proposal.url AS url,
     merge_proposal.status AS status
@@ -55,7 +55,7 @@ async def write_merge_proposals(db, suite):
 async def get_proposal_with_run(conn: asyncpg.Connection, url: str):
     query = """
 SELECT
-    run.package AS package,
+    run.codebase AS codebase,
     run.suite AS suite,
     merge_proposal.url AS url,
     merge_proposal.status AS status,

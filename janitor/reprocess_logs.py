@@ -93,7 +93,7 @@ def process_dist_log(logf):
 
 
 async def reprocess_run_logs(
-        db, logfile_manager, *, package: str, codebase: str,
+        db, logfile_manager, *, codebase: str,
         campaign: str, log_id: str, command: str,
         change_set: Optional[str], duration: timedelta,
         result_code: str, description: str, failure_details,
@@ -108,7 +108,7 @@ async def reprocess_run_logs(
             continue
         try:
             logf = await logfile_manager.get_log(
-                package, log_id, logname, timeout=log_timeout
+                codebase, log_id, logname, timeout=log_timeout
             )
         except FileNotFoundError:
             return
@@ -122,7 +122,7 @@ async def reprocess_run_logs(
     if new_code != result_code or description != new_description or failure_details != new_failure_details:
         logging.info(
             "%s/%s: Updated %r, %r ⇒ %r, %r %r",
-            package,
+            codebase,
             log_id,
             result_code,
             description,

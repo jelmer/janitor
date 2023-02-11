@@ -16,7 +16,7 @@
         <ul>
             {% for run in runs %}
                 <li>
-                    <a href="pkg/{{ run.package }}/">{{ run.package }}</a>
+                    <a href="/cupboard/c/{{ run.codebase }}/">{{ run.codebase }}</a>
                     {% set command = run.command -%}
                     {% set result = run.result -%}
                     {% include [run.suite + "/summary.html", "generic/summary.html"] %}

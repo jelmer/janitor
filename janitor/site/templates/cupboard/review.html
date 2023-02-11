@@ -9,7 +9,7 @@
     <div class="section" id="review">
         <h1>Review</h1>
         <p>
-            <a href="/cupboard/pkg/{{ codebase }}/{{ run_id }}/"
+            <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/"
                id="full-run-link">Full Run</a>
             {% if review_instructions_url %}
             <a href="{{ review_instructions_url }}">Review Instructions</a>
@@ -24,7 +24,7 @@
             }
 
             function allowReview(codebase, run_id) {
-                $('#full-run-link').attr('href', "/cupboard/pkg/" + codebase + "/" + run_id);
+                $('#full-run-link').attr('href', "/cupboard/c/" + codebase + "/" + run_id);
                 $('#run-id').attr('value', run_id);
                 $('#codebase').attr('value', codebase);
                 $('.review-button').disabled = "enabled";

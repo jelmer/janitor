@@ -24,7 +24,7 @@ SELECT
   finish_time,
   finish_time - start_time AS duration,
   description,
-  package,
+  codebase,
   result_code,
   failure_transient
 FROM
@@ -69,7 +69,7 @@ FROM candidate
 
 
 async def get_last_unabsorbed_run(
-        conn: asyncpg.Connection, package: str, suite: str):
+        conn: asyncpg.Connection, codebase: str, suite: str):
     args = []
     query = """
 SELECT
@@ -78,7 +78,6 @@ SELECT
   start_time,
   finish_time,
   description,
-  package,
   debian_build.version AS build_version,
   debian_build.distribution AS build_distribution,
   debian_build.lintian_result AS lintian_result,
@@ -107,18 +106,18 @@ FROM
   last_unabsorbed_runs
 LEFT JOIN worker ON worker.name = last_unabsorbed_runs.worker
 LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
-WHERE package = $1 AND suite = $2
-ORDER BY package, suite DESC, start_time DESC
+WHERE codebase = $1 AND suite = $2
+ORDER BY codebase, suite DESC, start_time DESC
 LIMIT 1
 """
-    args = [package, suite]
+    args = [codebase, suite]
     return await conn.fetchrow(query, *args)
 
 
 async def get_run(conn: asyncpg.Connection, run_id):
     query = """
 SELECT
-    id, command, start_time, finish_time, description, package,
+    id, command, start_time, finish_time, description, codebase,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution,
     debian_build.lintian_result AS lintian_result,
@@ -151,7 +150,7 @@ async def get_unchanged_run(
         conn: asyncpg.Connection, codebase: str, main_branch_revision: bytes):
     query = """
 SELECT
-    id, command, start_time, finish_time, description, package,
+    id, command, start_time, finish_time, description,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code, value,
     main_branch_revision, revision, context, result, suite,
@@ -176,20 +175,20 @@ ORDER BY finish_time DESC
         query, main_branch_revision.decode('utf-8'), codebase)
 
 
-async def generate_pkg_context(
-    db, config, suite, client, differ_url, vcs_managers, package_name, span, run_id=None
+async def generate_codebase_context(
+    db, config, suite, client, differ_url, vcs_managers, codebase_name, span, run_id=None
 ):
     async with db.acquire() as conn:
         # TODO(jelmer): Run these in parallel with gather()
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow("""\
-SELECT package.*, named_publish_policy.per_branch_policy AS publish_policy
-FROM package
-LEFT JOIN candidate ON package.codebase = candidate.codebase AND candidate.suite = $2
+        with span.new_child('sql:codebase'):
+            codebase = await conn.fetchrow("""\
+SELECT codebase.*, named_publish_policy.per_branch_policy AS publish_policy
+FROM codebase
+LEFT JOIN candidate ON codebase.name = candidate.codebase AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE package.name = $1 AND package.distribution = 'sid'""", package_name, suite)
-        if package is None:
-            raise web.HTTPNotFound(text='no such package: %s' % package_name)
+WHERE codebase.name = $1""", codebase_name, suite)
+        if codebase is None:
+            raise web.HTTPNotFound(text='no such codebase: %s' % codebase_name)
         if run_id is not None:
             with span.new_child('sql:run'):
                 run = await get_run(conn, run_id)
@@ -198,7 +197,7 @@ WHERE package.name = $1 AND package.distribution = 'sid'""", package_name, suite
             merge_proposals = []
         else:
             with span.new_child('sql:unchanged-run'):
-                run = await get_last_unabsorbed_run(conn, package_name, suite)
+                run = await get_last_unabsorbed_run(conn, codebase_name, suite)
             with span.new_child('sql:merge-proposals'):
                 merge_proposals = await conn.fetch("""\
 SELECT
@@ -209,7 +208,7 @@ FROM
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 WHERE run.codebase = $1 AND run.suite = $2
-""", package['codebase'], suite)
+""", codebase['name'], suite)
         if run is None:
             # No runs recorded
             run_id = None
@@ -225,7 +224,7 @@ WHERE run.codebase = $1 AND run.suite = $2
                 unchanged_run = None
 
         with span.new_child('sql:candidate'):
-            candidate = await get_candidate(conn, package['codebase'], suite)
+            candidate = await get_candidate(conn, codebase['name'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
@@ -233,11 +232,11 @@ WHERE run.codebase = $1 AND run.suite = $2
             candidate_value = None
             candidate_success_chance = None
         with span.new_child('sql:previous-runs'):
-            previous_runs = await get_previous_runs(conn, package['codebase'], suite)
+            previous_runs = await get_previous_runs(conn, codebase['name'], suite)
         with span.new_child('sql:queue-position'):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
-                suite, package['codebase'])
+                suite, codebase['name'])
         if run_id:
             with span.new_child('sql:reviews'):
                 reviews = await conn.fetch(
@@ -293,7 +292,7 @@ WHERE run.codebase = $1 AND run.suite = $2
             return "Error retrieving debdiff: %s" % e
 
     kwargs: Dict[str, Any] = {}
-    kwargs.update([(k, v) for (k, v) in package.items() if k != 'name'])
+    kwargs.update([(k, v) for (k, v) in codebase.items() if k != 'name'])
 
     if run:
         kwargs.update(run)
@@ -306,7 +305,7 @@ WHERE run.codebase = $1 AND run.suite = $2
     campaign = get_campaign_config(config, suite)
 
     kwargs.update({
-        "package": package['name'],
+        "codebase": codebase['name'],
         "reviews": reviews,
         "unchanged_run": unchanged_run,
         "merge_proposals": merge_proposals,
@@ -332,7 +331,7 @@ async def generate_candidates(db, suite):
     candidates = []
     async with db.acquire() as conn:
         for row in await iter_candidates(conn, campaign=suite):
-            candidates.append((row['package'], row['value']))
+            candidates.append((row['codebase'], row['value']))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite, "campaign": suite}
 

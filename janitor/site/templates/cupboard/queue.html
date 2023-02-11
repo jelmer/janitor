@@ -80,7 +80,7 @@
                         <tr id="active-{{ entry['id'] }}"
                             {% if entry['mia'] %} class="old-keepalive"{% endif %}>
                             <td>
-                                <a href="/cupboard/pkg/{{ entry['package'] }}/">{{ entry['package'] }}</a>
+                                <a href="/cupboard/c/{{ entry['codebase'] }}/">{{ entry['codebase'] }}</a>
                             </td>
                             <td>{{ entry['campaign'] }}</td>
                             <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
@@ -147,7 +147,7 @@
                         <tr id="queue-{{ queue_item.id }}"
                             {% if queue_item.id in active_queue_ids %} class="active"{% endif %}>
                             <td>
-                                <a class="reference external" href="pkg/{{ queue_item.package }}">{{ queue_item.package }}</a>
+                                <a class="reference external" href="c/{{ queue_item.codebase }}">{{ queue_item.codebase }}</a>
                             </td>
                             <td>
                                 {{ description|safe }}
@@ -160,7 +160,7 @@
                             </td>
                             <td>
                                 {% if last_run.id %}
-                                    <a href="/cupboard/pkg/{{ last_run.package }}/{{ last_run.id }}/">{{ display_result_code(last_run.result_code, last_run.failure_transient) }}</a>
+                                    <a href="/cupboard/c/{{ last_run.codebase }}/{{ last_run.id }}/">{{ display_result_code(last_run.result_code, last_run.failure_transient) }}</a>
                                 {% endif %}
                             </td>
                         </tr>
@@ -176,7 +176,7 @@
                         var existing = 'active-' + p['id'];
                         if (!$('#' + existing).length) {
                             tr = $('<tr id="active-' + p['id'] + '"/>');
-                            tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '/">' + p['package'] + '</a></td>');
+                            tr.append('<td><a href="/cupboard/c/' + p['codebase'] + '/">' + p['codebase'] + '</a></td>');
                             tr.append('<td>' + p['campaign'] + '</td>');
                             tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
                             tr.append('<td>' + format_duration(p['current_duration']) + '</td>');

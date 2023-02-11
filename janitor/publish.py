@@ -524,7 +524,7 @@ class PublishWorker:
                         'merge-proposal',
                         json.dumps({
                             "url": proposal_url, "web_url": proposal_web_url,
-                            "status": "open", "package": (extra_context or {}).get('package'),
+                            "status": "open", "codebase": codebase,
                             "campaign": campaign,
                             "target_branch_url": target_branch_url,
                             "target_branch_web_url": target_branch_web_url}))
@@ -1080,9 +1080,7 @@ async def publish_from_policy(
         publish_result = await publish_worker.publish_one(
             campaign=run.campaign,
             codebase=run.codebase,
-            extra_context={
-                'package': run.package,
-            },
+            extra_context={},
             command=run.command,
             codemod_result=run.result,
             target_branch_url=target_branch_url,
@@ -1159,7 +1157,6 @@ async def publish_from_policy(
 
     topic_entry: dict[str, Any] = {
         "id": publish_id,
-        "package": run.package,
         "codebase": run.codebase,
         "campaign": run.campaign,
         "proposal_url": publish_result.proposal_url or None,
@@ -1244,9 +1241,7 @@ async def publish_and_store(
             publish_result = await publish_worker.publish_one(
                 campaign=run.campaign,
                 codebase=run.codebase,
-                extra_context={
-                    'package': run.package,
-                },
+                extra_context={},
                 command=run.command,
                 codemod_result=run.result,
                 target_branch_url=target_branch_url,
@@ -1295,7 +1290,6 @@ async def publish_and_store(
                 "mode": e.mode,
                 "result_code": e.code,
                 "description": e.description,
-                "package": run.package,
                 "campaign": run.campaign,
                 "main_branch_url": target_branch_url,
                 "result": run.result,
@@ -1336,7 +1330,6 @@ async def publish_and_store(
 
         publish_entry = {
             "id": publish_id,
-            "package": run.package,
             "campaign": run.campaign,
             "proposal_url": publish_result.proposal_url or None,
             "mode": mode,
@@ -2888,9 +2881,7 @@ This merge proposal will be closed, since the branch has moved to {}.
             publish_result = await publish_worker.publish_one(
                 campaign=last_run.campaign,
                 codebase=last_run.codebase,
-                extra_context={
-                    'package': last_run.package,
-                },
+                extra_context={},
                 command=last_run.command,
                 codemod_result=last_run.result,
                 target_branch_url=target_branch_url,

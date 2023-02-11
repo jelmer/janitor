@@ -17,9 +17,9 @@
             <li>
                 URL: <a href="{{ proposal.url }}">{{ proposal.url }}</a>
             </li>
-            {% if proposal.package %}
+            {% if proposal.codebase %}
                 <li>
-                    Package: <a href="/cupboard/pkg/{{ proposal.package }}/">{{ proposal.package }}</a>
+                    Codebase: <a href="/cupboard/c/{{ proposal.codebase }}/">{{ proposal.codebase }}</a>
                 </li>
             {% endif %}
             {% if proposal.can_be_merged is not none %}
@@ -72,7 +72,7 @@
             </li>
             {% if proposal.suite %}
                 <li>
-                    <a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Run Details</a>
+                    <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}">Run Details</a>
                 </li>
             {% endif %}
         </ul>
