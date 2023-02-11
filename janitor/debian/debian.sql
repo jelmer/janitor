@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS debversion;
 CREATE TABLE debian_build (
  run_id text not null references run (id),
  -- Debian version text of the built package
@@ -11,24 +12,5 @@ CREATE TABLE debian_build (
 CREATE INDEX ON debian_build (run_id);
 CREATE INDEX ON debian_build (distribution, source, version);
 
-
-CREATE VIEW all_debian_versions AS
-SELECT
-  source,
-  distribution,
-  version
-FROM
-  debian_build
-
-UNION
-
-SELECT
-  name AS source,
-  distribution,
-  archive_version AS version
-FROM
-  package;
-
-create view last_missing_apt_dependencies as select id, codebase, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
 
 

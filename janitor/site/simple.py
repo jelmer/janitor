@@ -276,21 +276,21 @@ async def handle_done_proposals(request):
     return await generate_done_list(request.app['pool'], campaign, since)
 
 
-@html_template("generic/package.html", headers={"Vary": "Cookie"})
-async def handle_generic_pkg(request):
-    from .common import generate_pkg_context
+@html_template("generic/codebase.html", headers={"Vary": "Cookie"})
+async def handle_generic_codebase(request):
+    from .common import generate_codebase_context
 
     # TODO(jelmer): Handle Accept: text/diff
-    pkg = request.match_info["pkg"]
+    codebase = request.match_info["codebase"]
     run_id = request.match_info.get("run_id")
-    return await generate_pkg_context(
-        request.app['pool'],
+    return await generate_codebase_context(
+        request.app.database,
         request.app['config'],
         request.match_info["campaign"],
         request.app['http_client_session'],
         request.app['differ_url'],
         request.app['vcs_managers'],
-        pkg,
+        codebase,
         aiozipkin.request_span(request),
         run_id,
     )
@@ -471,13 +471,13 @@ async def create_app(
         name="generic-candidates",
     )
     app.router.add_get(
-        "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/",
-        handle_generic_pkg,
-        name="generic-package",
+        "/{campaign:" + CAMPAIGN_REGEX + "}/c/{codebase}/",
+        handle_generic_codebase,
+        name="generic-codebase",
     )
     app.router.add_get(
-        "/{campaign:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}",
-        handle_generic_pkg,
+        "/{campaign:" + CAMPAIGN_REGEX + "}/c/{codebase}/{run_id}",
+        handle_generic_codebase,
         name="generic-run",
     )
     for entry in os.scandir(os.path.join(os.path.dirname(__file__), "_static")):
