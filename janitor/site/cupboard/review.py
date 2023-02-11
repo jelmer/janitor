@@ -22,7 +22,7 @@ async def generate_rejected(conn, config, campaign=None):
         campaigns = [campaign]
 
     runs = await conn.fetch(
-        "SELECT id, suite, package FROM last_unabsorbed_runs "
+        "SELECT id, suite, codebase FROM last_unabsorbed_runs "
         "WHERE publish_status = 'rejected' AND suite = ANY($1::text[]) "
         "ORDER BY finish_time DESC",
         campaigns)
@@ -71,7 +71,7 @@ async def generate_review(
 
     (
         run_id,
-        package,
+        codebase,
         campaign,
     ) = entries.pop(0)
 
@@ -85,7 +85,7 @@ async def generate_review(
 
     kwargs = {
         "review_instructions_url": request.app.get("review_instructions_url"),
-        "package_name": package,
+        "codebase": codebase,
         "run_id": run_id,
         "suite": campaign,
         "suites": campaigns,
@@ -96,7 +96,7 @@ async def generate_review(
         "publishable_only": publishable_only,
         "todo": [
             {
-                'package': entry['package'],
+                'codebase': entry['codebase'],
                 'id': entry['id'],
             } for entry in entries
         ],
@@ -107,7 +107,7 @@ async def generate_review(
 async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, run_id, span):
     async with db.acquire() as conn:
         run = await conn.fetchrow(
-            'SELECT package, array(SELECT row(role, remote_name, base_revision, revision) '
+            'SELECT codebase, array(SELECT row(role, remote_name, base_revision, revision) '
             'FROM new_result_branch WHERE run_id = id) AS result_branches, vcs_type, main_branch_revision, '
             'finish_time, value, command, suite AS campaign FROM run WHERE id = $1', run_id)
 
@@ -124,7 +124,7 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
         try:
             with span.new_child('vcs-diff'):
                 return (await vcs_managers[run['vcs_type']].get_diff(
-                    run['package'],
+                    run['codebase'],
                     base_revid.encode('utf-8') if base_revid else NULL_REVISION,
                     revid.encode('utf-8'))
                 ).decode("utf-8", "replace")
@@ -153,7 +153,7 @@ async def generate_evaluate(db, vcs_managers, http_client_session, differ_url, r
         old_revid = base_revid.encode('utf-8') if base_revid else NULL_REVISION
         new_revid = revid.encode('utf-8')
         try:
-            return await vcs_managers[run['vcs_type']].get_revision_info(run['package'], old_revid, new_revid)
+            return await vcs_managers[run['vcs_type']].get_revision_info(run['codebase'], old_revid, new_revid)
         except ClientResponseError as e:
             logging.warning("Unable to retrieve commit info; error code %d", e.status)
             return []
