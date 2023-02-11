@@ -880,7 +880,6 @@ async def store_publish(
     *,
     change_set: str,
     codebase: str,
-    package: str,
     branch_name: Optional[str],
     target_branch_url: Optional[str],
     main_branch_revision: Optional[bytes],
@@ -904,16 +903,15 @@ async def store_publish(
                 assert mode == 'propose'
                 await conn.execute(
                     "INSERT INTO merge_proposal "
-                    "(url, package, status, revision, last_scanned, "
+                    "(url, status, revision, last_scanned, "
                     " target_branch_url, codebase) "
-                    "VALUES ($1, $2, 'open', $3, NOW(), $4, $5) ON CONFLICT (url) "
-                    "DO UPDATE SET package = EXCLUDED.package, "
+                    "VALUES ($1, 'open', $2, NOW(), $3, $4) ON CONFLICT (url) "
+                    "DO UPDATE "
                     "revision = EXCLUDED.revision, "
                     "last_scanned = EXCLUDED.last_scanned, "
                     "target_branch_url = EXCLUDED.target_branch_url, "
                     "codebase = EXCLUDED.codebase",
                     merge_proposal_url,
-                    package,
                     revision,
                     target_branch_url,
                     codebase,
@@ -929,12 +927,11 @@ async def store_publish(
                         "SET absorbed = true WHERE run_id = $1 AND role = $2",
                         run_id, role)
         await conn.execute(
-            "INSERT INTO publish (package, branch_name, "
+            "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
             "description, merge_proposal_url, id, requestor, change_set, run_id, "
             "target_branch_url) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ",
-            package,
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ",
             branch_name,
             main_branch_revision,
             revision,
@@ -1134,7 +1131,6 @@ async def publish_from_policy(
         conn,
         change_set=run.change_set,
         codebase=run.codebase,
-        package=run.package,
         branch_name=publish_result.branch_name,
         main_branch_revision=base_revision,
         revision=revision,
@@ -1282,7 +1278,6 @@ async def publish_and_store(
                 conn,
                 change_set=run.change_set,
                 codebase=run.codebase,
-                package=run.package,
                 target_branch_url=target_branch_url,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=run.main_branch_revision,
@@ -1320,7 +1315,6 @@ async def publish_and_store(
             conn,
             change_set=run.change_set,
             codebase=run.codebase,
-            package=run.package,
             branch_name=publish_result.branch_name,
             main_branch_revision=run.main_branch_revision,
             revision=run.revision,
@@ -1372,7 +1366,7 @@ async def get_publish_attempt_count(
 
 
 @routes.get("/{campaign}/merge-proposals", name="campaign-merge-proposals")
-@routes.get("/c/{codebase}/merge-proposals", name="package-merge-proposals")
+@routes.get("/c/{codebase}/merge-proposals", name="codebase-merge-proposals")
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
@@ -1383,7 +1377,7 @@ async def handle_merge_proposal_list(request):
         query = """
     SELECT
         DISTINCT ON (merge_proposal.url)
-        merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
+        merge_proposal.url AS url, merge_proposal.status AS status,
         run.suite
     FROM
         merge_proposal
@@ -1401,7 +1395,7 @@ async def handle_merge_proposal_list(request):
             query += "WHERE " + " AND ".join(cond)
         query += " ORDER BY merge_proposal.url, run.finish_time DESC"
         for row in await conn.fetch(query, *args):
-            response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
+            response_obj.append({"url": row['url'], "status": row['status']})
     return web.json_response(response_obj)
 
 
@@ -1626,7 +1620,7 @@ async def handle_publish_id(request):
     async with request.app['db'].acquire() as conn:
         row = await conn.fetchrow("""
 SELECT
-  package,
+  codebase,
   branch_name,
   main_branch_revision,
   revision,
@@ -1644,7 +1638,6 @@ WHERE id = $1
             raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
     return web.json_response(
         {
-            "package": row['package'],
             "codebase": row['codebase'],
             "target_branch_url": row['target_branch_url'],
             "branch": row['branch_name'],
@@ -2223,7 +2216,6 @@ class ProposalInfo:
     revision: bytes
     target_branch_url: Optional[str]
     rate_limit_bucket: Optional[str] = None
-    package_name: Optional[str] = None
     codebase: Optional[str] = None
 
 
@@ -2262,9 +2254,9 @@ async def guess_codebase_from_branch_url(
     # TODO(jelmer): use codebase table
     query = """
 SELECT
-  codebase, branch_url
+  name, branch_url
 FROM
-  package
+  codebase
 WHERE
   TRIM(trailing '/' from branch_url) = ANY($1::text[])
 ORDER BY length(branch_url) DESC
@@ -2292,7 +2284,7 @@ ORDER BY length(branch_url) DESC
     if (source_branch.controldir.user_url.rstrip('/') != url.rstrip('/')
             and source_branch.name != branch):
         logger.info(
-            'Did not resolve branch URL to package: %r (%r) != %r (%r)',
+            'Did not resolve branch URL to codebase: %r (%r) != %r (%r)',
             source_branch.user_url, source_branch.name, url, branch)
         return None
     return result['codebase']
@@ -2325,7 +2317,6 @@ class ProposalInfoManager:
         merge_proposal.status,
         merge_proposal.target_branch_url,
         merge_proposal.codebase,
-        merge_proposal.package,
         can_be_merged
     FROM
         merge_proposal
@@ -2341,7 +2332,6 @@ class ProposalInfoManager:
             revision=row['revision'].encode("utf-8") if row[1] else None,
             status=row['status'],
             target_branch_url=row['target_branch_url'],
-            package_name=row['package'],
             can_be_merged=row['can_be_merged'],
             codebase=row['codebase'])
 
@@ -2367,7 +2357,7 @@ class ProposalInfoManager:
                     canonical_url, old_url)
 
     async def update_proposal_info(
-            self, mp, *, status, revision, codebase, package_name, target_branch_url,
+            self, mp, *, status, revision, codebase, target_branch_url,
             campaign, can_be_merged: Optional[bool],
             rate_limit_bucket: Optional[str]):
         if status == "closed":
@@ -2388,15 +2378,14 @@ class ProposalInfoManager:
         async with self.conn.transaction():
             await self.conn.execute(
                 """INSERT INTO merge_proposal (
-                    url, status, revision, package, merged_by, merged_at,
+                    url, status, revision, merged_by, merged_at,
                     target_branch_url, last_scanned, can_be_merged, rate_limit_bucket,
                     codebase)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, $9)
                 ON CONFLICT (url)
                 DO UPDATE SET
                   status = EXCLUDED.status,
                   revision = EXCLUDED.revision,
-                  package = EXCLUDED.package,
                   merged_by = EXCLUDED.merged_by,
                   merged_at = EXCLUDED.merged_at,
                   target_branch_url = EXCLUDED.target_branch_url,
@@ -2406,7 +2395,7 @@ class ProposalInfoManager:
                   codebase = EXCLUDED.codebase
                 """, mp.url, status,
                 revision.decode("utf-8") if revision is not None else None,
-                package_name, merged_by, merged_at, target_branch_url,
+                merged_by, merged_at, target_branch_url,
                 can_be_merged, rate_limit_bucket, codebase)
             if revision:
                 await self.conn.execute("""
@@ -2420,7 +2409,6 @@ class ProposalInfoManager:
             "target_branch_url": target_branch_url,
             "rate_limit_bucket": rate_limit_bucket,
             "status": status,
-            "package": package_name,
             "codebase": codebase,
             "merged_by": merged_by,
             "merged_by_url": merged_by_url,
@@ -2431,14 +2419,14 @@ class ProposalInfoManager:
 
 async def abandon_mp(proposal_info_manager: ProposalInfoManager,
                      mp: MergeProposal, revision: bytes,
-                     codebase: Optional[str], package_name: Optional[str], target_branch_url: str,
+                     codebase: Optional[str], target_branch_url: str,
                      campaign: Optional[str], can_be_merged: Optional[bool],
                      rate_limit_bucket: Optional[str],
                      comment: Optional[str]):
     if comment:
         logger.info('%s: %s', mp.url, comment)
     await proposal_info_manager.update_proposal_info(
-        mp, status="abandoned", revision=revision, package_name=package_name,
+        mp, status="abandoned", revision=revision,
         target_branch_url=target_branch_url, campaign=campaign,
         codebase=codebase,
         rate_limit_bucket=rate_limit_bucket, can_be_merged=can_be_merged)
@@ -2460,7 +2448,6 @@ async def abandon_mp(proposal_info_manager: ProposalInfoManager,
 
 async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
                            revision: bytes, codebase: Optional[str],
-                           package_name: Optional[str],
                            target_branch_url: str,
                            campaign: Optional[str], can_be_merged: Optional[bool],
                            rate_limit_bucket: Optional[str],
@@ -2468,7 +2455,6 @@ async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
 
     await proposal_info_manager.update_proposal_info(
         mp, status="applied", revision=revision, codebase=codebase,
-        package_name=package_name,
         target_branch_url=target_branch_url, campaign=campaign,
         can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket)
     try:
@@ -2525,11 +2511,9 @@ async def check_existing_mp(
     proposal_info_manager = ProposalInfoManager(conn, redis)
     old_proposal_info = await proposal_info_manager.get_proposal_info(mp.url)
     if old_proposal_info:
-        package_name = old_proposal_info.package_name
         codebase = old_proposal_info.codebase
         rate_limit_bucket = old_proposal_info.rate_limit_bucket
     else:
-        package_name = None
         codebase = None
         rate_limit_bucket = None
     revision = await asyncio.to_thread(mp.get_source_revision)
@@ -2590,10 +2574,6 @@ async def check_existing_mp(
                     mp.url,
                     extra={'mp_url': mp.url}
                 )
-                if package_name is None:
-                    # For now
-                    package_name = await conn.fetchval(
-                        'SELECT name FROM package WHERE codebase = $1', codebase)
         else:
             if source_branch_name is not None:
                 rate_limit_bucket = await guess_rate_limit_bucket(
@@ -2609,7 +2589,7 @@ async def check_existing_mp(
             or can_be_merged != old_proposal_info.can_be_merged):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await proposal_info_manager.update_proposal_info(
-            mp, status=status, revision=revision, package_name=package_name,
+            mp, status=status, revision=revision,
             codebase=codebase,
             target_branch_url=target_branch_url,
             campaign=mp_run['campaign'] if mp_run else None,
@@ -2665,7 +2645,6 @@ async def check_existing_mp(
                 else:
                     mp_run = {
                         'remote_branch_name': None,
-                        'package': package_name,
                         'campaign': campaign,
                         'change_set': None,
                         'codebase': codebase,
@@ -2709,7 +2688,7 @@ async def check_existing_mp(
 
         try:
             await close_applied_mp(
-                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, target_branch_url,
                 mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""
 This merge proposal will be closed, since all remaining changes have been \
@@ -2778,7 +2757,7 @@ applied independently.
             campaign_config, mp_run['value']):
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket,
                 comment="This merge proposal will be closed, since only trivial changes are left.")
@@ -2831,7 +2810,7 @@ applied independently.
                 )
                 try:
                     await abandon_mp(
-                        proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
+                        proposal_info_manager, mp, revision, codebase, target_branch_url,
                         rate_limit_bucket=rate_limit_bucket, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged, comment="""\
 This merge proposal will be closed, since the branch for the role '{}'
@@ -2861,7 +2840,7 @@ has changed from {} to {}.
         # doesn't
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, codebase, package_name, target_branch_url,
+                proposal_info_manager, mp, revision, codebase, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket, comment="""\
 This merge proposal will be closed, since the branch has moved to {}.
@@ -2955,7 +2934,7 @@ This merge proposal will be closed, since the branch has moved to {}.
                 )
                 try:
                     await close_applied_mp(
-                        proposal_info_manager, mp, revision, codebase, package_name,
+                        proposal_info_manager, mp, revision, codebase, 
                         target_branch_url, campaign=mp_run['campaign'],
                         can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
                         comment="""
@@ -2984,7 +2963,6 @@ applied independently.
                 conn,
                 change_set=last_run.change_set,
                 codebase=last_run.codebase,
-                package=last_run.package,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
@@ -3003,7 +2981,6 @@ applied independently.
                 conn,
                 change_set=last_run.change_set,
                 codebase=last_run.codebase,
-                package=last_run.package,
                 branch_name=publish_result.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
