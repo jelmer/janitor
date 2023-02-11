@@ -322,7 +322,7 @@ async def handle_review(request):
     )
 
 
-@routes.get("/cupboard/pkg/{pkg}/{run_id}/", name="cupboard-run")
+@routes.get("/cupboard/p/{codebase}/{run_id}/", name="cupboard-run")
 @html_template("cupboard/run.html", headers={"Vary": "Cookie"})
 async def handle_run(request):
     from ..common import get_run
@@ -330,13 +330,13 @@ async def handle_run(request):
 
     span = aiozipkin.request_span(request)
     run_id = request.match_info["run_id"]
-    pkg = request.match_info.get("pkg")
+    codebase = request.match_info.get("codebase")
     async with request.app.database.acquire() as conn:
         with span.new_child('sql:run'):
             run = await get_run(conn, run_id)
             if run is None:
                 raise web.HTTPNotFound(text="No run with id %r" % run_id)
-    if pkg is not None and pkg != run['package']:
+    if codebase is not None and codebase != run['codebase']:
         if run is None:
             raise web.HTTPNotFound(text="No run with id %r" % run_id)
     return await generate_run_file(
@@ -432,12 +432,12 @@ async def handle_run_redirect(request):
     run_id = request.match_info["run_id"]
 
     async with request.app.database.acquire() as conn:
-        package = await conn.fetchone("SELECT package FROM run WHERE id = $1", run_id)
-        if package is None:
+        codebase = await conn.fetchone("SELECT codebase FROM run WHERE id = $1", run_id)
+        if codebase is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
         raise web.HTTPPermanentRedirect(
             location=request.app.router["cupboard-run"].url_for(
-                pkg=package, run_id=run_id))
+                codebase=codebase, run_id=run_id))
 
 
 @routes.get("/cupboard/merge-proposals", name="cupboard-merge-proposals")
@@ -462,13 +462,13 @@ async def handle_merge_proposal(request):
 
 
 @routes.get(
-    "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}", name="cupboard-result-file")
+    "/cupboard/c/{codebase}/{run_id}/{filename:.+}", name="cupboard-result-file")
 async def handle_result_file(request):
-    pkg = request.match_info["pkg"]
+    codebase = request.match_info["codebase"]
     filename = request.match_info["filename"]
     run_id = request.match_info["run_id"]
-    if not re.match("^[a-z0-9+-\\.]+$", pkg) or len(pkg) < 2:
-        raise web.HTTPNotFound(text="Invalid package %s for run %s" % (pkg, run_id))
+    if not re.match("^[a-z0-9+-\\.]+$", codebase) or len(codebase) < 2:
+        raise web.HTTPNotFound(text="Invalid codebase %s for run %s" % (codebase, run_id))
     if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
         raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
     if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
@@ -478,7 +478,7 @@ async def handle_result_file(request):
             )
 
         try:
-            logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
+            logfile = await request.app['logfile_manager'].get_log(codebase, run_id, filename)
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
                 text="No log file %s for run %s" % (filename, run_id)
@@ -506,7 +506,7 @@ async def handle_result_file(request):
 async def handle_ready_proposals(request):
     publish_status = request.query.get("publish_status")
     async with request.app.database.acquire() as conn:
-        query = 'SELECT package, suite, id, command, result FROM publish_ready'
+        query = 'SELECT codebase, suite, id, command, result FROM publish_ready'
 
         conditions = [
             "EXISTS (SELECT * FROM unnest(unpublished_branches) "
@@ -519,7 +519,7 @@ async def handle_ready_proposals(request):
 
         query += " WHERE " + " AND ".join(conditions)
 
-        query += " ORDER BY package ASC"
+        query += " ORDER BY codebase ASC"
 
         runs = await conn.fetch(query, *args)
     return {"runs": runs}
@@ -614,7 +614,7 @@ async def iter_needs_review(
         required_only: Optional[bool] = None,
         reviewer: Optional[str] = None):
     args: List[Any] = []
-    query = "SELECT id, package, suite FROM publish_ready"
+    query = "SELECT id, codebase, suite FROM publish_ready"
     conditions = []
     if campaigns is not None:
         args.append(campaigns)
