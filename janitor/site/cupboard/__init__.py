@@ -257,7 +257,6 @@ async def handle_publish_history(request):
         return await write_history(conn, limit=limit)
 
 
-
 @routes.post("/cupboard/review", name="cupboard-review-post")
 async def handle_review_post(request):
     from ...review import store_review
@@ -322,7 +321,7 @@ async def handle_review(request):
     )
 
 
-@routes.get("/cupboard/p/{codebase}/{run_id}/", name="cupboard-run")
+@routes.get("/cupboard/c/{codebase}/{run_id}/", name="cupboard-run")
 @html_template("cupboard/run.html", headers={"Vary": "Cookie"})
 async def handle_run(request):
     from ..common import get_run
