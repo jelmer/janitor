@@ -25,7 +25,6 @@ class QueueItem:
 
     __slots__ = [
         "id",
-        "package",
         "context",
         "command",
         "estimated_duration",
@@ -40,7 +39,6 @@ class QueueItem:
         self,
         *,
         id,
-        package,
         context,
         command,
         estimated_duration,
@@ -51,7 +49,6 @@ class QueueItem:
         codebase,
     ):
         self.id = id
-        self.package = package
         self.context = context
         self.command = command
         self.estimated_duration = estimated_duration
@@ -65,7 +62,6 @@ class QueueItem:
     def from_row(cls, row) -> "QueueItem":
         return cls(
             id=row['id'],
-            package=row['package'],
             context=row['context'],
             command=row['command'],
             estimated_duration=row['estimated_duration'],
@@ -105,7 +101,6 @@ class Queue:
     async def get_item(self, queue_id: int):
         query = """
 SELECT
-    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -117,7 +112,6 @@ SELECT
     queue.codebase AS codebase
 FROM
     queue
-LEFT JOIN package ON package.codebase = queue.codebase
 WHERE queue.id = $1
 """
         row = await self.conn.fetchrow(query, queue_id)
@@ -131,7 +125,6 @@ WHERE queue.id = $1
                         assigned_queue_items: Optional[set[int]] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
         query = """
 SELECT
-    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -147,7 +140,6 @@ SELECT
 FROM
     queue
 LEFT JOIN codebase ON codebase.name = queue.codebase
-LEFT JOIN package ON package.codebase = queue.codebase
 """
         conditions = []
         args: list[Any] = []
@@ -162,7 +154,7 @@ LEFT JOIN package ON package.codebase = queue.codebase
             conditions.append("queue.suite = $%d" % len(args))
         if exclude_hosts:
             args.append(exclude_hosts)
-            # TODO(jelmer): Use package.hostname when kali upgrades to postgres 12+
+            # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
             conditions.append(
                 "NOT (codebase.branch_url IS NOT NULL AND "
                 "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
@@ -193,7 +185,6 @@ LIMIT 1
                          campaign: Optional[str] = None):
         query = """
 SELECT
-    package.name AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
@@ -205,7 +196,6 @@ SELECT
     queue.codebase AS codebase
 FROM
     queue
-LEFT JOIN package ON package.codebase = queue.codebase
 """
         conditions = []
         args: list[Any] = []

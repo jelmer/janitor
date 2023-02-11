@@ -49,7 +49,7 @@ async def handle_history(request):
     offset = int(request.query.get("offset", "0"))
 
     query = """\
-SELECT finish_time, package, suite, worker_link,
+SELECT finish_time, codebase, suite, worker_link,
 worker as worker_name, finish_time - start_time AS duration,
 result_code, id, description, failure_transient FROM run
 ORDER BY finish_time DESC"""
@@ -364,7 +364,6 @@ async def handle_broken_mps(request):
 select
 url,
 last_run.suite,
-last_run.package,
 last_run.codebase,
 last_run.id,
 last_run.result_code,
@@ -372,7 +371,7 @@ last_run.finish_time,
 last_run.description
 from
 (select
- distinct on (url) url, run.suite, run.package, run.finish_time,
+ distinct on (url) url, run.suite, run.codebase, run.finish_time,
  run.codebase, merge_proposal.revision as current_revision
 from merge_proposal join run on
  merge_proposal.revision = run.revision where status = 'open')
@@ -565,9 +564,6 @@ async def handle_done_proposals(request):
         runs.append(run)
 
     return {"oldest": oldest, "runs": runs, "since": since}
-
-
-
 
 
 _extra_cupboard_links = []

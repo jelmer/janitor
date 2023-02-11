@@ -64,7 +64,7 @@
                 {% for run in runs %}
                     <tr>
                         <td>
-                            <a class="reference external" href="../pkg/{{ run.package }}/">{{ run.package }}</a>
+                            <a class="reference external" href="../c/{{ run.codebase }}/">{{ run.codebase }}</a>
                         </td>
                         <td>{{ run.campaign }}</td>
                         <td>{{ run.failure_stage }}</td>
@@ -72,7 +72,7 @@
                         <td>{{ format_duration(run.finish_time - run.start_time) }}</td>
                         <td>
                             <a class="reference external"
-                               href="../pkg/{{ run.package }}/{{ run.id }}">{{ run.description }}</a>
+                               href="../c/{{ run.codebase }}/{{ run.id }}">{{ run.description }}</a>
                         </td>
                     </tr>
                 {% endfor %}

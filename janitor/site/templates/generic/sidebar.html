@@ -1,4 +1,4 @@
-{% from "inputs.html" import package_input %}
+{% from "inputs.html" import codebase_input %}
 <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
     <div class="sphinxsidebarwrapper">
         <h1 class="logo">
@@ -28,8 +28,8 @@
         </ul>
         <p>
             See the status for a specific package:
-            <form autocomplete="off" action="/{{ suite }}/pkg">
-                <div class="sidebar-packages" style="width:300px;">{{ package_input(name="package") }}</div>
+            <form autocomplete="off" action="/{{ suite }}/c">
+                <div class="sidebar-packages" style="width:300px;">{{ codebase_input(name="package") }}</div>
                 <input type="submit" style="display: none"/>
             </form>
         </p>

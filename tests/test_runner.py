@@ -177,7 +177,7 @@ async def test_register_run():
     qp = await create_queue_processor()
     assert await qp.active_run_count() == 0
     active_run = ActiveRun(
-        campaign='test', package='pkg', change_set=None, command='blah',
+        campaign='test', change_set=None, command='blah',
         queue_id=12, log_id='some-id', start_time=datetime.utcnow(),
         codebase='test-1.1',
         vcs_info={}, backchannel=Backchannel(), worker_name='tester',
@@ -354,7 +354,6 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
             'log_id': assignment['id'],
             'logfilenames': [],
             'main_branch_revision': None,
-            'package': None,
             'remotes': None,
             'resume': None,
             'revision': None,
@@ -429,7 +428,6 @@ def test_serialize_active_run():
         queue_id=4242,
         log_id='some-log-id',
         backchannel=Backchannel(),
-        package='pkg',
         start_time=datetime.utcnow(),
         vcs_info={
             'vcs_type': 'git',

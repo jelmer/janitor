@@ -14,13 +14,13 @@
         <h1>Merge Proposal Status</h1>
         {% macro display_merge_proposal(proposal) %}
             <a class="reference external" href="{{ proposal.url }}">
-                {% if proposal.package %}
-                    {{ proposal.package }}
+                {% if proposal.codebase %}
+                    {{ proposal.codebase }}
                 {% else %}
                     {{ proposal.url }}
                 {% endif %}
             </a>
-            {% if proposal.suite %}(<a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}/">Details</a>){% endif %}
+            {% if proposal.suite %}(<a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/">Details</a>){% endif %}
             {% if not suite %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
         {% endmacro %}
         {% if open_proposals %}

@@ -49,11 +49,12 @@ async def process_build(db_location, run_id, role, format):
     async with state.create_pool(db_location) as conn:
         query = """
 SELECT
-  package,
-  suite,
+  package.name AS package,
+  suite AS campaign,
   id AS log_id,
   result AS _result
 FROM run
+LEFT JOIN package ON run.codebase = package.codebase
 WHERE
   id = $1
 """

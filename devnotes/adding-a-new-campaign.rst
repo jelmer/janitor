@@ -8,7 +8,7 @@ At the core of every campaign is a script that can make changes
 to a version controlled branch.
 
 This script will be executed in a version controlled checkout of
-a source package, and can make changes to the package as it sees fit.
+a source codebase, and can make changes to the codebase as it sees fit.
 See `this blog post <https://www.jelmer.uk/silver-platter-intro.html>`_ for more
 information about creating codemod scripts.
 
