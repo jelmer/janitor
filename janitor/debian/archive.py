@@ -579,6 +579,7 @@ async def refresh_on_demand_dists(
         stamp = parsedate_to_datetime(release["Date"])
     async with db.acquire() as conn:
         if kind == 'run':
+            # /run/{run_id}
             row = await conn.fetchrow(
                 'SELECT suite, max(finish_time) FROM run WHERE id = $1', id)
             if row is None:
@@ -587,6 +588,7 @@ async def refresh_on_demand_dists(
             builds = await get_builds_for_run(db, id)
             campaign_config = get_campaign_config(config, campaign)
         elif kind == 'cs':
+            # /cs/{change_set_id}
             campaign = await conn.fetchval(
                 'SELECT campaign FROM change_set WHERE id = $1', id)
             if campaign is None:
@@ -597,6 +599,7 @@ async def refresh_on_demand_dists(
             description = f"Change set {id}"
             campaign_config = get_campaign_config(config, campaign)
         else:
+            # /{suite}/{codebase}
             try:
                 campaign_config = get_campaign_config(config, kind)
             except KeyError as e:
@@ -604,7 +607,7 @@ async def refresh_on_demand_dists(
             cs_id = await conn.fetchval(
                 "SELECT run.change_set FROM run "
                 "INNER JOIN change_set ON change_set.id = run.change_set "
-                "WHERE run.suite = $1 AND run.package = $2 "
+                "WHERE run.suite = $1 AND run.codebase = $2 "
                 "AND change_set.state in ('working', 'ready', 'publishing', 'done') AND "
                 "run.result_code = 'success' "
                 "ORDER BY run.finish_time DESC", kind, id)

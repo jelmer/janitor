@@ -9,7 +9,7 @@
     <div class="section" id="review">
         <h1>Review</h1>
         <p>
-            <a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}/"
+            <a href="/cupboard/pkg/{{ codebase }}/{{ run_id }}/"
                id="full-run-link">Full Run</a>
             {% if review_instructions_url %}
             <a href="{{ review_instructions_url }}">Review Instructions</a>
@@ -23,26 +23,26 @@
                 $('.review-button').disabled = "disabled";
             }
 
-            function allowReview(package, run_id) {
-                $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
+            function allowReview(codebase, run_id) {
+                $('#full-run-link').attr('href', "/cupboard/pkg/" + codebase + "/" + run_id);
                 $('#run-id').attr('value', run_id);
-                $('#package-name').attr('value', package);
+                $('#codebase').attr('value', codebase);
                 $('.review-button').disabled = "enabled";
             }
 
-            function loadRun(package, run_id) {
+            function loadRun(codebase, run_id) {
                 disallowReview();
                 if (run_id in preloaded) {
                     $('#evaluate').html(preloaded[run_id]);
                     delete preloaded[run_id];
-                    allowReview(package, run_id);
+                    allowReview(codebase, run_id);
                 } else {
-                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(package, run_id); });
+                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(codebase, run_id); });
                 }
                 preloadSome();
             }
 
-            function preload(package, run_id) {
+            function preload(codebase, run_id) {
                 if (run_id in preloaded) {
                     return;
                 }
@@ -54,7 +54,7 @@
 
             function preloadSome() {
                 for (i in todo.slice(0, 20)) {
-                    preload(todo[i].package, todo[i].id);
+                    preload(todo[i].codebase, todo[i].id);
                 }
             }
 
@@ -73,7 +73,7 @@
 
             function loadNewJob() {
                 if ((newJob = todo.shift()) !== undefined) {
-                    loadRun(newJob.package, newJob.id);
+                    loadRun(newJob.codebase, newJob.id);
                 } else {
                     {% if not publishable_only %}
                         $('.branch').replaceWith('All done!');
@@ -109,8 +109,8 @@
                     comment = window.prompt('Please specify a comment for the rejection');
                 }
                 var run_id = $('#run-id').val();
-                var package = $('#package-name').val();
-                console.log("Submitting review " + verdict + " for run " + package + "/" + run_id);
+                var codebase = $('#codebase').val();
+                console.log("Submitting review " + verdict + " for run " + codebase + "/" + run_id);
                 $.ajax('/api/run/' + run_id, {
                     type: "POST",
                     data: {
@@ -142,9 +142,9 @@
         <form action="/cupboard/review" method="post" id="options">
             <input type="hidden" name="run_id" id="run-id" value="{{ run_id }}"/>
             <input type="hidden"
-                   name="package-name"
-                   id="package-name"
-                   value="{{ package_name }}"/>
+                   name="codebase"
+                   id="codebase"
+                   value="{{ codebase }}"/>
             {% if suites %}
                 {% for s in suites %}<input type="hidden" name="suites[]" value="{{ s }}"/>{% endfor %}
             {% endif %}
