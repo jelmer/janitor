@@ -6,9 +6,9 @@ from aiohttp import web
 async def iter_publish_history(conn, limit=None):
     query = """
 SELECT
-    publish.id, publish.timestamp, publish.package, publish.branch_name,
+    publish.id, publish.timestamp, publish.branch_name,
     publish.mode, publish.merge_proposal_url, publish.result_code,
-    publish.description, codebase.web_url
+    publish.description, codebase.web_url, codebase.name AS codebase
 FROM
     publish
 JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
@@ -31,13 +31,13 @@ async def get_publish(conn, id):
 SELECT
     publish.id AS id,
     publish.timestamp AS timestamp,
-    publish.package AS package,
     publish.branch_name AS branch_name,
     publish.mode AS mode,
     publish.merge_proposal_url AS merge_proposal_url,
     publish.result_code AS result_code,
     publish.description AS description,
-    codebase.web_url AS vcs_browse
+    codebase.web_url AS vcs_browse,
+    codebase.name AS codebase
 FROM
     publish
 JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
