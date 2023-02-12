@@ -502,11 +502,9 @@ async def handle_health(request):
 @routes.get("/ready", name="ready")
 async def handle_ready(request):
     missing = []
-    for campaign_config in request.app['config'].campaign:
-        if not campaign_config.HasField('debian_build'):
-            continue
-        if campaign_config.name not in last_publish_time:
-            missing.append(campaign_config.name)
+    for apt_repo_config in request.app['config'].apt_repository:
+        if apt_repo_config.name not in last_publish_time:
+            missing.append(apt_repo_config.name)
     status = ''.join(
         [f'{name}: {dt.isoformat()}\n'
          for (name, dt) in last_publish_time.items()])
