@@ -2006,8 +2006,10 @@ SELECT
   candidate.command AS policy_command,
   run.result_code AS result_code,
   change_set.state AS change_set_state,
-  change_set.id AS change_set
+  change_set.id AS change_set,
+  codebase.inactive AS inactive
 FROM run
+INNER JOIN codebase ON codebase.name = run.codebase
 INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
@@ -2038,9 +2040,9 @@ WHERE run.id = $1
     ret['success'] = {
         'result': (run['result_code'] == 'success'),
         'details': {'result_code': run['result_code']}}
-    ret['removed'] = {
-        'result': not run['removed'],
-        'details': {'removed': run['removed']}}
+    ret['inactive'] = {
+        'result': not run['inactive'],
+        'details': {'inactive': run['inactive']}}
     ret['command'] = {
         'result': run['run_command'] == run['policy_command'],
         'details': {
