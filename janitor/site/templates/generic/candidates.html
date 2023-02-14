@@ -3,15 +3,15 @@
     {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
 {% endblock sidebar %}
 {% block page_title %}
-    {{ suite }} Packages - Candidates
+    {{ suite }} - Candidates
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="candidates">
-        <h1>{{ suite }} packages - Candidates</h1>
+        <h1>{{ suite }} - Candidates</h1>
         <ul>
-            {% for package, value in candidates %}
+            {% for codebase, value in candidates %}
                 <li>
-                    <a href="/{{ suite }}/pkg/{{ package }}/">{{ package }}</a>
+                    <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
                 </li>
             {% endfor %}
         </ul>
