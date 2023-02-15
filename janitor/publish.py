@@ -681,7 +681,6 @@ SELECT * FROM publish_ready
     )
 
     conditions.append(any_publishable_branches)
-    conditions.append("publish_status = 'approved'")
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)

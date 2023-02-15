@@ -39,13 +39,8 @@ async def generate_rejected(conn, config, campaign=None):
 
 async def generate_review(
     conn, request, client, differ_url, vcs_managers, campaigns=None,
-    publishable_only=True
+    publishable_only=True, required_only=None
 ):
-    if 'required_only' in request.query:
-        required_only = (request.query['required_only'] == 'true')
-    else:
-        required_only = None
-
     limit = int(request.query.get('limit', '100'))
 
     span = aiozipkin.request_span(request)
@@ -94,6 +89,7 @@ async def generate_review(
         "evaluate": evaluate,
         "evaluate_url": str(request.app["evaluate_url"]),
         "publishable_only": publishable_only,
+        "required_only": required_only,
         "todo": [
             {
                 'codebase': entry['codebase'],
