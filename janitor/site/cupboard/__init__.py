@@ -304,6 +304,10 @@ async def handle_review_post(request):
 async def handle_review(request):
     from .review import generate_review
     publishable_only = request.query.get("publishable_only", "true") == "true"
+    if 'required_only' in request.query:
+        required_only = (request.query['required_only'] == 'true')
+    else:
+        required_only = True
 
     campaigns = request.query.getall("suite", None)
     async with request.app.database.acquire() as conn:
@@ -315,6 +319,7 @@ async def handle_review(request):
             request.app['vcs_managers'],
             campaigns=campaigns,
             publishable_only=publishable_only,
+            required_only=required_only
         )
     return web.Response(
         content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
@@ -629,7 +634,7 @@ async def iter_needs_review(
     else:
         order_by.append(publishable_condition + " DESC")
 
-    if required_only is not None:
+    if required_only:
         conditions.append("publish_status = 'needs-manual-review'")
 
     if reviewer is not None:
