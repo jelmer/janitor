@@ -11,7 +11,7 @@ SELECT
     publish.description, codebase.web_url, codebase.name AS codebase
 FROM
     publish
-JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
+LEFT JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
 ORDER BY timestamp DESC
 """
     if limit:
