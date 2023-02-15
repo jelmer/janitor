@@ -246,10 +246,7 @@ async def has_cotenants(
 ) -> Optional[bool]:
     url = urlutils.split_segment_parameters(url)[0].rstrip("/")
     rows = await conn.fetch(
-        "SELECT name FROM codebase where "
-        "branch_url = $1 or "
-        "branch_url like $1 || ',branch=%' or "
-        "branch_url like $1 || '/,branch=%'",
+        "SELECT name FROM codebase where branch_url = $1 or url = $1",
         url,
     )
     if len(rows) > 1:
