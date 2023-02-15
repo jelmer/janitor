@@ -81,14 +81,14 @@ async def git_diff_request(request):
         *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.DEVNULL,
         cwd=repo_path,
     )
 
     # TODO(jelmer): Stream this
     try:
         with span.new_child('subprocess:communicate'):
-            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(None), 30.0)
     except asyncio.TimeoutError as e:
         with suppress(ProcessLookupError):
             p.kill()
