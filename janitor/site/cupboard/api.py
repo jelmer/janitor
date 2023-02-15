@@ -15,7 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -295,24 +294,18 @@ WHERE
     async with request.app['pool'].acquire() as conn:
         rows = await conn.fetch(query, *args)
 
-    async def do_reprocess():
-        todo = [
-            asyncio.create_task(reprocess_run_logs(
-                db=request.app['pool'],
-                logfile_manager=request.app['logfile_manager'],
-                codebase=row['codebase'], campaign=row['campaign'], log_id=row['id'],
-                command=row['command'], change_set=row['change_set'],
-                duration=row['duration'], result_code=row['result_code'],
-                description=row['description'], failure_details=row['failure_details'],
-                process_fns=[
-                    ('dist-', DIST_LOG_FILENAME, process_dist_log),
-                    ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
-                dry_run=dry_run, reschedule=reschedule))
-            for row in rows]
-        for i in range(0, len(todo), 100):
-            await asyncio.wait(set(todo[i : i + 100]))
-
-    await spawn(request, do_reprocess())
+    for row in rows:
+        await spawn(request, reprocess_run_logs(
+            db=request.app['pool'],
+            logfile_manager=request.app['logfile_manager'],
+            codebase=row['codebase'], campaign=row['campaign'], log_id=row['id'],
+            command=row['command'], change_set=row['change_set'],
+            duration=row['duration'], result_code=row['result_code'],
+            description=row['description'], failure_details=row['failure_details'],
+            process_fns=[
+                ('dist-', DIST_LOG_FILENAME, process_dist_log),
+                ('build-', BUILD_LOG_FILENAME, process_sbuild_log)],
+            dry_run=dry_run, reschedule=reschedule))
 
     return web.json_response([
         {'codebase': row['codebase'],

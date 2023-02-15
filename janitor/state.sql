@@ -33,7 +33,7 @@ CREATE INDEX ON codebase (name);
 
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   codebase text references codebase(name),
+   codebase text references codebase(name) on delete set null,
    url text not null,
    target_branch_url text,
    status merge_proposal_status NULL DEFAULT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS run (
    target_branch_url text,
    failure_transient boolean,
    -- The run this one resumed from
-   resume_from text references run (id),
+   resume_from text references run (id) on delete set null,
    change_set text not null references change_set(id),
    codebase text not null references codebase(name),
    check(finish_time >= start_time),
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS publish (
    description text,
    requestor text,
    timestamp timestamp default now(),
-   run_id text references run(id),
+   run_id text references run(id) on delete set null,
    foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
 );
 CREATE INDEX ON publish (revision);
@@ -153,7 +153,7 @@ CREATE TYPE queue_bucket AS ENUM(
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket not null default 'default',
-   codebase text not null references codebase(name),
+   codebase text not null references codebase(name) on delete cascade,
    branch_url text,
    suite suite_name not null,
    command text,
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS queue (
    estimated_duration interval,
    refresh boolean default false,
    requestor text,
-   change_set text references change_set(id),
+   change_set text references change_set(id) on delete cascade,
    check (command != '')
 );
 CREATE UNIQUE INDEX queue_codebase_suite_set ON queue(codebase, suite, coalesce(change_set, ''));
@@ -189,12 +189,12 @@ CREATE TABLE IF NOT EXISTS candidate (
    success_chance float,
    command text not null,
    publish_policy text references named_publish_policy (name),
-   change_set text references change_set(id),
+   change_set text references change_set(id) on delete cascade,
    codebase text not null,
    id serial primary key not null,
    check (command != ''),
    check (value > 0),
-   constraint candidate_codebase_fkey foreign key(codebase) references codebase(name)
+   constraint candidate_codebase_fkey foreign key(codebase) references codebase(name) on delete cascade
 );
 CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, coalesce(change_set, ''));
 CREATE INDEX ON candidate (suite);
@@ -228,7 +228,7 @@ CREATE OR REPLACE VIEW last_effective_runs AS
   INNER JOIN run on last_run.last_effective_run_id = run.id;
 
 CREATE TABLE new_result_branch (
- run_id text not null references run (id),
+ run_id text not null references run (id) on delete cascade,
  role text not null,
  remote_name text,
  base_revision text,
@@ -250,7 +250,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
     SELECT codebase, suite INTO row FROM run WHERE id = run_id;
     IF FOUND THEN
         perform refresh_last_run(row.codebase, row.suite);
-    end if;
+    END IF;
     END;
 $$;
 
@@ -676,3 +676,18 @@ CREATE TABLE followup (
     candidate int references candidate (id),
     unique (origin, candidate)
 );
+
+CREATE INDEX ON codebase (inactive);
+CREATE INDEX ON merge_proposal (can_be_merged);
+CREATE INDEX ON run (suite, revision, publish_status);
+CREATE INDEX ON run (codebase, suite, start_time, result_code);
+CREATE INDEX ON run (start_time);
+CREATE INDEX ON run (result_code);
+CREATE INDEX ON run (change_set);
+CREATE INDEX ON publish (merge_proposal_url);
+CREATE INDEX ON publish (revision);
+CREATE INDEX ON publish (timestamp);
+CREATE INDEX ON queue (bucket);
+CREATE INDEX ON queue (codebase);
+CREATE INDEX ON queue (suite, priority, id);
+CREATE UNIQUE INDEX ON candidate (codebase, suite, coalesce(change_set, ''));
