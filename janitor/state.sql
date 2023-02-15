@@ -33,7 +33,7 @@ CREATE INDEX ON codebase (name);
 
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned', 'rejected');
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   codebase text references codebase(name),
+   codebase text references codebase(name) on delete set null,
    url text not null,
    target_branch_url text,
    status merge_proposal_status NULL DEFAULT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS publish (
    description text,
    requestor text,
    timestamp timestamp default now(),
-   run_id text references run(id),
+   run_id text references run(id) on delete set null,
    foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
 );
 CREATE INDEX ON publish (revision);
@@ -250,7 +250,7 @@ CREATE OR REPLACE FUNCTION refresh_last_run(run_id text)
     SELECT codebase, suite INTO row FROM run WHERE id = run_id;
     IF FOUND THEN
         perform refresh_last_run(row.codebase, row.suite);
-    end if on delete cascade;
+    END IF;
     END;
 $$;
 
