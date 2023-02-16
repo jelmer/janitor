@@ -330,11 +330,11 @@ cd {{ codebase }}
                 {%- if v.result -%}☑ {% else -%}☒ {% endif -%}
                 {% set r = v.result -%}
                 {%- set d = v.details -%}
-                {%- if k == 'removed' -%}
+                {%- if k == 'inactive' -%}
                     {%- if r -%}
-                        package has not been removed from the archive
+                        codebase is not inactive
                     {%- else -%}
-                        package has been removed from the archive
+                        codebase is inactive
                     {%- endif -%}
                 {%- elif k == 'publish_status' -%}
                     {%- if d.status == 'needs-manual-review' -%}

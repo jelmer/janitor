@@ -52,11 +52,11 @@ def test_display_publish_blockers():
     </ul>
 """
     assert str(template.module.display_publish_blockers(  # type: ignore
-        {'removed': {'result': True, 'details': {}}})) == """\
+        {'inactive': {'result': True, 'details': {}}})) == """\
 
     <ul>
         
-            <li>☑ package has not been removed from the archive</li>
+            <li>☑ codebase is not inactive</li>
         
     </ul>
 """
