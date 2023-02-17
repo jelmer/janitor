@@ -905,7 +905,7 @@ async def store_publish(
                     "(url, status, revision, last_scanned, "
                     " target_branch_url, codebase) "
                     "VALUES ($1, 'open', $2, NOW(), $3, $4) ON CONFLICT (url) "
-                    "DO UPDATE "
+                    "DO UPDATE SET "
                     "revision = EXCLUDED.revision, "
                     "last_scanned = EXCLUDED.last_scanned, "
                     "target_branch_url = EXCLUDED.target_branch_url, "
