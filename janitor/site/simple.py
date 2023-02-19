@@ -410,8 +410,6 @@ async def create_app(
                         [name, json.loads(msg['data'])])})
                 await ch.run()
 
-        app['runner_status'] = None
-
         for name, title in [
             ('publish', 'publisher publish listening'),
             ('merge-proposal', 'merge proposal listening'),

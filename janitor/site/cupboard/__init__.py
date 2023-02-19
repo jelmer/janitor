@@ -23,11 +23,17 @@ from typing import Any, List, Optional
 
 import aiozipkin
 import asyncpg
-from aiohttp import web
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp import web, ClientSession
+import aiohttp_jinja2
 
+from jinja2 import select_autoescape
+from janitor.site import template_loader
+from janitor.vcs import get_vcs_managers_from_config
 from .. import check_logged_in, is_admin, is_qa_reviewer, worker_link_is_global
 from ..common import html_template
 from ..pkg import MergeProposalUserUrlResolver
+from ..setup import setup_postgres
 
 routes = web.RouteTableDef()
 
@@ -38,7 +44,7 @@ async def handle_rejected(request):
     from .review import generate_rejected
 
     campaign = request.query.get("campaign")
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         return await generate_rejected(conn, request.app['config'], campaign=campaign)
 
 
@@ -57,7 +63,7 @@ ORDER BY finish_time DESC"""
         query += ' OFFSET %d' % offset
     if limit:
         query += ' LIMIT %d' % limit
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         runs = await conn.fetch(query)
     return {
         "count": limit,
@@ -74,7 +80,7 @@ async def handle_reprocess_logs(request):
 @routes.get("/cupboard/workers", name="workers")
 @html_template("cupboard/workers.html", headers={"Vary": "Cookie"})
 async def handle_workers(request):
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         workers = []
         for worker in await conn.fetch(
                 'select name, link, count(run.id) as run_count from worker '
@@ -94,7 +100,7 @@ async def handle_queue(request):
     from .queue import write_queue
 
     return await write_queue(
-        request.app.database,
+        request.app['pool'],
         queue_status=request.app['runner_status'],
         limit=limit,
     )
@@ -107,7 +113,7 @@ async def handle_never_processed(request):
     if campaign is not None and campaign.lower() == "_all":
         campaign = None
     campaigns = [campaign] if campaign else None
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         query = """\
         select c.codebase, c.suite from candidate c
         where not exists (
@@ -134,7 +140,7 @@ async def handle_result_codes(request):
         campaign = None
     all_campaigns = [c.name for c in request.app['config'].campaign]
     args = [[campaign] if campaign else all_campaigns]
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         if include_transient:
             query = """\
     select (
@@ -178,7 +184,7 @@ async def handle_failure_stages(request):
         campaign = None
     all_campaigns = [c.name for c in request.app['config'].campaign]
     args = [[campaign] if campaign else all_campaigns]
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         if include_transient:
             query = """\
     select failure_stage, count(failure_stage) from last_runs AS run
@@ -229,7 +235,7 @@ async def handle_result_code(request):
             "run.suite = candidate.suite AND "
             "(run.change_set = candidate.change_set OR candidate.change_set IS NULL))")
     all_campaigns = [c.name for c in request.app['config'].campaign]
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         return {
             "code": code,
             "runs": await conn.fetch(query, codes, [campaign] if campaign else all_campaigns),
@@ -244,7 +250,7 @@ async def handle_result_code(request):
 async def handle_publish(request):
     id = request.match_info["id"]
     from .publish import write_publish
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         return await write_publish(conn, id)
 
 
@@ -255,7 +261,7 @@ async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
 
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         return await write_history(conn, limit=limit)
 
 
@@ -267,7 +273,7 @@ async def handle_review_post(request):
 
     post = await request.post()
     publishable_only = post.get("publishable_only", "true") == "true"
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         if "verdict" in post:
             verdict = {
                 'approve': 'approved',
@@ -312,7 +318,7 @@ async def handle_review(request):
         required_only = True
 
     campaigns = request.query.getall("suite", None)
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         text = await generate_review(
             conn,
             request,
@@ -337,7 +343,7 @@ async def handle_run(request):
     span = aiozipkin.request_span(request)
     run_id = request.match_info["run_id"]
     codebase = request.match_info.get("codebase")
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         with span.new_child('sql:run'):
             run = await get_run(conn, run_id)
             if run is None:
@@ -346,7 +352,7 @@ async def handle_run(request):
         if run is None:
             raise web.HTTPNotFound(text="No run with id %r" % run_id)
     return await generate_run_file(
-        request.app.database,
+        request.app['pool'],
         request.app['http_client_session'],
         request.app['config'],
         request.app['differ_url'],
@@ -364,7 +370,7 @@ async def handle_run(request):
     "cupboard/broken-merge-proposals.html", headers={"Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         broken_mps = await conn.fetch(
             """\
 select
@@ -404,7 +410,7 @@ async def handle_cupboard_start(request):
 @html_template("cupboard/changeset.html", headers={"Vary": "Cookie"})
 async def handle_changeset(request):
     span = aiozipkin.request_span(request)
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         with span.new_child('sql:changeset'):
             cs = await conn.fetchrow('SELECT * FROM change_set WHERE id = $1', request.match_info['id'])
         with span.new_child('sql:runs'):
@@ -422,7 +428,7 @@ async def handle_changeset(request):
 @html_template("cupboard/changeset-list.html", headers={"Vary": "Cookie"})
 async def handle_changeset_list(request):
     span = aiozipkin.request_span(request)
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         with span.new_child('sql:changesets'):
             cs = await conn.fetch("""\
 select * from change_set where exists (
@@ -436,7 +442,7 @@ async def handle_run_redirect(request):
 
     run_id = request.match_info["run_id"]
 
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         codebase = await conn.fetchone("SELECT codebase FROM run WHERE id = $1", run_id)
         if codebase is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
@@ -451,7 +457,7 @@ async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
     suite = request.match_info.get("suite")
-    return await write_merge_proposals(request.app.database, suite)
+    return await write_merge_proposals(request.app['pool'], suite)
 
 
 @routes.get("/cupboard/merge-proposal", name="cupboard-merge-proposal")
@@ -463,7 +469,7 @@ async def handle_merge_proposal(request):
         url = request.query["url"]
     except KeyError as e:
         raise web.HTTPBadRequest(text="no url specified") from e
-    return await write_merge_proposal(request.app.database, url)
+    return await write_merge_proposal(request.app['pool'], url)
 
 
 @routes.get(
@@ -510,7 +516,7 @@ async def handle_result_file(request):
 @html_template("cupboard/ready-list.html", headers={"Vary": "Cookie"})
 async def handle_ready_proposals(request):
     publish_status = request.query.get("publish_status")
-    async with request.app.database.acquire() as conn:
+    async with request.app['pool'].acquire() as conn:
         query = 'SELECT codebase, suite, id, command, result FROM publish_ready'
 
         conditions = [
@@ -606,6 +612,7 @@ def register_cupboard_endpoints(
     if evaluate_url is None:
         evaluate_url = app.router['cupboard-default-evaluate'].url_for(run_id='RUN_ID')
     app['evaluate_url'] = evaluate_url
+    app['runner_status'] = None
 
 
 async def iter_needs_review(
@@ -654,3 +661,39 @@ async def iter_needs_review(
     if limit is not None:
         query += " LIMIT %d" % limit
     return await conn.fetch(query, *args)
+
+
+def create_app(*, config, publisher_url, runner_url, differ_url,
+               evaluate_url=None, trace_configs=None, db=None):
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
+    if db is None:
+        setup_postgres(app)
+    else:
+        app['pool'] = db
+
+    async def persistent_session(app):
+        app['http_client_session'] = session = ClientSession(
+            trace_configs=trace_configs)
+        yield
+        await session.close()
+
+    app.cleanup_ctx.append(persistent_session)
+
+    app['vcs_managers'] = get_vcs_managers_from_config(config)
+    app['differ_url'] = differ_url
+    app['runner_url'] = runner_url
+    app['publisher_url'] = publisher_url
+
+    app['config'] = config
+
+    register_cupboard_endpoints(
+        app, config=config, publisher_url=publisher_url,
+        runner_url=runner_url, trace_configs=trace_configs, db=db,
+        evaluate_url=evaluate_url)
+
+    aiohttp_jinja2.setup(
+        app, loader=template_loader, enable_async=True,
+        autoescape=select_autoescape(["html", "xml"]))
+
+    return app
