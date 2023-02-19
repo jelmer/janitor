@@ -930,9 +930,9 @@ async def store_publish(
             "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
             "description, merge_proposal_url, id, requestor, change_set, run_id, "
-            "target_branch_url, target_branch_web_url) "
+            "target_branch_url, target_branch_web_url, codebase) "
             "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-            "$13, $14) ",
+            "$13, $14, $15) ",
             branch_name,
             main_branch_revision,
             revision,
@@ -947,6 +947,7 @@ async def store_publish(
             run_id,
             target_branch_url,
             target_branch_web_url,
+            codebase,
         )
         if result_code == 'success':
             await conn.execute(
@@ -1141,7 +1142,7 @@ async def publish_from_policy(
         merge_proposal_url=(
             publish_result.proposal_url if publish_result.proposal_url else None),
         publish_id=publish_id,
-        target_branch_url=target_branch_url,
+        target_branch_url=publish_result.target_branch_url,
         target_branch_web_url=publish_result.target_branch_web_url,
         requestor=requestor,
         run_id=run.id,
@@ -1277,6 +1278,7 @@ async def publish_and_store(
                 change_set=run.change_set,
                 codebase=run.codebase,
                 target_branch_url=target_branch_url,
+                target_branch_web_url=None,
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=run.main_branch_revision,
                 revision=run.revision,
@@ -1323,6 +1325,7 @@ async def publish_and_store(
                 publish_result.proposal_url
                 if publish_result.proposal_url else None),
             target_branch_url=publish_result.target_branch_url,
+            target_branch_web_url=publish_result.target_branch_web_url,
             publish_id=publish_id,
             requestor=requestor,
             run_id=run.id,
@@ -2966,6 +2969,7 @@ applied independently.
                 description=description,
                 merge_proposal_url=mp.url,
                 target_branch_url=target_branch_url,
+                target_branch_web_url=None,
                 publish_id=publish_id,
                 requestor="publisher (regular refresh)",
                 run_id=last_run.id,
@@ -2983,7 +2987,8 @@ applied independently.
                 result_code="success",
                 description=(publish_result.description or "Successfully updated"),
                 merge_proposal_url=publish_result.proposal_url,
-                target_branch_url=target_branch_url,
+                target_branch_url=publish_result.target_branch_url,
+                target_branch_web_url=publish_result.target_branch_web_url,
                 publish_id=publish_id,
                 requestor="publisher (regular refresh)",
                 run_id=last_run.id,
