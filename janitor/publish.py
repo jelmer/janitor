@@ -881,6 +881,7 @@ async def store_publish(
     codebase: str,
     branch_name: Optional[str],
     target_branch_url: Optional[str],
+    target_branch_web_url: Optional[str],
     main_branch_revision: Optional[bytes],
     revision: Optional[bytes],
     role: str,
@@ -929,8 +930,9 @@ async def store_publish(
             "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
             "description, merge_proposal_url, id, requestor, change_set, run_id, "
-            "target_branch_url) "
-            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ",
+            "target_branch_url, target_branch_web_url) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+            "$13, $14) ",
             branch_name,
             main_branch_revision,
             revision,
@@ -944,6 +946,7 @@ async def store_publish(
             change_set,
             run_id,
             target_branch_url,
+            target_branch_web_url,
         )
         if result_code == 'success':
             await conn.execute(
@@ -1139,6 +1142,7 @@ async def publish_from_policy(
             publish_result.proposal_url if publish_result.proposal_url else None),
         publish_id=publish_id,
         target_branch_url=target_branch_url,
+        target_branch_web_url=publish_result.target_branch_web_url,
         requestor=requestor,
         run_id=run.id,
     )
