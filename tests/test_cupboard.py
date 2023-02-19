@@ -97,3 +97,38 @@ def test_workers():
 def test_start():
     env = Environment(loader=template_loader)
     env.get_template('cupboard/start.html')
+
+
+def test_reprocess_logs():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/reprocess-logs.html')
+
+
+def test_never_processed():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/never-processed.html')
+
+
+def test_result_code_index():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/result-code-index.html')
+
+
+def test_result_code():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/result-code.html')
+
+
+def test_failure_stage():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/failure-stage-index.html')
+
+
+def test_publish():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/publish.html')
+
+
+def test_run():
+    env = Environment(loader=template_loader)
+    env.get_template('cupboard/run.html')
