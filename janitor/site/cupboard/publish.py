@@ -1,32 +1,31 @@
-#!/usr/bin/python3
+from typing import Optional
 
 from aiohttp import web
 
 
-async def iter_publish_history(conn, limit=None):
+async def iter_publish_history(conn, limit: Optional[int] = None):
     query = """
 SELECT
     publish.id, publish.timestamp, publish.branch_name,
     publish.mode, publish.merge_proposal_url, publish.result_code,
-    publish.description, codebase.web_url, codebase.name AS codebase
+    publish.description, codebase.web_url, publish.codebase AS codebase
 FROM
     publish
-LEFT JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
 ORDER BY timestamp DESC
 """
     if limit:
-        query += " LIMIT %d" % limit
+        query += f" LIMIT {limit}"
     return await conn.fetch(query)
 
 
-async def write_history(conn, limit=None):
+async def write_history(conn, limit: Optional[int] = None):
     return {
         "count": limit,
         "history": await iter_publish_history(conn, limit=limit),
     }
 
 
-async def get_publish(conn, id):
+async def write_publish(conn, publish_id):
     query = """
 SELECT
     publish.id AS id,
@@ -40,16 +39,10 @@ SELECT
     codebase.name AS codebase
 FROM
     publish
-JOIN codebase ON codebase.branch_url = publish.target_branch_url AND codebase.subpath = publish.subpath
+JOIN codebase ON codebase.name = publish.codebase
 WHERE id = $1
 """
-    return await conn.fetchrow(query, id)
-
-
-async def write_publish(conn, id):
-    publish = await get_publish(conn, id)
+    publish = await conn.fetchrow(query, publish_id)
     if publish is None:
-        raise web.HTTPNotFound(text="no such publish: %s" % id)
-    return {
-        "publish": publish
-    }
+        raise web.HTTPNotFound(text=f"no such publish: {publish_id}")
+    return {"publish": publish}

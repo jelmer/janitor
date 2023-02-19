@@ -129,7 +129,10 @@ CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    change_set text not null references change_set(id),
-   target_branch_url text,
+   source_branch_url text,
+   source_branch_web_url text,
+   target_branch_url text not null,
+   target_branch_web_url text,
    subpath text,
    branch_name text,
    main_branch_revision text,
@@ -140,9 +143,8 @@ CREATE TABLE IF NOT EXISTS publish (
    result_code text not null,
    description text,
    requestor text,
-   timestamp timestamp default now(),
-   run_id text references run(id) on delete set null,
-   foreign key (target_branch_url, subpath) references codebase (branch_url, subpath)
+   codebase text references codebase(name) on delete set null,
+   timestamp timestamp default now()
 );
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
