@@ -11,6 +11,7 @@ SELECT
     publish.description, codebase.web_url, publish.codebase AS codebase
 FROM
     publish
+LEFT JOIN codebase ON codebase.name = publish.codebase
 ORDER BY timestamp DESC
 """
     if limit:
@@ -39,7 +40,7 @@ SELECT
     codebase.name AS codebase
 FROM
     publish
-JOIN codebase ON codebase.name = publish.codebase
+LEFT JOIN codebase ON codebase.name = publish.codebase
 WHERE id = $1
 """
     publish = await conn.fetchrow(query, publish_id)
