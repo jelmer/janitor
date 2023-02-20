@@ -129,7 +129,7 @@ async def handle_login(request):
             "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
             "redirect_uri": str(request.app['external_url'].join(callback_path)),
             "response_type": "code",
-            "scope": "openid",
+            "scope": "openid,email,profile",
             "state": state,
         }
     )
