@@ -485,17 +485,14 @@ async def handle_precache(request):
 
     old_run, new_run = await get_run_pair(request.app['pool'], old_id, new_id)
 
-    async def _precache():
-        return precache(
-            request.app['artifact_manager'],
-            old_run['id'], new_run['id'],
-            task_memory_limit=request.app['task_memory_limit'],
-            task_timeout=request.app['task_timeout'],
-            diffoscope_cache_path=request.app['diffoscope_cache_path'],
-            debdiff_cache_path=request.app['debdiff_cache_path'],
-            diffoscope_command=request.app['diffoscope_command'])
-
-    await spawn(request, _precache())
+    await spawn(request, precache(
+        request.app['artifact_manager'],
+        old_run['id'], new_run['id'],
+        task_memory_limit=request.app['task_memory_limit'],
+        task_timeout=request.app['task_timeout'],
+        diffoscope_cache_path=request.app['diffoscope_cache_path'],
+        debdiff_cache_path=request.app['debdiff_cache_path'],
+        diffoscope_command=request.app['diffoscope_command']))
 
     return web.Response(status=202, text="Precaching started")
 
@@ -512,10 +509,12 @@ where
   run.result_code = 'success' and
   unchanged_run.result_code = 'success' and
   run.main_branch_revision != run.revision and
-  suite not in ('control', 'unchanged')
+  run.suite not in ('control', 'unchanged')
  order by run.finish_time desc, unchanged_run.finish_time desc
 """
         )
+        if not rows:
+            return web.json_response({'count': 0}, status=200)
         for row in rows:
             await spawn(request, precache(
                 request.app['artifact_manager'],
@@ -526,7 +525,7 @@ where
                 debdiff_cache_path=request.app['debdiff_cache_path'],
                 diffoscope_command=request.app['diffoscope_command']))
 
-    return web.Response(status=202, text="Precache started (todo: %d)" % len(rows))
+    return web.json_response({'count': len(rows)}, status=202)
 
 
 @routes.get("/health", name="health")
@@ -630,8 +629,8 @@ async def listen_to_runner(redis, db_location, app):
         await redis.close()
 
 
-def create_app(cache_path, artifact_manager, database_location, *,
-               task_memory_limit=None, task_timeout=None,
+def create_app(cache_path, artifact_manager, database_location=None, *,
+               task_memory_limit=None, task_timeout=None, db=None,
                diffoscope_command=None):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[
@@ -655,10 +654,13 @@ def create_app(cache_path, artifact_manager, database_location, *,
 
     app.on_startup.append(connect_artifact_manager)
 
-    async def connect_postgres(app):
-        app['pool'] = await state.create_pool(database_location)
+    if db is None:
+        async def connect_postgres(app):
+            app['pool'] = await state.create_pool(database_location)
 
-    app.on_startup.append(connect_postgres)
+        app.on_startup.append(connect_postgres)
+    else:
+        app['pool'] = db
 
     setup_aiojobs(app)
 
