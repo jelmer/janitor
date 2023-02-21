@@ -218,7 +218,7 @@ WHERE
     revision = $1 AND
     codebase = $2 AND
     result_code = 'success' AND
-    change_set IS NULL
+    run.id = run.change_set
 ORDER BY finish_time DESC
 """
     return await conn.fetchrow(query, main_branch_revision, codebase)
