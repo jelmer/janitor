@@ -168,7 +168,7 @@ WHERE
     suite in ('control', 'unchanged') AND revision = $1 AND
     codebase = $2 AND
     result_code = 'success' AND
-    change_set IS NULL
+    change_set = id
 ORDER BY finish_time DESC
 """
     return await conn.fetchrow(
