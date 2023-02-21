@@ -640,8 +640,9 @@ async def iter_needs_review(
 
     if publishable_only:
         conditions.append(publishable_condition)
-    else:
-        order_by.append(publishable_condition + " DESC")
+    order_by.append(
+        "exists (select from unnest(unpublished_branches) where "
+        "mode in ('propose', 'attempt-push', 'push')) DESC")
 
     if required_only:
         conditions.append("publish_status = 'needs-manual-review'")
