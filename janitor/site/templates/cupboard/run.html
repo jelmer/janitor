@@ -185,7 +185,7 @@
             <h2>
                 Reviews
             </h2>
-            {{ display_reviews_table(reviews, user.email or user.name) }}
+            {{ display_reviews_table(reviews, user.email) }}
         {% endif %}
     </div>
 {% endblock body %}
