@@ -427,6 +427,11 @@ def import_branches_bzr(
             rootcd.create_repository(shared=True)
         transport = rootcd.user_transport.clone(campaign)
         name = (fn if fn != 'main' else '')
+        if not transport.has('.'):
+            try:
+                transport.ensure_base()
+            except NoSuchFile:
+                transport.create_prefix()
         try:
             branchcd = format.initialize_on_transport(transport)
         except AlreadyControlDirError:
