@@ -111,6 +111,7 @@
                 var run_id = $('#run-id').val();
                 var codebase = $('#codebase').val();
                 console.log("Submitting review " + verdict + " for run " + codebase + "/" + run_id);
+                disallowReview();
                 $.ajax('/api/run/' + run_id, {
                     type: "POST",
                     data: {
