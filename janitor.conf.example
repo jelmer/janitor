@@ -138,6 +138,7 @@ oauth2_provider {
   admin_group: "janitor-team/admins"
 }
 
+# Note that you'll need to run janitor.debian.archive to publish apt archives0
 apt_repository {
   name: "lintian-fixes"
   description: "Builds of lintian fixes"

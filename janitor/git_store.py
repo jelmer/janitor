@@ -24,7 +24,7 @@ import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Tuple, Dict
 
 import aiohttp_jinja2
 import aiozipkin
@@ -50,7 +50,7 @@ from .worker_creds import is_worker
 GIT_BACKEND_CHUNK_SIZE = 4096
 
 
-async def git_diff_request(request):
+async def git_diff_request(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     codebase = request.match_info["codebase"]
     try:
@@ -78,7 +78,7 @@ async def git_diff_request(request):
         args.extend(['--', path])
 
     p = await asyncio.create_subprocess_exec(
-        *args,
+        *args,  # type: ignore
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         stdin=asyncio.subprocess.DEVNULL,
@@ -104,7 +104,7 @@ async def git_diff_request(request):
     raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr.decode())
 
 
-async def git_revision_info_request(request):
+async def git_revision_info_request(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     codebase = request.match_info["codebase"]
     try:
@@ -171,7 +171,7 @@ def _git_check_service(service: str, allow_writes: bool = False) -> None:
     raise web.HTTPForbidden(text="Unsupported service %s" % service)
 
 
-async def handle_klaus(request):
+async def handle_klaus(request: web.Request) -> web.Response:
     codebase = request.match_info["codebase"]
 
     span = aiozipkin.request_span(request)
@@ -243,7 +243,7 @@ async def handle_klaus(request):
     return await wsgi_handler(request)
 
 
-async def handle_set_git_remote(request):
+async def handle_set_git_remote(request: web.Request) -> web.Response:
     codebase = request.match_info["codebase"]
     remote = request.match_info["remote"]
 
@@ -255,8 +255,8 @@ async def handle_set_git_remote(request):
         post = await request.post()
         c = repo.get_config()
         section = ("remote", remote)
-        c.set(section, "url", post["url"])
-        c.set(section, "fetch", "+refs/heads/*:refs/remotes/%s/*" % remote)
+        c.set(section, "url", str(post["url"]))
+        c.set(section, "fetch", f"+refs/heads/*:refs/remotes/{remote}/*")
         c.write_to_path()
 
     # TODO(jelmer): Run 'git fetch $remote'?
@@ -264,7 +264,7 @@ async def handle_set_git_remote(request):
     return web.Response()
 
 
-async def cgit_backend(request):
+async def cgit_backend(request: web.Request) -> web.Response:
     codebase = request.match_info["codebase"]
     subpath = request.match_info["subpath"]
     span = aiozipkin.request_span(request)
@@ -287,15 +287,17 @@ async def cgit_backend(request):
     full_path = os.path.join(repo.path, subpath.lstrip('/'))
 
     repo.close()
-    env = {
+    env: Dict[str, str] = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
-        "REMOTE_ADDR": request.remote,
         "CONTENT_TYPE": request.content_type,
         "PATH_TRANSLATED": full_path,
         "QUERY_STRING": request.query_string,
         # REMOTE_USER is not set
     }
+
+    if request.remote:
+        env["REMOTE_ADDR"] = request.remote
 
     if request.content_type is not None:
         env['CONTENT_TYPE'] = request.content_type
@@ -311,12 +313,14 @@ async def cgit_backend(request):
         stdin=asyncio.subprocess.PIPE,
     )
 
+    assert p.stdin
+
     try:
-        async def feed_stdin(stream):
-            async for chunk in request.content.iter_any():
-                stream.write(chunk)
-                await stream.drain()
-            stream.close()
+        async for chunk in request.content.iter_any():
+            p.stdin.write(chunk)
+            await p.stdin.drain()
+        p.stdin.close()
+        await p.stdin.wait_closed()
 
         async def read_stderr(stream):
             line = await stream.readline()
@@ -342,6 +346,10 @@ async def cgit_backend(request):
                 status_code = 200
                 status_reason = "OK"
 
+            # Don't cross the streams
+            assert p.stdin
+            assert p.stdin.is_closing()
+
             if 'Content-Length' in headers:
                 content_length = int(headers['Content-Length'])
                 return web.Response(
@@ -362,7 +370,7 @@ async def cgit_backend(request):
                 while chunk:
                     try:
                         await response.write(chunk)
-                    except ConnectionResetError:
+                    except BaseException:
                         with suppress(ProcessLookupError):
                             p.kill()
                         raise
@@ -374,10 +382,9 @@ async def cgit_backend(request):
 
         with span.new_child('git-backend'):
             try:
-                unused_stderr, response, unused_stdin = await asyncio.gather(*[
+                _stderr_reader, response = await asyncio.gather(
                     read_stderr(p.stderr), read_stdout(p.stdout),
-                    feed_stdin(p.stdin),
-                ], return_exceptions=False)
+                    return_exceptions=False)
             except asyncio.CancelledError:
                 p.terminate()
                 await p.wait()
@@ -391,7 +398,7 @@ async def cgit_backend(request):
     return response
 
 
-async def dulwich_refs(request):
+async def dulwich_refs(request: web.Request) -> web.StreamResponse:
     codebase = request.match_info["codebase"]
 
     allow_writes = request.app['allow_writes']
@@ -404,6 +411,8 @@ async def dulwich_refs(request):
 
     with closing(repo):
         service = request.query.get("service")
+        if service is None:
+            raise web.HTTPBadRequest(text="dumb retrieval not supported")
         _git_check_service(service, allow_writes)
 
         headers = {
@@ -434,7 +443,7 @@ async def dulwich_refs(request):
         return response
 
 
-async def dulwich_service(request):
+async def dulwich_service(request: web.Request) -> web.StreamResponse:
     codebase = request.match_info["codebase"]
     service = request.match_info["service"]
 
@@ -478,11 +487,11 @@ async def dulwich_service(request):
         return response
 
 
-async def codebase_exists(conn, codebase):
+async def codebase_exists(conn, codebase: str) -> bool:
     return bool(await conn.fetchrow("SELECT 1 FROM codebase WHERE name = $1", codebase))
 
 
-async def handle_repo_list(request):
+async def handle_repo_list(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     with span.new_child('list-repositories'):
         names = [entry.name
@@ -503,15 +512,15 @@ async def handle_repo_list(request):
     raise web.HTTPNotAcceptable()
 
 
-async def handle_health(request):
+async def handle_health(request: web.Request) -> web.Response:
     return web.Response(text='ok')
 
 
-async def handle_ready(request):
+async def handle_ready(request: web.Request) -> web.Response:
     return web.Response(text='ok')
 
 
-async def handle_home(request):
+async def handle_home(request: web.Request) -> web.Response:
     return web.Response(text='')
 
 
@@ -524,7 +533,7 @@ async def create_web_app(
     *,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
-):
+) -> Tuple[web.Application, web.Application]:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
