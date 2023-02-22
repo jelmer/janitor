@@ -25,6 +25,7 @@ import warnings
 from contextlib import ExitStack
 from functools import partial
 from tempfile import TemporaryDirectory
+from typing import Optional, Callable, List, Tuple
 
 import aiozipkin
 import mimeparse
@@ -37,7 +38,7 @@ from aiojobs.aiohttp import spawn
 from redis.asyncio import Redis
 
 from . import set_user_agent, state
-from .artifacts import ArtifactsMissing, get_artifact_manager
+from .artifacts import ArtifactsMissing, get_artifact_manager, ArtifactManager
 from .config import read_config
 from .debian.debdiff import DebdiffError
 from .debian.debdiff import filter_boring as filter_debdiff_boring
@@ -53,14 +54,14 @@ PRECACHE_RETRIEVE_TIMEOUT = 300
 routes = web.RouteTableDef()
 
 
-def find_binaries(path):
+def find_binaries(path: str) -> List[Tuple[str, str]]:
     ret = []
     for entry in os.scandir(path):
         ret.append((entry.name, entry.path))
     return ret
 
 
-def is_binary(n):
+def is_binary(n: str) -> bool:
     return n.endswith(".deb") or n.endswith(".udeb")
 
 
@@ -71,6 +72,9 @@ class ArtifactRetrievalTimeout(Exception):
 class DiffCommandError(Exception):
     """Generic diff command error."""
 
+    command: str
+    reason: str
+
     def __init__(self, command, reason):
         self.command = command
         self.reason = reason
@@ -78,6 +82,9 @@ class DiffCommandError(Exception):
 
 class DiffCommandTimeout(Exception):
     """Timeout while running diff command."""
+
+    command: str
+    timeout: int
 
     def __init__(self, command, timeout):
         self.command = command
@@ -199,7 +206,7 @@ async def handle_debdiff(request):
     )
 
 
-async def get_run(conn, run_id):
+async def get_run(conn, run_id: str):
     return await conn.fetchrow("""\
 SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version, main_branch_revision
 FROM run
@@ -207,7 +214,7 @@ LEFT JOIN debian_build ON debian_build.run_id = run.id
 WHERE id = $1""", run_id)
 
 
-async def get_unchanged_run(conn, codebase, main_branch_revision):
+async def get_unchanged_run(conn, codebase: str, main_branch_revision: str):
     query = """
 SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version
 FROM
@@ -224,7 +231,7 @@ ORDER BY finish_time DESC
     return await conn.fetchrow(query, main_branch_revision, codebase)
 
 
-async def get_run_pair(pool, old_id, new_id):
+async def get_run_pair(pool, old_id: str, new_id: str):
     async with pool.acquire() as conn:
         new_run = await get_run(conn, new_id)
         old_run = await get_run(conn, old_id)
@@ -394,11 +401,12 @@ async def handle_diffoscope(request):
 
 
 async def precache(
-        artifact_manager, old_id, new_id, *,
-        task_memory_limit=None, task_timeout=None,
-        diffoscope_cache_path=None,
-        debdiff_cache_path=None,
-        diffoscope_command=None):
+        artifact_manager: ArtifactManager, old_id: str, new_id: str, *,
+        task_memory_limit: Optional[int] = None,
+        task_timeout: Optional[int] = None,
+        diffoscope_cache_path: Optional[Callable[[str, str], str]] = None,
+        debdiff_cache_path: Optional[Callable[[str, str], str]] = None,
+        diffoscope_command: Optional[str] = None) -> None: 
     """Precache the diff between two runs.
 
     Args:
@@ -538,14 +546,14 @@ async def handle_ready(request):
     return web.Response(text="ok")
 
 
-def diffoscope_cache_path(cache_path, old_id, new_id):
+def diffoscope_cache_path(cache_path, old_id: str, new_id: str) -> str:
     base_path = os.path.join(cache_path, "diffoscope")
     if not os.path.isdir(base_path):
         os.mkdir(base_path)
     return os.path.join(base_path, f"{old_id}_{new_id}.json")
 
 
-def debdiff_cache_path(cache_path, old_id, new_id):
+def debdiff_cache_path(cache_path, old_id: str, new_id: str) -> str:
     base_path = os.path.join(cache_path, "debdiff")
     # This can happen when the default branch changes
     if not os.path.isdir(base_path):
@@ -565,8 +573,7 @@ async def run_web_server(app, listen_addr, port):
         await runner.cleanup()
 
 
-async def listen_to_runner(redis, db_location, app):
-
+async def listen_to_runner(redis, db_location: str, app: web.Application):
     db = await state.create_pool(db_location)
 
     async def handle_result_message(msg):
@@ -732,6 +739,7 @@ def main(argv=None):
         task_timeout=args.task_timeout,
         diffoscope_command=args.diffoscope_command)
     setup_metrics(app)
+    setup_aiojobs(app)
     aiozipkin.setup(app, tracer)
 
     runner = web.AppRunner(app)

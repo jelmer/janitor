@@ -49,9 +49,9 @@ from breezy.branch import Branch
 from breezy.config import (GlobalStack, PlainTextCredentialStore,
                            credential_store_registry)
 from breezy.controldir import ControlDir, format_registry
-from breezy.errors import (ConnectionError, ConnectionReset,
-                           InvalidHttpResponse, NoRepositoryPresent,
-                           NotBranchError, TransportError,
+from breezy.errors import (AlreadyControlDirError, ConnectionError,
+                           ConnectionReset, InvalidHttpResponse,
+                           NoRepositoryPresent, NotBranchError, TransportError,
                            TransportNotPossible, UnexpectedHttpStatus)
 from breezy.git.remote import RemoteGitError
 from breezy.revision import NULL_REVISION
@@ -427,15 +427,10 @@ def import_branches_bzr(
             rootcd.create_repository(shared=True)
         transport = rootcd.user_transport.clone(campaign)
         name = (fn if fn != 'main' else '')
-        if not transport.has('.'):
-            try:
-                transport.ensure_base()
-            except NoSuchFile:
-                transport.create_prefix()
         try:
-            branchcd = ControlDir.open_from_transport(transport)
-        except NotBranchError:
             branchcd = format.initialize_on_transport(transport)
+        except AlreadyControlDirError:
+            branchcd = ControlDir.open_from_transport(transport)
 
         try:
             target_branch = branchcd.open_branch(name=name)
