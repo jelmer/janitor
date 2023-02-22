@@ -18,6 +18,7 @@
 __all__ = [
     "Config",
     "Campaign",
+    "AptRepository",
     "read_config",
     "get_campaign_config",
     "get_distribution",
