@@ -39,7 +39,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	python3-gpg \
 	&& apt clean \
 	&& make -C /code \
-	&& pip3 install "/code[gcp,debian]" \
+	&& pip3 install --break-system-packages "/code[gcp,debian]" \
 	&& apt-file update
 
 ENV AUTOPKGTEST=/code/autopkgtest-wrapper
