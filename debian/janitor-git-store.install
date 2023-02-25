@@ -1,1 +1,2 @@
 usr/bin/janitor-git-store
+helpers/cleanup-repositories.py /usr/share/doc/janitor-git-store/helpers/cleanup-repositories.py
