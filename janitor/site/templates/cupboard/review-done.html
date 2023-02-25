@@ -1,15 +1,18 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Review{% endblock %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Reviews Completed
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="review">
-<h1>Review</h1>
-
-<p>All done!</p>
-
-{% if publishable_only %}
-<p><a href="/cupboard/review?publishable_only=false">Review unpublishable</a></p>
-{% endif %}
-
-</div>
-{% endblock %}
+    <div class="section" id="review">
+        <h1>Review</h1>
+        <p>All done!</p>
+        {% if publishable_only %}
+            <p>
+                <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>
+            </p>
+        {% endif %}
+    </div>
+{% endblock body %}

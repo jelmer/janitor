@@ -1,15 +1,19 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include [suite + "/sidebar.html", "generic/sidebar.html"] %}{% endblock %}
-{% block page_title %}{{ suite }} Packages - Candidates{% endblock %}
+{% block sidebar %}
+    {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
+{% endblock sidebar %}
+{% block page_title %}
+    {{ suite }} - Candidates
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="candidates">
-<h1>{{ suite }} packages - Candidates</h1>
-
-<ul>
-{% for package, value in candidates %}
-<li><a href="/{{ suite }}/pkg/{{ package }}">{{ package }}</a></li>
-{% endfor %}
-</ul>
-
-</div>
-{% endblock %}
+    <div class="section" id="candidates">
+        <h1>{{ suite }} - Candidates</h1>
+        <ul>
+            {% for codebase, value in candidates %}
+                <li>
+                    <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock body %}

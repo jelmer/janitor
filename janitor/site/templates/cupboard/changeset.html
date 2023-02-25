@@ -1,16 +1,49 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Changeset List{% endblock %}
+{% from "run_util.html" import display_result_code %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Changeset List
+{% endblock page_title %}
 {% block body %}
-<div class="section">
-
-<h1>Changeset {{ changeset['id'] }}</h1>
-
-<ul>
-{% for run in runs %}
-  <li><a href="../run/{{ run['id'] }}">{{ run['id'] }}</a></li>
-{% endfor %}
-</ul>
-
-</div>
-{% endblock %}
+    <div class="section">
+        <h1>Changeset {{ changeset.id }}</h1>
+        <p>
+            Status: <i>{{ changeset.state }}</i>
+        </p>
+        <h2>Runs</h2>
+        <ul>
+            {% for run in runs %}
+                <li>
+                    <a href="/cupboard/c/{{ run.codebase }}/{{ run.id }}/">{{ format_timestamp(run.finish_time) }} {{ run.codebase }}/{{ run.suite }}</a>: {{ display_result_code(run.result_code, run.failure_transient) }}
+                </li>
+            {% endfor %}
+        </ul>
+        <h2>Left to process</h2>
+        <ul>
+            {% for candidate in todo %}
+                <li>
+                    <a class="/cupboard/c/{{ candidate.codebase }}/">{{ candidate.codebase }}</a> / <a class="/{{ candidate.suite }}">{{ candidate.suite }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+        <h2>APT Repository</h2>
+        <p>
+                To install the packages from this changeset, use the following
+                sources configuration (with <a
+                href="/archive-keyring.gpg">archive keyring</a> stored in
+                /etc/apt/keyrings/debian-janitor.gpg):
+        </p>
+	<p>
+            <div class="highlight-default notranslate">
+                <div class="highlight">
+                    <pre>
+deb "[arch=amd64 signed-by=/etc/apt/keyrings/debian-janitor.gpg]" {{ url.join(URL('/')) }} cs/{{ changeset.id }} main
+deb-src "[arch=amd64 signed-by=/etc/apt/keyrings/debian-janitor.gpg]" {{ url.join(URL('/')) }} cs/{{ changeset.id }} main
+</pre>
+                </div>
+            </div>
+        </p>
+    </div>
+{% endblock body %}

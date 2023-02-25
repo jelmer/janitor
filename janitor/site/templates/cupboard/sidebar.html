@@ -1,45 +1,76 @@
-{% from "inputs.html" import package_input %}
+{% from "inputs.html" import codebase_input %}
 <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
-<div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="/">{{ site_name }}</a></h1>
-
-<h3><a href="/cupboard">Cupboard</a></h3>
-
-{% if user %}
-Logged in as <a href="/cupboard/maintainer/{{ user['email'] }}">{{ user['name'] }}</a>
-{% else %}
-{% include "login.html" %}
-{% endif %}
-
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/queue">Queue</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/history">History</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/result-codes">Result Codes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/ready">Ready</a></li>
-{% if is_qa_reviewer %}
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/review">Review</a></li>
-{% endif %}
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/rejected">Rejected Runs During Review</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/publish">Publish history</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/stats">Statistics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/merge-proposals">Merge Proposals</a></li>
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/broken-merge-proposals">Broken Merge Proposals</a></li>
-{% if is_admin %}
-<li class="toctree-l1"><a class="reference internal" href="/cupboard/reprocess-logs">Reprocess Logs</a></li>
-{% endif %}
-{% for title, url in extra_cupboard_links %}
-<li class="toctree-l1"><a class="reference internal" href="{{ url }}">{{ title }}</a></li>
-{% endfor %}
-</ul>
-
-<p>
-See the status for a specific package:
-<div class="sidebar-packages" style="width:300px;">
-<form autocomplete="off" action="/cupboard/pkg">
-    {{ package_input(name="package") }}
-  <input type="submit" style="display: none">
-</form>
+    <div class="sphinxsidebarwrapper">
+        <h1 class="logo">
+            <a href="/">Janitor</a>
+        </h1>
+        <h3>
+            <a href="/cupboard/">Cupboard</a>
+        </h3>
+        {% if user %}
+            Logged in as <a href="/cupboard/maintainer/{{ user['email'] }}">{{ user['name'] }}</a>
+        {% else %}
+            {% include "login.html" %}
+        {% endif %}
+        <ul class="current">
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/queue">Queue</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/history">History</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/result-codes/">Result Codes</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/failure-stages/">Failure Stages</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/ready">Ready</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/done">Done</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/workers">Workers</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/review">Review</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/rejected">Rejected Runs During Review</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/publish/">Publish history</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/merge-proposals">Merge Proposals</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/broken-merge-proposals">Broken Merge Proposals</a>
+            </li>
+            <li class="toctree-l1">
+                <a class="reference internal" href="/cupboard/cs/">Change sets</a>
+            </li>
+            {% if is_admin %}
+                <li class="toctree-l1">
+                    <a class="reference internal" href="/cupboard/reprocess-logs">Reprocess Logs</a>
+                </li>
+            {% endif %}
+            {% for title, url in extra_cupboard_links %}
+                <li class="toctree-l1">
+                    <a class="reference internal" href="{{ url }}">{{ title }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+        <p>
+            See the status for a specific codebase:
+            <div class="sidebar-packages" style="width:300px;">
+                <form autocomplete="off" action="/cupboard/c/">
+                    {{ codebase_input(name="codebase") }}
+                    <input type="submit" style="display: none"/>
+                </form>
+            </div>
+        </p>
+    </div>
 </div>
-</p>
-
-</div></div>

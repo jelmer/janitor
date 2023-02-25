@@ -15,24 +15,55 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import aiohttp
-from aiohttp import ClientConnectorError, web, BasicAuth
-from jinja2 import Environment, PackageLoader, select_autoescape
+from datetime import datetime
 from typing import Optional
+
+from aiohttp import ClientConnectorError, web
+from jinja2 import PackageLoader
 from yarl import URL
 
-from janitor.config import Config, get_distribution
-from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
-from janitor.vcs import RemoteVcsManager, VcsManager
+from janitor import config_pb2
+from janitor.vcs import RemoteBzrVcsManager, RemoteGitVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
+    'worker-exception',
     'worker-clone-incomplete-read',
     'worker-clone-malformed-transform',
-    'autopkgtest-chroot-not-found',
-    'build-chroot-not-found',
+    'chroot-not-found',
     'worker-killed',
-    ]
+]
+
+
+TRANSIENT_ERROR_RESULT_CODES = [
+    'cancelled',
+    'aborted',
+    'install-deps-file-fetch-failure',
+    'apt-get-update-file-fetch-failure',
+    'build-failed-stage-apt-get-update',
+    'build-failed-stage-apt-get-dist-upgrade',
+    'build-failed-stage-explain-bd-uninstallable',
+    '502-bad-gateway',
+    'worker-502-bad-gateway',
+    'build-failed-stage-create-session',
+    'apt-get-update-missing-release-file',
+    'no-space-on-device',
+    'worker-killed',
+    'too-many-requests',
+    'check-space-insufficient-disk-space',
+    'worker-resume-branch-unavailable',
+    'worker-timeout',
+    'worker-clone-bad-gateway',
+    'worker-clone-temporary-transport-error',
+    'push-failed',
+    'push-bad-gateway',
+    'testbed-chroot-disappeared',
+    'apt-file-fetch-failure',
+    'pull-rate-limited',
+    'session-setup-failure',
+    'run-disappeared',
+    'branch-temporarily-unavailable',
+]
 
 
 def json_chart_data(max_age=None):
@@ -54,17 +85,27 @@ def json_chart_data(max_age=None):
 def update_vars_from_request(vs, request):
     vs["is_admin"] = is_admin(request)
     vs["is_qa_reviewer"] = is_qa_reviewer(request)
+    vs["config_pb2"] = config_pb2
     vs["user"] = request['user']
     vs["rel_url"] = request.rel_url
     vs["suites"] = [c for c in request.app['config'].campaign]
-    vs["site_name"] = request.app['config'].instance_name or "Debian Janitor"
+    vs["campaigns"] = [c for c in request.app['config'].campaign]
     vs["openid_configured"] = "openid_config" in request.app
+
+    def url_for(name, **kwargs):
+        return request.app.router[name].url_for(**kwargs)
+
+    vs['url_for'] = url_for
+
     if request.app['external_url'] is not None:
         vs["url"] = request.app['external_url'].join(request.rel_url)
-        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.app['external_url']))
+        vcs_base_url = request.app['external_url']
     else:
         vs["url"] = request.url
-        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.url.with_path("/")))
+        vcs_base_url = request.url.with_path("/")
+    vs['git_vcs_manager'] = RemoteGitVcsManager(str(vcs_base_url / "git"))
+    vs['bzr_vcs_manager'] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
+    vs['config'] = request.app['config']
 
 
 def format_duration(duration):
@@ -89,38 +130,27 @@ def format_timestamp(ts):
     return ts.isoformat(timespec="minutes")
 
 
-env = Environment(
-    loader=PackageLoader("janitor.site", "templates"),
-    autoescape=select_autoescape(["html", "xml"]),
-    enable_async=True,
-)
-
+template_loader = PackageLoader("janitor.site")
 
 
 def highlight_diff(diff):
     from pygments import highlight
-    from pygments.lexers.diff import DiffLexer
     from pygments.formatters import HtmlFormatter
+    from pygments.lexers.diff import DiffLexer
 
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def classify_result_code(result_code):
+def classify_result_code(result_code, transient: Optional[bool]):
     if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
     if result_code in BUG_ERROR_RESULT_CODES:
         return "bug"
-    if result_code in TRANSIENT_ERROR_RESULT_CODES:
+    if transient is None:
+        transient = result_code in TRANSIENT_ERROR_RESULT_CODES
+    if transient:
         return "transient-failure"
     return "failure"
-
-
-env.globals.update(format_duration=format_duration)
-env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(enumerate=enumerate)
-env.globals.update(highlight_diff=highlight_diff)
-env.globals.update(classify_result_code=classify_result_code)
-env.globals.update(URL=URL)
 
 
 class DebdiffRetrievalError(Exception):
@@ -132,12 +162,6 @@ class BuildDiffUnavailable(Exception):
 
     def __init__(self, unavailable_run_id):
         self.unavailable_run_id = unavailable_run_id
-
-
-async def get_vcs_diff(client, vcs_manager: VcsManager, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
-    if old_revid == new_revid:
-        return b""
-    return await vcs_manager.get_diff(package, old_revid, new_revid, vcs_type)
 
 
 async def get_archive_diff(
@@ -166,7 +190,7 @@ async def get_archive_diff(
                     "Unable to get debdiff: %s" % await resp.text()
                 )
     except ClientConnectorError as e:
-        raise DebdiffRetrievalError(str(e))
+        raise DebdiffRetrievalError(str(e)) from e
 
 
 def is_admin(request: web.Request) -> bool:
@@ -176,11 +200,6 @@ def is_admin(request: web.Request) -> bool:
     if admin_group is None:
         return True
     return admin_group in request['user']["groups"]
-
-
-def check_qa_reviewer(request: web.Request) -> None:
-    if not is_qa_reviewer(request):
-        raise web.HTTPUnauthorized()
 
 
 def is_qa_reviewer(request: web.Request) -> bool:
@@ -197,44 +216,33 @@ def check_admin(request: web.Request) -> None:
         raise web.HTTPUnauthorized()
 
 
-async def is_worker(db, request: web.Request) -> Optional[str]:
-    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
-    if not auth_header:
-        return None
-    auth = BasicAuth.decode(auth_header=auth_header)
-    async with db.acquire() as conn:
-        val = await conn.fetchval(
-            "select 1 from worker where name = $1 " "AND password = crypt($2, password)",
-            auth.login, auth.password,
-        )
-        if val:
-            return auth.login
-    return None
+def check_logged_in(request: web.Request) -> None:
+    if not request['user']:
+        raise web.HTTPUnauthorized()
 
 
-async def check_worker_creds(db, request: web.Request) -> Optional[str]:
-    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
-    if not auth_header:
-        raise web.HTTPUnauthorized(
-            text="worker login required",
-            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
-        )
-    login = await is_worker(db, request)
-    if not login:
-        raise web.HTTPUnauthorized(
-            text="worker login required",
-            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
-        )
-
-    return login
+def worker_link_is_global(url):
+    import ipaddress
+    from urllib.parse import urlparse
+    if not url:
+        return False
+    parsed_url = urlparse(url)
+    if not parsed_url.hostname:
+        return False
+    try:
+        return ipaddress.ip_address(parsed_url.hostname).is_global
+    except ValueError:
+        # Assume yes
+        return True
 
 
-def tracker_url(config: Config, base_distribution: str, pkg: str) -> Optional[str]:
-    distribution = get_distribution(config, base_distribution)
-    if distribution and distribution.tracker_url:
-        return "%s/%s" % (distribution.tracker_url.rstrip("/"), pkg)
-    return None
-
-
-def iter_accept(request):
-    return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
+TEMPLATE_ENV = {
+    'utcnow': datetime.utcnow,
+    'enumerate': enumerate,
+    'format_duration': format_duration,
+    'format_timestamp': format_timestamp,
+    'highlight_diff': highlight_diff,
+    'classify_result_code': classify_result_code,
+    'URL': URL,
+    'worker_link_is_global': worker_link_is_global,
+}

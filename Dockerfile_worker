@@ -1,78 +1,47 @@
-FROM debian:testing-slim
+FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-ENV DEBIAN_FRONTEND noninteractive
-RUN apt update && apt install --no-install-recommends -y autoconf \
+ARG DEBIAN_FRONTEND=noninteractive
+COPY . /code
+RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
 	ssh \
 	python3 \
-	python3-lz4 \
 	pristine-tar \
-	python3-iso8601 \
-	python3-tqdm \
-	python3-fastbencode \
-	python3-urllib3 \
-	python3-aiohttp \
-	rustc \
-	libpython3-dev \
-	cargo \
-	cython3 \
-	python3-merge3 \
-	python3-configobj \
-	python3-jinja2 \
-	python3-debian \
-	python3-asyncpg \
-	python3-protobuf \
-	protobuf-compiler \
-	python3-yaml \
-	python3-debianbts \
-	python3-apt \
-	python3-distro-info \
 	devscripts \
-	python3-prometheus-client \
-	python3-gpg \
-	python3-requirement-parser \
-	python3-ruamel.yaml \
-	python3-pcre \
+	python3-pip \
 	quilt \
-	python3-psycopg2 \
 	sbuild \
-	schroot \
 	autopkgtest \
-	python3-iniparse \
 	debootstrap \
-	python3-bs4 \
-	python3-lxml \
 	git-buildpackage \
 	pristine-tar \
 	lintian \
 	perl-doc \
-	python3-patiencediff \
-	python3-tomlkit \
-	python3-setuptools \
-	python3-setuptools-rust \
-	python3-aiohttp-openmetrics \
-	python3-toml \
-	python3-pip \
-	mypy-protobuf \
-	debcargo \
-	cargo \
 	dpkg \
-	python3-semver \
-	cme \
-	libconfig-model-dpkg-perl \
 	gnome-pkg-tools \
-	python3-tr \
 	subversion \
-	python3-pcre \
+	ca-certificates \
+	swig \
+	libgpgme-dev \
+	make \
+	cython3 \
+	rustc \
+	libpython3-dev \
+	build-essential \
+	cargo \
+	debcargo \
+	mypy-protobuf \
+	protobuf-compiler \
+	ca-certificates \
+	python3-apt \
+	libpcre3-dev \
+	python3-gpg \
 	&& apt clean \
-	&& pip3 install google-cloud-logging
-RUN apt-file update && apt -y install aptitude && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
-ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate:/code/python-debian/lib
-ENV PATH="/code/breezy-debian/scripts:/code/lintian-brush/scripts:/code/debmutate/scripts:/code/breezy:${PATH}"
-ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
+	&& make -C /code \
+	&& pip3 install --break-system-packages "/code[gcp,debian]" \
+	&& apt-file update
+
 ENV AUTOPKGTEST=/code/autopkgtest-wrapper
-ADD . /code
-RUN make -C /code
 EXPOSE 8080
 ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]

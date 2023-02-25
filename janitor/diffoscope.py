@@ -16,19 +16,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from io import BytesIO, StringIO
-import os
 import json
 import logging
+import os
+import shlex
 import sys
+from contextlib import suppress
+from io import StringIO
+from typing import Any
 
-from breezy.patches import (
-    iter_hunks,
-    InsertLine,
-    RemoveLine,
-    ContextLine,
-    MalformedHunkHeader,
-)
+from breezy.patches import (ContextLine, InsertLine, MalformedHunkHeader,
+                            RemoveLine, iter_hunks)
 
 
 class DiffoscopeError(Exception):
@@ -84,7 +82,7 @@ def filter_boring_detail(detail, old_version, new_version, display_version):
     return True
 
 
-def filter_boring(diff, old_version, new_version, old_suite, new_suite):
+def filter_boring(diff, old_version, new_version, old_campaign, new_campaign):
     display_version = new_version.rsplit("~", 1)[0]
     # Changes file differences
     BORING_FIELDS = ["Date", "Distribution", "Version"]
@@ -156,10 +154,13 @@ async def format_diffoscope(
     raise AssertionError("unknown content type %r" % content_type)
 
 
-async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
-    args = ["diffoscope", "--json=-", "--exclude-directory-metadata=yes"]
+async def _run_diffoscope(
+        old_binary, new_binary, *,
+        diffoscope_command=None, timeout=None, preexec_fn=None):
+    if diffoscope_command is None:
+        diffoscope_command = "diffoscope"
+    args = shlex.split(diffoscope_command) + ["--json=-", "--exclude-directory-metadata=yes"]
     args.extend([old_binary, new_binary])
-    stdout = BytesIO()
     logging.debug("running %r", args)
     p = await asyncio.create_subprocess_exec(
         *args,
@@ -168,7 +169,15 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
         stderr=asyncio.subprocess.PIPE,
         preexec_fn=preexec_fn
     )
-    stdout, stderr = await p.communicate(b"")
+    communicate = p.communicate(b"")
+    if timeout is not None:
+        communicate = asyncio.wait_for(communicate, timeout)
+    try:
+        stdout, stderr = await communicate
+    except asyncio.TimeoutError:
+        with suppress(ProcessLookupError):
+            p.kill()
+        raise
     if p.returncode == 0:
         return None
     if p.returncode != 1:
@@ -176,11 +185,13 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     try:
         return json.loads(stdout.decode("utf-8"))
     except json.JSONDecodeError as e:
-        raise DiffoscopeError("Error parsing JSON: %s" % e)
+        raise DiffoscopeError("Error parsing JSON: %s" % e) from e
 
 
-async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
-    ret = {
+async def run_diffoscope(
+        old_binaries, new_binaries, *, preexec_fn=None, timeout=None,
+        diffoscope_command=None):
+    ret: dict[str, Any] = {
         "diffoscope-json-version": 1,
         "source1": "old version",
         "source2": "new version",
@@ -188,8 +199,11 @@ async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
         "details": [],
     }
 
-    for (old_name, old_path), (new_name, new_path) in zip(old_binaries, new_binaries):
-        sub = await _run_diffoscope(old_path, new_path, preexec_fn=preexec_fn)
+    for (old_name, old_path), (new_name, new_path) in zip(
+            old_binaries, new_binaries):
+        sub = await _run_diffoscope(
+            old_path, new_path, preexec_fn=preexec_fn, timeout=timeout,
+            diffoscope_command=diffoscope_command)
         if sub is None:
             continue
         sub["source1"] = old_name

@@ -5,13 +5,15 @@ import asyncio
 import logging
 import os
 import sys
-from janitor.publish_one import template_env
+
 from janitor.config import read_config
+from janitor.publish_one import load_template_env
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.debian.debdiff import markdownify_debdiff, debdiff_is_empty  # noqa: E402
+from janitor.debian.debdiff import (debdiff_is_empty,  # noqa: E402
+                                    markdownify_debdiff)
 
 loop = asyncio.get_event_loop()
 
@@ -23,29 +25,36 @@ parser.add_argument(
     "-r", "--run-id", type=str, help="Run id to process"
 )
 parser.add_argument(
-        "--role", type=str, help="Role", default="main"
+    "--role", type=str, help="Role", default="main"
 )
 parser.add_argument(
-        '--format', type=str, choices=['md', 'txt'], default='md')
+    '--format', type=str, choices=['md', 'txt'], default='md')
+
+parser.add_argument(
+    '--template-env-path', type=str, help='Path to template env')
 
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-with open(args.config, "r") as f:
+with open(args.config) as f:
     config = read_config(f)
+
+
+template_env = load_template_env(args.template_env_path)
 
 
 async def process_build(db_location, run_id, role, format):
     async with state.create_pool(db_location) as conn:
         query = """
 SELECT
-  package,
-  suite,
+  package.name AS package,
+  suite AS campaign,
   id AS log_id,
   result AS _result
 FROM run
+LEFT JOIN package ON run.codebase = package.codebase
 WHERE
   id = $1
 """

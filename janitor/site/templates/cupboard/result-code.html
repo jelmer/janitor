@@ -1,58 +1,91 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
 {% from "run_util.html" import result_code_explanation %}
-{% block page_title %}Result Code {{ code }}{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
+{% block page_title %}
+    Result Code {{ code }}
+    {% if campaign %}- for {{ campaign }}{% endif %}
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="{{ code }}">
-<h1>{{ code }}</h1>
-{{ result_code_explanation(code) }}
-{% if is_admin %}
-<form id="mass_reschedule" method="POST" action="/api/mass-reschedule">
-    Description regex: <input type="text" name="description_re"/>
-    {% if suite %}<input type="hidden" name="suite" value="{{ suite }}"/>{% endif %}
-    Min age (days): <select name="min_age">{% for i in range(90) %}<option>{{ i }}</option>{% endfor %}</select>
-    Refresh: <input type="checkbox" name="refresh" value="1"/>
-    <input type="hidden" name="result_code" value="{{ code }}"/>
-    <input type="submit" value="Reschedule Matching"/>
-</form>
-<script>
-window.mass_reschedule.onsubmit = function(e) {
-$('form').submit(function(e){
-    e.preventDefault();
-    $.post("/api/mass-reschedule", $('form').serializeArray(), function(receivedData){
-        alert('Rescheduled ' + receivedData);
-    });
-});
-};
-</script>
-{% endif %}
-<table id="result-codes-t" class="display docutils" border="1">
-<colgroup>
-<col width="21%">
-<col width="6%">
-<col width="10%">
-<col width="6%">
-<col width="63%">
-</colgroup>
-<thead valign="bottom">
-<tr><th class="head">Package</th>
-<th class="head">Suite</th>
-<th class="head">Start Time</th>
-<th class="head">Duration</th>
-<th class="head">Description</th>
-</tr>
-</thead>
-<tbody valign="top">
-{% for run in runs %}
-<tr><td><a class="reference external" href="../pkg/{{ run.package }}/">{{ run.package }}</a></td>
-<td>{{ run.suite }}</td>
-<td>{{ format_timestamp(run.start_time) }}</td>
-<td>{{ format_duration(run.finish_time - run.start_time) }}</td>
-<td><a class="reference external" href="../pkg/{{ run.package }}/{{ run.id }}">{{ run.description }}</a></td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-<script>$(document).ready(function() {$('#result-codes-t').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": [2, "desc"]}); });</script>
-</div>
-{% endblock %}
+    <div class="section" id="{{ code }}">
+        <h1>{{ code }}</h1>
+        {{ result_code_explanation(code) }}
+        {% if is_admin %}
+            <form id="mass_reschedule" method="post" action="/cupboard/api/mass-reschedule">
+                Description regex:
+                <input type="text" name="description_re"/>
+                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
+                <input type="hidden" name="include_transient" value="{{ 'on' if include_transient else 'off' }}"/>
+                Min age (days):
+                <select name="min_age">
+                    {% for i in range(90) %}
+                        <option>
+                            {{ i }}
+                        </option>
+                    {% endfor %}
+                </select>
+                Refresh:
+                <input type="checkbox" name="refresh" value="1"/>
+                <input type="hidden" name="result_code" value="{{ code }}"/>
+                <input type="submit" value="Reschedule Matching"/>
+            </form>
+            <script>
+                window.mass_reschedule.onsubmit = function(e) {
+                    $('form').submit(function(e) {
+                        e.preventDefault();
+                        $.post("/cupboard/api/mass-reschedule", $('form').serializeArray(), function(receivedData) {
+                            alert('Rescheduled ' + receivedData);
+                        });
+                    });
+                };
+            </script>
+        {% endif %}
+        <table id="result-codes-t" class="display docutils" border="1">
+            <colgroup>
+                <col width="21%"/>
+                <col width="6%"/>
+                <col width="10%"/>
+                <col width="10%"/>
+                <col width="6%"/>
+                <col width="53%"/>
+            </colgroup>
+            <thead valign="bottom">
+                <tr>
+                    <th class="head">Codebase</th>
+                    <th class="head">Campaign</th>
+                    <th class="head">Stage</th>
+                    <th class="head">Start Time</th>
+                    <th class="head">Duration</th>
+                    <th class="head">Description</th>
+                </tr>
+            </thead>
+            <tbody valign="top">
+                {% for run in runs %}
+                    <tr>
+                        <td>
+                            <a class="reference external" href="../c/{{ run.codebase }}/">{{ run.codebase }}</a>
+                        </td>
+                        <td>{{ run.campaign }}</td>
+                        <td>{{ run.failure_stage }}</td>
+                        <td>{{ format_timestamp(run.start_time) }}</td>
+                        <td>{{ format_duration(run.finish_time - run.start_time) }}</td>
+                        <td>
+                            <a class="reference external"
+                               href="../c/{{ run.codebase }}/{{ run.id }}">{{ run.description }}</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <script>
+            $(document).ready(function() {
+                $('#result-codes-t').DataTable({
+                    "pageLength": 200,
+                    "lengthMenu": [50, 200, 500, 1000, -1],
+                    "order": [2, "desc"]
+                });
+            });
+        </script>
+    </div>
+{% endblock body %}

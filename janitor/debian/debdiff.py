@@ -17,13 +17,14 @@
 
 import asyncio
 import re
-from typing import Iterator, Tuple, List, Optional
+from collections.abc import Iterable, Iterator
+from typing import Optional
 
 
-def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
+def iter_sections(text: str) -> Iterator[tuple[Optional[str], list[str]]]:
     lines = list(text.splitlines(False))
     title = None
-    paragraph: List[str] = []
+    paragraph: list[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -46,8 +47,8 @@ def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
 
 
 def filter_boring_wdiff(
-    lines: List[str], old_version: str, new_version: str
-) -> List[str]:
+    lines: list[str], old_version: str, new_version: str
+) -> list[str]:
     if not lines:
         return lines
     try:
@@ -73,8 +74,8 @@ def filter_boring_wdiff(
     return lines
 
 
-def _iter_fields(lines):
-    cl = []
+def _iter_fields(lines: Iterable[str]) -> Iterator[list[str]]:
+    cl: list[str] = []
     for line in lines:
         if cl and line.startswith(" "):
             cl.append(line)
@@ -86,7 +87,8 @@ def _iter_fields(lines):
 
 
 def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
-    ret: List[Tuple[Optional[str], List[str]]] = []
+    lines: list[str] = []
+    ret: list[tuple[Optional[str], list[str]]] = []
     for title, paragraph in iter_sections(debdiff):
         if not title:
             ret.append((title, paragraph))
@@ -106,7 +108,7 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
             package = None
             wdiff = False
         if wdiff:
-            paragraph_unfiltered: List[str] = []
+            paragraph_unfiltered: list[str] = []
             for lines in _iter_fields(paragraph):
                 newlines = filter_boring_wdiff(lines, old_version, new_version)
                 paragraph_unfiltered.extend(newlines)
@@ -145,7 +147,7 @@ class DebdiffError(Exception):
     """Error occurred while running debdiff."""
 
 
-async def run_debdiff(old_binaries: List[str], new_binaries: List[str]) -> bytes:
+async def run_debdiff(old_binaries: list[str], new_binaries: list[str]) -> bytes:
     args = ["debdiff", "--from"] + old_binaries + ["--to"] + new_binaries
     p = await asyncio.create_subprocess_exec(
         *args,
@@ -160,10 +162,10 @@ async def run_debdiff(old_binaries: List[str], new_binaries: List[str]) -> bytes
 
 
 def debdiff_is_empty(debdiff: str) -> bool:
-    return any([title is not None for (title, paragraph) in iter_sections(debdiff)])
+    return not any([title is not None for (title, paragraph) in iter_sections(debdiff)])
 
 
-def section_is_wdiff(title: str) -> Tuple[bool, Optional[str]]:
+def section_is_wdiff(title: str) -> tuple[bool, Optional[str]]:
     m = re.match(
         r"Control files of package (.*): lines which differ " r"\(wdiff format\)", title
     )
@@ -222,7 +224,8 @@ def htmlize_debdiff(debdiff: str) -> str:
         )
         return line
 
-    ret = []
+    ret: list[str] = []
+    lines: list[str]
     for title, lines in iter_sections(debdiff):
         if title:
             ret.append("<h4>%s</h4>" % title)
@@ -237,11 +240,11 @@ def htmlize_debdiff(debdiff: str) -> str:
                 wdiff = False
             if wdiff:
                 ret.append("<ul>")
-                for line in _iter_fields(lines):
-                    if not line:
+                for mlines in _iter_fields(lines):
+                    if not mlines:
                         continue
                     ret.extend(
-                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(line))]
+                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(mlines))]
                     )
                 ret.append("</ul>")
             else:

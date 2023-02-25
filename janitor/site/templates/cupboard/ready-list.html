@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block sidebar %}
+    {% if not suite %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
+    {% endif %}
+{% endblock sidebar %}
+{% block page_title %}
+    Changes ready to publish
+    {% if suite %}- {{ suite }}{% endif %}
+{% endblock page_title %}
+{% block body %}
+    <div class="section" id="history">
+        <h1>Ready to publish</h1>
+        <ul>
+            {% for run in runs %}
+                <li>
+                    <a href="c/{{ run.codebase }}/{{ run.id }}/">{{ run.codebase }}</a>
+                    {% set command = run.command -%}
+                    {% set result = run.result -%}
+                    {% include [run.suite + "/summary.html", "generic/summary.html"] %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock body %}

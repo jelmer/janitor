@@ -1,15 +1,19 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Changeset List{% endblock %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Changeset List
+{% endblock page_title %}
 {% block body %}
-<div class="section">
-
-<h1>Changesets</h1>
-<ul class="simple">
-{% for changeset in changesets %}
-  <li id="{{ changeset['id'] }}"><a href="{{ changeset['id'] }}">{{ changeset['id'] }}</a></li>
-{% endfor %}
-</ul>
-
-</div>
-{% endblock %}
+    <div class="section">
+        <h1>Changesets</h1>
+        <ul class="simple">
+            {% for changeset in changesets %}
+                <li id="{{ changeset['id'] }}">
+                    <a href="{{ changeset['id'] }}">{{ changeset['id'] }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock body %}

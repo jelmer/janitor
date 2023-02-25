@@ -17,30 +17,44 @@
 
 __all__ = [
     "Config",
-    "Suite",
+    "Campaign",
+    "AptRepository",
     "read_config",
     "get_campaign_config",
+    "get_distribution",
 ]
 
-from typing import Union
+import sys
 
 from google.protobuf import text_format  # type: ignore
 
-from .config_pb2 import Config, Suite, Campaign, Distribution
+from . import config_pb2
+
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+
+    Config: TypeAlias = config_pb2.Config
+    Campaign: TypeAlias = config_pb2.Campaign
+    AptRepository: TypeAlias = config_pb2.AptRepository
+else:
+    Config = config_pb2.Config
+    Campaign = config_pb2.Campaign
+    AptRepository = config_pb2.AptRepository
 
 
 def read_config(f):
-    return text_format.Parse(f.read(), Config())
+    return text_format.Parse(f.read(), config_pb2.Config())
 
 
-def get_distribution(config: Config, name: str) -> Distribution:
+def get_distribution(config: Config, name: str) -> config_pb2.Distribution:
     for d in config.distribution:
         if d.name == name:
             return d
     raise KeyError(name)
 
 
-def get_campaign_config(config: Config, name: str) -> Union[Suite, Campaign]:
+def get_campaign_config(config: config_pb2.Config, name: str
+                        ) -> config_pb2.Campaign:
     for c in config.campaign:
         if c.name == name:
             return c
@@ -52,5 +66,5 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('config_file', type=str, help='Configuration file to read')
     args = parser.parse_args()
-    with open(args.config_file, 'r') as f:
+    with open(args.config_file) as f:
         config = read_config(f)

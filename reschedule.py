@@ -30,14 +30,17 @@ parser.add_argument("description_re", type=str, nargs="?")
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
-parser.add_argument("--refresh", action="store_true", help="Force run from scratch.")
-parser.add_argument("--offset", type=int, default=0, help="Schedule offset.")
+parser.add_argument(
+    "--refresh", action="store_true", help="Force run from scratch.")
+parser.add_argument(
+    "--offset", type=int, default=0, help="Schedule offset.")
 parser.add_argument(
     "--rejected", action="store_true", help="Process rejected runs only."
 )
-parser.add_argument("--suite", type=str, help="Suite to process.")
+parser.add_argument("--campaign", type=str, help="Campaign to process.")
 parser.add_argument(
-    "--min-age", type=int, default=0, help="Only reschedule runs older than N days."
+    "--min-age", type=int, default=0,
+    help="Only reschedule runs older than N days."
 )
 parser.add_argument(
     '--base-url', type=str, default='https://janitor.debian.net',
@@ -47,19 +50,21 @@ args = parser.parse_args()
 logging.basicConfig()
 
 
-async def main(base_url, result_code, suite, description_re, rejected, min_age=0):
+async def main(
+        base_url, result_code, campaign, description_re, rejected, min_age=0):
     params = {
         'result_code': result_code}
-    if suite:
-        params['suite'] = suite
+    if campaign:
+        params['suite'] = campaign
     if description_re:
         params['description_re'] = description_re
     if rejected:
         params['rejected'] = '1'
     if min_age:
         params['min_age'] = str(min_age)
-    url = URL(base_url) / 'api/mass-reschedule'
-    async with ClientSession() as session, session.post(url, params=params) as resp:
+    url = URL(base_url) / 'cupboard/api/mass-reschedule'
+    async with ClientSession() as session, \
+            session.post(url, params=params) as resp:
         if resp.status != 200:
             logging.fatal('rescheduling failed: %d', resp.status)
             return 1
@@ -67,4 +72,6 @@ async def main(base_url, result_code, suite, description_re, rejected, min_age=0
             logging.info('%r', entry)
 
 
-sys.exit(asyncio.run(main(args.base_url, args.result_code, args.suite, args.description_re, args.rejected, args.min_age)))
+sys.exit(asyncio.run(main(
+    args.base_url, args.result_code, args.campaign,
+    args.description_re, args.rejected, args.min_age)))

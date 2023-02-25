@@ -15,47 +15,39 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientTimeout
-from io import BytesIO
+import asyncio
 import logging
 import os
-from typing import Optional, List, Tuple, Iterable, Dict
-
+import ssl
+import sys
 import urllib.parse
-import breezy.git  # noqa: F401
+from collections.abc import Iterable
+from contextlib import suppress
+from io import BytesIO
+from typing import Optional
+
 import breezy.bzr  # noqa: F401
+import breezy.git  # noqa: F401
+from aiohttp import ClientSession, ClientTimeout
+from aiozipkin.helpers import TraceContext
 from breezy import urlutils
 from breezy.branch import Branch
+from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
-from breezy.errors import (
-    ConnectionError,
-    NotBranchError,
-    NoSuchRevision,
-    NoRepositoryPresent,
-    IncompatibleRepositories,
-    InvalidHttpResponse,
-)
+from breezy.errors import (ConnectionError, InvalidHttpResponse,
+                           NoSuchRevision, NotBranchError)
 from breezy.git.remote import RemoteGitError
-from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
-from breezy.transport import Transport
-from lintian_brush.vcs import (
-    determine_browser_url,
-    unsplit_vcs_url,
-)
-from silver_platter.utils import (
-    open_branch_containing,
-    open_branch,
-    full_branch_url,
-    BranchMissing,
-    BranchUnavailable,
-    BranchRateLimited,
-    BranchUnsupported,
-)
+from breezy.transport import Transport, get_transport_from_url
+from dulwich.objects import ZERO_SHA
+from silver_platter.utils import (BranchMissing, BranchRateLimited,
+                                  BranchTemporarilyUnavailable,
+                                  BranchUnavailable, BranchUnsupported,
+                                  open_branch)
+from yarl import URL
 
-
-SUPPORTED_VCSES = ["git", "bzr"]
+EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 
 class BranchOpenFailure(Exception):
@@ -110,11 +102,13 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "unsupported-vcs-darcs"
         elif str(e).startswith("Fossil branches are not yet"):
             code = "unsupported-vcs-fossil"
+        elif isinstance(e, BranchTemporarilyUnavailable):
+            code = "branch-temporarily-unavailable"
         else:
             code = "branch-unavailable"
         msg = str(e)
         if e.url not in msg:
-            msg = "%s (%s)" % (msg, e.url)
+            msg = "{} ({})".format(msg, e.url)
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchMissing):
         if str(e).startswith(
@@ -125,10 +119,12 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "branch-missing"
         msg = str(e)
         if e.url not in msg:
-            msg = "%s (%s)" % (msg, e.url)
+            msg = "{} ({})".format(msg, e.url)
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
-        if str(e).startswith("Unsupported protocol for url "):
+        if getattr(e, 'vcs', None):
+            code = "unsupported-vcs-%s" % e.vcs
+        elif str(e).startswith("Unsupported protocol for url "):
             if "anonscm.debian.org" in str(e) or "svn.debian.org" in str(e):
                 code = "hosted-on-alioth"
             else:
@@ -151,28 +147,19 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
                 code = "unsupported-vcs"
         msg = str(e)
         if e.url not in msg:
-            msg = "%s (%s)" % (msg, e.url)
+            msg = "{} ({})".format(msg, e.url)
         return BranchOpenFailure(code, msg)
 
     return e
 
 
 def open_branch_ext(
-    vcs_url: str, possible_transports: Optional[List[Transport]] = None, probers=None
+    vcs_url: str, possible_transports: Optional[list[Transport]] = None, probers=None
 ) -> Branch:
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
     except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
-        raise _convert_branch_exception(vcs_url, e)
-
-
-def open_branch_containing_ext(
-    vcs_url: str, possible_transports: Optional[List[Transport]] = None, probers=None
-) -> Tuple[Branch, str]:
-    try:
-        return open_branch_containing(vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
-        raise _convert_branch_exception(vcs_url, e)
+        raise _convert_branch_exception(vcs_url, e) from e
 
 
 class MirrorFailure(Exception):
@@ -183,105 +170,16 @@ class MirrorFailure(Exception):
         self.reason = reason
 
 
-def mirror_branches(
-    vcs_manager: "VcsManager",
-    codebase: str,
-    branch_map: Iterable[Tuple[str, Branch, bytes]],
-    public_master_branch: Optional[Branch] = None,
-) -> None:
-    vcses = set(get_vcs_abbreviation(br.repository) for name, br, revid in branch_map)
-    if len(vcses) == 0:
-        return
-    if len(vcses) > 1:
-        raise AssertionError("more than one VCS: %r" % branch_map)
-    vcs = vcses.pop()
-    if vcs == "git":
-        path = vcs_manager.get_repository_url(codebase, vcs)
-        try:
-            vcs_result_controldir = ControlDir.open(path)
-        except NotBranchError:
-            vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get("git-bare")()
-            )
-        for (target_branch_name, from_branch, revid) in branch_map:
-            # TODO(jelmer): Set depth
-            try:
-                vcs_result_controldir.push_branch(
-                    from_branch,
-                    name=target_branch_name,
-                    overwrite=True,
-                    revision_id=revid,
-                )
-            except NoSuchRevision as e:
-                raise MirrorFailure(target_branch_name, str(e))
-    elif vcs == "bzr":
-        path = vcs_manager.get_repository_url(codebase, vcs)
-        try:
-            vcs_result_controldir = ControlDir.open(path)
-        except NotBranchError:
-            vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get("bzr")()
-            )
-        try:
-            vcs_result_controldir.open_repository()
-        except NoRepositoryPresent:
-            vcs_result_controldir.create_repository(shared=True)
-        for (target_branch_name, from_branch, revid) in branch_map:
-            target_branch_path = vcs_manager.get_branch_url(
-                codebase, target_branch_name, vcs
-            )
-            try:
-                target_branch = Branch.open(target_branch_path)
-            except NotBranchError:
-                target_branch = ControlDir.create_branch_convenience(target_branch_path)
-            if public_master_branch:
-                try:
-                    target_branch.set_stacked_on_url(
-                        full_branch_url(public_master_branch)
-                    )
-                except IncompatibleRepositories:
-                    pass
-            try:
-                from_branch.push(target_branch, overwrite=True, stop_revision=revid)
-            except NoSuchRevision as e:
-                raise MirrorFailure(target_branch_name, str(e))
-    else:
-        raise AssertionError("unsupported vcs %s" % vcs)
-
-
 class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
 
-def get_cached_repository_url(base_url: str, vcs_type: str, package: str) -> str:
-    if vcs_type in SUPPORTED_VCSES:
-        return "%s/%s" % (base_url.rstrip("/"), package)
-    else:
-        raise UnsupportedVcs(vcs_type)
-
-
-def get_cached_branch_url(
-    base_url: str, vcs_type: str, package: str, branch_name: str
-) -> str:
-    if vcs_type == "git":
-        return urlutils.join_segment_parameters("%s/%s" % (
-            base_url.rstrip("/"), package), {
-                "branch": urlutils.escape(branch_name, safe='')})
-    elif vcs_type == "bzr":
-        return "%s/%s/%s" % (base_url.rstrip("/"), package, branch_name)
-    else:
-        raise UnsupportedVcs(vcs_type)
-
-
-def get_cached_branch(
-    base_url: str, vcs_type: str, package: str, branch_name: str
-) -> Optional[Branch]:
+def open_cached_branch(
+        url, trace_context: Optional[TraceContext] = None) -> Optional[Branch]:
+    # TODO(jelmer): Somehow pass in trace context headers
     try:
-        url = get_cached_branch_url(base_url, vcs_type, package, branch_name)
-    except UnsupportedVcs:
-        return None
-    try:
-        return Branch.open(url)
+        transport = get_transport_from_url(url)
+        return Branch.open_from_transport(transport)
     except NotBranchError:
         return None
     except RemoteGitError:
@@ -291,196 +189,326 @@ def get_cached_branch(
     except ConnectionError as e:
         logging.info("Unable to reach cache server: %s", e)
         return None
-
-
-def get_local_vcs_branch_url(
-    vcs_directory: str, vcs: str, codebase: str, branch_name: str
-) -> Optional[str]:
-    if vcs == "git":
-        return urlutils.join_segment_parameters(
-            "file:%s" % (
-                os.path.join(vcs_directory, "git", codebase)), {
-                    "branch": urlutils.escape(branch_name, safe='')})
-    elif vcs == "bzr":
-        return os.path.join(vcs_directory, "bzr", codebase, branch_name)
-    else:
-        raise AssertionError("unknown vcs type %r" % vcs)
-
-
-def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) -> Optional[Branch]:
-    for vcs in SUPPORTED_VCSES:
-        if os.path.exists(os.path.join(vcs_directory, vcs, codebase)):
-            break
-    else:
+    except BranchReferenceLoop:
         return None
-    url = get_local_vcs_branch_url(vcs_directory, vcs, codebase, branch_name)
-    if url is None:
-        return None
-    return open_branch(url)
+    except ssl.SSLCertVerificationError as e:
+        logging.warning('Unable to access cache branch at %s: %r', url, e)
+        raise
 
 
-def get_local_vcs_repo_url(vcs_directory: str, package: str, vcs_type: str) -> str:
-    return os.path.join(vcs_directory, vcs_type, package)
-
-
-def get_local_vcs_repo(
-    vcs_directory: str, package: str, vcs_type: Optional[str] = None
-) -> Optional[Repository]:
-    for vcs in SUPPORTED_VCSES if not vcs_type else [vcs_type]:
-        path = os.path.join(vcs_directory, vcs, package)
-        if not os.path.exists(path):
-            continue
-        return Repository.open(path)
-    return None
-
-
-class VcsManager(object):
+class VcsManager:
     def get_branch(
-        self, codebase: str, branch_name: str, vcs_type: Optional[str] = None
+            self, codebase: str, branch_name: str,
+            *, trace_context: Optional[TraceContext] = None
     ) -> Branch:
         raise NotImplementedError(self.get_branch)
 
     def get_branch_url(
-        self, codebase: str, branch_name: str, vcs_type: str
+        self, codebase: str, branch_name: str
     ) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
     def get_repository(
-        self, codebase: str, vcs_type: Optional[str] = None
+        self, codebase: str
     ) -> Repository:
         raise NotImplementedError(self.get_repository)
 
-    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
+    def get_repository_url(self, codebase: str) -> str:
         raise NotImplementedError(self.get_repository_url)
 
-    def list_repositories(self, vcs_type: str) -> Iterable[str]:
+    def list_repositories(self) -> Iterable[str]:
         raise NotImplementedError(self.list_repositories)
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+    async def get_diff(
+            self, codebase: str, old_revid: bytes,
+            new_revid: bytes) -> bytes:
         raise NotImplementedError(self.get_diff)
 
-    async def get_revision_info(self, codebase, old_revid, new_revid, vcs_type):
+    async def get_revision_info(
+            self, codebase: str, old_revid: bytes, new_revid: bytes):
         raise NotImplementedError(self.get_revision_info)
 
 
-class LocalVcsManager(VcsManager):
+class LocalGitVcsManager(VcsManager):
     def __init__(self, base_path: str):
         self.base_path = base_path
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.base_path)
+        return "{}({!r})".format(type(self).__name__, self.base_path)
 
-    def get_branch(self, codebase, branch_name, vcs_type=None):
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
+        url = self.get_branch_url(codebase, branch_name)
         try:
-            return get_local_vcs_branch(self.base_path, codebase, branch_name)
+            return open_branch(url)
         except (BranchUnavailable, BranchMissing):
             return None
 
-    def get_branch_url(self, codebase, branch_name, vcs_type):
-        return get_local_vcs_branch_url(self.base_path, vcs_type, codebase, branch_name)
+    def get_branch_url(self, codebase, branch_name):
+        return urlutils.join_segment_parameters(
+            "file:%s" % (
+                os.path.join(self.base_path, codebase)), {
+                    "branch": urlutils.escape(branch_name, safe='')})
 
-    def get_repository(self, codebase, vcs_type=None):
-        return get_local_vcs_repo(self.base_path, codebase, vcs_type)
+    def get_repository(self, codebase):
+        try:
+            return Repository.open(os.path.join(self.base_path, codebase))
+        except NotBranchError:
+            return None
 
-    def get_repository_url(self, codebase, vcs_type):
-        return get_local_vcs_repo_url(self.base_path, codebase, vcs_type)
+    def get_repository_url(self, codebase):
+        return os.path.join(self.base_path, codebase)
 
-    def list_repositories(self, vcs_type):
-        for entry in os.scandir(os.path.join(self.base_path, vcs_type)):
+    def list_repositories(self):
+        for entry in os.scandir(os.path.join(self.base_path)):
             yield entry.name
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
-        raise NotImplementedError(self.get_diff)
+    async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+
+        if old_revid == NULL_REVISION:
+            old_sha = EMPTY_GIT_TREE
+        else:
+            old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
+        if new_revid == NULL_REVISION:
+            new_sha = EMPTY_GIT_TREE
+        else:
+            new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
+
+        args: list[str] = [
+            "git",
+            "diff",
+            old_sha.decode('utf-8'), new_sha.decode('utf-8')
+        ]
+
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+            cwd=repo.user_transport.local_abspath('.'),
+        )
+
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            with suppress(ProcessLookupError):
+                p.kill()
+            raise
+
+        if p.returncode != 0:
+            raise RuntimeError('git diff failed: %s', stderr.decode())
+        return stdout
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        from dulwich.errors import MissingCommitError
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        ret = []
+        old_sha = repo.lookup_bzr_revision_id(old_revid)[0]
+        new_sha = repo.lookup_bzr_revision_id(new_revid)[0]
+        try:
+            walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+        except MissingCommitError as e:
+            raise KeyError from e
+        for entry in walker:
+            ret.append({
+                'commit-id': entry.commit.id.decode('ascii'),
+                'revision-id': repo.lookup_foreign_revision_id(entry.commit.id).decode('utf-8'),
+                'message': entry.commit.message.decode('utf-8', 'replace')})
+            await asyncio.sleep(0)
+        return ret
 
 
-class RemoteVcsManager(VcsManager):
-    def __init__(self, git_base_url: Optional[str], bzr_base_url: Optional[str]):
-        self.base_urls = {}
-        if git_base_url:
-            self.base_urls['git'] = git_base_url
-        if bzr_base_url:
-            self.base_urls['bzr'] = bzr_base_url
+class LocalBzrVcsManager(VcsManager):
+    def __init__(self, base_path: str):
+        self.base_path = base_path
 
-    @classmethod
-    def from_single_url(cls, url: str):
-        return cls(urlutils.join(url, 'git'), urlutils.join(url, 'bzr'))
+    def __repr__(self):
+        return "{}({!r})".format(type(self).__name__, self.base_path)
 
-    @classmethod
-    def from_urls(cls, urls: Dict[str, str]):
-        return cls(urls.get('git'), urls.get('bzr'))
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
+        url = self.get_branch_url(codebase, branch_name)
+        try:
+            return open_branch(url)
+        except (BranchUnavailable, BranchMissing):
+            return None
 
-    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
-        url = self.get_diff_url(codebase, old_revid, new_revid, vcs_type)
-        if url is None:
-            raise NotImplementedError('vcs type %s' % vcs_type)
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+    def get_branch_url(self, codebase, branch_name):
+        return os.path.join(self.base_path, codebase, branch_name)
+
+    def get_repository(self, codebase):
+        try:
+            return Repository.open(os.path.join(self.base_path, codebase))
+        except NotBranchError:
+            return None
+
+    def get_repository_url(self, codebase):
+        return os.path.join(self.base_path, codebase)
+
+    def list_repositories(self):
+        for entry in os.scandir(os.path.join(self.base_path)):
+            yield entry.name
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        args = [
+            sys.executable,
+            '-m',
+            'breezy',
+            "diff",
+            '-rrevid:{}..revid:{}'.format(
+                old_revid.decode(),
+                new_revid.decode(),
+            ),
+            urlutils.join(repo.user_url)
+        ]
+
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            with suppress(ProcessLookupError):
+                p.kill()
+            raise
+
+        if p.returncode != 3:
+            return stdout
+
+        raise RuntimeError('diff returned %d' % p.returncode)
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        repo = self.get_repository(codebase)
+        if repo is None:
+            raise KeyError
+        ret = []
+        with repo.lock_read():
+            graph = repo.get_graph()
+            for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
+                ret.append({
+                    'revision-id': rev.revision_id.decode('utf-8'),
+                    'link': None,
+                    'message': rev.description})
+                await asyncio.sleep(0)
+        return ret
+
+
+class RemoteGitVcsManager(VcsManager):
+    def __init__(self, base_url: str, trace_configs=None):
+        self.base_url = base_url
+        self.trace_configs = trace_configs
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.base_url == other.base_url
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
+
+        url = self.get_diff_url(codebase, old_revid, new_revid)
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
 
-    async def get_revision_info(self, codebase, old_revid, new_revid, vcs_type):
-        if vcs_type == 'bzr':
-            url = urllib.parse.urljoin(self.base_urls['bzr'], "%s/revision-info?old=%s&new=%s" % (
-                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
-        elif vcs_type == 'git':
-            url = urllib.parse.urljoin(self.base_urls['git'], "%s/revision-info?old=%s&new=%s" % (
-                codebase,
-                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
+    def _lookup_revid(self, revid, default):
+        if revid == NULL_REVISION:
+            return default
         else:
-            raise NotImplementedError('vcs type %s' % vcs_type)
-        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return revid[len(b'git-v1:'):]
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        url = urllib.parse.urljoin(self.base_url, "{}/revision-info?old={}&new={}".format(
+            codebase,
+            self._lookup_revid(old_revid, ZERO_SHA).decode('utf-8'),
+            self._lookup_revid(new_revid, ZERO_SHA).decode('utf-8')))
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
     def __repr__(self):
-        return "%s(%r, %r)" % (
-            type(self).__name__, self.base_urls.get('git'),
-            self.base_urls.get('bzr'))
+        return "{}({!r})".format(type(self).__name__, self.base_url)
 
-    def get_diff_url(self, codebase, old_revid, new_revid, vcs_type=None):
-        if vcs_type == 'bzr':
-            return urllib.parse.urljoin(self.base_urls['bzr'], "%s/diff?old=%s&new=%s" % (
-                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
-                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
-        elif vcs_type == 'git':
-            return urllib.parse.urljoin(self.base_urls['git'], "%s/diff?old=%s&new=%s" % (
-                codebase,
-                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
-                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
-        else:
-            return None
+    def get_diff_url(self, codebase, old_revid, new_revid):
+        return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(
+            codebase,
+            self._lookup_revid(old_revid, EMPTY_GIT_TREE).decode('utf-8'),
+            self._lookup_revid(new_revid, EMPTY_GIT_TREE).decode('utf-8')))
 
-    def get_branch(self, codebase, branch_name, vcs_type=None):
-        if vcs_type:
-            if vcs_type in self.base_urls:
-                return get_cached_branch(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
-            raise UnsupportedVcs(vcs_type)
-        for vcs_type, base_url in self.base_urls.items():
-            branch = get_cached_branch(base_url, vcs_type, codebase, branch_name)
-            if branch:
-                return branch
-        else:
-            return None
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
+        url = self.get_branch_url(codebase, branch_name)
+        return open_cached_branch(url, trace_context=trace_context)
 
-    def get_branch_url(self, codebase, branch_name, vcs_type) -> str:
-        if vcs_type in self.base_urls:
-            return get_cached_branch_url(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
-        raise UnsupportedVcs(vcs_type)
+    def get_branch_url(self, codebase, branch_name) -> str:
+        return urlutils.join_segment_parameters("{}/{}".format(
+            self.base_url.rstrip("/"), codebase), {
+                "branch": urlutils.escape(branch_name, safe='')})
 
-    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
-        if vcs_type in self.base_urls:
-            return get_cached_repository_url(self.base_urls[vcs_type], vcs_type, codebase)
-        raise UnsupportedVcs(vcs_type)
+    def get_repository_url(self, codebase: str) -> str:
+        return "{}/{}".format(self.base_url.rstrip("/"), codebase)
+
+
+class RemoteBzrVcsManager(VcsManager):
+    def __init__(self, base_url: str, *, trace_configs=None):
+        self.base_url = base_url
+        self.trace_configs = trace_configs
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.base_url == other.base_url
+
+    async def get_diff(self, codebase, old_revid, new_revid):
+        if old_revid == new_revid:
+            return b""
+        url = self.get_diff_url(codebase, old_revid, new_revid)
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.read()
+
+    async def get_revision_info(self, codebase, old_revid, new_revid):
+        url = urllib.parse.urljoin(self.base_url, "{}/revision-info?old={}&new={}".format(
+            codebase, old_revid.decode('utf-8'),
+            new_revid.decode('utf-8')))
+        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.json()
+
+    def __repr__(self):
+        return "{}({!r})".format(type(self).__name__, self.base_url)
+
+    def get_diff_url(self, codebase, old_revid, new_revid):
+        return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(
+            codebase, old_revid.decode('utf-8'),
+            new_revid.decode('utf-8')))
+
+    def get_branch(self, codebase, branch_name, *, trace_context=None):
+        url = self.get_branch_url(codebase, branch_name)
+        return open_cached_branch(url, trace_context=trace_context)
+
+    def get_branch_url(self, codebase, branch_name) -> str:
+        return "{}/{}/{}".format(self.base_url.rstrip("/"), codebase, branch_name)
+
+    def get_repository_url(self, codebase: str) -> str:
+        return "{}/{}".format(self.base_url.rstrip("/"), codebase)
 
 
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     f = BytesIO()
     try:
-        repo = vcs_manager.get_repository(run.package)  # type: Optional[Repository]
+        repo = vcs_manager.get_repository(run.codebase)  # type: Optional[Repository]
     except NotBranchError:
         repo = None
     if repo is None:
         return b"Local VCS repository for %s temporarily inaccessible" % (
-            run.package.encode("ascii")
+            run.codebase.encode("ascii")
         )
     for actual_role, _, base_revision, revision in run.result_branches:
         if role == actual_role:
@@ -502,38 +530,60 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     return f.getvalue()
 
 
-def get_vcs_manager(url: str) -> VcsManager:
-    if "=" in url:
-        urls = {}
-        for element in url.split(','):
-            (vcs, url) = element.split('=', 1)
-            urls[vcs] = url
-        return RemoteVcsManager.from_urls(urls)
-    else:
-        parsed = urlutils.URL.from_string(url)
+def get_vcs_managers(location, *, trace_configs=None):
+    if '=' not in location:
+        return {
+            'git': RemoteGitVcsManager(
+                str(URL(location) / "git"), trace_configs=trace_configs),
+            'bzr': RemoteBzrVcsManager(
+                str(URL(location) / "bzr"), trace_configs=trace_configs),
+        }
+    ret: dict[str, VcsManager] = {}
+    for p in location.split(','):
+        (k, v) = p.split('=', 1)
+        if k == 'git':
+            ret[k] = RemoteGitVcsManager(
+                str(URL(v)), trace_configs=trace_configs)
+        elif k == 'bzr':
+            ret[k] = RemoteBzrVcsManager(
+                str(URL(v)), trace_configs=trace_configs)
+        else:
+            raise ValueError('unsupported vcs %s' % k)
+    return ret
+
+
+def get_vcs_managers_from_config(
+        config, *, trace_configs=None) -> dict[str, VcsManager]:
+    ret: dict[str, VcsManager] = {}
+    if config.git_location:
+        parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
-            return LocalVcsManager(parsed.path)
-        return RemoteVcsManager.from_single_url(url)
-
-
-def bzr_to_browse_url(url: str) -> str:
-    # TODO(jelmer): Use browse_url_from_repo_url from upstream_ontologist.vcs ?
-    (url, params) = urlutils.split_segment_parameters(url)
-    branch = params.get("branch")
-    if branch:
-        branch = urllib.parse.unquote(branch)
-    deb_vcs_url = unsplit_vcs_url(url, branch)
-    return determine_browser_url(None, deb_vcs_url)
+            ret['git'] = LocalGitVcsManager(parsed.path)
+        else:
+            ret['git'] = RemoteGitVcsManager(
+                config.git_location, trace_configs=trace_configs)
+    if config.bzr_location:
+        parsed = urlutils.URL.from_string(config.git_location)
+        if parsed.scheme in ("", "file"):
+            ret['bzr'] = LocalBzrVcsManager(parsed.path)
+        else:
+            ret['bzr'] = RemoteBzrVcsManager(
+                config.git_location, trace_configs=trace_configs)
+    return ret
 
 
 def is_authenticated_url(url: str):
     return (url.startswith('git+ssh://') or url.startswith('bzr+ssh://'))
 
 
-if __name__ == "__main__":
+def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("url", type=str)
-    args = parser.parse_args()
-    branch = open_branch_ext(args.url)
+    args = parser.parse_args(argv)
+    open_branch_ext(args.url)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

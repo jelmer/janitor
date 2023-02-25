@@ -1,0 +1,33 @@
+<div class="score">
+    Score: <span id="score">{{ value }}</span>
+</div>
+<div class="command">
+    Command: <span id="command">{{ command }}</span>
+</div>
+<div class="finish_time">
+    Finish Time: <span id="finish_time">{{ format_timestamp(finish_time) }}</span>
+</div>
+{% for role, remote_branch_name, base_revision, revision in branches %}
+    <div class="branch" id="branch-{{ role }}">
+	<h2>{{ role }}</h2>
+	<div class="revisions" id="revisions-{{ role }}">
+	    <ul>
+		{% for rev in get_revision_info(role) %}
+		    <li>
+			{% if rev['link'] %}<a href="{{ rev['link'] }}">{% endif %}
+			{{ rev['revision-id'] }}
+			{% if rev['link'] %}</a>{% endif %}
+			: <pre>{{ rev['message'] }}</pre>
+		    </li>
+		{% endfor %}
+	    </ul>
+	</div>
+        {%- set DIFF_INLINE_THRESHOLD = 200 -%}
+        {%- set diff = show_diff(role) -%}
+        {% if diff.splitlines(False)|length < DIFF_INLINE_THRESHOLD %}
+	<div class="diff" id="diff-{{ role }}">{{ highlight_diff(diff)|safe }}</div>
+        {% else %}
+	<div class="diff" id="diff-{{ role }}">The <a href="/api/run/{{ run_id }}/diff?role={{ role }}">full diff</a> is too large to include here.</div>
+        {% endif %}
+    </div>
+{% endfor %}

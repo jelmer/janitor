@@ -1,0 +1,79 @@
+{% macro display_reviews_table(reviews, user=None) %}
+<table class="reviews">
+<thead>
+    <tr>
+        <th>
+            Reviewer
+        </th>
+        <th>
+            Verdict
+        </th>
+        <th>
+            Comment
+        </th>
+    </tr>
+</thead>
+{% set ns = namespace(my_review=None) %}
+{% for review in reviews %}
+    {% if user is not none and review.reviewer == user %}
+    {% set ns.my_review = review %}
+    {% else %}
+    <tr>
+        <td>
+            {{ review['reviewer'] }}
+        </td>
+        <td>
+            <span class="review-{{ review['verdict'] }}">{{ review['verdict'] }}</span>
+        </td>
+        <td>
+            {{ review['review_comment'] }}
+        </td>
+    </tr>
+    {% endif %}
+{% endfor %}
+{% if ns.my_review or user %}
+<tr>
+<td>Your review</td>
+<td>
+    <select id="verdict" name="verdict" onchange="submit_review(this.value)">
+	<option value="unreviewed"
+		{% if ns.my_review and ns.my_review.verdict == 'unreviewed' %} selected="true"{% endif %}>
+	    Unreviewed
+	</option>
+	<option value="approved"
+		{% if ns.my_review and ns.my_review.verdict == 'approved' %} selected="true"{% endif %}>
+	    Approved
+	</option>
+	<option value="abstained"
+		{% if ns.my_review and ns.my_review.verdict == 'abstained' %} selected="true"{% endif %}>
+	    Abstained
+	</option>
+	<option value="rejected"
+		{% if ns.my_review and ns.my_review.verdict == 'rejected' %} selected="true"{% endif %}>
+	    Rejected
+	</option>
+    </select>
+    <script>
+	function submit_review(verdict) {
+	    var comment = undefined;
+	    if (verdict == 'rejected') {
+		comment = window.prompt('Please specify a comment for the rejection');
+		$("#my-review-comment").html(comment);
+	    } else {
+		$("#my-review-comment").html("");
+	    }
+	    console.log("Submitting review " + verdict + " for run {{ run_id }} ");
+	    $.post('/api/run/{{ run_id }}', {
+		'verdict': verdict,
+		'review-comment': comment
+	    });
+	}
+    </script>
+</td>
+<td id="my-review-comment">
+      {% if ns.my_review %}{{ ns.my_review.review_comment }}{% endif %}
+</td>
+</tr>
+{% endif %}
+</table>
+{% endmacro %}

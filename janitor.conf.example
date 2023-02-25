@@ -1,8 +1,3 @@
-# Storage location for APT repository; can be:
-#  + a local file path
-#  + a GCS location (gs://BUCKET-NAME/)
-apt_location: 'gs://debian-janitor-apt/'
-
 # Logs location; can be:
 #  + a local file path
 #  + a GCS location (gs://BUCKET-NAME/)
@@ -17,6 +12,9 @@ artifact_location: '/home/janitor/artifacts'
 # Database location: must be a valid postgresql URL
 database_location: 'postgresql://janitor@example.com:5432/janitor'
 
+# Redis
+redis_location: 'redis://localhost'
+
 # Set the default committer; if unset defaults to current users' preferences
 # (i.e. ~/.gitconfig)
 committer: 'Debian Janitor <janitor@jelmer.uk>'
@@ -24,10 +22,15 @@ committer: 'Debian Janitor <janitor@jelmer.uk>'
 # Origin set in published archives
 origin: "janitor.debian.net"
 
+bugtracker {
+  kind: gitlab
+  url: "https://salsa.debian.org/jelmer/some-project"
+  name: "some project"
+}
+
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
-  tracker_url: "https://tracker.debian.org/pkg/"
   component: "main"
   chroot: "unstable-amd64-sbuild"
   lintian_profile: "debian"
@@ -42,69 +45,67 @@ distribution {
 
 campaign {
   name: "lintian-fixes"
+  command: "lintian-brush"
   branch_name: "lintian-fixes"
   debian_build {
-    archive_description: "Builds of lintian fixes"
     build_distribution: "lintian-fixes"
     build_suffix: "jan+lint"
     base_distribution: "unstable"
     build_command: "sbuild -Asv"
   }
+  bugtracker {
+    kind: debian
+    url: "https://bugs.debian.org/lintian-brush"
+    name: "lintian-brush"
+  }
 }
 
 campaign {
   name: "unchanged"
+  command: "true"
   branch_name: "master"
   debian_build {
-    archive_description: "Builds without any changes"
     build_distribution: "unchanged"
     build_suffix: "jan+unchanged"
     base_distribution: "unstable"
   }
-  webhook_trigger: false
 }
 
 campaign {
   name: "fresh-releases"
   branch_name: "new-upstream"
+  command: "deb-new-upstream"
   debian_build {
-    archive_description: "Builds with new upstream versions merged"
     build_distribution: "fresh-releases"
     build_suffix: "jan+nur"
     base_distribution: "unstable"
   }
-  webhook_trigger: true
 }
 
 campaign {
   name: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
   debian_build {
-    archive_description: "Builds with new upstream snapshots merged"
     build_distribution: "fresh-snapshots"
     build_suffix: "jan+nus"
     base_distribution: "unstable"
   }
-  webhook_trigger: true
 }
 
 campaign {
   name: "multiarch-fixes"
   branch_name: "multiarch-fixes"
   debian_build {
-    archive_description: "Build of multi arch fixes"
     build_distribution: "multiarch-fixes"
     build_suffix: "jan+maf"
     base_distribution: "unstable"
   }
-  webhook_trigger: false
 }
 
 campaign {
   name: "uncommitted"
   branch_name: "uncommitted"
   debian_build {
-    archive_description: "Builds of packages missing in VCS"
     build_distribution: "uncommitted"
     build_suffix: "jan+unc"
     base_distribution: "unstable"
@@ -115,7 +116,6 @@ campaign {
   name: "debianize"
   branch_name: "debianize"
   debian_build {
-    archive_description: "Automatic packaging of upstream branches"
     build_distribution: "debianize"
     build_suffix: "jan+deb"
     base_distribution: "unstable"
@@ -136,4 +136,14 @@ oauth2_provider {
   base_url: "https://gitlab.com"
   qa_reviewer_group: "janitor-team/qa-reviewers"
   admin_group: "janitor-team/admins"
+}
+
+# Note that you'll need to run janitor.debian.archive to publish apt archives0
+apt_repository {
+  name: "lintian-fixes"
+  description: "Builds of lintian fixes"
+  base: "unstable"
+  select {
+    campaign: "lintian-fixes"
+  }
 }
