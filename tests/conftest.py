@@ -36,5 +36,5 @@ async def con(db: asyncpg.Pool) -> AsyncGenerator[asyncpg.Connection, None]:
         yield con
 
 
-async def test_returns_janitor_engine(db) -> None:
+async def test_db_returns_janitor_db(db) -> None:
     assert isinstance(db, asyncpg.Pool)
