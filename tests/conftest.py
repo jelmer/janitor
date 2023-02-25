@@ -1,18 +1,19 @@
 import importlib.resources
-from typing import Type
+from typing import Type, AsyncGenerator
 
 import asyncpg
-import asyncpg_engine
 import pytest
+import pytest_asyncio
+
 import testing.postgresql
 
-from janitor.state import init_types
+from janitor.state import create_pool
 
-pytest_plugins = ["asyncpg_engine", "aiohttp"]
+pytest_plugins = ["aiohttp"]
 
 
-@pytest.fixture()
-async def postgres_url():
+@pytest_asyncio.fixture()
+async def db():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
         try:
@@ -22,20 +23,19 @@ async def postgres_url():
                 await conn.execute(f.read())
         finally:
             await conn.close()
-        yield postgresql.url()
+
+        db = await create_pool(postgresql.url())
+
+        yield db
+
+        await db.close()
 
 
-class JanitorEngine(asyncpg_engine.Engine):
-
-    @staticmethod
-    async def _set_codecs(con: asyncpg.Connection) -> None:
-        await init_types(con)
-
-
-@pytest.fixture()
-def asyncpg_engine_cls() -> Type[JanitorEngine]:
-    return JanitorEngine
+@pytest_asyncio.fixture()
+async def con(db: asyncpg.Pool) -> AsyncGenerator[asyncpg.Connection, None]:
+    async with db.acquire() as con:
+        yield con
 
 
-async def test_returns_janitor_engine(db: JanitorEngine) -> None:
-    assert isinstance(db, JanitorEngine)
+async def test_returns_janitor_engine(db) -> None:
+    assert isinstance(db, asyncpg.Pool)
