@@ -1,8 +1,9 @@
-janitor (0.1.0+git20230222.1.a3679b0-1) UNRELEASED; urgency=low
+janitor (0.1.0+git20230225.0.fa36134-1) UNRELEASED; urgency=low
 
   * New upstream snapshot.
+  * New upstream snapshot.
 
- -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 25 Feb 2023 15:37:16 -0000
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 25 Feb 2023 19:09:23 -0000
 
 janitor (0.1~git20220702-1) experimental; urgency=low
 
