@@ -19,10 +19,10 @@
 
 import logging
 import os
-from typing import Optional
 import uuid
+from typing import Optional
 
-from aiohttp import web, ClientSession
+from aiohttp import web
 from yarl import URL
 
 
@@ -31,14 +31,9 @@ async def openid_middleware(request, handler):
     session_id = request.cookies.get("session_id")
     if session_id is not None:
         async with request.app.database.acquire() as conn:
-            row = await conn.fetchrow(
+            userinfo = await conn.fetchval(
                 "SELECT userinfo FROM site_session WHERE id = $1",
                 session_id)
-            if row is not None:
-                (userinfo,) = row
-            else:
-                # Session expired?
-                userinfo = None
     else:
         userinfo = None
     request['user'] = userinfo
@@ -64,15 +59,14 @@ async def handle_oauth_callback(request):
         "grant_type": "authorization_code",
         "redirect_uri": str(redirect_uri),
     }
-    async with ClientSession() as session, session.post(
+    async with request.app['http_client_session'].post(
         token_url, params=params
     ) as resp:
         if resp.status != 200:
             return web.json_response(
                 status=resp.status, data={
                     "error": "token-error",
-                    "message": "received response %d" % resp.status,
-                    })
+                    "message": "received response %d" % resp.status})
         resp = await resp.json()
         if resp["token_type"] != "Bearer":
             return web.Response(
@@ -87,21 +81,16 @@ async def handle_oauth_callback(request):
     except KeyError:
         back_url = "/"
 
-    async with request.app.http_client_session.get(
+    async with request.app['http_client_session'].get(
         request.app['openid_config']["userinfo_endpoint"],
         headers={"Authorization": "Bearer %s" % access_token},
+        raise_for_status=True
     ) as resp:
-        if resp.status != 200:
-            raise Exception(
-                "unable to get user info (%s): %s"
-                % (resp.status, await resp.read())
-            )
         userinfo = await resp.json()
     session_id = str(uuid.uuid4())
     async with request.app.database.acquire() as conn:
         await conn.execute("""
 INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
-ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
 """, session_id, userinfo)
 
     # TODO(jelmer): Store access token / refresh token?
@@ -118,7 +107,7 @@ async def discover_openid_config(app, oauth2_provider_base_url):
     url = URL(oauth2_provider_base_url).join(
         URL("/.well-known/openid-configuration")
     )
-    async with ClientSession() as session, session.get(url) as resp:
+    async with app['http_client_session'].get(url) as resp:
         if resp.status != 200:
             # TODO(jelmer): Fail? Set flag?
             logging.warning(
@@ -140,7 +129,7 @@ async def handle_login(request):
             "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
             "redirect_uri": str(request.app['external_url'].join(callback_path)),
             "response_type": "code",
-            "scope": "openid",
+            "scope": "openid email profile",
             "state": state,
         }
     )
@@ -151,9 +140,9 @@ async def handle_login(request):
     if "url" in request.query:
         try:
             response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
-        except ValueError:
+        except ValueError as e:
             # 'url' is not a URL
-            raise web.HTTPBadRequest(text='invalid url')
+            raise web.HTTPBadRequest(text='invalid url') from e
     return response
 
 

@@ -1,15 +1,21 @@
-{% macro package_input(name) %}
-<input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
-
-<script>
-$.typeahead({
-  input: "#sidebar-package",
-  order: "asc",
-  source: {
-    packages: {
-      ajax: { url: '/api/pkgnames', path: '' },
-    }
-  }
-});
-</script>
+{% macro codebase_input(name) %}
+    <input id="sidebar-codebase"
+           type="text"
+           name="codebase"
+           class="typeahead"
+           placeholder="Codebase"/>
+    <script>
+        $.typeahead({
+            input: "#sidebar-codebase",
+            order: "asc",
+            source: {
+                codebases: {
+                    ajax: {
+                        url: '/api/pkgnames',
+                        path: ''
+                    },
+                }
+            }
+        });
+    </script>
 {% endmacro %}

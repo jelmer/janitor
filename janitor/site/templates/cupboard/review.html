@@ -1,173 +1,185 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
-{% block page_title %}Review{% endblock %}
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock sidebar %}
+{% block page_title %}
+    Review
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="review">
-<h1>Review</h1>
+    <div class="section" id="review">
+        <h1>Review</h1>
+        <p>
+            <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/"
+               id="full-run-link">Full Run</a>
+            {% if review_instructions_url %}
+            <a href="{{ review_instructions_url }}">Review Instructions</a>
+            {% endif %}
+        </p>
+        <div id="evaluate">{{ evaluate|safe }}</div>
+        <script type="text/javascript">
 
-<div class="score">Score: <span id="score">{{ value }}</div></div>
-<div class="command">Command: <span id="command">{{ command }}</div></div>
-
-{% for role, remote_branch_name, base_revision, revision in branches %}
-<div class="branch" id='branch-{{ role }}'>
-<h2>{{ role }}</h2>
-<div class="revisions" id="revisions-{{ role }}">
-<ul>
-{% for rev in get_revision_info(role) %}
-<li>{% if rev['link'] %}<a href="{{ rev['link'] }}">{% endif %}{{ rev['revision-id'] }}{% if rev['link'] %}</a>{% endif %}: <pre>{{ rev['message'] }}</pre></li>
-{% endfor %}
-</ul>
-</div>
-<div class="diff" id='diff-{{ role }}'>{{highlight_diff(show_diff(role))|safe}}</div>
-</div>
-{% endfor %}
-
-<div id='debdiff'>
-{{show_debdiff()|safe}}
-</div>
-
-<script type="text/javascript">
-function loadRun(package, command, run_id, roles, value) {
-    $('.review-button').blur()
-    $('.review-button').disabled = "disabled";
-    $('.branch').remove();
-    var deferreds = [];
-    roles.forEach(function(role) {
-      var diff_url = '/api/run/' + run_id + '/diff?role=' + role;
-      $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2>' +
-        '<div class="revisions" id="revisions-' + role + '">Loading revisions...</div>' +
-        '<div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div>' +
-        '</div>').insertBefore('#debdiff');
-      deferreds.push($('#diff-' + role).load(diff_url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
-           if (req.status == 413) {
-                 $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + diff_url + '">' + url + '</a></p>');
-           }
-      }));
-      var revisions_url = '/api/run/' + run_id + '/revision-info?role=' + role;
-      $.getJSON(revisions_url, function(data) {
-          var items = [];
-          data.forEach(function(rev) {
-            items.push("<li>");
-            if (rev['link']) {
-                items.push("<a href=" + rev['link'] + ">" + rev['revision-id'] + "</a>");
-            } else {
-                items.push(rev['revision-id']);
+            function disallowReview() {
+                $('.review-button').blur();
+                $('.review-button').disabled = "disabled";
             }
-            items.push(": <pre>" + rev['message'] + "</pre></li>");
-          });
-          $('#revisions-' + role).html("<ul>" + items.join("") + "</ul>");
-      });
-    });
-    deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
-          undefined,
-          function(responseText, textStatus, req) {
-               if (req.status == 404) {
-                    $('#debdiff').html('<p>No debdiff generated</p>');
-               }
-    }));
-    $.when.apply($, deferreds).done(function() {
-      $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
-      $('#run-id').attr('value', run_id);
-      $('#score').text(value);
-      $('#command').text(command);
-      $('#package-name').attr('value', package);
-      $('.review-button').disabled = "enabled";
-   });
-}
 
-var todo = {{ todo[1:]|tojson }};
-var queued = new Set();
-todo.forEach(function(entry) { queued.add(entry[1]); });
+            function allowReview(codebase, run_id) {
+                $('#full-run-link').attr('href', "/cupboard/c/" + codebase + "/" + run_id);
+                $('#run-id').attr('value', run_id);
+                $('#codebase').attr('value', codebase);
+                $('.review-button').disabled = "enabled";
+            }
 
-$(function() {
-  $('.review-button').attr('type', 'button');
-});
-
-function loadNewJob() {
-  if ((newJob = todo.shift()) !== undefined) {
-    loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value);
-  } else {
-{% if not publishable_only %}
-    $('.branch').replaceWith('All done!');
-{% else %}
-    $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
-{% endif %}
-    $('#debdiff').replaceWith('');
-    $('#options').remove();
-    $('#full-run-link').remove();
-    $('#score').remove();
-    $('#command').remove();
-  }
-}
-
-function refreshData(cb) {
-  console.log("Updating backlog of todo items");
-  $.ajax({
-     url: '/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true' if publishable_only else 'false' }}',
-     dataType: 'json',
-     success: function(data) {
-         data.forEach(function(entry) {
-             if (!queued.has(entry[1])) {
-                 todo.push(entry);
-                 queued.add(entry[1]);
-             }
-         });
-         cb();
-     }
-  });
-}
-
-function submitReview(elem, status) {
-    var comment = undefined;
-    if (status == 'rejected') {
-        comment = window.prompt('Please specify a comment for the rejection');
-    }
-    var run_id = $('#run-id').val();
-    var package = $('#package-name').val();
-    console.log("Submitting review " + status + " for run " + package + "/" + run_id);
-    $.ajax('/api/run/' + run_id, {
-       type: "POST",
-       data: {'review-status': status, 'review-comment': comment},
-       statusCode: {
-            401: function() {
-{% if user %}
-                    alert('failed to submit review: not authorized');
-{% else %}
-                    window.location.replace("/login?url=" + encodeURI(window.location.href));
-{% endif %}
-            },
-            200: function() {
-                if (todo.length == 0) {
-                    refreshData(loadNewJob);
+            function loadRun(codebase, run_id) {
+                disallowReview();
+                if (run_id in preloaded) {
+                    $('#evaluate').html(preloaded[run_id]);
+                    delete preloaded[run_id];
+                    allowReview(codebase, run_id);
                 } else {
-                    loadNewJob();
+                    $('#evaluate').load("{{ evaluate_url }}".replace('RUN_ID', run_id), function() { allowReview(codebase, run_id); });
+                }
+                preloadSome();
+            }
+
+            function preload(codebase, run_id) {
+                if (run_id in preloaded) {
+                    return;
+                }
+                $.ajax({
+                    url : "{{ evaluate_url }}".replace('RUN_ID', run_id),
+                    success : function(result) { preloaded[run_id] = result; }
+                });
+            }
+
+            function preloadSome() {
+                for (i in todo.slice(0, 20)) {
+                    preload(todo[i].codebase, todo[i].id);
                 }
             }
-       }
-    });
 
-}
-</script>
+            var preloaded = {};
+            var todo = {{ todo[1: ] | tojson }};
+            var queued = new Set();
+            todo.forEach(function(entry) {
+                queued.add(entry[1]);
+            });
 
+            preloadSome();
 
-<form action="/cupboard/review" method="POST" id="options">
-<input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
-<input type="hidden" name="package-name" id='package-name' value="{{ package_name }}"/>
-{% if suites %}
-{% for s in suites %}
-<input type="hidden" name="suites[]" value="{{ s }}"/>
-{% endfor %}
-{% endif %}
-<input class='review-button' type="submit" name="review_status" value="Approve" accesskey="a" onclick="submitReview(this, 'approved')">
-<input class='review-button' type="submit" name="review_status" value="Reject" accesskey="r" onclick="submitReview(this, 'rejected')">
-<input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this, 'reschedule')">
-<input class='review-button' type="submit" name="review_status" value="Abstain" accesskey="n" onclick="submitReview(this, 'abstained')">
+            $(function() {
+                $('.review-button').attr('type', 'button');
+            });
 
-<input type="checkbox" value="true" name="publishable_only" id="publishable-only"{% if publishable_only %} checked{% endif %} onchange="$('#options').submit()"/>
-<label for="publishable_only">Publishable only</label>
-</form>
+            function loadNewJob() {
+                if ((newJob = todo.shift()) !== undefined) {
+                    loadRun(newJob.codebase, newJob.id);
+                } else {
+                    {% if not publishable_only %}
+                        $('.branch').replaceWith('All done!');
+                    {% else %}
+                        $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
+                    {% endif %}
+                    $('#evaluate').replaceWith('');
+                    $('#options').remove();
+                    $('#full-run-link').remove();
+                }
+            }
 
-<p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>
+            function refreshData(cb) {
+                console.log("Updating backlog of todo items");
+                $.ajax({
+			url: '/cupboard/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only={{ 'true' if required_only else 'false' }}&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
+                    dataType: 'json',
+                    success: function(data) {
+                        data.forEach(function(entry) {
+                            if (!queued.has(entry[1])) {
+                                todo.push(entry);
+                                queued.add(entry[1]);
+                            }
+                        });
+                        cb();
+                    }
+                });
+            }
 
-</div>
-{% endblock %}
+            function submitReview(elem, verdict) {
+                var comment = undefined;
+                if (verdict == 'rejected') {
+                    comment = window.prompt('Please specify a comment for the rejection');
+                }
+                var run_id = $('#run-id').val();
+                var codebase = $('#codebase').val();
+                console.log("Submitting review " + verdict + " for run " + codebase + "/" + run_id);
+                disallowReview();
+                $.ajax('/api/run/' + run_id, {
+                    type: "POST",
+                    data: {
+                        'verdict': verdict,
+                        'review-comment': comment
+                    },
+                    statusCode: {
+                       401: function() {
+                       {% if user %}
+                           alert('failed to submit review: not authorized');
+                       {% else %}
+                           window.location.replace("/login?url=" + encodeURI(window.location.href));
+                       {% endif %}
+                       },
+                       200: function() {
+                           if (todo.length == 0) {
+                                refreshData(loadNewJob);
+                           } else {
+                                loadNewJob();
+                           }
+                       },
+                       500: function(response) {
+			   alert('500 error submitting review: ' + response.responseText);
+		       }
+                    }
+                });
+            }
+        </script>
+        <form action="/cupboard/review" method="post" id="options">
+            <input type="hidden" name="run_id" id="run-id" value="{{ run_id }}"/>
+            <input type="hidden"
+                   name="codebase"
+                   id="codebase"
+                   value="{{ codebase }}"/>
+            {% if suites %}
+                {% for s in suites %}<input type="hidden" name="suites[]" value="{{ s }}"/>{% endfor %}
+            {% endif %}
+            <input class="review-button"
+                   type="submit"
+                   name="verdict"
+                   value="Approve"
+                   accesskey="a"
+                   onclick="submitReview(this, 'approved')"/>
+            <input class="review-button"
+                   type="submit"
+                   name="verdict"
+                   value="Reject"
+                   accesskey="r"
+                   onclick="submitReview(this, 'rejected')"/>
+            <input class="review-button"
+                   type="submit"
+                   name="verdict"
+                   value="Reschedule"
+                   accesskey="s"
+                   onclick="submitReview(this, 'reschedule')"/>
+            <input class="review-button"
+                   type="submit"
+                   name="verdict"
+                   value="Abstain"
+                   accesskey="n"
+                   onclick="submitReview(this, 'abstained')"/>
+            <input type="checkbox"
+                   value="true"
+                   name="publishable_only"
+                   id="publishable-only"
+                   {% if publishable_only %} checked{% endif %}
+                   onchange="$('#options').submit()"/>
+            <label for="publishable_only">Publishable only</label>
+        </form>
+    </div>
+{% endblock body %}

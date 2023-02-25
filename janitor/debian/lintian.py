@@ -15,27 +15,29 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import subprocess
 import json
-import os
 import logging
-
+import os
+import subprocess
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def run_lintian(output_directory, changes_names, profile=None, suppress_tags=None):
+def run_lintian(output_directory: str, changes_names: list[str],
+                profile: Optional[str] = None,
+                suppress_tags: Optional[list[str]] = None):
     logger.info('Running lintian')
     args = ['--exp-output=format=json', '--allow-root']
     if suppress_tags:
-        args.append('--suppress-tags=' + suppress_tags)
+        args.append('--suppress-tags=' + ','.join(suppress_tags))
     if profile:
         args.append('--profile=%s' % profile)
     try:
         lintian_output = subprocess.check_output(
-            ['lintian'] + args +
-            [os.path.join(output_directory, changes_name)
-             for changes_name in changes_names])
+            ['lintian'] + args
+            + changes_names,
+            cwd=output_directory)
     except subprocess.CalledProcessError:
         logger.warning('lintian failed to run.')
         return None

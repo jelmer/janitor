@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from typing import Optional
+from typing import Dict, List, Optional
 
 import asyncpg
 
@@ -11,7 +11,7 @@ async def get_proposals_with_run(
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    run.package AS package,
+    run.codebase AS codebase,
     run.suite AS suite,
     merge_proposal.url AS url,
     merge_proposal.status AS status
@@ -34,7 +34,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
 
 async def write_merge_proposals(db, suite):
     async with db.acquire() as conn:
-        proposals_by_status = {}
+        proposals_by_status: Dict[str, List[asyncpg.Record]] = {}
         for row in await get_proposals_with_run(conn, suite=suite):
             proposals_by_status.setdefault(row['status'], []).append(row)
 
@@ -43,6 +43,7 @@ async def write_merge_proposals(db, suite):
     )
     return {
         "suite": suite,
+        "campaign": suite,
         "open_proposals": proposals_by_status.get("open", []),
         "merged_proposals": merged,
         "closed_proposals": proposals_by_status.get("closed", []),
@@ -54,12 +55,14 @@ async def write_merge_proposals(db, suite):
 async def get_proposal_with_run(conn: asyncpg.Connection, url: str):
     query = """
 SELECT
-    run.package AS package,
+    run.codebase AS codebase,
     run.suite AS suite,
     merge_proposal.url AS url,
     merge_proposal.status AS status,
     merge_proposal.merged_at AS merged_at,
-    merge_proposal.merged_by AS merged_by
+    merge_proposal.merged_by AS merged_by,
+    merge_proposal.last_scanned AS last_scanned,
+    merge_proposal.can_be_merged AS can_be_merged
 FROM
     merge_proposal
 LEFT JOIN new_result_branch ON new_result_branch.revision = merge_proposal.revision

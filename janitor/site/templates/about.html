@@ -1,53 +1,43 @@
 {% extends "layout.html" %}
-{% block page_title %}About{% endblock %}
+{% block page_title %}
+    About
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="about">
-<h1>About</h1>
-<p>The initial version of the Debian Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.</p>
-
-<p>Many thanks to everybody who has provided feedback and helped make the Janitor better. </p>
-
-<h2>Software Used</h2>
-
-<p>This project would not have been possible without several large efforts and projects across Debian:</p>
-
-<ul>
-<li><a class="reference external" href="https://www.debian.org/doc/debian-policy/ch-controlfields.html#version-control-system-vcs-fields">Vcs Headers</a> allow the finding the version control repositories.</li>
-<li><a class="reference external" href="https://qa.debian.org/cgi-bin/vcswatch">VcsWatch</a> provides current information about the vcs location and status of packaging branches.</li>
-<li>The migration from Alioth to <a class="reference external" href="https://salsa.debian.org/">Salsa</a> means that it's now possible to submit merge proposals for the vast majority of Debian packages.</li>
-<li><a class="reference external" href="https://lintian.debian.org/">Lintian</a> and its archive-wide run make it possible to process packages with specific issues, without having to download the full archive.</li>
-<li><a class="reference external" href="https://wiki.debian.org/UpstreamMetadata">UpstreamMetadata</a> allows easily finding upstream repository locations.</li>
-<li><a class="reference external" href="https://wiki.debian.org/UScan">UScan</a> allows easily finding new upstream releases.</li>
-<li><a class="reference external" href="https://wiki.debian.org/UltimateDebianDatabase/">UDD</a> makes it possible to find package VCS URLs, packages with new upstream releases and lintian results easily.</li>
-<li><a class="reference external" href="https://ci.debian.net/">CI</a> and <a href="https://salsa.debian.org/ci-team/autopkgtest/raw/master/doc/README.package-tests.rst">autopkgtest</a> allow automated testing to ensure that built packages actually work.</li>
-<li><a class="reference external" href="https://jenkins.debian.net/job/janitor-worker">jenkins.debian.net</a> hosts the workers.</li>
-</ul>
-
-<h2>Source Code</h2>
-
-<p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
-
-<ul>
-    <li><a href="https://salsa.debian.org/python-debian-team/python-debian">python-debian</a> for parsing of Debian-related files</li>
-    <li>The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.</li>
-    <li><a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
- provides abstractions over the version control system (Git, Bazaar,
-Mercurial, Subversion) and the supported hosting platforms (GitHub,
-GitLab, Launchpad).</li>
-    <li><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a> is responsible for actually making changes to the packages.</li>
-    <li><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
- ties this all together; it trawls UDD to find packages that are
-affected by lintian tags that lintian-brush knows how to fix, clones the
- packaging branches, invokes lintian-brush and pushes back or creates
-merge proposals.</li>
-    <li><a class="reference external" href="https://www.diffoscope.org/">Diffoscope</a> is used to show the diff between binary packages.</a></li>
-</ul>
-
-<p>The source code is hosted <a href="https://github.com/jelmer/janitor">on GitHub</a>.</p>
-
-<h2>Bugs</h2>
-
-<p>Please report bugs in the <a href="https://github.com/jelmer/janitor/issues/new">bug tracker</a>.</p>
-
+    <div class="section" id="about">
+        <h1>About</h1>
+        <p>
+            The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.
+        </p>
+        <p>
+            The code for the Debian-specific instance has now been split out into a <a href="https://salsa.debian.org/janitor-team/janitor.debian.net/">separate
+        repository</a>.
+    </p>
+    <p>Many thanks to everybody who has provided feedback and helped make the Janitor better.</p>
+    <h2>Source Code</h2>
+    <p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
+    <ul>
+        <li>
+            The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.
+        </li>
+        <li>
+            <a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
+            provides abstractions over the version control system (Git, Bazaar,
+            Mercurial, Subversion) and the supported hosting platforms (GitHub,
+            GitLab, Launchpad).
+        </li>
+        <li>
+            <a class="reference external"
+               href="https://github.com/jelmer/silver-platter/">Silver-Platter</a>
+            ties this all together; it manages branches, invokes codemods and pushes back or creates
+            merge proposals.
+        </li>
+    </ul>
+    <p>
+        The source code is hosted <a href="https://github.com/jelmer/janitor">on GitHub</a>.
+    </p>
+    <h2>Bugs</h2>
+    <p>
+        Please report bugs in the <a href="https://github.com/jelmer/janitor/issues/new">bug tracker</a>.
+    </p>
 </div>
-{% endblock %}
+{% endblock body %}

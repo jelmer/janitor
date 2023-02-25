@@ -7,11 +7,12 @@ message Distribution {
 
   optional string archive_mirror_uri = 2;
 
-  // This should eventually be distribution-specific
-  optional string tracker_url = 3;
+  optional string signed_by = 11;
 
   // Chroot name to use in sbuild
   optional string chroot = 5;
+
+  repeated string chroot_alias = 12;
 
   repeated string component = 4;
 
@@ -27,14 +28,9 @@ message Distribution {
 }
 
 message Config {
-  // Location at which to store VCS repositories.
-  optional string vcs_location = 1 [deprecated=true];
-
   // Location to store logs. Can either be a filesystem path or a http
   // location, for use with GCS or S3.
   optional string logs_location = 2;
-
-  optional string apt_location = 3;
 
   // postgresql URL for database connection
   optional string database_location = 4;
@@ -52,12 +48,26 @@ message Config {
   // Location to store build results
   optional string artifact_location = 10;
 
-  optional string instance_name = 11;
-
   // Location for zipkin server
   optional string zipkin_address = 12;
 
   repeated Campaign campaign = 13;
+
+  // Location of git storage
+  optional string git_location = 14;
+
+  // Location of bzr storage
+  optional string bzr_location = 15;
+
+  // Location of the redis server
+  optional string redis_location = 16;
+
+  // User agent string
+  optional string user_agent = 18;
+
+  repeated BugTracker bugtracker = 17;
+
+  repeated AptRepository apt_repository = 19;
 }
 
 message Env {
@@ -75,24 +85,6 @@ message MergeProposalConfig {
    repeated string label = 4;
 };
 
-message Suite {
-  // Name of the suite. E.g. "lintian-fixes"
-  optional string name = 1;
-
-  // VCS branch name to use
-  optional string branch_name = 2;
-
-  optional MergeProposalConfig merge_proposal = 5;
-
-  // Force building even if the command did not make any changes.
-  optional bool force_build = 6 [default=false];
-
-  oneof build {
-    DebianBuild debian_build = 3;
-    GenericBuild generic_build = 4;
-  }
-}
-
 message Campaign {
   // Name of the campaign. E.g. "lintian-fixes"
   optional string name = 1;
@@ -105,14 +97,19 @@ message Campaign {
   // Force building even if the command did not make any changes.
   optional bool force_build = 6 [default=false];
 
+  optional bool skip_setup_validation = 10 [default=false];
+
+  optional bool default_empty = 11 [default=false];
+
   oneof build {
     DebianBuild debian_build = 3;
     GenericBuild generic_build = 4;
   }
 
-  // Does this campaign fix issues based on the repository contents
-  // or some external source?
-  optional bool webhook_trigger = 7 [default=false];
+  repeated BugTracker bugtracker = 8;
+
+  // Default command, can be overridden on a per-package basis
+  optional string command = 9;
 }
 
 message GenericBuild {
@@ -123,16 +120,10 @@ message DebianBuild {
   // Extra distributions to pull in packages from when building
   repeated string extra_build_distribution = 1;
 
-  // Sbuild environment override
-  repeated Env sbuild_env = 2;
-
   optional string base_distribution = 3;
 
   // Optional chroot, if different from that of base_distribution
   optional string chroot = 4;
-
-  // Human-readable description of the archive. Used in e.g. apt Release file.
-  optional string archive_description = 5;
 
   // Distribution to target when building
   optional string build_distribution = 6;
@@ -157,4 +148,32 @@ message OAuth2Provider {
 
   // Name of the OpenID group for admins
   optional string admin_group = 5;
+};
+
+enum BugTrackerKind {
+   gitlab = 1;
+   debian = 2;
+   github = 3;
+};
+
+message BugTracker {
+   optional BugTrackerKind kind = 1;
+
+   // URL to the project in the bugtracker
+   optional string url = 2;
+
+   optional string name = 3;
+};
+
+message Select {
+    optional string campaign = 1;
+};
+
+message AptRepository {
+    optional string name = 1;
+    optional string base = 3;
+    repeated Select select = 2;
+
+    // Human-readable description of the archive. Used in e.g. apt Release file.
+    optional string description = 5;
 };

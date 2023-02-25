@@ -1,5 +1,0 @@
-FROM ghcr.io/jelmer/janitor/base:latest
-MAINTAINER Jelmer Vernooij <jelmer@debian.org>
-EXPOSE 9919
-RUN apt update && apt -y install python3-mastodon
-ENTRYPOINT ["python3", "/code/notifiers/mastodon_notify.py", "--prometheus-port=9919", "--prometheus-listen-address=0.0.0.0"]

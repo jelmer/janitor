@@ -1,52 +1,93 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-{% if not suite %}
-{% include "cupboard/sidebar.html" %}
-{% else %}
-{% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
-{% endif %}
-{% endblock %}
+    {% if not suite %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
+    {% endif %}
+{% endblock sidebar %}
 {% from "run_util.html" import display_publish_result_code %}
-{% block page_title %}Merge Proposal Status - {{ proposal.url }}{% endblock %}
+{% block page_title %}
+    Merge Proposal Status - {{ proposal.url }}
+{% endblock page_title %}
 {% block body %}
-<div class="section" id="merge-proposal-status">
-<h1>Merge Proposal Status</h1>
-
-<ul>
-	<li>URL: <a href="{{ proposal.url }}">{{ proposal.url }}</a></li>
-{% if proposal.package %}
-<li>Package: <a href="/cupboard/pkg/{{ proposal.package }}">{{ proposal.package }}</a></li>
-{% endif %}
-<li>Status:
-{% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
-<select id="status" name='status' onchange="submit_status(this.value)">
-  <option value="closed"{% if proposal.status == 'closed' %} selected="true"{% endif %}>Closed</option>
-  <option value="abandoned"{% if proposal.status == 'abandoned' %} selected="true"{% endif %}>Abandoned</option>
-  <option value="rejected"{% if proposal.status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
-  <option value="applied"{% if proposal.status == 'applied' %} selected="true"{% endif %}>Applied</option>
-</select>
-<script>
-function submit_status(status) {
-console.log("Changing of merge proposal {{ proposal.url }} to " + status);
-$.post('/api/merge-proposal', {'status': status, 'url': {{ proposal.url|tojson }}});
-}
-</script>
-{% elif proposal.status == 'merged' %}
-Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{% endif %}{% if proposal.merged_by %} by {{ proposal.merged_by }}{% endif %}
-{% else %}
-{{ proposal.status }}
-{% endif %}
-</li>
-{% if proposal.suite %}
-<li><a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Run Details</a></li>
-{% endif %}
-
-<h2>State changes</h2>
-
-<ul>
-	{% for publish in publishes %}
-	<li>{{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}: {% if '\n' in publish.description %}<pre>{{ publish.description }}</pre>{% else %}{{ publish.description }}{% endif %}</li>
-	{% endfor %}
-</ul>
-
-{% endblock %}
+    <div class="section" id="merge-proposal-status">
+        <h1>Merge Proposal Status</h1>
+        <ul>
+            <li>
+                URL: <a href="{{ proposal.url }}">{{ proposal.url }}</a>
+            </li>
+            {% if proposal.codebase %}
+                <li>
+                    Codebase: <a href="/cupboard/c/{{ proposal.codebase }}/">{{ proposal.codebase }}</a>
+                </li>
+            {% endif %}
+            {% if proposal.can_be_merged is not none %}
+                {% if proposal.can_be_merged %}
+                    <li>Can be merged</li>
+                {% else %}
+                    <li>Can not be merged</li>
+                {% endif %}
+            {% endif %}
+            {% if proposal.last_scanned %}
+                <li>Last scanned: {{ format_timestamp(proposal.last_scanned) }}</li>
+            {% endif %}
+            <li>
+                Status:
+                {% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
+                    <select id="status" name='status' onchange="submit_status(this.value)">
+                        <option value="closed"
+                                {% if proposal.status == 'closed' %} selected="true"{% endif %}>
+                            Closed
+                        </option>
+                        <option value="abandoned"
+                                {% if proposal.status == 'abandoned' %} selected="true"{% endif %}>
+                            Abandoned
+                        </option>
+                        <option value="rejected"
+                                {% if proposal.status == 'rejected' %} selected="true"{% endif %}>
+                            Rejected
+                        </option>
+                        <option value="applied"
+                                {% if proposal.status == 'applied' %} selected="true"{% endif %}>
+                            Applied
+                        </option>
+                    </select>
+                    <script>
+                        function submit_status(status) {
+                            console.log("Changing of merge proposal {{ proposal.url }} to " + status);
+                            $.post('/api/merge-proposal', {
+                                'status': status,
+                                'url': {{ proposal.url | tojson }}
+                            });
+                        }
+                    </script>
+                {% elif proposal.status == 'merged' %}
+                    Merged
+                    {% if proposal.merged_at %}at {{ format_timestamp(proposal.merged_at) }}{% endif %}
+                    {% if proposal.merged_by %}by {{ proposal.merged_by }}{% endif %}
+                {% else %}
+                    {{ proposal.status }}
+                {% endif %}
+            </li>
+            {% if proposal.suite %}
+                <li>
+                    <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}">Run Details</a>
+                </li>
+            {% endif %}
+        </ul>
+        <h2>State changes</h2>
+        <ul>
+            {% for publish in publishes %}
+                <li>
+                    {{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}:
+                    {% if '\n' in publish.description %}
+                        <pre>{{ publish.description }}</pre>
+                    {% else %}
+                        {{ publish.description }}<!-- {{ publish.revision }} -->
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% endblock body %}

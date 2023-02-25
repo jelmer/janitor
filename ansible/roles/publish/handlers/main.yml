@@ -1,2 +1,0 @@
-- name: restart publisher
-  service: name=janitor-publish state=restarted

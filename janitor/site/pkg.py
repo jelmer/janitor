@@ -16,41 +16,36 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+import logging
 from datetime import datetime
-from functools import partial
 from io import BytesIO
+from typing import Dict, List, Optional
 
-from typing import Optional, Tuple
-
-from aiohttp import ClientConnectorError, ClientResponseError
 import asyncpg
-
+from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
+from breezy.forge import UnsupportedForge, get_forge_by_hostname
 from breezy.revision import NULL_REVISION
+from buildlog_consultant.sbuild import (SbuildLog,
+                                        find_build_failure_description,
+                                        worker_failure_from_sbuild_log)
+from ognibuild.build import BUILD_LOG_FILENAME
+from ognibuild.dist import DIST_LOG_FILENAME
+from yarl import URL
 
-from janitor.queue import get_queue_position
 from janitor import state
-from buildlog_consultant.sbuild import (
-    SbuildLog,
-    find_build_failure_description,
-    worker_failure_from_sbuild_log,
-)
 from janitor.logs import LogRetrievalError
-from janitor.site import (
-    get_archive_diff,
-    get_vcs_diff,
-    BuildDiffUnavailable,
-    DebdiffRetrievalError,
-    tracker_url,
-)
+from janitor.queue import Queue
+from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
+                          get_archive_diff)
 
-from .common import iter_candidates, get_unchanged_run
 from ..config import get_campaign_config
+from ..vcs import VcsManager
+from .common import get_unchanged_run
 
 FAIL_BUILD_LOG_LEN = 15
 
-BUILD_LOG_NAME = "build.log"
-WORKER_LOG_NAME = "worker.log"
-DIST_LOG_NAME = "dist.log"
+WORKER_LOG_FILENAME = "worker.log"
+CODEMOD_LOG_FILENAME = "codemod.log"
 
 
 def find_build_log_failure(logf, length):
@@ -58,13 +53,21 @@ def find_build_log_failure(logf, length):
     linecount = sbuildlog.sections[-1].offsets[1]
     failure = worker_failure_from_sbuild_log(sbuildlog)
 
-    if failure.match:
+    if failure.match and failure.section:
         abs_offset = failure.section.offsets[0] + failure.match.lineno
         include_lines = (
             max(1, abs_offset - length // 2),
             abs_offset + min(length // 2, len(failure.section.lines)),
         )
         highlight_lines = [abs_offset]
+        return (linecount, include_lines, highlight_lines)
+
+    if failure.match:
+        include_lines = (
+            max(1, failure.match.lineno - length // 2),
+            failure.match.lineno + min(length // 2, linecount),
+        )
+        highlight_lines = [failure.match.lineno]
         return (linecount, include_lines, highlight_lines)
 
     if failure.section:
@@ -81,7 +84,7 @@ def find_dist_log_failure(logf, length):
     lines = [line.decode('utf-8', 'replace') for line in logf.readlines()]
     match, unused_err = find_build_failure_description(lines)
     if match is not None:
-        highlight_lines = [match.lineno]
+        highlight_lines = getattr(match, 'linenos', None)
     else:
         highlight_lines = None
 
@@ -102,7 +105,7 @@ def in_line_boundaries(i, boundaries):
 
 async def get_publish_history(
     conn: asyncpg.Connection, revision: bytes
-) -> Tuple[str, Optional[str], str, str, str, datetime]:
+) -> asyncpg.Record:
     return await conn.fetch(
         "select mode, merge_proposal_url, description, result_code, "
         "requestor, timestamp from publish where revision = $1 "
@@ -112,9 +115,11 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, logfile_manager, run, vcs_manager, is_admin, span
+        db, client, config,
+        differ_url: Optional[str], publisher_url: Optional[str], logfile_manager, run,
+        vcs_managers: Dict[str, VcsManager], is_admin, span
 ):
-    from ..schedule import estimate_success_probability
+    from ..schedule import estimate_success_probability_and_duration
     kwargs = {}
     kwargs["run"] = run
     kwargs["run_id"] = run['id']
@@ -123,38 +128,64 @@ async def generate_run_file(
         if run['main_branch_revision']:
             with span.new_child('sql:unchanged-run'):
                 kwargs["unchanged_run"] = await get_unchanged_run(
-                    conn, run['package'], run['main_branch_revision']
+                    conn, run['codebase'],
+                    run['main_branch_revision'].encode('utf-8')
                 )
         with span.new_child('sql:queue-position'):
-            (queue_position, queue_wait_time) = await get_queue_position(
-                conn, run['suite'], run['package']
+            queue = Queue(conn)
+            (queue_position, queue_wait_time) = await queue.get_position(
+                run['suite'], run['codebase']
             )
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow(
-                'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
-                'FROM package WHERE name = $1', run['package'])
         with span.new_child('sql:publish-history'):
+            publish_history: List[asyncpg.Record]
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
                 publish_history = await get_publish_history(conn, run['revision'])
             else:
                 publish_history = []
         with span.new_child('sql:reviews'):
             kwargs['reviews'] = await conn.fetch(
-                'SELECT review_status, comment, reviewer, reviewed_at '
+                'SELECT verdict, comment, reviewer, reviewed_at '
                 'FROM review WHERE run_id = $1',
                 run['id'])
         with span.new_child('sql:success-probability'):
-            kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
-                conn, run['package'], run['suite'])
+            kwargs["success_probability"], kwargs['estimated_duration'], kwargs["total_previous_runs"] = await estimate_success_probability_and_duration(
+                conn, run['codebase'], run['suite'])
+        with span.new_child('sql:followups'):
+            kwargs['followups'] = await conn.fetch("""SELECT \
+    candidate.codebase AS codebase,
+    candidate.suite AS campaign
+FROM followup
+LEFT JOIN candidate ON candidate.id = followup.candidate
+WHERE followup.origin = $1""", run['id'])
+
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["branch_url"] = package['branch_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
+
+    async def publish_blockers():
+        if publisher_url is None:
+            return {}
+        url = URL(publisher_url) / "blockers" / run['id']
+        with span.new_child('publish-blockers'):
+            try:
+                async with client.get(url, raise_for_status=True,
+                                      timeout=ClientTimeout(30)) as resp:
+                    return await resp.json()
+            except ClientResponseError as e:
+                if e.status == 404:
+                    return {}
+                logging.warning(
+                    "Unable to retrieve publish blockers for %s: %r",
+                    run['id'], e)
+                return {}
+            except ClientConnectorError as e:
+                logging.warning(
+                    "Unable to retrieve publish blockers for %s: %r",
+                    run['id'], e)
+                return {}
+
+    kwargs["publish_blockers"] = publish_blockers
 
     async def show_diff(role):
         try:
@@ -164,12 +195,16 @@ async def generate_run_file(
             return "No branch with role %s" % role
         if base_revid == revid:
             return ""
+        if run['vcs_type'] is None:
+            return "Run not in VCS"
+        if revid is None:
+            return "Branch deleted"
         try:
             with span.new_child('vcs-diff'):
-                diff = await get_vcs_diff(
-                    client, vcs_manager, run['vcs_type'], run['package'],
+                diff = await vcs_managers[run['vcs_type']].get_diff(
+                    run['codebase'],
                     base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
-                    revid.encode('utf-8') if revid is not None else NULL_REVISION)
+                    revid.encode('utf-8'))
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
@@ -184,7 +219,7 @@ async def generate_run_file(
         if run['result_code'] != 'success':
             return ""
         unchanged_run = kwargs.get("unchanged_run")
-        if not unchanged_run or unchanged_run.result_code != 'success':
+        if not unchanged_run or unchanged_run['result_code'] != 'success':
             return ""
         try:
             with span.new_child('archive-diff'):
@@ -192,7 +227,7 @@ async def generate_run_file(
                     client,
                     differ_url,
                     run['id'],
-                    unchanged_run.id,
+                    unchanged_run['id'],
                     kind="debdiff",
                     filter_boring=True,
                     accept="text/html",
@@ -206,12 +241,12 @@ async def generate_run_file(
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
-    kwargs["campaign"] = get_campaign_config(config, run['suite'])
-    if kwargs['campaign'].HasField('debian_build'):
-        kwargs["tracker_url"] = partial(
-            tracker_url, config,
-            kwargs['campaign'].debian_build.base_distribution)
+    try:
+        kwargs["campaign"] = get_campaign_config(config, run['suite'])
+    except KeyError:
+        kwargs["campaign"] = None
     kwargs["resume_from"] = run['resume_from']
+    kwargs['codemod_result'] = run['result']
 
     def read_file(f):
         return [line.decode("utf-8", "replace") for line in f.readlines()]
@@ -224,7 +259,7 @@ async def generate_run_file(
 
     async def _get_log(name):
         try:
-            return (await logfile_manager.get_log(run['package'], run['id'], name)).read()
+            return (await logfile_manager.get_log(run['codebase'], run['id'], name)).read()
         except FileNotFoundError:
             return None
         except LogRetrievalError as e:
@@ -244,94 +279,151 @@ async def generate_run_file(
             return BytesIO(b"Log file missing.")
         return BytesIO(log)
 
-    if has_log(BUILD_LOG_NAME):
-        kwargs["build_log_name"] = BUILD_LOG_NAME
+    if has_log(BUILD_LOG_FILENAME):
+        kwargs["build_log_name"] = BUILD_LOG_FILENAME
 
-    if has_log(WORKER_LOG_NAME):
-        kwargs["worker_log_name"] = WORKER_LOG_NAME
+    if has_log(WORKER_LOG_FILENAME):
+        kwargs["worker_log_name"] = WORKER_LOG_FILENAME
 
-    if has_log(DIST_LOG_NAME):
-        kwargs["dist_log_name"] = DIST_LOG_NAME
+    if has_log(CODEMOD_LOG_FILENAME):
+        kwargs["codemod_log_name"] = CODEMOD_LOG_FILENAME
+
+    if has_log(DIST_LOG_FILENAME):
+        kwargs["dist_log_name"] = DIST_LOG_FILENAME
 
     kwargs["get_log"] = get_log
-    if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
-        kwargs["primary_log"] = "worker"
-    elif has_log(BUILD_LOG_NAME):
-        kwargs["earlier_build_log_names"] = []
-        i = 1
-        while has_log(BUILD_LOG_NAME + ".%d" % i):
-            log_name = "%s.%d" % (BUILD_LOG_NAME, i)
-            kwargs["earlier_build_log_names"].append((i, log_name))
-            i += 1
 
-        logf = await get_log(BUILD_LOG_NAME)
-        line_count, include_lines, highlight_lines = find_build_log_failure(
-            logf, FAIL_BUILD_LOG_LEN
-        )
-        kwargs["build_log_line_count"] = line_count
-        kwargs["build_log_include_lines"] = include_lines
-        kwargs["build_log_highlight_lines"] = highlight_lines
-        kwargs["primary_log"] = "build"
-    elif has_log(DIST_LOG_NAME) and run['result_code'].startswith('dist-'):
-        kwargs["primary_log"] = "dist"
-        logf = await get_log(DIST_LOG_NAME)
+    if run.get('failure_stage'):
+        if run['failure_stage'] == 'codemod/dist':
+            primary_log = "dist"
+        if run['failure_stage'].split('/')[0] == 'codemod':
+            primary_log = "codemod"
+        elif run['failure_stage'].split('/')[0] == 'build':
+            primary_log = "build"
+        else:
+            primary_log = "worker"
+    else:
+        # Legacy runs
+        if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
+            primary_log = "worker"
+        elif has_log(BUILD_LOG_FILENAME):
+            primary_log = "build"
+        elif has_log(DIST_LOG_FILENAME) and run['result_code'].startswith('dist-'):
+            primary_log = "dist"
+        elif has_log(WORKER_LOG_FILENAME):
+            primary_log = "worker"
+        else:
+            primary_log = None
+
+    if primary_log == "dist":
+        logf = await get_log(DIST_LOG_FILENAME)
         line_count, include_lines, highlight_lines = find_dist_log_failure(
             logf, FAIL_BUILD_LOG_LEN
         )
         kwargs["dist_log_line_count"] = line_count
         kwargs["dist_log_include_lines"] = include_lines
         kwargs["dist_log_highlight_lines"] = highlight_lines
-    elif has_log(WORKER_LOG_NAME):
-        kwargs["primary_log"] = "worker"
+    elif primary_log == "build":
+        kwargs["earlier_build_log_names"] = []
+        i = 1
+        while has_log(BUILD_LOG_FILENAME + ".%d" % i):
+            log_name = "%s.%d" % (BUILD_LOG_FILENAME, i)
+            kwargs["earlier_build_log_names"].append((i, log_name))
+            i += 1
+
+        logf = await get_log(BUILD_LOG_FILENAME)
+        line_count, include_lines, highlight_lines = find_build_log_failure(
+            logf, FAIL_BUILD_LOG_LEN
+        )
+        kwargs["build_log_line_count"] = line_count
+        kwargs["build_log_include_lines"] = include_lines
+        kwargs["build_log_highlight_lines"] = highlight_lines
+
+    kwargs["primary_log"] = primary_log
 
     return kwargs
 
 
-async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
-    kwargs = {}
-    kwargs["package"] = package['name']
-    kwargs["vcswatch_status"] = package['vcswatch_status']
-    kwargs["maintainer_email"] = package['maintainer_email']
-    kwargs["vcs_type"] = package['vcs_type']
-    kwargs["vcs_url"] = package['vcs_url']
-    kwargs["vcs_browse"] = package['vcs_browse']
-    kwargs["branch_url"] = package['branch_url']
-    kwargs["merge_proposals"] = merge_proposals
-    kwargs["runs"] = runs
-    kwargs["removed"] = package['removed']
-    kwargs["distributions"] = config.distribution
-    kwargs["tracker_url"] = partial(tracker_url, config)
-    kwargs["available_suites"] = available_suites
+async def generate_done_list(
+        db, campaign: Optional[str], since: Optional[datetime] = None):
+
     async with db.acquire() as conn:
-        with span.new_child('sql:candidates'):
-            kwargs["candidates"] = {
-                row['suite']: (row['context'], row['value'], row['success_chance'])
-                for row in await iter_candidates(conn, packages=[package['name']])
-            }
-    return kwargs
+        oldest = await conn.fetchval(
+            "SELECT MIN(absorbed_at) FROM absorbed_runs WHERE campaign = $1",
+            campaign)
+
+        if since:
+            orig_runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs "
+                "WHERE absorbed_at >= $1 AND campaign = $2 "
+                "ORDER BY absorbed_at DESC NULLS LAST", since, campaign)
+        else:
+            orig_runs = await conn.fetch(
+                "SELECT * FROM absorbed_runs WHERE campaign = $1 "
+                "ORDER BY absorbed_at DESC NULLS LAST", campaign)
+
+    mp_user_url_resolver = MergeProposalUserUrlResolver()
+
+    runs = []
+    for orig_run in orig_runs:
+        run = dict(orig_run)
+        if not run['merged_by']:
+            run['merged_by_url'] = None
+        else:
+            run['merged_by_url'] = mp_user_url_resolver.resolve(
+                run['merge_proposal_url'], run['merged_by'])
+        runs.append(run)
+
+    return {
+        "oldest": oldest, "runs": runs, "campaign": campaign,
+        "since": since}
+
+
+class MergeProposalUserUrlResolver(object):
+
+    def __init__(self):
+        self._forges = {}
+
+    def resolve(self, url, user):
+        hostname = URL(url).host
+        if hostname is None:
+            return None
+        if hostname not in self._forges:
+            try:
+                self._forges[hostname] = get_forge_by_hostname(hostname)
+            except UnsupportedForge:
+                self._forges[hostname] = None
+        if self._forges[hostname]:
+            return self._forges[hostname].get_user_url(user)
+        else:
+            return None
 
 
 async def generate_ready_list(
-    db, suite: Optional[str], review_status: Optional[str] = None
+    db, suite: Optional[str], publish_status: Optional[str] = None
 ):
     async with db.acquire() as conn:
-        query = 'SELECT package, suite, id, command, result FROM publish_ready'
+        query = 'SELECT codebase, suite, id, command, result FROM publish_ready'
 
         conditions = [
-            "EXISTS (SELECT * FROM unnest(unpublished_branches) "
+            "EXISTS (SELECT * FROM unnest(unpublished_branches) upb "
             "WHERE mode in "
-            "('propose', 'attempt-push', 'push-derived', 'push'))"]
+            "('propose', 'attempt-push', 'push-derived', 'push') "
+            "AND NOT EXISTS "
+            "(SELECT FROM merge_proposal WHERE revision = upb.revision) "
+            ")"]
+
         args = []
         if suite:
             args.append(suite)
             conditions.append('suite = $%d' % len(args))
-        if review_status:
-            args.append(review_status)
-            conditions.append('review_status = %d' % len(args))
+        if publish_status:
+            args.append(publish_status)
+            conditions.append('publish_status = $%d' % len(args))
 
         query += " WHERE " + " AND ".join(conditions)
 
-        query += " ORDER BY package ASC"
+        query += " ORDER BY codebase ASC"
 
         runs = await conn.fetch(query, *args)
-    return {"runs": runs, "suite": suite}
+    return {"runs": runs, "suite": suite, "campaign": suite}

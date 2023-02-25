@@ -1,5 +1,0 @@
----
-- name: restart prometheus-postgres-exporter
-  service:
-    name: prometheus-postgres-exporter
-    state: restarted

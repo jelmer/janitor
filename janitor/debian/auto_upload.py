@@ -16,26 +16,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-import os
+import json
 import logging
+import os
 import sys
 import tempfile
-from typing import Optional, List
+from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_openmetrics import Counter, setup_metrics
+from redis.asyncio import Redis
 
-from yarl import URL
-
-from aiohttp_openmetrics import (
-    Counter,
-    setup_metrics,
-    )
-
-from ..artifacts import get_artifact_manager, ArtifactsMissing
+from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
-from ..pubsub import pubsub_reader
-
 
 logger = logging.getLogger('janitor.debian.auto_upload')
 debsign_failed_count = Counter("debsign_failed", "Number of packages for which signing failed.")
@@ -94,15 +88,15 @@ async def dput(directory, changes_filename, dput_host):
 
 
 async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None, source_only: bool = False):
-    logging.info('Uploading results for %s', log_id)
-    with tempfile.TemporaryDirectory() as td:
+    logging.info('Uploading results for %s', log_id, extra={'run_id': log_id})
+    with tempfile.TemporaryDirectory(prefix='janitor-auto-upload') as td:
         try:
             await artifact_manager.retrieve_artifacts(
                 log_id, td)
         except ArtifactsMissing:
             logging.error(
                 'artifacts for build %s are missing',
-                log_id)
+                log_id, extra={'run_id': log_id})
             return
         changes_filenames = []
         # Work around https://bugs.debian.org/389908:
@@ -117,27 +111,27 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
             changes_filenames.append(entry.name)
 
         if not changes_filenames:
-            logging.error('no changes filename in build artifacts')
+            logging.error('no changes filename in build artifacts', extra={'run_id': log_id})
             return
 
         failures = False
         for changes_filename in changes_filenames:
-            logging.info('Running debsign')
+            logging.info('Running debsign', extra={'run_id': log_id})
             try:
                 await debsign(td, changes_filename, debsign_keyid)
             except DebsignFailure as e:
                 logging.error(
                     'Error (exit code %d) signing %s for %s: %s',
                     e.returncode, changes_filename,
-                    log_id, e.reason)
+                    log_id, e.reason, extra={'run_id': log_id})
                 failures = True
                 debsign_failed_count.inc()
             else:
                 logging.info(
                     'Successfully signed %s for %s',
-                    changes_filename, log_id)
+                    changes_filename, log_id, extra={'run_id': log_id})
 
-            logging.debug('Running dput.')
+            logging.debug('Running dput.', extra={'run_id': log_id})
             try:
                 await dput(td, changes_filename, dput_host)
             except DputFailure as e:
@@ -145,33 +139,35 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
                 logging.error(
                     'Error (exit code %d) uploading %s for %s: %s',
                     e.returncode, changes_filename,
-                    log_id, e.reason)
+                    log_id, e.reason, extra={'run_id': log_id})
                 failures = True
 
         if not failures:
-            logging.info('Successfully uploaded run %s', log_id)
+            logging.info('Successfully uploaded run %s', log_id, extra={'run_id': log_id})
 
 
 async def listen_to_runner(
-        runner_url, artifact_manager, dput_host,
+        redis, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
-        distributions: Optional[List[str]] = None,
+        distributions: Optional[list[str]] = None,
         source_only: bool = False):
-    from aiohttp.client import ClientSession
 
-    url = URL(runner_url) / "ws/result"
-    async with ClientSession() as session:
-        async for result in pubsub_reader(session, url):
-            if result["code"] != "success":
-                continue
-            if not result['target']:
-                continue
-            if result['target']['name'] != 'debian':
-                continue
-            if not distributions or result['target']['details']['build_distribution'] in distributions:
-                await upload_build_result(
-                    result['log_id'], artifact_manager, dput_host,
-                    debsign_keyid=debsign_keyid, source_only=source_only)
+    async def handle_result_message(msg):
+        result = json.loads(msg['data'])
+
+        if result['target']['name'] != 'debian':
+            return
+        if not distributions or result['target']['details']['build_distribution'] in distributions:
+            await upload_build_result(
+                result['log_id'], artifact_manager, dput_host,
+                debsign_keyid=debsign_keyid, source_only=source_only)
+
+    try:
+        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
+            await ch.subscribe('result', result=handle_result_message)
+            await ch.run()
+    finally:
+        await redis.close()
 
 
 async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None, source_only=False):
@@ -204,9 +200,6 @@ async def main(argv=None):
     parser.add_argument("--dput-host", type=str, help="dput host to upload to.")
     parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
     parser.add_argument(
-        "--runner-url", type=str, default=None, help="URL to reach runner at."
-    )
-    parser.add_argument(
         "--backfill",
         action="store_true", help="Upload previously built packages.")
     parser.add_argument('--source-only', action='store_true', help='Only upload source-only changes')
@@ -220,7 +213,7 @@ async def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     artifact_manager = get_artifact_manager(config.artifact_location)
@@ -243,9 +236,10 @@ async def main(argv=None):
             logging.exception('listening to runner failed')
             sys.exit(1)
 
+    redis = Redis.from_url(config.redis_location)
     runner_task = loop.create_task(
         listen_to_runner(
-            args.runner_url, artifact_manager, args.dput_host,
+            redis, artifact_manager, args.dput_host,
             args.debsign_keyid, args.distribution,
             source_only=args.source_only))
     runner_task.add_done_callback(log_result)

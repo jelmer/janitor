@@ -16,11 +16,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession
 import argparse
 import asyncio
 import logging
 import sys
+
+from aiohttp import ClientSession
 from yarl import URL
 
 loop = asyncio.get_event_loop()
@@ -51,7 +52,8 @@ args = parser.parse_args()
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-async def reprocess_logs(base_url, run_ids=None, dry_run=False, reschedule=False):
+async def reprocess_logs(base_url, run_ids=None, dry_run=False,
+                         reschedule=False):
     params = {}
     if dry_run:
         params['dry_run'] = '1'
@@ -59,8 +61,9 @@ async def reprocess_logs(base_url, run_ids=None, dry_run=False, reschedule=False
         params['reschedule'] = '1'
     if run_ids:
         params['run_ids'] = run_ids
-    url = URL(base_url) / 'api/mass-reschedule'
-    async with ClientSession() as session, session.post(url, params=params) as resp:
+    url = URL(base_url) / 'cupboard/api/mass-reschedule'
+    async with ClientSession() as session, \
+            session.post(url, params=params) as resp:
         if resp.status != 200:
             logging.fatal('rescheduling failed: %d', resp.status)
             return 1
@@ -68,4 +71,6 @@ async def reprocess_logs(base_url, run_ids=None, dry_run=False, reschedule=False
             logging.info('%r', entry)
 
 
-sys.exit(asyncio.run(reprocess_logs(args.base_url, args.run_id, dry_run=args.dry_run, reschedule=args.reschedule)))
+sys.exit(asyncio.run(reprocess_logs(
+    args.base_url, args.run_id,
+    dry_run=args.dry_run, reschedule=args.reschedule)))

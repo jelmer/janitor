@@ -15,91 +15,61 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from datetime import timedelta
+from typing import Any, Optional
+
 import asyncpg
-from typing import Optional, Set
 
 
-class QueueItem(object):
+class QueueItem:
 
     __slots__ = [
         "id",
-        "branch_url",
-        "subpath",
-        "package",
         "context",
         "command",
         "estimated_duration",
-        "suite",
+        "campaign",
         "refresh",
         "requestor",
-        "vcs_type",
-        "upstream_branch_url",
         "change_set",
+        "codebase",
     ]
 
     def __init__(
         self,
+        *,
         id,
-        branch_url,
-        subpath,
-        package,
         context,
         command,
         estimated_duration,
-        suite,
+        campaign,
         refresh,
         requestor,
-        vcs_type,
-        upstream_branch_url,
         change_set,
+        codebase,
     ):
         self.id = id
-        self.package = package
-        self.branch_url = branch_url
-        self.subpath = subpath
         self.context = context
         self.command = command
         self.estimated_duration = estimated_duration
-        self.suite = suite
+        self.campaign = campaign
         self.refresh = refresh
         self.requestor = requestor
-        self.vcs_type = vcs_type
-        self.upstream_branch_url = upstream_branch_url
         self.change_set = change_set
+        self.codebase = codebase
 
     @classmethod
     def from_row(cls, row) -> "QueueItem":
         return cls(
             id=row['id'],
-            branch_url=row['branch_url'],
-            subpath=row['subpath'],
-            package=row['package'],
             context=row['context'],
             command=row['command'],
             estimated_duration=row['estimated_duration'],
-            suite=row['suite'],
+            campaign=row['campaign'],
             refresh=row['refresh'],
             requestor=row['requestor'],
-            vcs_type=row['vcs_type'],
-            upstream_branch_url=row['upstream_branch_url'],
             change_set=row['change_set'],
-        )
-
-    def _tuple(self):
-        return (
-            self.id,
-            self.branch_url,
-            self.subpath,
-            self.package,
-            self.context,
-            self.command,
-            self.estimated_duration,
-            self.suite,
-            self.refresh,
-            self.requestor,
-            self.vcs_type,
-            self.upstream_branch_url,
-            self.change_set,
+            codebase=row['codebase'],
         )
 
     def __eq__(self, other):
@@ -114,90 +84,193 @@ class QueueItem(object):
         return hash((type(self), self.id))
 
 
-async def get_queue_position(conn: asyncpg.Connection, suite, package):
-    row = await conn.fetchrow(
-        "SELECT position, wait_time FROM queue_positions "
-        "WHERE package = $1 AND suite = $2",
-        package, suite)
-    if not row:
-        return (None, None)
-    return row
+class Queue:
 
+    def __init__(self, conn: asyncpg.Connection):
+        self.conn = conn
 
-async def get_queue_item(conn: asyncpg.Connection, queue_id: int):
-    query = """
+    async def get_position(self, campaign: str, codebase: str) -> tuple[Optional[int], Optional[timedelta]]:
+        row = await self.conn.fetchrow(
+            "SELECT position, wait_time FROM queue_positions "
+            "WHERE codebase = $1 AND suite = $2",
+            codebase, campaign)
+        if not row:
+            return (None, None)
+        return row
+
+    async def get_item(self, queue_id: int):
+        query = """
 SELECT
-    package.branch_url AS branch_url,
-    package.subpath AS subpath,
-    queue.package AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
     queue.estimated_duration AS estimated_duration,
-    queue.suite AS suite,
+    queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
-    package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url,
-    queue.change_set AS change_set
+    queue.change_set AS change_set,
+    queue.codebase AS codebase
 FROM
     queue
-LEFT JOIN package ON package.name = queue.package
-LEFT OUTER JOIN upstream ON upstream.name = package.name
 WHERE queue.id = $1
 """
-    row = await conn.fetchrow(query, queue_id)
-    if row:
-        return QueueItem.from_row(row)
-    return None
+        row = await self.conn.fetchrow(query, queue_id)
+        if row:
+            return QueueItem.from_row(row)
+        return None
 
-
-async def iter_queue(conn: asyncpg.Connection, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, avoid_hosts: Optional[Set[str]] = None):
-    query = """
+    async def next_item(self, codebase: Optional[str] = None,
+                        campaign: Optional[str] = None,
+                        exclude_hosts: Optional[set[str]] = None,
+                        assigned_queue_items: Optional[set[int]] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
+        query = """
 SELECT
-    package.branch_url AS branch_url,
-    package.subpath AS subpath,
-    queue.package AS package,
     queue.command AS command,
     queue.context AS context,
     queue.id AS id,
     queue.estimated_duration AS estimated_duration,
-    queue.suite AS suite,
+    queue.suite AS campaign,
     queue.refresh AS refresh,
     queue.requestor AS requestor,
-    package.vcs_type AS vcs_type,
-    upstream.upstream_branch_url AS upstream_branch_url,
-    queue.change_set AS change_set
+    queue.change_set AS change_set,
+    codebase.vcs_type AS vcs_type,
+    codebase.branch_url AS branch_url,
+    codebase.subpath AS subpath,
+    queue.codebase AS codebase
 FROM
     queue
-LEFT JOIN package ON package.name = queue.package
-LEFT OUTER JOIN upstream ON upstream.name = package.name
+LEFT JOIN codebase ON codebase.name = queue.codebase
 """
-    conditions = []
-    args = []
-    if package:
-        args.append(package)
-        conditions.append("queue.package = $%d" % len(args))
-    if campaign:
-        args.append(campaign)
-        conditions.append("queue.suite = $%d" % len(args))
+        conditions = []
+        args: list[Any] = []
+        if assigned_queue_items:
+            args.append(assigned_queue_items)
+            conditions.append("NOT (queue.id = ANY($%d::int[]))" % len(args))
+        if codebase:
+            args.append(codebase)
+            conditions.append("queue.codebase = $%d" % len(args))
+        if campaign:
+            args.append(campaign)
+            conditions.append("queue.suite = $%d" % len(args))
+        if exclude_hosts:
+            args.append(exclude_hosts)
+            # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
+            conditions.append(
+                "NOT (codebase.branch_url IS NOT NULL AND "
+                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
 
-    if avoid_hosts:
-        for host in avoid_hosts:
-            assert isinstance(host, str), "not a string: %r" % host
-            args.append(host)
-            conditions.append("package.branch_url NOT LIKE CONCAT('%%/', $%d::text, '/%%')" % len(args))
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
 
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
+        query += """
+ORDER BY
+queue.bucket ASC,
+queue.priority ASC,
+queue.id ASC
+LIMIT 1
+"""
+        row = await self.conn.fetchrow(query, *args)
+        if row is None:
+            return None, {}
+        vcs_info = {}
+        if row['branch_url']:
+            vcs_info['branch_url'] = row['branch_url']
+        if row['subpath'] is not None:
+            vcs_info['subpath'] = row['subpath']
+        if row['vcs_type']:
+            vcs_info['vcs_type'] = row['vcs_type']
+        return QueueItem.from_row(row), vcs_info
 
-    query += """
+    async def iter_queue(self, limit: Optional[int] = None,
+                         campaign: Optional[str] = None):
+        query = """
+SELECT
+    queue.command AS command,
+    queue.context AS context,
+    queue.id AS id,
+    queue.estimated_duration AS estimated_duration,
+    queue.suite AS campaign,
+    queue.refresh AS refresh,
+    queue.requestor AS requestor,
+    queue.change_set AS change_set,
+    queue.codebase AS codebase
+FROM
+    queue
+"""
+        conditions = []
+        args: list[Any] = []
+        if campaign:
+            args.append(campaign)
+            conditions.append("queue.suite = $%d" % len(args))
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += """
 ORDER BY
 queue.bucket ASC,
 queue.priority ASC,
 queue.id ASC
 """
-    if limit:
-        query += " LIMIT %d" % limit
-    for row in await conn.fetch(query, *args):
-        yield QueueItem.from_row(row)
+        if limit:
+            query += " LIMIT %d" % limit
+        for row in await self.conn.fetch(query, *args):
+            yield QueueItem.from_row(row)
+
+    async def add(
+            self,
+            *,
+            codebase: str,
+            command: str,
+            campaign: str,
+            change_set: Optional[str] = None,
+            offset: float = 0.0,
+            bucket: str = "default",
+            context: Optional[str] = None,
+            estimated_duration: Optional[timedelta] = None,
+            refresh: bool = False,
+            requestor: Optional[str] = None) -> tuple[int, str]:
+        row = await self.conn.fetchrow(
+            "INSERT INTO queue "
+            "(command, priority, bucket, context, "
+            "estimated_duration, suite, refresh, requestor, change_set, "
+            "codebase) VALUES ($1, "
+            "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
+            + " + $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+            "ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) "
+            "DO UPDATE SET "
+            "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+            "bucket = EXCLUDED.bucket, "
+            "estimated_duration = EXCLUDED.estimated_duration, "
+            "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
+            "command = EXCLUDED.command, codebase = EXCLUDED.codebase "
+            "WHERE queue.bucket >= EXCLUDED.bucket OR "
+            "(queue.bucket = EXCLUDED.bucket AND "
+            "queue.priority >= EXCLUDED.priority) RETURNING id, bucket",
+            command,
+            offset,
+            bucket,
+            context,
+            estimated_duration,
+            campaign,
+            refresh,
+            requestor,
+            change_set,
+            codebase,
+        )
+        if row is None:
+            # Nothing has changed? TODO(jelmer): Avoid a second query in
+            # this case.
+            row = await self.conn.fetchrow(
+                "SELECT id, bucket FROM queue "
+                "WHERE codebase = $1 AND suite = $2 "
+                "AND coalesce(change_set, '') = $3",
+                codebase, campaign, change_set or '')
+            assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
+            return row
+        return row
+
+    async def get_buckets(self):
+        return await self.conn.fetch(
+            "SELECT bucket, count(*) FROM queue GROUP BY bucket "
+            "ORDER BY bucket ASC")
