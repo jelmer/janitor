@@ -1,4 +1,4 @@
-janitor (0.1.0+git20230225.0.fa36134-1) UNRELEASED; urgency=low
+janitor (0.1.0+git20230225.0.fa36134-1) experimental; urgency=low
 
   * New upstream snapshot.
 
