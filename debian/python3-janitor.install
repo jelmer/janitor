@@ -1,7 +1,1 @@
-helpers/analyse-branch-unknown.py /usr/share/doc/python3-janitor/helpers/
-helpers/cleanup-repositories.py /usr/share/doc/python3-janitor/helpers/
-helpers/guess-upstream-branch-urls.py /usr/share/doc/python3-janitor/helpers/
-helpers/migrate-logs.py /usr/share/doc/python3-janitor/helpers/
 usr/lib/python3.*/*
-
-#helpers/reconstruct-db.py /usr/share/doc/python3-janitor/helpers/

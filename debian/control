@@ -17,7 +17,6 @@ Build-Depends: debhelper-compat (= 13),
                python3-aiozipkin,
                python3-all,
                python3-asyncpg,
-               python3-asyncpg-engine,
                python3-backoff,
                python3-breezy.tests,
                python3-bs4,
@@ -56,7 +55,7 @@ Depends: python3-aiohttp,
          python3-yaml,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - core
+Description: platform for large-scale automated code improvements - core
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -79,7 +78,7 @@ Depends: python3-aiohttp-openmetrics,
          python3-jinja2,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - worker
+Description: platform for large-scale automated code improvements - worker
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -101,7 +100,7 @@ Depends: python3-aiohttp-openmetrics,
          python3-janitor,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - runner
+Description: platform for large-scale automated code improvements - runner
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -125,7 +124,7 @@ Depends: python3-aiohttp-openmetrics,
          python3-jinja2,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - publisher
+Description: platform for large-scale automated code improvements - publisher
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -147,7 +146,7 @@ Depends: python3-aiohttp-openmetrics,
          python3-janitor,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - apt repo generator
+Description: platform for large-scale automated code improvements - apt repository
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -169,7 +168,7 @@ Depends: python3-aiohttp-openmetrics,
          python3-janitor,
          ${misc:Depends},
          ${python3:Depends}
-Description: management platform for large-scale automated code improvements - differ
+Description: platform for large-scale automated code improvements - differ
  The Janitor is a platform for running code improvement tools on a large number
  of repositories.
  .
@@ -183,3 +182,72 @@ Description: management platform for large-scale automated code improvements - d
  repository or included in a pull request (that is kept up to date).
  .
  This package contains the result differ.
+
+Package: janitor-git-store
+Architecture: all
+Depends: python3-aiohttp-openmetrics,
+         python3-aiozipkin,
+         python3-janitor,
+	 python3-dulwich,
+         ${misc:Depends},
+         ${python3:Depends}
+Description: platform for large-scale automated code improvements - git store
+ The Janitor is a platform for running code improvement tools on a large number
+ of repositories.
+ .
+ It takes a collection of VCS repositories and will regularly try to run a set
+ of specified code improvement tools on those repositories. Scheduling takes
+ into account tool-specific hints, past success and chances of success.
+ .
+ The web UI allows review and analysis of changes made.
+ .
+ Depending on policy set, changes are either pushed directly back to the
+ repository or included in a pull request (that is kept up to date).
+ .
+ This package contains the Git storage manager.
+
+Package: janitor-bzr-store
+Architecture: all
+Depends: python3-aiohttp-openmetrics,
+         python3-aiozipkin,
+         python3-janitor,
+	 loggerhead,
+         ${misc:Depends},
+         ${python3:Depends}
+Description: platform for large-scale automated code improvements - bzr store
+ The Janitor is a platform for running code improvement tools on a large number
+ of repositories.
+ .
+ It takes a collection of VCS repositories and will regularly try to run a set
+ of specified code improvement tools on those repositories. Scheduling takes
+ into account tool-specific hints, past success and chances of success.
+ .
+ The web UI allows review and analysis of changes made.
+ .
+ Depending on policy set, changes are either pushed directly back to the
+ repository or included in a pull request (that is kept up to date).
+ .
+ This package contains the Bazaar storage manager.
+
+Package: janitor-mail-filter
+Architecture: all
+Depends: python3-aiohttp-openmetrics,
+         python3-aiozipkin,
+         python3-janitor,
+	 loggerhead,
+         ${misc:Depends},
+         ${python3:Depends}
+Description: platform for large-scale automated code improvements - mail filter
+ The Janitor is a platform for running code improvement tools on a large number
+ of repositories.
+ .
+ It takes a collection of VCS repositories and will regularly try to run a set
+ of specified code improvement tools on those repositories. Scheduling takes
+ into account tool-specific hints, past success and chances of success.
+ .
+ The web UI allows review and analysis of changes made.
+ .
+ Depending on policy set, changes are either pushed directly back to the
+ repository or included in a pull request (that is kept up to date).
+ .
+ This package contains the mail filter.

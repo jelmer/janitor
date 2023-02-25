@@ -1,1 +1,3 @@
 usr/bin/janitor-worker
+usr/bin/create-sbuild-chroot-unshare.py
+usr/bin/create-sbuild-chroot-schroot.py
