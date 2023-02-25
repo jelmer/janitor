@@ -1,5 +1,0 @@
-Test-Command: python3 setup.py test
-Depends: python3-breezy.tests,
-         python3-setuptools,
-         @
-Restrictions: allow-stderr
