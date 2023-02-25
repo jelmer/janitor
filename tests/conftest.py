@@ -1,8 +1,7 @@
 import importlib.resources
-from typing import Type, AsyncGenerator
+from typing import AsyncGenerator
 
 import asyncpg
-import pytest
 import pytest_asyncio
 
 import testing.postgresql
