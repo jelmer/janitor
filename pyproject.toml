@@ -1,5 +1,8 @@
 [build-system]
-requires = ["setuptools", "setuptools_protobuf[mypy]>=0.1.3"]
+requires = [
+    "setuptools",
+    "setuptools-protobuf[mypy]>=0.1.3",
+]
 build-backend = "setuptools.build_meta"
 
 [tool.mypy]
@@ -27,3 +30,156 @@ module = [
     "testing.*",
 ]
 ignore_missing_imports = true
+
+[project]
+name = "janitor"
+authors = [{name = "Jelmer Vernooĳ", email = "jelmer@jelmer.uk"}]
+description = "Manager for automatic VCS changes"
+license = {text = "GNU GPL v2 or later"}
+keywords = [
+    "debian",
+    "git",
+    "bzr",
+    "vcs",
+    "github",
+    "gitlab",
+    "launchpad",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License (GPL)",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Operating System :: POSIX",
+    "Topic :: Software Development :: Version Control",
+]
+urls = {Homepage = "https://github.com/jelmer/janitor"}
+requires-python = ">=3.9"
+dependencies = [
+    "aiohttp",
+    "aiohttp-apispec",
+    "aiohttp_jinja2",
+    "aiojobs",
+    "aioredlock",
+    "aiozipkin",
+    "asyncpg",
+    "backoff",
+    "bs4",
+    "python-mimeparse",
+    "pygments",
+    "breezy[git,launchpad,workspace,pgp]@git+https://github.com/breezy-team/breezy",
+    "jinja2",
+    "dulwich@git+https://github.com/jelmer/dulwich",
+    "ognibuild@git+https://github.com/jelmer/ognibuild",
+    "buildlog-consultant@git+https://github.com/jelmer/buildlog-consultant",
+    "silver-platter@git+https://github.com/jelmer/silver-platter",
+    "aiohttp-openmetrics",
+    "paramiko",
+    "redis>=4.2.0",
+    "iso8601",
+    "protobuf",
+    "uvloop",
+]
+dynamic = ["version"]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.optional-dependencies]
+dev = [
+    "flake8>=5.0.4",
+    "flake8-tidy-imports",
+    "flake8-bugbear",
+    "flake8-simplify",
+    "flake8-async",
+    "djlint",
+    "mock",
+    "mypy",
+    "yamllint",
+    "testtools",
+    "pytest",
+    "pytest-cov",
+    "pytest-aiohttp",
+    "fakeredis",
+    "python-subunit",
+    "types-PyYAML",
+    "types-protobuf",
+    "types-mock",
+    "types-redis",
+    "types-protobuf",
+    "types-beautifulsoup4",
+    "types-Pygments",
+    "types-flask",
+    "boto3",
+    "types-boto3",
+    "google-cloud-logging",
+    "gcloud-aio-storage",
+    "testing.postgresql",
+]
+debian = [
+    "python_apt",
+    "python_debian",
+    "silver-platter[debian]@git+https://github.com/jelmer/silver-platter",
+    "ognibuild[debian,dep_server]@git+https://github.com/jelmer/ognibuild",
+    "brz-debian@git+https://github.com/breezy-team/breezy-debian",
+    "iniparse",
+]
+gcp = [
+    "gcloud-aio-storage",
+    "google-cloud-logging",
+]
+s3 = ["boto3"]
+git_web = [
+    "klaus@git+https://github.com/jonashaag/klaus",
+    "aiohttp-wsgi",
+]
+bzr_web = ["loggerhead"]
+
+[project.scripts]
+janitor-runner = "janitor.run:main"
+janitor-worker = "janitor.worker:main"
+janitor-publisher = "janitor.publish:main"
+janitor-apt = "janitor.debian.archive:main"
+janitor-git-store = "janitor.git_store:main"
+janitor-bzr-store = "janitor.git_store:main"
+janitor-differ = "janitor.differ:main"
+janitor-mail-filter = "janitor.mail_filter:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = """
+--cov=janitor
+--cov-report=html"""
+
+[tool.setuptools]
+script-files = [
+    "create-sbuild-chroot-schroot.py",
+    "create-sbuild-chroot-unshare.py",
+]
+packages = [
+    "janitor",
+    "janitor.debian",
+    "janitor.generic",
+    "janitor.site",
+    "janitor.site.cupboard",
+]
+include-package-data = false
+
+[tool.setuptools.package-data]
+"*" = ["py.typed"]
+"janitor.site" = [
+    "templates/*.html",
+    "templates/*/*.html",
+    "_static/*.css",
+    "_static/*.js",
+    "_static/*.png",
+]
+janitor = ["state.sql"]
+"janitor.debian" = ["debian.sql"]
+
+[tool.setuptools.dynamic]
+version = {attr = "janitor.__version__"}
