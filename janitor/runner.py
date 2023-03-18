@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, List
 
 import aiojobs
 import aiozipkin
@@ -112,16 +112,16 @@ class BuilderResult:
 
     kind: str
 
-    def from_directory(self, path):
+    def from_directory(self, path: str) -> None:
         raise NotImplementedError(self.from_directory)
 
-    async def store(self, conn, run_id):
+    async def store(self, conn: asyncpg.Connection, run_id: str) -> None:
         raise NotImplementedError(self.store)
 
     def json(self):
         raise NotImplementedError(self.json)
 
-    def artifact_filenames(self):
+    def artifact_filenames(self) -> List[str]:
         raise NotImplementedError(self.artifact_filenames)
 
     @classmethod
@@ -172,6 +172,12 @@ class GenericResult(BuilderResult):
         pass
 
 
+class GenericConfig(TypedDict):
+
+    chroot: Optional[str]
+    dep_server_url: str
+
+
 class GenericBuilder(Builder):
     """Generic builder."""
 
@@ -179,17 +185,17 @@ class GenericBuilder(Builder):
 
     result_cls = GenericResult
 
-    def __init__(self, dep_server_url):
+    def __init__(self, dep_server_url: str) -> None::
         self.dep_server_url = dep_server_url
 
-    async def config(self, conn, campaign_config, queue_item):
+    async def config(self, conn, campaign_config: Campaign, queue_item: QueueItem) -> GenericConfig:
         config = {}
         if campaign_config.generic_build.chroot:
             config["chroot"] = campaign_config.generic_build.chroot
         config["dep_server_url"] = self.dep_server_url
         return config
 
-    async def build_env(self, conn, campaign_config, queue_item):
+    async def build_env(self, conn, campaign_config: Campaign, queue_item: QueueItem) -> Dict[str, str]:
         return {}
 
     def additional_colocated_branches(self, main_branch):
@@ -201,9 +207,13 @@ class DebianResult(BuilderResult):
     kind = "debian"
 
     def __init__(
-        self, source=None, build_version=None, build_distribution=None,
-        changes_filenames=None, lintian_result=None, binary_packages=None
-    ):
+            self, source: Optional[str] = None,
+            build_version: Optional[Version] = None,
+            build_distribution: Optional[str] = None,
+            changes_filenames: Optional[List[str]] = None,
+            lintian_result: Any = None,
+            binary_packages: Optional[List[str]] = None
+    ) -> None:
         self.source = source
         self.build_version = build_version
         self.build_distribution = build_distribution
@@ -247,7 +257,7 @@ class DebianResult(BuilderResult):
     def from_json(cls, target_details):
         return cls(lintian_result=target_details.get('lintian'))
 
-    async def store(self, conn, run_id):
+    async def store(self, conn, run_id) -> None:
         if self.build_version:
             await conn.execute(
                 "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result, binary_packages) "
@@ -1384,13 +1394,13 @@ class QueueProcessor:
                             'Failed to healthcheck %s: %r', active_run.log_id, e)
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
-    async def rate_limited_hosts(self):
+    async def rate_limited_hosts(self) -> Iterator[Tuple[str, datetime]]:
         for h, t in (await self.redis.hgetall('rate-limit-hosts')).items():
             dt = datetime.fromisoformat(t.decode('utf-8'))
             if dt > datetime.utcnow():
                 yield h.decode('utf-8'), dt
 
-    async def active_run_count(self):
+    async def active_run_count(self) -> int:
         return await self.redis.hlen('active-runs')
 
     async def estimate_wait(
@@ -1407,13 +1417,13 @@ class QueueProcessor:
                 wait_time)
 
     async def status_json(self) -> Any:
-        last_keepalives = {
+        last_keepalives: Dict[str, datetime] = {
             r.decode('utf-8'): datetime.fromisoformat(v.decode('utf-8'))
             for (r, v) in (await self.redis.hgetall('last-keepalive')).items()}
         processing = []
         for e in (await self.redis.hgetall('active-runs')).values():
             js = json.loads(e)
-            last_keepalive = last_keepalives.get(js['id'])
+            last_keepalive: Optional[datetime] = last_keepalives.get(js['id'])
             if last_keepalive:
                 js['last-keepalive'] = last_keepalive.isoformat(timespec='seconds')
                 js['keepalive_age'] = (datetime.utcnow() - last_keepalive).total_seconds()
@@ -2658,11 +2668,11 @@ async def handle_public_finish(request):
     )
 
 
-async def handle_public_root(request):
+async def handle_public_root(request: web.Request) -> web.Response:
     return web.Response(text='')
 
 
-async def create_public_app(queue_processor, config, db, tracer=None):
+async def create_public_app(queue_processor, config, db, tracer=None) -> web.Application:
     app = web.Application(middlewares=[
         state.asyncpg_error_middleware])
     app['config'] = config
@@ -2677,7 +2687,8 @@ async def create_public_app(queue_processor, config, db, tracer=None):
         '/runner/active-runs/{run_id}',
         handle_public_get_active_run,
         name='get-active-run')
-    aiozipkin.setup(app, tracer)
+    if tracer is not None:
+        aiozipkin.setup(app, tracer)
     return app
 
 
@@ -2690,7 +2701,8 @@ async def create_app(queue_processor, config, db, tracer=None):
     app['queue_processor'] = queue_processor
     app.middlewares.insert(0, metrics_middleware)
     metrics_route = app.router.add_get("/metrics", metrics, name="metrics")
-    aiozipkin.setup(app, tracer, skip_routes=[metrics_route])
+    if tracer is not None:
+        aiozipkin.setup(app, tracer, skip_routes=[metrics_route])
     return app
 
 
@@ -2779,7 +2791,7 @@ async def main(argv=None):
         parser.error(
             'Unsupported protocol in --public-vcs-location: %s' % e.path)
 
-    logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
+    logfile_manager: LogFileManager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     loop = asyncio.get_event_loop()
