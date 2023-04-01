@@ -1024,7 +1024,7 @@ def open_resume_branch(
     except ForgeLoginRequired as e:
         logging.warning("No credentials for forge (%s)", e)
         return None
-    except ssl.SSLCertVerificationError as e:
+    except (ssl.SSLCertVerificationError, ssl.SSLZeroReturnError) as e:
         logging.warning("SSL error probing for forge (%s)", e)
         return None
     except ConnectionError as e:
