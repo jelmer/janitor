@@ -12,6 +12,16 @@ check:: test
 
 check:: style
 
+check:: ruff
+
+ruff:
+	ruff check .
+
+fix:: ruff-fix
+
+ruff-fix:
+	ruff check --fix .
+
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
