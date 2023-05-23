@@ -512,7 +512,7 @@ async def do_schedule_control(
 
 
 class CandidateUnavailable(Exception):
-    def __init__(self, campaign: str, codebase: str):
+    def __init__(self, campaign: str, codebase: str) -> None:
         self.campaign = campaign
         self.codebase = codebase
 

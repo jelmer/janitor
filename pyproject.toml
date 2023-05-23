@@ -183,3 +183,42 @@ janitor = ["state.sql"]
 
 [tool.setuptools.dynamic]
 version = {attr = "janitor.__version__"}
+
+[tool.ruff]
+select = [
+    "ANN",
+    "D",
+    "E",
+    "F",
+    "I",
+    "B"
+]
+ignore = [
+    "ANN001",
+    "ANN002",
+    "ANN003",
+    "ANN101",  # missing-type-self
+    "ANN102",
+    "ANN201",
+    "ANN202",
+    "ANN204",
+    "ANN206",
+    "ANN401",
+    "E501",
+    "W293",
+    "W291",
+    "B905",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D107",
+    "D417",
+    "B007"
+]
+line-length = 88
+
+[tool.ruff.pydocstyle]
+convention = "google"

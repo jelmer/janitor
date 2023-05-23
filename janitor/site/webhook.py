@@ -67,8 +67,7 @@ def subscribe_webhook_github(branch, github, callback_url):
 
 
 def subscribe_webhook_gitlab(branch, gitlab, callback_url):
-    from breezy.plugins.gitlab.forge import (NotGitLabUrl,
-                                             parse_gitlab_branch_url)
+    from breezy.plugins.gitlab.forge import NotGitLabUrl, parse_gitlab_branch_url
     try:
         (host, project_name, branch_name) = (
             parse_gitlab_branch_url(branch))
@@ -117,7 +116,7 @@ class GitChange:
     urls: Set[str]
     after: bytes
 
-    def __init__(self, urls, after):
+    def __init__(self, urls, after) -> None:
         self.urls = urls
         self.after = after
 
@@ -132,7 +131,7 @@ class BzrChange:
     urls: Set[str]
     after: bytes
 
-    def __init__(self, urls, after):
+    def __init__(self, urls, after) -> None:
         self.urls = urls
         self.after = after
     

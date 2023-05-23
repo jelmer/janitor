@@ -23,11 +23,13 @@ from typing import Dict, List, Optional
 
 import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
-from breezy.forge import UnsupportedForge, get_forge_by_hostname
+from breezy.forge import UnsupportedForge, get_forge_by_hostname, Forge
 from breezy.revision import NULL_REVISION
-from buildlog_consultant.sbuild import (SbuildLog,
-                                        find_build_failure_description,
-                                        worker_failure_from_sbuild_log)
+from buildlog_consultant.sbuild import (
+    SbuildLog,
+    find_build_failure_description,
+    worker_failure_from_sbuild_log,
+)
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 from yarl import URL
@@ -35,8 +37,7 @@ from yarl import URL
 from janitor import state
 from janitor.logs import LogRetrievalError
 from janitor.queue import Queue
-from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
-                          get_archive_diff)
+from janitor.site import BuildDiffUnavailable, DebdiffRetrievalError, get_archive_diff
 
 from ..config import get_campaign_config
 from ..vcs import VcsManager
@@ -381,8 +382,8 @@ async def generate_done_list(
 
 class MergeProposalUserUrlResolver(object):
 
-    def __init__(self):
-        self._forges = {}
+    def __init__(self) -> None:
+        self._forges: Dict[str, Optional[Forge]] = {}
 
     def resolve(self, url, user):
         hostname = URL(url).host
@@ -393,8 +394,9 @@ class MergeProposalUserUrlResolver(object):
                 self._forges[hostname] = get_forge_by_hostname(hostname)
             except UnsupportedForge:
                 self._forges[hostname] = None
-        if self._forges[hostname]:
-            return self._forges[hostname].get_user_url(user)
+        forge = self._forges[hostname]
+        if forge is not None:
+            return forge.get_user_url(user)
         else:
             return None
 

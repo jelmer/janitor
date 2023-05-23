@@ -50,7 +50,7 @@ async def run_web_server(listen_addr, port, config):
 class DebsignFailure(Exception):
     """Debsign failed to run."""
 
-    def __init__(self, returncode, reason):
+    def __init__(self, returncode, reason) -> None:
         self.returncode = returncode
         self.reason = reason
 
@@ -71,7 +71,7 @@ async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = No
 
 class DputFailure(Exception):
 
-    def __init__(self, returncode, reason):
+    def __init__(self, returncode, reason) -> None:
         self.returncode = returncode
         self.reason = reason
 

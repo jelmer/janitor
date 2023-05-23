@@ -12,8 +12,7 @@ from janitor.publish_one import load_template_env
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.debian.debdiff import (debdiff_is_empty,  # noqa: E402
-                                    markdownify_debdiff)
+from janitor.debian.debdiff import debdiff_is_empty, markdownify_debdiff  # noqa: E402
 
 loop = asyncio.get_event_loop()
 

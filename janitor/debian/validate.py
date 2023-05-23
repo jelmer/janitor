@@ -19,16 +19,18 @@ import logging
 import os
 
 from breezy.plugins.debian.apt_repo import RemoteApt
-from breezy.plugins.debian.vcs_up_to_date import (MissingChangelogError,
-                                                  NewArchiveVersion,
-                                                  PackageMissingInArchive,
-                                                  TreeVersionNotInArchive,
-                                                  check_up_to_date)
+from breezy.plugins.debian.vcs_up_to_date import (
+    MissingChangelogError,
+    NewArchiveVersion,
+    PackageMissingInArchive,
+    TreeVersionNotInArchive,
+    check_up_to_date,
+)
 
 
 class ValidateError(Exception):
 
-    def __init__(self, code, description):
+    def __init__(self, code, description) -> None:
         self.code = code
         self.description = description
 

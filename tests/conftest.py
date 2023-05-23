@@ -3,7 +3,6 @@ from typing import AsyncGenerator
 
 import asyncpg
 import pytest_asyncio
-
 import testing.postgresql
 
 from janitor.state import create_pool

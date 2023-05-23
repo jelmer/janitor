@@ -24,8 +24,12 @@ from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
-from aiohttp import (ClientResponseError, ClientSession, ClientTimeout,
-                     ServerDisconnectedError)
+from aiohttp import (
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout,
+    ServerDisconnectedError,
+)
 from aiohttp_openmetrics import Counter
 from yarl import URL
 
@@ -69,7 +73,7 @@ class LogFileManager(ABC):
 
 
 class FileSystemLogFileManager(LogFileManager):
-    def __init__(self, log_directory):
+    def __init__(self, log_directory) -> None:
         self.log_directory = log_directory
 
     async def __aexit__(self, exc_typ, exc_val, exc_tb):
@@ -144,7 +148,7 @@ class LogRetrievalError(Exception):
 
 
 class S3LogFileManager(LogFileManager):
-    def __init__(self, endpoint_url, bucket_name="debian-janitor", trace_configs=None):
+    def __init__(self, endpoint_url, bucket_name="debian-janitor", trace_configs=None) -> None:
         self.base_url = endpoint_url + ("/%s/" % bucket_name)
         self.trace_configs = trace_configs
         self.bucket_name = bucket_name
@@ -219,7 +223,7 @@ class GCSLogFileManager(LogFileManager):
 
     session: ClientSession
 
-    def __init__(self, location, creds_path=None, trace_configs=None):
+    def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
         if hostname is None:
             raise ValueError('invalid location missing bucket name: %s' % location)
