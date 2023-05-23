@@ -47,7 +47,7 @@ class QueueItem:
         requestor,
         change_set,
         codebase,
-    ):
+    ) -> None:
         self.id = id
         self.context = context
         self.command = command
@@ -86,7 +86,7 @@ class QueueItem:
 
 class Queue:
 
-    def __init__(self, conn: asyncpg.Connection):
+    def __init__(self, conn: asyncpg.Connection) -> None:
         self.conn = conn
 
     async def get_position(self, campaign: str, codebase: str) -> tuple[Optional[int], Optional[timedelta]]:

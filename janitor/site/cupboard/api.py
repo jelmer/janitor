@@ -20,8 +20,7 @@ from datetime import datetime, timedelta
 
 import aiozipkin
 import asyncpg
-from aiohttp import (ClientConnectorError, ClientResponseError, ClientSession,
-                     web)
+from aiohttp import ClientConnectorError, ClientResponseError, ClientSession, web
 from aiohttp_apispec import docs
 from aiojobs.aiohttp import setup as setup_aiojobs
 from aiojobs.aiohttp import spawn
@@ -194,8 +193,11 @@ async def handle_needs_review(request):
 @docs()
 @routes.post('/run/{run_id}/reprocess-logs', name='admin-reprocess-logs-run')
 async def handle_run_reprocess_logs(request):
-    from ...reprocess_logs import (process_dist_log, process_sbuild_log,
-                                   reprocess_run_logs)
+    from ...reprocess_logs import (
+        process_dist_log,
+        process_sbuild_log,
+        reprocess_run_logs,
+    )
     check_admin(request)
     post = await request.post()
     run_id = request.match_info['run_id']
@@ -238,8 +240,11 @@ async def handle_run_reprocess_logs(request):
 @docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
 async def handle_reprocess_logs(request):
-    from ...reprocess_logs import (process_dist_log, process_sbuild_log,
-                                   reprocess_run_logs)
+    from ...reprocess_logs import (
+        process_dist_log,
+        process_sbuild_log,
+        reprocess_run_logs,
+    )
 
     check_admin(request)
     post = await request.post()

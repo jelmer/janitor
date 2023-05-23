@@ -21,8 +21,7 @@ from datetime import datetime
 
 import pytest
 
-from janitor.logs import (FileSystemLogFileManager, GCSLogFileManager,
-                          S3LogFileManager)
+from janitor.logs import FileSystemLogFileManager, GCSLogFileManager, S3LogFileManager
 
 
 def test_s3_log_file_manager():

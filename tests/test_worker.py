@@ -27,9 +27,14 @@ from breezy.config import GlobalStack
 from breezy.controldir import ControlDir, format_registry
 from silver_platter.apply import ScriptFailed
 
-from janitor.worker import (Metadata, WorkerFailure,
-                            _convert_codemod_script_failed, bundle_results,
-                            create_app, run_worker)
+from janitor.worker import (
+    Metadata,
+    WorkerFailure,
+    _convert_codemod_script_failed,
+    bundle_results,
+    create_app,
+    run_worker,
+)
 
 
 @pytest.fixture
@@ -48,7 +53,7 @@ def test_brz_identity(brz_identity):
 
 
 class AsyncBytesIO:
-    def __init__(self):
+    def __init__(self) -> None:
         self._io = BytesIO()
 
     def seek(self, pos):

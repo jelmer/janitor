@@ -20,9 +20,15 @@ from typing import Optional
 
 import aiozipkin
 import mimeparse
-from aiohttp import (ClientConnectorError, ClientOSError, ClientResponseError,
-                     ClientSession, ContentTypeError, ServerDisconnectedError,
-                     web)
+from aiohttp import (
+    ClientConnectorError,
+    ClientOSError,
+    ClientResponseError,
+    ClientSession,
+    ContentTypeError,
+    ServerDisconnectedError,
+    web,
+)
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_apispec import docs, response_schema
 from breezy.revision import NULL_REVISION
@@ -32,9 +38,15 @@ from yarl import URL
 from janitor.config import Config
 
 from ..vcs import VcsManager
-from . import (BuildDiffUnavailable, DebdiffRetrievalError, check_admin,
-               check_logged_in, get_archive_diff, highlight_diff,
-               is_qa_reviewer)
+from . import (
+    BuildDiffUnavailable,
+    DebdiffRetrievalError,
+    check_admin,
+    check_logged_in,
+    get_archive_diff,
+    highlight_diff,
+    is_qa_reviewer,
+)
 from .common import render_template_for_request
 from .setup import setup_logfile_manager, setup_postgres
 

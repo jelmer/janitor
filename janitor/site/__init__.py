@@ -160,7 +160,7 @@ class DebdiffRetrievalError(Exception):
 class BuildDiffUnavailable(Exception):
     """The build diff is not available."""
 
-    def __init__(self, unavailable_run_id):
+    def __init__(self, unavailable_run_id) -> None:
         self.unavailable_run_id = unavailable_run_id
 
 
