@@ -49,7 +49,7 @@ class Subscription(object):
 class Topic(object):
     """A pubsub topic."""
 
-    def __init__(self, name, repeat_last: bool = False):
+    def __init__(self, name, repeat_last: bool = False) -> None:
         self.name = name
         self.subscriptions: Set[asyncio.Queue] = set()
         self.last = None

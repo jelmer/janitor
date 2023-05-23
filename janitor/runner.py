@@ -38,40 +38,62 @@ import aiozipkin
 import asyncpg
 import asyncpg.pool
 import uvloop
-from aiohttp import (ClientConnectorError, ClientOSError, ClientResponseError,
-                     ClientSession, ClientTimeout, MultipartReader,
-                     ServerDisconnectedError, web)
-from aiohttp_openmetrics import (Counter, Gauge, Histogram, metrics,
-                                 metrics_middleware)
+from aiohttp import (
+    ClientConnectorError,
+    ClientOSError,
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout,
+    MultipartReader,
+    ServerDisconnectedError,
+    web,
+)
+from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics, metrics_middleware
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import (ConnectionError, PermissionDenied,
-                           UnexpectedHttpStatus)
+from breezy.errors import ConnectionError, PermissionDenied, UnexpectedHttpStatus
 from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
 from redis.asyncio import Redis
 from silver_platter.probers import select_preferred_probers
-from silver_platter.proposal import (Forge, ForgeLoginRequired, NoSuchProject,
-                                     UnsupportedForge, find_existing_proposed,
-                                     get_forge)
+from silver_platter.proposal import (
+    Forge,
+    ForgeLoginRequired,
+    NoSuchProject,
+    UnsupportedForge,
+    find_existing_proposed,
+    get_forge,
+)
 from silver_platter.utils import BranchRateLimited, full_branch_url
 from yarl import URL
 
 from . import set_user_agent, splitout_env, state
 from ._launchpad import override_launchpad_consumer_name
-from .artifacts import (ArtifactManager, LocalArtifactManager,
-                        get_artifact_manager, store_artifacts_with_backup,
-                        upload_backup_artifacts)
-from .config import (Campaign, get_campaign_config, get_distribution,
-                     read_config)
+from .artifacts import (
+    ArtifactManager,
+    LocalArtifactManager,
+    get_artifact_manager,
+    store_artifacts_with_backup,
+    upload_backup_artifacts,
+)
+from .config import Campaign, get_campaign_config, get_distribution, read_config
 from .debian import dpkg_vendor
-from .logs import (FileSystemLogFileManager, LogFileManager, get_log_manager,
-                   import_logs)
+from .logs import FileSystemLogFileManager, LogFileManager, get_log_manager, import_logs
 from .queue import Queue, QueueItem
-from .schedule import (CandidateUnavailable, do_schedule, do_schedule_control,
-                       do_schedule_regular)
-from .vcs import (BranchOpenFailure, UnsupportedVcs, VcsManager,
-                  get_vcs_abbreviation, get_vcs_managers, is_authenticated_url,
-                  open_branch_ext)
+from .schedule import (
+    CandidateUnavailable,
+    do_schedule,
+    do_schedule_control,
+    do_schedule_regular,
+)
+from .vcs import (
+    BranchOpenFailure,
+    UnsupportedVcs,
+    VcsManager,
+    get_vcs_abbreviation,
+    get_vcs_managers,
+    is_authenticated_url,
+    open_branch_ext,
+)
 from .worker_creds import check_worker_creds
 
 override_launchpad_consumer_name()
@@ -179,7 +201,7 @@ class GenericBuilder(Builder):
 
     result_cls = GenericResult
 
-    def __init__(self, dep_server_url):
+    def __init__(self, dep_server_url) -> None:
         self.dep_server_url = dep_server_url
 
     async def config(self, conn, campaign_config, queue_item):
@@ -203,7 +225,7 @@ class DebianResult(BuilderResult):
     def __init__(
         self, source=None, build_version=None, build_distribution=None,
         changes_filenames=None, lintian_result=None, binary_packages=None
-    ):
+    ) -> None:
         self.source = source
         self.build_version = build_version
         self.build_distribution = build_distribution
@@ -269,7 +291,7 @@ class DebianResult(BuilderResult):
             "binary_packages": self.binary_packages,
         }
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.changes_filenames is not None
 
 
@@ -280,7 +302,7 @@ class DebianBuilder(Builder):
     result_cls = DebianResult
 
     def __init__(self, distro_config, apt_location: Optional[str] = None,
-                 dep_server_url: Optional[str] = None):
+                 dep_server_url: Optional[str] = None) -> None:
         self.distro_config = distro_config
         self.apt_location = apt_location
         self.dep_server_url = dep_server_url
@@ -419,7 +441,7 @@ class JanitorResult:
         resume_from: Optional[str] = None,
         change_set: Optional[str] = None,
         transient=None,
-    ):
+    ) -> None:
         self.campaign = campaign
         self.log_id = log_id
         self.description = description
@@ -577,7 +599,7 @@ class WorkerResult:
 
     @classmethod
     def from_file(cls, path):
-        """create a WorkerResult object from a JSON file."""
+        """Create a WorkerResult object from a JSON file."""
         with open(path) as f:
             worker_result = json.load(f)
         return cls.from_json(worker_result)
@@ -668,9 +690,9 @@ def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:
 
 
 class PingFailure(Exception):
-    """Failure to ping the job"""
+    """Failure to ping the job."""
 
-    def __init__(self, reason):
+    def __init__(self, reason) -> None:
         self.reason = reason
 
 
@@ -733,7 +755,7 @@ class ActiveRun:
         worker_name: str,
         worker_link: Optional[str] = None,
         resume_from: Optional[str] = None,
-    ):
+    ) -> None:
         self.campaign = campaign
         self.change_set = change_set
         self.command = command
@@ -870,7 +892,7 @@ class JenkinsBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL, metadata=None):
+    def __init__(self, my_url: URL, metadata=None) -> None:
         self.my_url = my_url
         self._metadata = metadata
 
@@ -881,7 +903,7 @@ class JenkinsBackchannel(Backchannel):
             metadata=js['jenkins']
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<{}({!r})>".format(type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
@@ -936,7 +958,7 @@ class PollingBackchannel(Backchannel):
 
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url: URL):
+    def __init__(self, my_url: URL) -> None:
         self.my_url = my_url
 
     @classmethod
@@ -945,7 +967,7 @@ class PollingBackchannel(Backchannel):
             my_url=URL(js['my_url']),
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<{}({!r})>".format(type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
@@ -1101,7 +1123,7 @@ async def check_resume_result(
 
 
 class ResumeInfo:
-    def __init__(self, *, run_id, branch, result, result_branches):
+    def __init__(self, *, run_id, branch, result, result_branches) -> None:
         self.run_id = run_id
         self.branch = branch
         self.result = result
@@ -1233,14 +1255,14 @@ async def store_run(
 class RunExists(Exception):
     """Run already exists."""
 
-    def __init__(self, run_id):
+    def __init__(self, run_id) -> None:
         self.run_id = run_id
 
 
 class QueueItemAlreadyClaimed(Exception):
     """Queue item has been claimed by another run."""
 
-    def __init__(self, queue_id, run_id):
+    def __init__(self, queue_id, run_id) -> None:
         self.queue_id = queue_id
         self.run_id = run_id
 
@@ -1264,9 +1286,8 @@ class QueueProcessor:
         avoid_hosts: Optional[set[str]] = None,
         dep_server_url: Optional[str] = None,
         apt_archive_url: Optional[str] = None,
-    ):
-        """Create a queue processor.
-        """
+    ) -> None:
+        """Create a queue processor."""
         self.database = database
         self.redis = redis
         self.logfile_manager = logfile_manager
@@ -1568,7 +1589,7 @@ class QueueProcessor:
             campaign: Optional[str] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
         queue = Queue(conn)
         exclude_hosts = set(self.avoid_hosts)
-        async for host, retry_after in self.rate_limited_hosts():
+        async for host, _retry_after in self.rate_limited_hosts():
             exclude_hosts.add(host)
         assigned_queue_items = {
             int(i.decode('utf-8'))
@@ -2222,7 +2243,7 @@ class QueueEmpty(Exception):
 class QueueRateLimiting(Exception):
     """Rate limiting encountered while getting queue item."""
 
-    def __init__(self, retry_after):
+    def __init__(self, retry_after) -> None:
         self.retry_after = retry_after
 
 

@@ -25,7 +25,7 @@ import warnings
 from contextlib import ExitStack
 from functools import partial
 from tempfile import TemporaryDirectory
-from typing import Optional, Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import aiozipkin
 import mimeparse
@@ -38,15 +38,18 @@ from aiojobs.aiohttp import spawn
 from redis.asyncio import Redis
 
 from . import set_user_agent, state
-from .artifacts import ArtifactsMissing, get_artifact_manager, ArtifactManager
+from .artifacts import ArtifactManager, ArtifactsMissing, get_artifact_manager
 from .config import read_config
-from .debian.debdiff import DebdiffError
+from .debian.debdiff import (
+    DebdiffError,
+    htmlize_debdiff,
+    markdownify_debdiff,
+    run_debdiff,
+)
 from .debian.debdiff import filter_boring as filter_debdiff_boring
-from .debian.debdiff import htmlize_debdiff, markdownify_debdiff, run_debdiff
-from .diffoscope import DiffoscopeError
+from .diffoscope import DiffoscopeError, format_diffoscope, run_diffoscope
 from .diffoscope import filter_boring as filter_diffoscope_boring
 from .diffoscope import filter_irrelevant as filter_diffoscope_irrelevant
-from .diffoscope import format_diffoscope, run_diffoscope
 
 # Common prefix for temporary directories
 TMP_PREFIX = 'janitor-differ'
@@ -75,7 +78,7 @@ class DiffCommandError(Exception):
     command: str
     reason: str
 
-    def __init__(self, command, reason):
+    def __init__(self, command, reason) -> None:
         self.command = command
         self.reason = reason
 
@@ -86,7 +89,7 @@ class DiffCommandTimeout(Exception):
     command: str
     timeout: int
 
-    def __init__(self, command, timeout):
+    def __init__(self, command, timeout) -> None:
         self.command = command
         self.timeout = timeout
 

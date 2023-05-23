@@ -10,8 +10,12 @@ from breezy.revision import NULL_REVISION
 from janitor import splitout_env, state
 from janitor.config import get_campaign_config
 from janitor.queue import Queue
-from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
-                          get_archive_diff, update_vars_from_request)
+from janitor.site import (
+    BuildDiffUnavailable,
+    DebdiffRetrievalError,
+    get_archive_diff,
+    update_vars_from_request,
+)
 
 
 async def get_previous_runs(

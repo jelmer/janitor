@@ -26,15 +26,22 @@ from fakeredis.aioredis import FakeRedis
 from janitor.config import Config
 from janitor.debian import dpkg_vendor
 from janitor.logs import LogFileManager
-from janitor.runner import (ActiveRun, Backchannel, QueueProcessor,
-                            committer_env, create_app, is_log_filename,
-                            store_change_set, store_run)
+from janitor.runner import (
+    ActiveRun,
+    Backchannel,
+    QueueProcessor,
+    committer_env,
+    create_app,
+    is_log_filename,
+    store_change_set,
+    store_run,
+)
 from janitor.vcs import get_vcs_managers
 
 
 class MemoryLogFileManager(LogFileManager):
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.m = {}
 
     async def has_log(self, pkg, run_id, name, timeout=None):

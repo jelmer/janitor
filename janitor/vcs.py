@@ -34,17 +34,25 @@ from breezy import urlutils
 from breezy.branch import Branch
 from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
-from breezy.errors import (ConnectionError, InvalidHttpResponse,
-                           NoSuchRevision, NotBranchError)
+from breezy.errors import (
+    ConnectionError,
+    InvalidHttpResponse,
+    NoSuchRevision,
+    NotBranchError,
+)
 from breezy.git.remote import RemoteGitError
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
 from breezy.transport import Transport, get_transport_from_url
 from dulwich.objects import ZERO_SHA
-from silver_platter.utils import (BranchMissing, BranchRateLimited,
-                                  BranchTemporarilyUnavailable,
-                                  BranchUnavailable, BranchUnsupported,
-                                  open_branch)
+from silver_platter.utils import (
+    BranchMissing,
+    BranchRateLimited,
+    BranchTemporarilyUnavailable,
+    BranchUnavailable,
+    BranchUnsupported,
+    open_branch,
+)
 from yarl import URL
 
 EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
@@ -53,7 +61,7 @@ EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
 
-    def __init__(self, code: str, description: str, retry_after: Optional[int] = None):
+    def __init__(self, code: str, description: str, retry_after: Optional[int] = None) -> None:
         self.code = code
         self.description = description
         self.retry_after = retry_after
@@ -165,7 +173,7 @@ def open_branch_ext(
 class MirrorFailure(Exception):
     """Branch failed to mirror."""
 
-    def __init__(self, branch_name: str, reason: str):
+    def __init__(self, branch_name: str, reason: str) -> None:
         self.branch_name = branch_name
         self.reason = reason
 
@@ -230,10 +238,10 @@ class VcsManager:
 
 
 class LocalGitVcsManager(VcsManager):
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: str) -> None:
         self.base_path = base_path
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{}({!r})".format(type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
@@ -325,10 +333,10 @@ class LocalGitVcsManager(VcsManager):
 
 
 class LocalBzrVcsManager(VcsManager):
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: str) -> None:
         self.base_path = base_path
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{}({!r})".format(type(self).__name__, self.base_path)
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
@@ -408,7 +416,7 @@ class LocalBzrVcsManager(VcsManager):
 
 
 class RemoteGitVcsManager(VcsManager):
-    def __init__(self, base_url: str, trace_configs=None):
+    def __init__(self, base_url: str, trace_configs=None) -> None:
         self.base_url = base_url
         self.trace_configs = trace_configs
 
@@ -437,7 +445,7 @@ class RemoteGitVcsManager(VcsManager):
         async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{}({!r})".format(type(self).__name__, self.base_url)
 
     def get_diff_url(self, codebase, old_revid, new_revid):
@@ -460,7 +468,7 @@ class RemoteGitVcsManager(VcsManager):
 
 
 class RemoteBzrVcsManager(VcsManager):
-    def __init__(self, base_url: str, *, trace_configs=None):
+    def __init__(self, base_url: str, *, trace_configs=None) -> None:
         self.base_url = base_url
         self.trace_configs = trace_configs
 
@@ -481,7 +489,7 @@ class RemoteBzrVcsManager(VcsManager):
         async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.json()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{}({!r})".format(type(self).__name__, self.base_url)
 
     def get_diff_url(self, codebase, old_revid, new_revid):

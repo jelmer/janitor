@@ -25,8 +25,13 @@ from contextlib import suppress
 from io import StringIO
 from typing import Any
 
-from breezy.patches import (ContextLine, InsertLine, MalformedHunkHeader,
-                            RemoveLine, iter_hunks)
+from breezy.patches import (
+    ContextLine,
+    InsertLine,
+    MalformedHunkHeader,
+    RemoveLine,
+    iter_hunks,
+)
 
 
 class DiffoscopeError(Exception):

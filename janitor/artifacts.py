@@ -77,12 +77,12 @@ class ArtifactManager:
 
 
 class LocalArtifactManager(ArtifactManager):
-    def __init__(self, path):
+    def __init__(self, path) -> None:
         self.path = os.path.abspath(path)
         if not os.path.isdir(self.path):
             os.makedirs(self.path)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}({self.path!r})"
 
     async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
@@ -130,7 +130,7 @@ class GCSArtifactManager(ArtifactManager):
     bucket_name: str
     storage: "Storage"
 
-    def __init__(self, location, creds_path=None, trace_configs=None):
+    def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
         if hostname is None:
             raise ValueError('missing bucket in %s' % location)
@@ -138,7 +138,7 @@ class GCSArtifactManager(ArtifactManager):
         self.creds_path = creds_path
         self.trace_configs = trace_configs
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{}({!r})".format(type(self).__name__, "gs://%s/" % self.bucket_name)
 
     async def __aenter__(self):

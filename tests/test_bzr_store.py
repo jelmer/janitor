@@ -17,8 +17,8 @@
 
 import asyncio
 import os
-from threading import Thread
 import tempfile
+from threading import Thread
 
 from breezy.controldir import ControlDir
 

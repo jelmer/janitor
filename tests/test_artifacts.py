@@ -22,8 +22,7 @@ import tempfile
 import unittest
 from typing import Callable
 
-from janitor.artifacts import (ArtifactManager, ArtifactsMissing,
-                               LocalArtifactManager)
+from janitor.artifacts import ArtifactManager, ArtifactsMissing, LocalArtifactManager
 
 
 class ArtifactManagerTests:
