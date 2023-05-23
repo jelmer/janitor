@@ -28,3 +28,6 @@ man
 share
 .hypothesis
 .tox
+Cargo.lock
+target
+janitor/_mail_filter.*.so

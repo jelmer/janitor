@@ -1,0 +1,15 @@
+[package]
+name = "mail-filter-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+janitor-mail-filter = { path = "../mail-filter" }
+pyo3 = { version = ">=0.14", features = ["extension-module"]}
