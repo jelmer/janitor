@@ -33,7 +33,7 @@ from datetime import datetime
 from email.utils import formatdate, parsedate_to_datetime
 from functools import partial
 from time import mktime
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 import aiozipkin
 import gpg
@@ -41,7 +41,7 @@ import uvloop
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Gauge, setup_metrics
-from aiojobs import Scheduler
+from aiojobs import Scheduler, Job
 from debian.deb822 import Packages, Release, Sources
 from gpg.constants.sig import mode as gpg_mode
 
@@ -804,7 +804,7 @@ class GeneratorManager:
         self.package_info_provider = package_info_provider
         self.gpg_context = gpg_context
         self.scheduler = Scheduler()
-        self.jobs = {}
+        self.jobs: Dict[str, Job] = {}
         self._campaign_to_repository: dict[str, list[AptRepositoryConfig]] = {}
         for apt_repo in self.config.apt_repository:
             for select in apt_repo.select:

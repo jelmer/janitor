@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
-from breezy.forge import UnsupportedForge, get_forge_by_hostname
+from breezy.forge import UnsupportedForge, get_forge_by_hostname, Forge
 from breezy.revision import NULL_REVISION
 from buildlog_consultant.sbuild import (
     SbuildLog,
@@ -383,7 +383,7 @@ async def generate_done_list(
 class MergeProposalUserUrlResolver(object):
 
     def __init__(self) -> None:
-        self._forges = {}
+        self._forges: Dict[str, Optional[Forge]] = {}
 
     def resolve(self, url, user):
         hostname = URL(url).host
