@@ -1,0 +1,13 @@
+[package]
+name = "janitor-worker"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2021"
+description = "Worker for the janitor"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[dependencies]
+tokio = { version = "1.12.0", features = ["full"] }
+reqwest = { version = "0.11.6", features = ["json"] }

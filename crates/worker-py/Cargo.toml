@@ -1,0 +1,17 @@
+[package]
+name = "worker-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2021"
+description = "Worker for the janitor - python bindings"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3-asyncio = {version = ">=0.14", features=["tokio-runtime"]}
+pyo3 = {version = ">=0.14", features=["extension-module"]}
+janitor-worker = { path = "../worker" }
