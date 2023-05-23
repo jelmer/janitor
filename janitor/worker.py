@@ -97,6 +97,8 @@ from silver_platter.workspace import Workspace
 
 from .vcs import BranchOpenFailure, open_branch_ext
 
+from ._worker import is_gce_instance, gce_external_ip
+
 push_branch_retries = Counter(
     "push_branch_retries", "Number of branch push retries.")
 upload_result_retries = Counter(
@@ -124,30 +126,6 @@ class EmptyQueue(Exception):
 
 
 logger = logging.getLogger(__name__)
-
-
-def is_gce_instance():
-    try:
-        socket.getaddrinfo('metadata.google.internal', 80)
-    except socket.gaierror:
-        return False
-    return True
-
-
-def gce_external_ip():
-    from urllib.error import HTTPError
-    from urllib.request import Request, urlopen
-    req = Request(
-        'http://metadata.google.internal/computeMetadata/v1'
-        '/instance/network-interfaces/0/access-configs/0/external-ip',
-        headers={'Metadata-Flavor': 'Google'})
-    try:
-        resp = urlopen(req)
-    except HTTPError as e:
-        if e.code == 404:
-            return None
-        raise
-    return resp.read().decode()
 
 
 class WorkerFailure(Exception):
@@ -1628,6 +1606,7 @@ async def main(argv=None):
     if not node_name:
         node_name = socket.gethostname()
 
+    loop = asyncio.get_event_loop()
     if args.my_url:
         my_url = yarl.URL(args.my_url)
     elif args.external_address:
@@ -1636,8 +1615,8 @@ async def main(argv=None):
     elif 'MY_IP' in os.environ:
         my_url = yarl.URL.build(
             scheme='http', host=os.environ['MY_IP'], port=site_port)
-    elif is_gce_instance():
-        external_ip = gce_external_ip()
+    elif await is_gce_instance():
+        external_ip = await gce_external_ip()
         if external_ip:
             my_url = yarl.URL.build(
                 scheme='http', host=external_ip, port=site_port)
@@ -1650,7 +1629,6 @@ async def main(argv=None):
     if my_url:
         logging.info('Diagnostics available at %s', my_url)
 
-    loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
         loop.add_signal_handler(
             signal.SIGINT, handle_sigterm, session, base_url,
@@ -1684,5 +1662,5 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    uvloop.install()
     sys.exit(asyncio.run(main()))
