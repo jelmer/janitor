@@ -394,7 +394,7 @@ class MergeProposalUserUrlResolver(object):
                 self._forges[hostname] = get_forge_by_hostname(hostname)
             except UnsupportedForge:
                 self._forges[hostname] = None
-        if self._forges[hostname]:
+        if self._forges[hostname] is not None:
             return self._forges[hostname].get_user_url(user)
         else:
             return None
