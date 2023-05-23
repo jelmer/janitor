@@ -38,6 +38,7 @@ jobs:
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
           pip install -U -e .[dev,debian]
           python setup.py develop
+          python setup.py build_ext -i
           make
       - name: Style checks (flake8)
         run: |

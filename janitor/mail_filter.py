@@ -23,7 +23,6 @@ of any merge request mentioned in the body.
 """
 
 
-import logging
 import sys
 from typing import Optional, cast
 
