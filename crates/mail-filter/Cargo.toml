@@ -1,0 +1,16 @@
+[package]
+name = "janitor-mail-filter"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2018"
+description = "Mail filter for the janitor"
+license = "Apache-2.0"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[dependencies]
+isahc = "1"
+serde_json = "1"
+select = "0.6"
+mailparse = "0.14"
+async-std = "1"
