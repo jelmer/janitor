@@ -23,63 +23,12 @@ of any merge request mentioned in the body.
 """
 
 
-import logging
 import sys
 from typing import Optional, cast
 
 import uvloop
 
-
-def parse_plain_text_body(text):
-    lines = text.splitlines()
-
-    for i, line in enumerate(lines):
-        if line == 'Reply to this email directly or view it on GitHub:':
-            return lines[i + 1].split('#')[0]
-        if (line == 'For more details, see:'
-                and lines[i + 1].startswith('https://code.launchpad.net/')):
-            return lines[i + 1]
-        try:
-            (field, value) = line.split(':', 1)
-        except ValueError:
-            continue
-        if field.lower() == 'merge request url':
-            return value.strip()
-    return None
-
-
-def parse_json_ld(ld):
-    if isinstance(ld, list):
-        try:
-            return next(filter(None, map(parse_json_ld, ld)))
-        except StopIteration:
-            return None
-
-    if ld['@context'] not in ('https://schema.org', 'http://schema.org'):
-        logging.debug('Found unexpected @context: %s', ld['@context'])
-        return None
-    if ld['@type'] != 'EmailMessage':
-        logging.debug('Found unexpected @type: %s', ld['@type'])
-        return None
-    action = ld.get('action') or ld.get('potentialAction')
-    if not action:
-        logging.debug('No action or potentialAction found: %r', ld)
-        return None
-    if action['@type'] != 'ViewAction':
-        logging.debug('Unexpected @type: %r', action)
-        return None
-    return action['url'].split('#')[0]
-
-
-def parse_html_body(contents):
-    import json
-
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(contents, 'html.parser')
-    ld = soup.find('script', type='application/ld+json')
-    if not ld:
-        return None
-    return parse_json_ld(json.loads(ld.text))
+from ._mail_filter import parse_plain_text_body, parse_html_body
 
 
 def parse_email(f):

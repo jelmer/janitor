@@ -32,12 +32,13 @@ jobs:
           sudo apt -y update
           sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
             libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
-            libpcre3-dev libjs-jquery-datatables postgresql-14 postgresql-14-debversion
-          python -m pip install --upgrade pip setuptools setuptools-protobuf \
+            libpcre3-dev libjs-jquery-datatables postgresql-14 postgresql-14-debversion libssl-dev pkg-config
+          python -m pip install --upgrade pip setuptools setuptools-protobuf setuptools-rust \
             wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
           pip install -U -e .[dev,debian]
           python setup.py develop
+          python setup.py build_ext -i
           make
       - name: Style checks (flake8)
         run: |
