@@ -138,7 +138,7 @@ class Run:
         failure_transient,
         failure_stage,
         codebase,
-    ):
+    ) -> None:
         self.id = run_id
         self.start_time = start_time
         self.finish_time = finish_time

@@ -25,9 +25,11 @@ import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
 from breezy.forge import UnsupportedForge, get_forge_by_hostname
 from breezy.revision import NULL_REVISION
-from buildlog_consultant.sbuild import (SbuildLog,
-                                        find_build_failure_description,
-                                        worker_failure_from_sbuild_log)
+from buildlog_consultant.sbuild import (
+    SbuildLog,
+    find_build_failure_description,
+    worker_failure_from_sbuild_log,
+)
 from ognibuild.build import BUILD_LOG_FILENAME
 from ognibuild.dist import DIST_LOG_FILENAME
 from yarl import URL
@@ -35,8 +37,7 @@ from yarl import URL
 from janitor import state
 from janitor.logs import LogRetrievalError
 from janitor.queue import Queue
-from janitor.site import (BuildDiffUnavailable, DebdiffRetrievalError,
-                          get_archive_diff)
+from janitor.site import BuildDiffUnavailable, DebdiffRetrievalError, get_archive_diff
 
 from ..config import get_campaign_config
 from ..vcs import VcsManager
@@ -381,7 +382,7 @@ async def generate_done_list(
 
 class MergeProposalUserUrlResolver(object):
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._forges = {}
 
     def resolve(self, url, user):

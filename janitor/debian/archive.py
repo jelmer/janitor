@@ -47,8 +47,8 @@ from gpg.constants.sig import mode as gpg_mode
 
 from .. import state
 from ..artifacts import ArtifactsMissing, get_artifact_manager
-from ..config import (get_campaign_config, get_distribution,
-                      read_config, AptRepository as AptRepositoryConfig)
+from ..config import AptRepository as AptRepositoryConfig
+from ..config import get_campaign_config, get_distribution, read_config
 
 TMP_PREFIX = 'janitor-apt'
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -136,7 +136,7 @@ async def scan_sources(td):
 
 
 class GeneratingPackageInfoProvider(PackageInfoProvider):
-    def __init__(self, artifact_manager):
+    def __init__(self, artifact_manager) -> None:
         self.artifact_manager = artifact_manager
 
     async def __aenter__(self):
@@ -183,7 +183,7 @@ class GeneratingPackageInfoProvider(PackageInfoProvider):
 
 
 class DiskCachingPackageInfoProvider(PackageInfoProvider):
-    def __init__(self, primary_info_provider, cache_directory):
+    def __init__(self, primary_info_provider, cache_directory) -> None:
         self.primary_info_provider = primary_info_provider
         self.cache_directory = cache_directory
 
@@ -323,7 +323,7 @@ def cleanup_by_hash_files(base, number_to_keep):
 class HashedFileWriter:
     """File write wrapper that writes by-hash files."""
 
-    def __init__(self, release, base, path, open=open):
+    def __init__(self, release, base, path, open=open) -> None:
         self.open = open
         self.release = release
         self.base = base
@@ -797,7 +797,7 @@ async def publish_repository(
 
 
 class GeneratorManager:
-    def __init__(self, dists_dir, db, config, package_info_provider, gpg_context):
+    def __init__(self, dists_dir, db, config, package_info_provider, gpg_context) -> None:
         self.dists_dir = dists_dir
         self.db = db
         self.config = config

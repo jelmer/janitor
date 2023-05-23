@@ -34,27 +34,51 @@ from email.utils import parseaddr
 from typing import Any, Optional
 
 from breezy.branch import Branch
-from breezy.errors import (DivergedBranches, NoSuchRevision,
-                           UnexpectedHttpStatus)
-from breezy.forge import (Forge, ForgeLoginRequired, UnsupportedForge,
-                          determine_title, get_forge)
+from breezy.errors import DivergedBranches, NoSuchRevision, UnexpectedHttpStatus
+from breezy.forge import (
+    Forge,
+    ForgeLoginRequired,
+    UnsupportedForge,
+    determine_title,
+    get_forge,
+)
 from breezy.git.remote import RemoteGitBranch, RemoteGitError
-from breezy.plugins.gitlab.forge import (ForkingDisabled, GitLabConflict,
-                                         ProjectCreationTimeout)
+from breezy.plugins.gitlab.forge import (
+    ForkingDisabled,
+    GitLabConflict,
+    ProjectCreationTimeout,
+)
 from breezy.transport import Transport
-from jinja2 import (Environment, FileSystemLoader, Template, TemplateNotFound,
-                    TemplateSyntaxError, select_autoescape)
-from silver_platter.publish import (EmptyMergeProposal,
-                                    InsufficientChangesForNewProposal,
-                                    MergeProposal, MergeProposalExists,
-                                    NoSuchProject, PermissionDenied,
-                                    PublishResult, SourceNotDerivedFromTarget,
-                                    find_existing_proposed, merge_conflicts,
-                                    publish_changes)
-from silver_platter.utils import (BranchMissing, BranchRateLimited,
-                                  BranchTemporarilyUnavailable,
-                                  BranchUnavailable, create_temp_sprout,
-                                  full_branch_url, open_branch)
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    Template,
+    TemplateNotFound,
+    TemplateSyntaxError,
+    select_autoescape,
+)
+from silver_platter.publish import (
+    EmptyMergeProposal,
+    InsufficientChangesForNewProposal,
+    MergeProposal,
+    MergeProposalExists,
+    NoSuchProject,
+    PermissionDenied,
+    PublishResult,
+    SourceNotDerivedFromTarget,
+    find_existing_proposed,
+    merge_conflicts,
+    publish_changes,
+)
+from silver_platter.utils import (
+    BranchMissing,
+    BranchRateLimited,
+    BranchTemporarilyUnavailable,
+    BranchUnavailable,
+    create_temp_sprout,
+    full_branch_url,
+    open_branch,
+)
 
 from ._launchpad import override_launchpad_consumer_name
 from .debian.debdiff import debdiff_is_empty, markdownify_debdiff
@@ -79,24 +103,24 @@ SUPPORTED_MODES = [
 
 
 class PublishFailure(Exception):
-    def __init__(self, code, description):
+    def __init__(self, code, description) -> None:
         self.code = code
         self.description = description
 
 
 class PublishNothingToDo(Exception):
-    def __init__(self, description):
+    def __init__(self, description) -> None:
         self.description = description
 
 
 class MergeConflict(Exception):
-    def __init__(self, target_branch, source_branch):
+    def __init__(self, target_branch, source_branch) -> None:
         self.target_branch = target_branch
         self.source_branch = source_branch
 
 
 class DebdiffRetrievalError(Exception):
-    def __init__(self, reason):
+    def __init__(self, reason) -> None:
         self.reason = reason
 
 
@@ -258,14 +282,14 @@ def publish(
 class DebdiffMissingRun(Exception):
     """Raised when the debdiff was missing a run."""
 
-    def __init__(self, missing_run_id):
+    def __init__(self, missing_run_id) -> None:
         self.missing_run_id = missing_run_id
 
 
 class DifferUnavailable(Exception):
     """The differ was unavailable."""
 
-    def __init__(self, reason):
+    def __init__(self, reason) -> None:
         self.reason = reason
 
 

@@ -21,15 +21,16 @@ import re
 from datetime import date, datetime
 from typing import Any, List, Optional
 
+import aiohttp_jinja2
 import aiozipkin
 import asyncpg
+from aiohttp import ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp import web, ClientSession
-import aiohttp_jinja2
-
 from jinja2 import select_autoescape
+
 from janitor.site import template_loader
 from janitor.vcs import get_vcs_managers_from_config
+
 from .. import check_logged_in, is_admin, is_qa_reviewer, worker_link_is_global
 from ..common import html_template
 from ..pkg import MergeProposalUserUrlResolver

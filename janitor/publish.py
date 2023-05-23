@@ -43,20 +43,36 @@ import uvloop
 from aiohttp import ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_apispec import setup_aiohttp_apispec
-from aiohttp_openmetrics import (REGISTRY, Counter, Gauge, Histogram,
-                                 push_to_gateway, setup_metrics)
+from aiohttp_openmetrics import (
+    REGISTRY,
+    Counter,
+    Gauge,
+    Histogram,
+    push_to_gateway,
+    setup_metrics,
+)
 from aiojobs.aiohttp import setup as setup_aiojobs
 from aiojobs.aiohttp import spawn
 from breezy import urlutils
-from breezy.errors import (PermissionDenied, RedirectRequested,
-                           UnexpectedHttpStatus)
-from breezy.forge import (Forge, ForgeLoginRequired, MergeProposal,
-                          UnsupportedForge, forges, get_forge_by_hostname,
-                          get_proposal_by_url, iter_forge_instances)
+from breezy.errors import PermissionDenied, RedirectRequested, UnexpectedHttpStatus
+from breezy.forge import (
+    Forge,
+    ForgeLoginRequired,
+    MergeProposal,
+    UnsupportedForge,
+    forges,
+    get_forge_by_hostname,
+    get_proposal_by_url,
+    iter_forge_instances,
+)
 from breezy.transport import Transport
 from redis.asyncio import Redis
-from silver_platter.utils import (BranchMissing, BranchRateLimited,
-                                  BranchUnavailable, open_branch)
+from silver_platter.utils import (
+    BranchMissing,
+    BranchRateLimited,
+    BranchUnavailable,
+    open_branch,
+)
 from yarl import URL
 
 from . import set_user_agent, state
@@ -196,7 +212,7 @@ class RateLimited(Exception):
 class BucketRateLimited(RateLimited):
     """Per-bucket rate-limit was reached."""
 
-    def __init__(self, bucket, open_mps, max_open_mps):
+    def __init__(self, bucket, open_mps, max_open_mps) -> None:
         super().__init__(
             "Bucke %s already has %d merge proposal open (max: %d)" % (
                 bucket, open_mps, max_open_mps))
@@ -225,7 +241,7 @@ class FixedRateLimiter(RateLimiter):
 
     _open_mps_per_bucket: Optional[dict[str, int]]
 
-    def __init__(self, max_mps_per_bucket: Optional[int] = None):
+    def __init__(self, max_mps_per_bucket: Optional[int] = None) -> None:
         self._max_mps_per_bucket = max_mps_per_bucket
         self._open_mps_per_bucket = None
 
@@ -272,7 +288,7 @@ class NonRateLimiter(RateLimiter):
 
 
 class SlowStartRateLimiter(RateLimiter):
-    def __init__(self, max_mps_per_bucket=None):
+    def __init__(self, max_mps_per_bucket=None) -> None:
         self._max_mps_per_bucket = max_mps_per_bucket
         self._open_mps_per_bucket: Optional[dict[str, int]] = None
         self._absorbed_mps_per_bucket: Optional[dict[str, int]] = None
@@ -323,7 +339,7 @@ class SlowStartRateLimiter(RateLimiter):
 
 
 class PublishFailure(Exception):
-    def __init__(self, mode: str, code: str, description: str):
+    def __init__(self, mode: str, code: str, description: str) -> None:
         self.mode = mode
         self.code = code
         self.description = description
@@ -374,14 +390,14 @@ class PublishResult:
 class BranchBusy(Exception):
     """The branch is already busy."""
 
-    def __init__(self, branch_url):
+    def __init__(self, branch_url) -> None:
         self.branch_url = branch_url
 
 
 class WorkerInvalidResponse(Exception):
     """Invalid response from worker."""
 
-    def __init__(self, output):
+    def __init__(self, output) -> None:
         self.output = output
 
 
@@ -417,7 +433,7 @@ class PublishWorker:
                  redis=None,
                  template_env_path: Optional[str] = None,
                  external_url: Optional[str] = None,
-                 differ_url: Optional[str] = None):
+                 differ_url: Optional[str] = None) -> None:
         self.template_env_path = template_env_path
         self.external_url = external_url
         self.differ_url = differ_url
@@ -2155,7 +2171,7 @@ async def process_queue_loop(
 class NoRunForMergeProposal(Exception):
     """No run matching merge proposal."""
 
-    def __init__(self, mp, revision):
+    def __init__(self, mp, revision) -> None:
         self.mp = mp
         self.revision = revision
 
@@ -2298,7 +2314,7 @@ def find_campaign_by_branch_name(config, branch_name):
 
 class ProposalInfoManager:
 
-    def __init__(self, conn: asyncpg.Connection, redis):
+    def __init__(self, conn: asyncpg.Connection, redis) -> None:
         self.conn = conn
         self.redis = redis
 
@@ -3027,7 +3043,7 @@ applied independently.
 def iter_all_mps(
     statuses: Optional[list[str]] = None,
 ) -> Iterator[tuple[Forge, MergeProposal, str]]:
-    """iterate over all existing merge proposals."""
+    """Iterate over all existing merge proposals."""
     if statuses is None:
         statuses = ["open", "merged", "closed"]
     for instance in iter_forge_instances():

@@ -18,9 +18,15 @@
 from breezy import controldir
 from breezy.tests import TestCaseWithTransport
 
-from janitor.vcs import (LocalBzrVcsManager, RemoteBzrVcsManager,
-                         RemoteGitVcsManager, get_run_diff, get_vcs_managers,
-                         is_alioth_url, is_authenticated_url)
+from janitor.vcs import (
+    LocalBzrVcsManager,
+    RemoteBzrVcsManager,
+    RemoteGitVcsManager,
+    get_run_diff,
+    get_vcs_managers,
+    is_alioth_url,
+    is_authenticated_url,
+)
 
 
 class GetRunDiffsTests(TestCaseWithTransport):

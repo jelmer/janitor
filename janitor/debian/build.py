@@ -23,10 +23,13 @@ from typing import Any, Optional
 
 from breezy.workingtree import WorkingTree
 from ognibuild.debian.apt import AptManager
-from ognibuild.debian.build import (ChangelogNotEditable,
-                                    DetailedDebianBuildFailure,
-                                    MissingChangesFile,
-                                    UnidentifiedDebianBuildError, build_once)
+from ognibuild.debian.build import (
+    ChangelogNotEditable,
+    DetailedDebianBuildFailure,
+    MissingChangesFile,
+    UnidentifiedDebianBuildError,
+    build_once,
+)
 from ognibuild.debian.fix_build import build_incrementally, default_fixers
 from ognibuild.session import Session, SessionSetupFailure
 from ognibuild.session.plain import PlainSession

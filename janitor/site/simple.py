@@ -44,8 +44,13 @@ from . import TEMPLATE_ENV, template_loader
 from .common import html_template, render_template_for_request
 from .openid import setup_openid
 from .pubsub import Topic, pubsub_handler
-from .setup import (setup_artifact_manager, setup_gpg, setup_logfile_manager,
-                    setup_postgres, setup_redis)
+from .setup import (
+    setup_artifact_manager,
+    setup_gpg,
+    setup_logfile_manager,
+    setup_postgres,
+    setup_redis,
+)
 from .webhook import is_webhook_request, parse_webhook
 
 routes = web.RouteTableDef()

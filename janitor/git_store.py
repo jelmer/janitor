@@ -24,7 +24,7 @@ import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
 from io import BytesIO
-from typing import Optional, Tuple, Dict
+from typing import Dict, Optional, Tuple
 
 import aiohttp_jinja2
 import aiozipkin
@@ -183,7 +183,7 @@ async def handle_klaus(request: web.Request) -> web.Response:
     from klaus.repo import FancyRepo
 
     class Klaus(Flask):
-        def __init__(self, codebase, repo):
+        def __init__(self, codebase, repo) -> None:
             super().__init__("klaus")
             self.codebase = codebase
             self.valid_repos = {codebase: FancyRepo(repo.path, namespace=None)}
@@ -192,7 +192,7 @@ async def handle_klaus(request: web.Request) -> web.Response:
             return False
 
         def create_jinja_environment(self):
-            """Called by Flask.__init__"""
+            """Called by Flask.__init__."""
             env = super().create_jinja_environment()
             for func in [
                 "force_unicode",

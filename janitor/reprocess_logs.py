@@ -20,10 +20,8 @@ from datetime import timedelta
 from typing import Optional
 
 import silver_platter  # noqa: E402, F401
-from buildlog_consultant.common import \
-    find_build_failure_description  # noqa: E402
-from buildlog_consultant.sbuild import \
-    worker_failure_from_sbuild_log  # noqa: E402
+from buildlog_consultant.common import find_build_failure_description  # noqa: E402
+from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
 
 from janitor.schedule import do_schedule
 
@@ -99,8 +97,7 @@ async def reprocess_run_logs(
         result_code: str, description: str, failure_details,
         process_fns, dry_run: bool = False,
         reschedule: bool = False, log_timeout: Optional[int] = None):
-    """Reprocess run logs.
-    """
+    """Reprocess run logs."""
     if result_code in ('dist-no-tarball', ):
         return
     for prefix, logname, fn in process_fns:

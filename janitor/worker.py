@@ -40,35 +40,59 @@ from typing import Any, Optional, TypedDict, cast
 import backoff
 import uvloop
 import yarl
-from aiohttp import (BasicAuth, ClientConnectorError, ClientSession,
-                     ClientTimeout, ContentTypeError, MultipartWriter, web)
-from aiohttp_openmetrics import (REGISTRY, Counter, push_to_gateway,
-                                 setup_metrics)
+from aiohttp import (
+    BasicAuth,
+    ClientConnectorError,
+    ClientSession,
+    ClientTimeout,
+    ContentTypeError,
+    MultipartWriter,
+    web,
+)
+from aiohttp_openmetrics import REGISTRY, Counter, push_to_gateway, setup_metrics
 from breezy import urlutils
 from breezy.branch import Branch
-from breezy.config import (GlobalStack, PlainTextCredentialStore,
-                           credential_store_registry)
+from breezy.config import (
+    GlobalStack,
+    PlainTextCredentialStore,
+    credential_store_registry,
+)
 from breezy.controldir import ControlDir, format_registry
-from breezy.errors import (AlreadyControlDirError, ConnectionError,
-                           ConnectionReset, InvalidHttpResponse,
-                           NoRepositoryPresent, NotBranchError, TransportError,
-                           TransportNotPossible, UnexpectedHttpStatus)
+from breezy.errors import (
+    AlreadyControlDirError,
+    ConnectionError,
+    ConnectionReset,
+    InvalidHttpResponse,
+    NoRepositoryPresent,
+    NotBranchError,
+    TransportError,
+    TransportNotPossible,
+    UnexpectedHttpStatus,
+)
 from breezy.git.remote import RemoteGitError
 from breezy.revision import NULL_REVISION
-from breezy.transform import (ImmortalLimbo, MalformedTransform,
-                              TransformRenameFailed)
+from breezy.transform import ImmortalLimbo, MalformedTransform, TransformRenameFailed
 from breezy.transport import NoSuchFile, Transport, get_transport
 from breezy.tree import MissingNestedTree
 from jinja2 import Template
 from silver_platter.apply import CommandResult as GenericCommandResult
 from silver_platter.apply import DetailedFailure as GenericDetailedFailure
-from silver_platter.apply import (ResultFileFormatError, ScriptFailed,
-                                  ScriptMadeNoChanges, ScriptNotFound)
+from silver_platter.apply import (
+    ResultFileFormatError,
+    ScriptFailed,
+    ScriptMadeNoChanges,
+    ScriptNotFound,
+)
 from silver_platter.apply import script_runner as generic_script_runner
 from silver_platter.probers import select_probers
-from silver_platter.utils import (BranchMissing, BranchTemporarilyUnavailable,
-                                  BranchUnavailable, full_branch_url,
-                                  get_branch_vcs_type, open_branch)
+from silver_platter.utils import (
+    BranchMissing,
+    BranchTemporarilyUnavailable,
+    BranchUnavailable,
+    full_branch_url,
+    get_branch_vcs_type,
+    open_branch,
+)
 from silver_platter.workspace import Workspace
 
 from .vcs import BranchOpenFailure, open_branch_ext
@@ -191,7 +215,7 @@ class DebianTarget(Target):
 
     name = "debian"
 
-    def __init__(self, env):
+    def __init__(self, env) -> None:
         self.env = env
         self.committer = env.get("COMMITTER")
         uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
@@ -209,11 +233,9 @@ class DebianTarget(Target):
 
     def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
-        from silver_platter.debian.apply import \
-            DetailedFailure as DebianDetailedFailure
+        from silver_platter.debian.apply import DetailedFailure as DebianDetailedFailure
         from silver_platter.debian.apply import MissingChangelog
-        from silver_platter.debian.apply import \
-            script_runner as debian_script_runner
+        from silver_platter.debian.apply import script_runner as debian_script_runner
 
         if not argv:
             return GenericCommandResult(
@@ -302,7 +324,7 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, env):
+    def __init__(self, env) -> None:
         self.env = env
 
     def make_changes(self, local_tree, subpath, argv, *, log_directory,
@@ -1066,7 +1088,7 @@ def run_worker(
 class AssignmentFailure(Exception):
     """Assignment failed."""
 
-    def __init__(self, reason):
+    def __init__(self, reason) -> None:
         self.reason = reason
 
 
