@@ -18,6 +18,7 @@
 import os
 from datetime import datetime, timedelta
 from io import BytesIO
+from typing import Dict, Tuple
 
 import aiozipkin
 from aiohttp import MultipartWriter
@@ -42,18 +43,18 @@ from janitor.vcs import get_vcs_managers
 class MemoryLogFileManager(LogFileManager):
 
     def __init__(self) -> None:
-        self.m = {}
+        self.m: Dict[Tuple[str, str], Dict[str, bytes]] = {}
 
-    async def has_log(self, pkg, run_id, name, timeout=None):
+    async def has_log(self, pkg: str, run_id: str, name: str, timeout=None):
         return name in self.m.get((pkg, run_id), {})
 
-    async def get_log(self, pkg, run_id, name, timeout=None):
+    async def get_log(self, pkg: str, run_id: str, name: str, timeout=None):
         try:
             return BytesIO(self.m.get((pkg, run_id), {})[name])
         except KeyError as e:
             raise FileNotFoundError from e
 
-    async def get_ctime(self, pkg, run_id, name):
+    async def get_ctime(self, pkg: str, run_id: str, name: str):
         if self.has_log(pkg, run_id, name):
             return datetime.utcnow()
         raise FileNotFoundError
