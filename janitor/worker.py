@@ -1372,9 +1372,9 @@ async def main(argv=None):
 
     if args.gcp_logging:
         import google.cloud.logging
-        client = google.cloud.logging.Client()
-        client.get_default_handler()
-        client.setup_logging()
+        log_client = google.cloud.logging.Client()
+        log_client.get_default_handler()
+        log_client.setup_logging()
     else:
         if args.debug:
             log_level = logging.DEBUG
@@ -1486,7 +1486,6 @@ async def main(argv=None):
         try:
             await process_single_item(
                 client, my_url=my_url,
-                base_url=base_url,
                 node_name=node_name,
                 workitem=app['workitem'],
                 jenkins_build_url=jenkins_build_url,
@@ -1494,7 +1493,7 @@ async def main(argv=None):
                 codebase=args.codebase, campaign=args.campaign,
                 tee=args.tee)
         except AssignmentFailure as e:
-            logging.fatal("failed to get assignment: %s", e.reason)
+            logging.fatal("failed to get assignment: %s", e)
             return 1
         except EmptyQueue:
             logging.info('queue is empty')

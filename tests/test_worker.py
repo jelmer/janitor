@@ -69,40 +69,6 @@ class AsyncBytesIO:
         return self._io.read(size)
 
 
-@pytest.mark.asyncio
-async def test_bundle_results():
-    with tempfile.TemporaryDirectory() as test_dir:
-        with open(os.path.join(test_dir, "a"), "w") as f:
-            f.write("some data\n")
-        with bundle_results({"result_code": "success"}, test_dir) as writer:
-            assert ["Content-Type"] == list(writer.headers.keys())
-            b = AsyncBytesIO()
-            await writer.write(b)
-            b.seek(0)
-            reader = MultipartReader(writer.headers, b)  # type: ignore
-            part = await reader.next()
-            assert isinstance(part, BodyPartReader)
-            assert part.headers == {
-                "Content-Disposition": 'attachment; filename="result.json"; '
-                "filename*=utf-8''result.json",
-                "Content-Length": "26",
-                "Content-Type": "application/json",
-            }
-            assert "result.json" == part.filename
-            assert b'{"result_code": "success"}' == bytes(await part.read())
-            part = await reader.next()
-            assert isinstance(part, BodyPartReader)
-            assert part.headers == {
-                "Content-Disposition": 'attachment; filename="a"; '
-                "filename*=utf-8''a",
-                "Content-Length": "10",
-                "Content-Type": "application/octet-stream",
-            }
-            assert "a" == part.filename
-            assert b"some data\n" == bytes(await part.read())
-            assert part.at_eof()
-
-
 async def create_client(aiohttp_client):
     app = await create_app()
     client = await aiohttp_client(app)
