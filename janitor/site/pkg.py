@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
-from breezy.forge import UnsupportedForge, get_forge_by_hostname, Forge
+from breezy.forge import Forge, UnsupportedForge, get_forge_by_hostname
 from breezy.revision import NULL_REVISION
 from buildlog_consultant.sbuild import (
     SbuildLog,

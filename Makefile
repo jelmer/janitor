@@ -1,6 +1,7 @@
 DOCKER_TAG ?= latest
 
 core: janitor/site/_static/pygments.css
+	python3 setup.py build_ext -i
 
 all: core
 
@@ -19,6 +20,11 @@ ruff:
 
 fix:: ruff-fix
 
+fix:: cargo-fix
+
+cargo-fix:
+	cargo clippy --fix
+
 ruff-fix:
 	ruff check --fix .
 
@@ -27,6 +33,7 @@ suite-references:
 
 test:
 	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python py.test tests
+	cargo test
 
 style:: flake8
 

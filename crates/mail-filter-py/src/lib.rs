@@ -11,7 +11,7 @@ fn parse_html_body(html: &str) -> PyResult<Option<String>> {
 }
 
 #[pymodule]
-pub fn _mail_filter(py: Python, m: &PyModule) -> PyResult<()> {
+pub fn _mail_filter(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_plain_text_body, m)?)?;
     m.add_function(wrap_pyfunction!(parse_html_body, m)?)?;
     Ok(())
