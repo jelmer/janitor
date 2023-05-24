@@ -28,7 +28,7 @@ from typing import Optional, cast
 
 import uvloop
 
-from ._mail_filter import parse_plain_text_body, parse_html_body
+from ._mail_filter import parse_html_body, parse_plain_text_body
 
 
 def parse_email(f):

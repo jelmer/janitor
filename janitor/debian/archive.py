@@ -33,7 +33,7 @@ from datetime import datetime
 from email.utils import formatdate, parsedate_to_datetime
 from functools import partial
 from time import mktime
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 import aiozipkin
 import gpg
@@ -41,7 +41,7 @@ import uvloop
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Gauge, setup_metrics
-from aiojobs import Scheduler, Job
+from aiojobs import Job, Scheduler
 from debian.deb822 import Packages, Release, Sources
 from gpg.constants.sig import mode as gpg_mode
 
