@@ -33,20 +33,13 @@ from contextlib import ExitStack, contextmanager
 from datetime import datetime
 from functools import partial
 from http.client import IncompleteRead
-from io import BytesIO
 from tempfile import TemporaryDirectory
 from typing import Any, Optional, TypedDict, cast
 
 import backoff
-import uvloop
 import yarl
 from aiohttp import (
     BasicAuth,
-    ClientConnectorError,
-    ClientSession,
-    ClientTimeout,
-    ContentTypeError,
-    MultipartWriter,
     web,
 )
 from aiohttp_openmetrics import REGISTRY, Counter, push_to_gateway, setup_metrics
@@ -74,6 +67,7 @@ from breezy.revision import NULL_REVISION
 from breezy.transform import ImmortalLimbo, MalformedTransform, TransformRenameFailed
 from breezy.transport import NoSuchFile, Transport, get_transport
 from breezy.tree import MissingNestedTree
+from breezy.workingtree import WorkingTree
 from jinja2 import Template
 from silver_platter.apply import CommandResult as GenericCommandResult
 from silver_platter.apply import DetailedFailure as GenericDetailedFailure
@@ -95,9 +89,15 @@ from silver_platter.utils import (
 )
 from silver_platter.workspace import Workspace
 
+from ._worker import (
+    AssignmentFailure,
+    Client,
+    EmptyQueue,
+    ResultUploadFailure,
+    gce_external_ip,
+    is_gce_instance,
+)
 from .vcs import BranchOpenFailure, open_branch_ext
-
-from ._worker import is_gce_instance, gce_external_ip
 
 push_branch_retries = Counter(
     "push_branch_retries", "Number of branch push retries.")
@@ -108,21 +108,7 @@ assignment_failed_count = Counter(
 
 
 routes = web.RouteTableDef()
-DEFAULT_UPLOAD_TIMEOUT = ClientTimeout(30 * 60)
-
-
-class ResultUploadFailure(Exception):
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-
-
-class RetriableResultUploadFailure(ResultUploadFailure):
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
-
-
-class EmptyQueue(Exception):
-    """Queue was empty."""
+USER_AGENT = "janitor/worker (0.1)"
 
 
 logger = logging.getLogger(__name__)
@@ -177,13 +163,13 @@ class Target:
 
     name: str
 
-    def build(self, local_tree, subpath, output_directory, config):
+    def build(self, local_tree: WorkingTree, subpath, output_directory, config):
         raise NotImplementedError(self.build)
 
-    def validate(self, local_tree, subpath, config):
+    def validate(self, local_tree: WorkingTree, subpath: str, config):
         pass
 
-    def make_changes(self, local_tree, subpath, argv, *, log_directory,
+    def make_changes(self, local_tree: WorkingTree, subpath: str, argv, *, log_directory,
                      resume_metadata=None):
         raise NotImplementedError(self.make_changes)
 
@@ -458,7 +444,7 @@ def import_branches_bzr(
 
 
 async def abort_run(
-        session: ClientSession, base_url: yarl.URL, run_id: str,
+        client: Client, run_id: str,
         metadata: Any, description: str) -> None:
     metadata['code'] = 'aborted'
     metadata['description'] = description
@@ -466,100 +452,22 @@ async def abort_run(
     metadata["finish_time"] = finish_time.isoformat()
 
     try:
-        await upload_results(
-            session, base_url=base_url, run_id=run_id, metadata=metadata)
+        await client.upload_results(
+            run_id=run_id, metadata=metadata)
     except ResultUploadFailure as e:
         logging.warning('Result upload for abort failed: %s', e)
 
 
-def handle_sigterm(session, base_url: yarl.URL, workitem, signum):
+def handle_sigterm(client: Client, workitem, signum):
     logging.warning('Received signal %d, aborting and exiting...', signum)
 
     async def shutdown():
         if workitem:
             await abort_run(
-                session, base_url, workitem['assignment']['id'], workitem['metadata'], "Killed by signal")
+                client, workitem['assignment']['id'], workitem['metadata'], "Killed by signal")
         sys.exit(1)
     loop = asyncio.get_event_loop()
     loop.create_task(shutdown())
-
-
-@contextmanager
-def bundle_results(metadata: Any, directory: Optional[str] = None):
-    with ExitStack() as es:
-        with MultipartWriter("form-data") as mpwriter:
-            mpwriter.append_json(
-                metadata,
-                headers=[  # type: ignore
-                    (
-                        "Content-Disposition",
-                        'attachment; filename="result.json"; '
-                        "filename*=utf-8''result.json",
-                    )
-                ],
-            )  # type: ignore
-            if directory is not None:
-                for entry in os.scandir(directory):
-                    if entry.is_file():
-                        f = open(entry.path, "rb")
-                        es.enter_context(f)
-                        mpwriter.append(
-                            BytesIO(f.read()),
-                            headers=[  # type: ignore
-                                (
-                                    "Content-Disposition",
-                                    'attachment; filename="%s"; '
-                                    "filename*=utf-8''%s" % (entry.name, entry.name),
-                                )
-                            ],
-                        )  # type: ignore
-        yield mpwriter
-
-
-@backoff.on_exception(
-    backoff.expo,
-    (ClientConnectorError, RetriableResultUploadFailure),
-    max_tries=10,
-    on_backoff=lambda m: upload_result_retries.inc())
-async def upload_results(
-    session: ClientSession,
-    base_url: yarl.URL,
-    run_id: str,
-    metadata: Any,
-    output_directory: Optional[str] = None,
-) -> Any:
-    with bundle_results(metadata, output_directory) as mpwriter:
-        finish_url = base_url / "active-runs" / run_id / "finish"
-        async with session.post(
-            finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
-        ) as resp:
-            if resp.status == 404:
-                try:
-                    resp_json = await resp.json()
-                except ContentTypeError as e:
-                    raise ResultUploadFailure("Runner returned 404") from e
-                else:
-                    raise ResultUploadFailure(resp_json["reason"])
-            if resp.status in (502, 503):
-                raise RetriableResultUploadFailure(
-                    "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
-                )
-            if resp.status not in (201, 200):
-                raise ResultUploadFailure(
-                    "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
-                )
-            result = await resp.json()
-            if output_directory is not None:
-                local_filenames = {
-                    entry.name for entry in os.scandir(output_directory)
-                    if entry.is_file()}
-                runner_filenames = set(result.get('filenames', []))
-                if local_filenames != runner_filenames:
-                    logging.warning(
-                        'Difference between local filenames and '
-                        'runner reported filenames: %r != %r',
-                        local_filenames, runner_filenames)
-            return result
 
 
 @contextmanager
@@ -1063,71 +971,6 @@ def run_worker(
             raise
 
 
-class AssignmentFailure(Exception):
-    """Assignment failed."""
-
-    def __init__(self, reason) -> None:
-        self.reason = reason
-
-
-@backoff.on_exception(
-    backoff.expo,
-    AssignmentFailure,
-    max_tries=10,
-    on_backoff=lambda m: assignment_failed_count.inc())
-async def get_assignment(
-    session: ClientSession,
-    my_url: Optional[yarl.URL],
-    base_url: yarl.URL,
-    node_name: str,
-    jenkins_build_url: Optional[str],
-    codebase: Optional[str] = None,
-    campaign: Optional[str] = None,
-) -> Any:
-    assign_url = base_url / "active-runs"
-    build_arch = subprocess.check_output(
-        ["dpkg-architecture", "-qDEB_BUILD_ARCH"]
-    ).decode().strip()
-    json: Any = {"node": node_name, "archs": [build_arch]}
-    if my_url:
-        json["backchannel"] = {'kind': 'http', 'url': str(my_url)}
-    elif jenkins_build_url:
-        json["backchannel"] = {
-            'kind': 'jenkins',
-            'url': jenkins_build_url}
-    else:
-        json["backchannel"] = None
-    if jenkins_build_url:
-        json["worker_link"] = jenkins_build_url
-    elif my_url:
-        json["worker_link"] = str(my_url)
-    else:
-        json["worker_link"] = None
-    if codebase:
-        json["codebase"] = codebase
-    if campaign:
-        json["campaign"] = campaign
-    logging.debug("Sending assignment request: %r", json)
-    try:
-        async with session.post(assign_url, json=json) as resp:
-            if resp.status != 201:
-                try:
-                    data = await resp.json()
-                except ContentTypeError as e:
-                    data = await resp.text()
-                    raise AssignmentFailure(data) from e
-                else:
-                    if 'reason' in data:
-                        if resp.status == 503 and data['reason'] == 'queue empty':
-                            raise EmptyQueue()
-                        raise AssignmentFailure(data['reason'])
-                    else:
-                        raise AssignmentFailure(data)
-            return await resp.json()
-    except asyncio.TimeoutError as e:
-        raise AssignmentFailure("timeout while retrieving assignment: %s" % e) from e
-
-
 INDEX_TEMPLATE = Template("""\
 <html lang="en">
 <head><title>Job{% if assignment %}{{ assignment['id'] }}{% endif %}</title></head>
@@ -1313,12 +1156,12 @@ async def handle_log_id(request):
 
 
 async def process_single_item(
-        session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
+        client, my_url: Optional[yarl.URL], node_name, workitem,
         jenkins_build_url=None, prometheus: Optional[str] = None,
         codebase: Optional[str] = None, campaign: Optional[str] = None,
         tee: bool = False):
-    assignment = await get_assignment(
-        session, my_url, base_url, node_name,
+    assignment = await client.get_assignment_raw(
+        my_url, node_name,
         jenkins_build_url=jenkins_build_url,
         codebase=codebase, campaign=campaign,
     )
@@ -1445,9 +1288,7 @@ async def process_single_item(
             metadata["finish_time"] = finish_time.isoformat()
             logging.info("Elapsed time: %s", finish_time - start_time)
 
-            result = await upload_results(
-                session,
-                base_url=base_url,
+            result = await client.upload_results(
                 run_id=assignment["id"],
                 metadata=metadata,
                 output_directory=output_directory,
@@ -1531,9 +1372,9 @@ async def main(argv=None):
 
     if args.gcp_logging:
         import google.cloud.logging
-        client = google.cloud.logging.Client()
-        client.get_default_handler()
-        client.setup_logging()
+        log_client = google.cloud.logging.Client()
+        log_client.get_default_handler()
+        log_client.setup_logging()
     else:
         if args.debug:
             log_level = logging.DEBUG
@@ -1559,7 +1400,7 @@ async def main(argv=None):
     await runner.setup()
     site = web.TCPSite(runner, args.listen_address, args.port)
     await site.start()
-    (unused_site_addr, site_port) = site._server.sockets[0].getsockname()  # type: ignore
+    (_site_addr, site_port) = site._server.sockets[0].getsockname()  # type: ignore
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -1629,38 +1470,40 @@ async def main(argv=None):
     if my_url:
         logging.info('Diagnostics available at %s', my_url)
 
-    async with ClientSession(auth=auth) as session:
-        loop.add_signal_handler(
-            signal.SIGINT, handle_sigterm, session, base_url,
-            app['workitem'], signal.SIGINT)
-        loop.add_signal_handler(
-            signal.SIGTERM, handle_sigterm, session, base_url,
-            app['workitem'], signal.SIGTERM)
+    if auth:
+        client = Client(str(base_url), auth.login, auth.password, USER_AGENT)
+    else:
+        client = Client(str(base_url), None, None, user_agent=USER_AGENT)
 
-        while True:
-            try:
-                await process_single_item(
-                    session, my_url=my_url,
-                    base_url=base_url,
-                    node_name=node_name,
-                    workitem=app['workitem'],
-                    jenkins_build_url=jenkins_build_url,
-                    prometheus=args.prometheus,
-                    codebase=args.codebase, campaign=args.campaign,
-                    tee=args.tee)
-            except AssignmentFailure as e:
-                logging.fatal("failed to get assignment: %s", e.reason)
-                return 1
-            except EmptyQueue:
-                logging.info('queue is empty')
-                return 0
-            except ResultUploadFailure as e:
-                sys.stderr.write(str(e))
-                return 1
-            if not args.loop:
-                return 0
+    loop.add_signal_handler(
+        signal.SIGINT, handle_sigterm, client,
+        app['workitem'], signal.SIGINT)
+    loop.add_signal_handler(
+        signal.SIGTERM, handle_sigterm, client,
+        app['workitem'], signal.SIGTERM)
+
+    while True:
+        try:
+            await process_single_item(
+                client, my_url=my_url,
+                node_name=node_name,
+                workitem=app['workitem'],
+                jenkins_build_url=jenkins_build_url,
+                prometheus=args.prometheus,
+                codebase=args.codebase, campaign=args.campaign,
+                tee=args.tee)
+        except AssignmentFailure as e:
+            logging.fatal("failed to get assignment: %s", e)
+            return 1
+        except EmptyQueue:
+            logging.info('queue is empty')
+            return 0
+        except ResultUploadFailure as e:
+            sys.stderr.write(str(e))
+            return 1
+        if not args.loop:
+            return 0
 
 
 if __name__ == "__main__":
-    uvloop.install()
     sys.exit(asyncio.run(main()))

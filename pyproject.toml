@@ -71,7 +71,7 @@ dependencies = [
     "bs4",
     "python-mimeparse",
     "pygments",
-    "breezy[git,launchpad,workspace,pgp]@git+https://github.com/breezy-team/breezy",
+    "breezy[git,launchpad,workspace,pgp]",
     "jinja2",
     "dulwich@git+https://github.com/jelmer/dulwich",
     "ognibuild@git+https://github.com/jelmer/ognibuild",
