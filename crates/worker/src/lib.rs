@@ -13,8 +13,6 @@ use tokio::time::Duration;
 
 use reqwest::multipart::{Form, Part};
 
-
-
 pub async fn is_gce_instance() -> bool {
     match lookup_host("metadata.google.internal").await {
         Ok(lookup_result) => {
