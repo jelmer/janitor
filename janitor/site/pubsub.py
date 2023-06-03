@@ -17,7 +17,6 @@
 
 import asyncio
 import json
-from typing import Set
 
 from aiohttp import web
 from aiohttp_openmetrics import Gauge
@@ -27,7 +26,7 @@ subscription_count = Gauge(
 )
 
 
-class Subscription(object):
+class Subscription:
     """A pubsub subscription."""
 
     def __init__(self, topic: "Topic") -> None:
@@ -46,12 +45,12 @@ class Subscription(object):
         self.topic.subscriptions.remove(self.queue)
 
 
-class Topic(object):
+class Topic:
     """A pubsub topic."""
 
     def __init__(self, name, repeat_last: bool = False) -> None:
         self.name = name
-        self.subscriptions: Set[asyncio.Queue] = set()
+        self.subscriptions: set[asyncio.Queue] = set()
         self.last = None
         self.repeat_last = repeat_last
 

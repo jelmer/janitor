@@ -154,7 +154,7 @@ def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
             stage=("codemod", ))
     return WorkerFailure(
         'command-failed',
-        'Script %s failed to run with code %s' % e.args,
+        'Script {} failed to run with code {}'.format(*e.args),
         stage=("codemod", ))
 
 
@@ -438,7 +438,7 @@ def import_branches_bzr(
         for name, revision in (tags or []):
             # Only set tags on those branches where the revisions exist
             if graph.is_ancestor(revision, target_branch.last_revision()):
-                target_branch.tags.set_tag('{}/{}'.format(log_id, name), revision)
+                target_branch.tags.set_tag(f'{log_id}/{name}', revision)
                 if update_current:
                     target_branch.tags.set_tag(name, revision)
 
@@ -870,7 +870,7 @@ def run_worker(
             elif actual_vcs_type != vcs_type:
                 raise WorkerFailure(
                     'vcs-type-mismatch',
-                    'Expected VCS {}, got {}'.format(vcs_type, actual_vcs_type),
+                    f'Expected VCS {vcs_type}, got {actual_vcs_type}',
                     stage=("result-push", ),
                     transient=False)
 

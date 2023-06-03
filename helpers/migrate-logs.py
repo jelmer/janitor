@@ -48,7 +48,7 @@ async def reprocess_run(pool, codebase, log_id, logfilenames):
                 'UPDATE run SET logfilenames = $1 WHERE id = $2', logfilenames,
                 log_id)
 
-    print('Processing {} ({!r})'.format(log_id, logfilenames))
+    print(f'Processing {log_id} ({logfilenames!r})')
     with tempfile.TemporaryDirectory() as d:
         for name in logfilenames:
             try:

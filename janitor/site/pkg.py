@@ -19,7 +19,7 @@
 import logging
 from datetime import datetime
 from io import BytesIO
-from typing import Dict, List, Optional
+from typing import Optional
 
 import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
@@ -118,7 +118,7 @@ async def get_publish_history(
 async def generate_run_file(
         db, client, config,
         differ_url: Optional[str], publisher_url: Optional[str], logfile_manager, run,
-        vcs_managers: Dict[str, VcsManager], is_admin, span
+        vcs_managers: dict[str, VcsManager], is_admin, span
 ):
     from ..schedule import estimate_success_probability_and_duration
     kwargs = {}
@@ -138,7 +138,7 @@ async def generate_run_file(
                 run['suite'], run['codebase']
             )
         with span.new_child('sql:publish-history'):
-            publish_history: List[asyncpg.Record]
+            publish_history: list[asyncpg.Record]
             if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
                 publish_history = await get_publish_history(conn, run['revision'])
             else:
@@ -380,10 +380,10 @@ async def generate_done_list(
         "since": since}
 
 
-class MergeProposalUserUrlResolver(object):
+class MergeProposalUserUrlResolver:
 
     def __init__(self) -> None:
-        self._forges: Dict[str, Optional[Forge]] = {}
+        self._forges: dict[str, Optional[Forge]] = {}
 
     def resolve(self, url, user):
         hostname = URL(url).host

@@ -17,7 +17,7 @@
 
 import json
 import logging
-from typing import List, Set, Union
+from typing import Union
 
 import asyncpg
 from aiohttp import ClientSession, web
@@ -34,7 +34,7 @@ def subscribe_webhook_github(branch, github, callback_url):
     (owner, repo_name, branch_name) = (
         parse_github_branch_url(branch))
 
-    path = 'repos/%s/%s/hooks' % (owner, repo_name)
+    path = f'repos/{owner}/{repo_name}/hooks'
 
     data = {
         "name": "web",
@@ -113,7 +113,7 @@ def is_webhook_request(request):
 
 class GitChange:
 
-    urls: Set[str]
+    urls: set[str]
     after: bytes
 
     def __init__(self, urls, after) -> None:
@@ -128,7 +128,7 @@ class GitChange:
 
 class BzrChange:
 
-    urls: Set[str]
+    urls: set[str]
     after: bytes
 
     def __init__(self, urls, after) -> None:
@@ -235,7 +235,7 @@ async def parse_webhook(request, db):
         raise web.HTTPUnsupportedMediaType(
             text="Invalid content type %s" % request.content_type
         )
-    changes: List[Union[GitChange, BzrChange]]
+    changes: list[Union[GitChange, BzrChange]]
     if "X-Gitlab-Event" in request.headers:
         if request.headers["X-Gitlab-Event"] != "Push Hook":
             return

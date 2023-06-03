@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import aiohttp_jinja2
 import asyncpg
@@ -48,7 +48,7 @@ async def get_candidate(conn: asyncpg.Connection, codebase: str, campaign: str):
 
 async def iter_candidates(
         conn: asyncpg.Connection,
-        codebases: Optional[List[str]] = None,
+        codebases: Optional[list[str]] = None,
         campaign: Optional[str] = None):
     query = """
 SELECT
@@ -295,7 +295,7 @@ WHERE run.codebase = $1 AND run.suite = $2
         except DebdiffRetrievalError as e:
             return "Error retrieving debdiff: %s" % e
 
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     kwargs.update([(k, v) for (k, v) in codebase.items() if k != 'name'])
 
     if run:
@@ -356,6 +356,6 @@ def html_template(template_name, headers={}):  # noqa: B006
     return decorator
 
 
-async def render_template_for_request(templatename, request, vs: Dict[str, Any]):
+async def render_template_for_request(templatename, request, vs: dict[str, Any]):
     update_vars_from_request(vs, request)
     return await aiohttp_jinja2.render_string_async(templatename, request, vs)
