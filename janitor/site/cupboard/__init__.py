@@ -19,7 +19,7 @@
 
 import re
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import aiohttp_jinja2
 import aiozipkin
@@ -480,20 +480,20 @@ async def handle_result_file(request):
     filename = request.match_info["filename"]
     run_id = request.match_info["run_id"]
     if not re.match("^[a-z0-9+-\\.]+$", codebase) or len(codebase) < 2:
-        raise web.HTTPNotFound(text="Invalid codebase %s for run %s" % (codebase, run_id))
+        raise web.HTTPNotFound(text=f"Invalid codebase {codebase} for run {run_id}")
     if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
-        raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
+        raise web.HTTPNotFound(text=f"Invalid run run id {run_id}")
     if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
         if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
             raise web.HTTPNotFound(
-                text="No log file %s for run %s" % (filename, run_id)
+                text=f"No log file {filename} for run {run_id}"
             )
 
         try:
             logfile = await request.app['logfile_manager'].get_log(codebase, run_id, filename)
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
-                text="No log file %s for run %s" % (filename, run_id)
+                text=f"No log file {filename} for run {run_id}"
             ) from e
         else:
             with logfile as f:
@@ -509,7 +509,7 @@ async def handle_result_file(request):
             )
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
-                text="No artifact %s for run %s" % (filename, run_id)) from e
+                text=f"No artifact {filename} for run {run_id}") from e
         return web.Response(body=f.read())
 
 
@@ -618,12 +618,12 @@ def register_cupboard_endpoints(
 
 async def iter_needs_review(
         conn: asyncpg.Connection,
-        campaigns: Optional[List[str]] = None,
+        campaigns: Optional[list[str]] = None,
         limit: Optional[int] = None,
         publishable_only: bool = False,
         required_only: Optional[bool] = None,
         reviewer: Optional[str] = None):
-    args: List[Any] = []
+    args: list[Any] = []
     query = "SELECT id, codebase, suite FROM publish_ready"
     conditions = []
     if campaigns is not None:

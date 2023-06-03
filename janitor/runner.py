@@ -321,7 +321,7 @@ class DebianBuilder(Builder):
         config['build-extra-repositories'] = []
         if self.apt_location:
             config['build-extra-repositories'].extend([
-                "deb [trusted=yes] {} {} main".format(self.apt_location, suite)
+                f"deb [trusted=yes] {self.apt_location} {suite} main"
                 for suite in extra_janitor_distributions
             ])
 
@@ -904,7 +904,7 @@ class JenkinsBackchannel(Backchannel):
         )
 
     def __repr__(self) -> str:
-        return "<{}({!r})>".format(type(self).__name__, self.my_url)
+        return f"<{type(self).__name__}({self.my_url!r})>"
 
     async def kill(self) -> None:
         raise NotImplementedError(self.kill)
@@ -968,7 +968,7 @@ class PollingBackchannel(Backchannel):
         )
 
     def __repr__(self) -> str:
-        return "<{}({!r})>".format(type(self).__name__, self.my_url)
+        return f"<{type(self).__name__}({self.my_url!r})>"
 
     async def kill(self) -> None:
         async with ClientSession() as session, \
@@ -1010,8 +1010,7 @@ class PollingBackchannel(Backchannel):
 
             if log_id != expected_log_id:
                 raise PingFatalFailure(
-                    'Worker started processing new run %s rather than %s' %
-                    (log_id, expected_log_id))
+                    f'Worker started processing new run {log_id} rather than {expected_log_id}')
 
     def json(self):
         return {
@@ -1057,7 +1056,7 @@ def open_resume_branch(
         raise e
     else:
         try:
-            for option in [campaign_name, ('%s/main' % campaign_name), ('{}/main/{}'.format(campaign_name, package))]:
+            for option in [campaign_name, ('%s/main' % campaign_name), (f'{campaign_name}/main/{package}')]:
                 (
                     resume_branch,
                     unused_overwrite,

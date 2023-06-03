@@ -25,7 +25,7 @@ import warnings
 from contextlib import ExitStack
 from functools import partial
 from tempfile import TemporaryDirectory
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional
 
 import aiozipkin
 import mimeparse
@@ -57,7 +57,7 @@ PRECACHE_RETRIEVE_TIMEOUT = 300
 routes = web.RouteTableDef()
 
 
-def find_binaries(path: str) -> List[Tuple[str, str]]:
+def find_binaries(path: str) -> list[tuple[str, str]]:
     ret = []
     for entry in os.scandir(path):
         ret.append((entry.name, entry.path))

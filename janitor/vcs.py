@@ -116,7 +116,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "branch-unavailable"
         msg = str(e)
         if e.url not in msg:
-            msg = "{} ({})".format(msg, e.url)
+            msg = f"{msg} ({e.url})"
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchMissing):
         if str(e).startswith(
@@ -127,7 +127,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "branch-missing"
         msg = str(e)
         if e.url not in msg:
-            msg = "{} ({})".format(msg, e.url)
+            msg = f"{msg} ({e.url})"
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
         if getattr(e, 'vcs', None):
@@ -155,7 +155,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
                 code = "unsupported-vcs"
         msg = str(e)
         if e.url not in msg:
-            msg = "{} ({})".format(msg, e.url)
+            msg = f"{msg} ({e.url})"
         return BranchOpenFailure(code, msg)
 
     return e
@@ -242,7 +242,7 @@ class LocalGitVcsManager(VcsManager):
         self.base_path = base_path
 
     def __repr__(self) -> str:
-        return "{}({!r})".format(type(self).__name__, self.base_path)
+        return f"{type(self).__name__}({self.base_path!r})"
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
@@ -337,7 +337,7 @@ class LocalBzrVcsManager(VcsManager):
         self.base_path = base_path
 
     def __repr__(self) -> str:
-        return "{}({!r})".format(type(self).__name__, self.base_path)
+        return f"{type(self).__name__}({self.base_path!r})"
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
@@ -446,7 +446,7 @@ class RemoteGitVcsManager(VcsManager):
             return await resp.json()
 
     def __repr__(self) -> str:
-        return "{}({!r})".format(type(self).__name__, self.base_url)
+        return f"{type(self).__name__}({self.base_url!r})"
 
     def get_diff_url(self, codebase, old_revid, new_revid):
         return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(
@@ -490,7 +490,7 @@ class RemoteBzrVcsManager(VcsManager):
             return await resp.json()
 
     def __repr__(self) -> str:
-        return "{}({!r})".format(type(self).__name__, self.base_url)
+        return f"{type(self).__name__}({self.base_url!r})"
 
     def get_diff_url(self, codebase, old_revid, new_revid):
         return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(

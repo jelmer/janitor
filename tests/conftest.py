@@ -1,5 +1,5 @@
 import importlib.resources
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import asyncpg
 import pytest_asyncio

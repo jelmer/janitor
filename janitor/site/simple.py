@@ -25,7 +25,7 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import aiohttp_jinja2
 import aiozipkin
@@ -83,7 +83,7 @@ async def get_credentials(session, publisher_url):
 
 
 async def handle_simple(templatename, request):
-    vs: Dict[str, Any] = {}
+    vs: dict[str, Any] = {}
     return web.Response(
         content_type="text/html",
         text=await render_template_for_request(templatename, request, vs),
@@ -221,20 +221,20 @@ async def handle_result_file(request):
     filename = request.match_info["filename"]
     run_id = request.match_info["run_id"]
     if not re.match("^[a-z0-9+-\\.]+$", pkg) or len(pkg) < 2:
-        raise web.HTTPNotFound(text="Invalid package %s for run %s" % (pkg, run_id))
+        raise web.HTTPNotFound(text=f"Invalid package {pkg} for run {run_id}")
     if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
-        raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
+        raise web.HTTPNotFound(text=f"Invalid run run id {run_id}")
     if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
         if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
             raise web.HTTPNotFound(
-                text="No log file %s for run %s" % (filename, run_id)
+                text=f"No log file {filename} for run {run_id}"
             )
 
         try:
             logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
-                text="No log file %s for run %s" % (filename, run_id)
+                text=f"No log file {filename} for run {run_id}"
             ) from e
         else:
             with logfile as f:
@@ -250,7 +250,7 @@ async def handle_result_file(request):
             )
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
-                text="No artifact %s for run %s" % (filename, run_id)) from e
+                text=f"No artifact {filename} for run {run_id}") from e
         return web.Response(body=f.read())
 
 
@@ -316,10 +316,10 @@ async def handle_health(request):
 
 
 async def process_webhook(request, db):
-    rescheduled: Dict[str, List[str]] = {}
+    rescheduled: dict[str, list[str]] = {}
 
     urls = []
-    codebases: Dict[str, str] = {}
+    codebases: dict[str, str] = {}
     async for codebase, branch_url in parse_webhook(request, db):
         urls.append(branch_url)
         if codebase is not None:
@@ -510,9 +510,9 @@ async def create_app(
         if not os.path.exists(basepath + "." + kind):
             continue
         app.router.add_get(
-            "/_static/%s.%s" % (name, kind),
+            f"/_static/{name}.{kind}",
             functools.partial(
-                handle_static_file, "%s.%s%s" % (basepath, minified_prefix, kind)
+                handle_static_file, f"{basepath}.{minified_prefix}{kind}"
             ),
         )
     from .api import create_app as create_api_app
@@ -630,7 +630,7 @@ async def main(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         config = read_config(f)
 
     private_app, public_app = await create_app(

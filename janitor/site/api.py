@@ -278,7 +278,7 @@ async def handle_diff(request):
             'WHERE run.id = $1 AND role = $2', run_id, role)
     span = aiozipkin.request_span(request)
     if run is None:
-        raise web.HTTPNotFound(text="no run %s" % (run_id, ))
+        raise web.HTTPNotFound(text=f"no run {run_id}")
 
     if run['vcs_type'] is None:
         return web.Response(
@@ -371,8 +371,7 @@ async def handle_archive_diff(request):
     except BuildDiffUnavailable as e:
         return web.json_response(
             {
-                "reason": "debdiff not calculated yet (run: %s, unchanged run: %s)"
-                % (run['id'], unchanged_run_id),
+                "reason": "debdiff not calculated yet (run: {}, unchanged run: {})".format(run['id'], unchanged_run_id),
                 "run_id": [unchanged_run_id, run['id']],
                 "unavailable_run_id": e.unavailable_run_id,
                 "campaign": run['campaign'],
