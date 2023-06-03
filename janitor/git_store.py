@@ -24,7 +24,7 @@ import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
 from io import BytesIO
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 import aiohttp_jinja2
 import aiozipkin
@@ -287,7 +287,7 @@ async def cgit_backend(request: web.Request) -> web.Response:
     full_path = os.path.join(repo.path, subpath.lstrip('/'))
 
     repo.close()
-    env: Dict[str, str] = {
+    env: dict[str, str] = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
         "CONTENT_TYPE": request.content_type,
@@ -533,7 +533,7 @@ async def create_web_app(
     *,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
-) -> Tuple[web.Application, web.Application]:
+) -> tuple[web.Application, web.Application]:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
