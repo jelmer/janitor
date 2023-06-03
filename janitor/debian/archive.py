@@ -33,7 +33,7 @@ from datetime import datetime
 from email.utils import formatdate, parsedate_to_datetime
 from functools import partial
 from time import mktime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import aiozipkin
 import gpg
@@ -804,7 +804,7 @@ class GeneratorManager:
         self.package_info_provider = package_info_provider
         self.gpg_context = gpg_context
         self.scheduler = Scheduler()
-        self.jobs: Dict[str, Job] = {}
+        self.jobs: dict[str, Job] = {}
         self._campaign_to_repository: dict[str, list[AptRepositoryConfig]] = {}
         for apt_repo in self.config.apt_repository:
             for select in apt_repo.select:

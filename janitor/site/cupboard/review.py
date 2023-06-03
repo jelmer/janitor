@@ -2,7 +2,6 @@
 
 import logging
 from asyncio import TimeoutError
-from typing import Dict, List
 
 import aiozipkin
 import asyncpg
@@ -27,7 +26,7 @@ async def generate_rejected(conn, config, campaign=None):
         "ORDER BY finish_time DESC",
         campaigns)
 
-    reviews: Dict[str, List[asyncpg.Record]] = {}
+    reviews: dict[str, list[asyncpg.Record]] = {}
 
     for row in await conn.fetch(
             'SELECT * FROM review WHERE run_id = ANY($1::text[])',

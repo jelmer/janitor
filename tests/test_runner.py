@@ -18,7 +18,6 @@
 import os
 from datetime import datetime, timedelta
 from io import BytesIO
-from typing import Dict, Tuple
 
 import aiozipkin
 from aiohttp import MultipartWriter
@@ -43,7 +42,7 @@ from janitor.vcs import get_vcs_managers
 class MemoryLogFileManager(LogFileManager):
 
     def __init__(self) -> None:
-        self.m: Dict[Tuple[str, str], Dict[str, bytes]] = {}
+        self.m: dict[tuple[str, str], dict[str, bytes]] = {}
 
     async def has_log(self, pkg: str, run_id: str, name: str, timeout=None):
         return name in self.m.get((pkg, run_id), {})

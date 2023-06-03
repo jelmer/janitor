@@ -16,15 +16,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import shlex
+from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timedelta
-from typing import Any, AsyncIterator, Dict, Iterator, Tuple
+from typing import Any
 
 import asyncpg
 
 from ...queue import Queue, QueueItem
 
 
-def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+def get_processing(answer: dict[str, Any]) -> Iterator[dict[str, Any]]:
     for entry in answer["processing"]:
         entry = dict(entry.items())
         if entry.get("estimated_duration"):
@@ -61,7 +62,7 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
 
 
 async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIterator[
-    Tuple[
+    tuple[
         QueueItem,
         Any,
         str

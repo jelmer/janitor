@@ -61,8 +61,7 @@ def filter_boring_wdiff(
         return []
     lines = [
         re.sub(
-            r"\[-%s(.*?)-\] \{\+%s\1\+\}"
-            % (re.escape(old_version), re.escape(new_version)),
+            fr"\[-{re.escape(old_version)}(.*?)-\] \{{\+{re.escape(new_version)}\1\+\}}",
             "",
             line,
         )

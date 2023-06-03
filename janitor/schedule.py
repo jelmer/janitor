@@ -397,7 +397,7 @@ WHERE
 """
     args = [name]
     if version:
-        version_match = "version {} $2".format(version[0])
+        version_match = f"version {version[0]} $2"
         args.append(str(version[1]))
     else:
         version_match = "True"

@@ -12,7 +12,7 @@ from janitor.config import get_distribution, read_config
 
 
 def sbuild_schroot_name(suite, arch):
-    return "{}-{}-sbuild".format(suite, arch)
+    return f"{suite}-{arch}-sbuild"
 
 
 def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[],  # noqa: B006

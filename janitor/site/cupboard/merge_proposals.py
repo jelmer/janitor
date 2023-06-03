@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from typing import Dict, List, Optional
+from typing import Optional
 
 import asyncpg
 
@@ -34,7 +34,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
 
 async def write_merge_proposals(db, suite):
     async with db.acquire() as conn:
-        proposals_by_status: Dict[str, List[asyncpg.Record]] = {}
+        proposals_by_status: dict[str, list[asyncpg.Record]] = {}
         for row in await get_proposals_with_run(conn, campaign=suite):
             proposals_by_status.setdefault(row['status'], []).append(row)
 
