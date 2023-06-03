@@ -376,7 +376,7 @@ async def generate_done_list(
         runs.append(run)
 
     return {
-        "oldest": oldest, "runs": runs, "campaign": campaign,
+        "oldest": oldest, "runs": runs, "suite": suite, "campaign": campaign,
         "since": since}
 
 
