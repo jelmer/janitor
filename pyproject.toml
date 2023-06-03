@@ -192,7 +192,8 @@ select = [
     "E",
     "F",
     "I",
-    "B"
+    "B",
+    "UP",
 ]
 ignore = [
     "ANN001",
@@ -220,6 +221,7 @@ ignore = [
     "B007"
 ]
 line-length = 88
+target-version = "py39"
 
 [tool.ruff.pydocstyle]
 convention = "google"
