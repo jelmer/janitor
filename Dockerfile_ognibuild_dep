@@ -10,6 +10,7 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
+	dpkg-dev \
 	git \
 	make \
 	rustc \
