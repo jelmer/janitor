@@ -30,5 +30,4 @@ share
 .tox
 Cargo.lock
 target
-janitor/_mail_filter.*.so
 janitor/_worker.*.so
