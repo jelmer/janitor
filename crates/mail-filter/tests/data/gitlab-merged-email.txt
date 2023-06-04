@@ -1,0 +1,114 @@
+From gitlab@salsa.debian.org Fri Nov  4 14:35:04 2022
+Return-Path: <gitlab@salsa.debian.org>
+Delivered-To: jelmer+janitor@jelmer.uk
+Date: Fri, 04 Nov 2022 14:34:54 +0000
+From: =?UTF-8?B?SmVsbWVyIFZlcm5vb8SzIChAamVsbWVyKQ==?= <gitlab@salsa.debian.org>
+Reply-To: Debian / pkg-lojban-common <gitlab+ea8cd99546cbc76a70a527bf26e6eeeb@salsa.debian.org>
+To: janitor@jelmer.uk
+Message-ID: <3ae5e0b4e2311c797875a0053c78bd28@salsa.debian.org>
+In-Reply-To: <merge_request_52492@salsa.debian.org>
+References: <reply-ea8cd99546cbc76a70a527bf26e6eeeb@salsa.debian.org>
+ <merge_request_52492@salsa.debian.org>
+Subject: Re: pkg-lojban-common | Fix some issues reported by lintian (!2)
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="--==_mimepart_6365230e28ca5_49411dbd4c195215f";
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+X-GitLab-Project: pkg-lojban-common
+X-GitLab-Project-Id: 21620
+X-GitLab-Project-Path: debian/pkg-lojban-common
+List-Id: debian/pkg-lojban-common
+ <21620.pkg-lojban-common.debian.salsa.debian.org>
+List-Unsubscribe: <https://salsa.debian.org/-/sent_notifications/ea8cd99546cbc76a70a527bf26e6eeeb/unsubscribe?force=true>,<mailto:gitlab+ea8cd99546cbc76a70a527bf26e6eeeb-unsubscribe@salsa.debian.org>
+X-GitLab-MergeRequest-ID: 52492
+X-GitLab-MergeRequest-IID: 2
+X-GitLab-NotificationReason: 
+X-GitLab-Reply-Key: ea8cd99546cbc76a70a527bf26e6eeeb
+Auto-Submitted: auto-generated
+Status: RO
+Content-Length: 3283
+Lines: 80
+
+
+----==_mimepart_6365230e28ca5_49411dbd4c195215f
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+
+
+Merge request !2 was merged
+Merge request URL: https://salsa.debian.org/debian/pkg-lojban-common/-/merge_requests/2
+Project:Branches: janitor-team/proposed/pkg-lojban-common:lintian-fixes to debian/pkg-lojban-common:main
+Author: Janitor
+
+-- 
+Reply to this email directly or view it on GitLab: https://salsa.debian.org/debian/pkg-lojban-common/-/merge_requests/2
+You're receiving this email because of your account on salsa.debian.org.
+
+
+
+----==_mimepart_6365230e28ca5_49411dbd4c195215f
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN" "http://www.w3.org/TR/REC-html40/loose.dtd">
+<html lang="en">
+<head>
+<meta content="text/html; charset=US-ASCII" http-equiv="Content-Type">
+<title>
+GitLab
+</title>
+
+<style data-premailer="ignore" type="text/css">
+a { color: #1068bf; }
+</style>
+
+<style>img {
+max-width: 100%; height: auto;
+}
+body {
+font-size: 0.875rem;
+}
+body {
+-webkit-text-shadow: rgba(255,255,255,0.01) 0 0 1px;
+}
+body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; font-size: inherit;
+}
+</style>
+</head>
+<body style='font-size: inherit; -webkit-text-shadow: rgba(255,255,255,0.01) 0 0 1px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";'>
+<div class="content">
+
+<p>
+Merge request <a href="https://salsa.debian.org/debian/pkg-lojban-common/-/merge_requests/2" style="color: #1068bf;">!2</a> was merged
+</p>
+<p>
+Project:Branches: janitor-team/proposed/pkg-lojban-common:lintian-fixes to debian/pkg-lojban-common:main
+</p>
+<div>
+Author: Janitor
+</div>
+
+</div>
+<div class="footer" style="margin-top: 10px;">
+<p style="font-size: small; color: #666;">
+&#8212;
+<br>
+Reply to this email directly or <a href="https://salsa.debian.org/debian/pkg-lojban-common/-/merge_requests/2" style="color: #1068bf;">view it on GitLab</a>.
+<br>
+You're receiving this email because of your account on <a target="_blank" rel="noopener noreferrer" href="https://salsa.debian.org" style="color: #1068bf;">salsa.debian.org</a>. <a href="https://salsa.debian.org/-/sent_notifications/ea8cd99546cbc76a70a527bf26e6eeeb/unsubscribe" target="_blank" rel="noopener noreferrer" style="color: #1068bf;">Unsubscribe</a> from this thread &#183; <a href="https://salsa.debian.org/-/profile/notifications" target="_blank" rel="noopener noreferrer" class="mng-notif-link" style="color: #1068bf;">Manage all notifications</a> &#183; <a href="https://salsa.debian.org/help" target="_blank" rel="noopener noreferrer" class="help-link" style="color: #1068bf;">Help</a>
+<script type="application/ld+json">{"@context":"http://schema.org","@type":"EmailMessage","action":{"@type":"ViewAction","name":"View Merge request","url":"https://salsa.debian.org/debian/pkg-lojban-common/-/merge_requests/2"}}</script>
+
+
+</p>
+</div>
+</body>
+</html>
+
+----==_mimepart_6365230e28ca5_49411dbd4c195215f--
+
+
