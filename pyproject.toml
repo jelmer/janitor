@@ -148,7 +148,6 @@ janitor-apt = "janitor.debian.archive:main"
 janitor-git-store = "janitor.git_store:main"
 janitor-bzr-store = "janitor.git_store:main"
 janitor-differ = "janitor.differ:main"
-janitor-mail-filter = "janitor.mail_filter:main"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
