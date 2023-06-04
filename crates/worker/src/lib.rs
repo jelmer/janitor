@@ -339,6 +339,14 @@ pub async fn bundle_results<'a>(
 #[derive(Debug)]
 pub struct UploadFailure(String);
 
+impl std::fmt::Display for UploadFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for UploadFailure {}
+
 pub async fn upload_results(
     client: &reqwest::Client,
     credentials: &Credentials,
@@ -464,4 +472,24 @@ pub async fn upload_results(
             }
         }
     }).await
+}
+
+pub async fn abort_run(
+    client: &Client,
+    run_id: &str,
+    metadata: &serde_json::Value,
+    description: &str,
+) {
+    let mut metadata = metadata.clone();
+    metadata["code"] = "aborted".into();
+    metadata["description"] = description.into();
+    let finish_time = chrono::Utc::now();
+    metadata["finish_time"] = finish_time.to_rfc3339().into();
+
+    match client.upload_results(run_id, &metadata, None).await {
+        Ok(_) => {}
+        Err(e) => {
+            log::warn!("Result upload for abort of {} failed: {}", run_id, e);
+        }
+    }
 }

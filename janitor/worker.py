@@ -96,6 +96,7 @@ from ._worker import (
     ResultUploadFailure,
     gce_external_ip,
     is_gce_instance,
+    abort_run,
 )
 from .vcs import BranchOpenFailure, open_branch_ext
 
@@ -441,21 +442,6 @@ def import_branches_bzr(
                 target_branch.tags.set_tag(f'{log_id}/{name}', revision)
                 if update_current:
                     target_branch.tags.set_tag(name, revision)
-
-
-async def abort_run(
-        client: Client, run_id: str,
-        metadata: Any, description: str) -> None:
-    metadata['code'] = 'aborted'
-    metadata['description'] = description
-    finish_time = datetime.utcnow()
-    metadata["finish_time"] = finish_time.isoformat()
-
-    try:
-        await client.upload_results(
-            run_id=run_id, metadata=metadata)
-    except ResultUploadFailure as e:
-        logging.warning('Result upload for abort failed: %s', e)
 
 
 def handle_sigterm(client: Client, workitem, signum):
