@@ -1,7 +1,7 @@
+use mailparse::{parse_mail, ParsedMail};
 use select::document::Document;
 use select::predicate::{And, Attr, Name};
 use serde_json::Value;
-use mailparse::{parse_mail, ParsedMail};
 use std::fs::File;
 use std::io::Read;
 
@@ -70,18 +70,21 @@ pub fn parse_email<F: std::io::Read>(mut file: F) -> Option<String> {
 
     let mail = parse_mail(&data.as_bytes()).unwrap();
     for part in mail.subparts {
-    if part.ctype.mimetype == "text/html" {
-        let body = part.get_body().unwrap();
-        if let Some(merge_proposal_url) = parse_html_body(&body) {
-            return Some(merge_proposal_url);
-        }
-    } else if part.ctype.mimetype == "text/plain" {
-        let body = part.get_body().unwrap();
-        if let Some(merge_proposal_url) = parse_plain_text_body(&body) {
-            return Some(merge_proposal_url);
+        if part.ctype.mimetype == "text/html" {
+            let body = part.get_body().unwrap();
+            if let Some(merge_proposal_url) = parse_html_body(&body) {
+                return Some(merge_proposal_url);
+            }
+        } else if part.ctype.mimetype == "text/plain" {
+            let body = part.get_body().unwrap();
+            if let Some(merge_proposal_url) = parse_plain_text_body(&body) {
+                return Some(merge_proposal_url);
+            }
         }
     }
-}
 
     None
 }
+
+#[cfg(test)]
+mod tests;

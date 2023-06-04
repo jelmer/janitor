@@ -1,0 +1,77 @@
+From noreply@github.com Fri Nov  4 13:18:36 2022
+Return-Path: <noreply@github.com>
+Delivered-To: jelmer+janitor@jelmer.uk
+Date: Fri, 04 Nov 2022 06:18:29 -0700
+From: Some User <notifications@github.com>
+Reply-To: UbuntuBudgie/budgie-desktop <reply+AKT4UUMF3LHYRIQTBKZCJRGBOJB2LEVBNHHFICBOZM@reply.github.com>
+To: UbuntuBudgie/budgie-desktop <budgie-desktop@noreply.github.com>
+Cc: Debian Janitor <janitor@jelmer.uk>, 
+ Author <author@noreply.github.com>
+Message-ID: <UbuntuBudgie/budgie-desktop/pull/78/issue_event/7740657652@github.com>
+In-Reply-To: <UbuntuBudgie/budgie-desktop/pull/78@github.com>
+References: <UbuntuBudgie/budgie-desktop/pull/78@github.com>
+Subject: Re: [UbuntuBudgie/budgie-desktop] Apply hints suggested by the
+ multi-arch hinter (PR #78)
+Mime-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="--==_mimepart_63651125482a9_93f6d55c472112";
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+Precedence: list
+X-GitHub-Sender: fossfreedom
+X-GitHub-Recipient: debian-janitor
+X-GitHub-Reason: author
+List-ID: UbuntuBudgie/budgie-desktop <budgie-desktop.UbuntuBudgie.github.com>
+List-Archive: https://github.com/UbuntuBudgie/budgie-desktop
+List-Post: <mailto:reply+AKT4UUMF3LHYRIQTBKZCJRGBOJB2LEVBNHHFICBOZM@reply.github.com>
+List-Unsubscribe: <mailto:unsub+AKT4UUMF3LHYRIQTBKZCJRGBOJB2LEVBNHHFICBOZM@reply.github.com>,
+ <https://github.com/notifications/unsubscribe/AKT4UUKTFRGZK3G6E55BSBLWGUEKLANCNFSM6AAAAAARFRWCMY>
+X-Auto-Response-Suppress: All
+X-GitHub-Recipient-Address: janitor@jelmer.uk
+Status: RO
+Content-Length: 2470
+Lines: 42
+
+
+----==_mimepart_63651125482a9_93f6d55c472112
+Content-Type: text/plain;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+Merged #78 into debian.
+
+-- 
+Reply to this email directly or view it on GitHub:
+https://github.com/UbuntuBudgie/budgie-desktop/pull/78#event-7740657652
+You are receiving this because you authored the thread.
+
+Message ID: <UbuntuBudgie/budgie-desktop/pull/78/issue_event/7740657652@github.com>
+----==_mimepart_63651125482a9_93f6d55c472112
+Content-Type: text/html;
+ charset=UTF-8
+Content-Transfer-Encoding: 7bit
+
+<p></p>
+<p dir="auto">Merged <a class="issue-link js-issue-link" data-error-text="Failed to load title" data-id="1409822411" data-permission-text="Title is private" data-url="https://github.com/UbuntuBudgie/budgie-desktop/issues/78" data-hovercard-type="pull_request" data-hovercard-url="/UbuntuBudgie/budgie-desktop/pull/78/hovercard" href="https://github.com/UbuntuBudgie/budgie-desktop/pull/78">#78</a> into debian.</p>
+
+<p style="font-size:small;-webkit-text-size-adjust:none;color:#666;">&mdash;<br />Reply to this email directly, <a href="https://github.com/UbuntuBudgie/budgie-desktop/pull/78#event-7740657652">view it on GitHub</a>, or <a href="https://github.com/notifications/unsubscribe-auth/AKT4UUL4O2DVXUA5C4LJJSTWGUEKLANCNFSM6AAAAAARFRWCMY">unsubscribe</a>.<br />You are receiving this because you authored the thread.<img src="https://github.com/notifications/beacon/AKT4UUP22SNQCQEFA27TRJLWGUEKLA5CNFSM6AAAAAARFRWCM2WGG33NNVSW45C7OR4XAZNWJFZXG5LFIV3GK3TUJZXXI2LGNFRWC5DJN5XKUY3PNVWWK3TUL5UWJTYAAAAADTLBB72A.gif" height="1" width="1" alt="" /><span style="color: transparent; font-size: 0; display: none; visibility: hidden; overflow: hidden; opacity: 0; width: 0; height: 0; max-width: 0; max-height: 0; mso-hide: all">Message ID: <span>&lt;UbuntuBudgie/budgie-desktop/pull/78/issue_event/7740657652</span><span>@</span><span>github</span><span>.</span><span>com&gt;</span></span></p>
+<script type="application/ld+json">[
+{
+"@context": "http://schema.org",
+"@type": "EmailMessage",
+"potentialAction": {
+"@type": "ViewAction",
+"target": "https://github.com/UbuntuBudgie/budgie-desktop/pull/78#event-7740657652",
+"url": "https://github.com/UbuntuBudgie/budgie-desktop/pull/78#event-7740657652",
+"name": "View Pull Request"
+},
+"description": "View this Pull Request on GitHub",
+"publisher": {
+"@type": "Organization",
+"name": "GitHub",
+"url": "https://github.com"
+}
+}
+]</script>
+----==_mimepart_63651125482a9_93f6d55c472112--
+
