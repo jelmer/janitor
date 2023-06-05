@@ -1,4 +1,4 @@
-use janitor_worker::{AssignmentError};
+use janitor_worker::AssignmentError;
 use pyo3::create_exception;
 use pyo3::prelude::*;
 
@@ -165,6 +165,24 @@ impl Client {
     }
 }
 
+#[pyfunction]
+fn abort_run<'a>(
+    py: Python<'a>,
+    client: &Client,
+    run_id: &str,
+    metadata: PyObject,
+    description: &str,
+) -> PyResult<&'a PyAny> {
+    let client = client.0.clone();
+    let run_id = run_id.to_string();
+    let description = description.to_string();
+    let metadata = py_to_serde_json(metadata.as_ref(py))?;
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        janitor_worker::abort_run(&client, run_id.as_str(), &metadata, description.as_str()).await;
+        Ok(())
+    })
+}
+
 #[pymodule]
 pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
@@ -174,5 +192,6 @@ pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("ResultUploadFailure", py.get_type::<ResultUploadFailure>())?;
     m.add("AssignmentFailure", py.get_type::<AssignmentFailure>())?;
     m.add("EmptyQueue", py.get_type::<EmptyQueue>())?;
+    m.add_function(wrap_pyfunction!(abort_run, m)?)?;
     Ok(())
 }
