@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 fn main() {
-    let top_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap() + "/../..")
+    let top_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
         .canonicalize()
         .unwrap();
 
