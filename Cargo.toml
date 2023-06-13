@@ -11,6 +11,7 @@ build = "build.rs"
 
 [dependencies]
 protobuf = "3"
+sqlx = { version = "0.6", features = ["postgres", "runtime-async-std-native-tls"] }
 
 [build-dependencies]
 protobuf-codegen = "3"
