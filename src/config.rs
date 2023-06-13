@@ -6,7 +6,7 @@ use std::io::Read;
 
 pub use config::{AptRepository, Campaign, Config, Distribution};
 
-pub fn read_file(file_path: &str) -> Result<Config, Box<dyn std::error::Error>> {
+pub fn read_file(file_path: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
     let mut file = File::open(file_path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_read_file() {
-        let config = read_file("janitor.conf.example").unwrap();
+        let config = read_file(std::path::Path::new("janitor.conf.example")).unwrap();
         assert_eq!(config.distribution.len(), 1);
         assert_eq!(config.campaign.len(), 8);
         assert_eq!(config.apt_repository.len(), 1);
