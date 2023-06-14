@@ -3,6 +3,7 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 COPY . /code
+COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
 	ssh \
@@ -41,8 +42,9 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	pkg-config \
 	&& apt clean \
 	&& pip3 install --break-system-packages "/code[gcp,debian]" \
+	&& rm -rf /code \
 	&& apt-file update
 
-ENV AUTOPKGTEST=/code/autopkgtest-wrapper
+ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 EXPOSE 8080
 ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]

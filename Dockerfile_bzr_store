@@ -9,5 +9,5 @@ COPY . /code
 VOLUME /bzr
 EXPOSE 9929
 
-RUN apt update && apt install -y --no-install-recommends libjs-sphinxdoc && pip3 install --break-system-packages "/code[bzr_web,gcp]"
+RUN apt update && apt install -y --no-install-recommends libjs-sphinxdoc && pip3 install --break-system-packages "/code[bzr_web,gcp]" && rm -rf /code
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]
