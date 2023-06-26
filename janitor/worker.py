@@ -1147,7 +1147,7 @@ async def process_single_item(
         codebase: Optional[str] = None, campaign: Optional[str] = None,
         tee: bool = False):
     assignment = await client.get_assignment_raw(
-        my_url, node_name,
+        str(my_url), node_name,
         jenkins_build_url=jenkins_build_url,
         codebase=codebase, campaign=campaign,
     )
