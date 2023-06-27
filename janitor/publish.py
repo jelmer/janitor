@@ -2359,17 +2359,17 @@ class ProposalInfoManager:
                 'UPDATE merge_proposal canonical SET codebase = COALESCE(canonical.codebase, old.codebase), '
                 'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
                 'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
-                old_url, canonical_url)
+                str(old_url), str(canonical_url))
             await self.conn.execute(
                 'UPDATE publish SET merge_proposal_url = $1 WHERE merge_proposal_url = $2',
-                canonical_url, old_url)
+                str(canonical_url), str(old_url))
             if old_url:
                 await self.conn.execute(
-                    'DELETE FROM merge_proposal WHERE url = $1', old_url)
+                    'DELETE FROM merge_proposal WHERE url = $1', str(old_url))
             else:
                 await self.conn.execute(
                     "UPDATE merge_proposal SET url = $1 WHERE url = $2",
-                    canonical_url, old_url)
+                    str(canonical_url), str(old_url))
 
     async def update_proposal_info(
             self, mp, *, status, revision, codebase, target_branch_url,
