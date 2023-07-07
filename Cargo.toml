@@ -14,7 +14,7 @@ env_logger = "0.10.0"
 log = "0.4.19"
 protobuf = "3"
 sqlx = { version = "0.6", features = ["postgres", "runtime-async-std-native-tls"] }
-stackdriver_logger = "0.8.2"
+stackdriver_logger = { version = "0.8", optional = true }
 
 [build-dependencies]
 protobuf-codegen = "3"
@@ -22,3 +22,7 @@ protoc-rust = "^2.0"
 
 [workspace]
 members = [ "crates/*" ]
+
+[features]
+default = ["gcp"]
+gcp = ["stackdriver_logger"]
