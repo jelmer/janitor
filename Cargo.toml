@@ -10,8 +10,11 @@ homepage = "https://github.com/jelmer/janitor"
 build = "build.rs"
 
 [dependencies]
+env_logger = "0.10.0"
+log = "0.4.19"
 protobuf = "3"
 sqlx = { version = "0.6", features = ["postgres", "runtime-async-std-native-tls"] }
+stackdriver_logger = "0.8.2"
 
 [build-dependencies]
 protobuf-codegen = "3"
