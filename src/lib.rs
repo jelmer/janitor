@@ -1,3 +1,4 @@
 pub mod config;
 pub mod logging;
+pub mod publish;
 pub mod state;
