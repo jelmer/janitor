@@ -10,6 +10,7 @@ homepage = "https://github.com/jelmer/janitor"
 build = "build.rs"
 
 [dependencies]
+breezyshim = "0.1.3"
 chrono = { version = "0.4.26", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.10.0"
