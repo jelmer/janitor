@@ -9,6 +9,9 @@ setup(
         RustBin(
             "janitor-mail-filter", "crates/mail-filter/Cargo.toml",
             features=["cmdline"]),
+        RustBin(
+            "janitor-worker", "Cargo.toml",
+            features=["cli"]),
         RustExtension(
             "janitor._worker", "crates/worker-py/Cargo.toml",
             binding=Binding.PyO3)]

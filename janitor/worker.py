@@ -1145,7 +1145,7 @@ async def process_single_item(
         client, my_url: Optional[yarl.URL], node_name, workitem,
         jenkins_build_url=None, prometheus: Optional[str] = None,
         codebase: Optional[str] = None, campaign: Optional[str] = None,
-        tee: bool = False):
+        tee: bool = False, output_directory_base: Optional[str] = None):
     assignment = await client.get_assignment_raw(
         str(my_url), node_name,
         jenkins_build_url=jenkins_build_url,
@@ -1209,7 +1209,7 @@ async def process_single_item(
 
         vendor = build_environment.get('DEB_VENDOR', 'debian')
 
-        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor-worker'))
+        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor-worker', dir=output_directory_base))
         workitem['directory'] = output_directory
         loop = asyncio.get_running_loop()
 
@@ -1303,78 +1303,10 @@ async def create_app():
     return app
 
 
-async def main(argv=None):
-    import os
-    parser = argparse.ArgumentParser(
-        prog="janitor-worker",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--base-url",
-        type=str,
-        help="Base URL",
-        default=os.environ.get('JANITOR_BASE_URL'),
-    )
-    parser.add_argument(
-        "--output-directory", type=str, help="Output directory", default="."
-    )
-    parser.add_argument(
-        "--credentials", help="Path to credentials file (JSON).", type=str,
-        default=os.environ.get('JANITOR_CREDENTIALS')
-    )
-    parser.add_argument(
-        "--debug",
-        help="Print out API communication",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to."
-    )
-    parser.add_argument(
-        '--port', type=int, default=0, help="Port to use for diagnostics web server")
-    parser.add_argument(
-        '--codebase', type=str, help='Request run for specified codebase')
-    parser.add_argument(
-        '--campaign', type=str, help='Request run for specified campaign')
-
-    parser.add_argument("--gcp-logging", action="store_true")
-    parser.add_argument("--listen-address", type=str, default="127.0.0.1")
-    parser.add_argument(
-        "--external-address", type=str,
-        help="IP / hostname this instance can be reached on by runner")
-    parser.add_argument("--my-url", type=str,
-                        help="URL this instance can be reached on by runner")
-    parser.add_argument(
-        "--loop", action="store_true", help="Keep building until the queue is empty")
-    parser.add_argument(
-        "--tee", action="store_true",
-        help="Copy work output to standard out, in addition to worker.log")
-
-    args = parser.parse_args(argv)
-
-    if args.base_url is None:
-        parser.error('please specify --base-url')
-
-    if args.gcp_logging:
-        import google.cloud.logging
-        log_client = google.cloud.logging.Client()
-        log_client.get_default_handler()
-        log_client.setup_logging()
-    else:
-        if args.debug:
-            log_level = logging.DEBUG
-        else:
-            log_level = logging.INFO
-
-        logging.basicConfig(
-            level=log_level,
-            format="[%(asctime)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S")
-
-        logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
-
-    if args.debug:
+async def main(debug, listen_address, port, base_url, my_url, codebase,
+               campaign, credentials, prometheus, tee, loop, external_address,
+               output_directory):
+    if debug:
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
@@ -1384,18 +1316,18 @@ async def main(argv=None):
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, args.listen_address, args.port)
+    site = web.TCPSite(runner, listen_address, port)
     await site.start()
     (_site_addr, site_port) = site._server.sockets[0].getsockname()  # type: ignore
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
 
-    base_url = yarl.URL(args.base_url)
+    base_url = yarl.URL(base_url)
 
     auth: Optional[BasicAuth]
-    if args.credentials:
-        with open(args.credentials) as f:
+    if credentials:
+        with open(credentials) as f:
             creds = json.load(f)
         auth = BasicAuth(login=creds["login"], password=creds["password"])
     elif 'WORKER_NAME' in os.environ and 'WORKER_PASSWORD' in os.environ:
@@ -1434,11 +1366,11 @@ async def main(argv=None):
         node_name = socket.gethostname()
 
     loop = asyncio.get_event_loop()
-    if args.my_url:
-        my_url = yarl.URL(args.my_url)
-    elif args.external_address:
+    if my_url:
+        my_url = yarl.URL(my_url)
+    elif external_address:
         my_url = yarl.URL.build(
-            scheme='http', host=args.external_address, port=site_port)
+            scheme='http', host=external_address, port=site_port)
     elif 'MY_IP' in os.environ:
         my_url = yarl.URL.build(
             scheme='http', host=os.environ['MY_IP'], port=site_port)
@@ -1475,9 +1407,9 @@ async def main(argv=None):
                 node_name=node_name,
                 workitem=app['workitem'],
                 jenkins_build_url=jenkins_build_url,
-                prometheus=args.prometheus,
-                codebase=args.codebase, campaign=args.campaign,
-                tee=args.tee)
+                prometheus=prometheus,
+                codebase=codebase, campaign=campaign,
+                tee=tee, output_directory_base=output_directory)
         except AssignmentFailure as e:
             logging.fatal("failed to get assignment: %s", e)
             return 1
@@ -1487,9 +1419,9 @@ async def main(argv=None):
         except ResultUploadFailure as e:
             sys.stderr.write(str(e))
             return 1
-        if not args.loop:
+        if not loop:
             return 0
 
 
-if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+def main_sync(**kwargs):
+    return asyncio.run(main(**kwargs))
