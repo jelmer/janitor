@@ -1,6 +1,7 @@
 use backoff::ExponentialBackoff;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::multipart::{Form, Part};
 use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -11,7 +12,8 @@ use tokio::io::AsyncReadExt;
 use tokio::net::lookup_host;
 use tokio::time::Duration;
 
-use reqwest::multipart::{Form, Part};
+#[cfg(feature = "debian")]
+pub mod debian;
 
 pub async fn is_gce_instance() -> bool {
     match lookup_host("metadata.google.internal").await {
