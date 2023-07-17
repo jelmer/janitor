@@ -142,7 +142,6 @@ bzr_web = ["loggerhead"]
 
 [project.scripts]
 janitor-runner = "janitor.run:main"
-janitor-worker = "janitor.worker:main"
 janitor-publisher = "janitor.publish:main"
 janitor-apt = "janitor.debian.archive:main"
 janitor-git-store = "janitor.git_store:main"

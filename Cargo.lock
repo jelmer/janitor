@@ -1368,6 +1368,7 @@ dependencies = [
  "protobuf 3.2.0",
  "protobuf-codegen 3.2.0",
  "protoc-rust",
+ "pyo3",
  "serde",
  "serde_json",
  "sqlx",
