@@ -15,48 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import json
-import logging
-import os
-import subprocess
-from typing import Optional
+from .. import _worker
 
-logger = logging.getLogger(__name__)
-
-
-def run_lintian(output_directory: str, changes_names: list[str],
-                profile: Optional[str] = None,
-                suppress_tags: Optional[list[str]] = None):
-    logger.info('Running lintian')
-    args = ['--exp-output=format=json', '--allow-root']
-    if suppress_tags:
-        args.append('--suppress-tags=' + ','.join(suppress_tags))
-    if profile:
-        args.append('--profile=%s' % profile)
-    try:
-        lintian_output = subprocess.check_output(
-            ['lintian'] + args
-            + changes_names,
-            cwd=output_directory)
-    except subprocess.CalledProcessError:
-        logger.warning('lintian failed to run.')
-        return None
-    lines = []
-    for line in lintian_output.splitlines(True):
-        lines.append(line)
-        if line == b"}\n":
-            break
-    try:
-        result = json.loads(b''.join(lines))
-    except json.decoder.JSONDecodeError:
-        logging.warning(
-            'Error parsing lintian output: %r (%r)', lintian_output,
-            b''.join(lines))
-        return None
-
-    # Strip irrelevant directory information
-    for group in result.get('groups', []):
-        for inp in group.get('input-files', []):
-            inp['path'] = os.path.basename(inp['path'])
-
-    return result
+LintianOutputInvalid = _worker.LintianOutputInvalid
+run_lintian = _worker.LintianOutputInvalid

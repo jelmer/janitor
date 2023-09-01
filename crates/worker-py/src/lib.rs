@@ -7,6 +7,11 @@ create_exception!(
     AssignmentFailure,
     pyo3::exceptions::PyException
 );
+create_exception!(
+    janitor_worker.debian.lintian,
+    LintianOutputInvalid,
+    pyo3::exceptions::PyException
+);
 create_exception!(janitor._worker, EmptyQueue, pyo3::exceptions::PyException);
 create_exception!(
     janitor._worker,
@@ -183,6 +188,28 @@ fn abort_run<'a>(
     })
 }
 
+#[pyfunction]
+fn run_lintian(
+    output_directory: &str,
+    changes_names: Vec<&str>,
+    profile: Option<&str>,
+    suppress_tags: Option<Vec<&str>>,
+) -> PyResult<PyObject> {
+    let result = janitor_worker::debian::lintian::run_lintian(
+        output_directory,
+        changes_names,
+        profile,
+        suppress_tags,
+    )
+    .map_err(|e| match e {
+        janitor_worker::debian::lintian::Error::LintianFailed(e) => e.into(),
+        janitor_worker::debian::lintian::Error::LintianOutputInvalid(e) => {
+            LintianOutputInvalid::new_err((e.to_string(),))
+        }
+    })?;
+    Ok(serde_json_to_py(result))
+}
+
 #[pymodule]
 pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
@@ -193,5 +220,10 @@ pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("AssignmentFailure", py.get_type::<AssignmentFailure>())?;
     m.add("EmptyQueue", py.get_type::<EmptyQueue>())?;
     m.add_function(wrap_pyfunction!(abort_run, m)?)?;
+    m.add_function(wrap_pyfunction!(run_lintian, m)?)?;
+    m.add(
+        "LintianOutputInvalid",
+        py.get_type::<LintianOutputInvalid>(),
+    )?;
     Ok(())
 }
