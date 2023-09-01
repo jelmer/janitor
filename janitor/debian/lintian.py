@@ -15,7 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = ['LintianOutputInvalid', 'run_lintian']
+
 from .. import _worker
 
 LintianOutputInvalid = _worker.LintianOutputInvalid
-run_lintian = _worker.LintianOutputInvalid
+run_lintian = _worker.run_lintian
