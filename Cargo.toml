@@ -11,22 +11,28 @@ build = "build.rs"
 
 [dependencies]
 breezyshim = { workspace = true }
-chrono = { version = "0.4.26", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"], optional = true }
-env_logger = "0.10.0"
-log = "0.4.19"
+env_logger = { workspace = true }
+log = { workspace = true }
 protobuf = "3"
-serde = { version = "1.0.171", features = ["derive"] }
-serde_json = "1.0.100"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 sqlx = { version = "0.7", features = ["postgres", "runtime-async-std-native-tls"] }
 stackdriver_logger = { version = "0.8", optional = true }
-url = { version = "2.4.0", features = ["serde"] }
+url = { workspace = true, features = ["serde"] }
 pyo3 = { workspace = true, features = ["auto-initialize"], optional = true }
 
 [workspace.dependencies]
 pyo3-asyncio = { version = "0.19" }
 pyo3 = { version = "0.19" }
 breezyshim = "0.1.4"
+log = "0.4"
+env_logger = "0.10"
+serde = "1.0"
+serde_json = "1.0"
+url = "2.4"
+chrono = "0.4"
 
 [build-dependencies]
 protobuf-codegen = "3"
