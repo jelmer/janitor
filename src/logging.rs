@@ -3,12 +3,12 @@
 pub struct LoggingArgs {
     /// Enable debug mode.
     #[arg(long, default_value_t = false)]
-    debug: bool,
+    pub debug: bool,
 
     /// Use Google cloud logging.
     #[cfg(feature = "gcp")]
     #[arg(long, default_value_t = false)]
-    gcp_logging: bool,
+    pub gcp_logging: bool,
 }
 
 impl LoggingArgs {
