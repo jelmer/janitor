@@ -1,7 +1,8 @@
 DOCKER_TAG ?= latest
+PYTHON ?= python3
 
 core: janitor/site/_static/pygments.css
-	python3 setup.py build_ext -i
+	$(PYTHON) setup.py build_ext -i
 
 all: core
 
@@ -32,13 +33,13 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
-	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python py.test tests
+	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
 	cargo test
 
 style:: flake8
 
 flake8:
-	flake8 janitor tests
+	$(PYTHON) -m flake8 janitor tests
 
 style:: yamllint
 
@@ -51,7 +52,7 @@ djlint:
 	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
 
 typing:
-	mypy janitor tests
+	$(PYTHON) -m mypy janitor tests
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
