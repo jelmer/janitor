@@ -42,26 +42,26 @@ jobs:
           make
       - name: Style checks (flake8)
         run: |
-          make flake8
+          make flake8 PYTHON=python
       - name: Style checks (djlint)
         if: always()
         run: |
-          make djlint
+          make djlint PYTHON=python
       - name: Style checks (yamllint)
         if: always()
         run: |
-          make yamllint
+          make yamllint PYTHON=python
       - name: Typing checks
         if: always()
         run: |
-          make typing
+          make typing PYTHON=python
       - name: Build
         if: always()
         run: |
-          make all
+          make all PYTHON=python
       - name: Test suite run
         run: |
-          make test
+          make test PYTHON=python
         env:
           PYTHONHASHSEED: random
       - name: Config compat test
