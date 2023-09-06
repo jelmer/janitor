@@ -29,6 +29,9 @@ module = [
     # https://github.com/MagicStack/asyncpg/issues/387
     "asyncpg.*",
     "testing.*",
+    "boto3.*",
+    "google.protobuf.*",
+    "pytest_asyncio.*",
 ]
 ignore_missing_imports = true
 

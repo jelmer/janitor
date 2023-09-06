@@ -52,8 +52,6 @@ from breezy.config import (
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import (
     AlreadyControlDirError,
-    ConnectionError,
-    ConnectionReset,
     InvalidHttpResponse,
     NoRepositoryPresent,
     NotBranchError,
@@ -61,6 +59,10 @@ from breezy.errors import (
     TransportNotPossible,
     UnexpectedHttpStatus,
 )
+try:
+    from breezy.errors import ConnectionError  # type: ignore
+except ImportError:  # breezy >= 4
+    pass
 from breezy.git.remote import RemoteGitError
 from breezy.revision import NULL_REVISION
 from breezy.transform import ImmortalLimbo, MalformedTransform, TransformRenameFailed
@@ -339,7 +341,7 @@ class GenericTarget(Target):
 
 @backoff.on_exception(
     backoff.expo,
-    (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
+    (InvalidHttpResponse, IncompleteRead, ConnectionError),
     max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_git(
@@ -394,7 +396,7 @@ def import_branches_git(
 
 @backoff.on_exception(
     backoff.expo,
-    (InvalidHttpResponse, IncompleteRead, ConnectionError, ConnectionReset),
+    (InvalidHttpResponse, IncompleteRead, ConnectionError),
     max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def import_branches_bzr(
@@ -480,7 +482,7 @@ def copy_output(output_log: str, tee: bool = False):
 @backoff.on_exception(
     backoff.expo,
     (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
-     ConnectionError, ConnectionReset, ssl.SSLEOFError),
+     ConnectionError, ssl.SSLEOFError),
     max_tries=10,
     on_backoff=lambda m: push_branch_retries.inc())
 def push_branch(
@@ -535,7 +537,7 @@ def _push_error_to_worker_failure(e, stage):
 
     if isinstance(
             e, (InvalidHttpResponse, IncompleteRead,
-                ConnectionError, ConnectionReset, ssl.SSLEOFError,
+                ConnectionError, ssl.SSLEOFError,
                 ssl.SSLError)):
         return WorkerFailure(
             "push-failed", "Failed to push result branch: %s" % e,
@@ -942,7 +944,7 @@ def run_worker(
                         )
                     except (InvalidHttpResponse, IncompleteRead,
                             ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                            TransportNotPossible, ConnectionReset,
+                            TransportNotPossible,
                             ssl.SSLEOFError, ssl.SSLError, TransportError) as e:
                         logging.warning(
                             "unable to push to cache URL %s: %s",

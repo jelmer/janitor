@@ -35,11 +35,14 @@ from breezy.branch import Branch
 from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
 from breezy.errors import (
-    ConnectionError,
     InvalidHttpResponse,
     NoSuchRevision,
     NotBranchError,
 )
+try:
+    from breezy.errors import ConnectionError  # type: ignore
+except ImportError:  # breezy >= 4
+    pass
 from breezy.git.remote import RemoteGitError
 from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
