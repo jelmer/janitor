@@ -51,7 +51,11 @@ from aiohttp import (
 from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics, metrics_middleware
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import ConnectionError, PermissionDenied, UnexpectedHttpStatus
+from breezy.errors import PermissionDenied, UnexpectedHttpStatus
+try:
+    from breezy.errors import ConnectionError  # type: ignore
+except ImportError:  # breezy >= 4
+    pass
 from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
 from redis.asyncio import Redis
 from silver_platter.probers import select_preferred_probers
