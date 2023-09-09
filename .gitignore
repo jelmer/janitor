@@ -31,3 +31,4 @@ share
 Cargo.lock
 target
 janitor/_worker.*.so
+.testrepository
