@@ -39,6 +39,7 @@ from breezy.errors import (
     NoSuchRevision,
     NotBranchError,
 )
+
 try:
     from breezy.errors import ConnectionError  # type: ignore
 except ImportError:  # breezy >= 4
