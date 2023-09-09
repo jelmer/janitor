@@ -59,6 +59,7 @@ from breezy.errors import (
     TransportNotPossible,
     UnexpectedHttpStatus,
 )
+
 try:
     from breezy.errors import ConnectionError  # type: ignore
 except ImportError:  # breezy >= 4
@@ -95,9 +96,9 @@ from ._worker import (
     Client,
     EmptyQueue,
     ResultUploadFailure,
+    abort_run,
     gce_external_ip,
     is_gce_instance,
-    abort_run,
 )
 from .vcs import BranchOpenFailure, open_branch_ext
 
@@ -373,20 +374,20 @@ def import_branches_git(
     def get_changed_refs(refs):
         changed_refs: dict[bytes, tuple[bytes, Optional[bytes]]] = {}
         for (fn, _n, _br, r) in (branches or []):
-            tagname = ("refs/tags/run/{}/{}".format(log_id, fn)).encode("utf-8")
+            tagname = f"refs/tags/run/{log_id}/{fn}".encode()
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
             else:
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
-                branchname = ("refs/heads/{}/{}".format(campaign, fn)).encode("utf-8")
+                branchname = f"refs/heads/{campaign}/{fn}".encode()
                 # TODO(jelmer): Ideally this would be a symref:
                 changed_refs[branchname] = changed_refs[tagname]
         for n, r in (tags or []):
-            tagname = ("refs/tags/{}/{}".format(log_id, n)).encode("utf-8")
+            tagname = f"refs/tags/{log_id}/{n}".encode()
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
-                tagname = ("refs/tags/{}".format(n)).encode("utf-8")
+                tagname = f"refs/tags/{n}".encode()
                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
 
