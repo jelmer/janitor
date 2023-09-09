@@ -52,6 +52,7 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, metrics, metrics_midd
 from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, UnexpectedHttpStatus
+
 try:
     from breezy.errors import ConnectionError  # type: ignore
 except ImportError:  # breezy >= 4
