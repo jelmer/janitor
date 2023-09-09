@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 from setuptools import setup
 from setuptools_protobuf import Protobuf
-from setuptools_rust import Binding, RustExtension, RustBin
+from setuptools_rust import Binding, RustBin, RustExtension
 
 setup(
     protobufs=[Protobuf('janitor/config.proto', mypy=True)],
