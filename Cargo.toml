@@ -12,7 +12,6 @@ build = "build.rs"
 [dependencies]
 breezyshim = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-clap = { workspace = true, features = ["derive", "env"], optional = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 protobuf = "3"
@@ -21,7 +20,7 @@ serde_json = { workspace = true }
 sqlx = { version = "0.7", features = ["postgres", "runtime-async-std-native-tls"] }
 stackdriver_logger = { version = "0.8", optional = true }
 url = { workspace = true, features = ["serde"] }
-pyo3 = { workspace = true, features = ["auto-initialize"], optional = true }
+clap = { workspace = true, features = ["derive", "env"] }
 
 [workspace.dependencies]
 pyo3-asyncio = { version = "0.19" }
@@ -44,11 +43,5 @@ protoc-rust = "^2.0"
 members = [ "crates/*" ]
 
 [features]
-default = ["gcp", "cli"]
+default = ["gcp"]
 gcp = ["stackdriver_logger"]
-cli = ["dep:clap", "dep:pyo3"]
-
-[[bin]]
-name = "janitor-worker"
-path = "src/bin/worker.rs"
-required-features = ["cli"]
