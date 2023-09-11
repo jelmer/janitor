@@ -62,8 +62,12 @@ struct Args {
     tee: bool,
 }
 
-async fn handler() -> Html<&'static str> {
+async fn index() -> Html<&'static str> {
     Html("<h1>Hello, World!</h1>")
+}
+
+async fn health() -> String {
+    "ok".to_string()
 }
 
 #[tokio::main]
@@ -73,7 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     args.logging.init();
 
     // build our application with a route
-    let app = Router::new().route("/", get(handler));
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/health", get(health));
 
     // run it
     let addr = SocketAddr::new(args.listen_address, args.new_port);
