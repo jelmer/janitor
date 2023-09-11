@@ -1,9 +1,11 @@
 use backoff::ExponentialBackoff;
+use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::multipart::{Form, Part};
 use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
 use std::net::IpAddr;
@@ -60,8 +62,85 @@ pub fn get_build_arch() -> String {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Codemod {
+    command: String,
+    environment: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Build {
+    target: String,
+    config: HashMap<String, String>,
+    environment: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Branch {
+    cached_url: Option<Url>,
+    vcs_type: String,
+    url: Url,
+    subpath: Option<String>,
+    additional_colocated_branches: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TargetRepository {
+    url: Url,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Assignment {
     id: String,
+    queue_id: u64,
+    campaign: String,
+    codebase: String,
+    #[serde(rename = "force-build")]
+    force_build: bool,
+    branch: Branch,
+    resume: Option<Branch>,
+    target_repository: TargetRepository,
+    #[serde(rename = "skip-setup-validation")]
+    skip_setup_validation: bool,
+    #[serde(rename = "default-empty")]
+    default_empty: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Remote {
+    url: Url,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Target {
+    name: String,
+    details: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Metadata {
+    code: String,
+    description: String,
+    start_time: chrono::DateTime<chrono::Utc>,
+    finish_time: chrono::DateTime<chrono::Utc>,
+    command: String,
+    codebase: String,
+    vcs_type: String,
+    branch_url: Url,
+    subpath: Option<String>,
+    revision: RevisionId,
+    codemod: serde_json::Value,
+    remotes: HashMap<String, Remote>,
+    refreshed: bool,
+    value: Option<u64>,
+    target_branch_url: Option<Url>,
+    branches: Vec<(
+        String,
+        Option<String>,
+        Option<RevisionId>,
+        Option<RevisionId>,
+    )>,
+    tags: Vec<(String, RevisionId)>,
+    target: Target,
 }
 
 #[derive(Debug)]

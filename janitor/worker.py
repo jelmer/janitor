@@ -1307,12 +1307,28 @@ async def create_app():
 
 async def main(debug, listen_address, port, base_url, my_url, codebase,
                campaign, credentials, prometheus, tee, loop, external_address,
-               output_directory):
+               output_directory, gcp_logging):
     if debug:
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
         warnings.simplefilter('always', ResourceWarning)
+
+    if gcp_logging:
+        import google.cloud.logging
+        log_client = google.cloud.logging.Client()
+        log_client.get_default_handler()
+        log_client.setup_logging()
+    else:
+        if debug:
+            log_level = logging.DEBUG
+        else:
+            log_level = logging.INFO
+
+        logging.basicConfig(
+            level=log_level,
+            format="[%(asctime)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S")
 
     app = await create_app()
 
