@@ -1,5 +1,8 @@
+use axum::{response::Html, routing::get, Router};
 use clap::Parser;
 use pyo3::prelude::*;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[derive(Parser, Debug)]
 #[command(author, version)]
@@ -26,6 +29,10 @@ struct Args {
     /// Port to use for diagnostics web server
     port: Option<u16>,
 
+    /// Port to use for diagnostics web server (rust)
+    #[clap(long, default_value_t = 9820)]
+    new_port: u16,
+
     /// Request run for specified codebase
     #[clap(long)]
     codebase: Option<String>,
@@ -35,8 +42,8 @@ struct Args {
     campaign: Option<String>,
 
     /// Address to listen on
-    #[clap(long)]
-    listen_address: Option<std::net::IpAddr>,
+    #[clap(long, default_value = "0.0.0.0")]
+    listen_address: std::net::IpAddr,
 
     /// IP / hostname this instance can be reached on by runner
     #[clap(long)]
@@ -55,46 +62,63 @@ struct Args {
     tee: bool,
 }
 
+async fn handler() -> Html<&'static str> {
+    Html("<h1>Hello, World!</h1>")
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     args.logging.init();
 
-    let r = Python::with_gil(|py| {
-        let kwargs = pyo3::types::PyDict::new(py);
-        kwargs.set_item("base_url", args.base_url.as_str())?;
-        kwargs.set_item("output_directory", args.output_directory)?;
-        kwargs.set_item("debug", args.logging.debug)?;
-        kwargs.set_item("port", args.port)?;
-        kwargs.set_item("listen_address", args.listen_address)?;
-        kwargs.set_item("my_url", args.my_url.map(|u| u.to_string()))?;
-        kwargs.set_item("external_address", args.external_address)?;
-        kwargs.set_item("codebase", args.codebase)?;
-        kwargs.set_item("campaign", args.campaign)?;
-        kwargs.set_item("prometheus", args.prometheus.map(|p| p.to_string()))?;
-        kwargs.set_item("tee", args.tee)?;
-        kwargs.set_item("loop", args.r#loop)?;
-        kwargs.set_item("credentials", args.credentials)?;
+    // build our application with a route
+    let app = Router::new().route("/", get(handler));
 
-        let worker = py.import("janitor.worker")?;
-        let main = worker.getattr("main_sync")?;
-        main.call((), Some(kwargs))?.extract::<Option<i32>>()
+    // run it
+    let addr = SocketAddr::new(args.listen_address, args.new_port);
+    log::info!("listening on {}", addr);
+
+    std::thread::spawn(move || {
+        match Python::with_gil(|py| {
+            let kwargs = pyo3::types::PyDict::new(py);
+            kwargs.set_item("base_url", args.base_url.as_str())?;
+            kwargs.set_item("output_directory", args.output_directory)?;
+            kwargs.set_item("debug", args.logging.debug)?;
+            kwargs.set_item("port", args.port)?;
+            kwargs.set_item("listen_address", args.listen_address.to_string())?;
+            kwargs.set_item("my_url", args.my_url.map(|u| u.to_string()))?;
+            kwargs.set_item("external_address", args.external_address)?;
+            kwargs.set_item("codebase", args.codebase)?;
+            kwargs.set_item("campaign", args.campaign)?;
+            kwargs.set_item("prometheus", args.prometheus.map(|p| p.to_string()))?;
+            kwargs.set_item("tee", args.tee)?;
+            kwargs.set_item("loop", args.r#loop)?;
+            kwargs.set_item("credentials", args.credentials)?;
+
+            let worker = py.import("janitor.worker")?;
+            let main = worker.getattr("main_sync")?;
+
+            main.call((), Some(kwargs))?.extract::<Option<i32>>()
+        }) {
+            Ok(Some(exit_code)) => std::process::exit(exit_code),
+            Ok(None) => std::process::exit(0),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                if args.logging.debug {
+                    pyo3::Python::with_gil(|py| {
+                        if let Some(traceback) = e.traceback(py) {
+                            println!("{}", traceback.format().unwrap());
+                        }
+                    });
+                }
+                std::process::exit(1);
+            }
+        }
     });
 
-    match r {
-        Ok(Some(exit_code)) => std::process::exit(exit_code),
-        Ok(None) => std::process::exit(0),
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            if args.logging.debug {
-                pyo3::Python::with_gil(|py| {
-                    if let Some(traceback) = e.traceback(py) {
-                        println!("{}", traceback.format().unwrap());
-                    }
-                });
-            }
-            std::process::exit(1);
-        }
-    }
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await?;
+    Ok(())
 }
