@@ -1,5 +1,7 @@
-use axum::{response::Html, routing::get, Router};
+use axum::{response::Html, response::Json, routing::get, Router};
 use clap::Parser;
+use janitor_worker::{Assignment, Metadata};
+use pyo3::exceptions::PySystemExit;
 use pyo3::prelude::*;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -70,6 +72,16 @@ async fn health() -> String {
     "ok".to_string()
 }
 
+async fn assignment() -> Json<Option<Assignment>> {
+    // TODO
+    Json(None)
+}
+
+async fn intermediate_result() -> Json<Option<Metadata>> {
+    // TODO
+    Json(None)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -79,7 +91,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // build our application with a route
     let app = Router::new()
         .route("/", get(index))
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .route("/assignment", get(assignment))
+        .route("/intermediate-result", get(intermediate_result));
 
     // run it
     let addr = SocketAddr::new(args.listen_address, args.new_port);
@@ -101,11 +115,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             kwargs.set_item("tee", args.tee)?;
             kwargs.set_item("loop", args.r#loop)?;
             kwargs.set_item("credentials", args.credentials)?;
+            kwargs.set_item("gcp_logging", args.logging.gcp_logging)?;
 
             let worker = py.import("janitor.worker")?;
             let main = worker.getattr("main_sync")?;
 
-            main.call((), Some(kwargs))?.extract::<Option<i32>>()
+            match main.call((), Some(kwargs))?.extract::<Option<i32>>() {
+                Ok(o) => Ok(o),
+                Err(e) if e.is_instance_of::<PySystemExit>(py) => {
+                    Ok(Some(e.value(py).getattr("code")?.extract::<i32>()?))
+                }
+                Err(e) => Err(e),
+            }
         }) {
             Ok(Some(exit_code)) => std::process::exit(exit_code),
             Ok(None) => std::process::exit(0),
