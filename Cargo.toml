@@ -25,6 +25,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 [workspace.dependencies]
 pyo3-asyncio = { version = "0.19" }
 pyo3 = { version = "0.19" }
+pyo3-log = { version = "0.8" }
 breezyshim = "0.1.4"
 log = "0.4"
 env_logger = "0.10"
@@ -34,6 +35,8 @@ url = "2.4"
 chrono = "0.4"
 # clap >= 4.3 requires rustc 1.70, which is not yet in Debian unstable
 clap = { version = "<4.3" }
+tokio = "1"
+axum = "0.6.16"
 
 [build-dependencies]
 protobuf-codegen = "3"
