@@ -1,5 +1,5 @@
 use backoff::ExponentialBackoff;
-use breezyshim::RevisionId;
+pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::multipart::{Form, Part};
@@ -61,86 +61,126 @@ pub fn get_build_arch() -> String {
     .to_owned()
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerFailure {
+    pub code: String,
+    pub description: String,
+    pub details: Option<serde_json::Value>,
+    pub stage: Option<Vec<String>>,
+    pub transient: Option<bool>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Codemod {
-    command: String,
-    environment: HashMap<String, String>,
+    pub command: String,
+    pub environment: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Build {
-    target: String,
-    config: HashMap<String, String>,
-    environment: Option<HashMap<String, String>>,
+    pub target: String,
+    pub config: HashMap<String, String>,
+    pub environment: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Branch {
-    cached_url: Option<Url>,
-    vcs_type: String,
-    url: Url,
-    subpath: Option<String>,
-    additional_colocated_branches: Option<Vec<String>>,
+    pub cached_url: Option<Url>,
+    pub vcs_type: String,
+    pub url: Url,
+    pub subpath: Option<String>,
+    pub additional_colocated_branches: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TargetRepository {
-    url: Url,
+    pub url: Url,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assignment {
-    id: String,
-    queue_id: u64,
-    campaign: String,
-    codebase: String,
+    pub id: String,
+    pub queue_id: u64,
+    pub campaign: String,
+    pub codebase: String,
     #[serde(rename = "force-build")]
-    force_build: bool,
-    branch: Branch,
-    resume: Option<Branch>,
-    target_repository: TargetRepository,
+    pub force_build: bool,
+    pub branch: Branch,
+    pub resume: Option<Branch>,
+    pub target_repository: TargetRepository,
     #[serde(rename = "skip-setup-validation")]
-    skip_setup_validation: bool,
+    pub skip_setup_validation: bool,
     #[serde(rename = "default-empty")]
-    default_empty: bool,
+    pub default_empty: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Remote {
-    url: Url,
+    pub url: Url,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Target {
-    name: String,
-    details: serde_json::Value,
+    pub name: String,
+    pub details: serde_json::Value,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl Target {
+    pub fn new(name: String, details: serde_json::Value) -> Self {
+        Self { name, details }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Metadata {
-    code: String,
-    description: String,
-    start_time: chrono::DateTime<chrono::Utc>,
-    finish_time: chrono::DateTime<chrono::Utc>,
-    command: String,
-    codebase: String,
-    vcs_type: String,
-    branch_url: Url,
-    subpath: Option<String>,
-    revision: RevisionId,
-    codemod: serde_json::Value,
-    remotes: HashMap<String, Remote>,
-    refreshed: bool,
-    value: Option<u64>,
-    target_branch_url: Option<Url>,
-    branches: Vec<(
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub campaign: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<chrono::NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_time: Option<chrono::NaiveDateTime>,
+    pub command: Option<Vec<String>>,
+    pub codebase: Option<String>,
+    pub vcs_type: Option<String>,
+    pub branch_url: Option<Url>,
+    pub subpath: Option<String>,
+    pub main_branch_revision: Option<RevisionId>,
+    pub revision: Option<RevisionId>,
+    pub codemod: Option<serde_json::Value>,
+    pub remotes: HashMap<String, Remote>,
+    pub refreshed: Option<bool>,
+    pub value: Option<u64>,
+    pub target_branch_url: Option<Url>,
+    pub branches: Vec<(
         String,
         Option<String>,
         Option<RevisionId>,
         Option<RevisionId>,
     )>,
-    tags: Vec<(String, RevisionId)>,
-    target: Target,
+    pub tags: Vec<(String, RevisionId)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<Target>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "details")]
+    pub failure_details: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transient: Option<bool>,
+}
+
+impl Metadata {
+    pub fn update(&mut self, failure: &WorkerFailure) {
+        self.code = Some(failure.code.clone());
+        self.description = Some(failure.description.clone());
+        self.failure_details = failure.details.clone();
+        self.stage = failure.stage.as_ref().map(|s| s.join("/"));
+        self.transient = failure.transient;
+    }
 }
 
 #[derive(Debug)]
@@ -371,7 +411,7 @@ impl Client {
     pub async fn upload_results(
         &self,
         run_id: &str,
-        metadata: &serde_json::Value,
+        metadata: &Metadata,
         output_directory: Option<&Path>,
     ) -> Result<serde_json::Value, UploadFailure> {
         upload_results(
@@ -387,12 +427,12 @@ impl Client {
 }
 
 pub async fn bundle_results<'a>(
-    metadata: &'a serde_json::Value,
+    metadata: &'a Metadata,
     directory: Option<&'a Path>,
 ) -> Result<Form, Box<dyn Error + Send + Sync>> {
     let mut form = Form::new();
 
-    let json_part = Part::text(metadata.to_string())
+    let json_part = Part::text(serde_json::to_string(metadata)?)
         .file_name("result.json")
         .mime_str("application/json")?;
     form = form.part("metadata", json_part);
@@ -433,15 +473,17 @@ pub async fn upload_results(
     credentials: &Credentials,
     base_url: &Url,
     run_id: &str,
-    metadata: &serde_json::Value,
+    metadata: &Metadata,
     output_directory: Option<&Path>,
 ) -> Result<serde_json::Value, UploadFailure> {
     backoff::future::retry(ExponentialBackoff::default(), || async {
         let finish_url = base_url
             .join(&format!("active-runs/{}/finish", run_id))
             .map_err(|e| UploadFailure(format!("Error building finish URL: {}", e)))?;
+        log::info!("Uploading results to {}", &finish_url);
         let builder = client.post(finish_url).timeout(Duration::from_secs(60));
         let builder = credentials.set_credentials(builder);
+        log::debug!("Uploading results: {}", serde_json::to_string(metadata).unwrap());
         let bundle: Form = bundle_results(metadata, output_directory)
             .await
             .map_err(|e| {
@@ -546,6 +588,7 @@ pub async fn upload_results(
                         e
                     )))
                 })?;
+                log::warn!("Error uploading results: {}: {}", status, text);
                 Err(backoff::Error::transient(UploadFailure(format!(
                     "ResultUploadFailure: Unable to submit result: {}: {}",
                     text, status
@@ -555,17 +598,11 @@ pub async fn upload_results(
     }).await
 }
 
-pub async fn abort_run(
-    client: &Client,
-    run_id: &str,
-    metadata: &serde_json::Value,
-    description: &str,
-) {
-    let mut metadata = metadata.clone();
-    metadata["code"] = "aborted".into();
-    metadata["description"] = description.into();
-    let finish_time = chrono::Utc::now();
-    metadata["finish_time"] = finish_time.to_rfc3339().into();
+pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, description: &str) {
+    let mut metadata: Metadata = metadata.clone();
+    metadata.code = Some("aborted".to_string());
+    metadata.description = Some(description.to_string());
+    metadata.finish_time = Some(chrono::Utc::now().naive_utc());
 
     match client.upload_results(run_id, &metadata, None).await {
         Ok(_) => {}

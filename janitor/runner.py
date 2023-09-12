@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict, cast
 
 import aiojobs
 import aiozipkin
@@ -727,6 +727,12 @@ class Backchannel:
         return {}
 
 
+class VcsInfo(TypedDict, total=False):
+    vcs_type: str
+    branch_url: str
+    subpath: str
+
+
 class ActiveRun:
 
     worker_name: str
@@ -741,7 +747,7 @@ class ActiveRun:
     change_set: Optional[str]
     command: str
     backchannel: Backchannel
-    vcs_info: dict[str, str]
+    vcs_info: VcsInfo
 
     def __init__(
         self,
@@ -755,7 +761,7 @@ class ActiveRun:
         queue_id: int,
         log_id: str,
         start_time: datetime,
-        vcs_info: dict[str, str],
+        vcs_info: VcsInfo,
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -781,7 +787,7 @@ class ActiveRun:
     def from_queue_item(
         cls,
         queue_item: QueueItem,
-        vcs_info: dict[str, str],
+        vcs_info: VcsInfo,
         backchannel: Optional[Backchannel],
         worker_name: str,
         worker_link: Optional[str] = None,
@@ -822,7 +828,7 @@ class ActiveRun:
             queue_id=js['queue_id'],
             log_id=js['id'],
             backchannel=backchannel,
-            vcs_info=(js['vcs'] or {}),
+            vcs_info=cast(VcsInfo, (js['vcs'] or {})),
             worker_name=js['worker'],
             worker_link=js['worker_link'],
             codebase=js.get('codebase'),
@@ -850,15 +856,15 @@ class ActiveRun:
         return True
 
     @property
-    def vcs_type(self):
+    def vcs_type(self) -> str | None:
         return self.vcs_info.get("vcs_type")
 
     @property
-    def main_branch_url(self):
+    def main_branch_url(self) -> str | None:
         return self.vcs_info.get("branch_url")
 
     @property
-    def subpath(self):
+    def subpath(self) -> str | None:
         return self.vcs_info.get("subpath")
 
     def __eq__(self, other):
@@ -2383,7 +2389,7 @@ async def next_item(
                 else:
                     resume_branch = None
         else:
-            vcs_type = vcs_info.get('vcs_type', DEFAULT_VCS_TYPE)
+            vcs_type = vcs_info.get('vcs_type') or DEFAULT_VCS_TYPE
             resume_branch = None
             additional_colocated_branches = None
 

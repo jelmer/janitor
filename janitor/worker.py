@@ -33,7 +33,7 @@ from datetime import datetime
 from functools import partial
 from http.client import IncompleteRead
 from tempfile import TemporaryDirectory
-from typing import Any, Optional, TypedDict, cast
+from typing import Any, Optional, cast
 
 import backoff
 import yarl
@@ -95,12 +95,21 @@ from ._worker import (
     AssignmentFailure,
     Client,
     EmptyQueue,
+    Metadata,
     ResultUploadFailure,
     abort_run,
     gce_external_ip,
     is_gce_instance,
 )
+from ._worker import (
+    WorkerFailure as _WorkerFailure,
+)
 from .vcs import BranchOpenFailure, open_branch_ext
+
+
+def WorkerFailure(code: str, description: str, details: Any | None = None, stage: tuple[str, ...] | None = None, transient: bool | None = None):
+    return _WorkerFailure(code, description, details, stage, transient)
+
 
 push_branch_retries = Counter(
     "push_branch_retries", "Number of branch push retries.")
@@ -117,34 +126,7 @@ USER_AGENT = "janitor/worker (0.1)"
 logger = logging.getLogger(__name__)
 
 
-class WorkerFailure(Exception):
-    """Worker processing failed."""
-
-    def __init__(
-            self, code: str, description: str,
-            details: Optional[Any] = None, stage=None,
-            transient: Optional[bool] = None) -> None:
-        self.code = code
-        self.description = description
-        self.details = details
-        self.stage = stage
-        self.transient = transient
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and self.json() == other.json()
-
-    def json(self):
-        ret = {
-            "code": self.code,
-            "description": self.description,
-            'details': self.details,
-            'transient': self.transient,
-            'stage': "/".join(self.stage) if self.stage else None,
-        }
-        return ret
-
-
-def _convert_codemod_script_failed(e: ScriptFailed) -> WorkerFailure:
+def _convert_codemod_script_failed(e: ScriptFailed) -> _WorkerFailure:
     if e.args[1] == 127:
         return WorkerFailure(
             'command-not-found',
@@ -558,25 +540,6 @@ def _push_error_to_worker_failure(e, stage):
     return e
 
 
-class Metadata(TypedDict, total=False):
-    codebase: str
-    command: list[str]
-    description: str
-    revision: str
-    main_branch_revision: str
-    subpath: str
-    target_branch_url: str
-    refreshed: bool
-    codemod: Any
-    branch_url: Optional[str]
-    vcs_type: str
-    branches: list[tuple[str, Optional[str], Optional[str], Optional[str]]]
-    tags: list[tuple[str, bytes]]
-    value: int
-    target: dict[str, Any]
-    remotes: dict[str, dict[str, str]]
-
-
 def run_worker(
     *,
     codebase: str,
@@ -605,13 +568,14 @@ def run_worker(
     skip_setup_validation: bool = False,
     default_empty: bool = False,
 ):
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     with ExitStack() as es:
         es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
         try:
-            metadata["command"] = command
-            metadata["codebase"] = codebase
+            metadata.command = command
+            metadata.codebase = codebase
 
             build_target: Target
             if target == "debian":
@@ -632,16 +596,16 @@ def run_worker(
                         'url': main_branch_url,
                         'retry_after': e.retry_after,
                     }, transient=('temporarily' in e.code)) from e
-                metadata["branch_url"] = main_branch.user_url
-                metadata["vcs_type"] = get_branch_vcs_type(main_branch)
-                metadata["subpath"] = subpath
+                metadata.branch_url = main_branch.user_url
+                metadata.vcs_type = get_branch_vcs_type(main_branch)
+                metadata.subpath = subpath
                 empty_format = None
             else:
                 assert vcs_type is not None
                 main_branch = None
-                metadata["branch_url"] = None
-                metadata["vcs_type"] = vcs_type
-                metadata["subpath"] = ""
+                metadata.branch_url = None
+                metadata.vcs_type = vcs_type
+                metadata.subpath = ""
                 try:
                     empty_format = format_registry.make_controldir(vcs_type)
                 except KeyError as e:
@@ -776,14 +740,11 @@ def run_worker(
                 build_target.validate(ws.local_tree, subpath, build_config)
 
             if ws.main_branch:
-                metadata["revision"] = metadata[
-                    "main_branch_revision"
-                ] = ws.main_branch.last_revision().decode('utf-8')
+                metadata.revision = metadata.main_branch_revision = ws.main_branch.last_revision()
             else:
-                metadata["revision"] = metadata["main_branch_revision"] = NULL_REVISION.decode("utf-8")
+                metadata.revision = metadata.main_branch_revision = NULL_REVISION
 
-            metadata["codemod"] = {}
-            metadata["remotes"] = {}
+            metadata.codemod = {}
 
             if ws.resume_branch is None:
                 # If the resume branch was discarded for whatever reason, then we
@@ -791,7 +752,7 @@ def run_worker(
                 resume_codemod_result = None
 
             if main_branch:
-                metadata["remotes"]["origin"] = {"url": main_branch.user_url}
+                metadata.add_remote("origin", main_branch.user_url)
 
             try:
                 changer_result = build_target.make_changes(
@@ -800,7 +761,7 @@ def run_worker(
                     resume_metadata=resume_codemod_result)
                 if not ws.any_branch_changes():
                     raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ), transient=False)
-            except WorkerFailure as e:
+            except _WorkerFailure as e:
                 if e.code == "nothing-to-do":
                     if ws.changes_since_main():
                         # This should only ever happen if we were resuming
@@ -820,13 +781,13 @@ def run_worker(
                 else:
                     raise
             finally:
-                metadata["revision"] = ws.local_tree.branch.last_revision().decode('utf-8')
+                metadata.revision = ws.local_tree.branch.last_revision()
 
-            metadata["refreshed"] = ws.refreshed
-            metadata["value"] = changer_result.value
-            metadata['codemod'] = changer_result.context
-            metadata["target_branch_url"] = changer_result.target_branch_url
-            metadata["description"] = changer_result.description
+            metadata.refreshed = ws.refreshed
+            metadata.value = changer_result.value
+            metadata.codemod = changer_result.context
+            metadata.target_branch_url = changer_result.target_branch_url
+            metadata.description = changer_result.description
 
             result_branches: list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
             for (name, base_revision, revision) in ws.result_branches():
@@ -843,13 +804,10 @@ def run_worker(
             assert len(result_branch_roles) == len(set(result_branch_roles)), \
                 "Duplicate result branches: %r" % result_branches
 
-            metadata["branches"] = [
-                (f, n, br.decode("utf-8") if br else None,
-                 r.decode("utf-8") if r else None)
-                for (f, n, br, r) in (result_branches or [])]
-            metadata["tags"] = [
-                (n, r.decode("utf-8") if r else None)
-                for (n, r) in (changer_result.tags or [])]
+            for (f, n, br, r) in (result_branches or []):
+                metadata.add_branch(f, n, br, r)
+            for (n, r) in (changer_result.tags or []):
+                metadata.add_tag(n, r)  # type: ignore
 
             actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
 
@@ -890,15 +848,12 @@ def run_worker(
                          for (role, name, br, r) in result_branches]))
 
             if should_build:
-                metadata['target'] = {
-                    "name": build_target.name,
-                    "details": None,
-                }
+                metadata.target_name = build_target.name
 
                 build_target_details = build_target.build(
                     ws.local_tree, subpath, output_directory, build_config)
 
-                metadata['target']['details'] = build_target_details
+                metadata.target_details = build_target_details
             else:
                 build_target_details = None
 
@@ -952,7 +907,7 @@ def run_worker(
                             cached_branch_url, e)
 
             logging.info("All done.")
-        except WorkerFailure:
+        except _WorkerFailure:
             raise
         except BaseException:
             traceback.print_exc()
@@ -969,11 +924,11 @@ INDEX_TEMPLATE = Template("""\
 
 <ul>
 <li><a href="/assignment">Raw Assignment</a></li>
-<li><b>Campaign</b>: {{ metadata['campaign'] }}</li>
-<li><b>Codebase</b>: {{ metadata['codebase'] }}</li>
-{% if metadata and metadata.get('start_time') %}
-<li><b>Start Time</b>: {{ metadata['start_time'] }}
-<li><b>Current duration</b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
+<li><b>Campaign</b>: {{ metadata.campaign }}</li>
+<li><b>Codebase</b>: {{ metadata.codebase }}</li>
+{% if metadata and metadata.start_time %}
+<li><b>Start Time</b>: {{ metadata.start_time }}
+<li><b>Current duration</b>: {{ datetime.utcnow() - metadata.start_time }}
 {% endif %}
 <li><b>Environment</b>: <ul>
 {% for key, value in assignment['env'].items() %}
@@ -1185,12 +1140,11 @@ async def process_single_item(
         build_config = assignment["build"].get("config", {})
 
         start_time = datetime.utcnow()
-        metadata = {
-            "queue_id": assignment["queue_id"],
-            "start_time": start_time.isoformat(),
-            "branch_url": branch_url,
-            "vcs_type": vcs_type,
-        }
+        metadata = Metadata()
+        metadata.queue_id = int(assignment["queue_id"])
+        metadata.start_time = start_time
+        metadata.branch_url = branch_url
+        metadata.vcs_type = vcs_type
         workitem['metadata'] = metadata
 
         target_repo_url = assignment["target_repository"]["url"]
@@ -1211,7 +1165,9 @@ async def process_single_item(
 
         vendor = build_environment.get('DEB_VENDOR', 'debian')
 
-        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor-worker', dir=output_directory_base))
+        tmpdir_prefix = os.path.join(os.environ.get("TMPDIR", "/tmp"), "janitor-worker")
+
+        output_directory = es.enter_context(TemporaryDirectory(prefix=tmpdir_prefix, dir=output_directory_base))
         workitem['directory'] = output_directory
         loop = asyncio.get_running_loop()
 
@@ -1247,8 +1203,8 @@ async def process_single_item(
         )
         try:
             await main_task
-        except WorkerFailure as e:
-            metadata.update(e.json())
+        except _WorkerFailure as e:
+            metadata.update(e)
             logging.info("Worker failed in %r (%s): %s",
                          e.stage, e.code, e.description)
             # This is a failure for the worker, but returning 0 will cause
@@ -1257,23 +1213,23 @@ async def process_single_item(
             return
         except OSError as e:
             if e.errno == errno.ENOSPC:
-                metadata["code"] = "no-space-on-device"
-                metadata["description"] = str(e)
+                metadata.code = "no-space-on-device"
+                metadata.description = str(e)
             else:
-                metadata["code"] = "worker-exception"
-                metadata["description"] = str(e)
+                metadata.code = "worker-exception"
+                metadata.description = str(e)
             return
         except BaseException as e:
-            metadata["code"] = "worker-failure"
-            metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
+            metadata.code = "worker-failure"
+            metadata.description = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
             return
         else:
-            metadata["code"] = None
-            logging.info("%s", metadata['description'])
+            metadata.code = None
+            logging.info("%s", metadata.description)
             return
         finally:
             finish_time = datetime.utcnow()
-            metadata["finish_time"] = finish_time.isoformat()
+            metadata.finish_time = finish_time
             logging.info("Elapsed time: %s", finish_time - start_time)
 
             result = await client.upload_results(

@@ -2202,6 +2202,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e681a6cfdc4adcc93b4d3cf993749a4552018ee0a9b65fc0ccfad74352c72a38"
 dependencies = [
  "cfg-if",
+ "chrono",
  "indoc",
  "libc",
  "memoffset",
@@ -3596,6 +3597,7 @@ dependencies = [
 name = "worker-py"
 version = "0.0.0"
 dependencies = [
+ "chrono",
  "janitor-worker",
  "log",
  "pyo3",

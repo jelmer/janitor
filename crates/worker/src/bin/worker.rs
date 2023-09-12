@@ -99,48 +99,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::new(args.listen_address, args.new_port);
     log::info!("listening on {}", addr);
 
-    std::thread::spawn(move || {
-        match Python::with_gil(|py| {
-            let kwargs = pyo3::types::PyDict::new(py);
-            kwargs.set_item("base_url", args.base_url.as_str())?;
-            kwargs.set_item("output_directory", args.output_directory)?;
-            kwargs.set_item("debug", args.logging.debug)?;
-            kwargs.set_item("port", args.port)?;
-            kwargs.set_item("listen_address", args.listen_address.to_string())?;
-            kwargs.set_item("my_url", args.my_url.map(|u| u.to_string()))?;
-            kwargs.set_item("external_address", args.external_address)?;
-            kwargs.set_item("codebase", args.codebase)?;
-            kwargs.set_item("campaign", args.campaign)?;
-            kwargs.set_item("prometheus", args.prometheus.map(|p| p.to_string()))?;
-            kwargs.set_item("tee", args.tee)?;
-            kwargs.set_item("loop", args.r#loop)?;
-            kwargs.set_item("credentials", args.credentials)?;
-            kwargs.set_item("gcp_logging", args.logging.gcp_logging)?;
+    tokio::task::spawn_blocking(move || {
+        let thread_result = std::thread::spawn(move || {
+            match Python::with_gil(|py| {
+                let kwargs = pyo3::types::PyDict::new(py);
+                kwargs.set_item("base_url", args.base_url.as_str())?;
+                kwargs.set_item("output_directory", args.output_directory)?;
+                kwargs.set_item("debug", args.logging.debug)?;
+                kwargs.set_item("port", args.port)?;
+                kwargs.set_item("listen_address", args.listen_address.to_string())?;
+                kwargs.set_item("my_url", args.my_url.map(|u| u.to_string()))?;
+                kwargs.set_item("external_address", args.external_address)?;
+                kwargs.set_item("codebase", args.codebase)?;
+                kwargs.set_item("campaign", args.campaign)?;
+                kwargs.set_item("prometheus", args.prometheus.map(|p| p.to_string()))?;
+                kwargs.set_item("tee", args.tee)?;
+                kwargs.set_item("loop", args.r#loop)?;
+                kwargs.set_item("credentials", args.credentials)?;
+                kwargs.set_item("gcp_logging", args.logging.gcp_logging)?;
 
-            let worker = py.import("janitor.worker")?;
-            let main = worker.getattr("main_sync")?;
+                let worker = py.import("janitor.worker")?;
+                let main = worker.getattr("main_sync")?;
 
-            match main.call((), Some(kwargs))?.extract::<Option<i32>>() {
-                Ok(o) => Ok(o),
-                Err(e) if e.is_instance_of::<PySystemExit>(py) => {
-                    Ok(Some(e.value(py).getattr("code")?.extract::<i32>()?))
+                match main.call((), Some(kwargs))?.extract::<Option<i32>>() {
+                    Ok(o) => Ok(o),
+                    Err(e) if e.is_instance_of::<PySystemExit>(py) => {
+                        Ok(Some(e.value(py).getattr("code")?.extract::<i32>()?))
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            }
-        }) {
-            Ok(Some(exit_code)) => std::process::exit(exit_code),
-            Ok(None) => std::process::exit(0),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                if args.logging.debug {
-                    pyo3::Python::with_gil(|py| {
-                        if let Some(traceback) = e.traceback(py) {
-                            println!("{}", traceback.format().unwrap());
-                        }
-                    });
+            }) {
+                Ok(Some(exit_code)) => std::process::exit(exit_code),
+                Ok(None) => std::process::exit(0),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    if args.logging.debug {
+                        pyo3::Python::with_gil(|py| {
+                            if let Some(traceback) = e.traceback(py) {
+                                println!("{}", traceback.format().unwrap());
+                            }
+                        });
+                    }
+                    std::process::exit(1);
                 }
-                std::process::exit(1);
             }
+        })
+        .join();
+        if let Err(e) = thread_result {
+            std::process::exit(1);
         }
     });
 

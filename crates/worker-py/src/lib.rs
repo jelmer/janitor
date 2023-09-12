@@ -1,6 +1,9 @@
-use janitor_worker::AssignmentError;
+use chrono::NaiveDateTime;
+use janitor_worker::{AssignmentError, Remote, RevisionId};
 use pyo3::create_exception;
+use pyo3::exceptions::{PyException, PyNotImplementedError, PyTypeError};
 use pyo3::prelude::*;
+use pyo3::pyclass::CompareOp;
 
 create_exception!(
     janitor._worker,
@@ -59,16 +62,14 @@ fn py_to_serde_json(obj: &PyAny) -> PyResult<serde_json::Value> {
         }
         Ok(serde_json::Value::Object(ret))
     } else {
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            ("unsupported type",),
-        ))
+        Err(PyTypeError::new_err(("unsupported type",)))
     }
 }
 
-fn serde_json_to_py(value: serde_json::Value) -> PyObject {
+fn serde_json_to_py(value: &serde_json::Value) -> PyObject {
     Python::with_gil(|py| match value {
         serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, b).into(),
+        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, *b).into(),
         serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap()).into(),
         serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str()).into(),
         serde_json::Value::Array(a) => {
@@ -145,7 +146,7 @@ impl Client {
                     AssignmentError::EmptyQueue => EmptyQueue::new_err(()),
                 })?;
 
-            Ok(serde_json_to_py(assignment))
+            Ok(serde_json_to_py(&assignment))
         })
     }
 
@@ -153,19 +154,19 @@ impl Client {
         &self,
         py: Python<'a>,
         run_id: &str,
-        metadata: PyObject,
+        metadata: &'a Metadata,
         output_directory: Option<std::path::PathBuf>,
     ) -> PyResult<&'a PyAny> {
         let client = self.0.clone();
         let run_id = run_id.to_string();
-        let metadata = py_to_serde_json(metadata.as_ref(py))?;
+        let metadata = metadata.0.clone();
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let result = client
                 .upload_results(run_id.as_str(), &metadata, output_directory.as_deref())
                 .await
                 .map_err(|e| ResultUploadFailure::new_err(format!("{:?}", e)))?;
 
-            Ok(serde_json_to_py(result))
+            Ok(serde_json_to_py(&result))
         })
     }
 }
@@ -175,13 +176,13 @@ fn abort_run<'a>(
     py: Python<'a>,
     client: &Client,
     run_id: &str,
-    metadata: PyObject,
+    metadata: &Metadata,
     description: &str,
 ) -> PyResult<&'a PyAny> {
     let client = client.0.clone();
     let run_id = run_id.to_string();
     let description = description.to_string();
-    let metadata = py_to_serde_json(metadata.as_ref(py))?;
+    let metadata = metadata.0.clone();
     pyo3_asyncio::tokio::future_into_py(py, async move {
         janitor_worker::abort_run(&client, run_id.as_str(), &metadata, description.as_str()).await;
         Ok(())
@@ -204,15 +205,322 @@ fn run_lintian(
     .map_err(|e| match e {
         janitor_worker::debian::lintian::Error::LintianFailed(e) => e.into(),
         janitor_worker::debian::lintian::Error::LintianOutputInvalid(e) => {
-            LintianOutputInvalid::new_err((e.to_string(),))
+            LintianOutputInvalid::new_err((e,))
         }
     })?;
-    Ok(serde_json_to_py(result))
+    Ok(serde_json_to_py(&result))
+}
+
+create_exception!(janitor_worker, WorkerFailure, pyo3::exceptions::PyException);
+
+#[pyclass]
+struct Assignment(janitor_worker::Assignment);
+
+#[pymethods]
+impl Assignment {}
+
+#[pyclass]
+struct MetadataTarget(janitor_worker::Target);
+
+#[pymethods]
+impl MetadataTarget {
+    #[getter]
+    fn get_name(&self) -> PyResult<&str> {
+        Ok(self.0.name.as_str())
+    }
+
+    #[new]
+    fn new(name: &str) -> Self {
+        Self(janitor_worker::Target::new(
+            name.to_string(),
+            serde_json::Value::Null,
+        ))
+    }
+
+    #[getter]
+    fn get_details(&self) -> PyResult<PyObject> {
+        Ok(serde_json_to_py(&self.0.details))
+    }
+
+    #[setter]
+    fn set_details(&mut self, details: &PyAny) -> PyResult<()> {
+        self.0.details = py_to_serde_json(details)?;
+        Ok(())
+    }
+}
+
+#[pyclass]
+struct Metadata(janitor_worker::Metadata);
+
+#[pymethods]
+impl Metadata {
+    #[new]
+    fn new() -> PyResult<Self> {
+        Ok(Self(janitor_worker::Metadata::default()))
+    }
+
+    #[getter]
+    fn get_command(&self) -> PyResult<Option<Vec<String>>> {
+        Ok(self.0.command.clone())
+    }
+
+    #[setter]
+    fn set_command(&mut self, command: Option<Vec<String>>) -> PyResult<()> {
+        self.0.command = command;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_codebase(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.codebase.as_deref())
+    }
+
+    #[setter]
+    fn set_codebase(&mut self, codebase: Option<&str>) -> PyResult<()> {
+        self.0.codebase = codebase.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_code(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.code.as_deref())
+    }
+
+    #[setter]
+    fn set_code(&mut self, code: Option<&str>) -> PyResult<()> {
+        self.0.code = code.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_description(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.description.as_deref())
+    }
+
+    #[setter]
+    fn set_description(&mut self, description: Option<&str>) -> PyResult<()> {
+        self.0.description = description.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_start_time(&self) -> PyResult<Option<NaiveDateTime>> {
+        Ok(self.0.start_time)
+    }
+
+    #[setter]
+    fn set_start_time(&mut self, start_time: Option<NaiveDateTime>) -> PyResult<()> {
+        self.0.start_time = start_time;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_finish_time(&self) -> PyResult<Option<NaiveDateTime>> {
+        Ok(self.0.finish_time)
+    }
+
+    #[setter]
+    fn set_finish_time(&mut self, finish_time: Option<NaiveDateTime>) -> PyResult<()> {
+        self.0.finish_time = finish_time;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_queue_id(&self) -> PyResult<Option<u64>> {
+        Ok(self.0.queue_id)
+    }
+
+    #[setter]
+    fn set_queue_id(&mut self, queue_id: Option<u64>) -> PyResult<()> {
+        self.0.queue_id = queue_id;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_branch_url(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.branch_url.as_ref().map(|s| s.as_str()))
+    }
+
+    #[setter]
+    fn set_branch_url(&mut self, branch_url: Option<&str>) -> PyResult<()> {
+        self.0.branch_url = branch_url.map(|s| s.parse().unwrap());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_vcs_type(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.vcs_type.as_deref())
+    }
+
+    #[setter]
+    fn set_vcs_type(&mut self, vcs_type: Option<&str>) -> PyResult<()> {
+        self.0.vcs_type = vcs_type.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_subpath(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.subpath.as_deref())
+    }
+
+    #[setter]
+    fn set_subpath(&mut self, subpath: Option<&str>) -> PyResult<()> {
+        self.0.subpath = subpath.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_revision(&self) -> PyResult<Option<RevisionId>> {
+        Ok(self.0.revision.clone())
+    }
+
+    #[setter]
+    fn set_revision(&mut self, revision: Option<RevisionId>) -> PyResult<()> {
+        self.0.revision = revision;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_main_branch_revision(&self) -> PyResult<Option<RevisionId>> {
+        Ok(self.0.main_branch_revision.clone())
+    }
+
+    #[setter]
+    fn set_main_branch_revision(&mut self, revision: Option<RevisionId>) -> PyResult<()> {
+        self.0.main_branch_revision = revision;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_refreshed(&self) -> PyResult<Option<bool>> {
+        Ok(self.0.refreshed)
+    }
+
+    #[setter]
+    fn set_refreshed(&mut self, refreshed: Option<bool>) -> PyResult<()> {
+        self.0.refreshed = refreshed;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_value(&self) -> PyResult<Option<u64>> {
+        Ok(self.0.value)
+    }
+
+    #[setter]
+    fn set_value(&mut self, value: Option<u64>) -> PyResult<()> {
+        self.0.value = value;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_campaign(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.campaign.as_deref())
+    }
+
+    #[setter]
+    fn set_campaign(&mut self, campaign: Option<&str>) -> PyResult<()> {
+        self.0.campaign = campaign.map(|s| s.to_string());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_target_branch_url(&self) -> PyResult<Option<&str>> {
+        Ok(self.0.target_branch_url.as_ref().map(|s| s.as_str()))
+    }
+
+    #[setter]
+    fn set_target_branch_url(&mut self, target_branch_url: Option<&str>) -> PyResult<()> {
+        self.0.target_branch_url = target_branch_url.map(|s| s.parse().unwrap());
+        Ok(())
+    }
+
+    fn add_remote(&mut self, name: &str, url: &str) -> PyResult<()> {
+        self.0.remotes.insert(
+            name.to_string(),
+            Remote {
+                url: url.parse().unwrap(),
+            },
+        );
+        Ok(())
+    }
+
+    fn add_branch(
+        &mut self,
+        function: &str,
+        name: Option<String>,
+        base_revision: Option<RevisionId>,
+        revision: Option<RevisionId>,
+    ) -> PyResult<()> {
+        self.0
+            .branches
+            .push((function.to_string(), name, base_revision, revision));
+        Ok(())
+    }
+
+    fn add_tag(&mut self, name: &str, revision: RevisionId) -> PyResult<()> {
+        self.0.tags.push((name.to_string(), revision));
+        Ok(())
+    }
+
+    #[getter]
+    fn get_codemod(&self) -> PyResult<Option<PyObject>> {
+        Ok(self.0.codemod.as_ref().map(serde_json_to_py))
+    }
+
+    #[setter]
+    fn set_codemod(&mut self, codemod: Option<&PyAny>) -> PyResult<()> {
+        self.0.codemod = codemod.map(|c| py_to_serde_json(c).unwrap());
+        Ok(())
+    }
+
+    fn update(&mut self, py: Python, failure: &WorkerFailure) -> PyResult<()> {
+        let args: (
+            String,
+            String,
+            Option<PyObject>,
+            Option<Vec<String>>,
+            Option<bool>,
+        ) = failure.extract()?;
+        let failure = janitor_worker::WorkerFailure {
+            code: args.0,
+            description: args.1,
+            details: args.2.map(|d| py_to_serde_json(d.as_ref(py)).unwrap()),
+            stage: args.3,
+            transient: args.4,
+        };
+        self.0.update(&failure);
+        Ok(())
+    }
+
+    #[setter]
+    fn set_target_name(&mut self, name: &str) -> PyResult<()> {
+        self.0.target = Some(janitor_worker::Target::new(
+            name.to_string(),
+            serde_json::Value::Null,
+        ));
+        Ok(())
+    }
+
+    #[setter]
+    fn set_target_details(&mut self, details: &PyAny) -> PyResult<()> {
+        if let Some(t) = self.0.target.as_mut() {
+            t.details = py_to_serde_json(details).unwrap();
+        }
+        Ok(())
+    }
+
+    fn json(&self) -> PyObject {
+        let json = serde_json::to_value(&self.0).unwrap();
+        serde_json_to_py(&json)
+    }
 }
 
 #[pymodule]
 pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
+    m.add_class::<Metadata>()?;
+    m.add("WorkerFailure", py.get_type::<WorkerFailure>())?;
     m.add_function(wrap_pyfunction!(is_gce_instance, m)?)?;
     m.add_function(wrap_pyfunction!(gce_external_ip, m)?)?;
     m.add_class::<Client>()?;
