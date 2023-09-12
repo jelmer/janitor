@@ -30,6 +30,7 @@ from janitor.worker import (
     Metadata,
     WorkerFailure,
     _convert_codemod_script_failed,
+    _WorkerFailure,
     create_app,
     run_worker,
 )
@@ -159,15 +160,13 @@ async def test_artifact_index(aiohttp_client):
 
 
 def test_convert_codemod_script_failed():
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)) == WorkerFailure(
-        'command-not-found',
-        'Command foobar not found',
-        stage=("codemod", ))
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)) == WorkerFailure(
-        'killed', 'Process was killed (by OOM killer?)', stage=('codemod', ))
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)) == WorkerFailure(
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)).args == WorkerFailure(
+        'command-not-found', 'Command foobar not found', stage=("codemod", )).args
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)).args == WorkerFailure(
+        'killed', 'Process was killed (by OOM killer?)', stage=('codemod', )).args
+    assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)).args == WorkerFailure(
         'command-failed', 'Script foobar failed to run with code 1',
-        stage=('codemod', ))
+        stage=('codemod', )).args
 
 
 @pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
@@ -189,7 +188,7 @@ check:
     os.mkdir(tmp_path / "target")
     output_dir = tmp_path / "output"
     os.mkdir(output_dir)
-    metadata: Metadata = {}
+    metadata = Metadata()
     run_worker(
         codebase='mycodebase',
         campaign='mycampaign',
@@ -211,9 +210,9 @@ check:
     elif vcs_type == 'bzr':
         b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
         branch_name = ''
-    assert metadata == {
+    assert metadata.json() == {
         'branch_url': wt.branch.user_url,
-        'branches': [('main', branch_name, old_revid.decode('utf-8'), b.last_revision().decode('utf-8'))],
+        'branches': [['main', branch_name, old_revid.decode('utf-8'), b.last_revision().decode('utf-8')]],
         'codebase': 'mycodebase',
         'codemod': {},
         'command': ['sh', '-c', 'echo foo > bar'],
@@ -236,7 +235,7 @@ def test_run_worker_new(tmp_path, vcs_type, brz_identity):
     os.mkdir(tmp_path / "target")
     output_dir = tmp_path / "output"
     os.mkdir(output_dir)
-    metadata: Metadata = {}
+    metadata = Metadata()
     run_worker(
         codebase='mycodebase',
         campaign='mycampaign',
@@ -261,9 +260,9 @@ def test_run_worker_new(tmp_path, vcs_type, brz_identity):
         b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
         tags = b.tags.get_tag_dict()
         assert tags == {'run-id': b.last_revision()}
-    assert metadata == {
+    assert metadata.json() == {
         'branch_url': None,
-        'branches': [('main', '', 'null:', b.last_revision().decode('utf-8'))],
+        'branches': [['main', '', 'null:', b.last_revision().decode('utf-8')]],
         'codebase': 'mycodebase',
         'codemod': {},
         'command': ['sh', '-c', 'echo all check test: > Makefile'],
@@ -286,8 +285,8 @@ def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
     os.mkdir(tmp_path / "target")
     output_dir = tmp_path / "output"
     os.mkdir(output_dir)
-    metadata: Metadata = {}
-    with pytest.raises(WorkerFailure, match='.*no-build-tools.*'):
+    metadata = Metadata()
+    with pytest.raises(_WorkerFailure, match='.*no-build-tools.*'):
         run_worker(
             codebase='mycodebase',
             campaign='mycampaign',
@@ -312,9 +311,9 @@ def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
         tags = b.tags.get_tag_dict()
         assert list(tags.keys()) == ['run-id']
         run_id_revid = tags['run-id']
-    assert metadata == {
+    assert metadata.json() == {
         'branch_url': None,
-        'branches': [('main', '', 'null:', run_id_revid.decode('utf-8'))],
+        'branches': [['main', '', 'null:', run_id_revid.decode('utf-8')]],
         'codebase': 'mycodebase',
         'codemod': {},
         'command': ['sh', '-c', 'echo foo > bar'],
