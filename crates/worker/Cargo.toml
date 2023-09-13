@@ -9,14 +9,30 @@ repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
-tokio = { version = "1.12.0", features = ["full"] }
+url = { workspace = true, features = ["serde"] }
+tokio = { workspace = true, features = ["full"] }
+axum = { workspace = true }
 reqwest = { version = "0.11", features = ["json", "multipart"] }
 backoff = { version = "0.4", features = ["tokio"] }
 serde_json = "1"
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
+clap = { workspace = true, features = ["derive", "env"], optional = true }
+pyo3 = { workspace = true, features = ["auto-initialize"], optional = true }
+janitor = { path = "../.." }
+pyo3-asyncio = { workspace = true, features = ["tokio-runtime"], optional = true}
+pyo3-log = { workspace = true, optional = true }
+breezyshim.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }
+shlex = "1.2.0"
 
 [features]
-default = ["debian"]
+default = ["debian", "cli"]
 debian = []
+cli = ["dep:clap", "dep:pyo3", "dep:pyo3-asyncio", "dep:pyo3-log"]
+
+[[bin]]
+name = "janitor-worker"
+path = "src/bin/worker.rs"
+required-features = ["cli"]
