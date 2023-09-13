@@ -91,8 +91,8 @@ from ._worker import (
     ResultUploadFailure,
     abort_run,
     debian_make_changes,
-    generic_make_changes,
     gce_external_ip,
+    generic_make_changes,
     is_gce_instance,
 )
 from ._worker import (
