@@ -29,7 +29,6 @@ from silver_platter.apply import ScriptFailed
 from janitor.worker import (
     Metadata,
     WorkerFailure,
-    _convert_codemod_script_failed,
     _WorkerFailure,
     create_app,
     run_worker,
@@ -157,16 +156,6 @@ async def test_artifact_index(aiohttp_client):
         assert resp.status == 200
         text = await resp.text()
         assert "<body>" in text
-
-
-def test_convert_codemod_script_failed():
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 127)).args == WorkerFailure(
-        'command-not-found', 'Command foobar not found', stage=("codemod", )).args
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 137)).args == WorkerFailure(
-        'killed', 'Process was killed (by OOM killer?)', stage=('codemod', )).args
-    assert _convert_codemod_script_failed(ScriptFailed("foobar", 1)).args == WorkerFailure(
-        'command-failed', 'Script foobar failed to run with code 1',
-        stage=('codemod', )).args
 
 
 @pytest.mark.parametrize("vcs_type", ['git', 'bzr'])
