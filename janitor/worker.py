@@ -101,7 +101,7 @@ from ._worker import (
 from .vcs import BranchOpenFailure, open_branch_ext
 
 
-def WorkerFailure(code: str, description: str, details: Any | None = None, stage: tuple[str, ...] | None = None, transient: bool | None = None):
+def WorkerFailure(code: str, description: str, details: Optional[Any] = None, stage: Optional[tuple[str, ...]] = None, transient: Optional[bool] = None):
     return _WorkerFailure(code, description, details, stage, transient)
 
 

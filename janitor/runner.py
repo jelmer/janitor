@@ -856,15 +856,15 @@ class ActiveRun:
         return True
 
     @property
-    def vcs_type(self) -> str | None:
+    def vcs_type(self) -> Optional[str]:
         return self.vcs_info.get("vcs_type")
 
     @property
-    def main_branch_url(self) -> str | None:
+    def main_branch_url(self) -> Optional[str]:
         return self.vcs_info.get("branch_url")
 
     @property
-    def subpath(self) -> str | None:
+    def subpath(self) -> Optional[str]:
         return self.vcs_info.get("subpath")
 
     def __eq__(self, other):
