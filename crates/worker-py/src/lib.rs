@@ -552,6 +552,42 @@ fn debian_make_changes(
     })
 }
 
+#[pyclass]
+struct GenericCommandResult(silver_platter::codemod::CommandResult);
+
+#[pyfunction]
+fn generic_make_changes(
+    local_tree: PyObject,
+    subpath: std::path::PathBuf,
+    argv: Vec<&str>,
+    env: std::collections::HashMap<String, String>,
+    log_directory: std::path::PathBuf,
+    resume_metadata: Option<PyObject>,
+) -> PyResult<GenericCommandResult> {
+    Python::with_gil(|py| {
+        janitor_worker::generic::generic_make_changes(
+            &breezyshim::tree::WorkingTree::new(local_tree).unwrap(),
+            &subpath,
+            argv.as_slice(),
+            env,
+            &log_directory,
+            resume_metadata
+                .map(|m| py_to_serde_json(m.as_ref(py)).unwrap())
+                .as_ref(),
+        )
+    })
+    .map(GenericCommandResult)
+    .map_err(|e| {
+        WorkerFailure::new_err((
+            e.code,
+            e.description,
+            e.details.map(|e| serde_json_to_py(&e)),
+            e.stage,
+            e.transient,
+        ))
+    })
+}
+
 #[pymodule]
 pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
@@ -566,6 +602,7 @@ pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(abort_run, m)?)?;
     m.add_function(wrap_pyfunction!(run_lintian, m)?)?;
     m.add_function(wrap_pyfunction!(debian_make_changes, m)?)?;
+    m.add_function(wrap_pyfunction!(generic_make_changes, m)?)?;
     m.add(
         "LintianOutputInvalid",
         py.get_type::<LintianOutputInvalid>(),
