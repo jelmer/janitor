@@ -24,6 +24,8 @@ janitor = { path = "../.." }
 pyo3-asyncio = { workspace = true, features = ["tokio-runtime"], optional = true}
 pyo3-log = { workspace = true, optional = true }
 breezyshim.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }
+shlex = "1.2.0"
 
 [features]
 default = ["debian", "cli"]
