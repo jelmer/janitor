@@ -640,3 +640,44 @@ pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::WorkerFailure;
+
+    #[test]
+    fn test_convert_codemod_script_failed() {
+        assert_eq!(
+            convert_codemod_script_failed(127, "foobar"),
+            WorkerFailure {
+                code: "command-not-found".to_string(),
+                description: "Command foobar not found".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(137, "foobar"),
+            WorkerFailure {
+                code: "killed".to_string(),
+                description: "Process was killed (by OOM killer?)".to_string(),
+                stage: vec!["codemod".to_string()],
+
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(1, "foobar"),
+            WorkerFailure {
+                code: "command-failed".to_string(),
+                description: "Script foobar failed to run with code 1".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
+    }
+}

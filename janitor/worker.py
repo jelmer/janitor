@@ -197,7 +197,7 @@ class GenericTarget(Target):
                      resume_metadata=None):
         return generic_make_changes(
             local_tree, subpath, argv, log_directory=log_directory,
-            resume_metadata=resume_metadata)
+            resume_metadata=resume_metadata, env=self.env)
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import BuildFailure, build_from_config
