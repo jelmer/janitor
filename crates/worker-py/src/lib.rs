@@ -4,6 +4,7 @@ use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyNotImplementedError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
+use std::path::Path;
 
 create_exception!(
     janitor._worker,
@@ -475,13 +476,8 @@ impl Metadata {
     }
 
     fn update(&mut self, py: Python, failure: &WorkerFailure) -> PyResult<()> {
-        let args: (
-            String,
-            String,
-            Option<PyObject>,
-            Option<Vec<String>>,
-            Option<bool>,
-        ) = failure.extract()?;
+        let args: (String, String, Option<PyObject>, Vec<String>, Option<bool>) =
+            failure.extract()?;
         let failure = janitor_worker::WorkerFailure {
             code: args.0,
             description: args.1,
@@ -516,6 +512,46 @@ impl Metadata {
     }
 }
 
+#[pyclass]
+struct DebianCommandResult(silver_platter::debian::codemod::CommandResult);
+
+#[pyfunction]
+fn debian_make_changes(
+    local_tree: PyObject,
+    subpath: std::path::PathBuf,
+    argv: Vec<&str>,
+    env: std::collections::HashMap<String, String>,
+    log_directory: std::path::PathBuf,
+    resume_metadata: Option<PyObject>,
+    committer: Option<&str>,
+    update_changelog: Option<bool>,
+) -> PyResult<DebianCommandResult> {
+    Python::with_gil(|py| {
+        janitor_worker::debian::debian_make_changes(
+            &breezyshim::tree::WorkingTree::new(local_tree).unwrap(),
+            &subpath,
+            argv.as_slice(),
+            env,
+            &log_directory,
+            resume_metadata
+                .map(|m| py_to_serde_json(m.as_ref(py)).unwrap())
+                .as_ref(),
+            committer,
+            update_changelog,
+        )
+    })
+    .map(DebianCommandResult)
+    .map_err(|e| {
+        WorkerFailure::new_err((
+            e.code,
+            e.description,
+            e.details.map(|e| serde_json_to_py(&e)),
+            e.stage,
+            e.transient,
+        ))
+    })
+}
+
 #[pymodule]
 pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
@@ -529,6 +565,7 @@ pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
     m.add("EmptyQueue", py.get_type::<EmptyQueue>())?;
     m.add_function(wrap_pyfunction!(abort_run, m)?)?;
     m.add_function(wrap_pyfunction!(run_lintian, m)?)?;
+    m.add_function(wrap_pyfunction!(debian_make_changes, m)?)?;
     m.add(
         "LintianOutputInvalid",
         py.get_type::<LintianOutputInvalid>(),

@@ -7,6 +7,7 @@ use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs::File;
 use std::io::Read;
 use std::net::IpAddr;
 use std::path::Path;
@@ -66,7 +67,7 @@ pub struct WorkerFailure {
     pub code: String,
     pub description: String,
     pub details: Option<serde_json::Value>,
-    pub stage: Option<Vec<String>>,
+    pub stage: Vec<String>,
     pub transient: Option<bool>,
 }
 
@@ -178,7 +179,7 @@ impl Metadata {
         self.code = Some(failure.code.clone());
         self.description = Some(failure.description.clone());
         self.failure_details = failure.details.clone();
-        self.stage = failure.stage.as_ref().map(|s| s.join("/"));
+        self.stage = Some(failure.stage.join("/"));
         self.transient = failure.transient;
     }
 }
@@ -609,5 +610,31 @@ pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, descr
         Err(e) => {
             log::warn!("Result upload for abort of {} failed: {}", run_id, e);
         }
+    }
+}
+
+pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
+    match i {
+        127 => WorkerFailure {
+            code: "command-not-found".to_string(),
+            description: format!("Command {} not found", command),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
+        137 => WorkerFailure {
+            code: "killed".to_string(),
+            description: "Process was killed (by OOM killer?)".to_string(),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
+        _ => WorkerFailure {
+            code: "command-failed".to_string(),
+            description: format!("Script {} failed to run with code {}", command, i),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
     }
 }
