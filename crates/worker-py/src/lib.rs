@@ -515,6 +515,49 @@ impl Metadata {
 #[pyclass]
 struct DebianCommandResult(silver_platter::debian::codemod::CommandResult);
 
+#[pymethods]
+impl DebianCommandResult {
+    #[getter]
+    fn value(&self) -> Option<u32> {
+        self.0.value
+    }
+
+    #[getter]
+    fn description(&self) -> &str {
+        self.0.description.as_str()
+    }
+
+    #[getter]
+    fn serialized_context(&self) -> Option<&str> {
+        self.0.serialized_context.as_deref()
+    }
+
+    #[getter]
+    fn tags(&self) -> Vec<(String, Option<RevisionId>)> {
+        self.0.tags.clone()
+    }
+
+    #[getter]
+    fn target_branch_url(&self) -> Option<&str> {
+        self.0.target_branch_url.as_ref().map(|u| u.as_str())
+    }
+
+    #[getter]
+    fn old_revision(&self) -> RevisionId {
+        self.0.old_revision.clone()
+    }
+
+    #[getter]
+    fn new_revision(&self) -> RevisionId {
+        self.0.new_revision.clone()
+    }
+
+    #[getter]
+    fn context(&self) -> Option<PyObject> {
+        self.0.context.as_ref().map(|c| serde_json_to_py(c))
+    }
+}
+
 #[pyfunction]
 fn debian_make_changes(
     local_tree: PyObject,
@@ -554,6 +597,49 @@ fn debian_make_changes(
 
 #[pyclass]
 struct GenericCommandResult(silver_platter::codemod::CommandResult);
+
+#[pymethods]
+impl GenericCommandResult {
+    #[getter]
+    fn value(&self) -> Option<u32> {
+        self.0.value
+    }
+
+    #[getter]
+    fn description(&self) -> &str {
+        self.0.description.as_str()
+    }
+
+    #[getter]
+    fn serialized_context(&self) -> Option<&str> {
+        self.0.serialized_context.as_deref()
+    }
+
+    #[getter]
+    fn tags(&self) -> Vec<(String, Option<RevisionId>)> {
+        self.0.tags.clone()
+    }
+
+    #[getter]
+    fn target_branch_url(&self) -> Option<&str> {
+        self.0.target_branch_url.as_ref().map(|u| u.as_str())
+    }
+
+    #[getter]
+    fn old_revision(&self) -> RevisionId {
+        self.0.old_revision.clone()
+    }
+
+    #[getter]
+    fn new_revision(&self) -> RevisionId {
+        self.0.new_revision.clone()
+    }
+
+    #[getter]
+    fn context(&self, py: Python) -> Option<PyObject> {
+        self.0.context.as_ref().map(|c| serde_json_to_py(&c))
+    }
+}
 
 #[pyfunction]
 fn generic_make_changes(

@@ -24,11 +24,9 @@ import breezy.git  # noqa: F401
 import pytest
 from breezy.config import GlobalStack
 from breezy.controldir import ControlDir, format_registry
-from silver_platter.apply import ScriptFailed
 
 from janitor.worker import (
     Metadata,
-    WorkerFailure,
     _WorkerFailure,
     create_app,
     run_worker,
@@ -203,7 +201,7 @@ check:
         'branch_url': wt.branch.user_url,
         'branches': [['main', branch_name, old_revid.decode('utf-8'), b.last_revision().decode('utf-8')]],
         'codebase': 'mycodebase',
-        'codemod': {},
+        'codemod': None,
         'command': ['sh', '-c', 'echo foo > bar'],
         'description': '',
         'main_branch_revision': old_revid.decode('utf-8'),
@@ -253,7 +251,7 @@ def test_run_worker_new(tmp_path, vcs_type, brz_identity):
         'branch_url': None,
         'branches': [['main', '', 'null:', b.last_revision().decode('utf-8')]],
         'codebase': 'mycodebase',
-        'codemod': {},
+        'codemod': None,
         'command': ['sh', '-c', 'echo all check test: > Makefile'],
         'description': '',
         'main_branch_revision': 'null:',
@@ -304,7 +302,7 @@ def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
         'branch_url': None,
         'branches': [['main', '', 'null:', run_id_revid.decode('utf-8')]],
         'codebase': 'mycodebase',
-        'codemod': {},
+        'codemod': None,
         'command': ['sh', '-c', 'echo foo > bar'],
         'description': '',
         'main_branch_revision': 'null:',
