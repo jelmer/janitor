@@ -1,10 +1,13 @@
 use backoff::ExponentialBackoff;
+pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::multipart::{Form, Part};
 use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
+use std::fs::File;
 use std::io::Read;
 use std::net::IpAddr;
 use std::path::Path;
@@ -14,6 +17,8 @@ use tokio::time::Duration;
 
 #[cfg(feature = "debian")]
 pub mod debian;
+
+pub mod generic;
 
 pub async fn is_gce_instance() -> bool {
     match lookup_host("metadata.google.internal").await {
@@ -59,9 +64,126 @@ pub fn get_build_arch() -> String {
     .to_owned()
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerFailure {
+    pub code: String,
+    pub description: String,
+    pub details: Option<serde_json::Value>,
+    pub stage: Vec<String>,
+    pub transient: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Codemod {
+    pub command: String,
+    pub environment: HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Build {
+    pub target: String,
+    pub config: HashMap<String, String>,
+    pub environment: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Branch {
+    pub cached_url: Option<Url>,
+    pub vcs_type: String,
+    pub url: Url,
+    pub subpath: Option<String>,
+    pub additional_colocated_branches: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TargetRepository {
+    pub url: Url,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Assignment {
-    id: String,
+    pub id: String,
+    pub queue_id: u64,
+    pub campaign: String,
+    pub codebase: String,
+    #[serde(rename = "force-build")]
+    pub force_build: bool,
+    pub branch: Branch,
+    pub resume: Option<Branch>,
+    pub target_repository: TargetRepository,
+    #[serde(rename = "skip-setup-validation")]
+    pub skip_setup_validation: bool,
+    #[serde(rename = "default-empty")]
+    pub default_empty: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Remote {
+    pub url: Url,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Target {
+    pub name: String,
+    pub details: serde_json::Value,
+}
+
+impl Target {
+    pub fn new(name: String, details: serde_json::Value) -> Self {
+        Self { name, details }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct Metadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub campaign: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<chrono::NaiveDateTime>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_time: Option<chrono::NaiveDateTime>,
+    pub command: Option<Vec<String>>,
+    pub codebase: Option<String>,
+    pub vcs_type: Option<String>,
+    pub branch_url: Option<Url>,
+    pub subpath: Option<String>,
+    pub main_branch_revision: Option<RevisionId>,
+    pub revision: Option<RevisionId>,
+    pub codemod: Option<serde_json::Value>,
+    pub remotes: HashMap<String, Remote>,
+    pub refreshed: Option<bool>,
+    pub value: Option<u64>,
+    pub target_branch_url: Option<Url>,
+    pub branches: Vec<(
+        String,
+        Option<String>,
+        Option<RevisionId>,
+        Option<RevisionId>,
+    )>,
+    pub tags: Vec<(String, RevisionId)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<Target>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "details")]
+    pub failure_details: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transient: Option<bool>,
+}
+
+impl Metadata {
+    pub fn update(&mut self, failure: &WorkerFailure) {
+        self.code = Some(failure.code.clone());
+        self.description = Some(failure.description.clone());
+        self.failure_details = failure.details.clone();
+        self.stage = Some(failure.stage.join("/"));
+        self.transient = failure.transient;
+    }
 }
 
 #[derive(Debug)]
@@ -292,7 +414,7 @@ impl Client {
     pub async fn upload_results(
         &self,
         run_id: &str,
-        metadata: &serde_json::Value,
+        metadata: &Metadata,
         output_directory: Option<&Path>,
     ) -> Result<serde_json::Value, UploadFailure> {
         upload_results(
@@ -308,12 +430,12 @@ impl Client {
 }
 
 pub async fn bundle_results<'a>(
-    metadata: &'a serde_json::Value,
+    metadata: &'a Metadata,
     directory: Option<&'a Path>,
 ) -> Result<Form, Box<dyn Error + Send + Sync>> {
     let mut form = Form::new();
 
-    let json_part = Part::text(metadata.to_string())
+    let json_part = Part::text(serde_json::to_string(metadata)?)
         .file_name("result.json")
         .mime_str("application/json")?;
     form = form.part("metadata", json_part);
@@ -354,15 +476,17 @@ pub async fn upload_results(
     credentials: &Credentials,
     base_url: &Url,
     run_id: &str,
-    metadata: &serde_json::Value,
+    metadata: &Metadata,
     output_directory: Option<&Path>,
 ) -> Result<serde_json::Value, UploadFailure> {
     backoff::future::retry(ExponentialBackoff::default(), || async {
         let finish_url = base_url
             .join(&format!("active-runs/{}/finish", run_id))
             .map_err(|e| UploadFailure(format!("Error building finish URL: {}", e)))?;
+        log::info!("Uploading results to {}", &finish_url);
         let builder = client.post(finish_url).timeout(Duration::from_secs(60));
         let builder = credentials.set_credentials(builder);
+        log::debug!("Uploading results: {}", serde_json::to_string(metadata).unwrap());
         let bundle: Form = bundle_results(metadata, output_directory)
             .await
             .map_err(|e| {
@@ -467,6 +591,7 @@ pub async fn upload_results(
                         e
                     )))
                 })?;
+                log::warn!("Error uploading results: {}: {}", status, text);
                 Err(backoff::Error::transient(UploadFailure(format!(
                     "ResultUploadFailure: Unable to submit result: {}: {}",
                     text, status
@@ -476,22 +601,83 @@ pub async fn upload_results(
     }).await
 }
 
-pub async fn abort_run(
-    client: &Client,
-    run_id: &str,
-    metadata: &serde_json::Value,
-    description: &str,
-) {
-    let mut metadata = metadata.clone();
-    metadata["code"] = "aborted".into();
-    metadata["description"] = description.into();
-    let finish_time = chrono::Utc::now();
-    metadata["finish_time"] = finish_time.to_rfc3339().into();
+pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, description: &str) {
+    let mut metadata: Metadata = metadata.clone();
+    metadata.code = Some("aborted".to_string());
+    metadata.description = Some(description.to_string());
+    metadata.finish_time = Some(chrono::Utc::now().naive_utc());
 
     match client.upload_results(run_id, &metadata, None).await {
         Ok(_) => {}
         Err(e) => {
             log::warn!("Result upload for abort of {} failed: {}", run_id, e);
         }
+    }
+}
+
+pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
+    match i {
+        127 => WorkerFailure {
+            code: "command-not-found".to_string(),
+            description: format!("Command {} not found", command),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
+        137 => WorkerFailure {
+            code: "killed".to_string(),
+            description: "Process was killed (by OOM killer?)".to_string(),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
+        _ => WorkerFailure {
+            code: "command-failed".to_string(),
+            description: format!("Script {} failed to run with code {}", command, i),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::WorkerFailure;
+
+    #[test]
+    fn test_convert_codemod_script_failed() {
+        assert_eq!(
+            convert_codemod_script_failed(127, "foobar"),
+            WorkerFailure {
+                code: "command-not-found".to_string(),
+                description: "Command foobar not found".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(137, "foobar"),
+            WorkerFailure {
+                code: "killed".to_string(),
+                description: "Process was killed (by OOM killer?)".to_string(),
+                stage: vec!["codemod".to_string()],
+
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(1, "foobar"),
+            WorkerFailure {
+                code: "command-failed".to_string(),
+                description: "Script foobar failed to run with code 1".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
     }
 }

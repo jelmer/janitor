@@ -1,7 +1,9 @@
 DOCKER_TAG ?= latest
 PYTHON ?= python3
 
-core: janitor/site/_static/pygments.css
+core: janitor/site/_static/pygments.css build-inplace
+
+build-inplace:
 	$(PYTHON) setup.py build_ext -i
 
 all: core
@@ -32,7 +34,7 @@ ruff-fix:
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
-test:
+test: build-inplace
 	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
 	cargo test
 
