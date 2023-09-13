@@ -99,6 +99,7 @@ from ._worker import (
     ResultUploadFailure,
     abort_run,
     debian_make_changes,
+    generic_make_changes,
     gce_external_ip,
     is_gce_instance,
 )
@@ -219,37 +220,9 @@ class GenericTarget(Target):
 
     def make_changes(self, local_tree, subpath, argv, *, log_directory,
                      resume_metadata=None):
-        if not argv:
-            return GenericCommandResult(
-                description='No change build', context={}, tags=[], value=0)
-
-        logging.info('Running %r', argv)
-        try:
-            with open(os.path.join(log_directory, "codemod.log"), 'wb') as f:
-                return generic_script_runner(
-                    local_tree, script=argv, commit_pending=None,
-                    resume_metadata=resume_metadata, subpath=subpath,
-                    committer=self.env.get('COMMITTER'), extra_env=self.env,
-                    stderr=f)
-        except ResultFileFormatError as e:
-            raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e,
-                transient=False,
-                stage=("codemod", )) from e
-        except ScriptMadeNoChanges as e:
-            raise WorkerFailure(
-                'nothing-to-do', 'No changes made', stage=("codemod", ),
-                transient=False) from e
-        except GenericDetailedFailure as e:
-            stage = ("codemod", ) + (e.stage if e.stage else ())
-            raise WorkerFailure(
-                e.result_code, e.description, e.details, stage=stage) from e
-        except ScriptNotFound as e:
-            raise WorkerFailure(
-                "codemod-not-found",
-                "Codemod script %r not found" % argv) from e
-        except ScriptFailed as e:
-            raise _convert_codemod_script_failed(e) from e
+        return generic_make_changes(
+            local_tree, subpath, argv, log_directory=log_directory,
+            resume_metadata=resume_metadata)
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import BuildFailure, build_from_config

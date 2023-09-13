@@ -82,3 +82,15 @@ def debian_make_changes(
     update_changelog: bool | None = None
     ) -> Any: ...
 
+
+def generic_make_changes(
+    local_tree: Tree,
+    subpath: str,
+    argv: list[str],
+    env: dict[str, str],
+    log_directory: str,
+    resume_metadata: Any = None,
+    committer: str | None = None,
+    update_changelog: bool | None = None
+    ) -> Any: ...
+
