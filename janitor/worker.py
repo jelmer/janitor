@@ -72,14 +72,6 @@ from breezy.tree import MissingNestedTree
 from breezy.workingtree import WorkingTree
 from jinja2 import Template
 from silver_platter.apply import CommandResult as GenericCommandResult
-from silver_platter.apply import DetailedFailure as GenericDetailedFailure
-from silver_platter.apply import (
-    ResultFileFormatError,
-    ScriptFailed,
-    ScriptMadeNoChanges,
-    ScriptNotFound,
-)
-from silver_platter.apply import script_runner as generic_script_runner
 from silver_platter.probers import select_probers
 from silver_platter.utils import (
     BranchMissing,
@@ -126,23 +118,6 @@ USER_AGENT = "janitor/worker (0.1)"
 
 
 logger = logging.getLogger(__name__)
-
-
-def _convert_codemod_script_failed(e: ScriptFailed) -> _WorkerFailure:
-    if e.args[1] == 127:
-        return WorkerFailure(
-            'command-not-found',
-            f'Command {e.args[0]} not found',
-            stage=("codemod", ))
-    elif e.args[1] == 137:
-        return WorkerFailure(
-            'killed',
-            'Process was killed (by OOM killer?)',
-            stage=("codemod", ))
-    return WorkerFailure(
-        'command-failed',
-        'Script {} failed to run with code {}'.format(*e.args),
-        stage=("codemod", ))
 
 
 class Target:
