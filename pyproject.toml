@@ -226,3 +226,12 @@ target-version = "py39"
 
 [tool.ruff.pydocstyle]
 convention = "google"
+
+[tool.codespell]
+ignore-words = ".codespell-ignore-words"
+
+[tool.setuptools-protobuf]
+mypy = true
+protobufs = [
+    "janitor/config.proto"
+]
