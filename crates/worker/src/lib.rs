@@ -7,7 +7,7 @@ use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
+
 use std::io::Read;
 use std::net::IpAddr;
 use std::path::Path;
