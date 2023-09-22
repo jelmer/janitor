@@ -8,8 +8,8 @@ use silver_platter::debian::codemod::{
 };
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
-use std::path::{Path, PathBuf};
+
+use std::path::{Path};
 
 pub fn debian_make_changes(
     local_tree: &WorkingTree,

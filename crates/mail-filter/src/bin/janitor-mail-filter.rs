@@ -1,12 +1,12 @@
-use std::error::Error;
+
 use std::fs::File;
-use std::io::{self, Read};
+
 use std::process;
 use log::debug;
 
 use clap::{Arg, App};
 use log::{error,info};
-use reqwest::blocking::{Client, RequestBuilder};
+use reqwest::blocking::{Client};
 
 fn refresh_merge_proposal(api_url: &str, merge_proposal_url: &str) -> Result<(), String> {
     let client = Client::new();
@@ -16,7 +16,7 @@ fn refresh_merge_proposal(api_url: &str, merge_proposal_url: &str) -> Result<(),
 
     match res.status().as_u16() {
         200 | 202 => Ok(()),
-        status => Err(format!("error {} triggering refresh for {}", status, api_url).into()),
+        status => Err(format!("error {} triggering refresh for {}", status, api_url)),
     }
 }
 
