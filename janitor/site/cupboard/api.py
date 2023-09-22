@@ -121,7 +121,7 @@ AND """ % table
                 async with session.post(schedule_url, json={
                         'codebase': run['codebase'],
                         'campaign': run['campaign'],
-                        'requestor': "reschedule",
+                        'requester': "reschedule",
                         'refresh': refresh,
                         'offset': offset,
                         'bucket': "reschedule",

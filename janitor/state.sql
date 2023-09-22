@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS publish (
    merge_proposal_url text references merge_proposal(url),
    result_code text not null,
    description text,
-   requestor text,
+   requester text,
    codebase text references codebase(name) on delete set null,
    timestamp timestamp default now()
 );
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS queue (
    context text,
    estimated_duration interval,
    refresh boolean default false,
-   requestor text,
+   requester text,
    change_set text references change_set(id) on delete cascade,
    check (command != '')
 );
