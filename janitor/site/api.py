@@ -66,12 +66,12 @@ async def handle_publish(request):
     url = URL(publisher_url) / campaign / codebase / "publish"
     if request['user']:
         try:
-            requestor = request['user']["email"]
+            requester = request['user']["email"]
         except KeyError:
-            requestor = request['user']["name"]
+            requester = request['user']["name"]
     else:
-        requestor = "user from web UI"
-    data = {"requestor": requestor}
+        requester = "user from web UI"
+    data = {"requester": requester}
     if mode:
         data["mode"] = mode
     try:
@@ -110,15 +110,15 @@ async def handle_run_reschedule(request):
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
     if request['user']:
         try:
-            requestor = request['user']["email"]
+            requester = request['user']["email"]
         except KeyError:
-            requestor = request['user']["name"]
+            requester = request['user']["name"]
     else:
-        requestor = "user from web UI"
+        requester = "user from web UI"
     json = {
         'run_id': run_id,
         'refresh': refresh,
-        'requestor': requestor,
+        'requester': requester,
         'bucket': 'manual',
         'offset': offset,
     }
@@ -147,17 +147,17 @@ async def handle_schedule_control(request):
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
     if request['user']:
         try:
-            requestor = request['user']["email"]
+            requester = request['user']["email"]
         except KeyError:
-            requestor = request['user']['name']
+            requester = request['user']['name']
     else:
-        requestor = "user from web UI"
+        requester = "user from web UI"
 
     json = {
         'run_id': run_id,
         'offset': offset,
         'refresh': refresh,
-        'requestor': requestor,
+        'requester': requester,
     }
 
     schedule_url = URL(request.app['runner_url']) / "schedule-control"

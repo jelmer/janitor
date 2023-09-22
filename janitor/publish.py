@@ -661,7 +661,7 @@ async def consider_publish_run(
             redis=redis,
             require_binary_diff=require_binary_diff,
             force=False,
-            requestor="publisher (publish pending)",
+            requester="publisher (publish pending)",
         )
 
     return actual_modes
@@ -782,7 +782,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             campaign=run.campaign,
             change_set=run.change_set,
             codebase=run.codebase,
-            requestor="publisher (pre-creation merge conflict)",
+            requester="publisher (pre-creation merge conflict)",
             bucket=bucket,
         )
     elif e.code == "diverged-branches":
@@ -791,7 +791,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             conn,
             campaign=run.campaign,
             change_set=run.change_set,
-            requestor="publisher (diverged branches)",
+            requester="publisher (diverged branches)",
             bucket=bucket,
             codebase=run.codebase,
         )
@@ -805,7 +805,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
                 campaign=run.campaign,
                 change_set=run.change_set,
                 refresh=True,
-                requestor="publisher (missing build artifacts - self)",
+                requester="publisher (missing build artifacts - self)",
                 bucket=bucket, codebase=run.codebase,
             )
     elif e.code == "missing-build-diff-control":
@@ -823,7 +823,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
                 conn,
                 main_branch_revision=unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
-                requestor="publisher (missing build artifacts - control)",
+                requester="publisher (missing build artifacts - control)",
                 bucket=bucket, codebase=run.codebase,
             )
         else:
@@ -832,7 +832,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
                 await do_schedule_control(
                     conn,
                     main_branch_revision=run.main_branch_revision,
-                    requestor="publisher (missing control run for diff)",
+                    requester="publisher (missing control run for diff)",
                     bucket=bucket, codebase=run.codebase,
                 )
             else:
@@ -906,7 +906,7 @@ async def store_publish(
     description: str,
     merge_proposal_url: Optional[str] = None,
     publish_id: Optional[str] = None,
-    requestor: Optional[str] = None,
+    requester: Optional[str] = None,
     run_id: Optional[str] = None,
 ) -> None:
     if isinstance(revision, bytes):
@@ -945,7 +945,7 @@ async def store_publish(
         await conn.execute(
             "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
-            "description, merge_proposal_url, id, requestor, change_set, run_id, "
+            "description, merge_proposal_url, id, requester, change_set, run_id, "
             "target_branch_url, target_branch_web_url, codebase) "
             "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
             "$13, $14, $15) ",
@@ -958,7 +958,7 @@ async def store_publish(
             description,
             merge_proposal_url,
             publish_id,
-            requestor,
+            requester,
             change_set,
             run_id,
             target_branch_url,
@@ -990,7 +990,7 @@ async def publish_from_policy(
     command: str,
     require_binary_diff: bool = False,
     force: bool = False,
-    requestor: Optional[str] = None,
+    requester: Optional[str] = None,
 ) -> Optional[str]:
     if not command:
         logger.warning("no command set for %s", run.id)
@@ -1013,7 +1013,7 @@ async def publish_from_policy(
             command=command,
             bucket="update-new-mp",
             refresh=True,
-            requestor="publisher (changed policy: {!r} ⇒ {!r})".format(
+            requester="publisher (changed policy: {!r} ⇒ {!r})".format(
                 run.command, command),
             codebase=run.codebase,
         )
@@ -1160,7 +1160,7 @@ async def publish_from_policy(
         publish_id=publish_id,
         target_branch_url=publish_result.target_branch_url,
         target_branch_web_url=publish_result.target_branch_web_url,
-        requestor=requestor,
+        requester=requester,
         run_id=run.id,
     )
 
@@ -1235,7 +1235,7 @@ async def publish_and_store(
     bucket_rate_limiter: RateLimiter,
     allow_create_proposal: bool = True,
     require_binary_diff: bool = False,
-    requestor: Optional[str] = None,
+    requester: Optional[str] = None,
 ):
     remote_branch_name, base_revision, revision = run.get_result_branch(role)
 
@@ -1303,7 +1303,7 @@ async def publish_and_store(
                 result_code=e.code,
                 description=e.description,
                 publish_id=publish_id,
-                requestor=requestor,
+                requester=requester,
                 run_id=run.id,
             )
             publish_entry = {
@@ -1343,7 +1343,7 @@ async def publish_and_store(
             target_branch_url=publish_result.target_branch_url,
             target_branch_web_url=publish_result.target_branch_web_url,
             publish_id=publish_id,
-            requestor=requestor,
+            requester=requester,
             run_id=run.id,
         )
 
@@ -1721,7 +1721,7 @@ async def publish_request(request):
                 bucket_rate_limiter=bucket_rate_limiter,
                 allow_create_proposal=True,
                 require_binary_diff=False,
-                requestor=post.get("requestor"),
+                requester=post.get("requester"),
             ))
 
     if not publish_ids:
@@ -2644,7 +2644,7 @@ async def check_existing_mp(
                             change_set=None,
                             bucket="update-existing-mp",
                             refresh=True,
-                            requestor="publisher (orphaned merge proposal)",
+                            requester="publisher (orphaned merge proposal)",
                             codebase=codebase,
                         )
                     except CandidateUnavailable as e:
@@ -2729,7 +2729,7 @@ applied independently.
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
                     refresh=False,
-                    requestor="publisher (transient error)",
+                    requester="publisher (transient error)",
                     codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:
@@ -2750,7 +2750,7 @@ applied independently.
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
                     refresh=False,
-                    requestor="publisher (retrying failed run after %d days)"
+                    requester="publisher (retrying failed run after %d days)"
                     % last_run_age.days,
                     codebase=last_run.codebase,
                 )
@@ -2987,7 +2987,7 @@ applied independently.
                 target_branch_url=target_branch_url,
                 target_branch_web_url=None,
                 publish_id=publish_id,
-                requestor="publisher (regular refresh)",
+                requester="publisher (regular refresh)",
                 run_id=last_run.id,
             )
         else:
@@ -3006,7 +3006,7 @@ applied independently.
                 target_branch_url=publish_result.target_branch_url,
                 target_branch_web_url=publish_result.target_branch_web_url,
                 publish_id=publish_id,
-                requestor="publisher (regular refresh)",
+                requester="publisher (regular refresh)",
                 run_id=last_run.id,
             )
 
@@ -3029,7 +3029,7 @@ applied independently.
                     change_set=mp_run['change_set'],
                     bucket="update-existing-mp",
                     refresh=True,
-                    requestor="publisher (merge conflict)",
+                    requester="publisher (merge conflict)",
                     codebase=mp_run['codebase'],
                 )
             except CandidateUnavailable:
@@ -3274,7 +3274,7 @@ async def listen_to_runner(
                 command=command,
                 require_binary_diff=require_binary_diff,
                 force=True,
-                requestor="runner",
+                requester="runner",
             )
 
     async def handle_publish_status_message(msg):

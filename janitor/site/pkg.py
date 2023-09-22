@@ -109,7 +109,7 @@ async def get_publish_history(
 ) -> asyncpg.Record:
     return await conn.fetch(
         "select mode, merge_proposal_url, description, result_code, "
-        "requestor, timestamp from publish where revision = $1 "
+        "requester, timestamp from publish where revision = $1 "
         "ORDER BY timestamp DESC",
         revision
     )

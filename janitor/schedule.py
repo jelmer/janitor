@@ -272,7 +272,7 @@ async def do_schedule_regular(
         candidate_value: Optional[float] = None,
         success_chance: Optional[float] = None,
         normalized_codebase_value: Optional[float] = None,
-        requestor: Optional[str] = None,
+        requester: Optional[str] = None,
         default_offset: float = 0.0,
         context: Optional[str] = None,
         change_set: Optional[str] = None,
@@ -339,7 +339,7 @@ async def do_schedule_regular(
             bucket=bucket,
             estimated_duration=estimated_duration,
             context=context,
-            requestor=requestor or "scheduler",
+            requester=requester or "scheduler",
         )
     else:
         queue_id = -1
@@ -490,7 +490,7 @@ async def do_schedule_control(
     offset: Optional[float] = None,
     refresh: bool = False,
     bucket: Optional[str] = None,
-    requestor: Optional[str] = None,
+    requester: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None,
 ) -> tuple[float, Optional[timedelta], int, str]:
     command = ["brz", "up"]
@@ -505,7 +505,7 @@ async def do_schedule_control(
         offset=offset,
         refresh=refresh,
         bucket=bucket,
-        requestor=requestor,
+        requester=requester,
         command=shlex.join(command),
         codebase=codebase,
     )
@@ -526,7 +526,7 @@ async def do_schedule(
     change_set: Optional[str] = None,
     offset: Optional[float] = None,
     refresh: bool = False,
-    requestor: Optional[str] = None,
+    requester: Optional[str] = None,
     estimated_duration=None,
     command: Optional[str] = None,
 ) -> tuple[float, Optional[timedelta], int, str]:
@@ -554,7 +554,7 @@ async def do_schedule(
         bucket=bucket,
         estimated_duration=estimated_duration,
         refresh=refresh,
-        requestor=requestor,
+        requester=requester,
         codebase=codebase,
     )
     return offset, estimated_duration, queue_id, bucket
