@@ -1,5 +1,5 @@
 use super::parse_email;
-use std::io::Read;
+
 
 #[test]
 fn test_parse_github_merged_email() {

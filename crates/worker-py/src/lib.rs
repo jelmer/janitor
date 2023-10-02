@@ -1,10 +1,10 @@
 use chrono::NaiveDateTime;
 use janitor_worker::{AssignmentError, Remote, RevisionId};
 use pyo3::create_exception;
-use pyo3::exceptions::{PyException, PyNotImplementedError, PyTypeError};
+use pyo3::exceptions::{PyTypeError};
 use pyo3::prelude::*;
-use pyo3::pyclass::CompareOp;
-use std::path::Path;
+
+
 
 create_exception!(
     janitor._worker,
@@ -74,7 +74,7 @@ fn serde_json_to_py(value: &serde_json::Value) -> PyObject {
         serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap()).into(),
         serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str()).into(),
         serde_json::Value::Array(a) => {
-            pyo3::types::PyList::new(py, a.into_iter().map(serde_json_to_py)).into()
+            pyo3::types::PyList::new(py, a.iter().map(serde_json_to_py)).into()
         }
         serde_json::Value::Object(o) => {
             let ret = pyo3::types::PyDict::new(py);
@@ -554,7 +554,7 @@ impl DebianCommandResult {
 
     #[getter]
     fn context(&self) -> Option<PyObject> {
-        self.0.context.as_ref().map(|c| serde_json_to_py(c))
+        self.0.context.as_ref().map(serde_json_to_py)
     }
 }
 
@@ -636,8 +636,8 @@ impl GenericCommandResult {
     }
 
     #[getter]
-    fn context(&self, py: Python) -> Option<PyObject> {
-        self.0.context.as_ref().map(|c| serde_json_to_py(&c))
+    fn context(&self, _py: Python) -> Option<PyObject> {
+        self.0.context.as_ref().map(serde_json_to_py)
     }
 }
 

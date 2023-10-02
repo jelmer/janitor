@@ -30,7 +30,7 @@ class QueueItem:
         "estimated_duration",
         "campaign",
         "refresh",
-        "requestor",
+        "requester",
         "change_set",
         "codebase",
     ]
@@ -44,7 +44,7 @@ class QueueItem:
         estimated_duration,
         campaign,
         refresh,
-        requestor,
+        requester,
         change_set,
         codebase,
     ) -> None:
@@ -54,7 +54,7 @@ class QueueItem:
         self.estimated_duration = estimated_duration
         self.campaign = campaign
         self.refresh = refresh
-        self.requestor = requestor
+        self.requester = requester
         self.change_set = change_set
         self.codebase = codebase
 
@@ -67,7 +67,7 @@ class QueueItem:
             estimated_duration=row['estimated_duration'],
             campaign=row['campaign'],
             refresh=row['refresh'],
-            requestor=row['requestor'],
+            requester=row['requester'],
             change_set=row['change_set'],
             codebase=row['codebase'],
         )
@@ -107,7 +107,7 @@ SELECT
     queue.estimated_duration AS estimated_duration,
     queue.suite AS campaign,
     queue.refresh AS refresh,
-    queue.requestor AS requestor,
+    queue.requester AS requester,
     queue.change_set AS change_set,
     queue.codebase AS codebase
 FROM
@@ -131,7 +131,7 @@ SELECT
     queue.estimated_duration AS estimated_duration,
     queue.suite AS campaign,
     queue.refresh AS refresh,
-    queue.requestor AS requestor,
+    queue.requester AS requester,
     queue.change_set AS change_set,
     codebase.vcs_type AS vcs_type,
     codebase.branch_url AS branch_url,
@@ -191,7 +191,7 @@ SELECT
     queue.estimated_duration AS estimated_duration,
     queue.suite AS campaign,
     queue.refresh AS refresh,
-    queue.requestor AS requestor,
+    queue.requester AS requester,
     queue.change_set AS change_set,
     queue.codebase AS codebase
 FROM
@@ -229,11 +229,11 @@ queue.id ASC
             context: Optional[str] = None,
             estimated_duration: Optional[timedelta] = None,
             refresh: bool = False,
-            requestor: Optional[str] = None) -> tuple[int, str]:
+            requester: Optional[str] = None) -> tuple[int, str]:
         row = await self.conn.fetchrow(
             "INSERT INTO queue "
             "(command, priority, bucket, context, "
-            "estimated_duration, suite, refresh, requestor, change_set, "
+            "estimated_duration, suite, refresh, requester, change_set, "
             "codebase) VALUES ($1, "
             "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
             + " + $2, $3, $4, $5, $6, $7, $8, $9, $10) "
@@ -242,7 +242,7 @@ queue.id ASC
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "bucket = EXCLUDED.bucket, "
             "estimated_duration = EXCLUDED.estimated_duration, "
-            "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
+            "refresh = EXCLUDED.refresh, requester = EXCLUDED.requester, "
             "command = EXCLUDED.command, codebase = EXCLUDED.codebase "
             "WHERE queue.bucket >= EXCLUDED.bucket OR "
             "(queue.bucket = EXCLUDED.bucket AND "
@@ -254,7 +254,7 @@ queue.id ASC
             estimated_duration,
             campaign,
             refresh,
-            requestor,
+            requester,
             change_set,
             codebase,
         )

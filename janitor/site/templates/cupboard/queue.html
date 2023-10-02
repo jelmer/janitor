@@ -156,7 +156,7 @@
                                 {{ format_duration(queue_item.estimated_duration) if queue_item.estimated_duration else 'unknown' }}
                             </td>
                             <td>
-                                {{ queue_item.requestor }}
+                                {{ queue_item.requester }}
                             </td>
                             <td>
                                 {% if last_run.id %}
