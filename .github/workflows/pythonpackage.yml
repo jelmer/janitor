@@ -33,7 +33,7 @@ jobs:
           sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
             libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
             libpcre3-dev libjs-jquery-datatables postgresql-14 postgresql-14-debversion \
-            libssl-dev pkg-config
+            libssl-dev pkg-config codespell
           python -m pip install --upgrade pip setuptools setuptools-protobuf \
             setuptools-rust wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
@@ -65,6 +65,9 @@ jobs:
           make test PYTHON=python
         env:
           PYTHONHASHSEED: random
+      - name: codespell
+        run: |
+          codespell
       - name: Config compat test
         if: always()
         run: |

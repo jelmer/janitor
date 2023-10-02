@@ -7,7 +7,7 @@ use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
+
 use std::io::Read;
 use std::net::IpAddr;
 use std::path::Path;
@@ -203,6 +203,7 @@ impl std::fmt::Display for AssignmentError {
 
 impl std::error::Error for AssignmentError {}
 
+/// Get an assignment from the queue.
 pub async fn get_assignment_raw(
     session: &reqwest::Client,
     credentials: &Credentials,
@@ -304,6 +305,21 @@ pub async fn get_assignment_raw(
     Ok(assignment)
 }
 
+/// Get an assignment from the queue.
+///
+/// # Arguments
+/// * `session` - A reqwest session.
+/// * `credentials` - Credentials for the server.
+/// * `my_url` - The URL of the worker.
+/// * `base_url` - The base URL of the server.
+/// * `node_name` - The name of the node.
+/// * `jenkins_build_url` - The URL of the Jenkins build.
+/// * `codebase` - Request an assignment for a specific codebase.
+/// * `campaign` - Request an assignment for a specific campaign.
+///
+/// # Returns
+///
+/// An assignment.
 pub async fn get_assignment(
     session: &reqwest::Client,
     credentials: &Credentials,

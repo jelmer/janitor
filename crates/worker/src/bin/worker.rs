@@ -4,7 +4,7 @@ use janitor_worker::{Assignment, Metadata};
 use pyo3::exceptions::PySystemExit;
 use pyo3::prelude::*;
 use std::net::SocketAddr;
-use std::str::FromStr;
+
 
 #[derive(Parser, Debug)]
 #[command(author, version)]
@@ -145,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .join();
-        if let Err(e) = thread_result {
+        if let Err(_e) = thread_result {
             std::process::exit(1);
         }
     });

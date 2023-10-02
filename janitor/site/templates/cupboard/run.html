@@ -149,11 +149,11 @@
         {% if publish_history %}
             <h2>Publish History</h2>
             <ul>
-                {% for pmode, mp_url, pdesc, pcode, requestor, timestamp in publish_history[:10] %}
+                {% for pmode, mp_url, pdesc, pcode, requester, timestamp in publish_history[:10] %}
                     <li>
                         {{ format_timestamp(timestamp) }}: {{ display_publish_result(pmode, pcode, pdesc, mp_url) }}
-                        {% if requestor and not requestor.startswith('publisher') %}
-                            (requested by {{ requestor }})
+                        {% if requester and not requester.startswith('publisher') %}
+                            (requested by {{ requester }})
                         {% endif %}
                     </li>
                 {% endfor %}

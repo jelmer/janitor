@@ -26,6 +26,7 @@ pyo3-log = { workspace = true, optional = true }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 shlex = "1.2.0"
+askama_axum = { version = "0.3.0", features = ["serde-json", "serde-yaml", "humansize", "urlencode", "markdown"] }
 
 [features]
 default = ["debian", "cli"]

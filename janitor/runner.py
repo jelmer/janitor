@@ -1577,7 +1577,7 @@ class QueueProcessor:
                         await do_schedule_regular(
                             schedule_conn, campaign=active_run.campaign,
                             change_set=active_run.change_set, context=result.context,
-                            requestor='after run schedule', codebase=result.codebase)
+                            requester='after run schedule', codebase=result.codebase)
                     except CandidateUnavailable:
                         # Maybe this was a one-off schedule without candidate, or
                         # the candidate has been removed. Either way, this is fine.
@@ -1636,7 +1636,7 @@ async def handle_schedule_control(request):
     json = await request.json()
     change_set = json.get('change_set')
     offset = json.get('offset')
-    requestor = json['requestor']
+    requester = json['requester']
     refresh = json.get('refresh', False)
     bucket = json.get('bucket')
     estimated_duration = (
@@ -1667,7 +1667,7 @@ async def handle_schedule_control(request):
                 offset=offset,
                 refresh=refresh,
                 bucket=bucket,
-                requestor=requestor,
+                requester=requester,
                 codebase=codebase,
                 estimated_duration=estimated_duration)
 
@@ -1704,7 +1704,7 @@ async def handle_schedule(request):
             codebase = run['codebase']
         refresh = json.get('refresh', False)
         change_set = json.get('change_set')
-        requestor = json.get('requestor')
+        requester = json.get('requester')
         bucket = json.get('bucket')
         offset = json.get('offset')
         estimated_duration = (
@@ -1730,7 +1730,7 @@ async def handle_schedule(request):
                     offset=offset,
                     change_set=change_set,
                     refresh=refresh,
-                    requestor=requestor,
+                    requester=requester,
                     estimated_duration=estimated_duration,
                     codebase=codebase,
                     command=command,
@@ -2038,19 +2038,19 @@ async def handle_candidates_upload(request):
                             refresh = True
                             if existing_runs[0]['mp_url']:
                                 bucket = 'update-existing-mp'
-                                requestor = 'command changed for existing mp: {!r} ⇒ {!r}'.format(
+                                requester = 'command changed for existing mp: {!r} ⇒ {!r}'.format(
                                     existing_runs[0]['command'], command)
                             else:
                                 bucket = None
-                                requestor = 'command changed: {!r} ⇒ {!r}'.format(
+                                requester = 'command changed: {!r} ⇒ {!r}'.format(
                                     existing_runs[0]['command'], command)
                         else:
                             bucket = candidate.get('bucket')
                             refresh = False
-                            requestor = "candidate update"
+                            requester = "candidate update"
 
-                        if candidate.get('requestor'):
-                            requestor += f' {candidate["requestor"]}'
+                        if candidate.get('requester'):
+                            requester += f' {candidate["requester"]}'
 
                         with span.new_child('sql:insert-followups'):
                             for origin in candidate.get('followup_for', []):
@@ -2064,7 +2064,7 @@ async def handle_candidates_upload(request):
                                 campaign=campaign,
                                 change_set=candidate.get('change_set'),
                                 bucket=bucket,
-                                requestor=requestor,
+                                requester=requester,
                                 command=command,
                                 codebase=candidate['codebase'],
                                 refresh=refresh)

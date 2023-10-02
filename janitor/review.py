@@ -35,7 +35,7 @@ async def store_review(
                 conn,
                 campaign=run['suite'],
                 refresh=True,
-                requestor="reviewer (%s)" % reviewer,
+                requester="reviewer (%s)" % reviewer,
                 bucket="default",
                 codebase=run['codebase']
             )

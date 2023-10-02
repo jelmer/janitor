@@ -143,7 +143,7 @@ async def reprocess_run_logs(
                         change_set=change_set,
                         codebase=codebase,
                         estimated_duration=duration,
-                        requestor="reprocess-build-results",
+                        requester="reprocess-build-results",
                         bucket="reschedule",
                     )
         return (new_code, new_description, new_failure_details)
