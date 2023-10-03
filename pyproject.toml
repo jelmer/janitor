@@ -228,6 +228,7 @@ target-version = "py39"
 convention = "google"
 
 [tool.codespell]
+skip = "./target,./build,./lib,*~"
 ignore-words = ".codespell-ignore-words"
 
 [tool.setuptools-protobuf]

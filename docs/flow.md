@@ -26,7 +26,7 @@ changes.
 Candidates include information like:
 
  * value: a relative number that explains how useful this change would be
- * success_chance: an estimate of how likely this change is to succeeed and result in a build
+ * success_chance: an estimate of how likely this change is to succeed and result in a build
  * context: some indicator of the current state of the world. Used to avoid retrying
      builds if nothing has really changed. e.g. for new upstream releases, this
      is the upstream version number of the latest release

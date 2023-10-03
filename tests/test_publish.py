@@ -56,13 +56,13 @@ def test_find_campaign_by_branch_name():
         """\
 campaign {
  name: "bar"
- branch_name: "fo"
+ branch_name: "foo"
 }
 """,
         Config(),
     )
 
-    assert find_campaign_by_branch_name(config, "fo") == ("bar", "main")
+    assert find_campaign_by_branch_name(config, "foo") == ("bar", "main")
     assert find_campaign_by_branch_name(config, "bar") == (None, None)
     assert find_campaign_by_branch_name(config, "lala") == (None, None)
 
