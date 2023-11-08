@@ -26,43 +26,43 @@ from janitor import config_pb2
 from janitor.vcs import RemoteBzrVcsManager, RemoteGitVcsManager
 
 BUG_ERROR_RESULT_CODES = [
-    'worker-failure',
-    'worker-exception',
-    'worker-clone-incomplete-read',
-    'worker-clone-malformed-transform',
-    'chroot-not-found',
-    'worker-killed',
+    "worker-failure",
+    "worker-exception",
+    "worker-clone-incomplete-read",
+    "worker-clone-malformed-transform",
+    "chroot-not-found",
+    "worker-killed",
 ]
 
 
 TRANSIENT_ERROR_RESULT_CODES = [
-    'cancelled',
-    'aborted',
-    'install-deps-file-fetch-failure',
-    'apt-get-update-file-fetch-failure',
-    'build-failed-stage-apt-get-update',
-    'build-failed-stage-apt-get-dist-upgrade',
-    'build-failed-stage-explain-bd-uninstallable',
-    '502-bad-gateway',
-    'worker-502-bad-gateway',
-    'build-failed-stage-create-session',
-    'apt-get-update-missing-release-file',
-    'no-space-on-device',
-    'worker-killed',
-    'too-many-requests',
-    'check-space-insufficient-disk-space',
-    'worker-resume-branch-unavailable',
-    'worker-timeout',
-    'worker-clone-bad-gateway',
-    'worker-clone-temporary-transport-error',
-    'push-failed',
-    'push-bad-gateway',
-    'testbed-chroot-disappeared',
-    'apt-file-fetch-failure',
-    'pull-rate-limited',
-    'session-setup-failure',
-    'run-disappeared',
-    'branch-temporarily-unavailable',
+    "cancelled",
+    "aborted",
+    "install-deps-file-fetch-failure",
+    "apt-get-update-file-fetch-failure",
+    "build-failed-stage-apt-get-update",
+    "build-failed-stage-apt-get-dist-upgrade",
+    "build-failed-stage-explain-bd-uninstallable",
+    "502-bad-gateway",
+    "worker-502-bad-gateway",
+    "build-failed-stage-create-session",
+    "apt-get-update-missing-release-file",
+    "no-space-on-device",
+    "worker-killed",
+    "too-many-requests",
+    "check-space-insufficient-disk-space",
+    "worker-resume-branch-unavailable",
+    "worker-timeout",
+    "worker-clone-bad-gateway",
+    "worker-clone-temporary-transport-error",
+    "push-failed",
+    "push-bad-gateway",
+    "testbed-chroot-disappeared",
+    "apt-file-fetch-failure",
+    "pull-rate-limited",
+    "session-setup-failure",
+    "run-disappeared",
+    "branch-temporarily-unavailable",
 ]
 
 
@@ -86,26 +86,26 @@ def update_vars_from_request(vs, request):
     vs["is_admin"] = is_admin(request)
     vs["is_qa_reviewer"] = is_qa_reviewer(request)
     vs["config_pb2"] = config_pb2
-    vs["user"] = request['user']
+    vs["user"] = request["user"]
     vs["rel_url"] = request.rel_url
-    vs["suites"] = [c for c in request.app['config'].campaign]
-    vs["campaigns"] = [c for c in request.app['config'].campaign]
+    vs["suites"] = [c for c in request.app["config"].campaign]
+    vs["campaigns"] = [c for c in request.app["config"].campaign]
     vs["openid_configured"] = "openid_config" in request.app
 
     def url_for(name, **kwargs):
         return request.app.router[name].url_for(**kwargs)
 
-    vs['url_for'] = url_for
+    vs["url_for"] = url_for
 
-    if request.app['external_url'] is not None:
-        vs["url"] = request.app['external_url'].join(request.rel_url)
-        vcs_base_url = request.app['external_url']
+    if request.app["external_url"] is not None:
+        vs["url"] = request.app["external_url"].join(request.rel_url)
+        vcs_base_url = request.app["external_url"]
     else:
         vs["url"] = request.url
         vcs_base_url = request.url.with_path("/")
-    vs['git_vcs_manager'] = RemoteGitVcsManager(str(vcs_base_url / "git"))
-    vs['bzr_vcs_manager'] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
-    vs['config'] = request.app['config']
+    vs["git_vcs_manager"] = RemoteGitVcsManager(str(vcs_base_url / "git"))
+    vs["bzr_vcs_manager"] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
+    vs["config"] = request.app["config"]
 
 
 def format_duration(duration):
@@ -194,21 +194,21 @@ async def get_archive_diff(
 
 
 def is_admin(request: web.Request) -> bool:
-    if not request['user']:
+    if not request["user"]:
         return False
-    admin_group = request.app['config'].oauth2_provider.admin_group
+    admin_group = request.app["config"].oauth2_provider.admin_group
     if admin_group is None:
         return True
-    return admin_group in request['user']["groups"]
+    return admin_group in request["user"]["groups"]
 
 
 def is_qa_reviewer(request: web.Request) -> bool:
-    if not request['user']:
+    if not request["user"]:
         return False
-    qa_reviewer_group = request.app['config'].oauth2_provider.qa_reviewer_group
+    qa_reviewer_group = request.app["config"].oauth2_provider.qa_reviewer_group
     if qa_reviewer_group is None:
         return True
-    return qa_reviewer_group in request['user']["groups"]
+    return qa_reviewer_group in request["user"]["groups"]
 
 
 def check_admin(request: web.Request) -> None:
@@ -217,13 +217,14 @@ def check_admin(request: web.Request) -> None:
 
 
 def check_logged_in(request: web.Request) -> None:
-    if not request['user']:
+    if not request["user"]:
         raise web.HTTPUnauthorized()
 
 
 def worker_link_is_global(url):
     import ipaddress
     from urllib.parse import urlparse
+
     if not url:
         return False
     parsed_url = urlparse(url)
@@ -237,12 +238,12 @@ def worker_link_is_global(url):
 
 
 TEMPLATE_ENV = {
-    'utcnow': datetime.utcnow,
-    'enumerate': enumerate,
-    'format_duration': format_duration,
-    'format_timestamp': format_timestamp,
-    'highlight_diff': highlight_diff,
-    'classify_result_code': classify_result_code,
-    'URL': URL,
-    'worker_link_is_global': worker_link_is_global,
+    "utcnow": datetime.utcnow,
+    "enumerate": enumerate,
+    "format_duration": format_duration,
+    "format_timestamp": format_timestamp,
+    "highlight_diff": highlight_diff,
+    "classify_result_code": classify_result_code,
+    "URL": URL,
+    "worker_link_is_global": worker_link_is_global,
 }

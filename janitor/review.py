@@ -23,31 +23,45 @@ from .schedule import do_schedule
 
 
 async def store_review(
-        conn, session, runner_url, run_id: str, verdict: str,
-        comment: Optional[str], reviewer: Optional[str], is_qa_reviewer: bool):
+    conn,
+    session,
+    runner_url,
+    run_id: str,
+    verdict: str,
+    comment: Optional[str],
+    reviewer: Optional[str],
+    is_qa_reviewer: bool,
+):
     async with conn.transaction():
         if verdict == "reschedule":
             verdict = "rejected"
 
             run = await conn.fetchrow(
-                'SELECT suite, codebase FROM run WHERE id = $1', run_id)
+                "SELECT suite, codebase FROM run WHERE id = $1", run_id
+            )
             await do_schedule(
                 conn,
-                campaign=run['suite'],
+                campaign=run["suite"],
                 refresh=True,
                 requester="reviewer (%s)" % reviewer,
                 bucket="default",
-                codebase=run['codebase']
+                codebase=run["codebase"],
             )
 
-        if verdict != 'abstained' and is_qa_reviewer:
+        if verdict != "abstained" and is_qa_reviewer:
             async with session.post(
-                    URL(runner_url) / "runs" / run_id,
-                    json={'publish_status': verdict},
-                    raise_for_status=True):
+                URL(runner_url) / "runs" / run_id,
+                json={"publish_status": verdict},
+                raise_for_status=True,
+            ):
                 pass
         await conn.execute(
             "INSERT INTO review (run_id, comment, reviewer, verdict) VALUES "
             " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
             "DO UPDATE SET verdict = EXCLUDED.verdict, comment = EXCLUDED.comment, "
-            "reviewed_at = NOW()", run_id, comment, reviewer, verdict)
+            "reviewed_at = NOW()",
+            run_id,
+            comment,
+            reviewer,
+            verdict,
+        )

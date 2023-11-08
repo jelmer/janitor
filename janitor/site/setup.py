@@ -15,14 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+
 def setup_redis(app):
     from redis.asyncio import Redis
 
     async def connect_redis(app):
-        app['redis'] = Redis.from_url(app['config'].redis_location)
+        app["redis"] = Redis.from_url(app["config"].redis_location)
 
     async def disconnect_redis(app):
-        await app['redis'].close()
+        await app["redis"].close()
 
     app.on_startup.append(connect_redis)
     app.on_cleanup.append(disconnect_redis)
@@ -34,16 +35,17 @@ def setup_gpg(app):
     import gpg
 
     async def start_gpg_context(app):
-        gpg_home = tempfile.TemporaryDirectory(prefix='janitor-gpg')
+        gpg_home = tempfile.TemporaryDirectory(prefix="janitor-gpg")
         gpg_home.__enter__()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
-        app['gpg'] = gpg_context.__enter__()
+        app["gpg"] = gpg_context.__enter__()
 
         async def cleanup_gpg(app):
             gpg_context.__exit__(None, None, None)
             gpg_home.__exit__(None, None, None)
 
         app.on_cleanup.append(cleanup_gpg)
+
     app.on_startup.append(start_gpg_context)
 
 
@@ -51,9 +53,9 @@ def setup_postgres(app):
     from ..state import create_pool
 
     async def connect_postgres(app):
-        database = await create_pool(app['config'].database_location)
+        database = await create_pool(app["config"].database_location)
         app.database = database
-        app['pool'] = database
+        app["pool"] = database
 
     app.on_startup.append(connect_postgres)
 
@@ -62,14 +64,15 @@ def setup_logfile_manager(app, trace_configs=None):
     from ..logs import get_log_manager
 
     async def startup_logfile_manager(app):
-        app['logfile_manager'] = get_log_manager(
-            app['config'].logs_location, trace_configs=trace_configs)
-        await app['logfile_manager'].__aenter__()
+        app["logfile_manager"] = get_log_manager(
+            app["config"].logs_location, trace_configs=trace_configs
+        )
+        await app["logfile_manager"].__aenter__()
 
     app.on_startup.append(startup_logfile_manager)
 
     async def teardown_logfile_manager(app):
-        await app['logfile_manager'].__aexit__(None, None, None)
+        await app["logfile_manager"].__aexit__(None, None, None)
 
     app.on_cleanup.append(teardown_logfile_manager)
 
@@ -78,12 +81,13 @@ def setup_artifact_manager(app, trace_configs=None):
     from ..artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
-        app['artifact_manager'] = get_artifact_manager(
-            app['config'].artifact_location, trace_configs=trace_configs)
-        await app['artifact_manager'].__aenter__()
+        app["artifact_manager"] = get_artifact_manager(
+            app["config"].artifact_location, trace_configs=trace_configs
+        )
+        await app["artifact_manager"].__aenter__()
 
     async def turndown_artifact_manager(app):
-        await app['artifact_manager'].__aexit__(None, None, None)
+        await app["artifact_manager"].__aexit__(None, None, None)
 
     app.on_startup.append(startup_artifact_manager)
     app.on_cleanup.append(turndown_artifact_manager)

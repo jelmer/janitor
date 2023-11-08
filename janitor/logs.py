@@ -34,9 +34,9 @@ from aiohttp_openmetrics import Counter
 from yarl import URL
 
 primary_logfile_upload_failed_count = Counter(
-    "primary_logfile_upload_failed", "Number of failed logs to primary logfile target")
-logfile_uploaded_count = Counter(
-    "logfile_uploads", "Number of uploaded log files")
+    "primary_logfile_upload_failed", "Number of failed logs to primary logfile target"
+)
+logfile_uploaded_count = Counter("logfile_uploads", "Number of uploaded log files")
 
 
 class ServiceUnavailable(Exception):
@@ -53,8 +53,15 @@ class LogFileManager(ABC):
         raise NotImplementedError(self.get_log)
 
     @abstractmethod
-    async def import_log(self, codebase: str, run_id: str, orig_path: str,
-                         timeout=None, mtime=None, basename: Optional[str] = None):
+    async def import_log(
+        self,
+        codebase: str,
+        run_id: str,
+        orig_path: str,
+        timeout=None,
+        mtime=None,
+        basename: Optional[str] = None,
+    ):
         raise NotImplementedError(self.import_log)
 
     @abstractmethod
@@ -96,8 +103,11 @@ class FileSystemLogFileManager(LogFileManager):
                 yield (
                     codebase.name,
                     entry.name,
-                    [n[:-3] if n.endswith('.gz') else n
-                     for n in os.listdir(entry.path)])
+                    [
+                        n[:-3] if n.endswith(".gz") else n
+                        for n in os.listdir(entry.path)
+                    ],
+                )
 
     async def has_log(self, codebase, run_id, name):
         return any(map(os.path.exists, self._get_paths(codebase, run_id, name)))
@@ -120,8 +130,15 @@ class FileSystemLogFileManager(LogFileManager):
                 return open(path, "rb")
         raise FileNotFoundError(name)
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=None,
-                         mtime=None, basename: Optional[str] = None):
+    async def import_log(
+        self,
+        codebase,
+        run_id,
+        orig_path,
+        timeout=None,
+        mtime=None,
+        basename: Optional[str] = None,
+    ):
         dest_dir = os.path.join(self.log_directory, codebase, run_id)
         os.makedirs(dest_dir, exist_ok=True)
         with open(orig_path, "rb") as inf:
@@ -148,7 +165,9 @@ class LogRetrievalError(Exception):
 
 
 class S3LogFileManager(LogFileManager):
-    def __init__(self, endpoint_url, bucket_name="debian-janitor", trace_configs=None) -> None:
+    def __init__(
+        self, endpoint_url, bucket_name="debian-janitor", trace_configs=None
+    ) -> None:
         self.base_url = endpoint_url + ("/%s/" % bucket_name)
         self.trace_configs = trace_configs
         self.bucket_name = bucket_name
@@ -156,6 +175,7 @@ class S3LogFileManager(LogFileManager):
 
     async def __aenter__(self):
         import boto3
+
         self.session = ClientSession(trace_configs=self.trace_configs)
         self.s3 = boto3.resource("s3", endpoint_url=self.endpoint_url)
         self.s3_bucket = self.s3.Bucket(self.bucket_name)
@@ -197,7 +217,15 @@ class S3LogFileManager(LogFileManager):
                 "Unexpected response code %d: %s" % (resp.status, await resp.text())
             )
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None, basename: Optional[str] = None):
+    async def import_log(
+        self,
+        codebase,
+        run_id,
+        orig_path,
+        timeout=360,
+        mtime=None,
+        basename: Optional[str] = None,
+    ):
         with open(orig_path, "rb") as f:
             data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
 
@@ -220,19 +248,19 @@ class S3LogFileManager(LogFileManager):
 
 
 class GCSLogFileManager(LogFileManager):
-
     session: ClientSession
 
     def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
         if hostname is None:
-            raise ValueError('invalid location missing bucket name: %s' % location)
+            raise ValueError("invalid location missing bucket name: %s" % location)
         self.bucket_name = hostname
         self.trace_configs = trace_configs
         self.creds_path = creds_path
 
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
+
         self.session = ClientSession(trace_configs=self.trace_configs)
         self.storage = Storage(service_file=self.creds_path, session=self.session)  # type: ignore
         self.bucket = self.storage.get_bucket(self.bucket_name)
@@ -258,6 +286,7 @@ class GCSLogFileManager(LogFileManager):
 
     async def get_ctime(self, codebase, run_id, name):
         from iso8601 import parse_date
+
         object_name = self._get_object_name(codebase, run_id, name)
         try:
             blob = await self.bucket.get_blob(object_name, session=self.session)  # type: ignore
@@ -273,8 +302,10 @@ class GCSLogFileManager(LogFileManager):
         object_name = self._get_object_name(codebase, run_id, name)
         try:
             data = await self.storage.download(
-                self.bucket_name, object_name,
-                session=self.session, timeout=timeout  # type: ignore
+                self.bucket_name,
+                object_name,
+                session=self.session,
+                timeout=timeout,  # type: ignore
             )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
@@ -284,7 +315,15 @@ class GCSLogFileManager(LogFileManager):
         except ServerDisconnectedError as e:
             raise ServiceUnavailable() from e
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=360, mtime=None, basename: Optional[str] = None):
+    async def import_log(
+        self,
+        codebase,
+        run_id,
+        orig_path,
+        timeout=360,
+        mtime=None,
+        basename: Optional[str] = None,
+    ):
         if basename is None:
             basename = os.path.basename(orig_path)
         object_name = self._get_object_name(codebase, run_id, basename)
@@ -300,8 +339,8 @@ class GCSLogFileManager(LogFileManager):
                 raise ServiceUnavailable() from e
             if e.status == 403:
                 data = await self.storage.download(
-                    self.bucket_name, object_name,
-                    session=self.session, timeout=timeout)  # type: ignore
+                    self.bucket_name, object_name, session=self.session, timeout=timeout
+                )  # type: ignore
                 if data == plain_data:
                     return
                 raise PermissionError(e.message) from e
@@ -317,10 +356,15 @@ def get_log_manager(location, trace_configs=None):
 
 
 async def import_log(
-        logfile_manager: LogFileManager, pkg: str, log_id: str, name: str,
-        path: str, *, mtime: Optional[int] = None,
-        backup_logfile_manager: Optional[LogFileManager] = None):
-
+    logfile_manager: LogFileManager,
+    pkg: str,
+    log_id: str,
+    name: str,
+    path: str,
+    *,
+    mtime: Optional[int] = None,
+    backup_logfile_manager: Optional[LogFileManager] = None,
+):
     try:
         await logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
     except ServiceUnavailable as e:
@@ -335,14 +379,15 @@ async def import_log(
             await backup_logfile_manager.import_log(pkg, log_id, path, mtime=mtime)
     except PermissionError as e:
         logging.warning(
-            "Permission denied error while uploading logfile %s: %s",
-            name, e)
+            "Permission denied error while uploading logfile %s: %s", name, e
+        )
         # It may just be that the file already exists
         try:
-            suffix = datetime.utcnow().isoformat(timespec='seconds')
-            alternative_basename = os.path.basename(path) + '.' + suffix
+            suffix = datetime.utcnow().isoformat(timespec="seconds")
+            alternative_basename = os.path.basename(path) + "." + suffix
             await logfile_manager.import_log(
-                pkg, log_id, path, mtime=mtime, basename=alternative_basename)
+                pkg, log_id, path, mtime=mtime, basename=alternative_basename
+            )
         except (asyncio.TimeoutError, PermissionError, ServiceUnavailable):
             pass
         else:
@@ -365,7 +410,16 @@ async def import_logs(
     mtime: Optional[int] = None,
 ):
     await asyncio.gather(
-        *[import_log(
-            logfile_manager, pkg, log_id, entry.name, entry.path,
-            mtime=mtime, backup_logfile_manager=backup_logfile_manager)
-          for entry in entries])
+        *[
+            import_log(
+                logfile_manager,
+                pkg,
+                log_id,
+                entry.name,
+                entry.path,
+                mtime=mtime,
+                backup_logfile_manager=backup_logfile_manager,
+            )
+            for entry in entries
+        ]
+    )

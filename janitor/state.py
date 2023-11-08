@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 __all__ = [
-    'iter_publishable_suites',
+    "iter_publishable_suites",
 ]
 
 import datetime
@@ -33,8 +33,8 @@ from breezy import urlutils
 from debian.changelog import Version
 
 insufficient_resources_counter = Counter(
-    "postgres_insufficient_resources",
-    "Database refused query due to resource issues")
+    "postgres_insufficient_resources", "Database refused query due to resource issues"
+)
 
 
 async def init_types(conn):
@@ -44,9 +44,7 @@ async def init_types(conn):
     await conn.set_type_codec(
         "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
     )
-    await conn.set_type_codec(
-        "debversion", format="text", encoder=str, decoder=Version
-    )
+    await conn.set_type_codec("debversion", format="text", encoder=str, decoder=Version)
 
 
 def create_pool(uri, *args, **kwargs) -> asyncpg.pool.Pool:
@@ -61,7 +59,6 @@ def get_result_branch(result_branches, role):
 
 
 class Run:
-
     id: str
     command: str
     description: Optional[str]
@@ -192,30 +189,34 @@ class Run:
     @classmethod
     def from_row(cls, row) -> "Run":
         return cls(
-            run_id=row['id'],
-            start_time=row['start_time'],
-            finish_time=row['finish_time'],
-            command=row['command'],
-            description=row['description'],
-            result_code=row['result_code'],
-            main_branch_revision=(row['main_branch_revision'].encode("utf-8") if row['main_branch_revision'] else None),
-            revision=(row['revision'].encode("utf-8") if row['revision'] else None),
-            context=row['context'],
-            result=row['result'],
-            value=row['value'],
-            suite=row['suite'],
-            instigated_context=row['instigated_context'],
-            vcs_type=row['vcs_type'],
-            branch_url=row['branch_url'],
-            logfilenames=row['logfilenames'],
-            worker_name=row['worker'],
-            result_branches=row['result_branches'],
-            result_tags=row['result_tags'],
-            target_branch_url=row['target_branch_url'],
-            change_set=row['change_set'],
-            failure_transient=row['failure_transient'],
-            failure_stage=row['failure_stage'],
-            codebase=row['codebase'],
+            run_id=row["id"],
+            start_time=row["start_time"],
+            finish_time=row["finish_time"],
+            command=row["command"],
+            description=row["description"],
+            result_code=row["result_code"],
+            main_branch_revision=(
+                row["main_branch_revision"].encode("utf-8")
+                if row["main_branch_revision"]
+                else None
+            ),
+            revision=(row["revision"].encode("utf-8") if row["revision"] else None),
+            context=row["context"],
+            result=row["result"],
+            value=row["value"],
+            suite=row["suite"],
+            instigated_context=row["instigated_context"],
+            vcs_type=row["vcs_type"],
+            branch_url=row["branch_url"],
+            logfilenames=row["logfilenames"],
+            worker_name=row["worker"],
+            result_branches=row["result_branches"],
+            result_tags=row["result_tags"],
+            target_branch_url=row["target_branch_url"],
+            change_set=row["change_set"],
+            failure_transient=row["failure_transient"],
+            failure_stage=row["failure_stage"],
+            codebase=row["codebase"],
         )
 
     def __eq__(self, other) -> bool:
@@ -229,10 +230,7 @@ class Run:
         return self.id < other.id
 
 
-async def iter_publishable_suites(
-    conn: asyncpg.Connection,
-    codebase: str
-) -> list[str]:
+async def iter_publishable_suites(conn: asyncpg.Connection, codebase: str) -> list[str]:
     query = """
 SELECT DISTINCT suite
 FROM publish_ready

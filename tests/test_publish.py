@@ -28,10 +28,9 @@ from janitor.vcs import VcsManager
 
 
 async def create_client(aiohttp_client):
-    return await aiohttp_client(await create_app(
-        vcs_managers={}, db=None,
-        redis=FakeRedis(),
-        config=None))
+    return await aiohttp_client(
+        await create_app(vcs_managers={}, db=None, redis=FakeRedis(), config=None)
+    )
 
 
 async def test_health(aiohttp_client):
@@ -53,12 +52,15 @@ async def test_ready(aiohttp_client):
 
 
 def test_find_campaign_by_branch_name():
-    config = text_format.Parse("""\
+    config = text_format.Parse(
+        """\
 campaign {
  name: "bar"
  branch_name: "fo"
 }
-""", Config())
+""",
+        Config(),
+    )
 
     assert find_campaign_by_branch_name(config, "fo") == ("bar", "main")
     assert find_campaign_by_branch_name(config, "bar") == (None, None)
@@ -66,53 +68,62 @@ campaign {
 
 
 class DummyVcsManager(VcsManager):
-
     def get_branch_url(self, pkg, name):
-        return 'file://foo'
+        return "file://foo"
 
 
 async def test_publish_worker():
-    with mock.patch('janitor.publish.run_worker_process', return_value=(0, {})) as e:
+    with mock.patch("janitor.publish.run_worker_process", return_value=(0, {})) as e:
         pw = PublishWorker()
         await pw.publish_one(
-            campaign='test-campaign', codebase='pkg', command='blah --foo',
-            codemod_result={}, target_branch_url='https://example.com/',
-            mode='attempt-push', role='main', revision=b'main-revid',
-            log_id='some-id', unchanged_id='unchanged-id',
-            derived_branch_name='branch-name',
-            rate_limit_bucket='jelmer@jelmer.uk',
-            vcs_manager=DummyVcsManager(), extra_context={'package': 'pkg'})
+            campaign="test-campaign",
+            codebase="pkg",
+            command="blah --foo",
+            codemod_result={},
+            target_branch_url="https://example.com/",
+            mode="attempt-push",
+            role="main",
+            revision=b"main-revid",
+            log_id="some-id",
+            unchanged_id="unchanged-id",
+            derived_branch_name="branch-name",
+            rate_limit_bucket="jelmer@jelmer.uk",
+            vcs_manager=DummyVcsManager(),
+            extra_context={"package": "pkg"},
+        )
         e.assert_called_with(
-            [sys.executable, '-m', 'janitor.publish_one'], {
-                'campaign': 'test-campaign',
-                'extra_context': {
-                    'package': 'pkg',
+            [sys.executable, "-m", "janitor.publish_one"],
+            {
+                "campaign": "test-campaign",
+                "extra_context": {
+                    "package": "pkg",
                 },
-                'command': 'blah --foo',
-                'codemod_result': {},
-                'target_branch_url': 'https://example.com',
-                'source_branch_url': 'file://foo',
-                'existing_mp_url': None,
-                'derived_branch_name': 'branch-name',
-                'mode': 'attempt-push',
-                'role': 'main',
-                'log_id': 'some-id',
-                'unchanged_id': 'unchanged-id',
-                'require-binary-diff': False,
-                'allow_create_proposal': False,
-                'external_url': None,
-                'differ_url': None,
-                'revision': 'main-revid',
-                'reviewers': None,
-                'commit_message_template': None,
-                'title_template': None,
-                'tags': {}
-            })
+                "command": "blah --foo",
+                "codemod_result": {},
+                "target_branch_url": "https://example.com",
+                "source_branch_url": "file://foo",
+                "existing_mp_url": None,
+                "derived_branch_name": "branch-name",
+                "mode": "attempt-push",
+                "role": "main",
+                "log_id": "some-id",
+                "unchanged_id": "unchanged-id",
+                "require-binary-diff": False,
+                "allow_create_proposal": False,
+                "external_url": None,
+                "differ_url": None,
+                "revision": "main-revid",
+                "reviewers": None,
+                "commit_message_template": None,
+                "title_template": None,
+                "tags": {},
+            },
+        )
 
 
 def test_drop_env():
-    args = ['PATH=foo', 'BAR=foo', 'ls', 'bar']
+    args = ["PATH=foo", "BAR=foo", "ls", "bar"]
     _drop_env(args)
-    assert args == ['ls', 'bar']
+    assert args == ["ls", "bar"]
     _drop_env(args)
-    assert args == ['ls', 'bar']
+    assert args == ["ls", "bar"]

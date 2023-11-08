@@ -22,5 +22,11 @@ from janitor import splitout_env
 def test_splitout_env():
     assert splitout_env("ls") == ({}, "ls")
     assert splitout_env("PATH=/bin ls") == ({"PATH": "/bin"}, "ls")
-    assert splitout_env("PATH=/bin FOO=bar ls") == ({"PATH": "/bin", "FOO": "bar"}, "ls")
-    assert splitout_env("PATH=/bin FOO=bar ls -l") == ({"PATH": "/bin", "FOO": "bar"}, "ls -l")
+    assert splitout_env("PATH=/bin FOO=bar ls") == (
+        {"PATH": "/bin", "FOO": "bar"},
+        "ls",
+    )
+    assert splitout_env("PATH=/bin FOO=bar ls -l") == (
+        {"PATH": "/bin", "FOO": "bar"},
+        "ls -l",
+    )

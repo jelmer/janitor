@@ -48,28 +48,34 @@ def find_changes(path: str) -> tuple[list[str], str, Version, str, list[str]]:
             names.append(entry.name)
             if version is not None and changes["Version"] != version:
                 raise InconsistentChangesFiles(
-                    names, 'Version', changes['Version'], version)
-            version = changes['Version']
-            if source is not None and changes['Source'] != source:
+                    names, "Version", changes["Version"], version
+                )
+            version = changes["Version"]
+            if source is not None and changes["Source"] != source:
                 raise InconsistentChangesFiles(
-                    names, 'Source', changes['Source'], source)
-            source = changes['Source']
+                    names, "Source", changes["Source"], source
+                )
+            source = changes["Source"]
             if distribution is not None and changes["Distribution"] != distribution:
                 raise InconsistentChangesFiles(
-                    names, 'Distribution', changes['Distribution'], distribution)
-            distribution = changes['Distribution']
+                    names, "Distribution", changes["Distribution"], distribution
+                )
+            distribution = changes["Distribution"]
             binary_packages.extend(
-                [entry['name'].split('_')[0]
-                 for entry in changes['files']
-                 if entry['name'].endswith('.deb')])
+                [
+                    entry["name"].split("_")[0]
+                    for entry in changes["files"]
+                    if entry["name"].endswith(".deb")
+                ]
+            )
     if not names:
         raise NoChangesFile(path)
     if source is None:
-        raise InconsistentChangesFiles('Source not set')
+        raise InconsistentChangesFiles("Source not set")
     if version is None:
-        raise InconsistentChangesFiles('Version not set')
+        raise InconsistentChangesFiles("Version not set")
     if distribution is None:
-        raise InconsistentChangesFiles('Distribution not set')
+        raise InconsistentChangesFiles("Distribution not set")
     return (names, source, version, distribution, binary_packages)
 
 
@@ -97,4 +103,6 @@ def tree_set_changelog_version(
 
 @cache
 def dpkg_vendor():
-    return subprocess.check_output(['dpkg-vendor', '--query', 'vendor']).strip().decode()
+    return (
+        subprocess.check_output(["dpkg-vendor", "--query", "vendor"]).strip().decode()
+    )

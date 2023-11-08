@@ -49,7 +49,7 @@ def process_sbuild_log(logf):
 
 
 def process_build_log(logf):
-    lines = [line.decode('utf-8', 'replace') for line in logf]
+    lines = [line.decode("utf-8", "replace") for line in logf]
     match, problem = find_build_failure_description(lines)
     if problem:
         new_code = problem.kind
@@ -70,17 +70,17 @@ def process_build_log(logf):
 
 
 def process_dist_log(logf):
-    lines = [line.decode('utf-8', 'replace') for line in logf]
+    lines = [line.decode("utf-8", "replace") for line in logf]
     problem = find_build_failure_description(lines)[1]
     if problem is None:
-        new_code = 'dist-command-failed'
+        new_code = "dist-command-failed"
         new_description = "Dist command failed"
         new_failure_details = None
     else:
         if problem.is_global:
             new_code = problem.kind
         else:
-            new_code = 'dist-' + problem.kind
+            new_code = "dist-" + problem.kind
         new_description = str(problem)
         try:
             new_failure_details = problem.json()
@@ -91,14 +91,25 @@ def process_dist_log(logf):
 
 
 async def reprocess_run_logs(
-        db, logfile_manager, *, codebase: str,
-        campaign: str, log_id: str, command: str,
-        change_set: Optional[str], duration: timedelta,
-        result_code: str, description: str, failure_details,
-        process_fns, dry_run: bool = False,
-        reschedule: bool = False, log_timeout: Optional[int] = None):
+    db,
+    logfile_manager,
+    *,
+    codebase: str,
+    campaign: str,
+    log_id: str,
+    command: str,
+    change_set: Optional[str],
+    duration: timedelta,
+    result_code: str,
+    description: str,
+    failure_details,
+    process_fns,
+    dry_run: bool = False,
+    reschedule: bool = False,
+    log_timeout: Optional[int] = None,
+):
     """Reprocess run logs."""
-    if result_code in ('dist-no-tarball', ):
+    if result_code in ("dist-no-tarball",):
         return
     for prefix, logname, fn in process_fns:
         if not result_code.startswith(prefix):
@@ -110,13 +121,16 @@ async def reprocess_run_logs(
         except FileNotFoundError:
             return
         else:
-            (new_code, new_description, new_phase,
-             new_failure_details) = fn(logf)
+            (new_code, new_description, new_phase, new_failure_details) = fn(logf)
             break
     else:
         return
 
-    if new_code != result_code or description != new_description or failure_details != new_failure_details:
+    if (
+        new_code != result_code
+        or description != new_description
+        or failure_details != new_failure_details
+    ):
         logging.info(
             "%s/%s: Updated %r, %r ⇒ %r, %r %r",
             codebase,
@@ -125,7 +139,7 @@ async def reprocess_run_logs(
             description,
             new_code,
             new_description,
-            new_phase
+            new_phase,
         )
         if not dry_run:
             async with db.acquire() as conn:
