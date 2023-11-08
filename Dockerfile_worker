@@ -40,6 +40,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	python3-gpg \
 	libssl-dev \
 	pkg-config \
+	libtdb-dev \
 	&& apt clean \
 	&& pip3 install --break-system-packages "/code[gcp,debian]" \
 	&& rm -rf /code \
