@@ -1013,8 +1013,7 @@ async def publish_from_policy(
             command=command,
             bucket="update-new-mp",
             refresh=True,
-            requester="publisher (changed policy: {!r} ⇒ {!r})".format(
-                run.command, command),
+            requester=f"publisher (changed policy: {run.command!r} ⇒ {command!r})",
             codebase=run.codebase,
         )
         return None
@@ -2857,9 +2856,9 @@ has changed from {} to {}.
             await abandon_mp(
                 proposal_info_manager, mp, revision, codebase, target_branch_url,
                 campaign=mp_run['campaign'], can_be_merged=can_be_merged,
-                rate_limit_bucket=rate_limit_bucket, comment="""\
-This merge proposal will be closed, since the branch has moved to {}.
-""".format(last_run.branch_url))
+                rate_limit_bucket=rate_limit_bucket, comment=f"""\
+This merge proposal will be closed, since the branch has moved to {last_run.branch_url}.
+""")
         except PermissionDenied:
             return False
         return True

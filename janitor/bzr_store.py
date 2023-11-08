@@ -55,10 +55,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
         '-m',
         'breezy',
         "diff",
-        '-rrevid:{}..revid:{}'.format(
-            old_revid.decode(),
-            new_revid.decode(),
-        ),
+        f'-rrevid:{old_revid.decode()}..revid:{new_revid.decode()}',
         urlutils.join(repo.user_url, path or '')
     ]
 
