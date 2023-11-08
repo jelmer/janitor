@@ -34,15 +34,11 @@ def test_simple():
             ),
             (
                 "Files in second .changes but not in first",  # noqa
-                [
-                    "-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug"
-                ],
+                ["-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug"],
             ),
             (
                 "Files in first .changes but not in second",  # noqa
-                [
-                    "-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug"
-                ],
+                ["-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug"],
             ),
             (  # noqa
                 "Control files of package xserver-blah: lines which differ (wdiff format)",
@@ -115,9 +111,7 @@ Control files of package acpi-support-base: lines which differ (wdiff format)
 -----------------------------------------------------------------------------
 Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
 """
-    newdebdiff = filter_boring(
-        debdiff, "0.143-4~jan+unchanged1", "0.143-5~jan+lint1"
-    )
+    newdebdiff = filter_boring(debdiff, "0.143-4~jan+unchanged1", "0.143-5~jan+lint1")
     assert (
         newdebdiff
         == """\

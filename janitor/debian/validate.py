@@ -29,30 +29,29 @@ from breezy.plugins.debian.vcs_up_to_date import (
 
 
 class ValidateError(Exception):
-
     def __init__(self, code, description) -> None:
         self.code = code
         self.description = description
 
 
 def validate_from_config(local_tree, subpath, config):
-    if config.get('base-apt-repository'):
+    if config.get("base-apt-repository"):
         apt = RemoteApt.from_string(
-            config['base-apt-repository'],
-            config.get('base-apt-repository-signed-by'))
+            config["base-apt-repository"], config.get("base-apt-repository-signed-by")
+        )
         try:
             check_up_to_date(local_tree, subpath, apt)
         except MissingChangelogError as exc:
-            if not os.path.isdir(local_tree.abspath(os.path.join(subpath, 'debian'))):
+            if not os.path.isdir(local_tree.abspath(os.path.join(subpath, "debian"))):
                 raise ValidateError(
-                    'not-debian-package', "Not a Debian package") from exc
-            raise ValidateError('missing-changelog', str(exc)) from exc
+                    "not-debian-package", "Not a Debian package"
+                ) from exc
+            raise ValidateError("missing-changelog", str(exc)) from exc
         except PackageMissingInArchive as exc:
-            logging.warning(
-                'Package %s is not present in archive', exc.package)
+            logging.warning("Package %s is not present in archive", exc.package)
         except TreeVersionNotInArchive as exc:
             logging.warning(
-                'Last tree version %s not present in the archive',
-                exc.tree_version)
+                "Last tree version %s not present in the archive", exc.tree_version
+            )
         except NewArchiveVersion as exc:
-            raise ValidateError('new-archive-version', str(exc)) from exc
+            raise ValidateError("new-archive-version", str(exc)) from exc

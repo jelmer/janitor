@@ -19,40 +19,62 @@ from jinja2 import Environment, select_autoescape
 
 from janitor.site import template_loader
 
-env = Environment(
-    loader=template_loader,
-    autoescape=select_autoescape(["html", "xml"]))
+env = Environment(loader=template_loader, autoescape=select_autoescape(["html", "xml"]))
 
 
 def test_display_branch_url():
-    template = env.get_template('run_util.html')
-    assert str(template.module.display_branch_url(  # type: ignore
-        None, 'https://github.com/jelmer/example.git')) == """\
+    template = env.get_template("run_util.html")
+    assert (
+        str(
+            template.module.display_branch_url(  # type: ignore
+                None, "https://github.com/jelmer/example.git"
+            )
+        )
+        == """\
 
     
         <a href="https://github.com/jelmer/example.git">https://github.com/jelmer/example.git</a>
     
 """
-    assert str(template.module.display_branch_url(  # type: ignore
-        'https://github.com/jelmer/example.git', 'https://github.com/jelmer/example')) == """\
+    )
+    assert (
+        str(
+            template.module.display_branch_url(  # type: ignore
+                "https://github.com/jelmer/example.git",
+                "https://github.com/jelmer/example",
+            )
+        )
+        == """\
 
     
         <a href="https://github.com/jelmer/example.git">https://github.com/jelmer/example</a>
     
 """
+    )
 
 
 def test_display_publish_blockers():
-    template = env.get_template('run_util.html')
-    assert str(template.module.display_publish_blockers(  # type: ignore
-        {})) == """\
+    template = env.get_template("run_util.html")
+    assert (
+        str(
+            template.module.display_publish_blockers(  # type: ignore
+                {}
+            )
+        )
+        == """\
 
     <ul>
         
     </ul>
 """
-    assert str(template.module.display_publish_blockers(  # type: ignore
-        {'inactive': {'result': True, 'details': {}}})) == """\
+    )
+    assert (
+        str(
+            template.module.display_publish_blockers(  # type: ignore
+                {"inactive": {"result": True, "details": {}}}
+            )
+        )
+        == """\
 
     <ul>
         
@@ -60,3 +82,4 @@ def test_display_publish_blockers():
         
     </ul>
 """
+    )

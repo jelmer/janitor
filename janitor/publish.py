@@ -119,76 +119,81 @@ merge_proposal_count = Gauge(
     labelnames=("status",),
 )
 new_merge_proposal_count = Counter(
-    "new_merge_proposal_count",
-    "Number of new merge proposals opened.")
+    "new_merge_proposal_count", "Number of new merge proposals opened."
+)
 last_publish_pending_success = Gauge(
     "last_publish_pending_success",
     "Last time pending changes were successfully published",
 )
 last_scan_existing_success = Gauge(
     "last_scan_existing_success",
-    "Last time existing merge proposals were successfully scanned")
+    "Last time existing merge proposals were successfully scanned",
+)
 publish_latency = Histogram(
     "publish_latency", "Delay between build finish and publish."
 )
 
 exponential_backoff_count = Counter(
     "exponential_backoff_count",
-    "Number of times publishing has been skipped due to exponential backoff")
+    "Number of times publishing has been skipped due to exponential backoff",
+)
 
 push_limit_count = Counter(
-    "push_limit_count",
-    "Number of times pushes haven't happened due to the limit")
+    "push_limit_count", "Number of times pushes haven't happened due to the limit"
+)
 
 missing_branch_url_count = Counter(
     "missing_branch_url_count",
-    "Number of runs that weren't published because they had a "
-    "missing branch URL")
+    "Number of runs that weren't published because they had a " "missing branch URL",
+)
 
-rejected_last_mp_count = Counter(
-    "rejected_last_mp",
-    "Last merge proposal was rejected")
+rejected_last_mp_count = Counter("rejected_last_mp", "Last merge proposal was rejected")
 
 missing_publish_mode_count = Counter(
     "missing_publish_mode_count",
     "Number of runs not published due to missing publish mode",
-    labelnames=("role", ))
+    labelnames=("role",),
+)
 
 unpublished_aux_branches_count = Counter(
     "unpublished_aux_branches_count",
     "Number of branches not published because auxiliary branches "
     "were not yet published",
-    labelnames=("role", ))
+    labelnames=("role",),
+)
 
 command_changed_count = Counter(
     "command_changed_count",
-    "Number of runs not published because the codemod command changed")
+    "Number of runs not published because the codemod command changed",
+)
 
 
 no_result_branches_count = Counter(
-    "no_result_branches_count",
-    "Runs not published since there were no result branches")
+    "no_result_branches_count", "Runs not published since there were no result branches"
+)
 
 
 missing_main_result_branch_count = Counter(
     "missing_main_result_branch_count",
-    "Runs not published because of missing main result branch")
+    "Runs not published because of missing main result branch",
+)
 
 forge_rate_limited_count = Counter(
     "forge_rate_limited_count",
     "Runs were not published because the relevant forge was rate-limiting",
-    labelnames=("forge", ))
+    labelnames=("forge",),
+)
 
 unexpected_http_response_count = Counter(
     "unexpected_http_response_count",
-    "Number of unexpected HTTP responses during checks of existing "
-    "proposals")
+    "Number of unexpected HTTP responses during checks of existing " "proposals",
+)
 
 
-CLOSED_STATUSES = ['closed', 'abandoned', 'rejected', 'applied']
+CLOSED_STATUSES = ["closed", "abandoned", "rejected", "applied"]
 
 
-logger = logging.getLogger('janitor.publish')
+logger = logging.getLogger("janitor.publish")
 
 
 routes = web.RouteTableDef()
@@ -214,17 +219,16 @@ class BucketRateLimited(RateLimited):
 
     def __init__(self, bucket, open_mps, max_open_mps) -> None:
         super().__init__(
-            "Bucke %s already has %d merge proposal open (max: %d)" % (
-                bucket, open_mps, max_open_mps))
+            "Bucke %s already has %d merge proposal open (max: %d)"
+            % (bucket, open_mps, max_open_mps)
+        )
         self.bucket = bucket
         self.open_mps = open_mps
         self.max_open_mps = max_open_mps
 
 
 class RateLimiter:
-    def set_mps_per_bucket(
-        self, mps_per_bucket: dict[str, dict[str, int]]
-    ) -> None:
+    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]) -> None:
         raise NotImplementedError(self.set_mps_per_bucket)
 
     def check_allowed(self, bucket: str) -> None:
@@ -238,7 +242,6 @@ class RateLimiter:
 
 
 class FixedRateLimiter(RateLimiter):
-
     _open_mps_per_bucket: Optional[dict[str, int]]
 
     def __init__(self, max_mps_per_bucket: Optional[int] = None) -> None:
@@ -268,7 +271,8 @@ class FixedRateLimiter(RateLimiter):
         if self._open_mps_per_bucket:
             return {
                 bucket: (current, self._max_mps_per_bucket)
-                for (bucket, current) in self._open_mps_per_bucket.items()}
+                for (bucket, current) in self._open_mps_per_bucket.items()
+            }
         else:
             return {}
 
@@ -294,10 +298,7 @@ class SlowStartRateLimiter(RateLimiter):
         self._absorbed_mps_per_bucket: Optional[dict[str, int]] = None
 
     def check_allowed(self, bucket: str) -> None:
-        if (
-            self._open_mps_per_bucket is None
-            or self._absorbed_mps_per_bucket is None
-        ):
+        if self._open_mps_per_bucket is None or self._absorbed_mps_per_bucket is None:
             # Be conservative
             raise RateLimited("Open mps per bucket not yet determined.")
         current = self._open_mps_per_bucket.get(bucket, 0)
@@ -321,7 +322,7 @@ class SlowStartRateLimiter(RateLimiter):
     def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]):
         self._open_mps_per_bucket = mps_per_bucket.get("open", {})
         ms: dict[str, int] = {}
-        for status in ['merged', 'applied']:
+        for status in ["merged", "applied"]:
             for m, c in mps_per_bucket.get(status, {}).items():
                 ms.setdefault(m, 0)
                 ms[m] += c
@@ -334,8 +335,10 @@ class SlowStartRateLimiter(RateLimiter):
             return {
                 bucket: (
                     current,
-                    min(self._max_mps_per_bucket, self._get_limit(bucket)))
-                for bucket, current in self._open_mps_per_bucket.items()}
+                    min(self._max_mps_per_bucket, self._get_limit(bucket)),
+                )
+                for bucket, current in self._open_mps_per_bucket.items()
+            }
 
 
 class PublishFailure(Exception):
@@ -377,7 +380,6 @@ def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
 
 @dataclass
 class PublishResult:
-
     description: str
     target_branch_url: Optional[str] = None
     is_new: bool = False
@@ -401,16 +403,15 @@ class WorkerInvalidResponse(Exception):
         self.output = output
 
 
-async def run_worker_process(args, request, *, encoding='utf-8'):
+async def run_worker_process(args, request, *, encoding="utf-8"):
     p = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE
+        stdin=asyncio.subprocess.PIPE,
     )
 
-    (stdout, stderr) = await p.communicate(
-        json.dumps(request).encode(encoding))
+    (stdout, stderr) = await p.communicate(json.dumps(request).encode(encoding))
 
     if p.returncode == 1:
         try:
@@ -427,13 +428,15 @@ async def run_worker_process(args, request, *, encoding='utf-8'):
 
 
 class PublishWorker:
-
-    def __init__(self, *,
-                 lock_manager=None,
-                 redis=None,
-                 template_env_path: Optional[str] = None,
-                 external_url: Optional[str] = None,
-                 differ_url: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        *,
+        lock_manager=None,
+        redis=None,
+        template_env_path: Optional[str] = None,
+        external_url: Optional[str] = None,
+        differ_url: Optional[str] = None,
+    ) -> None:
         self.template_env_path = template_env_path
         self.external_url = external_url
         self.differ_url = differ_url
@@ -507,18 +510,20 @@ class PublishWorker:
         args = [sys.executable, "-m", "janitor.publish_one"]
 
         if self.template_env_path:
-            args.append('--template-env-path=%s' % self.template_env_path)
+            args.append("--template-env-path=%s" % self.template_env_path)
 
         try:
             async with AsyncExitStack() as es:
                 if self.lock_manager:
                     await es.enter_async_context(
-                        await self.lock_manager.lock("publish:%s" % target_branch_url))
+                        await self.lock_manager.lock("publish:%s" % target_branch_url)
+                    )
                 try:
                     returncode, response = await run_worker_process(args, request)
                 except WorkerInvalidResponse as e:
                     raise PublishFailure(
-                        mode, "publisher-invalid-response", e.output) from e
+                        mode, "publisher-invalid-response", e.output
+                    ) from e
         except aioredlock.LockError as e:
             raise BranchBusy(target_branch_url) from e
 
@@ -530,20 +535,26 @@ class PublishWorker:
             proposal_web_url = response.get("proposal_web_url")
             branch_name = response.get("branch_name")
             is_new = response.get("is_new")
-            description = response.get('description')
+            description = response.get("description")
             target_branch_url = response.get("target_branch_url")
             target_branch_web_url = response.get("target_branch_web_url")
 
             if proposal_url and is_new:
                 if self.redis:
                     await self.redis.publish(
-                        'merge-proposal',
-                        json.dumps({
-                            "url": proposal_url, "web_url": proposal_web_url,
-                            "status": "open", "codebase": codebase,
-                            "campaign": campaign,
-                            "target_branch_url": target_branch_url,
-                            "target_branch_web_url": target_branch_web_url}))
+                        "merge-proposal",
+                        json.dumps(
+                            {
+                                "url": proposal_url,
+                                "web_url": proposal_web_url,
+                                "status": "open",
+                                "codebase": codebase,
+                                "campaign": campaign,
+                                "target_branch_url": target_branch_url,
+                                "target_branch_web_url": target_branch_web_url,
+                            }
+                        ),
+                    )
 
                 new_merge_proposal_count.inc()
                 merge_proposal_count.labels(status="open").inc()
@@ -556,10 +567,12 @@ class PublishWorker:
             return PublishResult(
                 proposal_url=proposal_url,
                 proposal_web_url=proposal_web_url,
-                branch_name=branch_name, is_new=is_new,
+                branch_name=branch_name,
+                is_new=is_new,
                 target_branch_url=target_branch_url,
                 target_branch_web_url=target_branch_web_url,
-                description=description)
+                description=description,
+            )
 
         raise AssertionError
 
@@ -568,26 +581,37 @@ def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> dateti
     if attempt_count == 0:
         return finish_time
     try:
-        return finish_time + (2 ** attempt_count * timedelta(hours=1))
+        return finish_time + (2**attempt_count * timedelta(hours=1))
     except OverflowError:
         return finish_time + timedelta(hours=(7 * 24))
 
 
 async def consider_publish_run(
-        conn: asyncpg.Connection, redis, *, config: Config, publish_worker: PublishWorker,
-        vcs_managers, bucket_rate_limiter,
-        run: state.Run, rate_limit_bucket,
-        unpublished_branches, command: str,
-        push_limit: Optional[int] = None,
-        require_binary_diff: bool = False) -> dict[str, Optional[str]]:
+    conn: asyncpg.Connection,
+    redis,
+    *,
+    config: Config,
+    publish_worker: PublishWorker,
+    vcs_managers,
+    bucket_rate_limiter,
+    run: state.Run,
+    rate_limit_bucket,
+    unpublished_branches,
+    command: str,
+    push_limit: Optional[int] = None,
+    require_binary_diff: bool = False,
+) -> dict[str, Optional[str]]:
     if run.revision is None:
         logger.warning(
-            "Run %s is publish ready, but does not have revision set.", run.id,
-            extra={'run_id': run.id})
+            "Run %s is publish ready, but does not have revision set.",
+            run.id,
+            extra={"run_id": run.id},
+        )
         return {}
     campaign_config = get_campaign_config(config, run.campaign)
     attempt_count = await get_publish_attempt_count(
-        conn, run.revision, {"differ-unreachable"})
+        conn, run.revision, {"differ-unreachable"}
+    )
     next_try_time = calculate_next_try_time(run.finish_time, attempt_count)
     if datetime.utcnow() < next_try_time:
         logger.info(
@@ -597,33 +621,42 @@ async def consider_publish_run(
             run.campaign,
             run.id,
             next_try_time - datetime.utcnow(),
-            extra={'run_id': run.id})
+            extra={"run_id": run.id},
+        )
         exponential_backoff_count.inc()
         return {}
 
     ms = [b[4] for b in unpublished_branches]
-    if push_limit is not None and (
-            MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
+    if push_limit is not None and (MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
         if push_limit == 0:
             logger.info(
                 "Not pushing %s / %s: push limit reached",
-                run.codebase, run.campaign, extra={'run_id': run.id})
+                run.codebase,
+                run.campaign,
+                extra={"run_id": run.id},
+            )
             push_limit_count.inc()
             return {}
     if run.branch_url is None:
         logger.warning(
-            '%s: considering publishing for branch without branch url',
-            run.id, extra={'run_id': run.id})
+            "%s: considering publishing for branch without branch url",
+            run.id,
+            extra={"run_id": run.id},
+        )
         missing_branch_url_count.inc()
         # TODO(jelmer): Support target_branch_url ?
         return {}
 
     last_mps: list[tuple[str, str]] = await get_previous_mp_status(
-        conn, run.codebase, run.campaign)
-    if any(last_mp[1] in ('rejected', 'closed') for last_mp in last_mps):
+        conn, run.codebase, run.campaign
+    )
+    if any(last_mp[1] in ("rejected", "closed") for last_mp in last_mps):
         logger.warning(
-            '%s: last merge proposal was rejected by maintainer: %r', run.id,
-            last_mps, extra={'run_id': run.id})
+            "%s: last merge proposal was rejected by maintainer: %r",
+            run.id,
+            last_mps,
+            extra={"run_id": run.id},
+        )
         rejected_last_mp_count.inc()
         return {}
 
@@ -634,30 +667,40 @@ async def consider_publish_run(
         _base_revision,
         _revision,
         publish_mode,
-        max_frequency_days
+        max_frequency_days,
     ) in unpublished_branches:
         if publish_mode is None:
             logger.warning(
-                "%s: No publish mode for branch with role %s", run.id, role,
-                extra={'run_id': run.id, 'role': role})
+                "%s: No publish mode for branch with role %s",
+                run.id,
+                role,
+                extra={"run_id": run.id, "role": role},
+            )
             missing_publish_mode_count.labels(role=role).inc()
             continue
-        if role == 'main' and None in actual_modes.values():
+        if role == "main" and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
-                "auxiliary branches were published.", run.id, role,
-                extra={'run_id': run.id, 'role': role})
+                "auxiliary branches were published.",
+                run.id,
+                role,
+                extra={"run_id": run.id, "role": role},
+            )
             unpublished_aux_branches_count.labels(role=role).inc()
             continue
         actual_modes[role] = await publish_from_policy(
-            conn=conn, campaign_config=campaign_config,
+            conn=conn,
+            campaign_config=campaign_config,
             publish_worker=publish_worker,
             bucket_rate_limiter=bucket_rate_limiter,
-            vcs_managers=vcs_managers, run=run, role=role,
+            vcs_managers=vcs_managers,
+            run=run,
+            role=role,
             rate_limit_bucket=rate_limit_bucket,
             target_branch_url=run.target_branch_url or run.branch_url,
             mode=publish_mode,
-            max_frequency_days=max_frequency_days, command=command,
+            max_frequency_days=max_frequency_days,
+            command=command,
             redis=redis,
             require_binary_diff=require_binary_diff,
             force=False,
@@ -676,8 +719,18 @@ async def iter_publish_ready(
         state.Run,
         str,
         str,
-        list[tuple[str, Optional[str], str, bytes, bytes, Optional[str],
-                   Optional[int], Optional[str]]],
+        list[
+            tuple[
+                str,
+                Optional[str],
+                str,
+                bytes,
+                bytes,
+                Optional[str],
+                Optional[int],
+                Optional[str],
+            ]
+        ],
     ]
 ]:
     args: list[Any] = []
@@ -710,11 +763,12 @@ SELECT * FROM publish_ready
 
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
-            [state.Run.from_row(record),
-             record['rate_limit_bucket'],
-             record['policy_command'],
-             record['unpublished_branches']
-             ]
+            [
+                state.Run.from_row(record),
+                record["rate_limit_bucket"],
+                record["policy_command"],
+                record["unpublished_branches"],
+            ]
         )
 
 
@@ -740,7 +794,9 @@ async def publish_pending_ready(
             unpublished_branches,
         ) in iter_publish_ready(conn1):
             actual_modes = await consider_publish_run(
-                conn, redis=redis, config=config,
+                conn,
+                redis=redis,
+                config=config,
                 publish_worker=publish_worker,
                 vcs_managers=vcs_managers,
                 bucket_rate_limiter=bucket_rate_limiter,
@@ -749,7 +805,8 @@ async def publish_pending_ready(
                 rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
                 push_limit=push_limit,
-                require_binary_diff=require_binary_diff)
+                require_binary_diff=require_binary_diff,
+            )
             for actual_mode in actual_modes.values():
                 if actual_mode is None:
                     continue
@@ -770,7 +827,8 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     unchanged_run = await conn.fetchrow(
         "SELECT result_code, revision FROM last_runs "
         "WHERE revision = $2 AND codebase = $1 and result_code = 'success'",
-        run.codebase, run.main_branch_revision.decode('utf-8')
+        run.codebase,
+        run.main_branch_revision.decode("utf-8"),
     )
 
     code = e.code
@@ -806,25 +864,27 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
                 change_set=run.change_set,
                 refresh=True,
                 requester="publisher (missing build artifacts - self)",
-                bucket=bucket, codebase=run.codebase,
+                bucket=bucket,
+                codebase=run.codebase,
             )
     elif e.code == "missing-build-diff-control":
-        if unchanged_run and unchanged_run['result_code'] != "success":
+        if unchanged_run and unchanged_run["result_code"] != "success":
             description = (
                 "Missing build diff; last control run failed (%s)."
-                % unchanged_run['result_code']
+                % unchanged_run["result_code"]
             )
-        elif unchanged_run and unchanged_run['result_code'] == 'success':
+        elif unchanged_run and unchanged_run["result_code"] == "success":
             description = (
                 "Missing build diff due to control run, but successful "
                 "control run exists. Rescheduling."
             )
             await do_schedule_control(
                 conn,
-                main_branch_revision=unchanged_run['revision'].encode('utf-8'),
+                main_branch_revision=unchanged_run["revision"].encode("utf-8"),
                 refresh=True,
                 requester="publisher (missing build artifacts - control)",
-                bucket=bucket, codebase=run.codebase,
+                bucket=bucket,
+                codebase=run.codebase,
             )
         else:
             description = "Missing binary diff; requesting control run."
@@ -833,7 +893,8 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
                     conn,
                     main_branch_revision=run.main_branch_revision,
                     requester="publisher (missing control run for diff)",
-                    bucket=bucket, codebase=run.codebase,
+                    bucket=bucket,
+                    codebase=run.codebase,
                 )
             else:
                 logger.warning(
@@ -844,8 +905,11 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
 
 
 async def already_published(
-    conn: asyncpg.Connection, target_branch_url: str, branch_name: str,
-    revision: bytes, modes: list[str]
+    conn: asyncpg.Connection,
+    target_branch_url: str,
+    branch_name: str,
+    revision: bytes,
+    modes: list[str],
 ) -> bool:
     row = await conn.fetchrow(
         """\
@@ -882,12 +946,17 @@ ORDER BY timestamp DESC
 
 
 async def check_last_published(
-        conn: asyncpg.Connection, campaign: str, codebase: str) -> Optional[datetime]:
-    return await conn.fetchval("""
+    conn: asyncpg.Connection, campaign: str, codebase: str
+) -> Optional[datetime]:
+    return await conn.fetchval(
+        """
 SELECT timestamp from publish left join run on run.revision = publish.revision
 WHERE run.suite = $1 and run.codebase = $2 AND publish.result_code = 'success'
 order by timestamp desc limit 1
-""", campaign, codebase)
+""",
+        campaign,
+        codebase,
+    )
 
 
 async def store_publish(
@@ -914,9 +983,9 @@ async def store_publish(
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode("utf-8")  # type: ignore
     async with conn.transaction():
-        if result_code == 'success':
+        if result_code == "success":
             if merge_proposal_url:
-                assert mode == 'propose'
+                assert mode == "propose"
                 await conn.execute(
                     "INSERT INTO merge_proposal "
                     "(url, status, revision, last_scanned, "
@@ -935,13 +1004,15 @@ async def store_publish(
             else:
                 if revision is None:
                     raise AssertionError
-                assert mode in ('push', 'push-derived')
+                assert mode in ("push", "push-derived")
                 assert run_id is not None
-                if mode == 'push':
+                if mode == "push":
                     await conn.execute(
                         "UPDATE new_result_branch "
                         "SET absorbed = true WHERE run_id = $1 AND role = $2",
-                        run_id, role)
+                        run_id,
+                        role,
+                    )
         await conn.execute(
             "INSERT INTO publish (branch_name, "
             "main_branch_revision, revision, role, mode, result_code, "
@@ -965,10 +1036,11 @@ async def store_publish(
             target_branch_web_url,
             codebase,
         )
-        if result_code == 'success':
+        if result_code == "success":
             await conn.execute(
                 "UPDATE change_set SET state = 'publishing' WHERE state = 'ready' AND id = $1",
-                change_set)
+                change_set,
+            )
             # TODO(jelmer): if there is nothing left to publish, then mark this
             # change_set as done
 
@@ -1004,7 +1076,7 @@ async def publish_from_policy(
             run.campaign,
             run.command,
             command,
-            extra={'run_id': run.id, 'role': role}
+            extra={"run_id": run.id, "role": role},
         )
         await do_schedule(
             conn,
@@ -1023,8 +1095,8 @@ async def publish_from_policy(
         return None
     if run.result_branches is None:
         logger.warning(
-            "no result branches for %s", run.id,
-            extra={'run_id': run.id, 'role': role})
+            "no result branches for %s", run.id, extra={"run_id": run.id, "role": role}
+        )
         no_result_branches_count.inc()
         return None
     try:
@@ -1033,14 +1105,20 @@ async def publish_from_policy(
         missing_main_result_branch_count.inc()
         logger.warning(
             "unable to find branch with role %s: %s",
-            role, run.id, extra={'run_id': run.id, 'role': role})
+            role,
+            run.id,
+            extra={"run_id": run.id, "role": role},
+        )
         return None
 
     target_branch_url = role_branch_url(target_branch_url, remote_branch_name)
 
     if not force and await already_published(
-        conn, run.branch_url, campaign_config.branch_name, revision,
-        [MODE_PROPOSE, MODE_PUSH] if mode == MODE_ATTEMPT_PUSH else [mode]
+        conn,
+        run.branch_url,
+        campaign_config.branch_name,
+        revision,
+        [MODE_PROPOSE, MODE_PUSH] if mode == MODE_ATTEMPT_PUSH else [mode],
     ):
         return None
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
@@ -1056,20 +1134,30 @@ async def publish_from_policy(
                     codebase=run.codebase, campaign=run.campaign
                 ).inc()
                 logger.debug(
-                    "Not creating proposal for %s/%s: %s", run.codebase, run.campaign, e,
-                    extra={'run_id': run.id}
+                    "Not creating proposal for %s/%s: %s",
+                    run.codebase,
+                    run.campaign,
+                    e,
+                    extra={"run_id": run.id},
                 )
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
                 last_published = await check_last_published(
-                    conn, run.campaign, run.codebase)
-                if (last_published is not None
-                        and (datetime.utcnow() - last_published).days < max_frequency_days):
+                    conn, run.campaign, run.codebase
+                )
+                if (
+                    last_published is not None
+                    and (datetime.utcnow() - last_published).days < max_frequency_days
+                ):
                     logger.debug(
-                        'Not creating proposal for %s/%s: '
-                        'was published already in last %d days (at %s)',
-                        run.codebase, run.campaign, max_frequency_days, last_published,
-                        extra={'run_id': run.id})
+                        "Not creating proposal for %s/%s: "
+                        "was published already in last %d days (at %s)",
+                        run.codebase,
+                        run.campaign,
+                        max_frequency_days,
+                        last_published,
+                        extra={"run_id": run.id},
+                    )
                     mode = MODE_BUILD_ONLY
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return None
@@ -1080,13 +1168,14 @@ async def publish_from_policy(
         unchanged_run = await conn.fetchrow(
             "SELECT id, result_code FROM last_runs "
             "WHERE codebase = $1 AND revision = $2 AND result_code = 'success'",
-            run.codebase, base_revision.decode('utf-8'))
+            run.codebase,
+            base_revision.decode("utf-8"),
+        )
 
     # TODO(jelmer): Make this more generic
     if (
         unchanged_run
-        and unchanged_run['result_code'] in (
-            "debian-upstream-metadata-invalid", )
+        and unchanged_run["result_code"] in ("debian-upstream-metadata-invalid",)
         and run.campaign == "lintian-fixes"
     ):
         require_binary_diff = False
@@ -1106,23 +1195,31 @@ async def publish_from_policy(
             role=role,
             revision=revision,
             log_id=run.id,
-            unchanged_id=(unchanged_run['id'] if unchanged_run else None),
-            derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
+            unchanged_id=(unchanged_run["id"] if unchanged_run else None),
+            derived_branch_name=await derived_branch_name(
+                conn, campaign_config, run, role
+            ),
             rate_limit_bucket=rate_limit_bucket,
             vcs_manager=vcs_managers[run.vcs_type],
             require_binary_diff=require_binary_diff,
             bucket_rate_limiter=bucket_rate_limiter,
             result_tags=run.result_tags,
-            allow_create_proposal=run_sufficient_for_proposal(campaign_config, run.value),
+            allow_create_proposal=run_sufficient_for_proposal(
+                campaign_config, run.value
+            ),
             commit_message_template=(
                 campaign_config.merge_proposal.commit_message
-                if campaign_config.merge_proposal else None),
+                if campaign_config.merge_proposal
+                else None
+            ),
             title_template=(
                 campaign_config.merge_proposal.title
-                if campaign_config.merge_proposal else None),
+                if campaign_config.merge_proposal
+                else None
+            ),
         )
     except BranchBusy as e:
-        logger.info('Branch %r was busy', e.branch_url)
+        logger.info("Branch %r was busy", e.branch_url)
         return None
     except PublishFailure as e:
         code, description = await handle_publish_failure(
@@ -1130,7 +1227,7 @@ async def publish_from_policy(
         )
         publish_result = PublishResult(description="Nothing to do")
         if e.code == "nothing-to-do":
-            logger.info('Nothing to do.')
+            logger.info("Nothing to do.")
         else:
             logger.info("Failed(%s): %s", code, description)
     else:
@@ -1155,7 +1252,8 @@ async def publish_from_policy(
         result_code=code,
         description=description,
         merge_proposal_url=(
-            publish_result.proposal_url if publish_result.proposal_url else None),
+            publish_result.proposal_url if publish_result.proposal_url else None
+        ),
         publish_id=publish_id,
         target_branch_url=publish_result.target_branch_url,
         target_branch_web_url=publish_result.target_branch_web_url,
@@ -1198,7 +1296,7 @@ async def publish_from_policy(
 
 
 async def pubsub_publish(redis, topic_entry):
-    await redis.publish('publish', json.dumps(topic_entry))
+    await redis.publish("publish", json.dumps(topic_entry))
 
 
 def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
@@ -1209,10 +1307,15 @@ def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
     return urlutils.join_segment_parameters(base_url, params)
 
 
-def run_sufficient_for_proposal(campaign_config: Campaign, run_value: Optional[int]) -> bool:
-    if (run_value is not None and campaign_config.merge_proposal is not None
-            and campaign_config.merge_proposal.value_threshold):
-        return (run_value >= campaign_config.merge_proposal.value_threshold)
+def run_sufficient_for_proposal(
+    campaign_config: Campaign, run_value: Optional[int]
+) -> bool:
+    if (
+        run_value is not None
+        and campaign_config.merge_proposal is not None
+        and campaign_config.merge_proposal.value_threshold
+    ):
+        return run_value >= campaign_config.merge_proposal.value_threshold
     else:
         # Assume yes, if the run doesn't have an associated value or if there
         # is no threshold configured.
@@ -1239,11 +1342,11 @@ async def publish_and_store(
     remote_branch_name, base_revision, revision = run.get_result_branch(role)
 
     target_branch_url = role_branch_url(
-        run.target_branch_url or run.branch_url, remote_branch_name)
+        run.target_branch_url or run.branch_url, remote_branch_name
+    )
 
     if allow_create_proposal is None:
-        allow_create_proposal = run_sufficient_for_proposal(
-            campaign_config, run.value)
+        allow_create_proposal = run_sufficient_for_proposal(campaign_config, run.value)
 
     async with db.acquire() as conn:
         if run.main_branch_revision:
@@ -1251,7 +1354,8 @@ async def publish_and_store(
                 "SELECT id FROM run "
                 "WHERE revision = $2 AND codebase = $1 and result_code = 'success' "
                 "ORDER BY finish_time DESC LIMIT 1",
-                run.codebase, run.main_branch_revision.decode('utf-8')
+                run.codebase,
+                run.main_branch_revision.decode("utf-8"),
             )
         else:
             unchanged_run_id = None
@@ -1269,7 +1373,9 @@ async def publish_and_store(
                 revision=revision,
                 log_id=run.id,
                 unchanged_id=unchanged_run_id,
-                derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
+                derived_branch_name=await derived_branch_name(
+                    conn, campaign_config, run, role
+                ),
                 rate_limit_bucket=rate_limit_bucket,
                 vcs_manager=vcs_managers[run.vcs_type],
                 require_binary_diff=require_binary_diff,
@@ -1278,14 +1384,17 @@ async def publish_and_store(
                 result_tags=run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message
-                    if campaign_config.merge_proposal else None),
+                    if campaign_config.merge_proposal
+                    else None
+                ),
                 title_template=(
                     campaign_config.merge_proposal.title
-                    if campaign_config.merge_proposal else None),
+                    if campaign_config.merge_proposal
+                    else None
+                ),
             )
         except BranchBusy as e:
-            logger.debug("Branch %r was busy while publishing",
-                         e.branch_url)
+            logger.debug("Branch %r was busy while publishing", e.branch_url)
             return
         except PublishFailure as e:
             await store_publish(
@@ -1337,8 +1446,8 @@ async def publish_and_store(
             result_code="success",
             description="Success",
             merge_proposal_url=(
-                publish_result.proposal_url
-                if publish_result.proposal_url else None),
+                publish_result.proposal_url if publish_result.proposal_url else None
+            ),
             target_branch_url=publish_result.target_branch_url,
             target_branch_web_url=publish_result.target_branch_web_url,
             publish_id=publish_id,
@@ -1386,7 +1495,7 @@ async def handle_merge_proposal_list(request):
     response_obj = []
     codebase = request.match_info.get("codebase")
     campaign = request.match_info.get("campaign")
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         args = []
         query = """
     SELECT
@@ -1401,22 +1510,22 @@ async def handle_merge_proposal_list(request):
         cond = []
         if codebase is not None:
             args.append(codebase)
-            cond.append("run.codebase = $%d" % (len(args), ))
+            cond.append("run.codebase = $%d" % (len(args),))
         if campaign:
             args.append(campaign)
-            cond.append("run.suite = $%d" % (len(args), ))
+            cond.append("run.suite = $%d" % (len(args),))
         if cond:
             query += "WHERE " + " AND ".join(cond)
         query += " ORDER BY merge_proposal.url, run.finish_time DESC"
         for row in await conn.fetch(query, *args):
-            response_obj.append({"url": row['url'], "status": row['status']})
+            response_obj.append({"url": row["url"], "status": row["status"]})
     return web.json_response(response_obj)
 
 
 @routes.get("/absorbed")
 async def handle_absorbed(request):
     try:
-        since = datetime.fromisoformat(request.query['since'])
+        since = datetime.fromisoformat(request.query["since"])
     except KeyError:
         extra = ""
         args = []
@@ -1425,7 +1534,7 @@ async def handle_absorbed(request):
         extra = " AND absorbed_at >= $%d" % len(args)
 
     ret = []
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         query = """\
 SELECT
    change_set,
@@ -1439,59 +1548,75 @@ SELECT
 FROM absorbed_runs
 """
         for row in await conn.fetch(query + extra, *args):
-            ret.append({
-                'mode': row['mode'],
-                'change_set': row['change_set'],
-                'delay': row['delay'].total_seconds,
-                'campaign': row['campaign'],
-                'merged-by': row['merged_by'],
-                'merged-by-url': await asyncio.to_thread(get_merged_by_user_url(
-                    row['merge_proposal_url'], row['merged_by'])),
-                'absorbed-at': row['absorbed-at'],
-                'id': row['id'],
-                'result': row['result'],
-            })
+            ret.append(
+                {
+                    "mode": row["mode"],
+                    "change_set": row["change_set"],
+                    "delay": row["delay"].total_seconds,
+                    "campaign": row["campaign"],
+                    "merged-by": row["merged_by"],
+                    "merged-by-url": await asyncio.to_thread(
+                        get_merged_by_user_url(
+                            row["merge_proposal_url"], row["merged_by"]
+                        )
+                    ),
+                    "absorbed-at": row["absorbed-at"],
+                    "id": row["id"],
+                    "result": row["result"],
+                }
+            )
     return web.json_response(ret)
 
 
 @routes.get("/policy/{name}", name="get-policy")
 async def handle_policy_get(request):
     name = request.match_info["name"]
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * "
-            "FROM named_publish_policy WHERE name = $1", name)
+            "SELECT * " "FROM named_publish_policy WHERE name = $1", name
+        )
     if not row:
         return web.json_response({"reason": "Publish policy not found"}, status=404)
-    return web.json_response({
-        "rate_limit_bucket": row["rate_limit_bucket"],
-        "per_branch": {
-            p['role']: {
-                'mode': p['mode'],
-                'max_frequency_days': p['frequency_days'],
-            } for p in row['publish']},
-    })
+    return web.json_response(
+        {
+            "rate_limit_bucket": row["rate_limit_bucket"],
+            "per_branch": {
+                p["role"]: {
+                    "mode": p["mode"],
+                    "max_frequency_days": p["frequency_days"],
+                }
+                for p in row["publish"]
+            },
+        }
+    )
 
 
 @routes.get("/policy", name="get-full-policy")
 async def handle_full_policy_get(request):
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         rows = await conn.fetch("SELECT * FROM named_publish_policy")
-    return web.json_response({row['name']: {
-        "rate_limit_bucket": row["rate_limit_bucket"],
-        "per_branch": {
-            p['role']: {
-                'mode': p['mode'],
-                'max_frequency_days': p['frequency_days'],
-            } for p in row['per_branch_policy']},
-    } for row in rows})
+    return web.json_response(
+        {
+            row["name"]: {
+                "rate_limit_bucket": row["rate_limit_bucket"],
+                "per_branch": {
+                    p["role"]: {
+                        "mode": p["mode"],
+                        "max_frequency_days": p["frequency_days"],
+                    }
+                    for p in row["per_branch_policy"]
+                },
+            }
+            for row in rows
+        }
+    )
 
 
 @routes.put("/policy/{name}", name="put-policy")
 async def handle_policy_put(request):
     name = request.match_info["name"]
     policy = await request.json()
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         await conn.execute(
             "INSERT INTO named_publish_policy "
             "(name, per_branch_policy, rate_limit_bucket) "
@@ -1499,9 +1624,13 @@ async def handle_policy_put(request):
             "DO UPDATE SET "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
             "rate_limit_bucket = EXCLUDED.rate_limit_bucket",
-            name, [(r, v['mode'], v.get('max_frequency_days'))
-                   for (r, v) in policy['per_branch'].items()],
-            policy.get('rate_limit_bucket'))
+            name,
+            [
+                (r, v["mode"], v.get("max_frequency_days"))
+                for (r, v) in policy["per_branch"].items()
+            ],
+            policy.get("rate_limit_bucket"),
+        )
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1509,22 +1638,31 @@ async def handle_policy_put(request):
 @routes.put("/policy", name="put-full-policy")
 async def handle_full_policy_put(request):
     policy = await request.json()
-    async with request.app['db'].acquire() as conn, conn.transaction():
+    async with request.app["db"].acquire() as conn, conn.transaction():
         entries = [
-            (name, [(r, b['mode'], b.get('max_frequency_days'))
-                    for (r, b) in v['per_branch'].items()],
-             v.get('rate_limit_bucket'))
-            for (name, v) in policy.items()]
+            (
+                name,
+                [
+                    (r, b["mode"], b.get("max_frequency_days"))
+                    for (r, b) in v["per_branch"].items()
+                ],
+                v.get("rate_limit_bucket"),
+            )
+            for (name, v) in policy.items()
+        ]
         await conn.executemany(
             "INSERT INTO named_publish_policy "
             "(name, per_branch_policy, rate_limit_bucket) "
             "VALUES ($1, $2, $3) ON CONFLICT (name) "
             "DO UPDATE SET "
             "per_branch_policy = EXCLUDED.per_branch_policy, "
-            "rate_limit_bucket = EXCLUDED.rate_limit_bucket", entries)
+            "rate_limit_bucket = EXCLUDED.rate_limit_bucket",
+            entries,
+        )
         await conn.execute(
             "DELETE FROM named_publish_policy WHERE NOT (name = ANY($1::text[]))",
-            policy.keys())
+            policy.keys(),
+        )
     # TODO(jelmer): Call consider_publish_run
     return web.json_response({})
 
@@ -1532,11 +1670,9 @@ async def handle_full_policy_put(request):
 @routes.delete("/policy/{name}", name="delete-policy")
 async def handle_policy_del(request):
     name = request.match_info["name"]
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         try:
-            await conn.execute(
-                "DELETE FROM named_publish_policy WHERE name = $1",
-                name)
+            await conn.execute("DELETE FROM named_publish_policy WHERE name = $1", name)
         except asyncpg.ForeignKeyViolationError:
             # There's a candidate that still references this
             # publish policy
@@ -1547,65 +1683,82 @@ async def handle_policy_del(request):
 @routes.post("/merge-proposal", name="merge-proposal")
 async def update_merge_proposal_request(request):
     post = await request.post()
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                'SELECT status FROM merge_proposal WHERE url = $1', post['url'])
-            if row['status'] in CLOSED_STATUSES and post['status'] in CLOSED_STATUSES:
+                "SELECT status FROM merge_proposal WHERE url = $1", post["url"]
+            )
+            if row["status"] in CLOSED_STATUSES and post["status"] in CLOSED_STATUSES:
                 pass
-            elif row['status'] == 'open' and post['status'] in CLOSED_STATUSES:
-                mp = await asyncio.to_thread(get_proposal_by_url, post['url'])
-                if post.get('comment'):
-                    logger.info('%s: %s', mp.url, post['comment'], extra={'mp_url': mp.url})
+            elif row["status"] == "open" and post["status"] in CLOSED_STATUSES:
+                mp = await asyncio.to_thread(get_proposal_by_url, post["url"])
+                if post.get("comment"):
+                    logger.info(
+                        "%s: %s", mp.url, post["comment"], extra={"mp_url": mp.url}
+                    )
                     try:
-                        await asyncio.to_thread(mp.post_comment, post['comment'])
+                        await asyncio.to_thread(mp.post_comment, post["comment"])
                     except PermissionDenied as e:
                         logger.warning(
-                            "Permission denied posting comment to %s: %s", mp.url, e,
-                            extra={'mp_url': mp.url})
+                            "Permission denied posting comment to %s: %s",
+                            mp.url,
+                            e,
+                            extra={"mp_url": mp.url},
+                        )
 
                 try:
                     await asyncio.to_thread(mp.close)
                 except PermissionDenied as e:
                     logger.warning(
-                        "Permission denied closing merge request %s: %s", mp.url, e,
-                        extra={'mp_url': mp.url})
+                        "Permission denied closing merge request %s: %s",
+                        mp.url,
+                        e,
+                        extra={"mp_url": mp.url},
+                    )
                     raise
             else:
                 raise web.HTTPBadRequest(
-                    text=f"no transition from {row['url']} to {post['url']}")
+                    text=f"no transition from {row['url']} to {post['url']}"
+                )
 
             await conn.execute(
                 "UPDATE merge_proposal SET status = $1 WHERE url = $2",
-                post['status'], post['url'])
+                post["status"],
+                post["url"],
+            )
 
-    return web.Response(text='updated')
+    return web.Response(text="updated")
 
 
 @routes.post("/consider/{run_id}", name="consider")
 async def consider_request(request):
-    run_id = request.match_info['run_id']
+    run_id = request.match_info["run_id"]
 
     async def run():
-        async with request.app['db'].acquire() as conn:
-            async for (run, rate_limit_bucket,
-                       command, unpublished_branches) in iter_publish_ready(
-                    conn,
-                    run_id=run_id):
+        async with request.app["db"].acquire() as conn:
+            async for (
+                run,
+                rate_limit_bucket,
+                command,
+                unpublished_branches,
+            ) in iter_publish_ready(conn, run_id=run_id):
                 break
             else:
                 return
             await consider_publish_run(
-                conn, redis=request.app['redis'],
-                config=request.app['config'],
-                publish_worker=request.app['publish_worker'],
-                vcs_managers=request.app['vcs_managers'],
-                bucket_rate_limiter=request.app['bucket_rate_limiter'],
+                conn,
+                redis=request.app["redis"],
+                config=request.app["config"],
+                publish_worker=request.app["publish_worker"],
+                vcs_managers=request.app["vcs_managers"],
+                bucket_rate_limiter=request.app["bucket_rate_limiter"],
                 run=run,
                 command=command,
                 rate_limit_bucket=rate_limit_bucket,
                 unpublished_branches=unpublished_branches,
-                require_binary_diff=request.app['require_binary_diff'])
+                require_binary_diff=request.app["require_binary_diff"],
+            )
+
     await spawn(request, run())
     return web.json_response({}, status=200)
 
@@ -1622,17 +1775,22 @@ async def get_publish_policy(conn: asyncpg.Connection, codebase: str, campaign: 
     )
     if row:
         return (
-            {v['role']: (v['mode'], v['frequency_days'])
-             for v in row['per_branch_policy']},
-            row['command'], row['rate_limit_bucket'])
+            {
+                v["role"]: (v["mode"], v["frequency_days"])
+                for v in row["per_branch_policy"]
+            },
+            row["command"],
+            row["rate_limit_bucket"],
+        )
     return None, None, None
 
 
 @routes.get("/publish/{publish_id}", name="publish-details")
 async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
-    async with request.app['db'].acquire() as conn:
-        row = await conn.fetchrow("""
+    async with request.app["db"].acquire() as conn:
+        row = await conn.fetchrow(
+            """
 SELECT
   codebase,
   branch_name,
@@ -1647,40 +1805,43 @@ FROM publish
 LEFT JOIN codebase
 ON codebase.branch_url = publish.target_branch_url
 WHERE id = $1
-""", publish_id)
+""",
+            publish_id,
+        )
         if row:
             raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
     return web.json_response(
         {
-            "codebase": row['codebase'],
-            "target_branch_url": row['target_branch_url'],
-            "branch": row['branch_name'],
-            "main_branch_revision": row['main_branch_revision'],
-            "revision": row['revision'],
-            "mode": row['mode'],
-            "merge_proposal_url": row['merge_proposal_url'],
-            "result_code": row['result_code'],
-            "description": row['description'],
+            "codebase": row["codebase"],
+            "target_branch_url": row["target_branch_url"],
+            "branch": row["branch_name"],
+            "main_branch_revision": row["main_branch_revision"],
+            "revision": row["revision"],
+            "mode": row["mode"],
+            "merge_proposal_url": row["merge_proposal_url"],
+            "result_code": row["result_code"],
+            "description": row["description"],
         }
     )
 
 
-@routes.post("/{campaign}/{codebase}/publish", name='publish')
+@routes.post("/{campaign}/{codebase}/publish", name="publish")
 async def publish_request(request):
-    vcs_managers = request.app['vcs_managers']
-    bucket_rate_limiter = request.app['bucket_rate_limiter']
+    vcs_managers = request.app["vcs_managers"]
+    bucket_rate_limiter = request.app["bucket_rate_limiter"]
     codebase = request.match_info["codebase"]
     campaign = request.match_info["campaign"]
     role = request.query.get("role")
     post = await request.post()
     mode = post.get("mode")
-    async with request.app['db'].acquire() as conn:
+    async with request.app["db"].acquire() as conn:
         run = await get_last_effective_run(conn, codebase, campaign)
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy, _, rate_limit_bucket = (
-            await get_publish_policy(conn, codebase, campaign))
+        publish_policy, _, rate_limit_bucket = await get_publish_policy(
+            conn, codebase, campaign
+        )
 
         logger.info("Handling request to publish %s/%s", codebase, campaign)
 
@@ -1707,10 +1868,12 @@ async def publish_request(request):
         await spawn(
             request,
             publish_and_store(
-                db=request.app['db'],
-                redis=request.app['redis'],
-                campaign_config=get_campaign_config(request.app['config'], run.campaign),
-                publish_worker=request.app['publish_worker'],
+                db=request.app["db"],
+                redis=request.app["redis"],
+                campaign_config=get_campaign_config(
+                    request.app["config"], run.campaign
+                ),
+                publish_worker=request.app["publish_worker"],
                 publish_id=publish_id,
                 run=run,
                 mode=mode,
@@ -1721,7 +1884,8 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requester=post.get("requester"),
-            ))
+            ),
+        )
 
     if not publish_ids:
         return web.json_response(
@@ -1733,7 +1897,7 @@ async def publish_request(request):
     )
 
 
-@routes.get("/credentials", name='credentials')
+@routes.get("/credentials", name="credentials")
 async def credentials_request(request):
     ssh_keys = []
     for entry in os.scandir(os.path.expanduser("~/.ssh")):
@@ -1741,8 +1905,8 @@ async def credentials_request(request):
             with open(entry.path) as f:
                 ssh_keys.extend([line.strip() for line in f.readlines()])
     pgp_keys = []
-    for gpg_entry in list(request.app['gpg'].keylist(secret=True)):
-        pgp_keys.append(request.app['gpg'].key_export_minimal(gpg_entry.fpr).decode())
+    for gpg_entry in list(request.app["gpg"].keylist(secret=True)):
+        pgp_keys.append(request.app["gpg"].key_export_minimal(gpg_entry.fpr).decode())
     hosting = []
     for name, forge_cls in forges.items():
         for instance in forge_cls.iter_instances():
@@ -1793,24 +1957,25 @@ async def create_app(
     modify_mp_limit: Optional[int] = None,
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[
-        trailing_slash_redirect, state.asyncpg_error_middleware])
+    app = web.Application(
+        middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware]
+    )
     app.router.add_routes(routes)
-    app['gpg'] = gpg.Context(armor=True)
-    app['publish_worker'] = publish_worker
-    app['vcs_managers'] = vcs_managers
-    app['db'] = db
-    app['redis'] = redis
-    app['config'] = config
+    app["gpg"] = gpg.Context(armor=True)
+    app["publish_worker"] = publish_worker
+    app["vcs_managers"] = vcs_managers
+    app["db"] = db
+    app["redis"] = redis
+    app["config"] = config
     if bucket_rate_limiter is None:
         bucket_rate_limiter = NonRateLimiter()
-    app['bucket_rate_limiter'] = bucket_rate_limiter
+    app["bucket_rate_limiter"] = bucket_rate_limiter
     if forge_rate_limiter is None:
         forge_rate_limiter = {}
-    app['forge_rate_limiter'] = forge_rate_limiter
-    app['modify_mp_limit'] = modify_mp_limit
-    app['push_limit'] = push_limit
-    app['require_binary_diff'] = require_binary_diff
+    app["forge_rate_limiter"] = forge_rate_limiter
+    app["modify_mp_limit"] = modify_mp_limit
+    app["push_limit"] = push_limit
+    app["require_binary_diff"] = require_binary_diff
     setup_metrics(app)
     setup_aiohttp_apispec(
         app=app,
@@ -1825,10 +1990,12 @@ async def create_app(
 
 async def run_web_server(listen_addr, port, **kwargs):
     app = await create_app(**kwargs)
-    config = kwargs['config']
+    config = kwargs["config"]
     endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
+        tracer = await aiozipkin.create(
+            config.zipkin_address, endpoint, sample_rate=0.1
+        )
     else:
         tracer = await aiozipkin.create_custom(endpoint)
 
@@ -1860,26 +2027,26 @@ async def get_mp_status(mp):
         return "open"
 
 
-@routes.post("/scan", name='scan')
+@routes.post("/scan", name="scan")
 async def scan_request(request):
     async def scan():
-        async with request.app['db'].acquire() as conn:
+        async with request.app["db"].acquire() as conn:
             await check_existing(
                 conn=conn,
-                redis=request.app['redis'],
-                config=request.app['config'],
-                publish_worker=request.app['publish_worker'],
-                bucket_rate_limiter=request.app['bucket_rate_limiter'],
-                forge_rate_limiter=request.app['forge_rate_limiter'],
-                vcs_managers=request.app['vcs_managers'],
-                modify_limit=request.app['modify_mp_limit'],
+                redis=request.app["redis"],
+                config=request.app["config"],
+                publish_worker=request.app["publish_worker"],
+                bucket_rate_limiter=request.app["bucket_rate_limiter"],
+                forge_rate_limiter=request.app["forge_rate_limiter"],
+                vcs_managers=request.app["vcs_managers"],
+                modify_limit=request.app["modify_mp_limit"],
             )
 
     await spawn(request, scan())
     return web.Response(status=202, text="Scan started.")
 
 
-@routes.post("/check-stragglers", name='check-stragglers')
+@routes.post("/check-stragglers", name="check-stragglers")
 async def refresh_stragglers(request):
     async def scan(db, redis, urls):
         async with db.acquire() as conn:
@@ -1887,15 +2054,15 @@ async def refresh_stragglers(request):
             for url in urls:
                 await check_straggler(proposal_info_manager, url)
 
-    ndays = int(request.query.get('ndays', 5))
-    async with request.app['db'].acquire() as conn:
-        proposal_info_manager = ProposalInfoManager(conn, request.app['redis'])
+    ndays = int(request.query.get("ndays", 5))
+    async with request.app["db"].acquire() as conn:
+        proposal_info_manager = ProposalInfoManager(conn, request.app["redis"])
         urls = await proposal_info_manager.iter_outdated_proposal_info_urls(ndays)
-    await spawn(request, scan(request.app['db'], request.app['redis'], urls))
+    await spawn(request, scan(request.app["db"], request.app["redis"], urls))
     return web.json_response(urls)
 
 
-@routes.post("/refresh-status", name='refresh-status')
+@routes.post("/refresh-status", name="refresh-status")
 async def refresh_proposal_status_request(request):
     post = await request.post()
     try:
@@ -1906,18 +2073,18 @@ async def refresh_proposal_status_request(request):
 
     async def scan():
         mp = await asyncio.to_thread(get_proposal_by_url, url)
-        async with request.app['db'].acquire() as conn:
+        async with request.app["db"].acquire() as conn:
             status = await get_mp_status(mp)
             try:
                 await check_existing_mp(
                     conn=conn,
-                    redis=request.app['redis'],
-                    config=request.app['config'],
-                    publish_worker=request.app['publish_worker'],
+                    redis=request.app["redis"],
+                    config=request.app["config"],
+                    publish_worker=request.app["publish_worker"],
                     mp=mp,
                     status=status,
-                    vcs_managers=request.app['vcs_managers'],
-                    bucket_rate_limiter=request.app['bucket_rate_limiter'],
+                    vcs_managers=request.app["vcs_managers"],
+                    bucket_rate_limiter=request.app["bucket_rate_limiter"],
                 )
             except NoRunForMergeProposal as e:
                 logger.warning(
@@ -1925,23 +2092,23 @@ async def refresh_proposal_status_request(request):
                 )
             except BranchRateLimited:
                 logger.warning("Rate-limited accessing %s. ", mp.url)
+
     await spawn(request, scan())
     return web.Response(status=202, text="Refresh of proposal started.")
 
 
-@routes.post("/autopublish", name='autopublish')
+@routes.post("/autopublish", name="autopublish")
 async def autopublish_request(request):
-
     async def autopublish():
         await publish_pending_ready(
-            db=request.app['db'],
-            redis=request.app['redis'],
-            config=request.app['config'],
-            publish_worker=request.app['publish_worker'],
-            bucket_rate_limiter=request.app['bucket_rate_limiter'],
-            vcs_managers=request.app['vcs_managers'],
-            push_limit=request.app['push_limit'],
-            require_binary_diff=request.app['require_binary_diff'],
+            db=request.app["db"],
+            redis=request.app["redis"],
+            config=request.app["config"],
+            publish_worker=request.app["publish_worker"],
+            bucket_rate_limiter=request.app["bucket_rate_limiter"],
+            vcs_managers=request.app["vcs_managers"],
+            push_limit=request.app["push_limit"],
+            require_binary_diff=request.app["require_binary_diff"],
         )
 
     await spawn(request, autopublish())
@@ -1950,25 +2117,26 @@ async def autopublish_request(request):
 
 @routes.get("/rate-limits/{bucket}", name="bucket-rate-limits")
 async def bucket_rate_limits_request(request):
-    bucket_rate_limiter = request.app['bucket_rate_limiter']
+    bucket_rate_limiter = request.app["bucket_rate_limiter"]
 
     stats = bucket_rate_limiter.get_stats()
 
-    (current_open, max_open) = stats.get(
-        request.match_info['bucket'], (None, None))
+    (current_open, max_open) = stats.get(request.match_info["bucket"], (None, None))
 
     ret = {
-        'open': current_open,
-        'max_open': max_open,
-        'remaining':
-            None if (current_open is None or max_open is None)
-            else max_open - current_open}
+        "open": current_open,
+        "max_open": max_open,
+        "remaining": None
+        if (current_open is None or max_open is None)
+        else max_open - current_open,
+    }
 
     return web.json_response(ret)
 
 
 async def get_previous_mp_status(conn, codebase: str, campaign: str):
-    rows = await conn.fetch("""\
+    rows = await conn.fetch(
+        """\
 WITH per_run_mps AS (
     SELECT run.id AS run_id, run.finish_time,
     merge_proposal.url AS mp_url, merge_proposal.status AS mp_status
@@ -1983,38 +2151,48 @@ WITH per_run_mps AS (
 SELECT mp_url, mp_status FROM per_run_mps
 WHERE run_id = (
     SELECT run_id FROM per_run_mps ORDER BY finish_time DESC LIMIT 1)
-""", codebase, campaign)
+""",
+        codebase,
+        campaign,
+    )
     return rows
 
 
 @routes.get("/rate-limits", name="rate-limits")
 async def rate_limits_request(request):
-    bucket_rate_limiter = request.app['bucket_rate_limiter']
+    bucket_rate_limiter = request.app["bucket_rate_limiter"]
 
     per_bucket = {}
-    for bucket, (current_open, max_open) in (
-            bucket_rate_limiter.get_stats().items()):
+    for bucket, (current_open, max_open) in bucket_rate_limiter.get_stats().items():
         per_bucket[bucket] = {
-            'open': current_open,
-            'max_open': max_open,
-            'remaining': (
-                None if (current_open is None or max_open is None)
-                else max_open - current_open)}
+            "open": current_open,
+            "max_open": max_open,
+            "remaining": (
+                None
+                if (current_open is None or max_open is None)
+                else max_open - current_open
+            ),
+        }
 
-    return web.json_response({
-        'proposals_per_bucket': per_bucket,
-        'per_forge': {
-            str(f): dt.isoformat()
-            for f, dt in request.app['forge_rate_limiter'].items()},
-        'push_limit': request.app['push_limit']})
+    return web.json_response(
+        {
+            "proposals_per_bucket": per_bucket,
+            "per_forge": {
+                str(f): dt.isoformat()
+                for f, dt in request.app["forge_rate_limiter"].items()
+            },
+            "push_limit": request.app["push_limit"],
+        }
+    )
 
 
-@routes.get("/blockers/{run_id}", name='blockers')
+@routes.get("/blockers/{run_id}", name="blockers")
 async def blockers_request(request):
     span = aiozipkin.request_span(request)
-    async with request.app['db'].acquire() as conn:
-        with span.new_child('sql:publish-status'):
-            run = await conn.fetchrow("""\
+    async with request.app["db"].acquire() as conn:
+        with span.new_child("sql:publish-status"):
+            run = await conn.fetchrow(
+                """\
 SELECT
   run.id AS id,
   run.codebase AS codebase,
@@ -2035,87 +2213,100 @@ INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = 
 INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
 INNER JOIN change_set ON change_set.id = run.change_set
 WHERE run.id = $1
-""", request.match_info['run_id'])
+""",
+                request.match_info["run_id"],
+            )
 
         if run is None:
-            return web.json_response({
-                'reason': 'No such publish-ready run',
-                'run_id': request.match_info['run_id']}, status=404)
+            return web.json_response(
+                {
+                    "reason": "No such publish-ready run",
+                    "run_id": request.match_info["run_id"],
+                },
+                status=404,
+            )
 
-        with span.new_child('sql:reviews'):
+        with span.new_child("sql:reviews"):
             reviews = await conn.fetch(
-                "SELECT * FROM review WHERE run_id = $1", run['id'])
+                "SELECT * FROM review WHERE run_id = $1", run["id"]
+            )
 
-        if run['revision'] is not None:
-            with span.new_child('sql:publish-attempt-count'):
+        if run["revision"] is not None:
+            with span.new_child("sql:publish-attempt-count"):
                 attempt_count = await get_publish_attempt_count(
-                    conn, run['revision'].encode('utf-8'),
-                    {"differ-unreachable"})
+                    conn, run["revision"].encode("utf-8"), {"differ-unreachable"}
+                )
         else:
             attempt_count = 0
 
-        with span.new_child('sql:last-mp'):
+        with span.new_child("sql:last-mp"):
             last_mps: list[tuple[str, str]] = await get_previous_mp_status(
-                conn, run['codebase'], run['campaign'])
+                conn, run["codebase"], run["campaign"]
+            )
     ret = {}
-    ret['success'] = {
-        'result': (run['result_code'] == 'success'),
-        'details': {'result_code': run['result_code']}}
-    ret['inactive'] = {
-        'result': not run['inactive'],
-        'details': {'inactive': run['inactive']}}
-    ret['command'] = {
-        'result': run['run_command'] == run['policy_command'],
-        'details': {
-            'correct': run['policy_command'],
-            'actual': run['run_command']}}
-    ret['publish_status'] = {
-        'result': (run['publish_status'] == 'approved'),
-        'details': {
-            'status': run['publish_status'],
-            'reviews': {review['reviewer']: {
-                'timestamp': review['reviewed_at'].isoformat(),
-                'comment': review['comment'],
-                'verdict': review['verdict']} for review in reviews}}}
+    ret["success"] = {
+        "result": (run["result_code"] == "success"),
+        "details": {"result_code": run["result_code"]},
+    }
+    ret["inactive"] = {
+        "result": not run["inactive"],
+        "details": {"inactive": run["inactive"]},
+    }
+    ret["command"] = {
+        "result": run["run_command"] == run["policy_command"],
+        "details": {"correct": run["policy_command"], "actual": run["run_command"]},
+    }
+    ret["publish_status"] = {
+        "result": (run["publish_status"] == "approved"),
+        "details": {
+            "status": run["publish_status"],
+            "reviews": {
+                review["reviewer"]: {
+                    "timestamp": review["reviewed_at"].isoformat(),
+                    "comment": review["comment"],
+                    "verdict": review["verdict"],
+                }
+                for review in reviews
+            },
+        },
+    }
 
-    next_try_time = calculate_next_try_time(
-        run['finish_time'], attempt_count)
-    ret['backoff'] = {
-        'result': datetime.utcnow() >= next_try_time,
-        'details': {
-            'attempt_count': attempt_count,
-            'next_try_time': next_try_time.isoformat()}}
+    next_try_time = calculate_next_try_time(run["finish_time"], attempt_count)
+    ret["backoff"] = {
+        "result": datetime.utcnow() >= next_try_time,
+        "details": {
+            "attempt_count": attempt_count,
+            "next_try_time": next_try_time.isoformat(),
+        },
+    }
 
     # TODO(jelmer): include forge rate limits?
 
-    ret['propose_rate_limit'] = {
-        'details': {
-            'bucket': run['rate_limit_bucket']}}
+    ret["propose_rate_limit"] = {"details": {"bucket": run["rate_limit_bucket"]}}
     try:
-        request.app['bucket_rate_limiter'].check_allowed(run['rate_limit_bucket'])
+        request.app["bucket_rate_limiter"].check_allowed(run["rate_limit_bucket"])
     except BucketRateLimited as e:
-        ret['propose_rate_limit']['result'] = False
-        ret['propose_rate_limit']['details'] = {
-            'open': e.open_mps,
-            'max_open': e.max_open_mps}
+        ret["propose_rate_limit"]["result"] = False
+        ret["propose_rate_limit"]["details"] = {
+            "open": e.open_mps,
+            "max_open": e.max_open_mps,
+        }
     except RateLimited:
-        ret['propose_rate_limit']['result'] = False
+        ret["propose_rate_limit"]["result"] = False
     else:
-        ret['propose_rate_limit']['result'] = True
+        ret["propose_rate_limit"]["result"] = True
 
-    ret['change_set'] = {
-        'result': (run['change_set_state'] in ('publishing', 'ready')),
-        'details': {
-            'change_set_id': run['change_set'],
-            'change_set_state': run['change_set_state']}}
+    ret["change_set"] = {
+        "result": (run["change_set_state"] in ("publishing", "ready")),
+        "details": {
+            "change_set_id": run["change_set"],
+            "change_set_state": run["change_set_state"],
+        },
+    }
 
-    ret['previous_mp'] = {
-        'result': all(last_mp[1] not in ('rejected', 'closed')
-                      for last_mp in last_mps),
-        'details': [{
-            'url': last_mp[0],
-            'status': last_mp[1]
-        } for last_mp in last_mps]
+    ret["previous_mp"] = {
+        "result": all(last_mp[1] not in ("rejected", "closed") for last_mp in last_mps),
+        "details": [{"url": last_mp[0], "status": last_mp[1]} for last_mp in last_mps],
     }
 
     return web.json_response(ret)
@@ -2159,7 +2350,8 @@ async def process_queue_loop(
                 bucket_rate_limiter=bucket_rate_limiter,
                 vcs_managers=vcs_managers,
                 push_limit=push_limit,
-                require_binary_diff=require_binary_diff)
+                require_binary_diff=require_binary_diff,
+            )
         cycle_duration = datetime.utcnow() - cycle_start
         to_wait = max(0, interval - cycle_duration.total_seconds())
         logger.info("Waiting %d seconds for next cycle.", to_wait)
@@ -2199,7 +2391,8 @@ LIMIT 1
 
 
 async def get_merge_proposal_run(
-        conn: asyncpg.Connection, mp_url: str) -> asyncpg.Record:
+    conn: asyncpg.Connection, mp_url: str
+) -> asyncpg.Record:
     query = """
 SELECT
     run.id AS id,
@@ -2224,7 +2417,6 @@ LIMIT 1
 
 @dataclass
 class ProposalInfo:
-
     can_be_merged: Optional[bool]
     status: str
     revision: bytes
@@ -2251,9 +2443,10 @@ WHERE rb.revision = $1 AND run.codebase is not null
 
 
 async def guess_rate_limit_bucket(
-        conn: asyncpg.Connection, codebase: str, source_branch_name: str):
+    conn: asyncpg.Connection, codebase: str, source_branch_name: str
+):
     # For now, just assume that source_branch_name is campaign
-    campaign = source_branch_name.split('/')[0]
+    campaign = source_branch_name.split("/")[0]
     query = """\
 SELECT named_publish_policy.rate_limit_bucket FROM candidate
 INNER JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
@@ -2263,8 +2456,10 @@ WHERE candidate.suite = $1 AND candidate.codebase = $2
 
 
 async def guess_codebase_from_branch_url(
-        conn: asyncpg.Connection, url: str,
-        possible_transports: Optional[list[Transport]] = None):
+    conn: asyncpg.Connection,
+    url: str,
+    possible_transports: Optional[list[Transport]] = None,
+):
     # TODO(jelmer): use codebase table
     query = """
 SELECT
@@ -2275,52 +2470,63 @@ WHERE
   TRIM(trailing '/' from branch_url) = ANY($1::text[])
 ORDER BY length(branch_url) DESC
 """
-    repo_url, params = urlutils.split_segment_parameters(url.rstrip('/'))
+    repo_url, params = urlutils.split_segment_parameters(url.rstrip("/"))
     try:
-        branch = urlutils.unescape(params['branch'])
+        branch = urlutils.unescape(params["branch"])
     except KeyError:
         branch = None
     options = [
-        url.rstrip('/'),
-        repo_url.rstrip('/'),
+        url.rstrip("/"),
+        repo_url.rstrip("/"),
     ]
     result = await conn.fetchrow(query, options)
     if result is None:
         return None
 
-    if url.rstrip('/') == result['branch_url'].rstrip('/'):
-        return result['codebase']
+    if url.rstrip("/") == result["branch_url"].rstrip("/"):
+        return result["codebase"]
 
     source_branch = await asyncio.to_thread(
         open_branch,
-        result['branch_url'].rstrip('/'),
-        possible_transports=possible_transports)
-    if (source_branch.controldir.user_url.rstrip('/') != url.rstrip('/')
-            and source_branch.name != branch):
+        result["branch_url"].rstrip("/"),
+        possible_transports=possible_transports,
+    )
+    if (
+        source_branch.controldir.user_url.rstrip("/") != url.rstrip("/")
+        and source_branch.name != branch
+    ):
         logger.info(
-            'Did not resolve branch URL to codebase: %r (%r) != %r (%r)',
-            source_branch.user_url, source_branch.name, url, branch)
+            "Did not resolve branch URL to codebase: %r (%r) != %r (%r)",
+            source_branch.user_url,
+            source_branch.name,
+            url,
+            branch,
+        )
         return None
-    return result['codebase']
+    return result["codebase"]
 
 
 def find_campaign_by_branch_name(config, branch_name):
     for campaign in config.campaign:
         if campaign.branch_name == branch_name:
-            return campaign.name, 'main'
+            return campaign.name, "main"
     return None, None
 
 
 class ProposalInfoManager:
-
     def __init__(self, conn: asyncpg.Connection, redis) -> None:
         self.conn = conn
         self.redis = redis
 
     async def iter_outdated_proposal_info_urls(self, days):
-        return [row['url'] for row in await self.conn.fetch(
-            "SELECT url FROM merge_proposal WHERE "
-            "last_scanned is NULL OR now() - last_scanned > interval '%d days'" % days)]
+        return [
+            row["url"]
+            for row in await self.conn.fetch(
+                "SELECT url FROM merge_proposal WHERE "
+                "last_scanned is NULL OR now() - last_scanned > interval '%d days'"
+                % days
+            )
+        ]
 
     async def get_proposal_info(self, url) -> Optional[ProposalInfo]:
         row = await self.conn.fetchrow(
@@ -2342,38 +2548,54 @@ class ProposalInfoManager:
         if not row:
             return None
         return ProposalInfo(
-            rate_limit_bucket=row['rate_limit_bucket'],
-            revision=row['revision'].encode("utf-8") if row[1] else None,
-            status=row['status'],
-            target_branch_url=row['target_branch_url'],
-            can_be_merged=row['can_be_merged'],
-            codebase=row['codebase'])
+            rate_limit_bucket=row["rate_limit_bucket"],
+            revision=row["revision"].encode("utf-8") if row[1] else None,
+            status=row["status"],
+            target_branch_url=row["target_branch_url"],
+            can_be_merged=row["can_be_merged"],
+            codebase=row["codebase"],
+        )
 
     async def delete_proposal_info(self, url):
-        await self.conn.execute('DELETE FROM merge_proposal WHERE url = $1', url)
+        await self.conn.execute("DELETE FROM merge_proposal WHERE url = $1", url)
 
     async def update_canonical_url(self, old_url: str, canonical_url: str):
         async with self.conn.transaction():
             old_url = await self.conn.fetchval(
-                'UPDATE merge_proposal canonical SET codebase = COALESCE(canonical.codebase, old.codebase), '
-                'rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) '
-                'FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url',
-                str(old_url), str(canonical_url))
+                "UPDATE merge_proposal canonical SET codebase = COALESCE(canonical.codebase, old.codebase), "
+                "rate_limit_bucket = COALESCE(canonical.rate_limit_bucket, old.rate_limit_bucket) "
+                "FROM merge_proposal old WHERE old.url = $1 AND canonical.url = $2 RETURNING old.url",
+                str(old_url),
+                str(canonical_url),
+            )
             await self.conn.execute(
-                'UPDATE publish SET merge_proposal_url = $1 WHERE merge_proposal_url = $2',
-                str(canonical_url), str(old_url))
+                "UPDATE publish SET merge_proposal_url = $1 WHERE merge_proposal_url = $2",
+                str(canonical_url),
+                str(old_url),
+            )
             if old_url:
                 await self.conn.execute(
-                    'DELETE FROM merge_proposal WHERE url = $1', str(old_url))
+                    "DELETE FROM merge_proposal WHERE url = $1", str(old_url)
+                )
             else:
                 await self.conn.execute(
                     "UPDATE merge_proposal SET url = $1 WHERE url = $2",
-                    str(canonical_url), str(old_url))
+                    str(canonical_url),
+                    str(old_url),
+                )
 
     async def update_proposal_info(
-            self, mp, *, status, revision, codebase, target_branch_url,
-            campaign, can_be_merged: Optional[bool],
-            rate_limit_bucket: Optional[str]):
+        self,
+        mp,
+        *,
+        status,
+        revision,
+        codebase,
+        target_branch_url,
+        campaign,
+        can_be_merged: Optional[bool],
+        rate_limit_bucket: Optional[str],
+    ):
         if status == "closed":
             # TODO(jelmer): Check if changes were applied manually and mark
             # as applied rather than closed?
@@ -2381,7 +2603,8 @@ class ProposalInfoManager:
         if status == "merged":
             merged_by = await asyncio.to_thread(mp.get_merged_by)
             merged_by_url = await asyncio.to_thread(
-                get_merged_by_user_url, mp.url, merged_by)
+                get_merged_by_user_url, mp.url, merged_by
+            )
             merged_at = await asyncio.to_thread(mp.get_merged_at)
             if merged_at is not None:
                 merged_at = merged_at.replace(tzinfo=None)
@@ -2407,82 +2630,112 @@ class ProposalInfoManager:
                   can_be_merged = EXCLUDED.can_be_merged,
                   rate_limit_bucket = EXCLUDED.rate_limit_bucket,
                   codebase = EXCLUDED.codebase
-                """, mp.url, status,
+                """,
+                mp.url,
+                status,
                 revision.decode("utf-8") if revision is not None else None,
-                merged_by, merged_at, target_branch_url,
-                can_be_merged, rate_limit_bucket, codebase)
+                merged_by,
+                merged_at,
+                target_branch_url,
+                can_be_merged,
+                rate_limit_bucket,
+                codebase,
+            )
             if revision:
-                await self.conn.execute("""
+                await self.conn.execute(
+                    """
                 UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
-                """, (status == 'merged'), revision.decode('utf-8'))
+                """,
+                    (status == "merged"),
+                    revision.decode("utf-8"),
+                )
 
         # TODO(jelmer): Check if the change_set should be marked as published
 
-        await self.redis.publish('merge-proposal', json.dumps({
-            "url": mp.url,
-            "target_branch_url": target_branch_url,
-            "rate_limit_bucket": rate_limit_bucket,
-            "status": status,
-            "codebase": codebase,
-            "merged_by": merged_by,
-            "merged_by_url": merged_by_url,
-            "merged_at": str(merged_at),
-            "campaign": campaign,
-        }))
+        await self.redis.publish(
+            "merge-proposal",
+            json.dumps(
+                {
+                    "url": mp.url,
+                    "target_branch_url": target_branch_url,
+                    "rate_limit_bucket": rate_limit_bucket,
+                    "status": status,
+                    "codebase": codebase,
+                    "merged_by": merged_by,
+                    "merged_by_url": merged_by_url,
+                    "merged_at": str(merged_at),
+                    "campaign": campaign,
+                }
+            ),
+        )
 
 
-async def abandon_mp(proposal_info_manager: ProposalInfoManager,
-                     mp: MergeProposal, revision: bytes,
-                     codebase: Optional[str], target_branch_url: str,
-                     campaign: Optional[str], can_be_merged: Optional[bool],
-                     rate_limit_bucket: Optional[str],
-                     comment: Optional[str]):
+async def abandon_mp(
+    proposal_info_manager: ProposalInfoManager,
+    mp: MergeProposal,
+    revision: bytes,
+    codebase: Optional[str],
+    target_branch_url: str,
+    campaign: Optional[str],
+    can_be_merged: Optional[bool],
+    rate_limit_bucket: Optional[str],
+    comment: Optional[str],
+):
     if comment:
-        logger.info('%s: %s', mp.url, comment)
+        logger.info("%s: %s", mp.url, comment)
     await proposal_info_manager.update_proposal_info(
-        mp, status="abandoned", revision=revision,
-        target_branch_url=target_branch_url, campaign=campaign,
+        mp,
+        status="abandoned",
+        revision=revision,
+        target_branch_url=target_branch_url,
+        campaign=campaign,
         codebase=codebase,
-        rate_limit_bucket=rate_limit_bucket, can_be_merged=can_be_merged)
+        rate_limit_bucket=rate_limit_bucket,
+        can_be_merged=can_be_merged,
+    )
     if comment:
         try:
             await asyncio.to_thread(mp.post_comment, comment)
         except PermissionDenied as e:
-            logger.warning(
-                "Permission denied posting comment to %s: %s", mp.url, e)
+            logger.warning("Permission denied posting comment to %s: %s", mp.url, e)
 
     try:
         await asyncio.to_thread(mp.close)
     except PermissionDenied as e:
-        logger.warning(
-            "Permission denied closing merge request %s: %s", mp.url, e
-        )
+        logger.warning("Permission denied closing merge request %s: %s", mp.url, e)
         raise
 
 
-async def close_applied_mp(proposal_info_manager, mp: MergeProposal,
-                           revision: bytes, codebase: Optional[str],
-                           target_branch_url: str,
-                           campaign: Optional[str], can_be_merged: Optional[bool],
-                           rate_limit_bucket: Optional[str],
-                           comment: Optional[str]):
-
+async def close_applied_mp(
+    proposal_info_manager,
+    mp: MergeProposal,
+    revision: bytes,
+    codebase: Optional[str],
+    target_branch_url: str,
+    campaign: Optional[str],
+    can_be_merged: Optional[bool],
+    rate_limit_bucket: Optional[str],
+    comment: Optional[str],
+):
     await proposal_info_manager.update_proposal_info(
-        mp, status="applied", revision=revision, codebase=codebase,
-        target_branch_url=target_branch_url, campaign=campaign,
-        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket)
+        mp,
+        status="applied",
+        revision=revision,
+        codebase=codebase,
+        target_branch_url=target_branch_url,
+        campaign=campaign,
+        can_be_merged=can_be_merged,
+        rate_limit_bucket=rate_limit_bucket,
+    )
     try:
         await asyncio.to_thread(mp.post_comment, comment)
     except PermissionDenied as e:
-        logger.warning(
-            "Permission denied posting comment to %s: %s", mp.url, e)
+        logger.warning("Permission denied posting comment to %s: %s", mp.url, e)
 
     try:
         await asyncio.to_thread(mp.close)
     except PermissionDenied as e:
-        logger.warning(
-            "Permission denied closing merge request %s: %s", mp.url, e
-        )
+        logger.warning("Permission denied closing merge request %s: %s", mp.url, e)
         raise
 
 
@@ -2498,14 +2751,12 @@ async def check_straggler(proposal_info_manager, url):
     async with ClientSession() as session:
         async with session.get(url) as resp:
             if resp.status == 200 and resp.url != url:
-                await proposal_info_manager.update_canonical_url(
-                    url, resp.url)
+                await proposal_info_manager.update_canonical_url(url, resp.url)
             if resp.status == 404:
                 # TODO(jelmer): Keep it but leave a tumbestone around?
                 await proposal_info_manager.delete_proposal_info(url)
             else:
-                logger.warning(
-                    'Got status %d loading straggler %r', resp.status, url)
+                logger.warning("Got status %d loading straggler %r", resp.status, url)
 
 
 async def check_existing_mp(
@@ -2540,16 +2791,16 @@ async def check_existing_mp(
 
     if revision is None:
         if source_branch_url is None:
-            logger.warning(
-                "No source branch for %r", mp,
-                extra={'mp_url': mp.url})
+            logger.warning("No source branch for %r", mp, extra={"mp_url": mp.url})
             revision = None
             source_branch_name = None
         else:
             try:
                 source_branch = await asyncio.to_thread(
                     open_branch,
-                    source_branch_url, possible_transports=possible_transports)
+                    source_branch_url,
+                    possible_transports=possible_transports,
+                )
             except (BranchMissing, BranchUnavailable):
                 revision = None
                 source_branch_name = None
@@ -2568,8 +2819,8 @@ async def check_existing_mp(
     target_branch_url = await asyncio.to_thread(mp.get_target_branch_url)
     if rate_limit_bucket is None:
         codebase = await guess_codebase_from_branch_url(
-            conn, target_branch_url,
-            possible_transports=possible_transports)
+            conn, target_branch_url, possible_transports=possible_transports
+        )
         if codebase is None:
             if revision is not None:
                 (
@@ -2578,40 +2829,52 @@ async def check_existing_mp(
                 ) = await guess_proposal_info_from_revision(conn, revision)
             if codebase is None:
                 logger.warning(
-                    "No codebase known for %s (%s)", mp.url, target_branch_url,
-                    extra={'mp_url': mp.url}
+                    "No codebase known for %s (%s)",
+                    mp.url,
+                    target_branch_url,
+                    extra={"mp_url": mp.url},
                 )
             else:
                 logger.info(
                     "Guessed codebase name (%s) for %s based on revision.",
                     codebase,
                     mp.url,
-                    extra={'mp_url': mp.url}
+                    extra={"mp_url": mp.url},
                 )
         else:
             if source_branch_name is not None:
                 rate_limit_bucket = await guess_rate_limit_bucket(
-                    conn, codebase, source_branch_name)
-    if old_proposal_info and old_proposal_info.status in ("abandoned", "applied", "rejected") and status == "closed":
+                    conn, codebase, source_branch_name
+                )
+    if (
+        old_proposal_info
+        and old_proposal_info.status in ("abandoned", "applied", "rejected")
+        and status == "closed"
+    ):
         status = old_proposal_info.status
 
     if old_proposal_info is None or (
-            old_proposal_info.status != status
-            or revision != old_proposal_info.revision
-            or target_branch_url != old_proposal_info.target_branch_url
-            or rate_limit_bucket != old_proposal_info.rate_limit_bucket
-            or can_be_merged != old_proposal_info.can_be_merged):
+        old_proposal_info.status != status
+        or revision != old_proposal_info.revision
+        or target_branch_url != old_proposal_info.target_branch_url
+        or rate_limit_bucket != old_proposal_info.rate_limit_bucket
+        or can_be_merged != old_proposal_info.can_be_merged
+    ):
         mp_run = await get_merge_proposal_run(conn, mp.url)
         await proposal_info_manager.update_proposal_info(
-            mp, status=status, revision=revision,
+            mp,
+            status=status,
+            revision=revision,
             codebase=codebase,
             target_branch_url=target_branch_url,
-            campaign=mp_run['campaign'] if mp_run else None,
-            can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket)
+            campaign=mp_run["campaign"] if mp_run else None,
+            can_be_merged=can_be_merged,
+            rate_limit_bucket=rate_limit_bucket,
+        )
     else:
         await conn.execute(
-            'UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1',
-            mp.url)
+            "UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1", mp.url
+        )
         mp_run = None
     if rate_limit_bucket is not None and mps_per_bucket is not None:
         mps_per_bucket[status].setdefault(rate_limit_bucket, 0)
@@ -2631,10 +2894,11 @@ async def check_existing_mp(
             campaign, role = find_campaign_by_branch_name(config, source_branch_name)
             if campaign:
                 logger.warning(
-                    'Recovered orphaned merge proposal %s', mp.url,
-                    extra={'mp_url': mp.url})
-                last_run = await get_last_effective_run(
-                    conn, codebase, campaign)
+                    "Recovered orphaned merge proposal %s",
+                    mp.url,
+                    extra={"mp_url": mp.url},
+                )
+                last_run = await get_last_effective_run(conn, codebase, campaign)
                 if last_run is None:
                     try:
                         await do_schedule(
@@ -2648,66 +2912,87 @@ async def check_existing_mp(
                         )
                     except CandidateUnavailable as e:
                         logger.warning(
-                            'Candidate unavailable while attempting to reschedule '
-                            'orphaned %s: %s/%s',
-                            mp.url, codebase, campaign,
-                            extra={'mp_url': mp.url})
+                            "Candidate unavailable while attempting to reschedule "
+                            "orphaned %s: %s/%s",
+                            mp.url,
+                            codebase,
+                            campaign,
+                            extra={"mp_url": mp.url},
+                        )
                         raise NoRunForMergeProposal(mp, revision) from e
                     else:
-                        logger.warning('Rescheduled', extra={'mp_url': mp.url})
+                        logger.warning("Rescheduled", extra={"mp_url": mp.url})
                         return False
                 else:
                     mp_run = {
-                        'remote_branch_name': None,
-                        'campaign': campaign,
-                        'change_set': None,
-                        'codebase': codebase,
-                        'role': role,
-                        'id': None,
-                        'branch_url': target_branch_url,
-                        'revision': revision.decode('utf-8'),
-                        'value': None,
+                        "remote_branch_name": None,
+                        "campaign": campaign,
+                        "change_set": None,
+                        "codebase": codebase,
+                        "role": role,
+                        "id": None,
+                        "branch_url": target_branch_url,
+                        "revision": revision.decode("utf-8"),
+                        "value": None,
                     }
-                    logger.warning('Going ahead with dummy old run', extra={'mp_url': mp.url})
+                    logger.warning(
+                        "Going ahead with dummy old run", extra={"mp_url": mp.url}
+                    )
             else:
                 raise NoRunForMergeProposal(mp, revision)
         else:
             raise NoRunForMergeProposal(mp, revision)
 
-    mp_remote_branch_name = mp_run['remote_branch_name']
+    mp_remote_branch_name = mp_run["remote_branch_name"]
 
     if mp_remote_branch_name is None:
         if target_branch_url is None:
-            logger.warning("No target branch for %r", mp, extra={'mp_url': mp.url})
+            logger.warning("No target branch for %r", mp, extra={"mp_url": mp.url})
         else:
             try:
-                mp_remote_branch_name = (await asyncio.to_thread(
-                    open_branch,
-                    target_branch_url, possible_transports=possible_transports)
+                mp_remote_branch_name = (
+                    await asyncio.to_thread(
+                        open_branch,
+                        target_branch_url,
+                        possible_transports=possible_transports,
+                    )
                 ).name
             except (BranchMissing, BranchUnavailable):
                 pass
 
-    last_run = await get_last_effective_run(conn, mp_run['codebase'], mp_run['campaign'])
+    last_run = await get_last_effective_run(
+        conn, mp_run["codebase"], mp_run["campaign"]
+    )
     if last_run is None:
-        logger.warning("%s: Unable to find any relevant runs.", mp.url, extra={'mp_url': mp.url})
+        logger.warning(
+            "%s: Unable to find any relevant runs.", mp.url, extra={"mp_url": mp.url}
+        )
         return False
 
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
         # do.
         logger.info(
-            "%s: Last run did not produce any changes, closing proposal.", mp.url, extra={'mp_url': mp.url}
+            "%s: Last run did not produce any changes, closing proposal.",
+            mp.url,
+            extra={"mp_url": mp.url},
         )
 
         try:
             await close_applied_mp(
-                proposal_info_manager, mp, revision, codebase, target_branch_url,
-                mp_run['campaign'], can_be_merged=can_be_merged,
-                rate_limit_bucket=rate_limit_bucket, comment="""
+                proposal_info_manager,
+                mp,
+                revision,
+                codebase,
+                target_branch_url,
+                mp_run["campaign"],
+                can_be_merged=can_be_merged,
+                rate_limit_bucket=rate_limit_bucket,
+                comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""")
+""",
+            )
         except PermissionDenied:
             return False
         else:
@@ -2719,7 +3004,8 @@ applied independently.
             logger.info(
                 "%s: Last run failed with transient error (%s). Rescheduling.",
                 mp.url,
-                last_run.result_code, extra={'mp_url': mp.url}
+                last_run.result_code,
+                extra={"mp_url": mp.url},
             )
             try:
                 await do_schedule(
@@ -2733,8 +3019,12 @@ applied independently.
                 )
             except CandidateUnavailable as e:
                 logger.warning(
-                    'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.codebase, last_run.campaign, e, extra={'mp_url': mp.url})
+                    "Candidate unavailable while attempting to reschedule %s/%s: %s",
+                    last_run.codebase,
+                    last_run.campaign,
+                    e,
+                    extra={"mp_url": mp.url},
+                )
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). Rescheduling.",
@@ -2755,26 +3045,38 @@ applied independently.
                 )
             except CandidateUnavailable as e:
                 logger.warning(
-                    'Candidate unavailable while attempting to reschedule %s/%s: %s',
-                    last_run.codebase, last_run.campaign, e, extra={'mp_url': mp.url})
+                    "Candidate unavailable while attempting to reschedule %s/%s: %s",
+                    last_run.codebase,
+                    last_run.campaign,
+                    e,
+                    extra={"mp_url": mp.url},
+                )
         else:
             logger.info(
                 "%s: Last run failed (%s). Not touching merge proposal.",
                 mp.url,
-                last_run.result_code, extra={'mp_url': mp.url}
+                last_run.result_code,
+                extra={"mp_url": mp.url},
             )
         return False
 
-    campaign_config = get_campaign_config(config, mp_run['campaign'])
+    campaign_config = get_campaign_config(config, mp_run["campaign"])
 
     if close_below_threshold and not run_sufficient_for_proposal(
-            campaign_config, mp_run['value']):
+        campaign_config, mp_run["value"]
+    ):
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, codebase, target_branch_url,
-                campaign=mp_run['campaign'], can_be_merged=can_be_merged,
+                proposal_info_manager,
+                mp,
+                revision,
+                codebase,
+                target_branch_url,
+                campaign=mp_run["campaign"],
+                can_be_merged=can_be_merged,
                 rate_limit_bucket=rate_limit_bucket,
-                comment="This merge proposal will be closed, since only trivial changes are left.")
+                comment="This merge proposal will be closed, since only trivial changes are left.",
+            )
         except PermissionDenied:
             return False
         return True
@@ -2784,14 +3086,15 @@ applied independently.
             last_run_remote_branch_name,
             last_run_base_revision,
             last_run_revision,
-        ) = last_run.get_result_branch(mp_run['role'])
+        ) = last_run.get_result_branch(mp_run["role"])
     except KeyError:
         logger.warning(
             "%s: Merge proposal run %s had role %s but it is gone now (%s)",
             mp.url,
-            mp_run['id'],
-            mp_run['role'],
-            last_run.id, extra={'mp_url': mp.url}
+            mp_run["id"],
+            mp_run["role"],
+            last_run.id,
+            extra={"mp_url": mp.url},
         )
         return False
 
@@ -2803,7 +3106,8 @@ applied independently.
             "%s: Remote branch name has changed: %s ⇒ %s ",
             mp.url,
             mp_remote_branch_name,
-            last_run_remote_branch_name, extra={'mp_url': mp.url}
+            last_run_remote_branch_name,
+            extra={"mp_url": mp.url},
         )
         # Note that we require that mp_remote_branch_name is set.
         # For some old runs it is not set because we didn't track
@@ -2811,41 +3115,52 @@ applied independently.
         if mp_remote_branch_name is not None:
             try:
                 await asyncio.to_thread(
-                    mp.set_target_branch_name,
-                    last_run_remote_branch_name or "")
+                    mp.set_target_branch_name, last_run_remote_branch_name or ""
+                )
             except NotImplementedError:
                 logger.info(
                     "%s: Closing merge proposal, since branch for role "
                     "'%s' has changed from %s to %s.",
                     mp.url,
-                    mp_run['role'],
+                    mp_run["role"],
                     mp_remote_branch_name,
-                    last_run_remote_branch_name, extra={'mp_url': mp.url}
+                    last_run_remote_branch_name,
+                    extra={"mp_url": mp.url},
                 )
                 try:
                     await abandon_mp(
-                        proposal_info_manager, mp, revision, codebase, target_branch_url,
-                        rate_limit_bucket=rate_limit_bucket, campaign=mp_run['campaign'],
-                        can_be_merged=can_be_merged, comment="""\
+                        proposal_info_manager,
+                        mp,
+                        revision,
+                        codebase,
+                        target_branch_url,
+                        rate_limit_bucket=rate_limit_bucket,
+                        campaign=mp_run["campaign"],
+                        can_be_merged=can_be_merged,
+                        comment="""\
 This merge proposal will be closed, since the branch for the role '{}'
 has changed from {} to {}.
-""".format(mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
+""".format(mp_run["role"], mp_remote_branch_name, last_run_remote_branch_name),
+                    )
                 except PermissionDenied:
                     return False
                 return True
             else:
                 target_branch_url = role_branch_url(
-                    mp_run['branch_url'], mp_remote_branch_name)
+                    mp_run["branch_url"], mp_remote_branch_name
+                )
         else:
             return False
 
-    if not await asyncio.to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
+    if not await asyncio.to_thread(
+        branches_match, mp_run["branch_url"], last_run.branch_url
+    ):
         logger.warning(
-            "%s: Remote branch URL appears to have have changed: "
-            "%s ⇒ %s, skipping.",
+            "%s: Remote branch URL appears to have have changed: " "%s ⇒ %s, skipping.",
             mp.url,
-            mp_run['branch_url'],
-            last_run.branch_url, extra={'mp_url': mp.url}
+            mp_run["branch_url"],
+            last_run.branch_url,
+            extra={"mp_url": mp.url},
         )
         return False
 
@@ -2854,34 +3169,43 @@ has changed from {} to {}.
         # doesn't
         try:
             await abandon_mp(
-                proposal_info_manager, mp, revision, codebase, target_branch_url,
-                campaign=mp_run['campaign'], can_be_merged=can_be_merged,
-                rate_limit_bucket=rate_limit_bucket, comment=f"""\
+                proposal_info_manager,
+                mp,
+                revision,
+                codebase,
+                target_branch_url,
+                campaign=mp_run["campaign"],
+                can_be_merged=can_be_merged,
+                rate_limit_bucket=rate_limit_bucket,
+                comment=f"""\
 This merge proposal will be closed, since the branch has moved to {last_run.branch_url}.
-""")
+""",
+            )
         except PermissionDenied:
             return False
         return True
 
-    if last_run.id != mp_run['id']:
+    if last_run.id != mp_run["id"]:
         publish_id = str(uuid.uuid4())
         logger.info(
             "%s (%s) needs to be updated (%s ⇒ %s).",
             mp.url,
-            mp_run['codebase'],
-            mp_run['id'],
-            last_run.id, extra={'mp_url': mp.url}
+            mp_run["codebase"],
+            mp_run["id"],
+            last_run.id,
+            extra={"mp_url": mp.url},
         )
-        if last_run_revision == mp_run['revision'].encode('utf-8'):
+        if last_run_revision == mp_run["revision"].encode("utf-8"):
             logger.warning(
                 "%s (%s): old run (%s/%s) has same revision as new run (%s/%s): %r",
                 mp.url,
-                mp_run['codebase'],
-                mp_run['id'],
-                mp_run['role'],
+                mp_run["codebase"],
+                mp_run["id"],
+                mp_run["role"],
                 last_run.id,
-                mp_run['role'],
-                mp_run['revision'].encode('utf-8'), extra={'mp_url': mp.url}
+                mp_run["role"],
+                mp_run["revision"].encode("utf-8"),
+                extra={"mp_url": mp.url},
             )
             # In some cases this can happen when we kick off two runs at
             # exactly the same time.
@@ -2889,13 +3213,15 @@ This merge proposal will be closed, since the branch has moved to {last_run.bran
 
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(
-                conn, campaign_config, last_run, mp_run['role'])
+                conn, campaign_config, last_run, mp_run["role"]
+            )
 
         unchanged_run_id = await conn.fetchval(
             "SELECT id FROM run "
             "WHERE revision = $2 AND codebase = $1 and result_code = 'success' "
             "ORDER BY finish_time DESC LIMIT 1",
-            last_run.codebase, last_run.main_branch_revision.decode('utf-8')
+            last_run.codebase,
+            last_run.main_branch_revision.decode("utf-8"),
         )
 
         try:
@@ -2907,7 +3233,7 @@ This merge proposal will be closed, since the branch has moved to {last_run.bran
                 codemod_result=last_run.result,
                 target_branch_url=target_branch_url,
                 mode=MODE_PROPOSE,
-                role=mp_run['role'],
+                role=mp_run["role"],
                 revision=last_run_revision,
                 log_id=last_run.id,
                 unchanged_id=unchanged_run_id,
@@ -2920,16 +3246,18 @@ This merge proposal will be closed, since the branch has moved to {last_run.bran
                 result_tags=last_run.result_tags,
                 commit_message_template=(
                     campaign_config.merge_proposal.commit_message
-                    if campaign_config.merge_proposal else None),
+                    if campaign_config.merge_proposal
+                    else None
+                ),
                 title_template=(
                     campaign_config.merge_proposal.title
-                    if campaign_config.merge_proposal else None),
+                    if campaign_config.merge_proposal
+                    else None
+                ),
                 existing_mp_url=mp.url,
             )
         except BranchBusy as e:
-            logger.info(
-                '%s: Branch %r was busy while publishing',
-                mp.url, e.branch_url)
+            logger.info("%s: Branch %r was busy while publishing", mp.url, e.branch_url)
             return False
         except PublishFailure as e:
             code, description = await handle_publish_failure(
@@ -2942,20 +3270,29 @@ This merge proposal will be closed, since the branch has moved to {last_run.bran
                     "%s: Empty merge proposal, changes must have been merged "
                     "some other way. Closing.",
                     mp.url,
-                    extra={'mp_url': mp.url},
+                    extra={"mp_url": mp.url},
                 )
                 try:
                     await close_applied_mp(
-                        proposal_info_manager, mp, revision, codebase, 
-                        target_branch_url, campaign=mp_run['campaign'],
-                        can_be_merged=can_be_merged, rate_limit_bucket=rate_limit_bucket,
+                        proposal_info_manager,
+                        mp,
+                        revision,
+                        codebase,
+                        target_branch_url,
+                        campaign=mp_run["campaign"],
+                        can_be_merged=can_be_merged,
+                        rate_limit_bucket=rate_limit_bucket,
                         comment="""
 This merge proposal will be closed, since all remaining changes have been \
 applied independently.
-""")
+""",
+                    )
                 except PermissionDenied as f:
                     logger.warning(
-                        "Permission denied closing merge request %s: %s", mp.url, f, extra={'mp_url': mp.url}
+                        "Permission denied closing merge request %s: %s",
+                        mp.url,
+                        f,
+                        extra={"mp_url": mp.url},
                     )
                     code = "empty-failed-to-close"
                     description = "Permission denied closing merge request: %s" % f
@@ -2969,7 +3306,8 @@ applied independently.
                     "%s: Updating merge proposal failed: %s (%s)",
                     mp.url,
                     code,
-                    description, extra={'mp_url': mp.url}
+                    description,
+                    extra={"mp_url": mp.url},
                 )
             await store_publish(
                 conn,
@@ -2978,7 +3316,7 @@ applied independently.
                 branch_name=campaign_config.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
-                role=mp_run['role'],
+                role=mp_run["role"],
                 mode=e.mode,
                 result_code=code,
                 description=description,
@@ -2997,7 +3335,7 @@ applied independently.
                 branch_name=publish_result.branch_name,
                 main_branch_revision=last_run_base_revision,
                 revision=last_run_revision,
-                role=mp_run['role'],
+                role=mp_run["role"],
                 mode=MODE_PROPOSE,
                 result_code="success",
                 description=(publish_result.description or "Successfully updated"),
@@ -3012,7 +3350,10 @@ applied independently.
             if publish_result.is_new:
                 # This can happen when the default branch changes
                 logger.warning(
-                    "Intended to update proposal %r, but created %r", mp.url, publish_result.proposal_url, extra={'mp_url': mp.url}
+                    "Intended to update proposal %r, but created %r",
+                    mp.url,
+                    publish_result.proposal_url,
+                    extra={"mp_url": mp.url},
                 )
         return True
     else:
@@ -3020,22 +3361,29 @@ applied independently.
         # be refreshed, so only check it if we haven't made any other
         # changes.
         if can_be_merged is False:
-            logger.info("%s can not be merged (conflict?). Rescheduling.", mp.url, extra={'mp_url': mp.url})
+            logger.info(
+                "%s can not be merged (conflict?). Rescheduling.",
+                mp.url,
+                extra={"mp_url": mp.url},
+            )
             try:
                 await do_schedule(
                     conn,
-                    campaign=mp_run['campaign'],
-                    change_set=mp_run['change_set'],
+                    campaign=mp_run["campaign"],
+                    change_set=mp_run["change_set"],
                     bucket="update-existing-mp",
                     refresh=True,
                     requester="publisher (merge conflict)",
-                    codebase=mp_run['codebase'],
+                    codebase=mp_run["codebase"],
                 )
             except CandidateUnavailable:
                 logger.warning(
-                    'Candidate unavailable while attempting to reschedule '
-                    'conflicted %s/%s',
-                    mp_run['codebase'], mp_run['campaign'], extra={'mp_url': mp.url})
+                    "Candidate unavailable while attempting to reschedule "
+                    "conflicted %s/%s",
+                    mp_run["codebase"],
+                    mp_run["campaign"],
+                    extra={"mp_url": mp.url},
+                )
         return False
 
 
@@ -3051,17 +3399,15 @@ def iter_all_mps(
                 for mp in instance.iter_my_proposals(status=status):
                     yield instance, mp, status
             except ForgeLoginRequired:
-                logger.info(
-                    'Skipping %r, no credentials known.',
-                    instance)
+                logger.info("Skipping %r, no credentials known.", instance)
             except UnexpectedHttpStatus as e:
                 logger.warning(
-                    'Got unexpected HTTP status %s, skipping %r',
-                    e, instance)
+                    "Got unexpected HTTP status %s, skipping %r", e, instance
+                )
             except UnsupportedForge as e:
                 logger.warning(
-                    'Unsupported host instance, skipping %r: %s',
-                    instance, e)
+                    "Unsupported host instance, skipping %r: %s", instance, e
+                )
 
 
 async def check_existing(
@@ -3126,12 +3472,12 @@ async def check_existing(
             logger.warning("Unable to find metadata for %s, skipping.", e.mp.url)
             modified = False
         except ForgeLoginRequired as e:
-            logger.warning('Login required for forge %s, skipping.', e)
+            logger.warning("Login required for forge %s, skipping.", e)
             modified = False
         except BranchRateLimited as e:
             logger.warning(
-                "Rate-limited accessing %s. Skipping %r for this cycle.",
-                mp.url, forge)
+                "Rate-limited accessing %s. Skipping %r for this cycle.", mp.url, forge
+            )
             if e.retry_after is None:
                 retry_after = timedelta(minutes=30)
             else:
@@ -3140,8 +3486,11 @@ async def check_existing(
             continue
         except UnexpectedHttpStatus as e:
             logger.warning(
-                'Got unexpected HTTP status %s, skipping %r',
-                e, mp.url, extra={'mp_url': mp.url})
+                "Got unexpected HTTP status %s, skipping %r",
+                e,
+                mp.url,
+                extra={"mp_url": mp.url},
+            )
             # TODO(jelmer): print traceback?
             unexpected += 1
 
@@ -3149,19 +3498,22 @@ async def check_existing(
             unexpected_http_response_count.inc()
             logger.warning(
                 "Saw %d unexpected HTTP responses, over threshold of %d. "
-                "Giving up for now.", unexpected, unexpected_limit)
+                "Giving up for now.",
+                unexpected,
+                unexpected_limit,
+            )
             return
 
         if modified:
             modified_mps += 1
             if modify_limit and modified_mps > modify_limit:
                 logger.warning(
-                    "Already modified %d merge proposals, "
-                    "waiting with the rest.", modified_mps,
+                    "Already modified %d merge proposals, " "waiting with the rest.",
+                    modified_mps,
                 )
                 check_only = True
 
-    logger.info('Successfully scanned existing merge proposals')
+    logger.info("Successfully scanned existing merge proposals")
     last_scan_existing_success.set_to_current_time()
 
     if not was_forge_ratelimited:
@@ -3176,7 +3528,9 @@ async def check_existing(
                 bucket_proposal_count.labels(bucket=bucket).set(count)
         open_proposal_count.set(total)
     else:
-        logger.info('Rate-Limited for forges %r. Not updating stats', forge_rate_limiter)
+        logger.info(
+            "Rate-Limited for forges %r. Not updating stats", forge_rate_limiter
+        )
 
 
 async def get_run(conn: asyncpg.Connection, run_id):
@@ -3201,7 +3555,9 @@ WHERE id = $1
     return None
 
 
-async def iter_control_matching_runs(conn: asyncpg.Connection, main_branch_revision: bytes, codebase: str):
+async def iter_control_matching_runs(
+    conn: asyncpg.Connection, main_branch_revision: bytes, codebase: str
+):
     query = """
 SELECT
   id,
@@ -3235,8 +3591,10 @@ ORDER BY start_time DESC
 """
     return [
         state.Run.from_row(row)
-        for row in await conn.fetch(query, main_branch_revision.decode('utf-8'), codebase)]
-
+        for row in await conn.fetch(
+            query, main_branch_revision.decode("utf-8"), codebase
+        )
+    ]
 
 
 async def listen_to_runner(
@@ -3251,10 +3609,12 @@ async def listen_to_runner(
 ):
     async def process_run(conn, run, branch_url):
         publish_policy, command, rate_limit_bucket = await get_publish_policy(
-            conn, run.codebase, run.campaign)
+            conn, run.codebase, run.campaign
+        )
         if publish_policy is None:
             logging.warning(
-                'No publish policy for %s/%s, skipping', run.codebase, run.campaign)
+                "No publish policy for %s/%s, skipping", run.codebase, run.campaign
+            )
             return
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
@@ -3277,25 +3637,25 @@ async def listen_to_runner(
             )
 
     async def handle_publish_status_message(msg):
-        result = json.loads(msg['data'])
+        result = json.loads(msg["data"])
         if result["publish_status"] != "approved":
             return
         async with db.acquire() as conn:
             # TODO(jelmer): Fold these into a single query ?
             codebase = await conn.fetchrow(
-                'SELECT branch_url FROM codebase WHERE name = $1',
-                result["codebase"])
+                "SELECT branch_url FROM codebase WHERE name = $1", result["codebase"]
+            )
             if codebase is None:
-                logger.warning('Codebase %s not in database?', result['codebase'])
+                logger.warning("Codebase %s not in database?", result["codebase"])
                 return
             run = await get_run(conn, result["run_id"])
-            await process_run(conn, run, codebase['branch_url'])
+            await process_run(conn, run, codebase["branch_url"])
 
     try:
         async with redis.pubsub(ignore_subscribe_messages=True) as ch:
             await ch.subscribe(
-                'publish-status',
-                **{'publish-status': handle_publish_status_message})
+                "publish-status", **{"publish-status": handle_publish_status_message}
+            )
             await ch.run()
     finally:
         await redis.close()
@@ -3304,16 +3664,19 @@ async def listen_to_runner(
 async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     per_bucket: dict[str, dict[str, int]] = {}
     async with db.acquire() as conn:
-        for row in await conn.fetch("""
+        for row in await conn.fetch(
+            """
              SELECT
              rate_limit_bucket AS rate_limit_bucket,
              status AS status,
              count(*) as c
              FROM merge_proposal
              GROUP BY 1, 2
-             """):
-            per_bucket.setdefault(
-                row['status'], {})[row['rate_limit_bucket']] = row['c']
+             """
+        ):
+            per_bucket.setdefault(row["status"], {})[row["rate_limit_bucket"]] = row[
+                "c"
+            ]
     bucket_rate_limiter.set_mps_per_bucket(per_bucket)
 
 
@@ -3379,24 +3742,23 @@ async def main(argv=None):
         default=10,
         help="Maximum number of merge proposals to update per cycle.",
     )
-    parser.add_argument(
-        "--external-url",
-        type=str,
-        help="External URL",
-        default=None)
+    parser.add_argument("--external-url", type=str, help="External URL", default=None)
     parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument(
-        "--template-env-path", type=str,
-        help="Path to merge proposal templates")
+        "--gcp-logging", action="store_true", help="Use Google cloud logging."
+    )
+    parser.add_argument(
+        "--template-env-path", type=str, help="Path to merge proposal templates"
+    )
 
     args = parser.parse_args()
 
     if args.gcp_logging:
         import google.cloud.logging
+
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
@@ -3409,7 +3771,7 @@ async def main(argv=None):
     if args.debug:
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
-        warnings.simplefilter('always', ResourceWarning)
+        warnings.simplefilter("always", ResourceWarning)
 
     with open(args.config) as f:
         config = read_config(f)
@@ -3444,7 +3806,8 @@ async def main(argv=None):
             external_url=args.external_url,
             differ_url=args.differ_url,
             lock_manager=lock_manager,
-            redis=redis)
+            redis=redis,
+        )
 
         if args.once:
             await publish_pending_ready(
@@ -3458,7 +3821,8 @@ async def main(argv=None):
             )
             if args.prometheus:
                 await push_to_gateway(
-                    args.prometheus, job="janitor.publish", registry=REGISTRY)
+                    args.prometheus, job="janitor.publish", registry=REGISTRY
+                )
         else:
             tasks = [
                 loop.create_task(
@@ -3485,7 +3849,9 @@ async def main(argv=None):
                         bucket_rate_limiter=bucket_rate_limiter,
                         forge_rate_limiter=forge_rate_limiter,
                         vcs_managers=vcs_managers,
-                        db=db, redis=redis, config=config,
+                        db=db,
+                        redis=redis,
+                        config=config,
                         require_binary_diff=args.require_binary_diff,
                         modify_mp_limit=args.modify_mp_limit,
                         push_limit=args.push_limit,

@@ -65,11 +65,12 @@ def create_background_task(fn, title):
         try:
             future.result()
         except asyncio.CancelledError:
-            logging.debug('%s cancelled', title)
+            logging.debug("%s cancelled", title)
         except BaseException:
-            logging.exception('%s failed', title)
+            logging.exception("%s failed", title)
         else:
-            logging.debug('%s succeeded', title)
+            logging.debug("%s succeeded", title)
+
     task.add_done_callback(log_result)
     return task
 
@@ -101,7 +102,7 @@ async def handle_generic_candidates(request):
     from .common import generate_candidates
 
     return await generate_candidates(
-        request.app['pool'], suite=request.match_info["suite"]
+        request.app["pool"], suite=request.match_info["suite"]
     )
 
 
@@ -110,7 +111,7 @@ async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
     suite = request.match_info.get("suite")
-    return await write_merge_proposals(request.app['pool'], suite)
+    return await write_merge_proposals(request.app["pool"], suite)
 
 
 @html_template("merge-proposal.html", headers={"Vary": "Cookie"})
@@ -118,7 +119,7 @@ async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
     url = request.query["url"]
-    return await write_merge_proposal(request.app['pool'], url)
+    return await write_merge_proposal(request.app["pool"], url)
 
 
 @routes.get("/credentials", name="credentials")
@@ -126,13 +127,13 @@ async def handle_merge_proposal(request):
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
-            request.app['http_client_session'], request.app['publisher_url']
+            request.app["http_client_session"], request.app["publisher_url"]
         )
     except ClientConnectorError:
-        return web.Response(status=500, text='Unable to retrieve credentials')
+        return web.Response(status=500, text="Unable to retrieve credentials")
     pgp_fprs = []
     for keydata in credentials["pgp_keys"]:
-        result = request.app['gpg'].key_import(keydata.encode("utf-8"))
+        result = request.app["gpg"].key_import(keydata.encode("utf-8"))
         pgp_fprs.extend([i.fpr for i in result.imports])
 
     pgp_validity = {
@@ -149,7 +150,7 @@ async def handle_credentials(request):
         "pgp_validity": pgp_validity.get,
         "pgp_algo": gpg.core.pubkey_algo_name,
         "ssh_keys": credentials["ssh_keys"],
-        "pgp_keys": request.app['gpg'].keylist("\0".join(pgp_fprs)),
+        "pgp_keys": request.app["gpg"].keylist("\0".join(pgp_fprs)),
         "hosting": credentials["hosting"],
     }
 
@@ -157,7 +158,7 @@ async def handle_credentials(request):
 @routes.get("/ssh_keys", name="ssh-keys")
 async def handle_ssh_keys(request):
     credentials = await get_credentials(
-        request.app['http_client_session'], request.app['publisher_url']
+        request.app["http_client_session"], request.app["publisher_url"]
     )
     return web.Response(
         text="\n".join(credentials["ssh_keys"]), content_type="text/plain"
@@ -167,7 +168,7 @@ async def handle_ssh_keys(request):
 @routes.get(r"/pgp_keys{extension:(\.asc)?}", name="pgp-keys")
 async def handle_pgp_keys(request):
     credentials = await get_credentials(
-        request.app['http_client_session'], request.app['publisher_url']
+        request.app["http_client_session"], request.app["publisher_url"]
     )
     armored = request.match_info["extension"] == ".asc"
     if armored:
@@ -178,20 +179,18 @@ async def handle_pgp_keys(request):
     else:
         fprs = []
         for keydata in credentials["pgp_keys"]:
-            result = request.app['gpg'].key_import(keydata.encode("utf-8"))
+            result = request.app["gpg"].key_import(keydata.encode("utf-8"))
             fprs.extend([i.fpr for i in result.imports])
         return web.Response(
-            body=request.app['gpg'].key_export_minimal("\0".join(fprs)),
+            body=request.app["gpg"].key_export_minimal("\0".join(fprs)),
             content_type="application/pgp-keys",
         )
 
 
-@routes.get(
-    r"/archive-keyring{extension:(\.asc|\.gpg)}",
-    name="archive-keyring")
+@routes.get(r"/archive-keyring{extension:(\.asc|\.gpg)}", name="archive-keyring")
 async def handle_archive_keyring(request):
-    url = URL(request.app['archiver_url']) / "pgp_keys"
-    async with request.app['http_client_session'].get(url=url) as resp:
+    url = URL(request.app["archiver_url"]) / "pgp_keys"
+    async with request.app["http_client_session"].get(url=url) as resp:
         if resp.status != 200:
             raise Exception("unexpected response")
         pgp_keys = await resp.json()
@@ -204,10 +203,10 @@ async def handle_archive_keyring(request):
     else:
         fprs = []
         for keydata in pgp_keys:
-            result = request.app['gpg'].key_import(keydata.encode("utf-8"))
+            result = request.app["gpg"].key_import(keydata.encode("utf-8"))
             fprs.extend([i.fpr for i in result.imports])
         return web.Response(
-            body=request.app['gpg'].key_export_minimal("\0".join(fprs)),
+            body=request.app["gpg"].key_export_minimal("\0".join(fprs)),
             content_type="application/pgp-keys",
         )
 
@@ -226,12 +225,12 @@ async def handle_result_file(request):
         raise web.HTTPNotFound(text=f"Invalid run run id {run_id}")
     if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
         if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
-            raise web.HTTPNotFound(
-                text=f"No log file {filename} for run {run_id}"
-            )
+            raise web.HTTPNotFound(text=f"No log file {filename} for run {run_id}")
 
         try:
-            logfile = await request.app['logfile_manager'].get_log(pkg, run_id, filename)
+            logfile = await request.app["logfile_manager"].get_log(
+                pkg, run_id, filename
+            )
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
                 text=f"No log file {filename} for run {run_id}"
@@ -245,12 +244,11 @@ async def handle_result_file(request):
         )
     else:
         try:
-            f = await request.app['artifact_manager'].get_artifact(
-                run_id, filename
-            )
+            f = await request.app["artifact_manager"].get_artifact(run_id, filename)
         except FileNotFoundError as e:
             raise web.HTTPNotFound(
-                text=f"No artifact {filename} for run {run_id}") from e
+                text=f"No artifact {filename} for run {run_id}"
+            ) from e
         return web.Response(body=f.read())
 
 
@@ -260,7 +258,7 @@ async def handle_ready_proposals(request):
 
     suite = request.match_info.get("suite")
     publish_status = request.query.get("publish_status")
-    return await generate_ready_list(request.app['pool'], suite, publish_status)
+    return await generate_ready_list(request.app["pool"], suite, publish_status)
 
 
 @html_template("generic/done.html", headers={"Vary": "Cookie"})
@@ -278,7 +276,7 @@ async def handle_done_proposals(request):
     else:
         since = None
 
-    return await generate_done_list(request.app['pool'], campaign, since)
+    return await generate_done_list(request.app["pool"], campaign, since)
 
 
 @html_template("generic/codebase.html", headers={"Vary": "Cookie"})
@@ -290,11 +288,11 @@ async def handle_generic_codebase(request):
     run_id = request.match_info.get("run_id")
     return await generate_codebase_context(
         request.app.database,
-        request.app['config'],
+        request.app["config"],
         request.match_info["campaign"],
-        request.app['http_client_session'],
-        request.app['differ_url'],
-        request.app['vcs_managers'],
+        request.app["http_client_session"],
+        request.app["differ_url"],
+        request.app["vcs_managers"],
         codebase,
         aiozipkin.request_span(request),
         run_id,
@@ -305,14 +303,14 @@ async def handle_generic_codebase(request):
 @aiohttp_jinja2.template("repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
-    url = request.app['vcs_managers'][vcs].base_url
-    async with request.app['http_client_session'].get(url) as resp:
+    url = request.app["vcs_managers"][vcs].base_url
+    async with request.app["http_client_session"].get(url) as resp:
         return {"vcs": vcs, "repositories": await resp.json()}
 
 
 @private_routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response(text='ok')
+    return web.Response(text="ok")
 
 
 async def process_webhook(request, db):
@@ -331,8 +329,12 @@ async def process_webhook(request, db):
             for suite in await state.iter_publishable_suites(conn, codebase):
                 if suite not in rescheduled.get(codebase, []):
                     await do_schedule(
-                        conn, campaign=suite, codebase=codebase,
-                        requester=requester, bucket="hook")
+                        conn,
+                        campaign=suite,
+                        codebase=codebase,
+                        requester=requester,
+                        bucket="hook",
+                    )
                     rescheduled.setdefault(codebase, []).append(suite)
 
         return web.json_response({"rescheduled": rescheduled, "urls": urls})
@@ -347,32 +349,53 @@ async def handle_webhook(request):
             content_type="text/html",
             text=text,
         )
-    return await process_webhook(request, request.app['db'])
+    return await process_webhook(request, request.app["db"])
 
 
 async def create_app(
-        config, *, minified=False,
-        external_url=None, debugtoolbar=None,
-        runner_url=None, publisher_url=None,
-        archiver_url=None, vcs_managers=None,
-        differ_url=None,
-        listen_address=None, port=None, redis=None):
+    config,
+    *,
+    minified=False,
+    external_url=None,
+    debugtoolbar=None,
+    runner_url=None,
+    publisher_url=None,
+    archiver_url=None,
+    vcs_managers=None,
+    differ_url=None,
+    listen_address=None,
+    port=None,
+    redis=None,
+):
     if minified:
         minified_prefix = ""
     else:
         minified_prefix = "min."
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[
-        metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    app = web.Application(
+        middlewares=[
+            metrics_middleware,
+            trailing_slash_redirect,
+            state.asyncpg_error_middleware,
+        ]
+    )
     aiohttp_jinja2.setup(
-        app, loader=template_loader, enable_async=True,
-        autoescape=select_autoescape(["html", "xml"]))
+        app,
+        loader=template_loader,
+        enable_async=True,
+        autoescape=select_autoescape(["html", "xml"]),
+    )
     jinja_env = aiohttp_jinja2.get_env(app)
     jinja_env.globals.update(TEMPLATE_ENV)
     app.router.add_routes(routes)
-    private_app = web.Application(middlewares=[
-        metrics_middleware, trailing_slash_redirect, state.asyncpg_error_middleware])
+    private_app = web.Application(
+        middlewares=[
+            metrics_middleware,
+            trailing_slash_redirect,
+            state.asyncpg_error_middleware,
+        ]
+    )
     private_app.router.add_routes(private_routes)
 
     metrics_route = private_app.router.add_get("/metrics", metrics, name="metrics")
@@ -386,7 +409,9 @@ async def create_app(
 
     endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
+        tracer = await aiozipkin.create(
+            config.zipkin_address, endpoint, sample_rate=0.1
+        )
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
@@ -395,7 +420,9 @@ async def create_app(
     aiozipkin.setup(app, tracer, skip_routes=[ws_notifications_route])
 
     async def persistent_session(app):
-        app['http_client_session'] = session = ClientSession(trace_configs=trace_configs)
+        app["http_client_session"] = session = ClientSession(
+            trace_configs=trace_configs
+        )
         yield
         await session.close()
 
@@ -403,23 +430,28 @@ async def create_app(
 
     setup_gpg(app)
     if redis is not None:
-        app['redis'] = redis
+        app["redis"] = redis
     else:
         setup_redis(app)
 
     async def start_pubsub_forwarder(app):
         async def forward_redis(app, name):
-            async with app['redis'].pubsub(ignore_subscribe_messages=True) as ch:
-                await ch.subscribe(name, **{
-                    name: lambda msg: app["topic_notifications"].publish(
-                        [name, json.loads(msg['data'])])})
+            async with app["redis"].pubsub(ignore_subscribe_messages=True) as ch:
+                await ch.subscribe(
+                    name,
+                    **{
+                        name: lambda msg: app["topic_notifications"].publish(
+                            [name, json.loads(msg["data"])]
+                        )
+                    },
+                )
                 await ch.run()
 
         for name, title in [
-            ('publish', 'publisher publish listening'),
-            ('merge-proposal', 'merge proposal listening'),
-            ('queue', 'queue listening'),
-            ('result', 'result listening'),
+            ("publish", "publisher publish listening"),
+            ("merge-proposal", "merge proposal listening"),
+            ("queue", "queue listening"),
+            ("result", "result listening"),
         ]:
             listener = create_background_task(forward_redis(app, name), title)
 
@@ -438,7 +470,9 @@ async def create_app(
             functools.partial(handle_simple, templatename + ".html"),
             name=templatename,
         )
-    CAMPAIGN_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
+    CAMPAIGN_REGEX = "|".join(
+        [re.escape(campaign.name) for campaign in config.campaign]
+    )
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % CAMPAIGN_REGEX,
         handle_merge_proposals,
@@ -450,23 +484,34 @@ async def create_app(
         name="suite-merge-proposal",
     )
     app.router.add_get(
-        "/{suite:%s}/ready" % CAMPAIGN_REGEX, handle_ready_proposals, name="campaign-ready"
+        "/{suite:%s}/ready" % CAMPAIGN_REGEX,
+        handle_ready_proposals,
+        name="campaign-ready",
     )
     app.router.add_get(
-        "/{campaign:%s}/done" % CAMPAIGN_REGEX, handle_done_proposals, name="campaign-done"
+        "/{campaign:%s}/done" % CAMPAIGN_REGEX,
+        handle_done_proposals,
+        name="campaign-done",
     )
 
     from .cupboard import register_cupboard_endpoints
+
     register_cupboard_endpoints(
-        app, config=config, publisher_url=publisher_url,
-        runner_url=runner_url, trace_configs=trace_configs)
+        app,
+        config=config,
+        publisher_url=publisher_url,
+        runner_url=runner_url,
+        trace_configs=trace_configs,
+    )
     app.router.add_get(
         "/{suite:" + CAMPAIGN_REGEX + "}/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
         name="result-file",
     )
     app.router.add_get(
-        "/{campaign:" + CAMPAIGN_REGEX + "}/", handle_generic_start, name="generic-start"
+        "/{campaign:" + CAMPAIGN_REGEX + "}/",
+        handle_generic_start,
+        name="generic-start",
     )
     app.router.add_get(
         "/{suite:" + CAMPAIGN_REGEX + "}/candidates",
@@ -491,7 +536,7 @@ async def create_app(
     app.router.add_static(
         "/_static/images/datatables", "/usr/share/javascript/jquery-datatables/images"
     )
-    for (name, kind, basepath) in [
+    for name, kind, basepath in [
         ("chart", "js", "/usr/share/javascript/chart.js/Chart"),
         ("chart", "css", "/usr/share/javascript/chart.js/Chart"),
         ("jquery", "js", "/usr/share/javascript/jquery/jquery"),
@@ -519,26 +564,27 @@ async def create_app(
 
     async def handle_post_root(request):
         if is_webhook_request(request):
-            return await process_webhook(request, request.app['pool'])
-        raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
+            return await process_webhook(request, request.app["pool"])
+        raise web.HTTPMethodNotAllowed(method="POST", allowed_methods=["GET", "HEAD"])
 
-    app['runner_url'] = runner_url
-    app['archiver_url'] = archiver_url
-    app['differ_url'] = differ_url
-    app['publisher_url'] = publisher_url
-    app['vcs_managers'] = vcs_managers
+    app["runner_url"] = runner_url
+    app["archiver_url"] = archiver_url
+    app["differ_url"] = differ_url
+    app["publisher_url"] = publisher_url
+    app["vcs_managers"] = vcs_managers
     if external_url:
-        app['external_url'] = URL(external_url)
+        app["external_url"] = URL(external_url)
     else:
-        app['external_url'] = None
+        app["external_url"] = None
 
     setup_postgres(app)
 
-    app['config'] = config
+    app["config"] = config
 
     setup_artifact_manager(app)
     setup_openid(
-        app, config.oauth2_provider.base_url if config.oauth2_provider else None)
+        app, config.oauth2_provider.base_url if config.oauth2_provider else None
+    )
     app.router.add_post("/", handle_post_root, name="root-post")
 
     app.add_subapp(
@@ -550,13 +596,17 @@ async def create_app(
             differ_url,
             config,
             external_url=(
-                app['external_url'].join(URL("api")) if app['external_url'] else None
+                app["external_url"].join(URL("api")) if app["external_url"] else None
             ),
             trace_configs=trace_configs,
         ),
     )
     import aiohttp_apispec
-    app.router.add_static('/static/swagger', os.path.join(os.path.dirname(aiohttp_apispec.__file__), "static"))
+
+    app.router.add_static(
+        "/static/swagger",
+        os.path.join(os.path.dirname(aiohttp_apispec.__file__), "static"),
+    )
 
     if debugtoolbar:
         import aiohttp_debugtoolbar
@@ -574,11 +624,17 @@ async def main(argv=None):
     from janitor.config import read_config
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
+    parser.add_argument(
+        "--debugtoolbar",
+        type=str,
+        action="append",
+        help="IP to allow debugtoolbar queries from.",
+    )
     parser.add_argument("--host", type=str, help="Host to listen on")
     parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
     parser.add_argument(
-        "--public-port", type=int, help="Public port to listen on", default=8090)
+        "--public-port", type=int, help="Public port to listen on", default=8090
+    )
     parser.add_argument(
         "--publisher-url",
         type=str,
@@ -617,13 +673,16 @@ async def main(argv=None):
         action="store_true",
         help="Enable debugging mode. For example, avoid minified JS.",
     )
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging."
+    )
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
 
     args = parser.parse_args()
 
     if args.gcp_logging:
         import google.cloud.logging
+
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
@@ -634,7 +693,8 @@ async def main(argv=None):
         config = read_config(f)
 
     private_app, public_app = await create_app(
-        config, minified=args.debug,
+        config,
+        minified=args.debug,
         external_url=args.external_url,
         debugtoolbar=args.debugtoolbar,
         runner_url=args.runner_url,
@@ -643,7 +703,8 @@ async def main(argv=None):
         vcs_managers=get_vcs_managers_from_config(config),
         differ_url=args.differ_url,
         listen_address=args.host,
-        port=args.port)
+        port=args.port,
+    )
 
     private_runner = web.AppRunner(private_app)
     public_runner = web.AppRunner(public_app)

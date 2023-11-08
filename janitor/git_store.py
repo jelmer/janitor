@@ -54,28 +54,24 @@ async def git_diff_request(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     codebase = request.match_info["codebase"]
     try:
-        old_sha = request.query['old'].encode('utf-8')
-        new_sha = request.query['new'].encode('utf-8')
+        old_sha = request.query["old"].encode("utf-8")
+        new_sha = request.query["new"].encode("utf-8")
     except KeyError as e:
-        raise web.HTTPBadRequest(text='need both old and new') from e
-    path = request.query.get('path')
-    repo_path = os.path.join(request.app['local_path'], codebase)
+        raise web.HTTPBadRequest(text="need both old and new") from e
+    path = request.query.get("path")
+    repo_path = os.path.join(request.app["local_path"], codebase)
 
     if not os.path.isdir(repo_path):
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            codebase)
+            text="Local VCS repository for %s temporarily inaccessible" % codebase
+        )
 
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-        raise web.HTTPBadRequest(text='invalid shas specified')
+        raise web.HTTPBadRequest(text="invalid shas specified")
 
-    args = [
-        "git",
-        "diff",
-        old_sha, new_sha
-    ]
+    args = ["git", "diff", old_sha, new_sha]
     if path:
-        args.extend(['--', path])
+        args.extend(["--", path])
 
     p = await asyncio.create_subprocess_exec(
         *args,  # type: ignore
@@ -87,12 +83,12 @@ async def git_diff_request(request: web.Request) -> web.Response:
 
     # TODO(jelmer): Stream this
     try:
-        with span.new_child('subprocess:communicate'):
+        with span.new_child("subprocess:communicate"):
             (stdout, stderr) = await asyncio.wait_for(p.communicate(None), 30.0)
     except asyncio.TimeoutError as e:
         with suppress(ProcessLookupError):
             p.kill()
-        raise web.HTTPRequestTimeout(text='diff generation timed out') from e
+        raise web.HTTPRequestTimeout(text="diff generation timed out") from e
     except BaseException:
         with suppress(ProcessLookupError):
             p.kill()
@@ -100,43 +96,49 @@ async def git_diff_request(request: web.Request) -> web.Response:
 
     if p.returncode == 0:
         return web.Response(body=stdout, content_type="text/x-diff")
-    logging.warning('git diff failed: %s', stderr.decode())
-    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr.decode())
+    logging.warning("git diff failed: %s", stderr.decode())
+    raise web.HTTPInternalServerError(text="git diff failed: %s" % stderr.decode())
 
 
 async def git_revision_info_request(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
     codebase = request.match_info["codebase"]
     try:
-        old_sha = request.query['old'].encode('utf-8')
-        new_sha = request.query['new'].encode('utf-8')
+        old_sha = request.query["old"].encode("utf-8")
+        new_sha = request.query["new"].encode("utf-8")
     except KeyError as e:
-        raise web.HTTPBadRequest(text='need both old and new') from e
+        raise web.HTTPBadRequest(text="need both old and new") from e
     try:
-        with span.new_child('open-repo'):
-            repo = Repo(os.path.join(request.app['local_path'], codebase))
+        with span.new_child("open-repo"):
+            repo = Repo(os.path.join(request.app["local_path"], codebase))
     except NotGitRepository as e:
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" %
-            codebase) from e
+            text="Local VCS repository for %s temporarily inaccessible" % codebase
+        ) from e
 
     with closing(repo):
         if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
-            raise web.HTTPBadRequest(text='invalid shas specified')
+            raise web.HTTPBadRequest(text="invalid shas specified")
         ret = []
         try:
-            with span.new_child('get-walker'):
+            with span.new_child("get-walker"):
                 walker = repo.get_walker(
                     include=[new_sha],
-                    exclude=([old_sha] if old_sha != ZERO_SHA else []))
+                    exclude=([old_sha] if old_sha != ZERO_SHA else []),
+                )
         except MissingCommitError:
             return web.json_response({}, status=404)
         for entry in walker:
-            ret.append({
-                'commit-id': entry.commit.id.decode('ascii'),
-                'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
-                'link': '/git/{}/commit/{}/'.format(codebase, entry.commit.id.decode('ascii')),
-                'message': entry.commit.message.decode('utf-8', 'replace')})
+            ret.append(
+                {
+                    "commit-id": entry.commit.id.decode("ascii"),
+                    "revision-id": "git-v1:" + entry.commit.id.decode("ascii"),
+                    "link": "/git/{}/commit/{}/".format(
+                        codebase, entry.commit.id.decode("ascii")
+                    ),
+                    "message": entry.commit.message.decode("utf-8", "replace"),
+                }
+            )
             await asyncio.sleep(0)
         return web.json_response(ret)
 
@@ -148,11 +150,9 @@ async def _git_open_repo(local_path: str, db, codebase: str) -> Repo:
     except NotGitRepository as e:
         async with db.acquire() as conn:
             if not await codebase_exists(conn, codebase):
-                raise web.HTTPNotFound(text='no such codebase: %s' % codebase) from e
+                raise web.HTTPNotFound(text="no such codebase: %s" % codebase) from e
         repo = Repo.init_bare(repo_path, mkdir=(not os.path.isdir(repo_path)))
-        logging.info(
-            "Created missing git repository for %s at %s", codebase, repo.path
-        )
+        logging.info("Created missing git repository for %s at %s", codebase, repo.path)
     return repo
 
 
@@ -175,8 +175,10 @@ async def handle_klaus(request: web.Request) -> web.Response:
     codebase = request.match_info["codebase"]
 
     span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
+    with span.new_child("open-repo"):
+        repo = await _git_open_repo(
+            request.app["local_path"], request.app["db"], codebase
+        )
 
     from flask import Flask
     from klaus import KLAUS_VERSION, utils, views
@@ -248,8 +250,10 @@ async def handle_set_git_remote(request: web.Request) -> web.Response:
     remote = request.match_info["remote"]
 
     span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
+    with span.new_child("open-repo"):
+        repo = await _git_open_repo(
+            request.app["local_path"], request.app["db"], codebase
+        )
 
     with closing(repo):
         post = await request.post()
@@ -269,22 +273,24 @@ async def cgit_backend(request: web.Request) -> web.Response:
     subpath = request.match_info["subpath"]
     span = aiozipkin.request_span(request)
 
-    allow_writes = request.app['allow_writes']
+    allow_writes = request.app["allow_writes"]
     if allow_writes is None:
-        with span.new_child('is-worker'):
-            allow_writes = await is_worker(request.app['db'], request)
+        with span.new_child("is-worker"):
+            allow_writes = await is_worker(request.app["db"], request)
     service = request.query.get("service")
     if service is not None:
         _git_check_service(service, allow_writes)
 
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
+    with span.new_child("open-repo"):
+        repo = await _git_open_repo(
+            request.app["local_path"], request.app["db"], codebase
+        )
 
     args = ["/usr/bin/git"]
     if allow_writes:
         args.extend(["-c", "http.receivepack=1"])
     args.append("http-backend")
-    full_path = os.path.join(repo.path, subpath.lstrip('/'))
+    full_path = os.path.join(repo.path, subpath.lstrip("/"))
 
     repo.close()
     env: dict[str, str] = {
@@ -300,7 +306,7 @@ async def cgit_backend(request: web.Request) -> web.Response:
         env["REMOTE_ADDR"] = request.remote
 
     if request.content_type is not None:
-        env['CONTENT_TYPE'] = request.content_type
+        env["CONTENT_TYPE"] = request.content_type
 
     for key, value in request.headers.items():
         env["HTTP_" + key.replace("-", "_").upper()] = value
@@ -325,13 +331,13 @@ async def cgit_backend(request: web.Request) -> web.Response:
         async def read_stderr(stream):
             line = await stream.readline()
             while line:
-                logging.warning("git: %s", line.decode().rstrip('\n'))
+                logging.warning("git: %s", line.decode().rstrip("\n"))
                 line = await stream.readline()
 
         async def read_stdout(stream):
             b = BytesIO()
             line = await stream.readline()
-            while line != b'\r\n':
+            while line != b"\r\n":
                 b.write(line)
                 line = await stream.readline()
             b.seek(0)
@@ -350,15 +356,19 @@ async def cgit_backend(request: web.Request) -> web.Response:
             assert p.stdin
             assert p.stdin.is_closing()
 
-            if 'Content-Length' in headers:
-                content_length = int(headers['Content-Length'])
+            if "Content-Length" in headers:
+                content_length = int(headers["Content-Length"])
                 return web.Response(
-                    headers=dict(headers), status=status_code, reason=status_reason,
-                    body=await p.stdout.read(content_length))  # type: ignore
+                    headers=dict(headers),
+                    status=status_code,
+                    reason=status_reason,
+                    body=await p.stdout.read(content_length),
+                )  # type: ignore
             else:
                 response = web.StreamResponse(
                     headers=dict(headers),
-                    status=status_code, reason=status_reason,
+                    status=status_code,
+                    reason=status_reason,
                 )
 
                 if tuple(request.version) == (1, 1):
@@ -380,11 +390,13 @@ async def cgit_backend(request: web.Request) -> web.Response:
 
                 return response
 
-        with span.new_child('git-backend'):
+        with span.new_child("git-backend"):
             try:
                 _stderr_reader, response = await asyncio.gather(
-                    read_stderr(p.stderr), read_stdout(p.stdout),
-                    return_exceptions=False)
+                    read_stderr(p.stderr),
+                    read_stdout(p.stdout),
+                    return_exceptions=False,
+                )
             except asyncio.CancelledError:
                 p.terminate()
                 await p.wait()
@@ -401,13 +413,15 @@ async def cgit_backend(request: web.Request) -> web.Response:
 async def dulwich_refs(request: web.Request) -> web.StreamResponse:
     codebase = request.match_info["codebase"]
 
-    allow_writes = request.app['allow_writes']
+    allow_writes = request.app["allow_writes"]
     if allow_writes is None:
-        allow_writes = await is_worker(request.app['db'], request)
+        allow_writes = await is_worker(request.app["db"], request)
 
     span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
+    with span.new_child("open-repo"):
+        repo = await _git_open_repo(
+            request.app["local_path"], request.app["db"], codebase
+        )
 
     with closing(repo):
         service = request.query.get("service")
@@ -429,7 +443,11 @@ async def dulwich_refs(request: web.Request) -> web.StreamResponse:
         out = BytesIO()
         proto = ReceivableProtocol(BytesIO().read, out.write)
         handler = handler_cls(
-            DictBackend({".": repo}), ["."], proto, stateless_rpc=True, advertise_refs=True
+            DictBackend({".": repo}),
+            ["."],
+            proto,
+            stateless_rpc=True,
+            advertise_refs=True,
         )
         handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
         handler.proto.write_pkt_line(None)
@@ -447,20 +465,20 @@ async def dulwich_service(request: web.Request) -> web.StreamResponse:
     codebase = request.match_info["codebase"]
     service = request.match_info["service"]
 
-    allow_writes = request.app['allow_writes']
+    allow_writes = request.app["allow_writes"]
     if allow_writes is None:
-        allow_writes = await is_worker(request.app['db'], request)
+        allow_writes = await is_worker(request.app["db"], request)
 
     span = aiozipkin.request_span(request)
-    with span.new_child('open-repo'):
-        repo = await _git_open_repo(request.app['local_path'], request.app['db'], codebase)
+    with span.new_child("open-repo"):
+        repo = await _git_open_repo(
+            request.app["local_path"], request.app["db"], codebase
+        )
 
     with closing(repo):
         _git_check_service(service, allow_writes)
 
-        headers = {
-            'Content-Type': "application/x-%s-result" % service
-        }
+        headers = {"Content-Type": "application/x-%s-result" % service}
         headers.update(NO_CACHE_HEADERS)
         handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
@@ -473,7 +491,9 @@ async def dulwich_service(request: web.Request) -> web.StreamResponse:
 
         def handle():
             proto = ReceivableProtocol(inf.read, outf.write)
-            handler = handler_cls(DictBackend({".": repo}), ["."], proto, stateless_rpc=True)
+            handler = handler_cls(
+                DictBackend({".": repo}), ["."], proto, stateless_rpc=True
+            )
             try:
                 handler.handle()
             except HangupException:
@@ -493,35 +513,38 @@ async def codebase_exists(conn, codebase: str) -> bool:
 
 async def handle_repo_list(request: web.Request) -> web.Response:
     span = aiozipkin.request_span(request)
-    with span.new_child('list-repositories'):
-        names = [entry.name
-                 for entry in os.scandir(os.path.join(request.app['local_path']))]
+    with span.new_child("list-repositories"):
+        names = [
+            entry.name for entry in os.scandir(os.path.join(request.app["local_path"]))
+        ]
         names.sort()
     best_match = mimeparse.best_match(
-        ['text/html', 'text/plain', 'application/json'],
-        request.headers.get('Accept', '*/*'))
-    if best_match == 'application/json':
+        ["text/html", "text/plain", "application/json"],
+        request.headers.get("Accept", "*/*"),
+    )
+    if best_match == "application/json":
         return web.json_response(names)
-    elif best_match == 'text/plain':
+    elif best_match == "text/plain":
         return web.Response(
-            text=''.join([line + '\n' for line in names]),
-            content_type='text/plain')
-    elif best_match == 'text/html':
+            text="".join([line + "\n" for line in names]), content_type="text/plain"
+        )
+    elif best_match == "text/html":
         return await aiohttp_jinja2.render_template_async(
-            'repo-list.html', request, {'vcs': "git", 'repositories': names})
+            "repo-list.html", request, {"vcs": "git", "repositories": names}
+        )
     raise web.HTTPNotAcceptable()
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    return web.Response(text='ok')
+    return web.Response(text="ok")
 
 
 async def handle_ready(request: web.Request) -> web.Response:
-    return web.Response(text='ok')
+    return web.Response(text="ok")
 
 
 async def handle_home(request: web.Request) -> web.Response:
-    return web.Response(text='')
+    return web.Response(text="")
 
 
 async def create_web_app(
@@ -537,21 +560,24 @@ async def create_web_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
-        client_max_size=(client_max_size or 0)
+        client_max_size=(client_max_size or 0),
     )
-    app['local_path'] = local_path
-    app['db'] = db
-    app['allow_writes'] = True
+    app["local_path"] = local_path
+    app["db"] = db
+    app["allow_writes"] = True
     public_app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware],
-        client_max_size=(client_max_size or 0)
+        client_max_size=(client_max_size or 0),
     )
     aiohttp_jinja2.setup(
-        public_app, loader=template_loader, enable_async=True,
-        autoescape=select_autoescape(["html", "xml"]))
-    public_app['local_path'] = local_path
-    public_app['db'] = db
-    public_app['allow_writes'] = None
+        public_app,
+        loader=template_loader,
+        enable_async=True,
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    public_app["local_path"] = local_path
+    public_app["db"] = db
+    public_app["allow_writes"] = None
     public_app.middlewares.insert(0, metrics_middleware)
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name="metrics")
@@ -559,43 +585,52 @@ async def create_web_app(
         app.router.add_post(
             "/{codebase}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
-            name='dulwich-service'
+            name="dulwich-service",
         )
         public_app.router.add_post(
             "/git/{codebase}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service,
-            name='dulwich-service-public'
+            name="dulwich-service-public",
         )
-        app.router.add_get(
-            "/{codebase}/info/refs",
-            dulwich_refs, name='dulwich-refs')
+        app.router.add_get("/{codebase}/info/refs", dulwich_refs, name="dulwich-refs")
         public_app.router.add_get(
-            "/git/{codebase}/info/refs",
-            dulwich_refs, name='dulwich-refs-public')
+            "/git/{codebase}/info/refs", dulwich_refs, name="dulwich-refs-public"
+        )
     else:
         for method, regex in HTTPGitApplication.services.keys():
             app.router.add_route(
-                method, "/{codebase}{subpath:" + regex.pattern + "}",
+                method,
+                "/{codebase}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
             public_app.router.add_route(
-                method, "/git/{codebase}{subpath:" + regex.pattern + "}",
+                method,
+                "/git/{codebase}{subpath:" + regex.pattern + "}",
                 cgit_backend,
             )
 
-
-    public_app.router.add_get("/", handle_home, name='home')
-    public_app.router.add_get("/git/", handle_repo_list, name='public-repo-list')
-    app.router.add_get("/", handle_repo_list, name='repo-list')
-    app.router.add_get("/health", handle_health, name='health')
-    app.router.add_get("/ready", handle_ready, name='ready')
-    app.router.add_get("/{codebase}/diff", git_diff_request, name='git-diff')
-    app.router.add_get("/{codebase}/revision-info", git_revision_info_request, name='git-revision-info')
-    public_app.router.add_get("/git/{codebase}/{path_info:.*}", handle_klaus, name='klaus')
-    app.router.add_post("/{codebase}/remotes/{remote}", handle_set_git_remote, name='git-remote')
-    endpoint = aiozipkin.create_endpoint("janitor.git_store", ipv4=listen_addr, port=port)
+    public_app.router.add_get("/", handle_home, name="home")
+    public_app.router.add_get("/git/", handle_repo_list, name="public-repo-list")
+    app.router.add_get("/", handle_repo_list, name="repo-list")
+    app.router.add_get("/health", handle_health, name="health")
+    app.router.add_get("/ready", handle_ready, name="ready")
+    app.router.add_get("/{codebase}/diff", git_diff_request, name="git-diff")
+    app.router.add_get(
+        "/{codebase}/revision-info", git_revision_info_request, name="git-revision-info"
+    )
+    public_app.router.add_get(
+        "/git/{codebase}/{path_info:.*}", handle_klaus, name="klaus"
+    )
+    app.router.add_post(
+        "/{codebase}/remotes/{remote}", handle_set_git_remote, name="git-remote"
+    )
+    endpoint = aiozipkin.create_endpoint(
+        "janitor.git_store", ipv4=listen_addr, port=port
+    )
     if config.zipkin_address:
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
+        tracer = await aiozipkin.create(
+            config.zipkin_address, endpoint, sample_rate=0.1
+        )
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     aiozipkin.setup(app, tracer)
@@ -615,7 +650,8 @@ async def main(argv=None):
     )
     parser.add_argument("--port", type=int, help="Listen port", default=9923)
     parser.add_argument(
-        "--public-port", type=int, help="Public listen port", default=9924)
+        "--public-port", type=int, help="Public listen port", default=9924
+    )
     parser.add_argument(
         "--dulwich-server",
         action="store_true",
@@ -630,17 +666,20 @@ async def main(argv=None):
     parser.add_argument(
         "--client-max-size",
         type=int,
-        default=1024 ** 3,
+        default=1024**3,
         help="Maximum client body size (0 for no limit)",
     )
     parser.add_argument("--debug", action="store_true", help="Show debug info")
-    parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
+    parser.add_argument(
+        "--vcs-path", default=None, type=str, help="Path to local vcs storage"
+    )
     parser.add_argument("--gcp-logging", action="store_true")
 
     args = parser.parse_args()
 
     if args.gcp_logging:
         import google.cloud.logging
+
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
@@ -653,13 +692,13 @@ async def main(argv=None):
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
-        warnings.simplefilter('always', ResourceWarning)
+        warnings.simplefilter("always", ResourceWarning)
 
     with open(args.config) as f:
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
-        parser.error('vcs path %s does not exist' % args.vcs_path)
+        parser.error("vcs path %s does not exist" % args.vcs_path)
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(

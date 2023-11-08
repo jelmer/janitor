@@ -33,12 +33,14 @@ def get_processing(answer: dict[str, Any]) -> Iterator[dict[str, Any]]:
         if entry.get("start_time"):
             entry["start_time"] = datetime.fromisoformat(entry["start_time"])
             entry["current_duration"] = datetime.utcnow() - entry["start_time"]
-        if entry.get('last-keepalive'):
+        if entry.get("last-keepalive"):
             entry["keepalive_age"] = timedelta(seconds=entry["keepalive_age"])
         yield entry
 
 
-async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, limit: int):
+async def iter_queue_items_with_last_run(
+    db: asyncpg.pool.Pool, queue: Queue, limit: int
+):
     async with db.acquire() as conn:
         items = []
         qs = []
@@ -47,36 +49,33 @@ async def iter_queue_items_with_last_run(db: asyncpg.pool.Pool, queue: Queue, li
             items.append(item)
             vals.append(item.codebase)
             vals.append(item.campaign)
-            qs.append(
-                '(codebase = $%d AND suite = $%d)' % (len(vals) - 1, len(vals)))
+            qs.append("(codebase = $%d AND suite = $%d)" % (len(vals) - 1, len(vals)))
 
         runs = {}
         if qs:
             for row in await conn.fetch(
-                    'SELECT codebase, suite AS campaign, id, result_code, failure_transient FROM last_runs '
-                    'WHERE (%s)' % ' OR '.join(qs), *vals):
-                runs[(row['codebase'], row['campaign'])] = dict(row)
+                "SELECT codebase, suite AS campaign, id, result_code, failure_transient FROM last_runs "
+                "WHERE (%s)" % " OR ".join(qs),
+                *vals,
+            ):
+                runs[(row["codebase"], row["campaign"])] = dict(row)
 
     for item in items:
         yield (item, runs.get((item.codebase, item.campaign)))
 
 
-async def get_queue(db: asyncpg.pool.Pool, queue: Queue, limit: int) -> AsyncIterator[
-    tuple[
-        QueueItem,
-        Any,
-        str
-    ]
-]:
+async def get_queue(
+    db: asyncpg.pool.Pool, queue: Queue, limit: int
+) -> AsyncIterator[tuple[QueueItem, Any, str]]:
     async for queue_item, row in iter_queue_items_with_last_run(db, queue, limit=limit):
         command = shlex.split(queue_item.command)
-        while command and '=' in command[0]:
+        while command and "=" in command[0]:
             command.pop(0)
         expecting = None
         if command:
-            description = ' '.join(command)
+            description = " ".join(command)
         else:
-            description = 'no-op'
+            description = "no-op"
         if expecting is not None:
             description += ", " + expecting
         if queue_item.refresh:
@@ -95,7 +94,8 @@ async def write_queue(
         avoid_hosts = queue_status["avoid_hosts"]
         rate_limit_hosts = {
             host: datetime.fromisoformat(ts)
-            for (host, ts) in queue_status["rate_limit_hosts"].items()}
+            for (host, ts) in queue_status["rate_limit_hosts"].items()
+        }
     else:
         processing = iter([])
         active_queue_ids = set()

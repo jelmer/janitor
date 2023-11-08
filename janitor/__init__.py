@@ -31,7 +31,7 @@ def set_user_agent(user_agent):
     _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
     URLopener.version = user_agent
     opener = build_opener()
-    opener.addheaders = [('User-agent', user_agent)]
+    opener.addheaders = [("User-agent", user_agent)]
     install_opener(opener)
 
 
@@ -41,7 +41,7 @@ CAMPAIGN_REGEX = "[a-z0-9-]+"
 def splitout_env(command):
     args = shlex.split(command)
     env = {}
-    while len(args) > 0 and '=' in args[0]:
-        (key, value) = args.pop(0).split('=', 1)
+    while len(args) > 0 and "=" in args[0]:
+        (key, value) = args.pop(0).split("=", 1)
         env[key] = value
     return env, shlex.join(args)

@@ -70,7 +70,7 @@ def filter_boring_detail(detail, old_version, new_version, display_version):
                 detail["unified_diff"], old_version, new_version, display_version
             )
         except MalformedHunkHeader as e:
-            logging.warning('Error parsing hunk: %r', e)
+            logging.warning("Error parsing hunk: %r", e)
     detail["source1"] = detail["source1"].replace(old_version, display_version)
     detail["source2"] = detail["source2"].replace(new_version, display_version)
     if detail.get("details"):
@@ -112,9 +112,7 @@ def filter_irrelevant(diff):
     diff["source2"] = os.path.basename(diff["source2"])
 
 
-async def format_diffoscope(
-    root_difference, content_type, title, css_url=None
-):
+async def format_diffoscope(root_difference, content_type, title, css_url=None):
     if content_type == "application/json":
         return json.dumps(root_difference)
     from diffoscope.readers.json import JSONReaderV1
@@ -160,11 +158,14 @@ async def format_diffoscope(
 
 
 async def _run_diffoscope(
-        old_binary, new_binary, *,
-        diffoscope_command=None, timeout=None, preexec_fn=None):
+    old_binary, new_binary, *, diffoscope_command=None, timeout=None, preexec_fn=None
+):
     if diffoscope_command is None:
         diffoscope_command = "diffoscope"
-    args = shlex.split(diffoscope_command) + ["--json=-", "--exclude-directory-metadata=yes"]
+    args = shlex.split(diffoscope_command) + [
+        "--json=-",
+        "--exclude-directory-metadata=yes",
+    ]
     args.extend([old_binary, new_binary])
     logging.debug("running %r", args)
     p = await asyncio.create_subprocess_exec(
@@ -172,7 +173,7 @@ async def _run_diffoscope(
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        preexec_fn=preexec_fn
+        preexec_fn=preexec_fn,
     )
     communicate = p.communicate(b"")
     if timeout is not None:
@@ -194,8 +195,13 @@ async def _run_diffoscope(
 
 
 async def run_diffoscope(
-        old_binaries, new_binaries, *, preexec_fn=None, timeout=None,
-        diffoscope_command=None):
+    old_binaries,
+    new_binaries,
+    *,
+    preexec_fn=None,
+    timeout=None,
+    diffoscope_command=None,
+):
     ret: dict[str, Any] = {
         "diffoscope-json-version": 1,
         "source1": "old version",
@@ -204,11 +210,14 @@ async def run_diffoscope(
         "details": [],
     }
 
-    for (old_name, old_path), (new_name, new_path) in zip(
-            old_binaries, new_binaries):
+    for (old_name, old_path), (new_name, new_path) in zip(old_binaries, new_binaries):
         sub = await _run_diffoscope(
-            old_path, new_path, preexec_fn=preexec_fn, timeout=timeout,
-            diffoscope_command=diffoscope_command)
+            old_path,
+            new_path,
+            preexec_fn=preexec_fn,
+            timeout=timeout,
+            diffoscope_command=diffoscope_command,
+        )
         if sub is None:
             continue
         sub["source1"] = old_name

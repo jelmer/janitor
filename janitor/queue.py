@@ -22,7 +22,6 @@ import asyncpg
 
 
 class QueueItem:
-
     __slots__ = [
         "id",
         "context",
@@ -61,15 +60,15 @@ class QueueItem:
     @classmethod
     def from_row(cls, row) -> "QueueItem":
         return cls(
-            id=row['id'],
-            context=row['context'],
-            command=row['command'],
-            estimated_duration=row['estimated_duration'],
-            campaign=row['campaign'],
-            refresh=row['refresh'],
-            requester=row['requester'],
-            change_set=row['change_set'],
-            codebase=row['codebase'],
+            id=row["id"],
+            context=row["context"],
+            command=row["command"],
+            estimated_duration=row["estimated_duration"],
+            campaign=row["campaign"],
+            refresh=row["refresh"],
+            requester=row["requester"],
+            change_set=row["change_set"],
+            codebase=row["codebase"],
         )
 
     def __eq__(self, other):
@@ -85,15 +84,18 @@ class QueueItem:
 
 
 class Queue:
-
     def __init__(self, conn: asyncpg.Connection) -> None:
         self.conn = conn
 
-    async def get_position(self, campaign: str, codebase: str) -> tuple[Optional[int], Optional[timedelta]]:
+    async def get_position(
+        self, campaign: str, codebase: str
+    ) -> tuple[Optional[int], Optional[timedelta]]:
         row = await self.conn.fetchrow(
             "SELECT position, wait_time FROM queue_positions "
             "WHERE codebase = $1 AND suite = $2",
-            codebase, campaign)
+            codebase,
+            campaign,
+        )
         if not row:
             return (None, None)
         return row
@@ -119,10 +121,13 @@ WHERE queue.id = $1
             return QueueItem.from_row(row)
         return None
 
-    async def next_item(self, codebase: Optional[str] = None,
-                        campaign: Optional[str] = None,
-                        exclude_hosts: Optional[set[str]] = None,
-                        assigned_queue_items: Optional[set[int]] = None) -> tuple[Optional[QueueItem], dict[str, str]]:
+    async def next_item(
+        self,
+        codebase: Optional[str] = None,
+        campaign: Optional[str] = None,
+        exclude_hosts: Optional[set[str]] = None,
+        assigned_queue_items: Optional[set[int]] = None,
+    ) -> tuple[Optional[QueueItem], dict[str, str]]:
         query = """
 SELECT
     queue.command AS command,
@@ -157,7 +162,8 @@ LEFT JOIN codebase ON codebase.name = queue.codebase
             # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
             conditions.append(
                 "NOT (codebase.branch_url IS NOT NULL AND "
-                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))")
+                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))"
+            )
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -173,16 +179,17 @@ LIMIT 1
         if row is None:
             return None, {}
         vcs_info = {}
-        if row['branch_url']:
-            vcs_info['branch_url'] = row['branch_url']
-        if row['subpath'] is not None:
-            vcs_info['subpath'] = row['subpath']
-        if row['vcs_type']:
-            vcs_info['vcs_type'] = row['vcs_type']
+        if row["branch_url"]:
+            vcs_info["branch_url"] = row["branch_url"]
+        if row["subpath"] is not None:
+            vcs_info["subpath"] = row["subpath"]
+        if row["vcs_type"]:
+            vcs_info["vcs_type"] = row["vcs_type"]
         return QueueItem.from_row(row), vcs_info
 
-    async def iter_queue(self, limit: Optional[int] = None,
-                         campaign: Optional[str] = None):
+    async def iter_queue(
+        self, limit: Optional[int] = None, campaign: Optional[str] = None
+    ):
         query = """
 SELECT
     queue.command AS command,
@@ -218,18 +225,19 @@ queue.id ASC
             yield QueueItem.from_row(row)
 
     async def add(
-            self,
-            *,
-            codebase: str,
-            command: str,
-            campaign: str,
-            change_set: Optional[str] = None,
-            offset: float = 0.0,
-            bucket: str = "default",
-            context: Optional[str] = None,
-            estimated_duration: Optional[timedelta] = None,
-            refresh: bool = False,
-            requester: Optional[str] = None) -> tuple[int, str]:
+        self,
+        *,
+        codebase: str,
+        command: str,
+        campaign: str,
+        change_set: Optional[str] = None,
+        offset: float = 0.0,
+        bucket: str = "default",
+        context: Optional[str] = None,
+        estimated_duration: Optional[timedelta] = None,
+        refresh: bool = False,
+        requester: Optional[str] = None,
+    ) -> tuple[int, str]:
         row = await self.conn.fetchrow(
             "INSERT INTO queue "
             "(command, priority, bucket, context, "
@@ -265,12 +273,15 @@ queue.id ASC
                 "SELECT id, bucket FROM queue "
                 "WHERE codebase = $1 AND suite = $2 "
                 "AND coalesce(change_set, '') = $3",
-                codebase, campaign, change_set or '')
+                codebase,
+                campaign,
+                change_set or "",
+            )
             assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
             return row
         return row
 
     async def get_buckets(self):
         return await self.conn.fetch(
-            "SELECT bucket, count(*) FROM queue GROUP BY bucket "
-            "ORDER BY bucket ASC")
+            "SELECT bucket, count(*) FROM queue GROUP BY bucket " "ORDER BY bucket ASC"
+        )

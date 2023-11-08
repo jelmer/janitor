@@ -59,13 +59,15 @@ from silver_platter.utils import (
 )
 from yarl import URL
 
-EMPTY_GIT_TREE = b'4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+EMPTY_GIT_TREE = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
 
-    def __init__(self, code: str, description: str, retry_after: Optional[int] = None) -> None:
+    def __init__(
+        self, code: str, description: str, retry_after: Optional[int] = None
+    ) -> None:
         self.code = code
         self.description = description
         self.retry_after = retry_after
@@ -134,7 +136,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             msg = f"{msg} ({e.url})"
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
-        if getattr(e, 'vcs', None):
+        if getattr(e, "vcs", None):
             code = "unsupported-vcs-%s" % e.vcs
         elif str(e).startswith("Unsupported protocol for url "):
             if "anonscm.debian.org" in str(e) or "svn.debian.org" in str(e):
@@ -170,7 +172,12 @@ def open_branch_ext(
 ) -> Branch:
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
+    except (
+        BranchUnavailable,
+        BranchMissing,
+        BranchUnsupported,
+        BranchRateLimited,
+    ) as e:
         raise _convert_branch_exception(vcs_url, e) from e
 
 
@@ -187,7 +194,8 @@ class UnsupportedVcs(Exception):
 
 
 def open_cached_branch(
-        url, trace_context: Optional[TraceContext] = None) -> Optional[Branch]:
+    url, trace_context: Optional[TraceContext] = None
+) -> Optional[Branch]:
     # TODO(jelmer): Somehow pass in trace context headers
     try:
         transport = get_transport_from_url(url)
@@ -204,25 +212,24 @@ def open_cached_branch(
     except BranchReferenceLoop:
         return None
     except ssl.SSLCertVerificationError as e:
-        logging.warning('Unable to access cache branch at %s: %r', url, e)
+        logging.warning("Unable to access cache branch at %s: %r", url, e)
         raise
 
 
 class VcsManager:
     def get_branch(
-            self, codebase: str, branch_name: str,
-            *, trace_context: Optional[TraceContext] = None
+        self,
+        codebase: str,
+        branch_name: str,
+        *,
+        trace_context: Optional[TraceContext] = None,
     ) -> Branch:
         raise NotImplementedError(self.get_branch)
 
-    def get_branch_url(
-        self, codebase: str, branch_name: str
-    ) -> Optional[str]:
+    def get_branch_url(self, codebase: str, branch_name: str) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
-    def get_repository(
-        self, codebase: str
-    ) -> Repository:
+    def get_repository(self, codebase: str) -> Repository:
         raise NotImplementedError(self.get_repository)
 
     def get_repository_url(self, codebase: str) -> str:
@@ -232,12 +239,13 @@ class VcsManager:
         raise NotImplementedError(self.list_repositories)
 
     async def get_diff(
-            self, codebase: str, old_revid: bytes,
-            new_revid: bytes) -> bytes:
+        self, codebase: str, old_revid: bytes, new_revid: bytes
+    ) -> bytes:
         raise NotImplementedError(self.get_diff)
 
     async def get_revision_info(
-            self, codebase: str, old_revid: bytes, new_revid: bytes):
+        self, codebase: str, old_revid: bytes, new_revid: bytes
+    ):
         raise NotImplementedError(self.get_revision_info)
 
 
@@ -257,9 +265,9 @@ class LocalGitVcsManager(VcsManager):
 
     def get_branch_url(self, codebase, branch_name):
         return urlutils.join_segment_parameters(
-            "file:%s" % (
-                os.path.join(self.base_path, codebase)), {
-                    "branch": urlutils.escape(branch_name, safe='')})
+            "file:%s" % (os.path.join(self.base_path, codebase)),
+            {"branch": urlutils.escape(branch_name, safe="")},
+        )
 
     def get_repository(self, codebase):
         try:
@@ -293,7 +301,8 @@ class LocalGitVcsManager(VcsManager):
         args: list[str] = [
             "git",
             "diff",
-            old_sha.decode('utf-8'), new_sha.decode('utf-8')
+            old_sha.decode("utf-8"),
+            new_sha.decode("utf-8"),
         ]
 
         p = await asyncio.create_subprocess_exec(
@@ -301,7 +310,7 @@ class LocalGitVcsManager(VcsManager):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE,
-            cwd=repo.user_transport.local_abspath('.'),
+            cwd=repo.user_transport.local_abspath("."),
         )
 
         try:
@@ -312,11 +321,12 @@ class LocalGitVcsManager(VcsManager):
             raise
 
         if p.returncode != 0:
-            raise RuntimeError('git diff failed: %s', stderr.decode())
+            raise RuntimeError("git diff failed: %s", stderr.decode())
         return stdout
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         from dulwich.errors import MissingCommitError
+
         repo = self.get_repository(codebase)
         if repo is None:
             raise KeyError
@@ -328,10 +338,15 @@ class LocalGitVcsManager(VcsManager):
         except MissingCommitError as e:
             raise KeyError from e
         for entry in walker:
-            ret.append({
-                'commit-id': entry.commit.id.decode('ascii'),
-                'revision-id': repo.lookup_foreign_revision_id(entry.commit.id).decode('utf-8'),
-                'message': entry.commit.message.decode('utf-8', 'replace')})
+            ret.append(
+                {
+                    "commit-id": entry.commit.id.decode("ascii"),
+                    "revision-id": repo.lookup_foreign_revision_id(
+                        entry.commit.id
+                    ).decode("utf-8"),
+                    "message": entry.commit.message.decode("utf-8", "replace"),
+                }
+            )
             await asyncio.sleep(0)
         return ret
 
@@ -374,11 +389,11 @@ class LocalBzrVcsManager(VcsManager):
             raise KeyError
         args = [
             sys.executable,
-            '-m',
-            'breezy',
+            "-m",
+            "breezy",
             "diff",
-            f'-rrevid:{old_revid.decode()}..revid:{new_revid.decode()}',
-            urlutils.join(repo.user_url)
+            f"-rrevid:{old_revid.decode()}..revid:{new_revid.decode()}",
+            urlutils.join(repo.user_url),
         ]
 
         p = await asyncio.create_subprocess_exec(
@@ -398,7 +413,7 @@ class LocalBzrVcsManager(VcsManager):
         if p.returncode != 3:
             return stdout
 
-        raise RuntimeError('diff returned %d' % p.returncode)
+        raise RuntimeError("diff returned %d" % p.returncode)
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         repo = self.get_repository(codebase)
@@ -407,11 +422,16 @@ class LocalBzrVcsManager(VcsManager):
         ret = []
         with repo.lock_read():
             graph = repo.get_graph()
-            for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
-                ret.append({
-                    'revision-id': rev.revision_id.decode('utf-8'),
-                    'link': None,
-                    'message': rev.description})
+            for rev in repo.iter_revisions(
+                graph.iter_lefthand_ancestry(new_revid, [old_revid])
+            ):
+                ret.append(
+                    {
+                        "revision-id": rev.revision_id.decode("utf-8"),
+                        "link": None,
+                        "message": rev.description,
+                    }
+                )
                 await asyncio.sleep(0)
         return ret
 
@@ -429,40 +449,57 @@ class RemoteGitVcsManager(VcsManager):
             return b""
 
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(
+            trace_configs=self.trace_configs
+        ) as client, client.get(
+            url, timeout=ClientTimeout(30), raise_for_status=True
+        ) as resp:
             return await resp.read()
 
     def _lookup_revid(self, revid, default):
         if revid == NULL_REVISION:
             return default
         else:
-            return revid[len(b'git-v1:'):]
+            return revid[len(b"git-v1:") :]
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
-        url = urllib.parse.urljoin(self.base_url, "{}/revision-info?old={}&new={}".format(
-            codebase,
-            self._lookup_revid(old_revid, ZERO_SHA).decode('utf-8'),
-            self._lookup_revid(new_revid, ZERO_SHA).decode('utf-8')))
-        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        url = urllib.parse.urljoin(
+            self.base_url,
+            "{}/revision-info?old={}&new={}".format(
+                codebase,
+                self._lookup_revid(old_revid, ZERO_SHA).decode("utf-8"),
+                self._lookup_revid(new_revid, ZERO_SHA).decode("utf-8"),
+            ),
+        )
+        async with ClientSession(
+            trace_configs=self.trace_configs
+        ) as client, client.get(
+            url, timeout=ClientTimeout(30), raise_for_status=True
+        ) as resp:
             return await resp.json()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.base_url!r})"
 
     def get_diff_url(self, codebase, old_revid, new_revid):
-        return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(
-            codebase,
-            self._lookup_revid(old_revid, EMPTY_GIT_TREE).decode('utf-8'),
-            self._lookup_revid(new_revid, EMPTY_GIT_TREE).decode('utf-8')))
+        return urllib.parse.urljoin(
+            self.base_url,
+            "{}/diff?old={}&new={}".format(
+                codebase,
+                self._lookup_revid(old_revid, EMPTY_GIT_TREE).decode("utf-8"),
+                self._lookup_revid(new_revid, EMPTY_GIT_TREE).decode("utf-8"),
+            ),
+        )
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
         return open_cached_branch(url, trace_context=trace_context)
 
     def get_branch_url(self, codebase, branch_name) -> str:
-        return urlutils.join_segment_parameters("{}/{}".format(
-            self.base_url.rstrip("/"), codebase), {
-                "branch": urlutils.escape(branch_name, safe='')})
+        return urlutils.join_segment_parameters(
+            "{}/{}".format(self.base_url.rstrip("/"), codebase),
+            {"branch": urlutils.escape(branch_name, safe="")},
+        )
 
     def get_repository_url(self, codebase: str) -> str:
         return "{}/{}".format(self.base_url.rstrip("/"), codebase)
@@ -480,23 +517,37 @@ class RemoteBzrVcsManager(VcsManager):
         if old_revid == new_revid:
             return b""
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        async with ClientSession(
+            trace_configs=self.trace_configs
+        ) as client, client.get(
+            url, timeout=ClientTimeout(30), raise_for_status=True
+        ) as resp:
             return await resp.read()
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
-        url = urllib.parse.urljoin(self.base_url, "{}/revision-info?old={}&new={}".format(
-            codebase, old_revid.decode('utf-8'),
-            new_revid.decode('utf-8')))
-        async with ClientSession(trace_configs=self.trace_configs) as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        url = urllib.parse.urljoin(
+            self.base_url,
+            "{}/revision-info?old={}&new={}".format(
+                codebase, old_revid.decode("utf-8"), new_revid.decode("utf-8")
+            ),
+        )
+        async with ClientSession(
+            trace_configs=self.trace_configs
+        ) as client, client.get(
+            url, timeout=ClientTimeout(30), raise_for_status=True
+        ) as resp:
             return await resp.json()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.base_url!r})"
 
     def get_diff_url(self, codebase, old_revid, new_revid):
-        return urllib.parse.urljoin(self.base_url, "{}/diff?old={}&new={}".format(
-            codebase, old_revid.decode('utf-8'),
-            new_revid.decode('utf-8')))
+        return urllib.parse.urljoin(
+            self.base_url,
+            "{}/diff?old={}&new={}".format(
+                codebase, old_revid.decode("utf-8"), new_revid.decode("utf-8")
+            ),
+        )
 
     def get_branch(self, codebase, branch_name, *, trace_context=None):
         url = self.get_branch_url(codebase, branch_name)
@@ -540,49 +591,52 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
 
 
 def get_vcs_managers(location, *, trace_configs=None):
-    if '=' not in location:
+    if "=" not in location:
         return {
-            'git': RemoteGitVcsManager(
-                str(URL(location) / "git"), trace_configs=trace_configs),
-            'bzr': RemoteBzrVcsManager(
-                str(URL(location) / "bzr"), trace_configs=trace_configs),
+            "git": RemoteGitVcsManager(
+                str(URL(location) / "git"), trace_configs=trace_configs
+            ),
+            "bzr": RemoteBzrVcsManager(
+                str(URL(location) / "bzr"), trace_configs=trace_configs
+            ),
         }
     ret: dict[str, VcsManager] = {}
-    for p in location.split(','):
-        (k, v) = p.split('=', 1)
-        if k == 'git':
-            ret[k] = RemoteGitVcsManager(
-                str(URL(v)), trace_configs=trace_configs)
-        elif k == 'bzr':
-            ret[k] = RemoteBzrVcsManager(
-                str(URL(v)), trace_configs=trace_configs)
+    for p in location.split(","):
+        (k, v) = p.split("=", 1)
+        if k == "git":
+            ret[k] = RemoteGitVcsManager(str(URL(v)), trace_configs=trace_configs)
+        elif k == "bzr":
+            ret[k] = RemoteBzrVcsManager(str(URL(v)), trace_configs=trace_configs)
         else:
-            raise ValueError('unsupported vcs %s' % k)
+            raise ValueError("unsupported vcs %s" % k)
     return ret
 
 
 def get_vcs_managers_from_config(
-        config, *, trace_configs=None) -> dict[str, VcsManager]:
+    config, *, trace_configs=None
+) -> dict[str, VcsManager]:
     ret: dict[str, VcsManager] = {}
     if config.git_location:
         parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
-            ret['git'] = LocalGitVcsManager(parsed.path)
+            ret["git"] = LocalGitVcsManager(parsed.path)
         else:
-            ret['git'] = RemoteGitVcsManager(
-                config.git_location, trace_configs=trace_configs)
+            ret["git"] = RemoteGitVcsManager(
+                config.git_location, trace_configs=trace_configs
+            )
     if config.bzr_location:
         parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
-            ret['bzr'] = LocalBzrVcsManager(parsed.path)
+            ret["bzr"] = LocalBzrVcsManager(parsed.path)
         else:
-            ret['bzr'] = RemoteBzrVcsManager(
-                config.git_location, trace_configs=trace_configs)
+            ret["bzr"] = RemoteBzrVcsManager(
+                config.git_location, trace_configs=trace_configs
+            )
     return ret
 
 
 def is_authenticated_url(url: str):
-    return (url.startswith('git+ssh://') or url.startswith('bzr+ssh://'))
+    return url.startswith("git+ssh://") or url.startswith("bzr+ssh://")
 
 
 def main(argv=None):

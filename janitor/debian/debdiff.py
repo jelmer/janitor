@@ -61,7 +61,7 @@ def filter_boring_wdiff(
         return []
     lines = [
         re.sub(
-            fr"\[-{re.escape(old_version)}(.*?)-\] \{{\+{re.escape(new_version)}\1\+\}}",
+            rf"\[-{re.escape(old_version)}(.*?)-\] \{{\+{re.escape(new_version)}\1\+\}}",
             "",
             line,
         )
@@ -152,7 +152,7 @@ async def run_debdiff(old_binaries: list[str], new_binaries: list[str]) -> bytes
         *args,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await p.communicate(b"")
     if p.returncode not in (0, 1):
