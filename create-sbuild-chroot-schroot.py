@@ -102,8 +102,7 @@ for distribution in args.distribution:
                     'directory')
                 if old_sbuild_path != sbuild_path:
                     raise AssertionError(
-                        'sbuild path has changed: {} != {}'.format(
-                            old_sbuild_path, sbuild_path))
+                        f'sbuild path has changed: {old_sbuild_path} != {sbuild_path}')
                 if os.path.isdir(old_sbuild_path):
                     shutil.rmtree(old_sbuild_path)
                 os.unlink(entry.path)
@@ -130,8 +129,7 @@ for distribution in args.distribution:
     if args.run_command:
         for cmd in args.run_command:
             p = subprocess.Popen(
-                "sbuild-shell {}".format(
-                    sbuild_schroot_name(distro_config.name, sbuild_arch)),
+                f"sbuild-shell {sbuild_schroot_name(distro_config.name, sbuild_arch)}",
                 shell=True,
                 stdin=subprocess.PIPE)
             p.communicate(cmd.encode())
