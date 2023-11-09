@@ -15,9 +15,9 @@ async def db():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
         try:
-            with importlib.resources.open_text('janitor', 'state.sql') as f:
+            with importlib.resources.open_text("janitor", "state.sql") as f:
                 await conn.execute(f.read())
-            with importlib.resources.open_text('janitor.debian', 'debian.sql') as f:
+            with importlib.resources.open_text("janitor.debian", "debian.sql") as f:
                 await conn.execute(f.read())
         finally:
             await conn.close()

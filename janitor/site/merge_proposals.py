@@ -5,9 +5,7 @@ from typing import Optional
 import asyncpg
 
 
-async def get_proposals_with_run(
-    conn: asyncpg.Connection, suite: Optional[str]
-):
+async def get_proposals_with_run(conn: asyncpg.Connection, suite: Optional[str]):
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
@@ -36,7 +34,7 @@ async def write_merge_proposals(db, suite):
     async with db.acquire() as conn:
         proposals_by_status: dict[str, list[asyncpg.Record]] = {}
         for row in await get_proposals_with_run(conn, suite=suite):
-            proposals_by_status.setdefault(row['status'], []).append(row)
+            proposals_by_status.setdefault(row["status"], []).append(row)
 
     merged = proposals_by_status.get("merged", []) + proposals_by_status.get(
         "applied", []
@@ -73,10 +71,13 @@ WHERE url = $1
 
 
 async def get_publishes(conn, url):
-    return await conn.fetch("""
+    return await conn.fetch(
+        """
 SELECT * FROM publish WHERE merge_proposal_url = $1
 ORDER BY timestamp ASC
-""", url)
+""",
+        url,
+    )
 
 
 async def write_merge_proposal(db, url):

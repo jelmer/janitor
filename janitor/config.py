@@ -53,18 +53,18 @@ def get_distribution(config: Config, name: str) -> config_pb2.Distribution:
     raise KeyError(name)
 
 
-def get_campaign_config(config: config_pb2.Config, name: str
-                        ) -> config_pb2.Campaign:
+def get_campaign_config(config: config_pb2.Config, name: str) -> config_pb2.Campaign:
     for c in config.campaign:
         if c.name == name:
             return c
     raise KeyError(name)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('config_file', type=str, help='Configuration file to read')
+    parser.add_argument("config_file", type=str, help="Configuration file to read")
     args = parser.parse_args()
     with open(args.config_file) as f:
         config = read_config(f)

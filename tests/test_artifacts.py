@@ -26,7 +26,6 @@ from janitor.artifacts import ArtifactManager, ArtifactsMissing, LocalArtifactMa
 
 
 class ArtifactManagerTests:
-
     manager: ArtifactManager
 
     assertEqual: Callable
@@ -34,21 +33,21 @@ class ArtifactManagerTests:
 
     def test_store_twice(self):
         with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, 'somefile'), 'w') as f:
-                f.write('lalala')
+            with open(os.path.join(td, "somefile"), "w") as f:
+                f.write("lalala")
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(self.manager.store_artifacts('some-run-id', td))
-            loop.run_until_complete(self.manager.store_artifacts('some-run-id', td))
+            loop.run_until_complete(self.manager.store_artifacts("some-run-id", td))
+            loop.run_until_complete(self.manager.store_artifacts("some-run-id", td))
 
     def test_store_and_retrieve(self):
         with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, 'somefile'), 'w') as f:
-                f.write('lalala')
+            with open(os.path.join(td, "somefile"), "w") as f:
+                f.write("lalala")
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(self.manager.store_artifacts('some-run-id', td))
+            loop.run_until_complete(self.manager.store_artifacts("some-run-id", td))
         with tempfile.TemporaryDirectory() as td:
-            loop.run_until_complete(self.manager.retrieve_artifacts('some-run-id', td))
-            self.assertEqual(['somefile'], os.listdir(td))
+            loop.run_until_complete(self.manager.retrieve_artifacts("some-run-id", td))
+            self.assertEqual(["somefile"], os.listdir(td))
 
     def test_retrieve_nonexistent(self):
         loop = asyncio.get_event_loop()
@@ -56,11 +55,11 @@ class ArtifactManagerTests:
             self.assertRaises(
                 ArtifactsMissing,
                 loop.run_until_complete,
-                self.manager.retrieve_artifacts('some-run-id', td))
+                self.manager.retrieve_artifacts("some-run-id", td),
+            )
 
 
 class LocalArtifactManagerTests(ArtifactManagerTests, unittest.TestCase):
-
     def setUp(self):
         super().setUp()
         self.path = tempfile.mkdtemp()

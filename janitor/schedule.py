@@ -45,7 +45,7 @@ DEFAULT_SCHEDULE_OFFSET = -1.0
 # will give a clearer error message.
 IGNORE_RESULT_CODE = {
     # Run worker failures from more than a day ago.
-    "worker-failure": lambda run: ((datetime.utcnow() - run['start_time']).days > 0),
+    "worker-failure": lambda run: ((datetime.utcnow() - run["start_time"]).days > 0),
 }
 
 PUBLISH_MODE_VALUE = {
@@ -59,9 +59,10 @@ PUBLISH_MODE_VALUE = {
 
 
 async def iter_candidates_with_publish_policy(
-        conn: asyncpg.Connection,
-        codebases: Optional[list[str]] = None,
-        campaign: Optional[str] = None):
+    conn: asyncpg.Connection,
+    codebases: Optional[list[str]] = None,
+    campaign: Optional[str] = None,
+):
     query = """
 SELECT
   codebase.name AS codebase,
@@ -91,15 +92,20 @@ INNER JOIN named_publish_policy ON
 
 
 def queue_item_from_candidate_and_publish_policy(row):
-    value = row['value']
-    for entry in row['publish']:
-        value += PUBLISH_MODE_VALUE[entry['mode']]
+    value = row["value"]
+    for entry in row["publish"]:
+        value += PUBLISH_MODE_VALUE[entry["mode"]]
 
-    command = row['command']
+    command = row["command"]
 
-    return (row['codebase'],
-            row['context'], command, row['campaign'],
-            value, row['success_chance'])
+    return (
+        row["codebase"],
+        row["context"],
+        command,
+        row["campaign"],
+        value,
+        row["success_chance"],
+    )
 
 
 async def _estimate_duration(
@@ -142,7 +148,10 @@ async def estimate_duration(
 
 
 async def estimate_success_probability_and_duration(
-    conn: asyncpg.Connection, codebase: str, campaign: str, context: Optional[str] = None
+    conn: asyncpg.Connection,
+    codebase: str,
+    campaign: str,
+    context: Optional[str] = None,
 ) -> tuple[float, timedelta, int]:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
@@ -152,7 +161,8 @@ async def estimate_success_probability_and_duration(
     else:
         same_context_multiplier = 1.0
     durations = []
-    for run in await conn.fetch("""
+    for run in await conn.fetch(
+        """
 SELECT
   result_code, instigated_context, context, failure_details,
   finish_time - start_time AS duration,
@@ -160,26 +170,35 @@ SELECT
 FROM run
 WHERE codebase = $1 AND suite = $2 AND failure_transient IS NOT True
 ORDER BY start_time DESC
-""", codebase, campaign):
+""",
+        codebase,
+        campaign,
+    ):
         try:
-            ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
+            ignore_checker = IGNORE_RESULT_CODE[run["result_code"]]
         except KeyError:
+
             def ignore_checker(run):
                 return False
 
         if ignore_checker(run):
             continue
 
-        durations.append(run['duration'])
+        durations.append(run["duration"])
         total += 1
-        if run['result_code'] == "success":
+        if run["result_code"] == "success":
             success += 1
         same_context = False
-        if context and context in (run['instigated_context'], run['context']):
+        if context and context in (run["instigated_context"], run["context"]):
             same_context = True
-        if (run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details']
-                and run['failure_details'].get('relations')):
-            if await deps_satisfied(conn, campaign, run['failure_details']['relations']):
+        if (
+            run["result_code"] == "install-deps-unsatisfied-dependencies"
+            and run["failure_details"]
+            and run["failure_details"].get("relations")
+        ):
+            if await deps_satisfied(
+                conn, campaign, run["failure_details"]["relations"]
+            ):
                 success += 1
                 same_context = False
         if same_context:
@@ -199,9 +218,12 @@ ORDER BY start_time DESC
             estimated_duration = timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
     else:
         estimated_duration = timedelta(
-            seconds=(sum([d.total_seconds() for d in durations]) / len(durations)))
+            seconds=(sum([d.total_seconds() for d in durations]) / len(durations))
+        )
 
-    return ((success * 10 + 1) / (total * 10 + 1) * same_context_multiplier), estimated_duration, total
+    return (
+        (success * 10 + 1) / (total * 10 + 1) * same_context_multiplier
+    ), estimated_duration, total
 
 
 # Overhead of doing a run; estimated to be roughly 20s
@@ -211,16 +233,23 @@ DEFAULT_NORMALIZED_CODEBASE_VALUE = 0.5
 
 
 def calculate_offset(
-        *, estimated_duration: timedelta,
-        normalized_codebase_value: Optional[float],
-        estimated_probability_of_success: float,
-        candidate_value: Optional[float], total_previous_runs: int,
-        success_chance: Optional[float]):
+    *,
+    estimated_duration: timedelta,
+    normalized_codebase_value: Optional[float],
+    estimated_probability_of_success: float,
+    candidate_value: Optional[float],
+    total_previous_runs: int,
+    success_chance: Optional[float],
+):
     if normalized_codebase_value is None:
         normalized_codebase_value = DEFAULT_NORMALIZED_CODEBASE_VALUE
 
-    normalized_codebase_value = max(MINIMUM_NORMALIZED_CODEBASE_VALUE, normalized_codebase_value)
-    assert normalized_codebase_value > 0.0, f"normalized codebase value is {normalized_codebase_value}"
+    normalized_codebase_value = max(
+        MINIMUM_NORMALIZED_CODEBASE_VALUE, normalized_codebase_value
+    )
+    assert (
+        normalized_codebase_value > 0.0
+    ), f"normalized codebase value is {normalized_codebase_value}"
 
     if candidate_value is None:
         candidate_value = 1.0
@@ -231,7 +260,7 @@ def calculate_offset(
     assert (
         estimated_probability_of_success >= 0.0
         and estimated_probability_of_success <= 1.0
-    ), (f"Probability of success: {estimated_probability_of_success}")
+    ), f"Probability of success: {estimated_probability_of_success}"
 
     if success_chance is not None:
         success_chance *= estimated_probability_of_success
@@ -246,10 +275,11 @@ def calculate_offset(
     estimated_value = (
         normalized_codebase_value * estimated_probability_of_success * candidate_value
     )
-    assert estimated_value > 0.0, \
-        (f"Estimated value: normalized_codebase_value({normalized_codebase_value}) * "
-         f"estimated_probability_of_success({estimated_probability_of_success}) * "
-         f"candidate_value({candidate_value})")
+    assert estimated_value > 0.0, (
+        f"Estimated value: normalized_codebase_value({normalized_codebase_value}) * "
+        f"estimated_probability_of_success({estimated_probability_of_success}) * "
+        f"candidate_value({candidate_value})"
+    )
 
     logging.debug(
         "normalized_codebase_value(%.2f) * "
@@ -266,49 +296,60 @@ def calculate_offset(
 
 
 async def do_schedule_regular(
-        conn: asyncpg.Connection, *,
-        codebase: str, campaign: str,
-        command: Optional[str] = None,
-        candidate_value: Optional[float] = None,
-        success_chance: Optional[float] = None,
-        normalized_codebase_value: Optional[float] = None,
-        requester: Optional[str] = None,
-        default_offset: float = 0.0,
-        context: Optional[str] = None,
-        change_set: Optional[str] = None,
-        dry_run: bool = False,
-        refresh: bool = False,
-        bucket: Optional[str] = None) -> tuple[float, Optional[timedelta], int, str]:
+    conn: asyncpg.Connection,
+    *,
+    codebase: str,
+    campaign: str,
+    command: Optional[str] = None,
+    candidate_value: Optional[float] = None,
+    success_chance: Optional[float] = None,
+    normalized_codebase_value: Optional[float] = None,
+    requester: Optional[str] = None,
+    default_offset: float = 0.0,
+    context: Optional[str] = None,
+    change_set: Optional[str] = None,
+    dry_run: bool = False,
+    refresh: bool = False,
+    bucket: Optional[str] = None,
+) -> tuple[float, Optional[timedelta], int, str]:
     assert codebase is not None
     assert campaign is not None
     if candidate_value is None or success_chance is None or command is None:
         row = await conn.fetchrow(
             "SELECT value, success_chance, command, context FROM candidate "
             "WHERE codebase = $1 and suite = $2 and coalesce(change_set, '') = $3",
-            codebase, campaign, change_set or '')
+            codebase,
+            campaign,
+            change_set or "",
+        )
         if row is None:
             raise CandidateUnavailable(campaign, codebase)
         if row is not None and candidate_value is None:
-            candidate_value = row['value']
+            candidate_value = row["value"]
         if row is not None and success_chance is None:
-            success_chance = row['success_chance']
+            success_chance = row["success_chance"]
         if row is not None and context is None:
-            context = row['context']
+            context = row["context"]
         if row is not None and command is None:
-            command = row['command']
+            command = row["command"]
     (
         estimated_probability_of_success,
         estimated_duration,
         total_previous_runs,
-    ) = await estimate_success_probability_and_duration(conn, codebase, campaign, context)
+    ) = await estimate_success_probability_and_duration(
+        conn, codebase, campaign, context
+    )
 
-    assert estimated_duration >= timedelta(0), \
-        f"{codebase}: estimated duration < 0.0: {estimated_duration!r}"
+    assert estimated_duration >= timedelta(
+        0
+    ), f"{codebase}: estimated duration < 0.0: {estimated_duration!r}"
 
     if normalized_codebase_value is None:
         normalized_codebase_value = await conn.fetchval(
             "select coalesce(least(1.0 * value / (select max(value) from codebase), 1.0), 1.0) "
-            "from codebase WHERE name = $1", codebase)
+            "from codebase WHERE name = $1",
+            codebase,
+        )
         if normalized_codebase_value is not None:
             normalized_codebase_value = float(normalized_codebase_value)
     try:
@@ -318,13 +359,14 @@ async def do_schedule_regular(
             estimated_probability_of_success=estimated_probability_of_success,
             candidate_value=candidate_value,
             total_previous_runs=total_previous_runs,
-            success_chance=success_chance)
+            success_chance=success_chance,
+        )
     except AssertionError as e:
         raise AssertionError(f"During {campaign}/{codebase}: {e}") from e
     assert offset > 0.0
     offset = default_offset + offset
     if bucket is None:
-        bucket = 'default'
+        bucket = "default"
 
     assert command
     if not dry_run:
@@ -354,8 +396,12 @@ async def bulk_add_to_queue(
     default_offset: float = 0.0,
     bucket: str = "default",
 ) -> None:
-    codebase_values = {k: (v or 0) for (k, v) in await conn.fetch(
-        "SELECT name, value FROM codebase WHERE name IS NOT NULL")}
+    codebase_values = {
+        k: (v or 0)
+        for (k, v) in await conn.fetch(
+            "SELECT name, value FROM codebase WHERE name IS NOT NULL"
+        )
+    }
     if codebase_values:
         max_codebase_value = max([(v or 0) for v in codebase_values.values()])
         if max_codebase_value:
@@ -365,17 +411,23 @@ async def bulk_add_to_queue(
     for codebase, context, command, campaign, value, success_chance in todo:
         if max_codebase_value is not None:
             normalized_codebase_value = min(
-                codebase_values.get(codebase, 0.0) / max_codebase_value, 1.0)
+                codebase_values.get(codebase, 0.0) / max_codebase_value, 1.0
+            )
         else:
             normalized_codebase_value = 1.0
         await do_schedule_regular(
-            conn, codebase=codebase, context=context,
-            command=command, campaign=campaign, candidate_value=value,
+            conn,
+            codebase=codebase,
+            context=context,
+            command=command,
+            campaign=campaign,
+            candidate_value=value,
             success_chance=success_chance,
             default_offset=default_offset,
             normalized_codebase_value=normalized_codebase_value,
             dry_run=dry_run,
-            bucket=bucket)
+            bucket=bucket,
+        )
 
 
 async def dep_available(
@@ -402,8 +454,7 @@ WHERE
     else:
         version_match = "True"
 
-    return bool(await conn.fetchval(
-        query % {"version_match": version_match}, *args))
+    return bool(await conn.fetchval(query % {"version_match": version_match}, *args))
 
 
 async def deps_satisfied(conn: asyncpg.Connection, campaign: str, dependencies) -> bool:
@@ -437,7 +488,9 @@ async def main():
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
     parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign.")
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging."
+    )
     parser.add_argument("codebases", help="Codebase to process.", nargs="*")
     parser.add_argument("--debug", action="store_true")
 
@@ -445,6 +498,7 @@ async def main():
 
     if args.gcp_logging:
         import google.cloud.logging
+
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
@@ -459,26 +513,29 @@ async def main():
         "job_last_success_unixtime", "Last time a batch job successfully finished"
     )
 
-    logging.info('Reading configuration')
+    logging.info("Reading configuration")
     with open(args.config) as f:
         config = read_config(f)
 
     set_user_agent(config.user_agent)
 
     async with state.create_pool(config.database_location) as conn:
-        logging.info('Finding candidates with policy')
-        logging.info('Determining schedule for candidates')
+        logging.info("Finding candidates with policy")
+        logging.info("Determining schedule for candidates")
         todo = [
             queue_item_from_candidate_and_publish_policy(row)
-            for row in
-            await iter_candidates_with_publish_policy(
-                conn, codebases=(args.codebases or None), campaign=args.campaign)]
-        logging.info('Adding %d items to queue', len(todo))
+            for row in await iter_candidates_with_publish_policy(
+                conn, codebases=(args.codebases or None), campaign=args.campaign
+            )
+        ]
+        logging.info("Adding %d items to queue", len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        await push_to_gateway(args.prometheus, job="janitor.schedule", registry=REGISTRY)
+        await push_to_gateway(
+            args.prometheus, job="janitor.schedule", registry=REGISTRY
+        )
 
 
 async def do_schedule_control(
@@ -537,12 +594,13 @@ async def do_schedule(
     assert codebase is not None
     if command is None:
         candidate = await conn.fetchrow(
-            "SELECT command "
-            "FROM candidate WHERE codebase = $1 AND suite = $2",
-            codebase, campaign)
+            "SELECT command " "FROM candidate WHERE codebase = $1 AND suite = $2",
+            codebase,
+            campaign,
+        )
         if not candidate:
             raise CandidateUnavailable(campaign, codebase)
-        command = candidate['command']
+        command = candidate["command"]
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, codebase, campaign)
     queue = Queue(conn)

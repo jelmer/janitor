@@ -37,7 +37,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="Dry run.")
     args = parser.parse_args()
 
-    logging.basicConfig(format='%(message)s')
+    logging.basicConfig(format="%(message)s")
 
     for instance in iter_forge_instances():
         try:
@@ -46,8 +46,7 @@ def main(argv=None):
                 if not args.dry_run:
                     instance.delete_project(project)
         except UnsupportedForge as e:
-            logging.warning(
-                'Ignoring unsupported instance %s: %s', instance, e)
+            logging.warning("Ignoring unsupported instance %s: %s", instance, e)
 
 
 if __name__ == "__main__":
