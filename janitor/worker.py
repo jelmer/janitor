@@ -101,16 +101,23 @@ from ._worker import (
 from .vcs import BranchOpenFailure, open_branch_ext
 
 
-def WorkerFailure(code: str, description: str, details: Optional[Any] = None, stage: Optional[tuple[str, ...]] = None, transient: Optional[bool] = None):
+def WorkerFailure(
+    code: str,
+    description: str,
+    details: Optional[Any] = None,
+    stage: Optional[tuple[str, ...]] = None,
+    transient: Optional[bool] = None,
+):
     return _WorkerFailure(code, description, details, stage, transient)
 
 
-push_branch_retries = Counter(
-    "push_branch_retries", "Number of branch push retries.")
+push_branch_retries = Counter("push_branch_retries", "Number of branch push retries.")
 upload_result_retries = Counter(
-    "upload_result_retries", "Number of result upload retries.")
+    "upload_result_retries", "Number of result upload retries."
+)
 assignment_failed_count = Counter(
-    "assignment_failed_count", "Failed to obtain assignment")
+    "assignment_failed_count", "Failed to obtain assignment"
+)
 
 
 routes = web.RouteTableDef()
@@ -131,8 +138,15 @@ class Target:
     def validate(self, local_tree: WorkingTree, subpath: str, config):
         pass
 
-    def make_changes(self, local_tree: WorkingTree, subpath: str, argv, *, log_directory,
-                     resume_metadata=None):
+    def make_changes(
+        self,
+        local_tree: WorkingTree,
+        subpath: str,
+        argv,
+        *,
+        log_directory,
+        resume_metadata=None,
+    ):
         raise NotImplementedError(self.make_changes)
 
 
@@ -153,36 +167,48 @@ class DebianTarget(Target):
             self.update_changelog = True
         else:
             logging.warning(
-                'Invalid value for DEB_UPDATE_CHANGELOG: %s, '
-                'defaulting to auto.', uc)
+                "Invalid value for DEB_UPDATE_CHANGELOG: %s, " "defaulting to auto.", uc
+            )
             self.update_changelog = None
 
-    def make_changes(self, local_tree, subpath, argv, *, log_directory,
-                     resume_metadata=None):
+    def make_changes(
+        self, local_tree, subpath, argv, *, log_directory, resume_metadata=None
+    ):
         return debian_make_changes(
-            local_tree, subpath, argv, log_directory=log_directory, resume_metadata=resume_metadata,
-            update_changelog=self.update_changelog, env=self.env, committer=self.committer)
+            local_tree,
+            subpath,
+            argv,
+            log_directory=log_directory,
+            resume_metadata=resume_metadata,
+            update_changelog=self.update_changelog,
+            env=self.env,
+            committer=self.committer,
+        )
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.debian.build import BuildFailure, build_from_config
+
         try:
             return build_from_config(
-                local_tree, subpath, output_directory, config, self.env)
+                local_tree, subpath, output_directory, config, self.env
+            )
         except BuildFailure as e:
             raise WorkerFailure(
-                e.code, e.description,
-                stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details) from e
+                e.code,
+                e.description,
+                stage=((("build",) + (e.stage,)) if e.stage else ()),
+                details=e.details,
+            ) from e
 
     def validate(self, local_tree, subpath, config):
         from .debian.validate import ValidateError, validate_from_config
+
         try:
             return validate_from_config(local_tree, subpath, config)
         except ValidateError as e:
             raise WorkerFailure(
-                e.code, e.description,
-                transient=False,
-                stage=("validate", )) from e
+                e.code, e.description, transient=False, stage=("validate",)
+            ) from e
 
 
 class GenericTarget(Target):
@@ -193,34 +219,51 @@ class GenericTarget(Target):
     def __init__(self, env) -> None:
         self.env = env
 
-    def make_changes(self, local_tree, subpath, argv, *, log_directory,
-                     resume_metadata=None):
+    def make_changes(
+        self, local_tree, subpath, argv, *, log_directory, resume_metadata=None
+    ):
         return generic_make_changes(
-            local_tree, subpath, argv, log_directory=log_directory,
-            resume_metadata=resume_metadata, env=self.env)
+            local_tree,
+            subpath,
+            argv,
+            log_directory=log_directory,
+            resume_metadata=resume_metadata,
+            env=self.env,
+        )
 
     def build(self, local_tree, subpath, output_directory, config):
         from janitor.generic.build import BuildFailure, build_from_config
+
         try:
             return build_from_config(
-                local_tree, subpath, output_directory, config, self.env)
+                local_tree, subpath, output_directory, config, self.env
+            )
         except BuildFailure as e:
             raise WorkerFailure(
-                e.code, e.description,
-                stage=((("build", ) + (e.stage, )) if e.stage else ()),
-                details=e.details) from e
+                e.code,
+                e.description,
+                stage=((("build",) + (e.stage,)) if e.stage else ()),
+                details=e.details,
+            ) from e
 
 
 @backoff.on_exception(
     backoff.expo,
     (InvalidHttpResponse, IncompleteRead, ConnectionError),
     max_tries=10,
-    on_backoff=lambda m: push_branch_retries.inc())
+    on_backoff=lambda m: push_branch_retries.inc(),
+)
 def import_branches_git(
-        repo_url, local_branch: Branch, campaign: str, log_id: str,
-        branches: Optional[list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]],
-        tags: Optional[list[tuple[str, bytes]]],
-        update_current: bool = True):
+    repo_url,
+    local_branch: Branch,
+    campaign: str,
+    log_id: str,
+    branches: Optional[
+        list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]]
+    ],
+    tags: Optional[list[tuple[str, bytes]]],
+    update_current: bool = True,
+):
     from breezy.git.dir import BareLocalGitControlDirFormat
     from breezy.git.repository import GitRepository
     from breezy.repository import InterRepository
@@ -230,7 +273,7 @@ def import_branches_git(
         vcs_result_controldir = ControlDir.open(repo_url)
     except NotBranchError:
         transport = get_transport(repo_url)
-        if not transport.has('.'):
+        if not transport.has("."):
             try:
                 transport.ensure_base()
             except NoSuchFile:
@@ -244,7 +287,7 @@ def import_branches_git(
 
     def get_changed_refs(refs):
         changed_refs: dict[bytes, tuple[bytes, Optional[bytes]]] = {}
-        for (fn, _n, _br, r) in (branches or []):
+        for fn, _n, _br, r in branches or []:
             tagname = f"refs/tags/run/{log_id}/{fn}".encode()
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
@@ -254,7 +297,7 @@ def import_branches_git(
                 branchname = f"refs/heads/{campaign}/{fn}".encode()
                 # TODO(jelmer): Ideally this would be a symref:
                 changed_refs[branchname] = changed_refs[tagname]
-        for n, r in (tags or []):
+        for n, r in tags or []:
             tagname = f"refs/tags/{log_id}/{n}".encode()
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             if update_current:
@@ -270,12 +313,18 @@ def import_branches_git(
     backoff.expo,
     (InvalidHttpResponse, IncompleteRead, ConnectionError),
     max_tries=10,
-    on_backoff=lambda m: push_branch_retries.inc())
+    on_backoff=lambda m: push_branch_retries.inc(),
+)
 def import_branches_bzr(
-        repo_url: str, local_branch, campaign: str, log_id: str, branches,
-        tags: Optional[list[tuple[str, bytes]]], update_current: bool = True
+    repo_url: str,
+    local_branch,
+    campaign: str,
+    log_id: str,
+    branches,
+    tags: Optional[list[tuple[str, bytes]]],
+    update_current: bool = True,
 ):
-    format = format_registry.make_controldir('bzr')
+    format = format_registry.make_controldir("bzr")
     for fn, _n, _br, r in branches:
         try:
             rootcd = ControlDir.open(repo_url)
@@ -286,8 +335,8 @@ def import_branches_bzr(
         except NoRepositoryPresent:
             rootcd.create_repository(shared=True)
         transport = rootcd.user_transport.clone(campaign)
-        name = (fn if fn != 'main' else '')
-        if not transport.has('.'):
+        name = fn if fn != "main" else ""
+        if not transport.has("."):
             try:
                 transport.ensure_base()
             except NoSuchFile:
@@ -309,22 +358,27 @@ def import_branches_bzr(
         target_branch.tags.set_tag(log_id, r)
 
         graph = target_branch.repository.get_graph()
-        for name, revision in (tags or []):
+        for name, revision in tags or []:
             # Only set tags on those branches where the revisions exist
             if graph.is_ancestor(revision, target_branch.last_revision()):
-                target_branch.tags.set_tag(f'{log_id}/{name}', revision)
+                target_branch.tags.set_tag(f"{log_id}/{name}", revision)
                 if update_current:
                     target_branch.tags.set_tag(name, revision)
 
 
 def handle_sigterm(client: Client, workitem, signum):
-    logging.warning('Received signal %d, aborting and exiting...', signum)
+    logging.warning("Received signal %d, aborting and exiting...", signum)
 
     async def shutdown():
         if workitem:
             await abort_run(
-                client, workitem['assignment']['id'], workitem['metadata'], "Killed by signal")
+                client,
+                workitem["assignment"]["id"],
+                workitem["metadata"],
+                "Killed by signal",
+            )
         sys.exit(1)
+
     loop = asyncio.get_event_loop()
     loop.create_task(shutdown())
 
@@ -337,7 +391,7 @@ def copy_output(output_log: str, tee: bool = False):
         p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
         newfd = p.stdin
     else:
-        newfd = open(output_log, 'wb')
+        newfd = open(output_log, "wb")
     os.dup2(newfd.fileno(), sys.stdout.fileno())  # type: ignore
     os.dup2(newfd.fileno(), sys.stderr.fileno())  # type: ignore
     try:
@@ -353,10 +407,16 @@ def copy_output(output_log: str, tee: bool = False):
 
 @backoff.on_exception(
     backoff.expo,
-    (IncompleteRead, UnexpectedHttpStatus, InvalidHttpResponse,
-     ConnectionError, ssl.SSLEOFError),
+    (
+        IncompleteRead,
+        UnexpectedHttpStatus,
+        InvalidHttpResponse,
+        ConnectionError,
+        ssl.SSLEOFError,
+    ),
     max_tries=10,
-    on_backoff=lambda m: push_branch_retries.inc())
+    on_backoff=lambda m: push_branch_retries.inc(),
+)
 def push_branch(
     source_branch: Branch,
     url: str,
@@ -380,8 +440,11 @@ def push_branch(
         )
 
     target.push_branch(
-        source_branch, revision_id=stop_revision, overwrite=overwrite, name=branch_name,
-        tag_selector=tag_selector
+        source_branch,
+        revision_id=stop_revision,
+        overwrite=overwrite,
+        name=branch_name,
+        tag_selector=tag_selector,
     )
 
 
@@ -392,40 +455,43 @@ def _push_error_to_worker_failure(e, stage):
                 "bad-gateway",
                 "Failed to push result branch: %s" % e,
                 stage=stage,
-                transient=True
+                transient=True,
             )
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e,
-            stage=stage)
+            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+        )
     if isinstance(e, ConnectionError):
         if "Temporary failure in name resolution" in e.msg:
             return WorkerFailure(
                 "failed-temporarily",
                 "Failed to push result branch: %s" % e,
-                stage=stage, transient=True)
+                stage=stage,
+                transient=True,
+            )
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e,
-            stage=stage)
+            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+        )
 
     if isinstance(
-            e, (InvalidHttpResponse, IncompleteRead,
-                ConnectionError, ssl.SSLEOFError,
-                ssl.SSLError)):
+        e,
+        (
+            InvalidHttpResponse,
+            IncompleteRead,
+            ConnectionError,
+            ssl.SSLEOFError,
+            ssl.SSLError,
+        ),
+    ):
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e,
-            stage=stage)
+            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+        )
     if isinstance(e, RemoteGitError):
-        if str(e) == 'missing necessary objects':
-            return WorkerFailure(
-                'git-missing-necessary-objects', str(e),
-                stage=stage)
-        elif str(e) == 'failed to updated ref':
-            return WorkerFailure(
-                'git-ref-update-failed',
-                str(e), stage=stage)
+        if str(e) == "missing necessary objects":
+            return WorkerFailure("git-missing-necessary-objects", str(e), stage=stage)
+        elif str(e) == "failed to updated ref":
+            return WorkerFailure("git-ref-update-failed", str(e), stage=stage)
         else:
-            return WorkerFailure(
-                "git-error", str(e), stage=stage)
+            return WorkerFailure("git-error", str(e), stage=stage)
     return e
 
 
@@ -444,12 +510,13 @@ def run_worker(
     vendor: str,
     target: str,
     vcs_type: Optional[str] = None,
-    subpath: str = '',
+    subpath: str = "",
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
     resume_codemod_result=None,
     resume_branches: Optional[
-        list[tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
+        list[tuple[str, str, Optional[bytes], Optional[bytes]]]
+    ] = None,
     possible_transports: Optional[list[Transport]] = None,
     force_build: bool = False,
     tee: bool = False,
@@ -457,11 +524,12 @@ def run_worker(
     skip_setup_validation: bool = False,
     default_empty: bool = False,
 ):
-
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     with ExitStack() as es:
-        es.enter_context(copy_output(os.path.join(output_directory, "worker.log"), tee=tee))
+        es.enter_context(
+            copy_output(os.path.join(output_directory, "worker.log"), tee=tee)
+        )
         try:
             metadata.command = command
             metadata.codebase = codebase
@@ -473,18 +541,29 @@ def run_worker(
                 build_target = GenericTarget(env)
             else:
                 raise WorkerFailure(
-                    'target-unsupported', 'The target %r is not supported' % target,
-                    transient=False, stage=("setup", ))
+                    "target-unsupported",
+                    "The target %r is not supported" % target,
+                    transient=False,
+                    stage=("setup",),
+                )
 
             logger.info("Opening branch at %s", main_branch_url)
             if main_branch_url:
                 try:
-                    main_branch = open_branch_ext(main_branch_url, possible_transports=possible_transports)
+                    main_branch = open_branch_ext(
+                        main_branch_url, possible_transports=possible_transports
+                    )
                 except BranchOpenFailure as e:
-                    raise WorkerFailure(e.code, e.description, stage=("setup", ), details={
-                        'url': main_branch_url,
-                        'retry_after': e.retry_after,
-                    }, transient=('temporarily' in e.code)) from e
+                    raise WorkerFailure(
+                        e.code,
+                        e.description,
+                        stage=("setup",),
+                        details={
+                            "url": main_branch_url,
+                            "retry_after": e.retry_after,
+                        },
+                        transient=("temporarily" in e.code),
+                    ) from e
                 metadata.branch_url = main_branch.user_url
                 metadata.vcs_type = get_branch_vcs_type(main_branch)
                 metadata.subpath = subpath
@@ -499,18 +578,24 @@ def run_worker(
                     empty_format = format_registry.make_controldir(vcs_type)
                 except KeyError as e:
                     raise WorkerFailure(
-                        "vcs-type-unsupported", f"Unable to find format for vcs type {vcs_type}",
-                        stage=("setup", ),
+                        "vcs-type-unsupported",
+                        f"Unable to find format for vcs type {vcs_type}",
+                        stage=("setup",),
                         transient=False,
-                        details={'vcs_type': vcs_type}) from e
+                        details={"vcs_type": vcs_type},
+                    ) from e
 
             if cached_branch_url:
                 try:
                     cached_branch = open_branch(
-                        cached_branch_url, possible_transports=possible_transports,
-                        probers=select_probers(vcs_type))
+                        cached_branch_url,
+                        possible_transports=possible_transports,
+                        probers=select_probers(vcs_type),
+                    )
                 except BranchMissing as e:
-                    logger.info("Cached branch URL %s missing: %s", cached_branch_url, e)
+                    logger.info(
+                        "Cached branch URL %s missing: %s", cached_branch_url, e
+                    )
                     cached_branch = None
                 except BranchUnavailable as e:
                     logger.warning(
@@ -519,49 +604,66 @@ def run_worker(
                     cached_branch = None
                 else:
                     if cached_branch is not None:
-                        logger.info("Using cached branch %s", full_branch_url(cached_branch))
+                        logger.info(
+                            "Using cached branch %s", full_branch_url(cached_branch)
+                        )
             else:
                 cached_branch = None
 
             if resume_branch_url:
-                logger.info('Using resume branch: %s', resume_branch_url)
+                logger.info("Using resume branch: %s", resume_branch_url)
                 try:
                     resume_branch = open_branch(
-                        resume_branch_url, possible_transports=possible_transports,
-                        probers=select_probers(vcs_type)
+                        resume_branch_url,
+                        possible_transports=possible_transports,
+                        probers=select_probers(vcs_type),
                     )
                 except BranchTemporarilyUnavailable as e:
-                    logger.info('Resume branch URL %s temporarily unavailable: %s', e.url, e)
+                    logger.info(
+                        "Resume branch URL %s temporarily unavailable: %s", e.url, e
+                    )
                     traceback.print_exc()
                     raise WorkerFailure(
-                        "worker-resume-branch-temporarily-unavailable", str(e),
-                        stage=("setup", ),
+                        "worker-resume-branch-temporarily-unavailable",
+                        str(e),
+                        stage=("setup",),
                         transient=True,
-                        details={'url': e.url}) from e
+                        details={"url": e.url},
+                    ) from e
                 except BranchUnavailable as e:
-                    logger.info('Resume branch URL %s unavailable: %s', e.url, e)
+                    logger.info("Resume branch URL %s unavailable: %s", e.url, e)
                     traceback.print_exc()
                     raise WorkerFailure(
-                        "worker-resume-branch-unavailable", str(e),
-                        stage=("setup", ),
+                        "worker-resume-branch-unavailable",
+                        str(e),
+                        stage=("setup",),
                         transient=False,
-                        details={'url': e.url}) from e
+                        details={"url": e.url},
+                    ) from e
                 except BranchMissing as e:
                     raise WorkerFailure(
-                        "worker-resume-branch-missing", str(e),
-                        stage=("setup", ),
+                        "worker-resume-branch-missing",
+                        str(e),
+                        stage=("setup",),
                         transient=False,
-                        details={'url': e.url}) from e
+                        details={"url": e.url},
+                    ) from e
             else:
                 resume_branch = None
 
-            roles: dict[Optional[str], str] = {b: r for (r, b) in (additional_colocated_branches or {}).items()}
+            roles: dict[Optional[str], str] = {
+                b: r for (r, b) in (additional_colocated_branches or {}).items()
+            }
 
             if main_branch:
-                roles[main_branch.name] = 'main'
-                directory_name = urlutils.split_segment_parameters(main_branch.user_url)[0].rstrip('/').rsplit('/')[-1]
+                roles[main_branch.name] = "main"
+                directory_name = (
+                    urlutils.split_segment_parameters(main_branch.user_url)[0]
+                    .rstrip("/")
+                    .rsplit("/")[-1]
+                )
             else:
-                roles[''] = 'main'
+                roles[""] = "main"
                 directory_name = codebase
 
             ws = Workspace(
@@ -569,9 +671,17 @@ def run_worker(
                 resume_branch=resume_branch,
                 cached_branch=cached_branch,
                 path=os.path.join(output_directory, directory_name),
-                additional_colocated_branches=[b for (r, b) in (additional_colocated_branches or {}).items()],
+                additional_colocated_branches=[
+                    b for (r, b) in (additional_colocated_branches or {}).items()
+                ],
                 resume_branch_additional_colocated_branches=(
-                    [name for (role, name, base_revision, revision) in resume_branches if role != 'main'] if resume_branches else None
+                    [
+                        name
+                        for (role, name, base_revision, revision) in resume_branches
+                        if role != "main"
+                    ]
+                    if resume_branches
+                    else None
                 ),
                 format=empty_format,
             )
@@ -581,55 +691,98 @@ def run_worker(
             except IncompleteRead as e:
                 traceback.print_exc()
                 raise WorkerFailure(
-                    "incomplete-read", str(e), stage=("setup", "clone"), transient=True) from e
+                    "incomplete-read", str(e), stage=("setup", "clone"), transient=True
+                ) from e
             except MalformedTransform as e:
                 traceback.print_exc()
-                raise WorkerFailure("malformed-transform", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure(
+                    "malformed-transform",
+                    str(e),
+                    stage=("setup", "clone"),
+                    transient=False,
+                ) from e
             except TransformRenameFailed as e:
                 traceback.print_exc()
-                raise WorkerFailure("transform-rename-failed", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure(
+                    "transform-rename-failed",
+                    str(e),
+                    stage=("setup", "clone"),
+                    transient=False,
+                ) from e
             except ImmortalLimbo as e:
                 traceback.print_exc()
-                raise WorkerFailure("transform-immortal-limbo", str(e), stage=("setup", "clone"), transient=False) from e
+                raise WorkerFailure(
+                    "transform-immortal-limbo",
+                    str(e),
+                    stage=("setup", "clone"),
+                    transient=False,
+                ) from e
             except UnexpectedHttpStatus as e:
                 traceback.print_exc()
                 if e.code == 502:
-                    raise WorkerFailure("bad-gateway", str(e), stage=("setup", "clone"), transient=True) from e
+                    raise WorkerFailure(
+                        "bad-gateway", str(e), stage=("setup", "clone"), transient=True
+                    ) from e
                 else:
                     raise WorkerFailure(
-                        "http-%s" % e.code, str(e),
-                        stage=("setup", "clone"), details={'status-code': e.code}) from e
+                        "http-%s" % e.code,
+                        str(e),
+                        stage=("setup", "clone"),
+                        details={"status-code": e.code},
+                    ) from e
             except TransportError as e:
                 if "No space left on device" in str(e):
-                    raise WorkerFailure("no-space-on-device", e.msg, stage=("setup", "clone"), transient=True) from e
+                    raise WorkerFailure(
+                        "no-space-on-device",
+                        e.msg,
+                        stage=("setup", "clone"),
+                        transient=True,
+                    ) from e
                 if "Too many open files" in str(e):
-                    raise WorkerFailure("too-many-open-files", e.msg, stage=("setup", "clone"), transient=True) from e
+                    raise WorkerFailure(
+                        "too-many-open-files",
+                        e.msg,
+                        stage=("setup", "clone"),
+                        transient=True,
+                    ) from e
                 if "Temporary failure in name resolution" in str(e):
                     raise WorkerFailure(
-                        "temporary-transport-error", str(e), stage=("setup", "clone"),
-                        transient=True) from e
+                        "temporary-transport-error",
+                        str(e),
+                        stage=("setup", "clone"),
+                        transient=True,
+                    ) from e
                 traceback.print_exc()
-                raise WorkerFailure("transport-error", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure(
+                    "transport-error", str(e), stage=("setup", "clone")
+                ) from e
             except RemoteGitError as e:
-                raise WorkerFailure("git-error", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure(
+                    "git-error", str(e), stage=("setup", "clone")
+                ) from e
             except TimeoutError as e:
                 raise WorkerFailure("timeout", str(e), stage=("setup", "clone")) from e
             except MissingNestedTree as e:
-                raise WorkerFailure("requires-nested-tree-support", str(e), stage=("setup", "clone")) from e
+                raise WorkerFailure(
+                    "requires-nested-tree-support", str(e), stage=("setup", "clone")
+                ) from e
 
-            logger.info('Workspace ready - starting.')
+            logger.info("Workspace ready - starting.")
 
             if ws.local_tree.has_changes():
                 raise WorkerFailure(
                     "unexpected-changes-in-tree",
                     description="The working tree has unexpected changes after initial clone",
-                    stage=("setup", "clone"))
+                    stage=("setup", "clone"),
+                )
 
             if not skip_setup_validation:
                 build_target.validate(ws.local_tree, subpath, build_config)
 
             if ws.main_branch:
-                metadata.revision = metadata.main_branch_revision = ws.main_branch.last_revision()
+                metadata.revision = (
+                    metadata.main_branch_revision
+                ) = ws.main_branch.last_revision()
             else:
                 metadata.revision = metadata.main_branch_revision = NULL_REVISION
 
@@ -645,26 +798,37 @@ def run_worker(
 
             try:
                 changer_result = build_target.make_changes(
-                    ws.local_tree, subpath, command,
+                    ws.local_tree,
+                    subpath,
+                    command,
                     log_directory=output_directory,
-                    resume_metadata=resume_codemod_result)
+                    resume_metadata=resume_codemod_result,
+                )
                 if not ws.any_branch_changes():
-                    raise WorkerFailure("nothing-to-do", "Nothing to do.", stage=("codemod", ), transient=False)
+                    raise WorkerFailure(
+                        "nothing-to-do",
+                        "Nothing to do.",
+                        stage=("codemod",),
+                        transient=False,
+                    )
             except _WorkerFailure as e:
                 if e.code == "nothing-to-do":
                     if ws.changes_since_main():
                         # This should only ever happen if we were resuming
-                        assert ws.resume_branch is not None, \
-                            ("Found existing changes despite not having resumed. "
-                             f"Mainline: {ws.main_branch_revid!r}, local: {ws.local_tree.branch.last_revision()!r}")
+                        assert ws.resume_branch is not None, (
+                            "Found existing changes despite not having resumed. "
+                            f"Mainline: {ws.main_branch_revid!r}, local: {ws.local_tree.branch.last_revision()!r}"
+                        )
                         raise WorkerFailure(
-                            "nothing-new-to-do", e.description, stage=("codemod", ), transient=False) from e
+                            "nothing-new-to-do",
+                            e.description,
+                            stage=("codemod",),
+                            transient=False,
+                        ) from e
                     elif force_build:
                         changer_result = GenericCommandResult(
-                            description='No change build',
-                            context={},
-                            tags=[],
-                            value=0)
+                            description="No change build", context={}, tags=[], value=0
+                        )
                     else:
                         raise
                 else:
@@ -678,24 +842,29 @@ def run_worker(
             metadata.target_branch_url = changer_result.target_branch_url
             metadata.description = changer_result.description
 
-            result_branches: list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] = []
-            for (name, base_revision, revision) in ws.result_branches():
+            result_branches: list[
+                tuple[str, Optional[str], Optional[bytes], Optional[bytes]]
+            ] = []
+            for name, base_revision, revision in ws.result_branches():
                 try:
                     role = roles[name]
                 except KeyError:
-                    logging.warning('Unable to find role for branch %s', name)
+                    logging.warning("Unable to find role for branch %s", name)
                     continue
                 if base_revision == revision:
                     continue
                 result_branches.append((role, name, base_revision, revision))
 
-            result_branch_roles = [role for (role, remote_name, br, r) in result_branches]
-            assert len(result_branch_roles) == len(set(result_branch_roles)), \
+            result_branch_roles = [
+                role for (role, remote_name, br, r) in result_branches
+            ]
+            assert len(result_branch_roles) == len(set(result_branch_roles)), (
                 "Duplicate result branches: %r" % result_branches
+            )
 
-            for (f, n, br, r) in (result_branches or []):
+            for f, n, br, r in result_branches or []:
                 metadata.add_branch(f, n, br, r)
-            for (n, r) in (changer_result.tags or []):
+            for n, r in changer_result.tags or []:
                 metadata.add_tag(n, r)  # type: ignore
 
             actual_vcs_type = get_branch_vcs_type(ws.local_tree.branch)
@@ -704,43 +873,54 @@ def run_worker(
                 vcs_type = actual_vcs_type
             elif actual_vcs_type != vcs_type:
                 raise WorkerFailure(
-                    'vcs-type-mismatch',
-                    f'Expected VCS {vcs_type}, got {actual_vcs_type}',
-                    stage=("result-push", ),
-                    transient=False)
+                    "vcs-type-mismatch",
+                    f"Expected VCS {vcs_type}, got {actual_vcs_type}",
+                    stage=("result-push",),
+                    transient=False,
+                )
 
             try:
                 if vcs_type.lower() == "git":
                     import_branches_git(
-                        target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result_branches,
+                        target_repo_url,
+                        ws.local_tree.branch,
+                        campaign,
+                        run_id,
+                        result_branches,
                         changer_result.tags,
-                        update_current=False
+                        update_current=False,
                     )
                 elif vcs_type.lower() == "bzr":
                     import_branches_bzr(
-                        target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result_branches,
+                        target_repo_url,
+                        ws.local_tree.branch,
+                        campaign,
+                        run_id,
+                        result_branches,
                         changer_result.tags,
-                        update_current=False
+                        update_current=False,
                     )
                 else:
                     raise NotImplementedError
             except Exception as e:
-                raise _push_error_to_worker_failure(e, ("result-push", )) from e
+                raise _push_error_to_worker_failure(e, ("result-push",)) from e
 
             if force_build:
                 should_build = True
             else:
-                should_build = (
-                    any([(role is None or role == 'main')
-                         for (role, name, br, r) in result_branches]))
+                should_build = any(
+                    [
+                        (role is None or role == "main")
+                        for (role, name, br, r) in result_branches
+                    ]
+                )
 
             if should_build:
                 metadata.target_name = build_target.name
 
                 build_target_details = build_target.build(
-                    ws.local_tree, subpath, output_directory, build_config)
+                    ws.local_tree, subpath, output_directory, build_config
+                )
 
                 metadata.target_details = build_target_details
             else:
@@ -751,30 +931,37 @@ def run_worker(
             try:
                 if vcs_type.lower() == "git":
                     import_branches_git(
-                        target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result_branches, changer_result.tags,
-                        update_current=True
+                        target_repo_url,
+                        ws.local_tree.branch,
+                        campaign,
+                        run_id,
+                        result_branches,
+                        changer_result.tags,
+                        update_current=True,
                     )
                 elif vcs_type.lower() == "bzr":
                     import_branches_bzr(
-                        target_repo_url, ws.local_tree.branch,
-                        campaign, run_id, result_branches, changer_result.tags,
-                        update_current=True
+                        target_repo_url,
+                        ws.local_tree.branch,
+                        campaign,
+                        run_id,
+                        result_branches,
+                        changer_result.tags,
+                        update_current=True,
                     )
                 else:
                     raise NotImplementedError
             except Exception as e:
-                raise _push_error_to_worker_failure(e, ("result-sym", )) from e
+                raise _push_error_to_worker_failure(e, ("result-sym",)) from e
 
             if cached_branch_url:
                 # TODO(jelmer): integrate into import_branches_git / import_branches_bzr
-                logging.info(
-                    "Pushing packaging branch cache to %s",
-                    cached_branch_url)
+                logging.info("Pushing packaging branch cache to %s", cached_branch_url)
 
                 def tag_selector(tag_name):
-                    return (tag_name.startswith(vendor + '/')
-                            or tag_name.startswith('upstream/'))
+                    return tag_name.startswith(vendor + "/") or tag_name.startswith(
+                        "upstream/"
+                    )
 
                 if ws.main_branch:
                     try:
@@ -787,13 +974,20 @@ def run_worker(
                             tag_selector=tag_selector,
                             overwrite=True,
                         )
-                    except (InvalidHttpResponse, IncompleteRead,
-                            ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                            TransportNotPossible,
-                            ssl.SSLEOFError, ssl.SSLError, TransportError) as e:
+                    except (
+                        InvalidHttpResponse,
+                        IncompleteRead,
+                        ConnectionError,
+                        UnexpectedHttpStatus,
+                        RemoteGitError,
+                        TransportNotPossible,
+                        ssl.SSLEOFError,
+                        ssl.SSLError,
+                        TransportError,
+                    ) as e:
                         logging.warning(
-                            "unable to push to cache URL %s: %s",
-                            cached_branch_url, e)
+                            "unable to push to cache URL %s: %s", cached_branch_url, e
+                        )
 
             logging.info("All done.")
         except _WorkerFailure:
@@ -803,7 +997,8 @@ def run_worker(
             raise
 
 
-INDEX_TEMPLATE = Template("""\
+INDEX_TEMPLATE = Template(
+    """\
 <html lang="en">
 <head><title>Job{% if assignment %}{{ assignment['id'] }}{% endif %}</title></head>
 <body>
@@ -868,35 +1063,44 @@ INDEX_TEMPLATE = Template("""\
 
 </body>
 </html>
-""")
+"""
+)
 
 
-@routes.get('/', name='index')
+@routes.get("/", name="index")
 async def handle_index(request):
-    if 'directory' in request.app['workitem']:
-        lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-                    if entry.name.endswith('.log') and entry.is_file()]
+    if "directory" in request.app["workitem"]:
+        lognames = [
+            entry.name
+            for entry in os.scandir(request.app["workitem"]["directory"])
+            if entry.name.endswith(".log") and entry.is_file()
+        ]
     else:
         lognames = None
-    return web.Response(text=INDEX_TEMPLATE.render(
-        assignment=request.app['workitem'].get('assignment'),
-        metadata=request.app['workitem'].get('metadata'),
-        lognames=lognames,
-        datetime=datetime),
-        content_type='text/html', status=200)
+    return web.Response(
+        text=INDEX_TEMPLATE.render(
+            assignment=request.app["workitem"].get("assignment"),
+            metadata=request.app["workitem"].get("metadata"),
+            lognames=lognames,
+            datetime=datetime,
+        ),
+        content_type="text/html",
+        status=200,
+    )
 
 
-@routes.get('/assignment', name='assignment')
+@routes.get("/assignment", name="assignment")
 async def handle_assignment(request):
-    return web.json_response(request.app['workitem'].get('assignment'))
+    return web.json_response(request.app["workitem"].get("assignment"))
 
 
-@routes.get('/intermediate-result', name='intermediate-result')
+@routes.get("/intermediate-result", name="intermediate-result")
 async def handle_intermediate_result(request):
-    return web.json_response(request.app['workitem'].get('metadata'))
+    return web.json_response(request.app["workitem"].get("metadata"))
 
 
-ARTIFACT_INDEX_TEMPLATE = Template("""\
+ARTIFACT_INDEX_TEMPLATE = Template(
+    """\
 <html>
 <head><title>Artifact Index</title><head>
 <body>
@@ -908,34 +1112,43 @@ ARTIFACT_INDEX_TEMPLATE = Template("""\
 </ul>
 </body>
 </html>
-""")
+"""
+)
 
 
-@routes.get('/artifacts/', name='artifact-index')
+@routes.get("/artifacts/", name="artifact-index")
 async def handle_artifact_index(request):
-    if 'directory' not in request.app['workitem']:
+    if "directory" not in request.app["workitem"]:
         raise web.HTTPNotFound(text="Output directory not created yet")
     try:
-        names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-                 if not entry.name.endswith('.log') and entry.is_file()]
+        names = [
+            entry.name
+            for entry in os.scandir(request.app["workitem"]["directory"])
+            if not entry.name.endswith(".log") and entry.is_file()
+        ]
     except FileNotFoundError as e:
         raise web.HTTPNotFound(text="Output directory does not exist") from e
     return web.Response(
-        text=ARTIFACT_INDEX_TEMPLATE.render(names=names), content_type='text/html',
-        status=200)
+        text=ARTIFACT_INDEX_TEMPLATE.render(names=names),
+        content_type="text/html",
+        status=200,
+    )
 
 
-@routes.get('/artifacts/{filename}', name='artifact')
+@routes.get("/artifacts/{filename}", name="artifact")
 async def handle_artifact(request):
-    if 'directory' not in request.app['workitem']:
+    if "directory" not in request.app["workitem"]:
         raise web.HTTPNotFound(text="Artifact directory not created yet")
-    p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    p = os.path.join(
+        request.app["workitem"]["directory"], request.match_info["filename"]
+    )
     if not os.path.exists(p):
         raise web.HTTPNotFound(text="No such artifact")
     return web.FileResponse(p)
 
 
-LOG_INDEX_TEMPLATE = Template("""\
+LOG_INDEX_TEMPLATE = Template(
+    """\
 <html>
 <head><title>Log Index</title><head>
 <body>
@@ -947,57 +1160,74 @@ LOG_INDEX_TEMPLATE = Template("""\
 </ul>
 </body>
 </html>
-""")
+"""
+)
 
 
-@routes.get('/logs/', name='log-index')
+@routes.get("/logs/", name="log-index")
 async def handle_log_index(request):
-    if 'directory' not in request.app['workitem']:
+    if "directory" not in request.app["workitem"]:
         raise web.HTTPNotFound(text="Log directory not created yet")
-    names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-             if entry.name.endswith('.log')]
-    if request.headers.get('Accept') == 'application/json':
+    names = [
+        entry.name
+        for entry in os.scandir(request.app["workitem"]["directory"])
+        if entry.name.endswith(".log")
+    ]
+    if request.headers.get("Accept") == "application/json":
         return web.json_response(names)
     else:
         return web.Response(
-            text=LOG_INDEX_TEMPLATE.render(names=names), content_type='text/html',
-            status=200)
+            text=LOG_INDEX_TEMPLATE.render(names=names),
+            content_type="text/html",
+            status=200,
+        )
 
 
-@routes.get('/logs/{filename}', name='log')
+@routes.get("/logs/{filename}", name="log")
 async def handle_log(request):
-    if 'directory' not in request.app['workitem']:
+    if "directory" not in request.app["workitem"]:
         raise web.HTTPNotFound(text="Log directory not created yet")
-    p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    p = os.path.join(
+        request.app["workitem"]["directory"], request.match_info["filename"]
+    )
     if not os.path.exists(p):
         raise web.HTTPNotFound(text="No such log file")
     return web.FileResponse(p)
 
 
-@routes.get('/health', name='health')
+@routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response(text='ok', status=200)
+    return web.Response(text="ok", status=200)
 
 
-@routes.get('/log-id', name='log_id')
+@routes.get("/log-id", name="log_id")
 async def handle_log_id(request):
-    assignment = request.app['workitem'].get('assignment')
+    assignment = request.app["workitem"].get("assignment")
     if assignment is None:
-        return web.Response(text='', status=200)
-    return web.Response(text=assignment.get('id', ''), status=200)
+        return web.Response(text="", status=200)
+    return web.Response(text=assignment.get("id", ""), status=200)
 
 
 async def process_single_item(
-        client, my_url: Optional[yarl.URL], node_name, workitem,
-        jenkins_build_url=None, prometheus: Optional[str] = None,
-        codebase: Optional[str] = None, campaign: Optional[str] = None,
-        tee: bool = False, output_directory_base: Optional[str] = None):
+    client,
+    my_url: Optional[yarl.URL],
+    node_name,
+    workitem,
+    jenkins_build_url=None,
+    prometheus: Optional[str] = None,
+    codebase: Optional[str] = None,
+    campaign: Optional[str] = None,
+    tee: bool = False,
+    output_directory_base: Optional[str] = None,
+):
     assignment = await client.get_assignment_raw(
-        str(my_url), node_name,
+        str(my_url),
+        node_name,
         jenkins_build_url=jenkins_build_url,
-        codebase=codebase, campaign=campaign,
+        codebase=codebase,
+        campaign=campaign,
     )
-    workitem['assignment'] = assignment
+    workitem["assignment"] = assignment
 
     logging.debug("Got back assignment: %r", assignment)
 
@@ -1007,15 +1237,21 @@ async def process_single_item(
         codebase = assignment["codebase"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
-        additional_colocated_branches = assignment["branch"]["additional_colocated_branches"]
-        force_build = assignment.get('force-build', False)
+        additional_colocated_branches = assignment["branch"][
+            "additional_colocated_branches"
+        ]
+        force_build = assignment.get("force-build", False)
         subpath = assignment["branch"].get("subpath", "") or ""
         if assignment["resume"]:
             resume_result = assignment["resume"]["result"]
             resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
             resume_branches = [
-                (role, name, base.encode("utf-8") if base else None,
-                 revision.encode("utf-8") if revision else None)
+                (
+                    role,
+                    name,
+                    base.encode("utf-8") if base else None,
+                    revision.encode("utf-8") if revision else None,
+                )
                 for (role, name, base, revision) in assignment["resume"]["branches"]
             ]
         else:
@@ -1034,7 +1270,7 @@ async def process_single_item(
         metadata.start_time = start_time
         metadata.branch_url = branch_url
         metadata.vcs_type = vcs_type
-        workitem['metadata'] = metadata
+        workitem["metadata"] = metadata
 
         target_repo_url = assignment["target_repository"]["url"]
 
@@ -1046,18 +1282,20 @@ async def process_single_item(
 
         skip_setup_validation = assignment.get("skip-setup-validation", False)
 
-        default_empty = assignment["branch"].get('default-empty', False)
+        default_empty = assignment["branch"].get("default-empty", False)
 
         env.update(build_environment)
 
-        logging.debug('Environment: %r', env)
+        logging.debug("Environment: %r", env)
 
-        vendor = build_environment.get('DEB_VENDOR', 'debian')
+        vendor = build_environment.get("DEB_VENDOR", "debian")
 
         tmpdir_prefix = os.path.join(os.environ.get("TMPDIR", "/tmp"), "janitor-worker")
 
-        output_directory = es.enter_context(TemporaryDirectory(prefix=tmpdir_prefix, dir=output_directory_base))
-        workitem['directory'] = output_directory
+        output_directory = es.enter_context(
+            TemporaryDirectory(prefix=tmpdir_prefix, dir=output_directory_base)
+        )
+        workitem["directory"] = output_directory
         loop = asyncio.get_running_loop()
 
         main_task = loop.run_in_executor(
@@ -1094,8 +1332,7 @@ async def process_single_item(
             await main_task
         except _WorkerFailure as e:
             metadata.update(e)
-            logging.info("Worker failed in %r (%s): %s",
-                         e.stage, e.code, e.description)
+            logging.info("Worker failed in %r (%s): %s", e.stage, e.code, e.description)
             # This is a failure for the worker, but returning 0 will cause
             # jenkins to mark the job having failed, which is not really
             # true.  We're happy if we get to successfully POST to /finish
@@ -1110,7 +1347,9 @@ async def process_single_item(
             return
         except BaseException as e:
             metadata.code = "worker-failure"
-            metadata.description = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
+            metadata.description = "".join(
+                traceback.format_exception_only(type(e), e)
+            ).rstrip("\n")
             return
         else:
             metadata.code = None
@@ -1127,40 +1366,56 @@ async def process_single_item(
                 output_directory=output_directory,
             )
 
-            logging.info('Results uploaded')
+            logging.info("Results uploaded")
 
             logging.debug("Result: %r", result)
 
             if prometheus:
                 await push_to_gateway(
-                    prometheus, job="janitor.worker",
+                    prometheus,
+                    job="janitor.worker",
                     grouping_key={
-                        'run_id': assignment['id'],
-                        'campaign': campaign,  # type: ignore
+                        "run_id": assignment["id"],
+                        "campaign": campaign,  # type: ignore
                     },
-                    registry=REGISTRY)
+                    registry=REGISTRY,
+                )
             workitem.clear()
 
 
 async def create_app():
     app = web.Application()
-    app['workitem'] = {}
+    app["workitem"] = {}
     app.router.add_routes(routes)
     setup_metrics(app)
     return app
 
 
-async def main(debug, listen_address, port, base_url, my_url, codebase,
-               campaign, credentials, prometheus, tee, loop, external_address,
-               output_directory, gcp_logging):
+async def main(
+    debug,
+    listen_address,
+    port,
+    base_url,
+    my_url,
+    codebase,
+    campaign,
+    credentials,
+    prometheus,
+    tee,
+    loop,
+    external_address,
+    output_directory,
+    gcp_logging,
+):
     if debug:
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
-        warnings.simplefilter('always', ResourceWarning)
+        warnings.simplefilter("always", ResourceWarning)
 
     if gcp_logging:
         import google.cloud.logging
+
         log_client = google.cloud.logging.Client()
         log_client.get_default_handler()
         log_client.setup_logging()
@@ -1173,7 +1428,8 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
         logging.basicConfig(
             level=log_level,
             format="[%(asctime)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S")
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
     app = await create_app()
 
@@ -1193,15 +1449,16 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
         with open(credentials) as f:
             creds = json.load(f)
         auth = BasicAuth(login=creds["login"], password=creds["password"])
-    elif 'WORKER_NAME' in os.environ and 'WORKER_PASSWORD' in os.environ:
+    elif "WORKER_NAME" in os.environ and "WORKER_PASSWORD" in os.environ:
         auth = BasicAuth(
-            login=os.environ["WORKER_NAME"],
-            password=os.environ["WORKER_PASSWORD"])
+            login=os.environ["WORKER_NAME"], password=os.environ["WORKER_PASSWORD"]
+        )
         del os.environ["WORKER_PASSWORD"]
     else:
         auth = BasicAuth.from_url(base_url)
 
     if auth is not None:
+
         class WorkerCredentialStore(PlainTextCredentialStore):
             def get_credentials(
                 self, protocol, host, port=None, user=None, path=None, realm=None
@@ -1222,7 +1479,7 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
             "janitor-worker", WorkerCredentialStore, fallback=True
         )
 
-    jenkins_build_url = os.environ.get('BUILD_URL')
+    jenkins_build_url = os.environ.get("BUILD_URL")
 
     node_name = os.environ.get("NODE_NAME")
     if not node_name:
@@ -1232,16 +1489,13 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
     if my_url:
         my_url = yarl.URL(my_url)
     elif external_address:
-        my_url = yarl.URL.build(
-            scheme='http', host=external_address, port=site_port)
-    elif 'MY_IP' in os.environ:
-        my_url = yarl.URL.build(
-            scheme='http', host=os.environ['MY_IP'], port=site_port)
+        my_url = yarl.URL.build(scheme="http", host=external_address, port=site_port)
+    elif "MY_IP" in os.environ:
+        my_url = yarl.URL.build(scheme="http", host=os.environ["MY_IP"], port=site_port)
     elif await is_gce_instance():
         external_ip = await gce_external_ip()
         if external_ip:
-            my_url = yarl.URL.build(
-                scheme='http', host=external_ip, port=site_port)
+            my_url = yarl.URL.build(scheme="http", host=external_ip, port=site_port)
         else:
             my_url = None
     # TODO(jelmer): Find out kubernetes IP?
@@ -1249,7 +1503,7 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
         my_url = None
 
     if my_url:
-        logging.info('Diagnostics available at %s', my_url)
+        logging.info("Diagnostics available at %s", my_url)
 
     if auth:
         client = Client(str(base_url), auth.login, auth.password, USER_AGENT)
@@ -1257,27 +1511,31 @@ async def main(debug, listen_address, port, base_url, my_url, codebase,
         client = Client(str(base_url), None, None, user_agent=USER_AGENT)
 
     loop.add_signal_handler(
-        signal.SIGINT, handle_sigterm, client,
-        app['workitem'], signal.SIGINT)
+        signal.SIGINT, handle_sigterm, client, app["workitem"], signal.SIGINT
+    )
     loop.add_signal_handler(
-        signal.SIGTERM, handle_sigterm, client,
-        app['workitem'], signal.SIGTERM)
+        signal.SIGTERM, handle_sigterm, client, app["workitem"], signal.SIGTERM
+    )
 
     while True:
         try:
             await process_single_item(
-                client, my_url=my_url,
+                client,
+                my_url=my_url,
                 node_name=node_name,
-                workitem=app['workitem'],
+                workitem=app["workitem"],
                 jenkins_build_url=jenkins_build_url,
                 prometheus=prometheus,
-                codebase=codebase, campaign=campaign,
-                tee=tee, output_directory_base=output_directory)
+                codebase=codebase,
+                campaign=campaign,
+                tee=tee,
+                output_directory_base=output_directory,
+            )
         except AssignmentFailure as e:
             logging.fatal("failed to get assignment: %s", e)
             return 1
         except EmptyQueue:
-            logging.info('queue is empty')
+            logging.info("queue is empty")
             return 0
         except ResultUploadFailure as e:
             sys.stderr.write(str(e))

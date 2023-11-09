@@ -149,21 +149,21 @@ def publish(
 ):
     def get_proposal_description(description_format, existing_proposal):
         vs = {
-            'log_id': log_id,
-            'campaign': campaign,
-            'role': role,
+            "log_id": log_id,
+            "campaign": campaign,
+            "role": role,
         }
         if extra_context:
             vs.update(extra_context)
         if codemod_result:
             vs.update(codemod_result)
-            vs['codemod'] = codemod_result
+            vs["codemod"] = codemod_result
         if debdiff:
-            vs['debdiff'] = debdiff.decode("utf-8", "replace")
-        if description_format == 'markdown':
-            template = template_env.get_template(campaign + '.md')
+            vs["debdiff"] = debdiff.decode("utf-8", "replace")
+        if description_format == "markdown":
+            template = template_env.get_template(campaign + ".md")
         else:
-            template = template_env.get_template(campaign + '.txt')
+            template = template_env.get_template(campaign + ".txt")
         return template.render(vs)
 
     def get_proposal_commit_message(existing_proposal):
@@ -179,9 +179,9 @@ def publish(
             return template.render(codemod_result or {})
         else:
             try:
-                description = get_proposal_description('text', existing_proposal)
+                description = get_proposal_description("text", existing_proposal)
             except TemplateNotFound:
-                description = get_proposal_description('markdown', existing_proposal)
+                description = get_proposal_description("markdown", existing_proposal)
             return determine_title(description)
 
     with target_branch.lock_read(), source_branch.lock_read():
@@ -191,7 +191,8 @@ def publish(
         except NoSuchRevision as e:
             raise PublishFailure(
                 description="Revision missing: %s" % e.revision,  # type: ignore
-                code="revision-missing") from e
+                code="revision-missing",
+            ) from e
 
     labels: Optional[list[str]]
 
@@ -268,11 +269,10 @@ def publish(
         ) from e
     except RemoteGitError as exc:
         raise PublishFailure(
-            code='remote-git-error',
-            description="remote git error: %s" % exc) from exc
+            code="remote-git-error", description="remote git error: %s" % exc
+        ) from exc
     except InsufficientChangesForNewProposal as e:
-        raise PublishNothingToDo(
-            'not enough changes for a new merge proposal') from e
+        raise PublishNothingToDo("not enough changes for a new merge proposal") from e
     except BranchTemporarilyUnavailable as e:
         raise PublishFailure("branch-temporarily-unavailable", str(e)) from e
     except BranchUnavailable as e:
@@ -310,7 +310,8 @@ def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
             raise
         elif e.code in (400, 500, 502, 503, 504):
             raise DebdiffRetrievalError(
-                'Error %d: %s' % (e.code, e.file.read().decode("utf-8", "replace"))) from e  # type: ignore
+                "Error %d: %s" % (e.code, e.file.read().decode("utf-8", "replace"))  # type: ignore
+            ) from e
         else:
             raise
     except ConnectionResetError as e:
@@ -320,7 +321,7 @@ def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
 
 
 def _drop_env(args):
-    while args and '=' in args[0]:
+    while args and "=" in args[0]:
         args.pop(0)
 
 
@@ -349,7 +350,6 @@ def publish_one(
     existing_mp_url: Optional[str] = None,
     extra_context: Optional[dict[str, Any]] = None,
 ) -> tuple[PublishResult, str]:
-
     args = shlex.split(command)
     _drop_env(args)
 
@@ -359,8 +359,7 @@ def publish_one(
                 source_branch_url, possible_transports=possible_transports
             )
         except BranchTemporarilyUnavailable as e:
-            raise PublishFailure(
-                "local-branch-temporarily-unavailable", str(e)) from e
+            raise PublishFailure("local-branch-temporarily-unavailable", str(e)) from e
         except BranchUnavailable as e:
             raise PublishFailure("local-branch-unavailable", str(e)) from e
         except BranchMissing as e:
@@ -376,7 +375,7 @@ def publish_one(
                 target_branch_url, possible_transports=possible_transports
             )
         except BranchRateLimited as e:
-            raise PublishFailure('branch-rate-limited', str(e)) from e
+            raise PublishFailure("branch-rate-limited", str(e)) from e
         except BranchTemporarilyUnavailable as e:
             raise PublishFailure("branch-temporarily-unavailable", str(e)) from e
         except BranchUnavailable as e:
@@ -412,7 +411,8 @@ def publish_one(
                 netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
                     description="Forge %s supported but no login known." % netloc,
-                    code="hoster-no-login") from e
+                    code="hoster-no-login",
+                ) from e
             # We can't figure out what branch to resume from when there's no forge
             # that can tell us.
             resume_branch = None
@@ -420,7 +420,8 @@ def publish_one(
             if mode == MODE_PUSH:
                 logging.warning(
                     "No login for forge (%s), will attempt to push to %s",
-                    e, full_branch_url(target_branch),
+                    e,
+                    full_branch_url(target_branch),
                 )
             forge = None
         except UnexpectedHttpStatus as e:
@@ -441,19 +442,25 @@ def publish_one(
                 try:
                     resume_branch = open_branch(
                         existing_proposal.get_source_branch_url(),
-                        possible_transports=possible_transports
+                        possible_transports=possible_transports,
                     )
                 except BranchRateLimited as e:
-                    raise PublishFailure('resume-branch-rate-limited', str(e)) from e
+                    raise PublishFailure("resume-branch-rate-limited", str(e)) from e
                 except BranchTemporarilyUnavailable as e:
-                    raise PublishFailure("resume-branch-temporarily-unavailable", str(e)) from e
+                    raise PublishFailure(
+                        "resume-branch-temporarily-unavailable", str(e)
+                    ) from e
                 except BranchUnavailable as e:
                     raise PublishFailure("resume-branch-unavailable", str(e)) from e
                 except BranchMissing as e:
                     raise PublishFailure("resume-branch-missing", str(e)) from e
             else:
                 try:
-                    (resume_branch, overwrite, existing_proposals) = find_existing_proposed(
+                    (
+                        resume_branch,
+                        overwrite,
+                        existing_proposals,
+                    ) = find_existing_proposed(
                         target_branch, forge, derived_branch_name
                     )
                 except NoSuchProject as e:
@@ -467,11 +474,13 @@ def publish_one(
                 except ForgeLoginRequired as e:
                     raise PublishFailure(
                         description="Forge %s supported but no login known." % forge,
-                        code="hoster-no-login") from e
+                        code="hoster-no-login",
+                    ) from e
                 except PermissionDenied as e:
                     raise PublishFailure(
                         description=(
-                            "Permission denied while finding existing proposal: %s" % e.extra
+                            "Permission denied while finding existing proposal: %s"
+                            % e.extra
                         ),
                         code="permission-denied",
                     ) from e
@@ -479,8 +488,10 @@ def publish_one(
                     if existing_proposals and len(existing_proposals) > 1:
                         existing_proposal = existing_proposals[0]
                         logging.warning(
-                            'Multiple existing proposals: %r. Using %r',
-                            existing_proposals, existing_proposal)
+                            "Multiple existing proposals: %r. Using %r",
+                            existing_proposals,
+                            existing_proposal,
+                        )
                     elif existing_proposals and len(existing_proposals) > 0:
                         existing_proposal = existing_proposals[0]
                     else:
@@ -563,12 +574,15 @@ def load_template_env(path):
         loader=FileSystemLoader(path),
         trim_blocks=True,
         lstrip_blocks=True,
-        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False))
-    env.globals.update({
-        'debdiff_is_empty': debdiff_is_empty,
-        'markdownify_debdiff': markdownify_debdiff,
-        'parseaddr': parseaddr,
-    })
+        autoescape=select_autoescape(disabled_extensions=("txt", "md"), default=False),
+    )
+    env.globals.update(
+        {
+            "debdiff_is_empty": debdiff_is_empty,
+            "markdownify_debdiff": markdownify_debdiff,
+            "parseaddr": parseaddr,
+        }
+    )
     return env
 
 
@@ -579,11 +593,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--template-env-path',
+        "--template-env-path",
         type=str,
-        default=os.path.join(
-            os.path.dirname(__file__), '..', "proposal-templates"),
-        help='Path to templates')
+        default=os.path.join(os.path.dirname(__file__), "..", "proposal-templates"),
+        help="Path to templates",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
@@ -591,9 +605,9 @@ if __name__ == "__main__":
     request = json.load(sys.stdin)
 
     template_env = load_template_env(args.template_env_path)
-    template_env.globals['external_url'] = (
-        request["external_url"].rstrip("/")
-        if request["external_url"] else None)
+    template_env.globals["external_url"] = (
+        request["external_url"].rstrip("/") if request["external_url"] else None
+    )
 
     try:
         publish_result, branch_name = publish_one(
@@ -618,8 +632,8 @@ if __name__ == "__main__":
             result_tags=request.get("tags"),
             commit_message_template=request.get("commit_message_template"),
             title_template=request.get("title_template"),
-            existing_mp_url=request.get('existing_mp_url'),
-            extra_context=request.get('extra_context'),
+            existing_mp_url=request.get("existing_mp_url"),
+            extra_context=request.get("extra_context"),
         )
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)
@@ -634,10 +648,11 @@ if __name__ == "__main__":
         result["proposal_web_url"] = publish_result.proposal.get_web_url()
         result["is_new"] = publish_result.is_new
     result["branch_name"] = branch_name
-    result["target_branch_url"] = publish_result.target_branch.user_url.rstrip('/')
+    result["target_branch_url"] = publish_result.target_branch.user_url.rstrip("/")
     if publish_result.forge:
         result["target_branch_web_url"] = publish_result.forge.get_web_url(
-            publish_result.target_branch)
+            publish_result.target_branch
+        )
 
     json.dump(result, sys.stdout)
 

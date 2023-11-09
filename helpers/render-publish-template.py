@@ -20,21 +20,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
-parser.add_argument(
-    "-r", "--run-id", type=str, help="Run id to process"
-)
-parser.add_argument(
-    "--role", type=str, help="Role", default="main"
-)
-parser.add_argument(
-    '--format', type=str, choices=['md', 'txt'], default='md')
+parser.add_argument("-r", "--run-id", type=str, help="Run id to process")
+parser.add_argument("--role", type=str, help="Role", default="main")
+parser.add_argument("--format", type=str, choices=["md", "txt"], default="md")
 
-parser.add_argument(
-    '--template-env-path', type=str, help='Path to template env')
+parser.add_argument("--template-env-path", type=str, help="Path to template env")
 
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO, format='%(message)s')
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 with open(args.config) as f:
@@ -60,12 +54,14 @@ WHERE
         row = await conn.fetchrow(query, run_id)
         vs = {}
         vs.update(row)
-        if row['_result']:
-            vs.update(row['_result'])
-        vs['external_url'] = 'https://janitor.debian.net/'
-        vs['markdownify_debdiff'] = markdownify_debdiff
-        vs['debdiff_is_empty'] = debdiff_is_empty
-        print(template_env.get_template(vs['suite'] + '.' + format).render(vs))
+        if row["_result"]:
+            vs.update(row["_result"])
+        vs["external_url"] = "https://janitor.debian.net/"
+        vs["markdownify_debdiff"] = markdownify_debdiff
+        vs["debdiff_is_empty"] = debdiff_is_empty
+        print(template_env.get_template(vs["suite"] + "." + format).render(vs))
 
 
-loop.run_until_complete(process_build(config.database_location, args.run_id, args.role, args.format))
+loop.run_until_complete(
+    process_build(config.database_location, args.run_id, args.role, args.format)
+)

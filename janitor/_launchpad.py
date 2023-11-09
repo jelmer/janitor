@@ -23,22 +23,25 @@ def override_launchpad_consumer_name():
     from launchpadlib.launchpad import Launchpad
 
     class LoginRequiredAuthorizationEngine(RequestTokenAuthorizationEngine):
-
         def make_end_user_authorize_token(self, credentials, request_token):
             raise ForgeLoginRequired(self.web_root)
 
-
-    def connect_launchpad(base_url, timeout=None, proxy_info=None,
-                          version=Launchpad.DEFAULT_VERSION):
+    def connect_launchpad(
+        base_url, timeout=None, proxy_info=None, version=Launchpad.DEFAULT_VERSION
+    ):
         cache_directory = lp_api.get_cache_directory()
         credential_store = lp_api.BreezyCredentialStore()
         authorization_engine = LoginRequiredAuthorizationEngine(
-            base_url, consumer_name='Janitor')
+            base_url, consumer_name="Janitor"
+        )
         return Launchpad.login_with(
-            'Janitor', base_url, cache_directory, timeout=timeout,
+            "Janitor",
+            base_url,
+            cache_directory,
+            timeout=timeout,
             credential_store=credential_store,
             authorization_engine=authorization_engine,
-            version=version)
-
+            version=version,
+        )
 
     lp_api.connect_launchpad = connect_launchpad

@@ -24,14 +24,20 @@ from janitor.config import get_campaign_config, get_distribution, read_config
 
 
 def test_config():
-    c = read_config(BytesIO(b"""\
+    c = read_config(
+        BytesIO(
+            b"""\
 logs_location: 'https://s3.nl-ams.scw.cloud'
-"""))
-    assert c.logs_location == 'https://s3.nl-ams.scw.cloud'
+"""
+        )
+    )
+    assert c.logs_location == "https://s3.nl-ams.scw.cloud"
 
 
 def test_distribution():
-    c = read_config(BytesIO(b"""\
+    c = read_config(
+        BytesIO(
+            b"""\
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
@@ -46,14 +52,18 @@ distribution {
   build_command: "sbuild -Asv"
   vendor: "debian"
 }
-"""))
+"""
+        )
+    )
     with pytest.raises(KeyError):
         get_distribution(c, "foo")
     assert get_distribution(c, "unstable").name == "unstable"
 
 
 def test_campaign_config():
-    c = read_config(BytesIO(b"""\
+    c = read_config(
+        BytesIO(
+            b"""\
 campaign {
   name: "lintian-fixes"
   command: "lintian-brush"
@@ -81,7 +91,9 @@ campaign {
     base_distribution: "unstable"
   }
 }
-"""))
+"""
+        )
+    )
 
     with pytest.raises(KeyError):
         get_campaign_config(c, "foo")

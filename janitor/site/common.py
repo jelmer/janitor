@@ -18,8 +18,7 @@ from janitor.site import (
 )
 
 
-async def get_previous_runs(
-        conn: asyncpg.Connection, codebase: str, suite: str):
+async def get_previous_runs(conn: asyncpg.Connection, codebase: str, suite: str):
     return await conn.fetch(
         """
 SELECT
@@ -36,20 +35,26 @@ FROM
 WHERE
   codebase = $1 AND suite = $2
 ORDER BY start_time DESC
-""", codebase, suite)
+""",
+        codebase,
+        suite,
+    )
 
 
 async def get_candidate(conn: asyncpg.Connection, codebase: str, campaign: str):
     return await conn.fetchrow(
         "SELECT context, value, success_chance FROM candidate "
         "WHERE codebase = $1 AND suite = $2",
-        codebase, campaign)
+        codebase,
+        campaign,
+    )
 
 
 async def iter_candidates(
-        conn: asyncpg.Connection,
-        codebases: Optional[list[str]] = None,
-        campaign: Optional[str] = None):
+    conn: asyncpg.Connection,
+    codebases: Optional[list[str]] = None,
+    campaign: Optional[str] = None,
+):
     query = """
 SELECT
   codebase AS codebase,
@@ -72,8 +77,7 @@ FROM candidate
     return await conn.fetch(query, *args)
 
 
-async def get_last_unabsorbed_run(
-        conn: asyncpg.Connection, codebase: str, suite: str):
+async def get_last_unabsorbed_run(conn: asyncpg.Connection, codebase: str, suite: str):
     args = []
     query = """
 SELECT
@@ -151,7 +155,8 @@ WHERE id = $1
 
 
 async def get_unchanged_run(
-        conn: asyncpg.Connection, codebase: str, main_branch_revision: bytes):
+    conn: asyncpg.Connection, codebase: str, main_branch_revision: bytes
+):
     query = """
 SELECT
     id, command, start_time, finish_time, description,
@@ -175,35 +180,47 @@ WHERE
     change_set = id
 ORDER BY finish_time DESC
 """
-    return await conn.fetchrow(
-        query, main_branch_revision.decode('utf-8'), codebase)
+    return await conn.fetchrow(query, main_branch_revision.decode("utf-8"), codebase)
 
 
 async def generate_codebase_context(
-    db, config, suite, client, differ_url, vcs_managers, codebase_name, span, run_id=None
+    db,
+    config,
+    suite,
+    client,
+    differ_url,
+    vcs_managers,
+    codebase_name,
+    span,
+    run_id=None,
 ):
     async with db.acquire() as conn:
         # TODO(jelmer): Run these in parallel with gather()
-        with span.new_child('sql:codebase'):
-            codebase = await conn.fetchrow("""\
+        with span.new_child("sql:codebase"):
+            codebase = await conn.fetchrow(
+                """\
 SELECT codebase.*, named_publish_policy.per_branch_policy AS publish_policy
 FROM codebase
 LEFT JOIN candidate ON codebase.name = candidate.codebase AND candidate.suite = $2
 LEFT JOIN named_publish_policy ON named_publish_policy.name = candidate.publish_policy
-WHERE codebase.name = $1""", codebase_name, suite)
+WHERE codebase.name = $1""",
+                codebase_name,
+                suite,
+            )
         if codebase is None:
-            raise web.HTTPNotFound(text='no such codebase: %s' % codebase_name)
+            raise web.HTTPNotFound(text="no such codebase: %s" % codebase_name)
         if run_id is not None:
-            with span.new_child('sql:run'):
+            with span.new_child("sql:run"):
                 run = await get_run(conn, run_id)
             if not run:
-                raise web.HTTPNotFound(text='no such run: %s' % run_id)
+                raise web.HTTPNotFound(text="no such run: %s" % run_id)
             merge_proposals = []
         else:
-            with span.new_child('sql:unchanged-run'):
+            with span.new_child("sql:unchanged-run"):
                 run = await get_last_unabsorbed_run(conn, codebase_name, suite)
-            with span.new_child('sql:merge-proposals'):
-                merge_proposals = await conn.fetch("""\
+            with span.new_child("sql:merge-proposals"):
+                merge_proposals = await conn.fetch(
+                    """\
 SELECT
     DISTINCT ON (merge_proposal.url)
     merge_proposal.url AS url, merge_proposal.status AS status
@@ -212,61 +229,73 @@ FROM
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 WHERE run.codebase = $1 AND run.suite = $2
-""", codebase['name'], suite)
+""",
+                    codebase["name"],
+                    suite,
+                )
         if run is None:
             # No runs recorded
             run_id = None
             unchanged_run = None
         else:
-            run_id = run['id']
-            if run['main_branch_revision']:
-                with span.new_child('sql:unchanged-run'):
+            run_id = run["id"]
+            if run["main_branch_revision"]:
+                with span.new_child("sql:unchanged-run"):
                     unchanged_run = await get_unchanged_run(
-                        conn, run['codebase'],
-                        run['main_branch_revision'].encode('utf-8'))
+                        conn,
+                        run["codebase"],
+                        run["main_branch_revision"].encode("utf-8"),
+                    )
             else:
                 unchanged_run = None
 
-        with span.new_child('sql:candidate'):
-            candidate = await get_candidate(conn, codebase['name'], suite)
+        with span.new_child("sql:candidate"):
+            candidate = await get_candidate(conn, codebase["name"], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
             candidate_context = None
             candidate_value = None
             candidate_success_chance = None
-        with span.new_child('sql:previous-runs'):
-            previous_runs = await get_previous_runs(conn, codebase['name'], suite)
-        with span.new_child('sql:queue-position'):
+        with span.new_child("sql:previous-runs"):
+            previous_runs = await get_previous_runs(conn, codebase["name"], suite)
+        with span.new_child("sql:queue-position"):
             queue = Queue(conn)
             (queue_position, queue_wait_time) = await queue.get_position(
-                suite, codebase['name'])
+                suite, codebase["name"]
+            )
         if run_id:
-            with span.new_child('sql:reviews'):
+            with span.new_child("sql:reviews"):
                 reviews = await conn.fetch(
-                    'SELECT * FROM review WHERE run_id = $1 '
-                    'ORDER BY reviewed_at ASC', run_id)
+                    "SELECT * FROM review WHERE run_id = $1 "
+                    "ORDER BY reviewed_at ASC",
+                    run_id,
+                )
         else:
             reviews = None
 
     async def show_diff(role):
         try:
-            (remote_name, base_revid, revid) = state.get_result_branch(run['result_branches'], role)
+            (remote_name, base_revid, revid) = state.get_result_branch(
+                run["result_branches"], role
+            )
         except KeyError:
             return "no result branch with role %s" % role
         if base_revid == revid:
             return ""
-        if run['vcs_type'] is None:
+        if run["vcs_type"] is None:
             return "not in a VCS"
         if revid is None:
             return "Branch deleted"
         try:
-            with span.new_child('vcs-diff'):
-                diff = await vcs_managers[run['vcs_type']].get_diff(
-                    run['codebase'],
-                    base_revid.encode('utf-8')
-                    if base_revid is not None else NULL_REVISION,
-                    revid.encode('utf-8'))
+            with span.new_child("vcs-diff"):
+                diff = await vcs_managers[run["vcs_type"]].get_diff(
+                    run["codebase"],
+                    base_revid.encode("utf-8")
+                    if base_revid is not None
+                    else NULL_REVISION,
+                    revid.encode("utf-8"),
+                )
                 return diff.decode("utf-8", "replace")
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
@@ -274,17 +303,17 @@ WHERE run.codebase = $1 AND run.suite = $2
             return "Unable to retrieve diff; error %s" % e
 
     async def show_debdiff():
-        if not run['build_version']:
+        if not run["build_version"]:
             return ""
-        if not unchanged_run or not unchanged_run['build_version']:
+        if not unchanged_run or not unchanged_run["build_version"]:
             return ""
         try:
-            with span.new_child('archive-diff'):
+            with span.new_child("archive-diff"):
                 debdiff, content_type = await get_archive_diff(
                     client,
                     differ_url,
-                    run['id'],
-                    unchanged_run['id'],
+                    run["id"],
+                    unchanged_run["id"],
                     kind="debdiff",
                     filter_boring=True,
                     accept="text/html",
@@ -296,38 +325,40 @@ WHERE run.codebase = $1 AND run.suite = $2
             return "Error retrieving debdiff: %s" % e
 
     kwargs: dict[str, Any] = {}
-    kwargs.update([(k, v) for (k, v) in codebase.items() if k != 'name'])
+    kwargs.update([(k, v) for (k, v) in codebase.items() if k != "name"])
 
     if run:
         kwargs.update(run)
-        env, plain_command = splitout_env(run['command'])
-        kwargs['env'] = env
-        kwargs['plain_command'] = plain_command
+        env, plain_command = splitout_env(run["command"])
+        kwargs["env"] = env
+        kwargs["plain_command"] = plain_command
     else:
         env = {}
 
     campaign = get_campaign_config(config, suite)
 
-    kwargs.update({
-        "codebase": codebase['name'],
-        "reviews": reviews,
-        "unchanged_run": unchanged_run,
-        "merge_proposals": merge_proposals,
-        "run_id": run_id,
-        "suite": suite,
-        "campaign": campaign,
-        "show_diff": show_diff,
-        "show_debdiff": show_debdiff,
-        "previous_runs": previous_runs,
-        "run": run,
-        "candidate_context": candidate_context,
-        "candidate_success_chance": candidate_success_chance,
-        "candidate_value": candidate_value,
-        "queue_position": queue_position,
-        "queue_wait_time": queue_wait_time,
-        "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
-        "config": config,
-    })
+    kwargs.update(
+        {
+            "codebase": codebase["name"],
+            "reviews": reviews,
+            "unchanged_run": unchanged_run,
+            "merge_proposals": merge_proposals,
+            "run_id": run_id,
+            "suite": suite,
+            "campaign": campaign,
+            "show_diff": show_diff,
+            "show_debdiff": show_debdiff,
+            "previous_runs": previous_runs,
+            "run": run,
+            "candidate_context": candidate_context,
+            "candidate_success_chance": candidate_success_chance,
+            "candidate_value": candidate_value,
+            "queue_position": queue_position,
+            "queue_wait_time": queue_wait_time,
+            "changelog_policy": env.get("DEB_UPDATE_CHANGELOG", "auto"),
+            "config": config,
+        }
+    )
     return kwargs
 
 
@@ -335,7 +366,7 @@ async def generate_candidates(db, suite):
     candidates = []
     async with db.acquire() as conn:
         for row in await iter_candidates(conn, campaign=suite):
-            candidates.append((row['codebase'], row['value']))
+            candidates.append((row["codebase"], row["value"]))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite, "campaign": suite}
 
@@ -346,10 +377,8 @@ def html_template(template_name, headers={}):  # noqa: B006
             vs = await fn(request)
             if isinstance(vs, web.Response):
                 return vs
-            text = await render_template_for_request(
-                template_name, request, vs)
-            return web.Response(
-                content_type="text/html", text=text, headers=headers)
+            text = await render_template_for_request(template_name, request, vs)
+            return web.Response(content_type="text/html", text=text, headers=headers)
 
         return handle
 

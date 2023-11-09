@@ -64,7 +64,6 @@ File b
         new_revid = tree.commit("actual")
 
         class Run:
-
             codebase = "pkg"
             main_branch_revision = old_revid
             revision = new_revid
@@ -89,16 +88,22 @@ def test_not_authenticated():
 
 
 def test_is_alioth_url():
-    assert is_alioth_url('https://svn.debian.org/svn/blah')
-    assert is_alioth_url('git+ssh://git.debian.org/blah')
-    assert is_alioth_url('https://git.debian.org/blah')
-    assert is_alioth_url('http://alioth.debian.org/blah')
-    assert not is_alioth_url('https://salsa.debian.org/blah')
+    assert is_alioth_url("https://svn.debian.org/svn/blah")
+    assert is_alioth_url("git+ssh://git.debian.org/blah")
+    assert is_alioth_url("https://git.debian.org/blah")
+    assert is_alioth_url("http://alioth.debian.org/blah")
+    assert not is_alioth_url("https://salsa.debian.org/blah")
 
 
 def test_get_vcs_managers():
-    assert {'bzr': RemoteBzrVcsManager('https://example.com/bzr'),
-            'git': RemoteGitVcsManager('https://example.com/git')} == get_vcs_managers('https://example.com/')
-    assert {'git': RemoteGitVcsManager('https://example.com/git/')} == get_vcs_managers('git=https://example.com/git/')
-    assert {'bzr': RemoteBzrVcsManager('https://example.com/bzr'),
-            'git': RemoteGitVcsManager('https://example.com/git/')} == get_vcs_managers('git=https://example.com/git/,bzr=https://example.com/bzr')
+    assert {
+        "bzr": RemoteBzrVcsManager("https://example.com/bzr"),
+        "git": RemoteGitVcsManager("https://example.com/git"),
+    } == get_vcs_managers("https://example.com/")
+    assert {"git": RemoteGitVcsManager("https://example.com/git/")} == get_vcs_managers(
+        "git=https://example.com/git/"
+    )
+    assert {
+        "bzr": RemoteBzrVcsManager("https://example.com/bzr"),
+        "git": RemoteGitVcsManager("https://example.com/git/"),
+    } == get_vcs_managers("git=https://example.com/git/,bzr=https://example.com/bzr")

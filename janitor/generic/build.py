@@ -36,9 +36,9 @@ from ognibuild.test import run_test
 class BuildFailure(Exception):
     """Building failed."""
 
-    def __init__(self, code: str, description: str, *,
-                 details: Optional[Any] = None,
-                 stage=None) -> None:
+    def __init__(
+        self, code: str, description: str, *, details: Optional[Any] = None, stage=None
+    ) -> None:
         self.code = code
         self.description = description
         self.details = details
@@ -48,8 +48,8 @@ class BuildFailure(Exception):
         ret = {
             "code": self.code,
             "description": self.description,
-            'details': self.details,
-            'stage': self.stage,
+            "details": self.details,
+            "stage": self.stage,
         }
         return ret
 
@@ -58,7 +58,7 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
     session: Session
     if chroot:
         session = SchrootSession(chroot)
-        logging.info('Using schroot %s', chroot)
+        logging.info("Using schroot %s", chroot)
     else:
         session = PlainSession()
     try:
@@ -70,41 +70,58 @@ def build(local_tree, subpath, output_directory, chroot=None, dep_server_url=Non
             session.chdir(os.path.join(internal_dir, subpath))
             try:
                 try:
-                    run_build(session, buildsystems=bss, resolver=resolver,
-                              fixers=fixers, log_manager=DirectoryLogManager(
-                                  os.path.join(output_directory, BUILD_LOG_FILENAME),
-                                  'redirect'))
+                    run_build(
+                        session,
+                        buildsystems=bss,
+                        resolver=resolver,
+                        fixers=fixers,
+                        log_manager=DirectoryLogManager(
+                            os.path.join(output_directory, BUILD_LOG_FILENAME),
+                            "redirect",
+                        ),
+                    )
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('build-action-unknown', str(e), stage=('build', )) from e
+                    raise BuildFailure(
+                        "build-action-unknown", str(e), stage=("build",)
+                    ) from e
                 try:
-                    run_test(session, buildsystems=bss, resolver=resolver,
-                             fixers=fixers, log_manager=DirectoryLogManager(
-                                 os.path.join(output_directory, 'test.log'),
-                                 'redirect'))
+                    run_test(
+                        session,
+                        buildsystems=bss,
+                        resolver=resolver,
+                        fixers=fixers,
+                        log_manager=DirectoryLogManager(
+                            os.path.join(output_directory, "test.log"), "redirect"
+                        ),
+                    )
                 except NotImplementedError as e:
                     traceback.print_exc()
-                    raise BuildFailure('test-action-unknown', str(e), stage=('test', )) from e
+                    raise BuildFailure(
+                        "test-action-unknown", str(e), stage=("test",)
+                    ) from e
             except NoBuildToolsFound as e:
-                raise BuildFailure('no-build-tools-found', str(e)) from e
+                raise BuildFailure("no-build-tools-found", str(e)) from e
             except DetailedFailure as f:
-                raise BuildFailure(f.error.kind, str(f.error), details={'command': f.argv}) from f
+                raise BuildFailure(
+                    f.error.kind, str(f.error), details={"command": f.argv}
+                ) from f
             except UnidentifiedError as e:
                 lines = [line for line in e.lines if line]
                 if e.secondary:
-                    raise BuildFailure('build-failed', e.secondary.line) from e
+                    raise BuildFailure("build-failed", e.secondary.line) from e
                 elif len(lines) == 1:
-                    raise BuildFailure('build-failed', lines[0]) from e
+                    raise BuildFailure("build-failed", lines[0]) from e
                 else:
                     raise BuildFailure(
-                        'build-failed',
+                        "build-failed",
                         "%r failed with unidentified error "
-                        "(return code %d)" % (e.argv, e.retcode)
+                        "(return code %d)" % (e.argv, e.retcode),
                     ) from e
     except SessionSetupFailure as e:
         if e.errlines:
             sys.stderr.buffer.writelines(e.errlines)
-        raise BuildFailure('session-setup-failure', str(e)) from e
+        raise BuildFailure("session-setup-failure", str(e)) from e
 
     return {}
 
@@ -113,23 +130,28 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
     chroot = config.get("chroot")
     dep_server_url = config.get("dep_server_url")
     return build(
-        local_tree, subpath, output_directory, chroot=chroot,
-        dep_server_url=dep_server_url)
+        local_tree,
+        subpath,
+        output_directory,
+        chroot=chroot,
+        dep_server_url=dep_server_url,
+    )
 
 
 def main():
     import argparse
     import json
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, help="Path to configuration (JSON)")
-    parser.add_argument('output-directory', type=str, help="Output directory")
+    parser.add_argument("--config", type=str, help="Path to configuration (JSON)")
+    parser.add_argument("output-directory", type=str, help="Output directory")
     args = parser.parse_args()
 
     import breezy.bzr  # noqa: F401
     import breezy.git  # noqa: F401
     from breezy.workingtree import WorkingTree
 
-    wt, subpath = WorkingTree.open_containing('.')
+    wt, subpath = WorkingTree.open_containing(".")
 
     if args.config:
         with open(args.config) as f:
@@ -139,8 +161,8 @@ def main():
 
     try:
         result = build_from_config(
-            wt, subpath, args.output_directory, config=config,
-            env=os.environ)
+            wt, subpath, args.output_directory, config=config, env=os.environ
+        )
     except BuildFailure as e:
         json.dump(e.json(), sys.stdout)
         return 1
@@ -149,5 +171,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

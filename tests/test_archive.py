@@ -54,14 +54,12 @@ def test_hash_file_writer():
     with TemporaryDirectory() as td:
         r = Release()
         with HashedFileWriter(r, td, "foo/bar") as w:
-            w.write(b'chunk1')
-            w.write(b'chunk2')
+            w.write(b"chunk1")
+            w.write(b"chunk2")
             w.done()
-        md5hex = hashlib.md5(b'chunk1chunk2').hexdigest()
-        with open(os.path.join(
-                td, "foo", "by-hash", "MD5Sum", md5hex), 'rb') as f:
-            assert f.read() == b'chunk1chunk2'
-        with open(os.path.join(td, "foo", "bar"), 'rb') as f:
-            assert f.read() == b'chunk1chunk2'
-        assert r['MD5Sum'] == [
-            {'md5sum': md5hex, 'name': 'foo/bar', 'size': 12}]
+        md5hex = hashlib.md5(b"chunk1chunk2").hexdigest()
+        with open(os.path.join(td, "foo", "by-hash", "MD5Sum", md5hex), "rb") as f:
+            assert f.read() == b"chunk1chunk2"
+        with open(os.path.join(td, "foo", "bar"), "rb") as f:
+            assert f.read() == b"chunk1chunk2"
+        assert r["MD5Sum"] == [{"md5sum": md5hex, "name": "foo/bar", "size": 12}]

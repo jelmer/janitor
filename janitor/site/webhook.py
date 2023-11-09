@@ -31,10 +31,10 @@ from yarl import URL
 
 def subscribe_webhook_github(branch, github, callback_url):
     from breezy.plugins.github.forge import parse_github_branch_url
-    (owner, repo_name, branch_name) = (
-        parse_github_branch_url(branch))
 
-    path = f'repos/{owner}/{repo_name}/hooks'
+    (owner, repo_name, branch_name) = parse_github_branch_url(branch)
+
+    path = f"repos/{owner}/{repo_name}/hooks"
 
     data = {
         "name": "web",
@@ -44,48 +44,54 @@ def subscribe_webhook_github(branch, github, callback_url):
             "url": callback_url,
             "content_type": "json",
             "insecure_ssl": "0",
-        }
+        },
     }
 
-    response = github._api_request(
-        'POST',
-        path,
-        body=json.dumps(data).encode('utf-8'))
+    response = github._api_request("POST", path, body=json.dumps(data).encode("utf-8"))
 
     if response.status in (200, 201):
         return True
     if response.status == 422:
         data = json.loads(response.text)
-        if any([x['message'] == "Hook already exists on this repository"
-                for x in data['errors']]):  # type: ignore
+        if any(
+            [
+                x["message"] == "Hook already exists on this repository"
+                for x in data["errors"]  # type: ignore
+            ]
+        ):
             return True
         logging.warning(
-            'Unable to subscribe to %s/%s: %d: %s', owner, repo_name,
-            response.status, response.text)
+            "Unable to subscribe to %s/%s: %d: %s",
+            owner,
+            repo_name,
+            response.status,
+            response.text,
+        )
         return False
     return True
 
 
 def subscribe_webhook_gitlab(branch, gitlab, callback_url):
     from breezy.plugins.gitlab.forge import NotGitLabUrl, parse_gitlab_branch_url
+
     try:
-        (host, project_name, branch_name) = (
-            parse_gitlab_branch_url(branch))
+        (host, project_name, branch_name) = parse_gitlab_branch_url(branch)
     except NotGitLabUrl as e:
         raise UnsupportedForge(branch.user_url) from e
 
     project = gitlab._get_project(project_name)
-    path = 'projects/%s/hooks' % (
-        urlutils.quote(str(project['id']), ''))
+    path = "projects/%s/hooks" % (urlutils.quote(str(project["id"]), ""))
 
-    response = gitlab._api_request('POST', path, fields={
-        'url': callback_url,
-        'push_events': True
-    })
+    response = gitlab._api_request(
+        "POST", path, fields={"url": callback_url, "push_events": True}
+    )
     if response.status not in (200, 201):
         logging.warning(
-            'Unable to subscribe to %s: %d %s', project_name, response.status,
-            response.text)
+            "Unable to subscribe to %s: %d %s",
+            project_name,
+            response.status,
+            response.text,
+        )
         return False
     return True
 
@@ -93,6 +99,7 @@ def subscribe_webhook_gitlab(branch, gitlab, callback_url):
 def subscribe_webhook(branch, callback_url):
     from breezy.plugins.github.forge import GitHub
     from breezy.plugins.gitlab.forge import GitLab
+
     forge = get_forge(branch)
 
     if isinstance(forge, GitHub):
@@ -104,15 +111,16 @@ def subscribe_webhook(branch, callback_url):
 
 
 def is_webhook_request(request):
-    return ("X-Gitlab-Event" in request.headers
-            or "X-GitHub-Event" in request.headers
-            or "X-Gitea-Event" in request.headers
-            or "X-Gogs-Event" in request.headers
-            or "X-Launchpad-Event-Type" in request.headers)
+    return (
+        "X-Gitlab-Event" in request.headers
+        or "X-GitHub-Event" in request.headers
+        or "X-Gitea-Event" in request.headers
+        or "X-Gogs-Event" in request.headers
+        or "X-Launchpad-Event-Type" in request.headers
+    )
 
 
 class GitChange:
-
     urls: set[str]
     after: bytes
 
@@ -127,14 +135,13 @@ class GitChange:
 
 
 class BzrChange:
-
     urls: set[str]
     after: bytes
 
     def __init__(self, urls, after) -> None:
         self.urls = urls
         self.after = after
-    
+
     def after_revision_id(self):
         return self.after
 
@@ -148,8 +155,8 @@ def get_changes_from_github_webhook(body):
             url = body["repository"][url_key]
         except KeyError:
             logging.warning(
-                'URL key %r not present for repository: %r', url_key,
-                body["repository"])
+                "URL key %r not present for repository: %r", url_key, body["repository"]
+            )
             continue
         urls.append(git_url_to_bzr_url(url, ref=body["ref"].encode()))
         try:
@@ -159,31 +166,34 @@ def get_changes_from_github_webhook(body):
         else:
             if branch_name == body["repository"].get("default_branch"):
                 urls.append(git_url_to_bzr_url(url))
-    return [GitChange(urls, body['after'].encode())]
+    return [GitChange(urls, body["after"].encode())]
 
 
 def get_bzr_changes_from_launchpad_webhook(body):
     urls = [
-        base + body['bzr_branch_path']
+        base + body["bzr_branch_path"]
         for base in [
-            'https://code.launchpad.net/',
-            'https://bazaar.launchpad.net/',
-            'lp:']]
+            "https://code.launchpad.net/",
+            "https://bazaar.launchpad.net/",
+            "lp:",
+        ]
+    ]
 
-    return [BzrChange(urls, body['new']['revision_id'].encode('utf-8'))]
+    return [BzrChange(urls, body["new"]["revision_id"].encode("utf-8"))]
 
 
 def get_git_changes_from_launchpad_webhook(body):
-    path = body['git_repository_path']
-    base_urls = body['git_repository'] + [
-        'https://git.launchpad.net/' + path,
-        'git+ssh://git.launchpad.net/' + path]
+    path = body["git_repository_path"]
+    base_urls = body["git_repository"] + [
+        "https://git.launchpad.net/" + path,
+        "git+ssh://git.launchpad.net/" + path,
+    ]
     ret = []
-    for ref, changes in body['ref_changes'].items():
+    for ref, changes in body["ref_changes"].items():
         urls = []
         for base_url in base_urls:
             urls.append(git_url_to_bzr_url(base_url, ref=ref.encode()))
-        ret.append(GitChange(urls, after=changes['new']['commit_sha1']))
+        ret.append(GitChange(urls, after=changes["new"]["commit_sha1"]))
     # No idea what the default branch is, so let's trigger on everything
     # for now:
     for base_url in base_urls:
@@ -202,13 +212,14 @@ def get_changes_from_gitlab_webhook(body):
         except ValueError:
             pass
         else:
-            if branch_name == body['project'].get('default_branch'):
+            if branch_name == body["project"].get("default_branch"):
                 urls.append(git_url_to_bzr_url(url_key))
-    return [GitChange(urls, body['after'].encode())]
+    return [GitChange(urls, body["after"].encode())]
 
 
 async def get_codebases_by_change(
-        conn: asyncpg.Connection, change: Union[GitChange, BzrChange]):
+    conn: asyncpg.Connection, change: Union[GitChange, BzrChange]
+):
     query = """
 SELECT
   name, branch_url
@@ -219,9 +230,7 @@ WHERE
 """
     candidates = []
     for url in change.urls:
-        candidates.extend([
-            url.rstrip('/'),
-            url.rstrip('/') + '/'])
+        candidates.extend([url.rstrip("/"), url.rstrip("/") + "/"])
     return await conn.fetch(query, candidates)
 
 
@@ -243,23 +252,26 @@ async def parse_webhook(request, db):
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
     elif "X-GitHub-Event" in request.headers:
-        if request.headers["X-GitHub-Event"] not in ("push", ):
+        if request.headers["X-GitHub-Event"] not in ("push",):
             return
         changes = get_changes_from_github_webhook(body)
     elif "X-Gitea-Event" in request.headers:
-        if request.headers["X-Gitea-Event"] not in ("push", ):
+        if request.headers["X-Gitea-Event"] not in ("push",):
             return
         changes = get_changes_from_github_webhook(body)
     elif "X-Gogs-Event" in request.headers:
-        if request.headers["X-Gogs-Event"] not in ("push", ):
+        if request.headers["X-Gogs-Event"] not in ("push",):
             return
         changes = get_changes_from_github_webhook(body)
     elif "X-Launchpad-Event-Type" in request.headers:
-        if request.headers["X-Launchpad-Event-Type"] not in ("bzr:push:0.1", "git:push:0.1"):
+        if request.headers["X-Launchpad-Event-Type"] not in (
+            "bzr:push:0.1",
+            "git:push:0.1",
+        ):
             return
-        if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
+        if request.headers["X-Launchpad-Event-Type"] == "bzr:push:0.1":
             changes = get_bzr_changes_from_launchpad_webhook(body)
-        elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
+        elif request.headers["X-Launchpad-Event-Type"] == "git:push:0.1":
             changes = get_git_changes_from_launchpad_webhook(body)
         else:
             return
@@ -271,18 +283,19 @@ async def parse_webhook(request, db):
             for row in await get_codebases_by_change(conn, change):
                 if change.after_revision_id() is not None:
                     await conn.execute(
-                        'UPDATE codebase SET '
-                        'vcs_last_revision = $1, last_scanned = NOW() '
-                        'WHERE branch_url = $2',
-                        change.after_revision_id().decode('utf-8'),
-                        row['branch_url'])
+                        "UPDATE codebase SET "
+                        "vcs_last_revision = $1, last_scanned = NOW() "
+                        "WHERE branch_url = $2",
+                        change.after_revision_id().decode("utf-8"),
+                        row["branch_url"],
+                    )
                 yield row
 
 
 async def get_codebases(runner_url):
-    async with ClientSession() as session, \
-            session.get(URL(runner_url) / "codebases",
-                        raise_for_status=True) as resp:
+    async with ClientSession() as session, session.get(
+        URL(runner_url) / "codebases", raise_for_status=True
+    ) as resp:
         return await resp.json()
 
 
@@ -297,28 +310,29 @@ def main(argv=None):
     from janitor.vcs import BranchMissing, BranchUnavailable, open_branch
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--runner-url', type=str)
-    parser.add_argument('callback_url', type=str)
+    parser.add_argument("--runner-url", type=str)
+    parser.add_argument("callback_url", type=str)
     args = parser.parse_args()
 
-    logging.basicConfig(format='%(message)s')
+    logging.basicConfig(format="%(message)s")
 
     codebases = asyncio.run(get_codebases(args.runner_url))
 
     for codebase in codebases:
         try:
-            b = open_branch(codebase['branch_url'])
+            b = open_branch(codebase["branch_url"])
         except (BranchUnavailable, BranchMissing):
             continue
         try:
             present = subscribe_webhook(b, args.callback_url)
         except UnsupportedForge:
-            logging.warning('Ignoring branch with unknown forge: %s', b.user_url)
+            logging.warning("Ignoring branch with unknown forge: %s", b.user_url)
             continue
         if present:
-            logging.info('Registered webhook for %s', codebase['name'])
+            logging.info("Registered webhook for %s", codebase["name"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
+
     sys.exit(main(sys.argv[1:]))

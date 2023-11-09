@@ -52,4 +52,4 @@ async def test_precache_all(aiohttp_client, db):
 
     resp = await client.post("/precache-all")
     assert resp.status == 200
-    assert {'count': 0} == await resp.json()
+    assert {"count": 0} == await resp.json()

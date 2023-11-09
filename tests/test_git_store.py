@@ -30,20 +30,18 @@ except ImportError:
 async def create_client(aiohttp_client, path, dulwich_server=False):
     config = config_pb2.Config()
     app, public_app = await create_web_app(
-        '127.0.0.1',
+        "127.0.0.1",
         80,
         path,
         None,
         config,
         dulwich_server=dulwich_server,
     )
-    return (
-        await aiohttp_client(app),
-        await aiohttp_client(public_app))
+    return (await aiohttp_client(app), await aiohttp_client(public_app))
 
 
 async def test_health(aiohttp_client):
-    client, public_client = await create_client(aiohttp_client, '/tmp')
+    client, public_client = await create_client(aiohttp_client, "/tmp")
 
     resp = await client.get("/health")
     assert resp.status == 200
@@ -52,7 +50,7 @@ async def test_health(aiohttp_client):
 
 
 async def test_ready(aiohttp_client):
-    client, public_client = await create_client(aiohttp_client, '/tmp')
+    client, public_client = await create_client(aiohttp_client, "/tmp")
 
     resp = await client.get("/ready")
     assert resp.status == 200
