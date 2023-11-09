@@ -56,9 +56,9 @@ def subscribe_webhook_github(branch, github, callback_url):
         if any(
             [
                 x["message"] == "Hook already exists on this repository"
-                for x in data["errors"]
+                for x in data["errors"]  # type: ignore
             ]
-        ):  # type: ignore
+        ):
             return True
         logging.warning(
             "Unable to subscribe to %s/%s: %d: %s",

@@ -15,8 +15,8 @@ def create_chroot(
     suites,
     sbuild_arch,
     include=[],  # noqa: B006
-    setup_hooks=[],
-):  # noqa: B006
+    setup_hooks=[],  # noqa: B006
+):
     cmd = [
         "mmdebstrap",
         "--variant=buildd",
