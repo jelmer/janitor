@@ -319,9 +319,9 @@ def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
     if vcs_type == "git":
         repo = ControlDir.open(str(tmp_path / "target")).open_repository()
         assert list(repo._git.get_refs().keys()) == [b"refs/tags/run/run-id/main"]  # type: ignore
-        run_id_revid = repo.lookup_foreign_revision_id(
-            repo._git.get_refs()[b"refs/tags/run/run-id/main"]
-        )  # type: ignore
+        run_id_revid = repo.lookup_foreign_revision_id(  # type: ignore
+            repo._git.get_refs()[b"refs/tags/run/run-id/main"]  # type: ignore
+        )
     elif vcs_type == "bzr":
         b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
         tags = b.tags.get_tag_dict()

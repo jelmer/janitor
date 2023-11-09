@@ -310,8 +310,8 @@ def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
             raise
         elif e.code in (400, 500, 502, 503, 504):
             raise DebdiffRetrievalError(
-                "Error %d: %s" % (e.code, e.file.read().decode("utf-8", "replace"))
-            ) from e  # type: ignore
+                "Error %d: %s" % (e.code, e.file.read().decode("utf-8", "replace"))  # type: ignore
+            ) from e
         else:
             raise
     except ConnectionResetError as e:
