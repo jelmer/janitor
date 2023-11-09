@@ -162,7 +162,7 @@ LEFT JOIN codebase ON codebase.name = queue.codebase
             # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
             conditions.append(
                 "NOT (codebase.branch_url IS NOT NULL AND "
-                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))"
+                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))" % len(args)
             )
 
         if conditions:
