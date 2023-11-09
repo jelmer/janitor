@@ -355,6 +355,7 @@ async def cgit_backend(request: web.Request) -> web.Response:
             # Don't cross the streams
             assert p.stdin
             assert p.stdin.is_closing()
+            assert p.stdout
 
             if "Content-Length" in headers:
                 content_length = int(headers["Content-Length"])
