@@ -2,6 +2,7 @@ pub mod lintian;
 
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::{Tree, WorkingTree};
+use silver_platter::CommitPending;
 use silver_platter::debian::codemod::{
     script_runner as debian_script_runner, CommandResult as DebianCommandResult,
     Error as DebianCodemodError,
@@ -97,7 +98,7 @@ pub fn debian_make_changes(
         local_tree,
         argv,
         subpath,
-        None,
+        CommitPending::Auto,
         resume_metadata,
         committer,
         Some(extra_env),
@@ -162,6 +163,13 @@ pub fn debian_make_changes(
         Err(DebianCodemodError::Utf8(e)) => Err(WorkerFailure {
             code: "utf8-error".to_string(),
             description: format!("UTF8 error: {}", e),
+            details: None,
+            stage: vec!["codemod".to_string()],
+            transient: None,
+        }),
+        Err(DebianCodemodError::ChangelogParse(e)) => Err(WorkerFailure {
+            code: "changelog-parse-error".to_string(),
+            description: format!("Changelog parse error: {}", e),
             details: None,
             stage: vec!["codemod".to_string()],
             transient: None,

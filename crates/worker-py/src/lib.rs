@@ -571,7 +571,7 @@ fn debian_make_changes(
 ) -> PyResult<DebianCommandResult> {
     Python::with_gil(|py| {
         janitor_worker::debian::debian_make_changes(
-            &breezyshim::tree::WorkingTree::new(local_tree).unwrap(),
+            &breezyshim::tree::WorkingTree::from(local_tree),
             &subpath,
             argv.as_slice(),
             env,
@@ -606,8 +606,8 @@ impl GenericCommandResult {
     }
 
     #[getter]
-    fn description(&self) -> &str {
-        self.0.description.as_str()
+    fn description(&self) -> Option<&str> {
+        self.0.description.as_deref()
     }
 
     #[getter]
@@ -652,7 +652,7 @@ fn generic_make_changes(
 ) -> PyResult<GenericCommandResult> {
     Python::with_gil(|py| {
         janitor_worker::generic::generic_make_changes(
-            &breezyshim::tree::WorkingTree::new(local_tree).unwrap(),
+            &breezyshim::tree::WorkingTree::from(local_tree),
             &subpath,
             argv.as_slice(),
             env,

@@ -33,11 +33,10 @@ serde = "1.0"
 serde_json = "1.0"
 url = "2.4"
 chrono = "0.4"
-# clap >= 4.3 requires rustc 1.70, which is not yet in Debian unstable
-clap = { version = "<4.3" }
+clap = { version = "4" }
 tokio = "1"
 axum = "0.6.16"
-silver-platter = "0.5.10"
+silver-platter = ">=0.5"
 
 [build-dependencies]
 protobuf-codegen = "3"
