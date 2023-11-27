@@ -236,18 +236,3 @@ mypy = true
 protobufs = [
     "janitor/config.proto"
 ]
-
-[[tool.setuptools-rust.ext-modules]]
-target = "janitor._worker"
-path = "crates/worker-py/Cargo.toml"
-binding = "PyO3"
-
-[[tool.setuptools-rust.bins]]
-target = "janitor-worker"
-path = "crates/worker/Cargo.toml"
-features = ["cli"]
-
-[[tool.setuptools-rust.bins]]
-target = "janitor-mail-filter"
-path = "crates/mail-filter/Cargo.toml"
-features = ["cmdline"]

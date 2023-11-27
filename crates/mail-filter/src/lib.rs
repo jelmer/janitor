@@ -3,8 +3,6 @@ use select::document::Document;
 use select::predicate::{And, Attr, Name};
 use serde_json::Value;
 
-use std::io::Read;
-
 pub fn parse_plain_text_body(text: &str) -> Option<String> {
     let lines: Vec<&str> = text.lines().collect();
 

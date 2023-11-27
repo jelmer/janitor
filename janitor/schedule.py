@@ -222,8 +222,10 @@ ORDER BY start_time DESC
         )
 
     return (
-        (success * 10 + 1) / (total * 10 + 1) * same_context_multiplier
-    ), estimated_duration, total
+        ((success * 10 + 1) / (total * 10 + 1) * same_context_multiplier),
+        estimated_duration,
+        total,
+    )
 
 
 # Overhead of doing a run; estimated to be roughly 20s
