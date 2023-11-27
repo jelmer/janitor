@@ -1,5 +1,6 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::WorkingTree;
+use silver_platter::CommitPending;
 use silver_platter::codemod::{
     script_runner as generic_script_runner, CommandResult as GenericCommandResult,
     Error as GenericCodemodError,
@@ -38,7 +39,7 @@ pub fn generic_make_changes(
         local_tree,
         argv,
         subpath,
-        None,
+        CommitPending::Auto,
         resume_metadata,
         committer.as_deref(),
         Some(env),
