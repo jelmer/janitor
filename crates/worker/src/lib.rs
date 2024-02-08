@@ -1,4 +1,5 @@
 use backoff::ExponentialBackoff;
+use breezy::tree::WorkingTree;
 pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -122,12 +123,12 @@ pub struct Remote {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Target {
+pub struct TargetDetails {
     pub name: String,
     pub details: serde_json::Value,
 }
 
-impl Target {
+impl TargetDetails {
     pub fn new(name: String, details: serde_json::Value) -> Self {
         Self { name, details }
     }
@@ -166,7 +167,7 @@ pub struct Metadata {
     )>,
     pub tags: Vec<(String, RevisionId)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target: Option<Target>,
+    pub target: Option<TargetDetails>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "details")]
     pub failure_details: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -696,3 +697,35 @@ mod tests {
         );
     }
 }
+
+#[derive(Debug, Default)]
+enum DebUpdateChangelog {
+    #[default]
+    Auto,
+    Update,
+    Leave,
+}
+
+impl std::str::FromStr for DebUpdateChangelog {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "auto" => Ok(DebUpdateChangelog::Auto),
+            "update" => Ok(DebUpdateChangelog::Update),
+            "leave" => Ok(DebUpdateChangelog::Leave),
+            _ => Err(format!("Invalid value for deb-update-changelog: {}", s)),
+        }
+    }
+}
+
+impl ToString for DebUpdateChangelog {
+    fn to_string(&self) -> String {
+        match self {
+            DebUpdateChangelog::Auto => "auto".to_string(),
+            DebUpdateChangelog::Update => "update".to_string(),
+            DebUpdateChangelog::Leave => "leave".to_string(),
+        }
+    }
+}
+
