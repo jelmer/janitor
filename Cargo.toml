@@ -23,10 +23,10 @@ url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 
 [workspace.dependencies]
-pyo3-asyncio = { version = "0.19" }
-pyo3 = { version = "0.19" }
+pyo3-asyncio = { version = "0.20" }
+pyo3 = { version = "0.20" }
 pyo3-log = { version = "0.8" }
-breezyshim = "0.1.27"
+breezyshim = "0.1.78"
 log = "0.4"
 env_logger = "0.10"
 serde = "1.0"
