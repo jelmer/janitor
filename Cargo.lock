@@ -1880,6 +1880,7 @@ dependencies = [
  "clap 4.4.11",
  "janitor",
  "log",
+ "percent-encoding",
  "pyo3",
  "pyo3-asyncio",
  "pyo3-log",

@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 
+use breezyshim::controldir::AsFormat;
+
 use std::net::IpAddr;
 use std::path::Path;
 use tokio::io::AsyncReadExt;
@@ -695,4 +697,74 @@ mod tests {
             }
         );
     }
+}
+
+pub fn push_branch(
+    source_branch: &dyn breezyshim::branch::Branch,
+    url: &url::Url,
+    format: Option<impl AsFormat>,
+    overwrite: Option<bool>,
+    stop_revision: Option<&breezyshim::RevisionId>,
+    mut tag_selector: Option<Box<dyn Fn(String) -> bool>>,
+    mut possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
+) -> pyo3::PyResult<()> {
+    let overwrite = overwrite.unwrap_or(false);
+    let (url, params) = breezyshim::urlutils::split_segment_parameters(url);
+    let branch_name = params
+        .get("branch")
+        .map(|b| percent_encoding::utf8_percent_encode(b, percent_encoding::CONTROLS).to_string());
+
+    let format = format.map_or_else(
+        || source_branch.controldir().cloning_metadir(),
+        |f| f.as_format().unwrap(),
+    );
+
+    backoff::retry(
+        ExponentialBackoff::default(),
+        move || -> std::result::Result<(), backoff::Error<pyo3::PyErr>> {
+            let transport =
+                breezyshim::transport::get_transport(&url, possible_transports.as_ref())
+                    .map_err(|e| backoff::Error::transient(e.into()))?;
+            let target = match breezyshim::controldir::open_from_transport(&transport, None) {
+                Ok(b) => b,
+                Err(breezyshim::controldir::OpenError::NotFound(e)) => {
+                    breezyshim::controldir::create_on_transport(&transport, Some(&format)).map_err(
+                        |e| match e {
+                            breezyshim::controldir::CreateError::Python(e) => {
+                                backoff::Error::transient(e)
+                            }
+                            breezyshim::controldir::CreateError::AlreadyExists => {
+                                unreachable!()
+                            }
+                            breezyshim::controldir::CreateError::UnknownFormat => {
+                                unreachable!()
+                            }
+                        },
+                    )?
+                }
+                Err(breezyshim::controldir::OpenError::Python(e)) => {
+                    return Err(backoff::Error::transient(e));
+                }
+                Err(breezyshim::controldir::OpenError::UnknownFormat) => {
+                    return Err(backoff::Error::permanent(
+                        pyo3::exceptions::PyRuntimeError::new_err("Unknown format"),
+                    ));
+                }
+            };
+
+            target
+                .push_branch(
+                    source_branch,
+                    branch_name.as_deref(),
+                    stop_revision,
+                    Some(overwrite),
+                    tag_selector,
+                )
+                .map_err(|e| backoff::Error::transient(e))?;
+
+            Ok(())
+        },
+    );
+
+    Ok(())
 }
