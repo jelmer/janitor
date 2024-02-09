@@ -36,7 +36,7 @@ chrono = "0.4"
 clap = { version = "4" }
 tokio = "1"
 axum = "0.6.16"
-silver-platter = ">=0.5"
+silver-platter = { git = "https://github.com/jelmer/silver-platter.git" }
 
 [build-dependencies]
 protobuf-codegen = "3"
