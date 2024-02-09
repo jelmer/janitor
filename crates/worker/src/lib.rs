@@ -1,5 +1,5 @@
 use backoff::ExponentialBackoff;
-use breezy::tree::WorkingTree;
+use breezyshim::tree::WorkingTree;
 pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -14,6 +14,8 @@ use std::path::Path;
 use tokio::io::AsyncReadExt;
 use tokio::net::lookup_host;
 use tokio::time::Duration;
+
+pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG_VERSION"), ")");
 
 #[cfg(feature = "debian")]
 pub mod debian;
@@ -728,4 +730,3 @@ impl ToString for DebUpdateChangelog {
         }
     }
 }
-
