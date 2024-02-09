@@ -18,12 +18,13 @@
 import tempfile
 
 from janitor.worker import DebianTarget
+
 from . import TestCaseWithTransport
 
 
 class DebianTargetTests(TestCaseWithTransport):
     def setUp(self):
-        super(DebianTargetTests, self).setUp()
+        super().setUp()
         self.tree = self.make_branch_and_tree(".")
 
     def test_create(self):
