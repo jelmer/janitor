@@ -3236,8 +3236,7 @@ dependencies = [
 [[package]]
 name = "silver-platter"
 version = "0.5.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6698d9f5de6ddc2db1f462976615bd454137dee9ff706129810698c22b91f26"
+source = "git+https://github.com/jelmer/silver-platter.git#981ae3123c261971c10e9d8667d4ce8eeb8baf1f"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -3245,7 +3244,7 @@ dependencies = [
  "debian-analyzer",
  "debian-changelog",
  "debversion",
- "env_logger 0.10.2",
+ "env_logger 0.9.3",
  "flate2",
  "lazy-regex 3.1.0",
  "libc",
