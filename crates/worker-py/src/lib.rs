@@ -1,10 +1,8 @@
 use chrono::NaiveDateTime;
 use janitor_worker::{AssignmentError, Remote, RevisionId};
 use pyo3::create_exception;
-use pyo3::exceptions::{PyTypeError};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-
-
 
 create_exception!(
     janitor._worker,
@@ -96,7 +94,7 @@ impl Client {
         base_url: &str,
         username: Option<&str>,
         password: Option<&str>,
-        user_agent: &str,
+        user_agent: Option<&str>,
     ) -> Self {
         if username.is_none() && password.is_some() {
             panic!("password specified without username");
@@ -110,6 +108,8 @@ impl Client {
             janitor_worker::Credentials::None
         };
 
+        let user_agent = user_agent.unwrap_or(janitor_worker::DEFAULT_USER_AGENT);
+
         Self(std::sync::Arc::new(janitor_worker::Client::new(
             reqwest::Url::parse(base_url).unwrap(),
             credentials,
@@ -120,8 +120,8 @@ impl Client {
     fn get_assignment_raw<'a>(
         &self,
         py: Python<'a>,
-        my_url: Option<&str>,
         node_name: &str,
+        my_url: Option<&str>,
         jenkins_build_url: Option<&str>,
         codebase: Option<&str>,
         campaign: Option<&str>,
@@ -221,7 +221,7 @@ struct Assignment(janitor_worker::Assignment);
 impl Assignment {}
 
 #[pyclass]
-struct MetadataTarget(janitor_worker::Target);
+struct MetadataTarget(janitor_worker::TargetDetails);
 
 #[pymethods]
 impl MetadataTarget {
@@ -232,7 +232,7 @@ impl MetadataTarget {
 
     #[new]
     fn new(name: &str) -> Self {
-        Self(janitor_worker::Target::new(
+        Self(janitor_worker::TargetDetails::new(
             name.to_string(),
             serde_json::Value::Null,
         ))
@@ -491,7 +491,7 @@ impl Metadata {
 
     #[setter]
     fn set_target_name(&mut self, name: &str) -> PyResult<()> {
-        self.0.target = Some(janitor_worker::Target::new(
+        self.0.target = Some(janitor_worker::TargetDetails::new(
             name.to_string(),
             serde_json::Value::Null,
         ));
