@@ -95,11 +95,6 @@ content-type = "text/markdown"
 
 [project.optional-dependencies]
 dev = [
-    "flake8>=5.0.4",
-    "flake8-tidy-imports",
-    "flake8-bugbear",
-    "flake8-simplify",
-    "flake8-async",
     "djlint",
     "mock",
     "mypy",
@@ -110,6 +105,7 @@ dev = [
     "pytest-aiohttp",
     "fakeredis",
     "python-subunit",
+    "ruff",
     "types-PyYAML",
     "types-protobuf",
     "types-mock",
@@ -189,6 +185,8 @@ version = {attr = "janitor.__version__"}
 [tool.ruff]
 select = [
     "ANN",
+    "B",
+    "W",
     "D",
     "E",
     "F",
@@ -230,6 +228,11 @@ convention = "google"
 [tool.codespell]
 skip = "./target,./build,./lib,*~"
 ignore-words = ".codespell-ignore-words"
+
+[tool.ruff.flake8-tidy-imports.banned-api]
+"lintian_brush".msg = "belongs in Debian Janitor"
+"debmutate".msg = "not used directly"
+"upstream_ontologist".msg = "not used"
 
 [tool.setuptools-protobuf]
 mypy = true
