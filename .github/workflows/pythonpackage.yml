@@ -41,9 +41,9 @@ jobs:
           python setup.py develop
           python setup.py build_ext -i
           make
-      - name: Style checks (flake8)
+      - name: Style checks (ruff)
         run: |
-          make flake8 PYTHON=python
+          make ruff PYTHON=python
       - name: Style checks (djlint)
         if: always()
         run: |
