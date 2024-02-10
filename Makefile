@@ -39,11 +39,6 @@ test: build-inplace
 	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
 	cargo test
 
-style:: flake8
-
-flake8:
-	$(PYTHON) -m flake8 janitor tests
-
 style:: yamllint
 
 yamllint:
