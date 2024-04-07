@@ -20,6 +20,6 @@ For example, to create a dev environment:
 ```
  $ python3 -m venv
  $ . ./bin/activate
- $ pip3 install python_apt@git+https://salsa.debian.org/apt-team/python-apt
+ $ pip3 install python_apt@git+https://salsa.debian.org/apt-team/python-apt@2.5.0
  $ pip3 install -e .[dev,debian]
 ```
