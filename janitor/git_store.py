@@ -345,8 +345,8 @@ async def cgit_backend(request: web.Request) -> web.Response:
             status = headers.get("Status")
             if status:
                 del headers["Status"]
-                (status_code, status_reason) = status.split(" ", 1)
-                status_code = int(status_code)
+                (status_code_text, status_reason) = status.split(" ", 1)
+                status_code = int(status_code_text)
                 status_reason = status_reason
             else:
                 status_code = 200
@@ -358,16 +358,16 @@ async def cgit_backend(request: web.Request) -> web.Response:
             assert p.stdout
 
             if "Content-Length" in headers:
-                content_length = int(headers["Content-Length"])
+                content_length = int(headers["Content-Length"])  # type: ignore
                 return web.Response(
-                    headers=dict(headers),
+                        headers=dict(headers),  # type: ignore
                     status=status_code,
                     reason=status_reason,
                     body=await p.stdout.read(content_length),
                 )  # type: ignore
             else:
                 response = web.StreamResponse(
-                    headers=dict(headers),
+                    headers=dict(headers),  # type: ignore
                     status=status_code,
                     reason=status_reason,
                 )
