@@ -71,14 +71,13 @@ from breezy.transport import NoSuchFile, Transport, get_transport
 from breezy.tree import MissingNestedTree
 from breezy.workingtree import WorkingTree
 from jinja2 import Template
-from silver_platter.apply import CommandResult as GenericCommandResult
+from silver_platter._svp_rs import CommandResult as GenericCommandResult  # type: ignore
 from silver_platter.probers import select_probers
 from silver_platter.utils import (
     BranchMissing,
     BranchTemporarilyUnavailable,
     BranchUnavailable,
     full_branch_url,
-    get_branch_vcs_type,
     open_branch,
 )
 from silver_platter.workspace import Workspace
@@ -98,7 +97,7 @@ from ._worker import (
 from ._worker import (
     WorkerFailure as _WorkerFailure,
 )
-from .vcs import BranchOpenFailure, open_branch_ext
+from .vcs import BranchOpenFailure, get_branch_vcs_type, open_branch_ext
 
 
 def WorkerFailure(

@@ -182,7 +182,7 @@ janitor = ["state.sql"]
 [tool.setuptools.dynamic]
 version = {attr = "janitor.__version__"}
 
-[tool.ruff]
+[tool.ruff.lint]
 select = [
     "ANN",
     "B",
@@ -219,17 +219,19 @@ ignore = [
     "D417",
     "B007"
 ]
+
+[tool.ruff]
 line-length = 88
 target-version = "py39"
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.codespell]
 skip = "./target,./build,./lib,*~"
 ignore-words = ".codespell-ignore-words"
 
-[tool.ruff.flake8-tidy-imports.banned-api]
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
 "lintian_brush".msg = "belongs in Debian Janitor"
 "debmutate".msg = "not used directly"
 "upstream_ontologist".msg = "not used"
