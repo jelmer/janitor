@@ -36,7 +36,7 @@ jobs:
             libssl-dev pkg-config codespell libtdb-dev
           python -m pip install --upgrade pip setuptools setuptools-protobuf \
             setuptools-rust wheel mypy-protobuf \
-            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git@2.5.0
           pip install -U -e .[dev,debian]
           python setup.py develop
           python setup.py build_ext -i
