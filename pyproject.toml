@@ -158,14 +158,11 @@ script-files = [
     "create-sbuild-chroot-schroot.py",
     "create-sbuild-chroot-unshare.py",
 ]
-packages = [
-    "janitor",
-    "janitor.debian",
-    "janitor.generic",
-    "janitor.site",
-    "janitor.site.cupboard",
-]
 include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["py"]
+include = ["janitor*"]
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
@@ -239,5 +236,5 @@ ignore-words = ".codespell-ignore-words"
 [tool.setuptools-protobuf]
 mypy = true
 protobufs = [
-    "janitor/config.proto"
+    "py/janitor/config.proto"
 ]
