@@ -22,7 +22,7 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from io import BytesIO
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from aiohttp import (
     ClientResponseError,
@@ -32,6 +32,9 @@ from aiohttp import (
 )
 from aiohttp_openmetrics import Counter
 from yarl import URL
+
+if TYPE_CHECKING:
+    import gcloud.aio.storage
 
 primary_logfile_upload_failed_count = Counter(
     "primary_logfile_upload_failed", "Number of failed logs to primary logfile target"
@@ -227,7 +230,7 @@ class S3LogFileManager(LogFileManager):
         basename: Optional[str] = None,
     ):
         with open(orig_path, "rb") as f:
-            data = gzip.compress(f.read(), mtime=mtime)  # type: ignore
+            data = gzip.compress(f.read(), mtime=mtime)
 
         if basename is None:
             basename = os.path.basename(orig_path)
@@ -248,7 +251,7 @@ class S3LogFileManager(LogFileManager):
 
 
 class GCSLogFileManager(LogFileManager):
-    session: ClientSession
+    session: "gcloud.aio.storage.storage.Session"
 
     def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
@@ -261,8 +264,8 @@ class GCSLogFileManager(LogFileManager):
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
 
-        self.session = ClientSession(trace_configs=self.trace_configs)
-        self.storage = Storage(service_file=self.creds_path, session=self.session)  # type: ignore
+        self.session = ClientSession(trace_configs=self.trace_configs)  # type: ignore
+        self.storage = Storage(service_file=self.creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
         return self
 
@@ -282,14 +285,14 @@ class GCSLogFileManager(LogFileManager):
 
     async def has_log(self, codebase, run_id, name):
         object_name = self._get_object_name(codebase, run_id, name)
-        return await self.bucket.blob_exists(object_name, session=self.session)  # type: ignore
+        return await self.bucket.blob_exists(object_name, session=self.session)
 
     async def get_ctime(self, codebase, run_id, name):
         from iso8601 import parse_date
 
         object_name = self._get_object_name(codebase, run_id, name)
         try:
-            blob = await self.bucket.get_blob(object_name, session=self.session)  # type: ignore
+            blob = await self.bucket.get_blob(object_name, session=self.session)
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name) from e
@@ -305,7 +308,7 @@ class GCSLogFileManager(LogFileManager):
                 self.bucket_name,
                 object_name,
                 session=self.session,
-                timeout=timeout,  # type: ignore
+                timeout=timeout,
             )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
@@ -329,7 +332,7 @@ class GCSLogFileManager(LogFileManager):
         object_name = self._get_object_name(codebase, run_id, basename)
         with open(orig_path, "rb") as f:
             plain_data = f.read()
-        compressed_data = gzip.compress(plain_data, mtime=mtime)  # type: ignore
+        compressed_data = gzip.compress(plain_data, mtime=mtime)
         try:
             await self.storage.upload(
                 self.bucket_name, object_name, compressed_data, timeout=timeout
@@ -340,7 +343,7 @@ class GCSLogFileManager(LogFileManager):
             if e.status == 403:
                 data = await self.storage.download(
                     self.bucket_name, object_name, session=self.session, timeout=timeout
-                )  # type: ignore
+                )
                 if data == plain_data:
                     return
                 raise PermissionError(e.message) from e
