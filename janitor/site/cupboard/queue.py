@@ -55,7 +55,7 @@ async def iter_queue_items_with_last_run(
         if qs:
             for row in await conn.fetch(
                 "SELECT codebase, suite AS campaign, id, result_code, failure_transient FROM last_runs "
-                "WHERE (%s)" % " OR ".join(qs),
+                "WHERE ({})".format(" OR ".join(qs)),
                 *vals,
             ):
                 runs[(row["codebase"], row["campaign"])] = dict(row)

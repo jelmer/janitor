@@ -190,7 +190,7 @@ def publish(
                 raise MergeConflict(target_branch, source_branch)
         except NoSuchRevision as e:
             raise PublishFailure(
-                description="Revision missing: %s" % e.revision,  # type: ignore
+                description=f"Revision missing: {e.revision}",  # type: ignore
                 code="revision-missing",
             ) from e
 
@@ -227,16 +227,16 @@ def publish(
         ) from e
     except UnsupportedForge as e:
         raise PublishFailure(
-            description="Forge unsupported: %s." % (target_branch.repository.user_url),
+            description=f"Forge unsupported: {target_branch.repository.user_url}.",
             code="hoster-unsupported",
         ) from e
     except NoSuchProject as e:
         raise PublishFailure(
-            description="project %s was not found" % e.project, code="project-not-found"
+            description=f"project {e.project} was not found", code="project-not-found"
         ) from e
     except ForkingDisabled as e:
         raise PublishFailure(
-            description="Forking disabled: %s" % (target_branch.repository.user_url),
+            description=f"Forking disabled: {target_branch.repository.user_url}",
             code="forking-disabled",
         ) from e
     except PermissionDenied as e:
@@ -269,7 +269,7 @@ def publish(
         ) from e
     except RemoteGitError as exc:
         raise PublishFailure(
-            code="remote-git-error", description="remote git error: %s" % exc
+            code="remote-git-error", description=f"remote git error: {exc}"
         ) from exc
     except InsufficientChangesForNewProposal as e:
         raise PublishNothingToDo("not enough changes for a new merge proposal") from e
@@ -392,7 +392,7 @@ def publish_one(
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
-                    description="Forge unsupported: %s." % netloc,
+                    description=f"Forge unsupported: {netloc}.",
                     code="hoster-unsupported",
                 ) from e
             # We can't figure out what branch to resume from when there's no forge
@@ -410,7 +410,7 @@ def publish_one(
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 netloc = urllib.parse.urlparse(target_branch.user_url).netloc
                 raise PublishFailure(
-                    description="Forge %s supported but no login known." % netloc,
+                    description=f"Forge {netloc} supported but no login known.",
                     code="hoster-no-login",
                 ) from e
             # We can't figure out what branch to resume from when there's no forge
@@ -431,7 +431,7 @@ def publish_one(
                 raise PublishFailure("too-many-requests", str(e)) from e
             else:
                 traceback.print_exc()
-                raise PublishFailure("http-%s" % e.code, str(e)) from e
+                raise PublishFailure(f"http-{e.code}", str(e)) from e
         else:
             if existing_mp_url is not None:
                 try:
@@ -466,21 +466,20 @@ def publish_one(
                 except NoSuchProject as e:
                     if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                         raise PublishFailure(
-                            description="Project %s not found." % e.project,
+                            description=f"Project {e.project} not found.",
                             code="project-not-found",
                         ) from e
                     resume_branch = None
                     existing_proposal = None
                 except ForgeLoginRequired as e:
                     raise PublishFailure(
-                        description="Forge %s supported but no login known." % forge,
+                        description=f"Forge {forge} supported but no login known.",
                         code="hoster-no-login",
                     ) from e
                 except PermissionDenied as e:
                     raise PublishFailure(
                         description=(
-                            "Permission denied while finding existing proposal: %s"
-                            % e.extra
+                            f"Permission denied while finding existing proposal: {e.extra}"
                         ),
                         code="permission-denied",
                     ) from e
@@ -502,12 +501,12 @@ def publish_one(
             debdiff = get_debdiff(differ_url, unchanged_id, log_id)
         except DebdiffRetrievalError as e:
             raise PublishFailure(
-                description="Error from differ for build diff: %s" % e.reason,
+                description=f"Error from differ for build diff: {e.reason}",
                 code="differ-error",
             ) from e
         except DifferUnavailable as e:
             raise PublishFailure(
-                description="Unable to contact differ for build diff: %s" % e.reason,
+                description=f"Unable to contact differ for build diff: {e.reason}",
                 code="differ-unreachable",
             ) from e
         except DebdiffMissingRun as e:
@@ -516,7 +515,7 @@ def publish_one(
                     raise PublishFailure(
                         description=(
                             "Build diff is not available. "
-                            "Run (%s) not yet published?" % log_id
+                            f"Run ({log_id}) not yet published?"
                         ),
                         code="missing-build-diff-self",
                     ) from e
@@ -524,7 +523,7 @@ def publish_one(
                     raise PublishFailure(
                         description=(
                             "Binary debdiff is not available. "
-                            "Control run (%s) not published?" % e.missing_run_id
+                            f"Control run ({e.missing_run_id}) not published?"
                         ),
                         code="missing-build-diff-control",
                     ) from e

@@ -168,7 +168,7 @@ async def get_archive_diff(
     client, differ_url, run_id, unchanged_run_id, kind, accept=None, filter_boring=False
 ):
     if kind not in ("debdiff", "diffoscope"):
-        raise DebdiffRetrievalError("invalid diff kind %r" % kind)
+        raise DebdiffRetrievalError(f"invalid diff kind {kind!r}")
     url = URL(differ_url) / kind / unchanged_run_id / run_id
     params = {
         "jquery_url": "/_static/jquery.js",

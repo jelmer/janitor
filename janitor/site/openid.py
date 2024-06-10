@@ -76,7 +76,7 @@ async def handle_oauth_callback(request):
         if resp["token_type"] != "Bearer":
             return web.Response(
                 status=500,
-                text="Expected bearer token, got %s" % resp["token_type"],
+                text="Expected bearer token, got {}".format(resp["token_type"]),
             )
         refresh_token = resp["refresh_token"]  # noqa: F841
         access_token = resp["access_token"]
@@ -88,7 +88,7 @@ async def handle_oauth_callback(request):
 
     async with request.app["http_client_session"].get(
         request.app["openid_config"]["userinfo_endpoint"],
-        headers={"Authorization": "Bearer %s" % access_token},
+        headers={"Authorization": f"Bearer {access_token}"},
         raise_for_status=True,
     ) as resp:
         userinfo = await resp.json()

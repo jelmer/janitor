@@ -135,13 +135,13 @@ class GCSArtifactManager(ArtifactManager):
     def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
         if hostname is None:
-            raise ValueError("missing bucket in %s" % location)
+            raise ValueError(f"missing bucket in {location}")
         self.bucket_name = hostname
         self.creds_path = creds_path
         self.trace_configs = trace_configs
 
     def __repr__(self) -> str:
-        return "{}({!r})".format(type(self).__name__, "gs://%s/" % self.bucket_name)
+        return "{}({!r})".format(type(self).__name__, f"gs://{self.bucket_name}/")
 
     async def __aenter__(self):
         from gcloud.aio.storage import Storage

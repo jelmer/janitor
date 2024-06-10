@@ -74,19 +74,18 @@ async def handle_mass_reschedule(request):
         else:
             table = "last_effective_runs"
         query = (
-            """
+            f"""
 SELECT
 codebase,
 suite AS campaign,
 finish_time - start_time as duration
-FROM %s AS run
+FROM {table} AS run
 WHERE
 EXISTS (SELECT FROM candidate WHERE
 run.codebase = candidate.codebase AND
 run.suite = candidate.suite AND
 (run.change_set = candidate.change_set OR candidate.change_set IS NULL))
 AND """
-            % table
         )
         where = []
         params = []
@@ -113,7 +112,7 @@ AND """
         try:
             runs = await conn.fetch(query, *params)
         except asyncpg.InvalidRegularExpressionError as e:
-            raise web.HTTPBadRequest(text="Invalid regex: %s" % e.message) from e
+            raise web.HTTPBadRequest(text=f"Invalid regex: {e.message}") from e
 
     session = request.app["http_client_session"]
 

@@ -61,7 +61,7 @@ class DebsignFailure(Exception):
 
 async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = None):
     if debsign_keyid:
-        args = ["-k%s" % debsign_keyid]
+        args = [f"-k{debsign_keyid}"]
     else:
         args = []
     p = await asyncio.create_subprocess_exec(

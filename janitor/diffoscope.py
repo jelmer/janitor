@@ -154,7 +154,7 @@ async def format_diffoscope(root_difference, content_type, title, css_url=None):
         p = TextPresenter(printfn, False)
         p.start(root_difference)
         return "".join(out)
-    raise AssertionError("unknown content type %r" % content_type)
+    raise AssertionError(f"unknown content type {content_type!r}")
 
 
 async def _run_diffoscope(
@@ -191,7 +191,7 @@ async def _run_diffoscope(
     try:
         return json.loads(stdout.decode("utf-8"))
     except json.JSONDecodeError as e:
-        raise DiffoscopeError("Error parsing JSON: %s" % e) from e
+        raise DiffoscopeError(f"Error parsing JSON: {e}") from e
 
 
 async def run_diffoscope(

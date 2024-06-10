@@ -340,7 +340,7 @@ class DebianBuilder(Builder):
             campaign_config.debian_build.extra_build_distribution
         )
         if queue_item.change_set:
-            extra_janitor_distributions.append("cs/%s" % queue_item.change_set)
+            extra_janitor_distributions.append(f"cs/{queue_item.change_set}")
 
         # TODO(jelmer): Ship build-extra-repositories-keys, and specify [signed-by] here
         config["build-extra-repositories"] = []
@@ -681,7 +681,7 @@ class WorkerResult:
             if target_kind is None:
                 builder_result = None
             else:
-                raise NotImplementedError("unsupported build target %r" % target_kind)
+                raise NotImplementedError(f"unsupported build target {target_kind!r}")
         return cls(
             code=worker_result.get("code", "missing-result-code"),
             description=worker_result.get("description"),
@@ -1130,7 +1130,7 @@ def open_resume_branch(
         try:
             for option in [
                 campaign_name,
-                ("%s/main" % campaign_name),
+                (f"{campaign_name}/main"),
                 (f"{campaign_name}/main/{package}"),
             ]:
                 (
@@ -1327,7 +1327,7 @@ async def store_run(
     if result_branches:
         roles = [role for (role, remote_name, br, r) in result_branches]
         assert len(roles) == len(set(roles)), (
-            "Duplicate result branches: %r" % result_branches
+            f"Duplicate result branches: {result_branches!r}"
         )
         await conn.executemany(
             "INSERT INTO new_result_branch "
@@ -1481,7 +1481,7 @@ class QueueProcessor:
                 await self.abort_run(
                     active_run,
                     code="worker-timeout",
-                    description=("No keepalives received in %s." % keepalive_age),
+                    description=(f"No keepalives received in {keepalive_age}."),
                     transient=True,
                 )
             except RunExists:
@@ -1902,7 +1902,7 @@ async def _find_active_run(request):
     worker_name = request.query.get("worker_name")  # noqa: F841
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text="No such current run: %s" % run_id)
+        raise web.HTTPNotFound(text=f"No such current run: {run_id}")
     return active_run
 
 
@@ -1934,14 +1934,14 @@ async def handle_log(request):
     filename = request.match_info["filename"]
 
     if "/" in filename:
-        return web.Response(text="Invalid filename %s" % filename, status=400)
+        return web.Response(text=f"Invalid filename {filename}", status=400)
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        return web.Response(text="No such current run: %s" % run_id, status=404)
+        return web.Response(text=f"No such current run: {run_id}", status=404)
     try:
         f = await active_run.backchannel.get_log_file(filename)
     except FileNotFoundError:
-        return web.Response(text="No such log file: %s" % filename, status=404)
+        return web.Response(text=f"No such log file: {filename}", status=404)
 
     try:
         response = web.StreamResponse(
@@ -2337,7 +2337,7 @@ async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text="no such run %s" % run_id)
+        raise web.HTTPNotFound(text=f"no such run {run_id}")
     return web.json_response(active_run.json())
 
 
@@ -2554,7 +2554,7 @@ async def next_item(
                 await abort(
                     active_run,
                     "unknown-campaign",
-                    "Campaign %s unknown" % item.campaign,
+                    f"Campaign {item.campaign} unknown",
                 )
                 item = None
                 continue
@@ -2917,7 +2917,7 @@ async def handle_public_get_active_run(request):
     run_id = request.match_info["run_id"]
     active_run = await queue_processor.get_run(run_id)
     if not active_run:
-        raise web.HTTPNotFound(text="no such run %s" % run_id)
+        raise web.HTTPNotFound(text=f"no such run {run_id}")
     return web.json_response(active_run.json())
 
 
@@ -3089,7 +3089,7 @@ async def main(argv=None):
             args.public_vcs_location, trace_configs=trace_configs
         )
     except UnsupportedProtocol as e:
-        parser.error("Unsupported protocol in --public-vcs-location: %s" % e.path)
+        parser.error(f"Unsupported protocol in --public-vcs-location: {e.path}")
 
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(

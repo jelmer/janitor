@@ -220,7 +220,7 @@ WHERE followup.origin = $1""",
                 run["result_branches"], role
             )
         except KeyError:
-            return "No branch with role %s" % role
+            return f"No branch with role {role}"
         if base_revid == revid:
             return ""
         if run["vcs_type"] is None:
@@ -239,7 +239,7 @@ WHERE followup.origin = $1""",
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
-            return "Unable to retrieve diff; error %s" % e
+            return f"Unable to retrieve diff; error {e}"
         except NotImplementedError:
             return "Unable to retrieve diff; unsupported vcs"
         return diff.decode("utf-8", "replace")
@@ -267,7 +267,7 @@ WHERE followup.origin = $1""",
         except BuildDiffUnavailable:
             return ""
         except DebdiffRetrievalError as e:
-            return "Error retrieving debdiff: %s" % e
+            return f"Error retrieving debdiff: {e}"
 
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max

@@ -208,12 +208,12 @@ WHERE codebase.name = $1""",
                 suite,
             )
         if codebase is None:
-            raise web.HTTPNotFound(text="no such codebase: %s" % codebase_name)
+            raise web.HTTPNotFound(text=f"no such codebase: {codebase_name}")
         if run_id is not None:
             with span.new_child("sql:run"):
                 run = await get_run(conn, run_id)
             if not run:
-                raise web.HTTPNotFound(text="no such run: %s" % run_id)
+                raise web.HTTPNotFound(text=f"no such run: {run_id}")
             merge_proposals = []
         else:
             with span.new_child("sql:unchanged-run"):
@@ -280,7 +280,7 @@ WHERE run.codebase = $1 AND run.suite = $2
                 run["result_branches"], role
             )
         except KeyError:
-            return "no result branch with role %s" % role
+            return f"no result branch with role {role}"
         if base_revid == revid:
             return ""
         if run["vcs_type"] is None:
@@ -300,7 +300,7 @@ WHERE run.codebase = $1 AND run.suite = $2
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
-            return "Unable to retrieve diff; error %s" % e
+            return f"Unable to retrieve diff; error {e}"
 
     async def show_debdiff():
         if not run["build_version"]:
@@ -322,7 +322,7 @@ WHERE run.codebase = $1 AND run.suite = $2
         except BuildDiffUnavailable:
             return ""
         except DebdiffRetrievalError as e:
-            return "Error retrieving debdiff: %s" % e
+            return f"Error retrieving debdiff: {e}"
 
     kwargs: dict[str, Any] = {}
     kwargs.update([(k, v) for (k, v) in codebase.items() if k != "name"])
