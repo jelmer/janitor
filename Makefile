@@ -36,7 +36,7 @@ suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:: build-inplace
-	PYTHONPATH=$(shell pwd)/py PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
+	PYTHONPATH=$(shell pwd)/py:$(PYTHONPATH) PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
 
 test::
 	cargo test
