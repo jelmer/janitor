@@ -168,7 +168,7 @@ class S3LogFileManager(LogFileManager):
     def __init__(
         self, endpoint_url, bucket_name="debian-janitor", trace_configs=None
     ) -> None:
-        self.base_url = endpoint_url + ("/%s/" % bucket_name)
+        self.base_url = endpoint_url + (f"/{bucket_name}/")
         self.trace_configs = trace_configs
         self.bucket_name = bucket_name
         self.endpoint_url = endpoint_url
@@ -253,7 +253,7 @@ class GCSLogFileManager(LogFileManager):
     def __init__(self, location, creds_path=None, trace_configs=None) -> None:
         hostname = URL(location).host
         if hostname is None:
-            raise ValueError("invalid location missing bucket name: %s" % location)
+            raise ValueError(f"invalid location missing bucket name: {location}")
         self.bucket_name = hostname
         self.trace_configs = trace_configs
         self.creds_path = creds_path

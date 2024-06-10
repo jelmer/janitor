@@ -80,7 +80,7 @@ def subscribe_webhook_gitlab(branch, gitlab, callback_url):
         raise UnsupportedForge(branch.user_url) from e
 
     project = gitlab._get_project(project_name)
-    path = "projects/%s/hooks" % (urlutils.quote(str(project["id"]), ""))
+    path = "projects/{}/hooks".format(urlutils.quote(str(project["id"]), ""))
 
     response = gitlab._api_request(
         "POST", path, fields={"url": callback_url, "push_events": True}
@@ -242,7 +242,7 @@ async def parse_webhook(request, db):
         body = json.loads(post["payload"])
     else:
         raise web.HTTPUnsupportedMediaType(
-            text="Invalid content type %s" % request.content_type
+            text=f"Invalid content type {request.content_type}"
         )
     changes: list[Union[GitChange, BzrChange]]
     if "X-Gitlab-Event" in request.headers:

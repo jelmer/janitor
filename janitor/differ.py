@@ -147,7 +147,7 @@ async def handle_debdiff(request):
                     )
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %r" % e,
+                    text=f"No artifacts for run id: {e!r}",
                     headers={"unavailable_run_id": e.args[0]},
                 ) from e
             except asyncio.TimeoutError as e:
@@ -156,14 +156,14 @@ async def handle_debdiff(request):
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % old_run["id"],
+                    text="No artifacts for run id: {}".format(old_run["id"]),
                     headers={"unavailable_run_id": old_run["id"]},
                 )
 
             new_binaries = find_binaries(new_dir)
             if not new_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % new_run["id"],
+                    text="No artifacts for run id: {}".format(new_run["id"]),
                     headers={"unavailable_run_id": new_run["id"]},
                 )
 
@@ -330,7 +330,7 @@ async def handle_diffoscope(request):
                     )
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %r" % e,
+                    text=f"No artifacts for run id: {e!r}",
                     headers={"unavailable_run_id": e.args[0]},
                 ) from e
             except asyncio.TimeoutError as e:
@@ -339,14 +339,14 @@ async def handle_diffoscope(request):
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % old_run["id"],
+                    text="No artifacts for run id: {}".format(old_run["id"]),
                     headers={"unavailable_run_id": old_run["id"]},
                 )
 
             new_binaries = find_binaries(new_dir)
             if not new_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % new_run["id"],
+                    text="No artifacts for run id: {}".format(new_run["id"]),
                     headers={"unavailable_run_id": new_run["id"]},
                 )
 

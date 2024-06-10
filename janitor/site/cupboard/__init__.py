@@ -161,13 +161,12 @@ async def handle_result_codes(request):
         query += " group by 1"
         if not exclude_never_processed:
             query = (
-                """(%s) union
+                f"""({query}) union
     select 'never-processed', count(*) from candidate c
         where not exists (
             SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)
         and suite = ANY($1::text[]) order by 2 desc
     """
-                % query
             )
         return {
             "exclude_never_processed": exclude_never_processed,
@@ -235,8 +234,8 @@ async def handle_result_code(request):
         else:
             table = "last_effective_runs"
     query = (
-        "SELECT *, suite AS campaign FROM %s AS run "
-        "WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])" % table
+        f"SELECT *, suite AS campaign FROM {table} AS run "
+        "WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])"
     )
     if not include_historical:
         query += (
@@ -367,10 +366,10 @@ async def handle_run(request):
         with span.new_child("sql:run"):
             run = await get_run(conn, run_id)
             if run is None:
-                raise web.HTTPNotFound(text="No run with id %r" % run_id)
+                raise web.HTTPNotFound(text=f"No run with id {run_id!r}")
     if codebase is not None and codebase != run["codebase"]:
         if run is None:
-            raise web.HTTPNotFound(text="No run with id %r" % run_id)
+            raise web.HTTPNotFound(text=f"No run with id {run_id!r}")
     return await generate_run_file(
         request.app["pool"],
         request.app["http_client_session"],
@@ -468,7 +467,7 @@ async def handle_run_redirect(request):
     async with request.app["pool"].acquire() as conn:
         codebase = await conn.fetchone("SELECT codebase FROM run WHERE id = $1", run_id)
         if codebase is None:
-            raise web.HTTPNotFound(text="No such run: %s" % run_id)
+            raise web.HTTPNotFound(text=f"No such run: {run_id}")
         raise web.HTTPPermanentRedirect(
             location=request.app.router["cupboard-run"].url_for(
                 codebase=codebase, run_id=run_id

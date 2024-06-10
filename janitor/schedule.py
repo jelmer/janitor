@@ -554,7 +554,7 @@ async def do_schedule_control(
 ) -> tuple[float, Optional[timedelta], int, str]:
     command = ["brz", "up"]
     if main_branch_revision is not None:
-        command.append("--revision=%s" % main_branch_revision.decode("utf-8"))
+        command.append("--revision={}".format(main_branch_revision.decode("utf-8")))
     if bucket is None:
         bucket = "control"
     return await do_schedule(

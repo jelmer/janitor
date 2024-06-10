@@ -510,13 +510,13 @@ class PublishWorker:
         args = [sys.executable, "-m", "janitor.publish_one"]
 
         if self.template_env_path:
-            args.append("--template-env-path=%s" % self.template_env_path)
+            args.append(f"--template-env-path={self.template_env_path}")
 
         try:
             async with AsyncExitStack() as es:
                 if self.lock_manager:
                     await es.enter_async_context(
-                        await self.lock_manager.lock("publish:%s" % target_branch_url)
+                        await self.lock_manager.lock(f"publish:{target_branch_url}")
                     )
                 try:
                     returncode, response = await run_worker_process(args, request)
@@ -870,8 +870,7 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
     elif e.code == "missing-build-diff-control":
         if unchanged_run and unchanged_run["result_code"] != "success":
             description = (
-                "Missing build diff; last control run failed (%s)."
-                % unchanged_run["result_code"]
+                "Missing build diff; last control run failed ({}).".format(unchanged_run["result_code"])
             )
         elif unchanged_run and unchanged_run["result_code"] == "success":
             description = (
@@ -1809,7 +1808,7 @@ WHERE id = $1
             publish_id,
         )
         if row:
-            raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
+            raise web.HTTPNotFound(text=f"no such publish: {publish_id}")
     return web.json_response(
         {
             "codebase": row["codebase"],
@@ -3295,7 +3294,7 @@ applied independently.
                         extra={"mp_url": mp.url},
                     )
                     code = "empty-failed-to-close"
-                    description = "Permission denied closing merge request: %s" % f
+                    description = f"Permission denied closing merge request: {f}"
                 code = "success"
                 description = (
                     "Closing merge request for which changes were "

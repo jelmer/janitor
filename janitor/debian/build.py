@@ -158,7 +158,7 @@ def build(
                 except MissingChangesFile as e:
                     raise BuildFailure(
                         "build-missing-changes",
-                        "Expected changes path %s does not exist." % e.filename,
+                        f"Expected changes path {e.filename} does not exist.",
                         details={"filename": e.filename},
                     ) from e
                 except DetailedDebianBuildFailure as e:

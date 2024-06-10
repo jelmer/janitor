@@ -137,7 +137,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
         if getattr(e, "vcs", None):
-            code = "unsupported-vcs-%s" % e.vcs
+            code = f"unsupported-vcs-{e.vcs}"
         elif str(e).startswith("Unsupported protocol for url "):
             if "anonscm.debian.org" in str(e) or "svn.debian.org" in str(e):
                 code = "hosted-on-alioth"
@@ -265,7 +265,7 @@ class LocalGitVcsManager(VcsManager):
 
     def get_branch_url(self, codebase, branch_name):
         return urlutils.join_segment_parameters(
-            "file:%s" % (os.path.join(self.base_path, codebase)),
+            f"file:{os.path.join(self.base_path, codebase)}",
             {"branch": urlutils.escape(branch_name, safe="")},
         )
 
@@ -608,7 +608,7 @@ def get_vcs_managers(location, *, trace_configs=None):
         elif k == "bzr":
             ret[k] = RemoteBzrVcsManager(str(URL(v)), trace_configs=trace_configs)
         else:
-            raise ValueError("unsupported vcs %s" % k)
+            raise ValueError(f"unsupported vcs {k}")
     return ret
 
 

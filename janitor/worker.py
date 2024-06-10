@@ -452,23 +452,23 @@ def _push_error_to_worker_failure(e, stage):
         if e.code == 502:
             return WorkerFailure(
                 "bad-gateway",
-                "Failed to push result branch: %s" % e,
+                f"Failed to push result branch: {e}",
                 stage=stage,
                 transient=True,
             )
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+            "push-failed", f"Failed to push result branch: {e}", stage=stage
         )
     if isinstance(e, ConnectionError):
         if "Temporary failure in name resolution" in e.msg:
             return WorkerFailure(
                 "failed-temporarily",
-                "Failed to push result branch: %s" % e,
+                f"Failed to push result branch: {e}",
                 stage=stage,
                 transient=True,
             )
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+            "push-failed", f"Failed to push result branch: {e}", stage=stage
         )
 
     if isinstance(
@@ -482,7 +482,7 @@ def _push_error_to_worker_failure(e, stage):
         ),
     ):
         return WorkerFailure(
-            "push-failed", "Failed to push result branch: %s" % e, stage=stage
+            "push-failed", f"Failed to push result branch: {e}", stage=stage
         )
     if isinstance(e, RemoteGitError):
         if str(e) == "missing necessary objects":
@@ -541,7 +541,7 @@ def run_worker(
             else:
                 raise WorkerFailure(
                     "target-unsupported",
-                    "The target %r is not supported" % target,
+                    f"The target {target!r} is not supported",
                     transient=False,
                     stage=("setup",),
                 )
@@ -724,7 +724,7 @@ def run_worker(
                     ) from e
                 else:
                     raise WorkerFailure(
-                        "http-%s" % e.code,
+                        f"http-{e.code}",
                         str(e),
                         stage=("setup", "clone"),
                         details={"status-code": e.code},
@@ -858,7 +858,7 @@ def run_worker(
                 role for (role, remote_name, br, r) in result_branches
             ]
             assert len(result_branch_roles) == len(set(result_branch_roles)), (
-                "Duplicate result branches: %r" % result_branches
+                f"Duplicate result branches: {result_branches!r}"
             )
 
             for f, n, br, r in result_branches or []:

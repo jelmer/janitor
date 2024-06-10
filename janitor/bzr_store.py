@@ -77,7 +77,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
     if p.returncode != 3:
         return web.Response(body=stdout, content_type="text/x-diff")
     logging.warning("bzr diff failed: %s", stderr.decode())
-    raise web.HTTPInternalServerError(text="bzr diff failed: %s" % stderr.decode())
+    raise web.HTTPInternalServerError(text=f"bzr diff failed: {stderr.decode()}")
 
 
 async def bzr_diff_request(request):
@@ -95,7 +95,7 @@ async def bzr_diff_request(request):
         repo = None
     if repo is None:
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" % codebase
+            text=f"Local VCS repository for {codebase} temporarily inaccessible"
         )
     return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
@@ -114,7 +114,7 @@ async def bzr_revision_info_request(request):
         repo = None
     if repo is None:
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" % codebase
+            text=f"Local VCS repository for {codebase} temporarily inaccessible"
         )
     ret = []
     with repo.lock_read():
@@ -159,7 +159,7 @@ async def codebase_exists(db, codebase):
 
 async def _bzr_open_repo(local_path, codebase_exists, codebase):
     if not await codebase_exists(codebase):
-        raise web.HTTPNotFound(text="no such codebase: %s" % codebase)
+        raise web.HTTPNotFound(text=f"no such codebase: {codebase}")
     repo_path = os.path.join(local_path, codebase)
     try:
         repo = Repository.open(repo_path)
@@ -184,7 +184,7 @@ async def bzr_backend(request):
         try:
             get_campaign_config(request.app["config"], campaign_name)
         except KeyError as e:
-            raise web.HTTPNotFound(text="no such campaign: %s" % campaign_name) from e
+            raise web.HTTPNotFound(text=f"no such campaign: {campaign_name}") from e
         transport = transport.clone(campaign_name)
         if allow_writes:
             transport.ensure_base()
@@ -402,7 +402,7 @@ async def main(argv=None):
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
-        raise RuntimeError("vcs path %s does not exist" % args.vcs_path)
+        raise RuntimeError(f"vcs path {args.vcs_path} does not exist")
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(

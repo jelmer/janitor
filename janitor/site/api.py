@@ -82,7 +82,7 @@ async def handle_publish(request):
                 return web.json_response(await resp.json(), status=400)
     except ContentTypeError as e:
         return web.json_response(
-            {"reason": "publisher returned error %s" % e}, status=400
+            {"reason": f"publisher returned error {e}"}, status=400
         )
     except ClientConnectorError:
         return web.json_response({"reason": "unable to contact publisher"}, status=400)
@@ -307,7 +307,7 @@ async def handle_diff(request):
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError as e:
-            raise web.HTTPBadRequest(text="unsupported vcs %s" % run["vcs_type"]) from e
+            raise web.HTTPBadRequest(text="unsupported vcs {}".format(run["vcs_type"])) from e
 
         best_match = mimeparse.best_match(
             ["text/x-diff", "text/plain", "text/html"],
@@ -347,7 +347,7 @@ async def handle_archive_diff(request):
                 run_id,
             )
             if run is None:
-                raise web.HTTPNotFound(text="No such run: %s" % run_id)
+                raise web.HTTPNotFound(text=f"No such run: {run_id}")
             unchanged_run_id = await conn.fetchval(
                 "SELECT id FROM run WHERE "
                 "codebase = $1 AND revision = $2 AND result_code = 'success' "
@@ -358,7 +358,7 @@ async def handle_archive_diff(request):
             if unchanged_run_id is None:
                 return web.json_response(
                     {
-                        "reason": "No matching unchanged build for %s" % run_id,
+                        "reason": f"No matching unchanged build for {run_id}",
                         "run_id": [run["id"]],
                         "unavailable_run_id": None,
                         "campaign": run["campaign"],
@@ -367,7 +367,7 @@ async def handle_archive_diff(request):
                 )
 
     if run["result_code"] != "success":
-        raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
+        raise web.HTTPNotFound(text=f"Build {run_id} has no artifacts")
 
     filter_boring = "filter_boring" in request.query
 
@@ -397,7 +397,7 @@ async def handle_archive_diff(request):
     except DebdiffRetrievalError as e:
         return web.json_response(
             {
-                "reason": "unable to contact differ for binary diff: %r" % e,
+                "reason": f"unable to contact differ for binary diff: {e!r}",
                 "inner_reason": e.args[0],
             },
             status=503,
@@ -470,7 +470,7 @@ async def handle_runner_status(request):
                 return web.json_response(await resp.json(), status=resp.status)
         except ContentTypeError as e:
             return web.json_response(
-                {"reason": "runner returned error %s" % e}, status=400
+                {"reason": f"runner returned error {e}"}, status=400
             )
         except ClientConnectorError as e:
             return web.json_response(
@@ -490,7 +490,7 @@ async def handle_runner_log_index(request):
                 ret = await resp.json()
         except ContentTypeError as e:
             return web.json_response(
-                {"reason": "runner returned error %s" % e}, status=400
+                {"reason": f"runner returned error {e}"}, status=400
             )
         except ClientConnectorError as e:
             return web.json_response(
@@ -540,7 +540,7 @@ async def handle_runner_kill(request):
                 return web.json_response(await resp.json(), status=resp.status)
         except ContentTypeError as e:
             return web.json_response(
-                {"reason": "runner returned error %s" % e}, status=400
+                {"reason": f"runner returned error {e}"}, status=400
             )
         except ClientConnectorError:
             return web.json_response({"reason": "unable to contact runner"}, status=502)
@@ -565,7 +565,7 @@ async def handle_runner_log(request):
                     body=body, status=resp.status, content_type="text/plain"
                 )
         except ContentTypeError as e:
-            return web.Response(text="runner returned error %s" % e, status=400)
+            return web.Response(text=f"runner returned error {e}", status=400)
         except ClientConnectorError:
             return web.Response(text="unable to contact runner", status=502)
         except asyncio.TimeoutError:
@@ -583,7 +583,7 @@ async def handle_publish_id(request):
             async with request.app["http_client_session"].get(url) as resp:
                 return web.json_response(await resp.json())
         except ContentTypeError as e:
-            return web.Response(text="runner returned error %s" % e, status=400)
+            return web.Response(text=f"runner returned error {e}", status=400)
         except ClientConnectorError:
             return web.Response(text="unable to contact runner", status=502)
         except asyncio.TimeoutError:
@@ -614,11 +614,11 @@ async def handle_run_peek(request):
                 return web.json_response(assignment, status=201)
         except (ClientConnectorError, ServerDisconnectedError) as e:
             return web.json_response(
-                {"reason": "unable to contact runner: %s" % e}, status=502
+                {"reason": f"unable to contact runner: {e}"}, status=502
             )
         except asyncio.TimeoutError as e:
             return web.json_response(
-                {"reason": "timeout contacting runner: %s" % e}, status=502
+                {"reason": f"timeout contacting runner: {e}"}, status=502
             )
 
 

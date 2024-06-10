@@ -38,7 +38,7 @@ def process_sbuild_log(logf):
         except NotImplementedError:
             new_failure_details = None
     elif failure.stage:
-        new_code = "build-failed-stage-%s" % failure.stage
+        new_code = f"build-failed-stage-{failure.stage}"
         new_failure_details = None
     else:
         new_code = "build-failed"

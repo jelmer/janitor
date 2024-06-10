@@ -325,7 +325,7 @@ async def process_webhook(request, db):
 
     async with db.acquire() as conn:
         for codebase, branch_url in codebases.items():
-            requester = "Push hook for %s" % branch_url
+            requester = f"Push hook for {branch_url}"
             for suite in await state.iter_publishable_suites(conn, codebase):
                 if suite not in rescheduled.get(codebase, []):
                     await do_schedule(
@@ -474,22 +474,22 @@ async def create_app(
         [re.escape(campaign.name) for campaign in config.campaign]
     )
     app.router.add_get(
-        "/{suite:%s}/merge-proposals" % CAMPAIGN_REGEX,
+        f"/{{suite:{CAMPAIGN_REGEX}}}/merge-proposals",
         handle_merge_proposals,
         name="suite-merge-proposals",
     )
     app.router.add_get(
-        "/{suite:%s}/merge-proposal" % CAMPAIGN_REGEX,
+        f"/{{suite:{CAMPAIGN_REGEX}}}/merge-proposal",
         handle_merge_proposal,
         name="suite-merge-proposal",
     )
     app.router.add_get(
-        "/{suite:%s}/ready" % CAMPAIGN_REGEX,
+        f"/{{suite:{CAMPAIGN_REGEX}}}/ready",
         handle_ready_proposals,
         name="campaign-ready",
     )
     app.router.add_get(
-        "/{campaign:%s}/done" % CAMPAIGN_REGEX,
+        f"/{{campaign:{CAMPAIGN_REGEX}}}/done",
         handle_done_proposals,
         name="campaign-done",
     )
@@ -530,7 +530,7 @@ async def create_app(
     )
     for entry in os.scandir(os.path.join(os.path.dirname(__file__), "_static")):
         app.router.add_get(
-            "/_static/%s" % entry.name,
+            f"/_static/{entry.name}",
             functools.partial(handle_static_file, entry.path),
         )
     app.router.add_static(

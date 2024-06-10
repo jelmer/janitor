@@ -85,7 +85,7 @@ async def generate_review(
         ) as resp:
             evaluate = await resp.text()
     except (ClientConnectorError, ClientResponseError) as e:
-        evaluate = "Unable to retrieve evaluation: %s" % e
+        evaluate = f"Unable to retrieve evaluation: {e}"
 
     kwargs = {
         "review_instructions_url": request.app.get("review_instructions_url"),

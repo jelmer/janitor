@@ -121,7 +121,7 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
                             None,
                             [
                                 "No differences were encountered between the control "
-                                "files of package %s" % package
+                                f"files of package {package}"
                             ],
                         )
                     )
@@ -184,11 +184,11 @@ def markdownify_debdiff(debdiff: str) -> str:
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
-            ret.append("### %s" % title)
+            ret.append(f"### {title}")
             wdiff, package = section_is_wdiff(title)
             if wdiff:
                 ret.extend(
-                    ["* %s" % fix_wdiff_md(line) for line in lines if line.strip()]
+                    [f"* {fix_wdiff_md(line)}" for line in lines if line.strip()]
                 )
             else:
                 for line in lines:
@@ -227,7 +227,7 @@ def htmlize_debdiff(debdiff: str) -> str:
     lines: list[str]
     for title, lines in iter_sections(debdiff):
         if title:
-            ret.append("<h4>%s</h4>" % title)
+            ret.append(f"<h4>{title}</h4>")
             if re.match(
                 r"Control files of package .*: lines which differ " r"\(wdiff format\)",
                 title,
@@ -243,7 +243,7 @@ def htmlize_debdiff(debdiff: str) -> str:
                     if not mlines:
                         continue
                     ret.extend(
-                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(mlines))]
+                        ["<li><pre>{}</pre></li>".format(highlight_wdiff("\n".join(mlines)))]
                     )
                 ret.append("</ul>")
             else:

@@ -63,7 +63,7 @@ async def git_diff_request(request: web.Request) -> web.Response:
 
     if not os.path.isdir(repo_path):
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" % codebase
+            text=f"Local VCS repository for {codebase} temporarily inaccessible"
         )
 
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
@@ -97,7 +97,7 @@ async def git_diff_request(request: web.Request) -> web.Response:
     if p.returncode == 0:
         return web.Response(body=stdout, content_type="text/x-diff")
     logging.warning("git diff failed: %s", stderr.decode())
-    raise web.HTTPInternalServerError(text="git diff failed: %s" % stderr.decode())
+    raise web.HTTPInternalServerError(text=f"git diff failed: {stderr.decode()}")
 
 
 async def git_revision_info_request(request: web.Request) -> web.Response:
@@ -113,7 +113,7 @@ async def git_revision_info_request(request: web.Request) -> web.Response:
             repo = Repo(os.path.join(request.app["local_path"], codebase))
     except NotGitRepository as e:
         raise web.HTTPServiceUnavailable(
-            text="Local VCS repository for %s temporarily inaccessible" % codebase
+            text=f"Local VCS repository for {codebase} temporarily inaccessible"
         ) from e
 
     with closing(repo):
@@ -150,7 +150,7 @@ async def _git_open_repo(local_path: str, db, codebase: str) -> Repo:
     except NotGitRepository as e:
         async with db.acquire() as conn:
             if not await codebase_exists(conn, codebase):
-                raise web.HTTPNotFound(text="no such codebase: %s" % codebase) from e
+                raise web.HTTPNotFound(text=f"no such codebase: {codebase}") from e
         repo = Repo.init_bare(repo_path, mkdir=(not os.path.isdir(repo_path)))
         logging.info("Created missing git repository for %s at %s", codebase, repo.path)
     return repo
@@ -168,7 +168,7 @@ def _git_check_service(service: str, allow_writes: bool = False) -> None:
             )
         return
 
-    raise web.HTTPForbidden(text="Unsupported service %s" % service)
+    raise web.HTTPForbidden(text=f"Unsupported service {service}")
 
 
 async def handle_klaus(request: web.Request) -> web.Response:
@@ -431,7 +431,7 @@ async def dulwich_refs(request: web.Request) -> web.StreamResponse:
         _git_check_service(service, allow_writes)
 
         headers = {
-            "Content-Type": "application/x-%s-advertisement" % service,
+            "Content-Type": f"application/x-{service}-advertisement",
         }
         headers.update(NO_CACHE_HEADERS)
 
@@ -479,7 +479,7 @@ async def dulwich_service(request: web.Request) -> web.StreamResponse:
     with closing(repo):
         _git_check_service(service, allow_writes)
 
-        headers = {"Content-Type": "application/x-%s-result" % service}
+        headers = {"Content-Type": f"application/x-{service}-result"}
         headers.update(NO_CACHE_HEADERS)
         handler_cls = DULWICH_SERVICE_HANDLERS[service.encode("ascii")]
 
@@ -699,7 +699,7 @@ async def main(argv=None):
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
-        parser.error("vcs path %s does not exist" % args.vcs_path)
+        parser.error(f"vcs path {args.vcs_path} does not exist")
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
