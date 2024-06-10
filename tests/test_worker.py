@@ -24,7 +24,6 @@ import breezy.git  # noqa: F401
 import pytest
 from breezy.config import GlobalStack
 from breezy.controldir import ControlDir, format_registry
-
 from janitor.worker import (
     Metadata,
     _WorkerFailure,

@@ -17,7 +17,6 @@
 
 
 from dulwich.repo import Repo
-
 from janitor import config_pb2
 from janitor.git_store import create_web_app
 
