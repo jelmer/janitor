@@ -105,7 +105,7 @@ dev = [
     "pytest-aiohttp",
     "fakeredis",
     "python-subunit",
-    "ruff",
+    "ruff==0.4.8",
     "types-PyYAML",
     "types-protobuf",
     "types-mock",
@@ -158,14 +158,11 @@ script-files = [
     "create-sbuild-chroot-schroot.py",
     "create-sbuild-chroot-unshare.py",
 ]
-packages = [
-    "janitor",
-    "janitor.debian",
-    "janitor.generic",
-    "janitor.site",
-    "janitor.site.cupboard",
-]
 include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["py"]
+include = ["janitor*"]
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
@@ -223,6 +220,7 @@ ignore = [
 [tool.ruff]
 line-length = 88
 target-version = "py39"
+extend-exclude = ["py/janitor/config_pb2.py"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -239,5 +237,8 @@ ignore-words = ".codespell-ignore-words"
 [tool.setuptools-protobuf]
 mypy = true
 protobufs = [
-    "janitor/config.proto"
+    "py/janitor/config.proto"
 ]
+
+[tool.ruff.lint.isort]
+known-third-party = ["debian"]
