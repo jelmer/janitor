@@ -7,7 +7,7 @@ fn main() {
 
     protobuf_codegen::Codegen::new()
         .cargo_out_dir("generated")
-        .inputs([top_dir.join("janitor/config.proto")])
+        .inputs([top_dir.join("py/janitor/config.proto")])
         .include(top_dir)
         .run_from_script();
 }

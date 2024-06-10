@@ -32,3 +32,5 @@ Cargo.lock
 target
 janitor/_worker.*.so
 .testrepository
+py/janitor/config_pb2.py
+py/janitor/_worker.*.so
