@@ -18,9 +18,6 @@
 from datetime import datetime
 
 from aiohttp import web
-from jinja2 import Environment
-from yarl import URL
-
 from janitor.config import Campaign, Config
 from janitor.site import (
     classify_result_code,
@@ -30,6 +27,8 @@ from janitor.site import (
     worker_link_is_global,
 )
 from janitor.site.cupboard import create_app
+from jinja2 import Environment
+from yarl import URL
 
 
 @web.middleware

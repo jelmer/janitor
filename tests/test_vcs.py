@@ -17,7 +17,6 @@
 
 from breezy import controldir
 from breezy.tests import TestCaseWithTransport
-
 from janitor.vcs import (
     LocalBzrVcsManager,
     RemoteBzrVcsManager,

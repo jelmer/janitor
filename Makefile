@@ -1,7 +1,7 @@
 DOCKER_TAG ?= latest
 PYTHON ?= python3
 
-core: janitor/site/_static/pygments.css build-inplace
+core: py/janitor/site/_static/pygments.css build-inplace
 
 build-inplace:
 	$(PYTHON) setup.py build_ext -i
@@ -20,7 +20,7 @@ check:: style
 check:: ruff
 
 ruff:
-	ruff check .
+	ruff check py tests
 
 fix:: ruff-fix
 
@@ -35,8 +35,10 @@ ruff-fix:
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
-test: build-inplace
-	PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
+test:: build-inplace
+	PYTHONPATH=$(shell pwd)/py PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python $(PYTHON) -m pytest tests
+
+test::
 	cargo test
 
 style:: yamllint
@@ -47,12 +49,12 @@ yamllint:
 style:: djlint
 
 djlint:
-	djlint -i J018,H030,H031,H021 --profile jinja janitor/site/templates
+	djlint -i J018,H030,H031,H021 --profile jinja py/janitor/site/templates
 
 typing:
-	$(PYTHON) -m mypy janitor tests
+	$(PYTHON) -m mypy py/janitor tests
 
-janitor/site/_static/pygments.css:
+py/janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
 
 clean:
@@ -69,4 +71,4 @@ docker-all: docker-site docker-runner docker-publish docker-archive docker-worke
 reformat:: reformat-html
 
 reformat-html:
-	djlint --reformat --format-css janitor/site/templates/
+	djlint --reformat --format-css py/janitor/site/templates/

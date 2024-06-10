@@ -20,7 +20,6 @@ from unittest import mock
 
 from fakeredis.aioredis import FakeRedis
 from google.protobuf import text_format  # type: ignore
-
 from janitor.config import Config
 from janitor.publish import PublishWorker, create_app, find_campaign_by_branch_name
 from janitor.publish_one import _drop_env

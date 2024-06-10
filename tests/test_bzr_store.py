@@ -21,7 +21,6 @@ import tempfile
 from threading import Thread
 
 from breezy.controldir import ControlDir
-
 from janitor import config_pb2
 from janitor.bzr_store import create_web_app
 
