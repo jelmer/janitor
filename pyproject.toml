@@ -105,7 +105,7 @@ dev = [
     "pytest-aiohttp",
     "fakeredis",
     "python-subunit",
-    "ruff",
+    "ruff==0.4.8",
     "types-PyYAML",
     "types-protobuf",
     "types-mock",
@@ -238,3 +238,6 @@ mypy = true
 protobufs = [
     "py/janitor/config.proto"
 ]
+
+[tool.ruff.lint.isort]
+known-third-party = ["debian"]
