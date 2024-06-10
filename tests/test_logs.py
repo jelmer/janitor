@@ -20,7 +20,6 @@ import tempfile
 from datetime import datetime
 
 import pytest
-
 from janitor.logs import FileSystemLogFileManager, GCSLogFileManager, S3LogFileManager
 
 

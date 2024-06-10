@@ -22,7 +22,6 @@ from io import BytesIO
 import aiozipkin
 from aiohttp import MultipartWriter
 from fakeredis.aioredis import FakeRedis
-
 from janitor.config import Config
 from janitor.debian import dpkg_vendor
 from janitor.logs import LogFileManager

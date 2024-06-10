@@ -22,7 +22,7 @@ import os
 from abc import ABC, abstractmethod
 from datetime import datetime
 from io import BytesIO
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from aiohttp import (
     ClientResponseError,
