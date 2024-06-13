@@ -196,6 +196,7 @@ check:
         "worker.log",
         "build.log",
         "test.log",
+        "main",
     }
     if vcs_type == "git":
         cd = ControlDir.open(str(tmp_path / "target"))
