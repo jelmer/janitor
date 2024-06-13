@@ -1,5 +1,5 @@
 use backoff::ExponentialBackoff;
-use breezyshim::tree::WorkingTree;
+
 pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
