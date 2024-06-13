@@ -72,3 +72,6 @@ reformat:: reformat-html
 
 reformat-html:
 	djlint --reformat --format-css py/janitor/site/templates/
+
+codespell:
+	codespell
