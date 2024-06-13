@@ -55,11 +55,11 @@ pub fn generic_make_changes(
         }),
         Err(GenericCodemodError::ExitCode(i)) => Err(convert_codemod_script_failed(
             i,
-            shlex::join(argv.to_vec()).as_str(),
+            shlex::try_join(argv.to_vec()).unwrap().as_str(),
         )),
         Err(GenericCodemodError::ScriptNotFound) => Err(WorkerFailure {
             code: "codemod-not-found".to_string(),
-            description: format!("Codemod script {} not found", shlex::join(argv.to_vec())),
+            description: format!("Codemod script {} not found", shlex::try_join(argv.to_vec()).unwrap()),
             details: None,
             stage: vec!["codemod".to_string()],
             transient: None,

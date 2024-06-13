@@ -2,15 +2,15 @@ pub mod lintian;
 
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::{Tree, WorkingTree};
-use silver_platter::CommitPending;
 use silver_platter::debian::codemod::{
     script_runner as debian_script_runner, CommandResult as DebianCommandResult,
     Error as DebianCodemodError,
 };
+use silver_platter::CommitPending;
 use std::collections::HashMap;
 use std::fs::File;
 
-use std::path::{Path};
+use std::path::Path;
 
 pub fn debian_make_changes(
     local_tree: &WorkingTree,
@@ -122,11 +122,14 @@ pub fn debian_make_changes(
         }),
         Err(DebianCodemodError::ExitCode(i)) => Err(convert_codemod_script_failed(
             i,
-            shlex::join(argv.to_vec()).as_str(),
+            shlex::try_join(argv.to_vec()).unwrap().as_str(),
         )),
         Err(DebianCodemodError::ScriptNotFound) => Err(WorkerFailure {
             code: "codemod-not-found".to_string(),
-            description: format!("Codemod script {} not found", shlex::join(argv.to_vec())),
+            description: format!(
+                "Codemod script {} not found",
+                shlex::try_join(argv.to_vec()).unwrap()
+            ),
             details: None,
             stage: vec!["codemod".to_string()],
             transient: None,
