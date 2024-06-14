@@ -12,7 +12,7 @@ homepage = "https://github.com/jelmer/janitor"
 isahc = "1"
 serde_json = "1"
 select = "0.6"
-mailparse = "0.14"
+mailparse = "0.15"
 async-std = "1"
 log = "0.4"
 clap = { version = "3", optional = true }
