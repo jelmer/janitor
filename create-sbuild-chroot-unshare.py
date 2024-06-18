@@ -24,7 +24,7 @@ def create_chroot(
         sbuild_path,
         distro.archive_mirror_uri,
         "--mode=unshare",
-        "--arch=%s" % sbuild_arch,
+        f"--arch={sbuild_arch}",
     ]
     cmd.append("--components=" + ",".join(distro.component))
     if include:
@@ -90,7 +90,7 @@ for distribution in args.distribution:
     try:
         distro_config = get_distribution(config, distribution)
     except KeyError:
-        parser.error("no such distribution: %s" % distribution)
+        parser.error(f"no such distribution: {distribution}")
 
     sbuild_arch = get_sbuild_architecture()
 
