@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 
 from iniparse import RawConfigParser
-
 from janitor.config import get_distribution, read_config
 
 
@@ -27,21 +26,21 @@ def create_chroot(
     chroot_mode: str | None = None,
 ):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path, distro.archive_mirror_uri]
-    cmd.append("--components=%s" % ",".join(distro.component))
+    cmd.append("--components={}".format(",".join(distro.component)))
     if eatmydata:
         cmd.append("--command-prefix=eatmydata")
         include = list(include) + ["eatmydata"]
     if include:
-        cmd.append("--include=%s" % ",".join(include))
+        cmd.append("--include={}".format(",".join(include)))
     if aliases is None:
         aliases = []
     aliases = list(aliases) + [
         sbuild_schroot_name(suite, sbuild_arch) for suite in suites
     ]
     for alias in aliases:
-        cmd.append("--alias=%s" % alias)
+        cmd.append(f"--alias={alias}")
     if make_sbuild_tarball:
-        cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
+        cmd.append(f"--make-sbuild-tarball={make_sbuild_tarball}")
     if chroot_mode:
         cmd.append(f"--chroot-mode={chroot_mode}")
     for name in distro.extra:
@@ -101,7 +100,7 @@ for distribution in args.distribution:
     try:
         distro_config = get_distribution(config, distribution)
     except KeyError:
-        parser.error("no such distribution: %s" % distribution)
+        parser.error(f"no such distribution: {distribution}")
 
     sbuild_arch = get_sbuild_architecture()
     if not args.base_directory:
