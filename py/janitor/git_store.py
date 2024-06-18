@@ -238,7 +238,7 @@ async def handle_klaus(request: web.Request) -> web.Response:
 
     from aiohttp_wsgi import WSGIHandler
 
-    wsgi_handler = WSGIHandler(app)
+    wsgi_handler = WSGIHandler(app)  # type: ignore
 
     await asyncio.sleep(0)
 
