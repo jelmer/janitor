@@ -12,12 +12,12 @@ homepage = "https://github.com/jelmer/janitor"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3-asyncio = { workspace = true, features=["tokio-runtime"]}
-pyo3 = {version = ">=0.14", features=["extension-module", "serde", "chrono"]}
+pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
+pyo3-asyncio = { workspace = true, features=["tokio-runtime"] }
 janitor-worker = { path = "../worker" }
 reqwest = { version = "0.12", features = ["json"] }
 serde_json = "1"
-pyo3-log = "0.9"
+pyo3-log = { workspace = true }
 log = "0.4"
 chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true

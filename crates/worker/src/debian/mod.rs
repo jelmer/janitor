@@ -22,6 +22,7 @@ pub fn debian_make_changes(
     committer: Option<&str>,
     update_changelog: Option<bool>,
 ) -> std::result::Result<DebianCommandResult, WorkerFailure> {
+    use pyo3::prelude::*;
     if argv.is_empty() {
         return Err(WorkerFailure {
             code: "no-changes".to_string(),
@@ -36,7 +37,7 @@ pub fn debian_make_changes(
 
     // TODO(jelmer): This is only necessary for deb-new-upstream
     let sys_path = pyo3::Python::with_gil(|py| {
-        let sys = py.import("sys").unwrap();
+        let sys = py.import_bound("sys").unwrap();
         Ok::<String, pyo3::PyErr>(
             sys.getattr("path")
                 .unwrap()
@@ -48,7 +49,7 @@ pub fn debian_make_changes(
     .unwrap();
 
     let sys_executable = pyo3::Python::with_gil(|py| {
-        let sys = py.import("sys").unwrap();
+        let sys = py.import_bound("sys").unwrap();
         Ok::<String, pyo3::PyErr>(
             sys.getattr("executable")
                 .unwrap()
