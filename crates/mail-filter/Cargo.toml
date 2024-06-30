@@ -15,7 +15,7 @@ select = "0.6"
 mailparse = "0.15"
 async-std = "1"
 log = "0.4"
-clap = { version = "3", optional = true }
+clap = { version = "4", optional = true }
 reqwest = { version = "0.12", features = ["blocking", "json"], optional = true }
 
 [[bin]]
