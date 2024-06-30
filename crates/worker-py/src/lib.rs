@@ -22,12 +22,12 @@ create_exception!(
 );
 
 #[pyfunction]
-fn is_gce_instance(py: Python) -> PyResult<&PyAny> {
+fn is_gce_instance(py: Python) -> PyResult<Bound<PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async { Ok(janitor_worker::is_gce_instance().await) })
 }
 
 #[pyfunction]
-fn gce_external_ip(py: Python) -> PyResult<&PyAny> {
+fn gce_external_ip(py: Python) -> PyResult<Bound<PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async {
         janitor_worker::gce_external_ip()
             .await
@@ -35,7 +35,7 @@ fn gce_external_ip(py: Python) -> PyResult<&PyAny> {
     })
 }
 
-fn py_to_serde_json(obj: &PyAny) -> PyResult<serde_json::Value> {
+fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
     if obj.is_none() {
         Ok(serde_json::Value::Null)
     } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
@@ -49,14 +49,14 @@ fn py_to_serde_json(obj: &PyAny) -> PyResult<serde_json::Value> {
     } else if let Ok(l) = obj.downcast::<pyo3::types::PyList>() {
         Ok(serde_json::Value::Array(
             l.iter()
-                .map(py_to_serde_json)
+                .map(|x| py_to_serde_json(&x))
                 .collect::<PyResult<Vec<_>>>()?,
         ))
     } else if let Ok(d) = obj.downcast::<pyo3::types::PyDict>() {
         let mut ret = serde_json::Map::new();
         for (k, v) in d.iter() {
             let k = k.extract::<String>()?;
-            let v = py_to_serde_json(v)?;
+            let v = py_to_serde_json(&v)?;
             ret.insert(k, v);
         }
         Ok(serde_json::Value::Object(ret))
@@ -65,21 +65,28 @@ fn py_to_serde_json(obj: &PyAny) -> PyResult<serde_json::Value> {
     }
 }
 
-fn serde_json_to_py(value: &serde_json::Value) -> PyObject {
+fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> Py<PyAny>
+where
+    'b: 'a,
+{
     Python::with_gil(|py| match value {
-        serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, *b).into(),
-        serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap()).into(),
-        serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str()).into(),
+        serde_json::Value::Null => py.None().into_py(py),
+        serde_json::Value::Bool(b) => pyo3::types::PyBool::new_bound(py, *b).into_py(py),
+        serde_json::Value::Number(n) => {
+            pyo3::types::PyFloat::new_bound(py, n.as_f64().unwrap()).into_py(py)
+        }
+        serde_json::Value::String(s) => {
+            pyo3::types::PyString::new_bound(py, s.as_str()).into_py(py)
+        }
         serde_json::Value::Array(a) => {
-            pyo3::types::PyList::new(py, a.iter().map(serde_json_to_py)).into()
+            pyo3::types::PyList::new_bound(py, a.iter().map(serde_json_to_py)).into_py(py)
         }
         serde_json::Value::Object(o) => {
-            let ret = pyo3::types::PyDict::new(py);
+            let ret = pyo3::types::PyDict::new_bound(py);
             for (k, v) in o.into_iter() {
                 ret.set_item(k, serde_json_to_py(v)).unwrap();
             }
-            ret.into()
+            ret.into_py(py)
         }
     })
 }
@@ -125,7 +132,7 @@ impl Client {
         jenkins_build_url: Option<&str>,
         codebase: Option<&str>,
         campaign: Option<&str>,
-    ) -> PyResult<&'a PyAny> {
+    ) -> PyResult<Bound<'a, PyAny>> {
         let campaign = campaign.map(|s| s.to_string());
         let codebase = codebase.map(|s| s.to_string());
         let node_name = node_name.to_string();
@@ -157,7 +164,7 @@ impl Client {
         run_id: &str,
         metadata: &'a Metadata,
         output_directory: Option<std::path::PathBuf>,
-    ) -> PyResult<&'a PyAny> {
+    ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.0.clone();
         let run_id = run_id.to_string();
         let metadata = metadata.0.clone();
@@ -179,7 +186,7 @@ fn abort_run<'a>(
     run_id: &str,
     metadata: &Metadata,
     description: &str,
-) -> PyResult<&'a PyAny> {
+) -> PyResult<Bound<'a, PyAny>> {
     let client = client.0.clone();
     let run_id = run_id.to_string();
     let description = description.to_string();
@@ -191,12 +198,16 @@ fn abort_run<'a>(
 }
 
 #[pyfunction]
-fn run_lintian(
-    output_directory: &str,
-    changes_names: Vec<&str>,
-    profile: Option<&str>,
-    suppress_tags: Option<Vec<&str>>,
-) -> PyResult<PyObject> {
+fn run_lintian<'a>(
+    output_directory: &'_ str,
+    changes_names: Vec<String>,
+    profile: Option<&'_ str>,
+    suppress_tags: Option<Vec<String>>,
+) -> PyResult<Py<PyAny>> {
+    let changes_names = changes_names.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    let suppress_tags = suppress_tags
+        .as_ref()
+        .map(|v| v.iter().map(|s| s.as_str()).collect());
     let result = janitor_worker::debian::lintian::run_lintian(
         output_directory,
         changes_names,
@@ -239,12 +250,12 @@ impl MetadataTarget {
     }
 
     #[getter]
-    fn get_details(&self) -> PyResult<PyObject> {
+    fn get_details(&self, py: Python) -> PyResult<Py<PyAny>> {
         Ok(serde_json_to_py(&self.0.details))
     }
 
     #[setter]
-    fn set_details(&mut self, details: &PyAny) -> PyResult<()> {
+    fn set_details(&mut self, details: &Bound<PyAny>) -> PyResult<()> {
         self.0.details = py_to_serde_json(details)?;
         Ok(())
     }
@@ -465,23 +476,28 @@ impl Metadata {
     }
 
     #[getter]
-    fn get_codemod(&self) -> PyResult<Option<PyObject>> {
-        Ok(self.0.codemod.as_ref().map(serde_json_to_py))
+    fn get_codemod(&self, py: Python) -> PyResult<Option<Py<PyAny>>> {
+        Ok(self.0.codemod.as_ref().map(|x| serde_json_to_py(x)))
     }
 
     #[setter]
-    fn set_codemod(&mut self, codemod: Option<&PyAny>) -> PyResult<()> {
-        self.0.codemod = codemod.map(|c| py_to_serde_json(c).unwrap());
+    fn set_codemod(&mut self, codemod: Option<Bound<PyAny>>) -> PyResult<()> {
+        self.0.codemod = codemod.map(|c| py_to_serde_json(&c).unwrap());
         Ok(())
     }
 
-    fn update(&mut self, py: Python, failure: &WorkerFailure) -> PyResult<()> {
-        let args: (String, String, Option<PyObject>, Vec<String>, Option<bool>) =
-            failure.extract()?;
+    fn update(&mut self, failure: Bound<WorkerFailure>) -> PyResult<()> {
+        let args: (
+            String,
+            String,
+            Option<Bound<PyAny>>,
+            Vec<String>,
+            Option<bool>,
+        ) = failure.extract()?;
         let failure = janitor_worker::WorkerFailure {
             code: args.0,
             description: args.1,
-            details: args.2.map(|d| py_to_serde_json(d.as_ref(py)).unwrap()),
+            details: args.2.map(|d| py_to_serde_json(&d).unwrap()),
             stage: args.3,
             transient: args.4,
         };
@@ -499,14 +515,14 @@ impl Metadata {
     }
 
     #[setter]
-    fn set_target_details(&mut self, details: &PyAny) -> PyResult<()> {
+    fn set_target_details(&mut self, details: &Bound<PyAny>) -> PyResult<()> {
         if let Some(t) = self.0.target.as_mut() {
             t.details = py_to_serde_json(details).unwrap();
         }
         Ok(())
     }
 
-    fn json(&self) -> PyObject {
+    fn json(&self, py: Python) -> Py<PyAny> {
         let json = serde_json::to_value(&self.0).unwrap();
         serde_json_to_py(&json)
     }
@@ -553,36 +569,36 @@ impl DebianCommandResult {
     }
 
     #[getter]
-    fn context(&self) -> Option<PyObject> {
-        self.0.context.as_ref().map(serde_json_to_py)
+    fn context(&self, py: Python) -> Option<Py<PyAny>> {
+        self.0.context.as_ref().map(|x| serde_json_to_py(x))
     }
 }
 
 #[pyfunction]
 fn debian_make_changes(
-    local_tree: PyObject,
+    py: Python,
+    local_tree: Bound<PyAny>,
     subpath: std::path::PathBuf,
-    argv: Vec<&str>,
+    argv: Vec<String>,
     env: std::collections::HashMap<String, String>,
     log_directory: std::path::PathBuf,
-    resume_metadata: Option<PyObject>,
+    resume_metadata: Option<Bound<PyAny>>,
     committer: Option<&str>,
     update_changelog: Option<bool>,
 ) -> PyResult<DebianCommandResult> {
-    Python::with_gil(|py| {
-        janitor_worker::debian::debian_make_changes(
-            &breezyshim::tree::WorkingTree::from(local_tree),
-            &subpath,
-            argv.as_slice(),
-            env,
-            &log_directory,
-            resume_metadata
-                .map(|m| py_to_serde_json(m.as_ref(py)).unwrap())
-                .as_ref(),
-            committer,
-            update_changelog,
-        )
-    })
+    let argv = argv.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    janitor_worker::debian::debian_make_changes(
+        &breezyshim::tree::WorkingTree::from(local_tree.into_py(py)),
+        &subpath,
+        argv.as_slice(),
+        env,
+        &log_directory,
+        resume_metadata
+            .map(|m| py_to_serde_json(&m).unwrap())
+            .as_ref(),
+        committer,
+        update_changelog,
+    )
     .map(DebianCommandResult)
     .map_err(|e| {
         WorkerFailure::new_err((
@@ -636,32 +652,32 @@ impl GenericCommandResult {
     }
 
     #[getter]
-    fn context(&self, _py: Python) -> Option<PyObject> {
-        self.0.context.as_ref().map(serde_json_to_py)
+    fn context(&self, py: Python) -> Option<Py<PyAny>> {
+        self.0.context.as_ref().map(|x| serde_json_to_py(x))
     }
 }
 
 #[pyfunction]
 fn generic_make_changes(
-    local_tree: PyObject,
+    py: Python,
+    local_tree: Bound<PyAny>,
     subpath: std::path::PathBuf,
-    argv: Vec<&str>,
+    argv: Vec<String>,
     env: std::collections::HashMap<String, String>,
     log_directory: std::path::PathBuf,
-    resume_metadata: Option<PyObject>,
+    resume_metadata: Option<Bound<PyAny>>,
 ) -> PyResult<GenericCommandResult> {
-    Python::with_gil(|py| {
-        janitor_worker::generic::generic_make_changes(
-            &breezyshim::tree::WorkingTree::from(local_tree),
-            &subpath,
-            argv.as_slice(),
-            env,
-            &log_directory,
-            resume_metadata
-                .map(|m| py_to_serde_json(m.as_ref(py)).unwrap())
-                .as_ref(),
-        )
-    })
+    let argv = argv.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+    janitor_worker::generic::generic_make_changes(
+        &breezyshim::tree::WorkingTree::from(local_tree.into_py(py)),
+        &subpath,
+        argv.as_slice(),
+        env,
+        &log_directory,
+        resume_metadata
+            .map(|m| py_to_serde_json(&m).unwrap())
+            .as_ref(),
+    )
     .map(GenericCommandResult)
     .map_err(|e| {
         WorkerFailure::new_err((
@@ -675,23 +691,29 @@ fn generic_make_changes(
 }
 
 #[pymodule]
-pub fn _worker(py: Python, m: &PyModule) -> PyResult<()> {
+pub fn _worker(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_class::<Metadata>()?;
-    m.add("WorkerFailure", py.get_type::<WorkerFailure>())?;
+    m.add("WorkerFailure", py.get_type_bound::<WorkerFailure>())?;
     m.add_function(wrap_pyfunction!(is_gce_instance, m)?)?;
     m.add_function(wrap_pyfunction!(gce_external_ip, m)?)?;
     m.add_class::<Client>()?;
-    m.add("ResultUploadFailure", py.get_type::<ResultUploadFailure>())?;
-    m.add("AssignmentFailure", py.get_type::<AssignmentFailure>())?;
-    m.add("EmptyQueue", py.get_type::<EmptyQueue>())?;
+    m.add(
+        "ResultUploadFailure",
+        py.get_type_bound::<ResultUploadFailure>(),
+    )?;
+    m.add(
+        "AssignmentFailure",
+        py.get_type_bound::<AssignmentFailure>(),
+    )?;
+    m.add("EmptyQueue", py.get_type_bound::<EmptyQueue>())?;
     m.add_function(wrap_pyfunction!(abort_run, m)?)?;
     m.add_function(wrap_pyfunction!(run_lintian, m)?)?;
     m.add_function(wrap_pyfunction!(debian_make_changes, m)?)?;
     m.add_function(wrap_pyfunction!(generic_make_changes, m)?)?;
     m.add(
         "LintianOutputInvalid",
-        py.get_type::<LintianOutputInvalid>(),
+        py.get_type_bound::<LintianOutputInvalid>(),
     )?;
     Ok(())
 }

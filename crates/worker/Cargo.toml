@@ -21,7 +21,6 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"], optional = true }
 pyo3 = { workspace = true, features = ["auto-initialize"], optional = true }
 janitor = { path = "../.." }
-pyo3-asyncio = { workspace = true, features = ["tokio-runtime"], optional = true}
 pyo3-log = { workspace = true, optional = true }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
@@ -31,7 +30,7 @@ askama_axum = { version = "0.4.0", features = ["serde-json", "serde-yaml", "huma
 [features]
 default = ["debian", "cli"]
 debian = []
-cli = ["dep:clap", "dep:pyo3", "dep:pyo3-asyncio", "dep:pyo3-log"]
+cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 
 [[bin]]
 name = "janitor-worker"

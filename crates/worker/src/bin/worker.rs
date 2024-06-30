@@ -5,7 +5,6 @@ use pyo3::exceptions::PySystemExit;
 use pyo3::prelude::*;
 use std::net::SocketAddr;
 
-
 #[derive(Parser, Debug)]
 #[command(author, version)]
 struct Args {
@@ -102,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::task::spawn_blocking(move || {
         let thread_result = std::thread::spawn(move || {
             match Python::with_gil(|py| {
-                let kwargs = pyo3::types::PyDict::new(py);
+                let kwargs = pyo3::types::PyDict::new_bound(py);
                 kwargs.set_item("base_url", args.base_url.as_str())?;
                 kwargs.set_item("output_directory", args.output_directory)?;
                 kwargs.set_item("debug", args.logging.debug)?;
@@ -118,14 +117,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 kwargs.set_item("credentials", args.credentials)?;
                 kwargs.set_item("gcp_logging", args.logging.gcp_logging)?;
 
-                let worker = py.import("janitor.worker")?;
+                let worker = py.import_bound("janitor.worker")?;
                 let main = worker.getattr("main_sync")?;
 
-                match main.call((), Some(kwargs))?.extract::<Option<i32>>() {
+                match main.call((), Some(&kwargs))?.extract::<Option<i32>>() {
                     Ok(o) => Ok(o),
-                    Err(e) if e.is_instance_of::<PySystemExit>(py) => {
-                        Ok(Some(e.value(py).getattr("code")?.extract::<i32>()?))
-                    }
+                    Err(e) if e.is_instance_of::<PySystemExit>(py) => Ok(Some(
+                        e.into_value(py).getattr(py, "code")?.extract::<i32>(py)?,
+                    )),
                     Err(e) => Err(e),
                 }
             }) {
@@ -135,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("Error: {}", e);
                     if args.logging.debug {
                         pyo3::Python::with_gil(|py| {
-                            if let Some(traceback) = e.traceback(py) {
+                            if let Some(traceback) = e.traceback_bound(py) {
                                 println!("{}", traceback.format().unwrap());
                             }
                         });

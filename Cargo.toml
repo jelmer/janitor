@@ -23,9 +23,9 @@ url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 
 [workspace.dependencies]
-pyo3-asyncio = { version = "0.20" }
-pyo3 = { version = "0.20" }
-pyo3-log = { version = "0.9" }
+pyo3 = { version = "0.22" }
+pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
+pyo3-log = { git = "https://github.com/jelmer/pyo3-log", branch = "pyo3-0.22" }
 breezyshim = "0.1.78"
 log = "0.4"
 env_logger = "0.10"
@@ -36,7 +36,7 @@ chrono = "0.4"
 clap = { version = ">=4,<4.5" }
 tokio = "1"
 axum = "0.6.16"
-silver-platter = { version = ">=0.5.24" }
+silver-platter = { git = "https://github.com/jelmer/silver-platter", branch = "pyo3-0.22" }
 
 [build-dependencies]
 protobuf-codegen = "3"
