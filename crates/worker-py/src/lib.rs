@@ -250,7 +250,7 @@ impl MetadataTarget {
     }
 
     #[getter]
-    fn get_details(&self, py: Python) -> PyResult<Py<PyAny>> {
+    fn get_details(&self) -> PyResult<Py<PyAny>> {
         Ok(serde_json_to_py(&self.0.details))
     }
 
@@ -476,7 +476,7 @@ impl Metadata {
     }
 
     #[getter]
-    fn get_codemod(&self, py: Python) -> PyResult<Option<Py<PyAny>>> {
+    fn get_codemod(&self) -> PyResult<Option<Py<PyAny>>> {
         Ok(self.0.codemod.as_ref().map(|x| serde_json_to_py(x)))
     }
 
@@ -522,7 +522,7 @@ impl Metadata {
         Ok(())
     }
 
-    fn json(&self, py: Python) -> Py<PyAny> {
+    fn json(&self) -> Py<PyAny> {
         let json = serde_json::to_value(&self.0).unwrap();
         serde_json_to_py(&json)
     }
@@ -569,7 +569,7 @@ impl DebianCommandResult {
     }
 
     #[getter]
-    fn context(&self, py: Python) -> Option<Py<PyAny>> {
+    fn context(&self) -> Option<Py<PyAny>> {
         self.0.context.as_ref().map(|x| serde_json_to_py(x))
     }
 }
@@ -652,7 +652,7 @@ impl GenericCommandResult {
     }
 
     #[getter]
-    fn context(&self, py: Python) -> Option<Py<PyAny>> {
+    fn context(&self) -> Option<Py<PyAny>> {
         self.0.context.as_ref().map(|x| serde_json_to_py(x))
     }
 }
