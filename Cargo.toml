@@ -26,7 +26,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { version = "0.22" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 pyo3-log = { git = "https://github.com/jelmer/pyo3-log", branch = "pyo3-0.22" }
-breezyshim = "0.1.78"
+breezyshim = "0.1.108"
 log = "0.4"
 env_logger = "0.10"
 serde = "1.0"
