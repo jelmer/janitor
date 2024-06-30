@@ -26,17 +26,17 @@ clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { version = "0.22" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 pyo3-log = { git = "https://github.com/jelmer/pyo3-log", branch = "pyo3-0.22" }
-breezyshim = "0.1.78"
+breezyshim = ">=0.1.78"
 log = "0.4"
-env_logger = "0.10"
+env_logger = ">=0.10"
 serde = "1.0"
 serde_json = "1.0"
 url = "2.5"
 chrono = "0.4"
-clap = { version = ">=4,<4.5" }
+clap = { version = "4" }
 tokio = "1"
-axum = "0.6.16"
-silver-platter = { git = "https://github.com/jelmer/silver-platter", branch = "pyo3-0.22" }
+axum = "0.7"
+silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 
 [build-dependencies]
 protobuf-codegen = "3"
