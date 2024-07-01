@@ -536,15 +536,16 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.108"
+version = "0.1.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce4dc748ec27a3e7ebbb742dfcb2310b16592789d55f032dbca6a9a207d8eed9"
+checksum = "0199be7ae13c2f3fd3412681c25c18f3f6c94ff0a85c55104c4e73bd8f7e84c7"
 dependencies = [
  "chrono",
  "ctor",
  "debversion",
  "lazy-regex",
  "lazy_static",
+ "log",
  "pyo3",
  "pyo3-filelike",
  "serde",
