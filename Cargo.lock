@@ -3296,7 +3296,7 @@ dependencies = [
 [[package]]
 name = "silver-platter"
 version = "0.5.26"
-source = "git+https://github.com/jelmer/silver-platter#1b9e90f14f7abeb432450f65084284d3e132906c"
+source = "git+https://github.com/jelmer/silver-platter#8a577fa0a06240e3a5f5c7cd52b52b79732a7175"
 dependencies = [
  "breezyshim",
  "chrono",
