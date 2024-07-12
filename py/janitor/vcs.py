@@ -73,13 +73,6 @@ class BranchOpenFailure(Exception):
         self.retry_after = retry_after
 
 
-def get_vcs_abbreviation(repository: Repository) -> str:
-    vcs = getattr(repository, "vcs", None)
-    if vcs:
-        return vcs.abbreviation
-    return "bzr"
-
-
 def is_alioth_url(url: str) -> bool:
     return urllib.parse.urlparse(url).netloc in (
         "svn.debian.org",
