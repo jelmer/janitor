@@ -1,0 +1,21 @@
+[package]
+name = "runner-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+publish = false
+edition = "2021"
+description = "Runner for the janitor - python bindings"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
+pyo3-asyncio = { workspace = true, features=["tokio-runtime"] }
+janitor-runner = { path = "../runner" }
+pyo3-log = { workspace = true }
+breezyshim.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }

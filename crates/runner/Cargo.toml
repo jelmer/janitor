@@ -9,4 +9,8 @@ repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
-tokio = { version = "1.38.0", features = ["full"] }
+breezyshim.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+maplit = { workspace = true }

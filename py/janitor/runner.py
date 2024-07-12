@@ -15,6 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = [
+    'committer_env',
+]
 
 import asyncio
 import json
@@ -72,6 +75,7 @@ from silver_platter.utils import BranchRateLimited, full_branch_url
 from yarl import URL
 
 from . import set_user_agent, splitout_env, state
+from ._runner import committer_env
 from ._launchpad import override_launchpad_consumer_name
 from .artifacts import (
     ArtifactManager,
@@ -587,25 +591,6 @@ class JanitorResult:
             if self.main_branch_revision
             else None,
         }
-
-
-def committer_env(committer: str) -> dict[str, str]:
-    env: dict[str, str] = {}
-    if not committer:
-        return env
-    (user, email) = parseaddr(committer)
-    if user:
-        env["DEBFULLNAME"] = user
-    if email:
-        env["DEBEMAIL"] = email
-    env["COMMITTER"] = committer
-    env["BRZ_EMAIL"] = committer
-    env["GIT_COMMITTER_NAME"] = user
-    env["GIT_COMMITTER_EMAIL"] = email
-    env["GIT_AUTHOR_NAME"] = user
-    env["GIT_AUTHOR_EMAIL"] = email
-    env["EMAIL"] = email
-    return env
 
 
 @dataclass
