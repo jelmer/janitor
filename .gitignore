@@ -30,7 +30,7 @@ share
 .tox
 Cargo.lock
 target
-janitor/_worker.*.so
 .testrepository
+py/janitor/_*.cpython-*.so
 py/janitor/config_pb2.py
 py/janitor/_worker.*.so
