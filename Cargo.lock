@@ -1876,6 +1876,7 @@ dependencies = [
  "protobuf 3.5.0",
  "protobuf-codegen 3.5.0",
  "protoc-rust",
+ "pyo3",
  "serde",
  "serde_json",
  "sqlx",
@@ -2816,8 +2817,8 @@ dependencies = [
 
 [[package]]
 name = "pyo3-log"
-version = "0.10.0"
-source = "git+https://github.com/jelmer/pyo3-log?branch=pyo3-0.22#7d91336d63df8f1b0cf3aa2d2182e842a2831513"
+version = "0.11.0"
+source = "git+https://github.com/vorner/pyo3-log#b62a250533f0a85e245dfcd189cadb368b1c73fc"
 dependencies = [
  "arc-swap",
  "log",
