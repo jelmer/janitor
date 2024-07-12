@@ -1,0 +1,23 @@
+[package]
+name = "publish-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2021"
+description = "Publisher for the janitor - python bindings"
+publish = false
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
+pyo3-asyncio = { workspace = true, features=["tokio-runtime"] }
+janitor-publish = { path = "../publish" }
+pyo3-log = { workspace = true }
+log = "0.4"
+chrono = { workspace = true, features = ["serde"] }
+breezyshim.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }

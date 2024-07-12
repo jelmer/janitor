@@ -17,6 +17,10 @@
 
 """Publishing VCS changes."""
 
+__all__ = [
+    'calculate_next_try_time',
+]
+
 import asyncio
 import json
 import logging
@@ -77,6 +81,7 @@ from yarl import URL
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
+from ._publish import calculate_next_try_time
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config
@@ -575,15 +580,6 @@ class PublishWorker:
             )
 
         raise AssertionError
-
-
-def calculate_next_try_time(finish_time: datetime, attempt_count: int) -> datetime:
-    if attempt_count == 0:
-        return finish_time
-    try:
-        return finish_time + (2**attempt_count * timedelta(hours=1))
-    except OverflowError:
-        return finish_time + timedelta(hours=(7 * 24))
 
 
 async def consider_publish_run(
