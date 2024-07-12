@@ -79,6 +79,7 @@ from silver_platter.utils import (
 from yarl import URL
 
 from ._common import (
+    get_branch_vcs_type,
     is_alioth_url,
     is_authenticated_url,
 )
@@ -639,14 +640,6 @@ def get_vcs_managers_from_config(
                 config.git_location, trace_configs=trace_configs
             )
     return ret
-
-
-def get_branch_vcs_type(branch):
-    vcs = getattr(branch.repository, "vcs", None)
-    if vcs:
-        return vcs.abbreviation
-    else:
-        return "bzr"
 
 
 def main(argv=None):

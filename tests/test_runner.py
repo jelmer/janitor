@@ -133,7 +133,7 @@ async def test_ready(aiohttp_client):
 
 
 def test_committer_env():
-    assert committer_env("") == {}
+    assert committer_env(None) == {}
     assert committer_env("Joe Example <joe@example.com>") == {
         "DEBFULLNAME": "Joe Example",
         "DEBEMAIL": "joe@example.com",

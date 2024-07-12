@@ -15,6 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = [
+    'committer_env',
+    'is_log_filename',
+]
 
 import asyncio
 import json
@@ -29,7 +33,6 @@ from collections.abc import Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from email.utils import parseaddr
 from io import BytesIO
 from typing import Any, Optional, TypedDict, cast
 
@@ -73,6 +76,10 @@ from yarl import URL
 
 from . import set_user_agent, splitout_env, state
 from ._launchpad import override_launchpad_consumer_name
+from ._runner import (
+    committer_env,
+    is_log_filename,
+)
 from .artifacts import (
     ArtifactManager,
     LocalArtifactManager,
@@ -589,25 +596,6 @@ class JanitorResult:
         }
 
 
-def committer_env(committer: str) -> dict[str, str]:
-    env: dict[str, str] = {}
-    if not committer:
-        return env
-    (user, email) = parseaddr(committer)
-    if user:
-        env["DEBFULLNAME"] = user
-    if email:
-        env["DEBEMAIL"] = email
-    env["COMMITTER"] = committer
-    env["BRZ_EMAIL"] = committer
-    env["GIT_COMMITTER_NAME"] = user
-    env["GIT_COMMITTER_EMAIL"] = email
-    env["GIT_AUTHOR_NAME"] = user
-    env["GIT_AUTHOR_EMAIL"] = email
-    env["EMAIL"] = email
-    return env
-
-
 @dataclass
 class WorkerResult:
     """The result from a worker."""
@@ -714,13 +702,6 @@ class WorkerResult:
             transient=worker_result.get("transient"),
             codebase=worker_result.get("codebase"),
         )
-
-
-def is_log_filename(name):
-    parts = name.split(".")
-    return parts[-1] == "log" or (
-        len(parts) == 3 and parts[-2] == "log" and parts[-1].isdigit()
-    )
 
 
 def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:

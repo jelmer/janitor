@@ -37,6 +37,7 @@ chrono = "0.4"
 clap = { version = "4" }
 tokio = "1"
 axum = "0.7"
+maplit = "1"
 silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 
 [build-dependencies]
