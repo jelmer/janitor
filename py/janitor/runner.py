@@ -17,6 +17,7 @@
 
 __all__ = [
     'committer_env',
+    'is_log_filename',
 ]
 
 import asyncio
@@ -32,7 +33,6 @@ from collections.abc import Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from email.utils import parseaddr
 from io import BytesIO
 from typing import Any, Optional, TypedDict, cast
 
@@ -75,8 +75,11 @@ from silver_platter.utils import BranchRateLimited, full_branch_url
 from yarl import URL
 
 from . import set_user_agent, splitout_env, state
-from ._runner import committer_env
 from ._launchpad import override_launchpad_consumer_name
+from ._runner import (
+    committer_env,
+    is_log_filename,
+)
 from .artifacts import (
     ArtifactManager,
     LocalArtifactManager,
@@ -699,13 +702,6 @@ class WorkerResult:
             transient=worker_result.get("transient"),
             codebase=worker_result.get("codebase"),
         )
-
-
-def is_log_filename(name):
-    parts = name.split(".")
-    return parts[-1] == "log" or (
-        len(parts) == 3 and parts[-2] == "log" and parts[-1].isdigit()
-    )
 
 
 def gather_logs(output_directory: str) -> Iterator[os.DirEntry]:

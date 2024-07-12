@@ -23,6 +23,18 @@ pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     env
 }
 
+pub fn is_log_filename(name: &str) -> bool {
+    let parts = name.split('.').collect::<Vec<_>>();
+    if parts.last() == Some(&"log") {
+        true
+    } else if parts.len() == 3 {
+        let mut rev = parts.iter().rev();
+        rev.next().unwrap().chars().all(char::is_numeric) && rev.next() == Some(&"log")
+    } else {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,5 +65,16 @@ mod tests {
         let expected = maplit::hashmap! {};
 
         assert_eq!(committer_env(committer), expected);
+    }
+
+    #[test]
+    fn is_log_filename_test() {
+        assert!(is_log_filename("foo.log"));
+        assert!(is_log_filename("foo.log.1"));
+        assert!(is_log_filename("foo.1.log"));
+        assert!(!is_log_filename("foo.1"));
+        assert!(!is_log_filename("foo.1.log.1"));
+        assert!(!is_log_filename("foo.1.notlog"));
+        assert!(!is_log_filename("foo.log.notlog"));
     }
 }
