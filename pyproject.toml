@@ -220,7 +220,7 @@ ignore = [
 [tool.ruff]
 line-length = 88
 target-version = "py39"
-extend-exclude = ["py/janitor/config_pb2.py"]
+extend-exclude = ["py/janitor/config_pb2.py", "py/janitor/config_pb2.pyi"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

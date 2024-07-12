@@ -1,5 +1,6 @@
-from typing import Any, Optional, TypedDict
 from datetime import datetime
+from typing import Any
+
 from breezy.tree import Tree
 
 async def is_gce_instance() -> bool: ...
@@ -12,7 +13,7 @@ class LintianOutputInvalid(Exception): ...
 
 async def abort_run(client: Client, run_id: str, metadata: Any, description: str) -> None: ...
 
-class Client(object):
+class Client:
     def __new__(cls, base_url: str, username: str | None, password: str | None, user_agent: str) -> Client: ...
 
     async def get_assignment_raw(self, my_url: str | None, node_name: str,
@@ -52,9 +53,9 @@ class Metadata:
     target_branch_url: str | None
     refreshed: bool | None
     codemod: Any | None
-    branch_url: Optional[str] | None
+    branch_url: str | None | None
     vcs_type: str | None
-    branches: list[tuple[str, Optional[str], Optional[bytes], Optional[bytes]]] | None
+    branches: list[tuple[str, str | None, bytes | None, bytes | None]] | None
     tags: list[tuple[str, bytes]] | None
     value: int | None
     target_name: str | None

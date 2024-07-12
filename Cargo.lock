@@ -694,6 +694,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
+name = "common-py"
+version = "0.0.0"
+dependencies = [
+ "breezyshim",
+ "chrono",
+ "janitor",
+ "log",
+ "pyo3",
+ "pyo3-asyncio",
+ "pyo3-log",
+ "reqwest",
+ "serde_json",
+ "silver-platter",
+ "url",
+]
+
+[[package]]
 name = "comrak"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
