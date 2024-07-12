@@ -6,11 +6,10 @@ import os
 import tempfile
 
 import silver_platter  # noqa: E402, F401
-from ognibuild.debian.build import BUILD_LOG_FILENAME
-
 from janitor import state  # noqa: E402
 from janitor.config import read_config  # noqa: E402
 from janitor.logs import get_log_manager  # noqa: E402
+from ognibuild.debian.build import BUILD_LOG_FILENAME
 
 loop = asyncio.get_event_loop()
 
