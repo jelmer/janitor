@@ -15,6 +15,25 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = [
+    'is_alioth_url',
+    'is_authenticated_url',
+    'BranchOpenFailure',
+    'open_branch_ext',
+    'MirrorFailure',
+    'UnsupportedVcs',
+    'open_cached_branch',
+    'VcsManager',
+    'LocalGitVcsManager',
+    'LocalBzrVcsManager',
+    'RemoteGitVcsManager',
+    'RemoteBzrVcsManager',
+    'get_run_diff',
+    'get_vcs_managers',
+    'get_vcs_managers_from_config',
+    'get_branch_vcs_type',
+]
+
 import asyncio
 import logging
 import os
@@ -59,6 +78,11 @@ from silver_platter.utils import (
 )
 from yarl import URL
 
+from ._common import (
+    is_authenticated_url,
+    is_alioth_url,
+    )
+
 EMPTY_GIT_TREE = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
@@ -71,17 +95,6 @@ class BranchOpenFailure(Exception):
         self.code = code
         self.description = description
         self.retry_after = retry_after
-
-
-def is_alioth_url(url: str) -> bool:
-    return urllib.parse.urlparse(url).netloc in (
-        "svn.debian.org",
-        "bzr.debian.org",
-        "anonscm.debian.org",
-        "hg.debian.org",
-        "git.debian.org",
-        "alioth.debian.org",
-    )
 
 
 def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
@@ -626,10 +639,6 @@ def get_vcs_managers_from_config(
                 config.git_location, trace_configs=trace_configs
             )
     return ret
-
-
-def is_authenticated_url(url: str):
-    return url.startswith("git+ssh://") or url.startswith("bzr+ssh://")
 
 
 def get_branch_vcs_type(branch):
