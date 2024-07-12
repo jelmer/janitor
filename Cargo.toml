@@ -21,11 +21,12 @@ sqlx = { version = "0.7", features = ["postgres", "runtime-async-std-native-tls"
 stackdriver_logger = { version = "0.8", optional = true }
 url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
+pyo3 = { workspace = true }
 
 [workspace.dependencies]
 pyo3 = { version = "0.22" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
-pyo3-log = { git = "https://github.com/jelmer/pyo3-log", branch = "pyo3-0.22" }
+pyo3-log = { git = "https://github.com/vorner/pyo3-log" }
 breezyshim = ">=0.1.78"
 log = "0.4"
 env_logger = ">=0.10"
