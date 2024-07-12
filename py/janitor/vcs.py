@@ -79,9 +79,9 @@ from silver_platter.utils import (
 from yarl import URL
 
 from ._common import (
-    is_authenticated_url,
     is_alioth_url,
-    )
+    is_authenticated_url,
+)
 
 EMPTY_GIT_TREE = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
