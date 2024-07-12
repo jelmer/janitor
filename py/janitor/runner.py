@@ -94,7 +94,7 @@ from .vcs import (
     BranchOpenFailure,
     UnsupportedVcs,
     VcsManager,
-    get_vcs_abbreviation,
+    get_branch_vcs_type,
     get_vcs_managers,
     is_authenticated_url,
     open_branch_ext,
@@ -2615,7 +2615,7 @@ async def next_item(
                 additional_colocated_branches = await asyncio.to_thread(
                     builder.additional_colocated_branches, main_branch
                 )
-                vcs_type = get_vcs_abbreviation(main_branch.repository)
+                vcs_type = get_branch_vcs_type(main_branch)
                 if not item.refresh:
                     with span.new_child("resume-branch:open"):
                         try:
