@@ -721,12 +721,12 @@ impl std::str::FromStr for DebUpdateChangelog {
     }
 }
 
-impl ToString for DebUpdateChangelog {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for DebUpdateChangelog {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            DebUpdateChangelog::Auto => "auto".to_string(),
-            DebUpdateChangelog::Update => "update".to_string(),
-            DebUpdateChangelog::Leave => "leave".to_string(),
+            DebUpdateChangelog::Auto => write!(f, "auto"),
+            DebUpdateChangelog::Update => write!(f, "update"),
+            DebUpdateChangelog::Leave => write!(f, "leave"),
         }
     }
 }
