@@ -1,5 +1,8 @@
 use backoff::ExponentialBackoff;
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
+use breezyshim::tree::WorkingTree;
 pub use breezyshim::RevisionId;
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -74,6 +77,14 @@ pub struct WorkerFailure {
     pub stage: Vec<String>,
     pub transient: Option<bool>,
 }
+
+impl std::fmt::Display for WorkerFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.description)
+    }
+}
+
+impl std::error::Error for WorkerFailure {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Codemod {
@@ -729,4 +740,36 @@ impl std::fmt::Display for DebUpdateChangelog {
             DebUpdateChangelog::Leave => write!(f, "leave"),
         }
     }
+}
+
+type BuildConfig = serde_json::Value;
+type ValidateConfig = serde_json::Value;
+
+/// A build target
+pub trait Target {
+    fn name(&self) -> String;
+
+    fn build(
+        &self,
+        local_tree: &WorkingTree,
+        subpath: &std::path::Path,
+        output_directory: &std::path::Path,
+        config: &BuildConfig,
+    ) -> Result<serde_json::Value, WorkerFailure>;
+
+    fn validate(
+        &self,
+        local_tree: &WorkingTree,
+        subpath: &std::path::Path,
+        config: &ValidateConfig,
+    ) -> Result<(), WorkerFailure>;
+
+    fn make_changes(
+        &self,
+        local_tree: &WorkingTree,
+        subpath: &std::path::Path,
+        argv: &[&str],
+        log_directory: &std::path::Path,
+        resume_metadata: Option<&Metadata>,
+    ) -> Result<serde_json::Value, WorkerFailure>;
 }
