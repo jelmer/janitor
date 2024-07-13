@@ -1,0 +1,17 @@
+[package]
+name = "janitor-publish"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2021"
+description = "Publisher for the janitor"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[dependencies]
+breezyshim.workspace = true
+chrono.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+maplit = { workspace = true }
