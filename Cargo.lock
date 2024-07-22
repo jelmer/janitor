@@ -937,8 +937,9 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
-version = "0.158.0"
-source = "git+https://salsa.debian.org/jelmer/lintian-brush#09b0c654c97b5e8db5037b77b341d43676952c3b"
+version = "0.158.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63a303143da4cdf2ddc1c5045836b62024975e4a6c6f5c7b437e3d2cec919c05"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -3461,8 +3462,8 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.5.26"
-source = "git+https://github.com/jelmer/silver-platter#a206777ef9d34b91bc90974bb569717cfab004ae"
+version = "0.5.27"
+source = "git+https://github.com/jelmer/silver-platter#bff5326527d36a96b86f33ae3374d8c41d554de5"
 dependencies = [
  "breezyshim",
  "chrono",
