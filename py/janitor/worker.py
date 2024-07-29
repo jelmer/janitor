@@ -1232,8 +1232,8 @@ async def process_single_item(
 
     with ExitStack() as es:
         es.callback(workitem.clear)
-        campaign = assignment["campaign"]
-        codebase = assignment["codebase"]
+        campaign = cast(str, assignment["campaign"])
+        codebase = cast(str, assignment["codebase"])
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
         additional_colocated_branches = assignment["branch"][
