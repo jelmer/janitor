@@ -106,7 +106,7 @@ async def reprocess_run_logs(
     process_fns,
     dry_run: bool = False,
     reschedule: bool = False,
-    log_timeout: Optional[int] = None,
+    log_timeout: Optional[timedelta] = None,
 ):
     """Reprocess run logs."""
     if result_code in ("dist-no-tarball",):

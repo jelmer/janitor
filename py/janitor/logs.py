@@ -16,12 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from datetime import timedelta
 import gzip
 import logging
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from typing import TYPE_CHECKING, Optional
 
@@ -113,7 +112,7 @@ class FileSystemLogFileManager(LogFileManager):
                     ],
                 )
 
-    async def has_log(self, codebase: str, run_id: str, name: str, timeout: timedelta | None = None) -> bool:
+    async def has_log(self, codebase: str, run_id: str, name: str, timeout: Optional[timedelta] = None) -> bool:
         return any(map(os.path.exists, self._get_paths(codebase, run_id, name)))
 
     async def get_ctime(self, codebase: str, run_id: str, name: str) -> datetime:
@@ -194,7 +193,7 @@ class S3LogFileManager(LogFileManager):
     def _get_url(self, codebase, run_id, name):
         return f"{self.base_url}{self._get_key(codebase, run_id, name)}"
 
-    async def has_log(self, codebase, run_id, name, timeout: timedelta | None = None) -> bool:
+    async def has_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None) -> bool:
         url = self._get_url(codebase, run_id, name)
         async with self.session.head(url) as resp:
             if resp.status == 404:
@@ -207,9 +206,11 @@ class S3LogFileManager(LogFileManager):
                 "Unexpected response code %d: %s" % (resp.status, await resp.text())
             )
 
-    async def get_log(self, codebase, run_id, name, timeout=10):
+    async def get_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None):
+        if timeout is None:
+            timeout = timedelta(minutes=5)
         url = self._get_url(codebase, run_id, name)
-        client_timeout = ClientTimeout(timeout)
+        client_timeout = ClientTimeout(int(timeout.total_seconds()))
         async with self.session.get(url, timeout=client_timeout) as resp:
             if resp.status == 404:
                 raise FileNotFoundError(name)
@@ -226,10 +227,12 @@ class S3LogFileManager(LogFileManager):
         codebase,
         run_id,
         orig_path,
-        timeout=360,
+        timeout: Optional[timedelta] = None,
         mtime=None,
         basename: Optional[str] = None,
     ):
+        if timeout is None:
+            timeout = timedelta(minutes=5)
         with open(orig_path, "rb") as f:
             data = gzip.compress(f.read(), mtime=mtime)
 
@@ -284,7 +287,7 @@ class GCSLogFileManager(LogFileManager):
     def _get_object_name(self, codebase, run_id, name):
         return f"{codebase}/{run_id}/{name}.gz"
 
-    async def has_log(self, codebase, run_id, name, timeout: timedelta | None = None) -> bool:
+    async def has_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None) -> bool:
         object_name = self._get_object_name(codebase, run_id, name)
         return await self.bucket.blob_exists(object_name, session=self.session)
 
@@ -302,14 +305,16 @@ class GCSLogFileManager(LogFileManager):
             raise ServiceUnavailable() from e
         return parse_date(blob.timeCreated)  # type: ignore
 
-    async def get_log(self, codebase, run_id, name, timeout=30):
+    async def get_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None):
+        if timeout is None:
+            timeout = timedelta(minutes=5)
         object_name = self._get_object_name(codebase, run_id, name)
         try:
             data = await self.storage.download(
                 self.bucket_name,
                 object_name,
                 session=self.session,
-                timeout=timeout,
+                timeout=int(timeout.total_seconds()),
             )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
@@ -324,26 +329,30 @@ class GCSLogFileManager(LogFileManager):
         codebase,
         run_id,
         orig_path,
-        timeout=360,
+        timeout: Optional[timedelta] = None,
         mtime=None,
         basename: Optional[str] = None,
     ):
         if basename is None:
             basename = os.path.basename(orig_path)
+        if timeout is None:
+            timeout = timedelta(minutes=5)
         object_name = self._get_object_name(codebase, run_id, basename)
         with open(orig_path, "rb") as f:
             plain_data = f.read()
         compressed_data = gzip.compress(plain_data, mtime=mtime)
         try:
             await self.storage.upload(
-                self.bucket_name, object_name, compressed_data, timeout=timeout
+                self.bucket_name, object_name, compressed_data,
+                timeout=int(timeout.total_seconds())
             )
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable() from e
             if e.status == 403:
                 data = await self.storage.download(
-                    self.bucket_name, object_name, session=self.session, timeout=timeout
+                    self.bucket_name, object_name, session=self.session,
+                    timeout=int(timeout.total_seconds())
                 )
                 if data == plain_data:
                     return
