@@ -287,7 +287,7 @@ class GCSLogFileManager(LogFileManager):
     def _get_object_name(self, codebase, run_id, name):
         return f"{codebase}/{run_id}/{name}.gz"
 
-    async def has_log(self, codebase, run_id, name, timeout: timedelta | None = None) -> bool:
+    async def has_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None) -> bool:
         object_name = self._get_object_name(codebase, run_id, name)
         return await self.bucket.blob_exists(object_name, session=self.session)
 
