@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python-version: [3.9, '3.10', '3.11']
+        python-version: [3.9, '3.10', '3.11', '3.12']
       fail-fast: false
 
     steps:
@@ -73,5 +73,5 @@ jobs:
         run: |
           git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ \
             janitor.debian.net
-          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=. \
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
             python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
