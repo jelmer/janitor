@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
+from datetime import timedelta
 import gzip
 import logging
 import os
@@ -112,7 +113,7 @@ class FileSystemLogFileManager(LogFileManager):
                     ],
                 )
 
-    async def has_log(self, codebase, run_id, name):
+    async def has_log(self, codebase: str, run_id: str, name: str, timeout: timedelta | None = None) -> bool:
         return any(map(os.path.exists, self._get_paths(codebase, run_id, name)))
 
     async def get_ctime(self, codebase: str, run_id: str, name: str) -> datetime:
@@ -193,7 +194,7 @@ class S3LogFileManager(LogFileManager):
     def _get_url(self, codebase, run_id, name):
         return f"{self.base_url}{self._get_key(codebase, run_id, name)}"
 
-    async def has_log(self, codebase, run_id, name):
+    async def has_log(self, codebase, run_id, name, timeout: timedelta | None = None) -> bool:
         url = self._get_url(codebase, run_id, name)
         async with self.session.head(url) as resp:
             if resp.status == 404:
@@ -283,7 +284,7 @@ class GCSLogFileManager(LogFileManager):
     def _get_object_name(self, codebase, run_id, name):
         return f"{codebase}/{run_id}/{name}.gz"
 
-    async def has_log(self, codebase, run_id, name):
+    async def has_log(self, codebase, run_id, name, timeout: timedelta | None = None) -> bool:
         object_name = self._get_object_name(codebase, run_id, name)
         return await self.bucket.blob_exists(object_name, session=self.session)
 
