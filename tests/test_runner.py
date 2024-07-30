@@ -56,7 +56,9 @@ class MemoryLogFileManager(LogFileManager):
             return datetime.utcnow()
         raise FileNotFoundError
 
-    async def import_log(self, codebase, run_id, orig_path, timeout=None, mtime=None, basename=None):
+    async def import_log(
+        self, codebase, run_id, orig_path, timeout=None, mtime=None, basename=None
+    ):
         if basename is None:
             basename = os.path.basename(orig_path)
         with open(orig_path, "rb") as f:

@@ -112,7 +112,9 @@ class FileSystemLogFileManager(LogFileManager):
                     ],
                 )
 
-    async def has_log(self, codebase: str, run_id: str, name: str, timeout: Optional[timedelta] = None) -> bool:
+    async def has_log(
+        self, codebase: str, run_id: str, name: str, timeout: Optional[timedelta] = None
+    ) -> bool:
         return any(map(os.path.exists, self._get_paths(codebase, run_id, name)))
 
     async def get_ctime(self, codebase: str, run_id: str, name: str) -> datetime:
@@ -193,7 +195,9 @@ class S3LogFileManager(LogFileManager):
     def _get_url(self, codebase, run_id, name):
         return f"{self.base_url}{self._get_key(codebase, run_id, name)}"
 
-    async def has_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None) -> bool:
+    async def has_log(
+        self, codebase, run_id, name, timeout: Optional[timedelta] = None
+    ) -> bool:
         url = self._get_url(codebase, run_id, name)
         async with self.session.head(url) as resp:
             if resp.status == 404:
@@ -206,7 +210,9 @@ class S3LogFileManager(LogFileManager):
                 "Unexpected response code %d: %s" % (resp.status, await resp.text())
             )
 
-    async def get_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None):
+    async def get_log(
+        self, codebase, run_id, name, timeout: Optional[timedelta] = None
+    ):
         if timeout is None:
             timeout = timedelta(minutes=5)
         url = self._get_url(codebase, run_id, name)
@@ -287,7 +293,9 @@ class GCSLogFileManager(LogFileManager):
     def _get_object_name(self, codebase, run_id, name):
         return f"{codebase}/{run_id}/{name}.gz"
 
-    async def has_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None) -> bool:
+    async def has_log(
+        self, codebase, run_id, name, timeout: Optional[timedelta] = None
+    ) -> bool:
         object_name = self._get_object_name(codebase, run_id, name)
         return await self.bucket.blob_exists(object_name, session=self.session)
 
@@ -305,7 +313,9 @@ class GCSLogFileManager(LogFileManager):
             raise ServiceUnavailable() from e
         return parse_date(blob.timeCreated)  # type: ignore
 
-    async def get_log(self, codebase, run_id, name, timeout: Optional[timedelta] = None):
+    async def get_log(
+        self, codebase, run_id, name, timeout: Optional[timedelta] = None
+    ):
         if timeout is None:
             timeout = timedelta(minutes=5)
         object_name = self._get_object_name(codebase, run_id, name)
@@ -343,16 +353,20 @@ class GCSLogFileManager(LogFileManager):
         compressed_data = gzip.compress(plain_data, mtime=mtime)
         try:
             await self.storage.upload(
-                self.bucket_name, object_name, compressed_data,
-                timeout=int(timeout.total_seconds())
+                self.bucket_name,
+                object_name,
+                compressed_data,
+                timeout=int(timeout.total_seconds()),
             )
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable() from e
             if e.status == 403:
                 data = await self.storage.download(
-                    self.bucket_name, object_name, session=self.session,
-                    timeout=int(timeout.total_seconds())
+                    self.bucket_name,
+                    object_name,
+                    session=self.session,
+                    timeout=int(timeout.total_seconds()),
                 )
                 if data == plain_data:
                     return

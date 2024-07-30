@@ -526,7 +526,9 @@ async def handle_ready(request):
     )
     if missing:
         return web.Response(
-            text=("missing: {}".format(", ".join(missing)) + "\n\n" "present:\n" + status),
+            text=(
+                "missing: {}".format(", ".join(missing)) + "\n\n" "present:\n" + status
+            ),
             status=500,
         )
     return web.Response(text=status)

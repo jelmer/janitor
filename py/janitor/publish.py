@@ -18,7 +18,7 @@
 """Publishing VCS changes."""
 
 __all__ = [
-    'calculate_next_try_time',
+    "calculate_next_try_time",
 ]
 
 import asyncio
@@ -865,8 +865,8 @@ async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
             )
     elif e.code == "missing-build-diff-control":
         if unchanged_run and unchanged_run["result_code"] != "success":
-            description = (
-                "Missing build diff; last control run failed ({}).".format(unchanged_run["result_code"])
+            description = "Missing build diff; last control run failed ({}).".format(
+                unchanged_run["result_code"]
             )
         elif unchanged_run and unchanged_run["result_code"] == "success":
             description = (
