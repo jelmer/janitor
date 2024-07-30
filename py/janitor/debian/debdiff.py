@@ -243,7 +243,11 @@ def htmlize_debdiff(debdiff: str) -> str:
                     if not mlines:
                         continue
                     ret.extend(
-                        ["<li><pre>{}</pre></li>".format(highlight_wdiff("\n".join(mlines)))]
+                        [
+                            "<li><pre>{}</pre></li>".format(
+                                highlight_wdiff("\n".join(mlines))
+                            )
+                        ]
                     )
                 ret.append("</ul>")
             else:

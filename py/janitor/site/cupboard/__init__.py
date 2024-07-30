@@ -160,14 +160,12 @@ async def handle_result_codes(request):
             )
         query += " group by 1"
         if not exclude_never_processed:
-            query = (
-                f"""({query}) union
+            query = f"""({query}) union
     select 'never-processed', count(*) from candidate c
         where not exists (
             SELECT FROM run WHERE run.codebase = c.codebase AND c.suite = suite)
         and suite = ANY($1::text[]) order by 2 desc
     """
-            )
         return {
             "exclude_never_processed": exclude_never_processed,
             "include_transient": include_transient,

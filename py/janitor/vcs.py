@@ -16,22 +16,22 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 __all__ = [
-    'is_alioth_url',
-    'is_authenticated_url',
-    'BranchOpenFailure',
-    'open_branch_ext',
-    'MirrorFailure',
-    'UnsupportedVcs',
-    'open_cached_branch',
-    'VcsManager',
-    'LocalGitVcsManager',
-    'LocalBzrVcsManager',
-    'RemoteGitVcsManager',
-    'RemoteBzrVcsManager',
-    'get_run_diff',
-    'get_vcs_managers',
-    'get_vcs_managers_from_config',
-    'get_branch_vcs_type',
+    "is_alioth_url",
+    "is_authenticated_url",
+    "BranchOpenFailure",
+    "open_branch_ext",
+    "MirrorFailure",
+    "UnsupportedVcs",
+    "open_cached_branch",
+    "VcsManager",
+    "LocalGitVcsManager",
+    "LocalBzrVcsManager",
+    "RemoteGitVcsManager",
+    "RemoteBzrVcsManager",
+    "get_run_diff",
+    "get_vcs_managers",
+    "get_vcs_managers_from_config",
+    "get_branch_vcs_type",
 ]
 
 import asyncio
@@ -456,11 +456,10 @@ class RemoteGitVcsManager(VcsManager):
             return b""
 
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession(
-            trace_configs=self.trace_configs
-        ) as client, client.get(
-            url, timeout=ClientTimeout(30), raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession(trace_configs=self.trace_configs) as client,
+            client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp,
+        ):
             return await resp.read()
 
     def _lookup_revid(self, revid, default):
@@ -478,11 +477,10 @@ class RemoteGitVcsManager(VcsManager):
                 self._lookup_revid(new_revid, ZERO_SHA).decode("utf-8"),
             ),
         )
-        async with ClientSession(
-            trace_configs=self.trace_configs
-        ) as client, client.get(
-            url, timeout=ClientTimeout(30), raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession(trace_configs=self.trace_configs) as client,
+            client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp,
+        ):
             return await resp.json()
 
     def __repr__(self) -> str:
@@ -524,11 +522,10 @@ class RemoteBzrVcsManager(VcsManager):
         if old_revid == new_revid:
             return b""
         url = self.get_diff_url(codebase, old_revid, new_revid)
-        async with ClientSession(
-            trace_configs=self.trace_configs
-        ) as client, client.get(
-            url, timeout=ClientTimeout(30), raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession(trace_configs=self.trace_configs) as client,
+            client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp,
+        ):
             return await resp.read()
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
@@ -538,11 +535,10 @@ class RemoteBzrVcsManager(VcsManager):
                 codebase, old_revid.decode("utf-8"), new_revid.decode("utf-8")
             ),
         )
-        async with ClientSession(
-            trace_configs=self.trace_configs
-        ) as client, client.get(
-            url, timeout=ClientTimeout(30), raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession(trace_configs=self.trace_configs) as client,
+            client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp,
+        ):
             return await resp.json()
 
     def __repr__(self) -> str:

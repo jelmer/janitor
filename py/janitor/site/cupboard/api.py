@@ -73,8 +73,7 @@ async def handle_mass_reschedule(request):
             table = "last_runs"
         else:
             table = "last_effective_runs"
-        query = (
-            f"""
+        query = f"""
 SELECT
 codebase,
 suite AS campaign,
@@ -86,7 +85,6 @@ run.codebase = candidate.codebase AND
 run.suite = candidate.suite AND
 (run.change_set = candidate.change_set OR candidate.change_set IS NULL))
 AND """
-        )
         where = []
         params = []
         if result_code is not None:

@@ -360,7 +360,7 @@ async def cgit_backend(request: web.Request) -> web.Response:
             if "Content-Length" in headers:
                 content_length = int(headers["Content-Length"])  # type: ignore
                 return web.Response(
-                        headers=dict(headers),  # type: ignore
+                    headers=dict(headers),  # type: ignore
                     status=status_code,
                     reason=status_reason,
                     body=await p.stdout.read(content_length),

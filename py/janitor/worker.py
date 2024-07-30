@@ -779,9 +779,9 @@ def run_worker(
                 build_target.validate(ws.local_tree, subpath, build_config)
 
             if ws.main_branch:
-                metadata.revision = (
-                    metadata.main_branch_revision
-                ) = ws.main_branch.last_revision()
+                metadata.revision = metadata.main_branch_revision = (
+                    ws.main_branch.last_revision()
+                )
             else:
                 metadata.revision = metadata.main_branch_revision = NULL_REVISION
 
@@ -857,9 +857,9 @@ def run_worker(
             result_branch_roles = [
                 role for (role, remote_name, br, r) in result_branches
             ]
-            assert len(result_branch_roles) == len(set(result_branch_roles)), (
-                f"Duplicate result branches: {result_branches!r}"
-            )
+            assert len(result_branch_roles) == len(
+                set(result_branch_roles)
+            ), f"Duplicate result branches: {result_branches!r}"
 
             for f, n, br, r in result_branches or []:
                 metadata.add_branch(f, n, br, r)
