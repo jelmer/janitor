@@ -19,6 +19,14 @@ check:: style
 
 check:: ruff
 
+check:: check-format
+
+check-format::
+	ruff format --check py tests
+
+check-format::
+	cargo fmt --check --all
+
 ruff:
 	ruff check py tests
 
@@ -31,6 +39,12 @@ cargo-fix:
 
 ruff-fix:
 	ruff check --fix .
+
+reformat::
+	ruff format py tests
+
+reformat::
+	cargo fmt --all
 
 suite-references:
 	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
