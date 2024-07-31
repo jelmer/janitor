@@ -44,12 +44,20 @@ class DebianTargetTests(TestCaseWithTransport):
                 "DEB_UPDATE_CHANGELOG": "auto",
             }
         )
-        self.build_tree_contents([
-            ("debian/", ),
-            ("debian/changelog", "foo (0.1) unstable; urgency=low\n\n  * Initial release.\n\n -- Joe Example <joe@example.com>  Mon, 01 Jan 2001 00:00:00 +0000\n"),
-            ])
+        self.build_tree_contents(
+            [
+                ("debian/",),
+                (
+                    "debian/changelog",
+                    "foo (0.1) unstable; urgency=low\n\n  * Initial release.\n\n -- Joe Example <joe@example.com>  Mon, 01 Jan 2001 00:00:00 +0000\n",
+                ),
+            ]
+        )
         result = target.make_changes(
-            self.tree, "", ["sh", "-c", "touch foo; echo Do a thing"], log_directory=tempfile.mkdtemp()
+            self.tree,
+            "",
+            ["sh", "-c", "touch foo; echo Do a thing"],
+            log_directory=tempfile.mkdtemp(),
         )
         self.assertIs(result.value, None)
         self.assertEqual(result.description, "Do a thing\n")

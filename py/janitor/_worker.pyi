@@ -11,24 +11,42 @@ class AssignmentFailure(Exception): ...
 class ResultUploadFailure(Exception): ...
 class LintianOutputInvalid(Exception): ...
 
-async def abort_run(client: Client, run_id: str, metadata: Any, description: str) -> None: ...
+async def abort_run(
+    client: Client, run_id: str, metadata: Any, description: str
+) -> None: ...
 
 class Client:
-    def __new__(cls, base_url: str, username: str | None, password: str | None, user_agent: str) -> Client: ...
+    def __new__(
+        cls, base_url: str, username: str | None, password: str | None, user_agent: str
+    ) -> Client: ...
+    async def get_assignment_raw(
+        self,
+        my_url: str | None,
+        node_name: str,
+        jenkins_build_url: str | None,
+        codebase: str | None,
+        campaign: str | None,
+    ) -> Any: ...
+    async def upload_results(
+        self, run_id: str, metadata: Any, output_directory: str | None = None
+    ) -> Any: ...
 
-    async def get_assignment_raw(self, my_url: str | None, node_name: str,
-                                jenkins_build_url: str | None, codebase: str | None,
-                                 campaign: str | None) -> Any: ...
-
-    async def upload_results(self, run_id: str, metadata: Any, output_directory: str | None = None) -> Any: ...
-
-
-def run_lintian(output_directory: str, changes_names: list[str], profile: str | None, suppress_tags: list[str] | None) -> Any: ...
-
+def run_lintian(
+    output_directory: str,
+    changes_names: list[str],
+    profile: str | None,
+    suppress_tags: list[str] | None,
+) -> Any: ...
 
 class WorkerFailure(Exception):
-
-    def __new__(cls, code: str, description: str, details: Any | None = None, stage: tuple[str, ...] | None = None, transient: bool | None = None) -> WorkerFailure: ...
+    def __new__(
+        cls,
+        code: str,
+        description: str,
+        details: Any | None = None,
+        stage: tuple[str, ...] | None = None,
+        transient: bool | None = None,
+    ) -> WorkerFailure: ...
 
     code: str
     description: str
@@ -36,11 +54,9 @@ class WorkerFailure(Exception):
     stage: tuple[str, ...] | None
     transient: bool | None
 
-
 class MetadataTarget:
     name: str
     details: Any | None
-
 
 class Metadata:
     code: str | None
@@ -66,11 +82,16 @@ class Metadata:
     queue_id: int | None
 
     def add_tag(self, tag: str, value: bytes) -> None: ...
-    def add_branch(self, function: str, name: str | None, base_revision: bytes | None, revision: bytes | None) -> None: ...
+    def add_branch(
+        self,
+        function: str,
+        name: str | None,
+        base_revision: bytes | None,
+        revision: bytes | None,
+    ) -> None: ...
     def add_remote(self, name: str, url: str) -> None: ...
     def update(self, e: WorkerFailure) -> None: ...
     def json(self) -> Any: ...
-
 
 def debian_make_changes(
     local_tree: Tree,
@@ -80,10 +101,8 @@ def debian_make_changes(
     log_directory: str,
     resume_metadata: Any = None,
     committer: str | None = None,
-    update_changelog: bool | None = None
-    ) -> Any: ...
-
-
+    update_changelog: bool | None = None,
+) -> Any: ...
 def generic_make_changes(
     local_tree: Tree,
     subpath: str,
@@ -92,6 +111,5 @@ def generic_make_changes(
     log_directory: str,
     resume_metadata: Any = None,
     committer: str | None = None,
-    update_changelog: bool | None = None
-    ) -> Any: ...
-
+    update_changelog: bool | None = None,
+) -> Any: ...

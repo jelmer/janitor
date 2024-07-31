@@ -307,7 +307,9 @@ async def handle_diff(request):
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError as e:
-            raise web.HTTPBadRequest(text="unsupported vcs {}".format(run["vcs_type"])) from e
+            raise web.HTTPBadRequest(
+                text="unsupported vcs {}".format(run["vcs_type"])
+            ) from e
 
         best_match = mimeparse.best_match(
             ["text/x-diff", "text/plain", "text/html"],

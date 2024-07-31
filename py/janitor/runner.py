@@ -16,8 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 __all__ = [
-    'committer_env',
-    'is_log_filename',
+    "committer_env",
+    "is_log_filename",
 ]
 
 import asyncio
@@ -949,9 +949,12 @@ class JenkinsBackchannel(Backchannel):
     async def get_log_file(self, name):
         if name != "worker.log":
             raise FileNotFoundError(name)
-        async with ClientSession() as session, session.get(
-            self.my_url / "logText/progressiveText", raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession() as session,
+            session.get(
+                self.my_url / "logText/progressiveText", raise_for_status=True
+            ) as resp,
+        ):
             return BytesIO(await resp.read())
 
     async def _get_job(self, session):
@@ -1013,26 +1016,33 @@ class PollingBackchannel(Backchannel):
         return f"<{type(self).__name__}({self.my_url!r})>"
 
     async def kill(self) -> None:
-        async with ClientSession() as session, session.post(
-            self.my_url / "kill",
-            headers={"Accept": "application/json"},
-            raise_for_status=True,
+        async with (
+            ClientSession() as session,
+            session.post(
+                self.my_url / "kill",
+                headers={"Accept": "application/json"},
+                raise_for_status=True,
+            ),
         ):
             pass
 
     async def list_log_files(self):
         # TODO(jelmer)
-        async with ClientSession() as session, session.get(
-            self.my_url / "logs",
-            headers={"Accept": "application/json"},
-            raise_for_status=True,
-        ) as resp:
+        async with (
+            ClientSession() as session,
+            session.get(
+                self.my_url / "logs",
+                headers={"Accept": "application/json"},
+                raise_for_status=True,
+            ) as resp,
+        ):
             return await resp.json()
 
     async def get_log_file(self, name):
-        async with ClientSession() as session, session.get(
-            self.my_url / "logs" / name, raise_for_status=True
-        ) as resp:
+        async with (
+            ClientSession() as session,
+            session.get(self.my_url / "logs" / name, raise_for_status=True) as resp,
+        ):
             return BytesIO(await resp.read())
 
     async def ping(self, expected_log_id):
@@ -1307,9 +1317,9 @@ async def store_run(
 
     if result_branches:
         roles = [role for (role, remote_name, br, r) in result_branches]
-        assert len(roles) == len(set(roles)), (
-            f"Duplicate result branches: {result_branches!r}"
-        )
+        assert len(roles) == len(
+            set(roles)
+        ), f"Duplicate result branches: {result_branches!r}"
         await conn.executemany(
             "INSERT INTO new_result_branch "
             "(run_id, role, remote_name, base_revision, revision) "

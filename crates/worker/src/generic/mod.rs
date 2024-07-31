@@ -1,10 +1,10 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::WorkingTree;
-use silver_platter::CommitPending;
 use silver_platter::codemod::{
     script_runner as generic_script_runner, CommandResult as GenericCommandResult,
     Error as GenericCodemodError,
 };
+use silver_platter::CommitPending;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
@@ -59,7 +59,10 @@ pub fn generic_make_changes(
         )),
         Err(GenericCodemodError::ScriptNotFound) => Err(WorkerFailure {
             code: "codemod-not-found".to_string(),
-            description: format!("Codemod script {} not found", shlex::try_join(argv.to_vec()).unwrap()),
+            description: format!(
+                "Codemod script {} not found",
+                shlex::try_join(argv.to_vec()).unwrap()
+            ),
             details: None,
             stage: vec!["codemod".to_string()],
             transient: None,
