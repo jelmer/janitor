@@ -293,9 +293,10 @@ async def parse_webhook(request, db):
 
 
 async def get_codebases(runner_url):
-    async with ClientSession() as session, session.get(
-        URL(runner_url) / "codebases", raise_for_status=True
-    ) as resp:
+    async with (
+        ClientSession() as session,
+        session.get(URL(runner_url) / "codebases", raise_for_status=True) as resp,
+    ):
         return await resp.json()
 
 

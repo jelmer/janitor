@@ -1,4 +1,4 @@
-use mailparse::{parse_mail};
+use mailparse::parse_mail;
 use select::document::Document;
 use select::predicate::{And, Attr, Name};
 use serde_json::Value;
