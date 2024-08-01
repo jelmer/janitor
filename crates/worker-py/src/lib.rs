@@ -97,6 +97,7 @@ struct Client(std::sync::Arc<janitor_worker::Client>);
 #[pymethods]
 impl Client {
     #[new]
+    #[pyo3(signature = (base_url, username=None, password=None, user_agent=None))]
     fn new(
         base_url: &str,
         username: Option<&str>,
@@ -124,6 +125,7 @@ impl Client {
         )))
     }
 
+    #[pyo3(signature = (node_name, my_url=None, jenkins_build_url=None, codebase=None, campaign=None))]
     fn get_assignment_raw<'a>(
         &self,
         py: Python<'a>,
@@ -158,6 +160,7 @@ impl Client {
         })
     }
 
+    #[pyo3(signature = (run_id, metadata, output_directory=None))]
     fn upload_results<'a>(
         &self,
         py: Python<'a>,
@@ -198,7 +201,8 @@ fn abort_run<'a>(
 }
 
 #[pyfunction]
-fn run_lintian<'a>(
+#[pyo3(signature = (output_directory, changes_names, profile=None, suppress_tags=None))]
+fn run_lintian(
     output_directory: &'_ str,
     changes_names: Vec<String>,
     profile: Option<&'_ str>,
@@ -457,6 +461,7 @@ impl Metadata {
         Ok(())
     }
 
+    #[pyo3(signature = (function, name=None, base_revision=None, revision=None))]
     fn add_branch(
         &mut self,
         function: &str,
@@ -477,7 +482,7 @@ impl Metadata {
 
     #[getter]
     fn get_codemod(&self) -> PyResult<Option<Py<PyAny>>> {
-        Ok(self.0.codemod.as_ref().map(|x| serde_json_to_py(x)))
+        Ok(self.0.codemod.as_ref().map(serde_json_to_py))
     }
 
     #[setter]
@@ -570,11 +575,12 @@ impl DebianCommandResult {
 
     #[getter]
     fn context(&self) -> Option<Py<PyAny>> {
-        self.0.context.as_ref().map(|x| serde_json_to_py(x))
+        self.0.context.as_ref().map(serde_json_to_py)
     }
 }
 
 #[pyfunction]
+#[pyo3(signature = (local_tree, subpath, argv, env, log_directory, resume_metadata=None, committer=None, update_changelog=None))]
 fn debian_make_changes(
     py: Python,
     local_tree: Bound<PyAny>,
@@ -653,11 +659,12 @@ impl GenericCommandResult {
 
     #[getter]
     fn context(&self) -> Option<Py<PyAny>> {
-        self.0.context.as_ref().map(|x| serde_json_to_py(x))
+        self.0.context.as_ref().map(serde_json_to_py)
     }
 }
 
 #[pyfunction]
+#[pyo3(signature = (local_tree, subpath, argv, env, log_directory, resume_metadata=None))]
 fn generic_make_changes(
     py: Python,
     local_tree: Bound<PyAny>,
