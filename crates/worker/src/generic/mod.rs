@@ -112,3 +112,84 @@ pub fn generic_make_changes(
         }),
     }
 }
+
+pub fn build_from_config(
+    local_tree: &WorkingTree,
+    subpath: &std::path::Path,
+    output_directory: &std::path::Path,
+    config: &serde_json::Value,
+    _env: HashMap<String, String>,
+) -> Result<serde_json::Value, WorkerFailure> {
+    let chroot = config.get("chroot").and_then(|v| v.as_str());
+    let dep_server_url = config.get("dep_server_url").and_then(|v| v.as_str());
+
+    build(
+        local_tree,
+        subpath,
+        output_directory,
+        chroot,
+        dep_server_url,
+    )
+}
+
+pub fn build(
+    local_tree: &WorkingTree,
+    subpath: &std::path::Path,
+    output_directory: &std::path::Path,
+    chroot: Option<&str>,
+    dep_server_url: Option<&str>,
+) -> Result<serde_json::Value, WorkerFailure> {
+    pyo3::import_exception!(janitor.generic.build, BuildFailure);
+    pyo3::Python::with_gil(|py| -> Result<serde_json::Value, WorkerFailure> {
+        use pyo3::prelude::*;
+        let m = py.import_bound("janitor.generic.build").unwrap();
+        let build = m.getattr("build").unwrap();
+
+        match build.call1((
+            local_tree.to_object(py),
+            subpath,
+            output_directory,
+            chroot,
+            dep_server_url,
+        )) {
+            Ok(_) => Ok(serde_json::Value::Null),
+            Err(e) => {
+                if e.is_instance_of::<BuildFailure>(py) {
+                    let value = e.value_bound(py);
+                    let code = value.getattr("code").unwrap().extract::<String>().unwrap();
+                    let description = value
+                        .getattr("description")
+                        .unwrap()
+                        .extract::<String>()
+                        .unwrap();
+                    let details = value
+                        .getattr("details")
+                        .unwrap()
+                        .extract::<Option<PyObject>>()
+                        .unwrap()
+                        .map(|x| crate::py_to_serde_json(x.bind(py)).unwrap());
+                    let stage = value
+                        .getattr("stage")
+                        .unwrap()
+                        .extract::<Vec<String>>()
+                        .unwrap();
+                    Err(WorkerFailure {
+                        code,
+                        description,
+                        details,
+                        stage: vec!["build".to_string()].into_iter().chain(stage).collect(),
+                        transient: None,
+                    })
+                } else {
+                    Err(WorkerFailure {
+                        code: "internal-error".to_string(),
+                        description: e.to_string(),
+                        details: None,
+                        stage: vec!["build".to_string()],
+                        transient: None,
+                    })
+                }
+            }
+        }
+    })
+}

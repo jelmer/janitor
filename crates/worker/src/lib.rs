@@ -774,3 +774,61 @@ pub trait Target {
         resume_metadata: Option<&Metadata>,
     ) -> Result<serde_json::Value, WorkerFailure>;
 }
+
+pub fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
+    if obj.is_none() {
+        Ok(serde_json::Value::Null)
+    } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
+        Ok(serde_json::Value::Bool(b.is_true()))
+    } else if let Ok(f) = obj.downcast::<pyo3::types::PyFloat>() {
+        Ok(serde_json::Value::Number(
+            serde_json::Number::from_f64(f.value()).unwrap(),
+        ))
+    } else if let Ok(s) = obj.downcast::<pyo3::types::PyString>() {
+        Ok(serde_json::Value::String(s.to_string_lossy().to_string()))
+    } else if let Ok(l) = obj.downcast::<pyo3::types::PyList>() {
+        Ok(serde_json::Value::Array(
+            l.iter()
+                .map(|x| py_to_serde_json(&x))
+                .collect::<PyResult<Vec<_>>>()?,
+        ))
+    } else if let Ok(d) = obj.downcast::<pyo3::types::PyDict>() {
+        let mut ret = serde_json::Map::new();
+        for (k, v) in d.iter() {
+            let k = k.extract::<String>()?;
+            let v = py_to_serde_json(&v)?;
+            ret.insert(k, v);
+        }
+        Ok(serde_json::Value::Object(ret))
+    } else {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            ("unsupported type",),
+        ))
+    }
+}
+
+pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> Py<PyAny>
+where
+    'b: 'a,
+{
+    Python::with_gil(|py| match value {
+        serde_json::Value::Null => py.None().into_py(py),
+        serde_json::Value::Bool(b) => pyo3::types::PyBool::new_bound(py, *b).into_py(py),
+        serde_json::Value::Number(n) => {
+            pyo3::types::PyFloat::new_bound(py, n.as_f64().unwrap()).into_py(py)
+        }
+        serde_json::Value::String(s) => {
+            pyo3::types::PyString::new_bound(py, s.as_str()).into_py(py)
+        }
+        serde_json::Value::Array(a) => {
+            pyo3::types::PyList::new_bound(py, a.iter().map(serde_json_to_py)).into_py(py)
+        }
+        serde_json::Value::Object(o) => {
+            let ret = pyo3::types::PyDict::new_bound(py);
+            for (k, v) in o.into_iter() {
+                ret.set_item(k, serde_json_to_py(v)).unwrap();
+            }
+            ret.into_py(py)
+        }
+    })
+}

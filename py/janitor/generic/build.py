@@ -137,39 +137,3 @@ def build_from_config(local_tree, subpath, output_directory, config, env):
         dep_server_url=dep_server_url,
     )
 
-
-def main():
-    import argparse
-    import json
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Path to configuration (JSON)")
-    parser.add_argument("output-directory", type=str, help="Output directory")
-    args = parser.parse_args()
-
-    import breezy.bzr  # noqa: F401
-    import breezy.git  # noqa: F401
-    from breezy.workingtree import WorkingTree
-
-    wt, subpath = WorkingTree.open_containing(".")
-
-    if args.config:
-        with open(args.config) as f:
-            config = json.load(f)
-    else:
-        config = {}
-
-    try:
-        result = build_from_config(
-            wt, subpath, args.output_directory, config=config, env=os.environ
-        )
-    except BuildFailure as e:
-        json.dump(e.json(), sys.stdout)
-        return 1
-
-    json.dump(result, sys.stdout, indent=4)
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
