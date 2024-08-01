@@ -13,10 +13,12 @@ pytest_plugins = ["aiohttp"]
 async def db():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
+        files = importlib.resources.files("janitor")
+        debian_files = importlib.resources.files("janitor.debian")
         try:
-            with importlib.resources.open_text("janitor", "state.sql") as f:
+            with files.joinpath("state.sql").open() as f:
                 await conn.execute(f.read())
-            with importlib.resources.open_text("janitor.debian", "debian.sql") as f:
+            with debian_files.joinpath("debian.sql").open() as f:
                 await conn.execute(f.read())
         finally:
             await conn.close()
