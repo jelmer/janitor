@@ -1,6 +1,5 @@
 use backoff::ExponentialBackoff;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 
 use breezyshim::tree::WorkingTree;
 pub use breezyshim::RevisionId;
@@ -24,6 +23,8 @@ pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG
 pub mod debian;
 
 pub mod generic;
+
+mod tee;
 
 pub async fn is_gce_instance() -> bool {
     match lookup_host("metadata.google.internal").await {
