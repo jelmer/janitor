@@ -22,6 +22,7 @@ stackdriver_logger = { version = "0.8", optional = true }
 url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { workspace = true }
+silver-platter = "0.5.27"
 
 [workspace.dependencies]
 pyo3 = { version = "0.22" }
