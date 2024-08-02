@@ -21,7 +21,7 @@ janitor.egg-info
 pyvenv.cfg
 lib
 lib64
-bin
+/bin
 man
 share
 .hypothesis

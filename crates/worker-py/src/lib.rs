@@ -35,62 +35,6 @@ fn gce_external_ip(py: Python) -> PyResult<Bound<PyAny>> {
     })
 }
 
-fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
-    if obj.is_none() {
-        Ok(serde_json::Value::Null)
-    } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
-        Ok(serde_json::Value::Bool(b.is_true()))
-    } else if let Ok(f) = obj.downcast::<pyo3::types::PyFloat>() {
-        Ok(serde_json::Value::Number(
-            serde_json::Number::from_f64(f.value()).unwrap(),
-        ))
-    } else if let Ok(s) = obj.downcast::<pyo3::types::PyString>() {
-        Ok(serde_json::Value::String(s.to_string_lossy().to_string()))
-    } else if let Ok(l) = obj.downcast::<pyo3::types::PyList>() {
-        Ok(serde_json::Value::Array(
-            l.iter()
-                .map(|x| py_to_serde_json(&x))
-                .collect::<PyResult<Vec<_>>>()?,
-        ))
-    } else if let Ok(d) = obj.downcast::<pyo3::types::PyDict>() {
-        let mut ret = serde_json::Map::new();
-        for (k, v) in d.iter() {
-            let k = k.extract::<String>()?;
-            let v = py_to_serde_json(&v)?;
-            ret.insert(k, v);
-        }
-        Ok(serde_json::Value::Object(ret))
-    } else {
-        Err(PyTypeError::new_err(("unsupported type",)))
-    }
-}
-
-fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> Py<PyAny>
-where
-    'b: 'a,
-{
-    Python::with_gil(|py| match value {
-        serde_json::Value::Null => py.None().into_py(py),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new_bound(py, *b).into_py(py),
-        serde_json::Value::Number(n) => {
-            pyo3::types::PyFloat::new_bound(py, n.as_f64().unwrap()).into_py(py)
-        }
-        serde_json::Value::String(s) => {
-            pyo3::types::PyString::new_bound(py, s.as_str()).into_py(py)
-        }
-        serde_json::Value::Array(a) => {
-            pyo3::types::PyList::new_bound(py, a.iter().map(serde_json_to_py)).into_py(py)
-        }
-        serde_json::Value::Object(o) => {
-            let ret = pyo3::types::PyDict::new_bound(py);
-            for (k, v) in o.into_iter() {
-                ret.set_item(k, serde_json_to_py(v)).unwrap();
-            }
-            ret.into_py(py)
-        }
-    })
-}
-
 #[pyclass]
 struct Client(std::sync::Arc<janitor_worker::Client>);
 
@@ -156,7 +100,7 @@ impl Client {
                     AssignmentError::EmptyQueue => EmptyQueue::new_err(()),
                 })?;
 
-            Ok(serde_json_to_py(&assignment))
+            Ok(janitor_worker::serde_json_to_py(&assignment))
         })
     }
 
@@ -177,7 +121,7 @@ impl Client {
                 .await
                 .map_err(|e| ResultUploadFailure::new_err(format!("{:?}", e)))?;
 
-            Ok(serde_json_to_py(&result))
+            Ok(janitor_worker::serde_json_to_py(&result))
         })
     }
 }
@@ -224,7 +168,7 @@ fn run_lintian(
             LintianOutputInvalid::new_err((e,))
         }
     })?;
-    Ok(serde_json_to_py(&result))
+    Ok(janitor_worker::serde_json_to_py(&result))
 }
 
 create_exception!(janitor_worker, WorkerFailure, pyo3::exceptions::PyException);
@@ -255,12 +199,12 @@ impl MetadataTarget {
 
     #[getter]
     fn get_details(&self) -> PyResult<Py<PyAny>> {
-        Ok(serde_json_to_py(&self.0.details))
+        Ok(janitor_worker::serde_json_to_py(&self.0.details))
     }
 
     #[setter]
     fn set_details(&mut self, details: &Bound<PyAny>) -> PyResult<()> {
-        self.0.details = py_to_serde_json(details)?;
+        self.0.details = janitor_worker::py_to_serde_json(details)?;
         Ok(())
     }
 }
@@ -482,12 +426,16 @@ impl Metadata {
 
     #[getter]
     fn get_codemod(&self) -> PyResult<Option<Py<PyAny>>> {
-        Ok(self.0.codemod.as_ref().map(serde_json_to_py))
+        Ok(self
+            .0
+            .codemod
+            .as_ref()
+            .map(janitor_worker::serde_json_to_py))
     }
 
     #[setter]
     fn set_codemod(&mut self, codemod: Option<Bound<PyAny>>) -> PyResult<()> {
-        self.0.codemod = codemod.map(|c| py_to_serde_json(&c).unwrap());
+        self.0.codemod = codemod.map(|c| janitor_worker::py_to_serde_json(&c).unwrap());
         Ok(())
     }
 
@@ -502,7 +450,9 @@ impl Metadata {
         let failure = janitor_worker::WorkerFailure {
             code: args.0,
             description: args.1,
-            details: args.2.map(|d| py_to_serde_json(&d).unwrap()),
+            details: args
+                .2
+                .map(|d| janitor_worker::py_to_serde_json(&d).unwrap()),
             stage: args.3,
             transient: args.4,
         };
@@ -522,14 +472,14 @@ impl Metadata {
     #[setter]
     fn set_target_details(&mut self, details: &Bound<PyAny>) -> PyResult<()> {
         if let Some(t) = self.0.target.as_mut() {
-            t.details = py_to_serde_json(details).unwrap();
+            t.details = janitor_worker::py_to_serde_json(details).unwrap();
         }
         Ok(())
     }
 
     fn json(&self) -> Py<PyAny> {
         let json = serde_json::to_value(&self.0).unwrap();
-        serde_json_to_py(&json)
+        janitor_worker::serde_json_to_py(&json)
     }
 }
 
@@ -575,7 +525,10 @@ impl DebianCommandResult {
 
     #[getter]
     fn context(&self) -> Option<Py<PyAny>> {
-        self.0.context.as_ref().map(serde_json_to_py)
+        self.0
+            .context
+            .as_ref()
+            .map(janitor_worker::serde_json_to_py)
     }
 }
 
@@ -600,7 +553,7 @@ fn debian_make_changes(
         env,
         &log_directory,
         resume_metadata
-            .map(|m| py_to_serde_json(&m).unwrap())
+            .map(|m| janitor_worker::py_to_serde_json(&m).unwrap())
             .as_ref(),
         committer,
         update_changelog,
@@ -610,7 +563,7 @@ fn debian_make_changes(
         WorkerFailure::new_err((
             e.code,
             e.description,
-            e.details.map(|e| serde_json_to_py(&e)),
+            e.details.map(|e| janitor_worker::serde_json_to_py(&e)),
             e.stage,
             e.transient,
         ))
@@ -659,7 +612,10 @@ impl GenericCommandResult {
 
     #[getter]
     fn context(&self) -> Option<Py<PyAny>> {
-        self.0.context.as_ref().map(serde_json_to_py)
+        self.0
+            .context
+            .as_ref()
+            .map(janitor_worker::serde_json_to_py)
     }
 }
 
@@ -682,7 +638,7 @@ fn generic_make_changes(
         env,
         &log_directory,
         resume_metadata
-            .map(|m| py_to_serde_json(&m).unwrap())
+            .map(|m| janitor_worker::py_to_serde_json(&m).unwrap())
             .as_ref(),
     )
     .map(GenericCommandResult)
@@ -690,7 +646,7 @@ fn generic_make_changes(
         WorkerFailure::new_err((
             e.code,
             e.description,
-            e.details.map(|e| serde_json_to_py(&e)),
+            e.details.map(|e| janitor_worker::serde_json_to_py(&e)),
             e.stage,
             e.transient,
         ))
