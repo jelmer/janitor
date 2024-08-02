@@ -193,3 +193,58 @@ pub fn build(
         }
     })
 }
+
+pub struct GenericTarget {}
+
+impl crate::Target for GenericTarget {
+    fn name(&self) -> String {
+        "generic".to_string()
+    }
+
+    fn build(
+        &self,
+        local_tree: &WorkingTree,
+        subpath: &std::path::Path,
+        output_directory: &std::path::Path,
+        config: &crate::BuildConfig,
+    ) -> Result<serde_json::Value, WorkerFailure> {
+        build_from_config(
+            local_tree,
+            subpath,
+            output_directory,
+            &config,
+            HashMap::new(),
+        )
+    }
+
+    fn validate(
+        &self,
+        _local_tree: &WorkingTree,
+        _subpath: &std::path::Path,
+        _config: &crate::ValidateConfig,
+    ) -> Result<(), WorkerFailure> {
+        Ok(())
+    }
+
+    fn make_changes(
+        &self,
+        local_tree: &WorkingTree,
+        subpath: &std::path::Path,
+        argv: &[&str],
+        log_directory: &std::path::Path,
+        resume_metadata: Option<&crate::Metadata>,
+    ) -> Result<serde_json::Value, WorkerFailure> {
+        generic_make_changes(
+            local_tree,
+            subpath,
+            argv,
+            HashMap::new(),
+            log_directory,
+            resume_metadata
+                .as_ref()
+                .map(|x| serde_json::to_value(x).unwrap())
+                .as_ref(),
+        )
+        .map(|x| serde_json::to_value(&x).unwrap())
+    }
+}
