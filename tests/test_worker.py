@@ -271,7 +271,7 @@ def test_run_worker_new(tmp_path, vcs_type, brz_identity):
         assert tags == {"run-id": b.last_revision()}
     assert metadata.json() == {
         "branch_url": None,
-        "branches": [["main", "", None, b.last_revision().decode("utf-8")]],
+        "branches": [["main", "", "null:", b.last_revision().decode("utf-8")]],
         "codebase": "mycodebase",
         "codemod": None,
         "command": ["sh", "-c", "echo all check test: > Makefile"],
@@ -329,7 +329,7 @@ def test_run_worker_build_failure(tmp_path, vcs_type, brz_identity):
         run_id_revid = tags["run-id"]
     assert metadata.json() == {
         "branch_url": None,
-        "branches": [["main", "", None, run_id_revid.decode("utf-8")]],
+        "branches": [["main", "", "null:", run_id_revid.decode("utf-8")]],
         "codebase": "mycodebase",
         "codemod": None,
         "command": ["sh", "-c", "echo foo > bar"],
