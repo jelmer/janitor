@@ -34,7 +34,7 @@ from ognibuild.debian.fix_build import build_incrementally, default_fixers
 from ognibuild.session import Session, SessionSetupFailure
 from ognibuild.session.plain import PlainSession
 from ognibuild.session.schroot import SchrootSession
-from silver_platter.debian import MissingUpstreamTarball
+from breezy.plugins.debian.upstream import MissingUpstreamTarball
 
 from . import tree_set_changelog_version
 
