@@ -24,6 +24,8 @@ pub mod debian;
 
 pub mod generic;
 
+pub mod vcs;
+
 mod tee;
 
 pub async fn is_gce_instance() -> bool {
