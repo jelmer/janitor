@@ -3,6 +3,7 @@ use janitor_worker::{AssignmentError, Remote, RevisionId};
 use pyo3::create_exception;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
+use janitor_worker::debian::DebUpdateChangelog;
 
 create_exception!(
     janitor._worker,
@@ -556,7 +557,11 @@ fn debian_make_changes(
             .map(|m| janitor_worker::py_to_serde_json(&m).unwrap())
             .as_ref(),
         committer,
-        update_changelog,
+        match update_changelog {
+            None => DebUpdateChangelog::Auto,
+            Some(true) => DebUpdateChangelog::Update,
+            Some(false) => DebUpdateChangelog::Leave,
+        }
     )
     .map(DebianCommandResult)
     .map_err(|e| {
