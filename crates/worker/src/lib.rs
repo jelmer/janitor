@@ -714,37 +714,6 @@ mod tests {
     }
 }
 
-#[derive(Debug, Default)]
-enum DebUpdateChangelog {
-    #[default]
-    Auto,
-    Update,
-    Leave,
-}
-
-impl std::str::FromStr for DebUpdateChangelog {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "auto" => Ok(DebUpdateChangelog::Auto),
-            "update" => Ok(DebUpdateChangelog::Update),
-            "leave" => Ok(DebUpdateChangelog::Leave),
-            _ => Err(format!("Invalid value for deb-update-changelog: {}", s)),
-        }
-    }
-}
-
-impl std::fmt::Display for DebUpdateChangelog {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            DebUpdateChangelog::Auto => write!(f, "auto"),
-            DebUpdateChangelog::Update => write!(f, "update"),
-            DebUpdateChangelog::Leave => write!(f, "leave"),
-        }
-    }
-}
-
 type BuildConfig = serde_json::Value;
 type ValidateConfig = serde_json::Value;
 
