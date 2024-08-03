@@ -27,6 +27,7 @@ silver-platter = { workspace = true, features = ["debian"] }
 shlex = "1.3.0"
 askama_axum = { version = "0.4.0", features = ["serde-json", "serde-yaml", "humansize", "urlencode", "markdown"] }
 nix = { version = "0.29.0", features = ["fs"] }
+percent-encoding = "2.3.1"
 
 [features]
 default = ["debian", "cli"]
@@ -37,3 +38,6 @@ cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 name = "janitor-worker"
 path = "src/bin/worker.rs"
 required-features = ["cli"]
+
+[dev-dependencies]
+tempfile = "3.11.0"
