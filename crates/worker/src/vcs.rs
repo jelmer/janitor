@@ -1,6 +1,7 @@
 use breezyshim::error::Error as BrzError;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
+use std::collections::HashMap;
 use url::Url;
 
 /// Push a branch to a new location.
@@ -218,6 +219,124 @@ impl Vcs for BzrVcs {
     }
 }
 
+fn import_branches_git(
+    repo_url: &Url,
+    local_branch: &dyn breezyshim::branch::Branch,
+    campaign: &str,
+    log_id: &str,
+    branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+    tags: Vec<(String, Option<RevisionId>)>,
+    update_current: bool,
+) -> Result<(), BrzError> {
+    let vcs_result_controldir = match breezyshim::controldir::open(repo_url, None) {
+        Err(BrzError::NotBranchError(..)) => {
+            let transport = breezyshim::transport::get_transport(repo_url, None).unwrap();
+            if !transport.has(".")? {
+                match transport.ensure_base() {
+                    Err(BrzError::NoSuchFile(..)) => {
+                        transport.create_prefix()?;
+                    }
+                    Ok(_) => (),
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+            // The server is expected to have repositories ready for us, unless we're working
+            // locally.
+            let format = breezyshim::controldir::FORMAT_REGISTRY
+                .make_controldir("git-bare")
+                .unwrap();
+            format.initialize(repo_url)?
+        }
+        Ok(cd) => cd,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    let repo = vcs_result_controldir.open_repository().unwrap();
+
+    // Clone for the sake of the closure
+    let log_id_ = log_id.to_string();
+    let campaign_ = campaign.to_string();
+    let repo_ = local_branch.repository();
+
+    let get_changed_refs = move |_refs: &HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)>| -> HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)> {
+        let mut changed_refs = HashMap::new();
+        for (f, _n, _br, r) in branches.iter() {
+            let tagname = format!("refs/tags/run/{}/{}", log_id_, f);
+            changed_refs.insert(
+                tagname.as_bytes().to_vec(),
+                if let Some(r) = r {
+                    (repo_.lookup_bzr_revision_id(r).unwrap().0, Some(r.clone()))
+                } else {
+                    (breezyshim::git::ZERO_SHA.to_vec(), r.clone())
+                },
+            );
+            if update_current {
+                let branchname = format!("refs/heads/{}/{}", campaign_, f);
+                // TODO(jelmer): Ideally this would be a symref:
+                changed_refs.insert(branchname.as_bytes().to_vec(), changed_refs.get(tagname.as_bytes()).unwrap().clone());
+            }
+        }
+        for (n, r) in tags.iter() {
+            let tagname = format!("refs/tags/{}/{}", log_id_, n);
+            changed_refs.insert(
+                tagname.as_bytes().to_vec(),
+                (
+                    repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                    r.clone(),
+                ),
+            );
+            if update_current {
+                let tagname = format!("refs/tags/{}", n);
+                changed_refs.insert(
+                    tagname.as_bytes().to_vec(),
+                    (
+                        repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                        r.clone(),
+                    ),
+                );
+            }
+        }
+        changed_refs
+    };
+
+    let inter = breezyshim::interrepository::get(&local_branch.repository(), &repo).unwrap();
+    inter.fetch_refs(
+        std::sync::Mutex::new(Box::new(get_changed_refs)),
+        false,
+        true,
+    )?;
+    Ok(())
+}
+
+pub struct GitVcs;
+
+impl Vcs for GitVcs {
+    fn import_branches(
+        &self,
+        repo_url: &Url,
+        local_branch: &dyn breezyshim::branch::Branch,
+        campaign: &str,
+        log_id: &str,
+        branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+        tags: Vec<(String, Option<RevisionId>)>,
+        update_current: bool,
+    ) -> Result<(), BrzError> {
+        import_branches_git(
+            repo_url,
+            local_branch,
+            campaign,
+            log_id,
+            branches,
+            tags,
+            update_current,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +430,60 @@ mod tests {
                 "log_id".to_string() => revid1.clone(),
             }
         );
+    }
+
+    #[test]
+    fn test_import_branches_git() {
+        let td = tempfile::tempdir().unwrap();
+        let source_tree = breezyshim::controldir::create_standalone_workingtree(
+            &td.path().join("source"),
+            &breezyshim::controldir::FORMAT_REGISTRY
+                .make_controldir("git")
+                .unwrap(),
+        )
+        .unwrap();
+        let target_path = td.path().join("target");
+        let target_url = Url::from_directory_path(&target_path).unwrap();
+        let revid1 = source_tree
+            .commit("Initial commit", None, None, None)
+            .unwrap();
+        let target = breezyshim::controldir::create(
+            &target_url,
+            &breezyshim::controldir::FORMAT_REGISTRY
+                .make_controldir("git-bare")
+                .unwrap(),
+            None,
+        )
+        .unwrap();
+        GitVcs
+            .import_branches(
+                &target_url,
+                source_tree.branch().as_ref(),
+                "campaign",
+                "log_id",
+                vec![(
+                    "main".to_string(),
+                    "foo".to_string(),
+                    None,
+                    Some(revid1.clone()),
+                )],
+                vec![("tag".to_string(), Some(revid1.clone()))],
+                true,
+            )
+            .unwrap();
+        let target_branch_foo = target.open_branch(Some("campaign/main")).unwrap();
+        assert_eq!(
+            &target_branch_foo.last_revision(),
+            &revid1
+        );
+        assert_eq!(
+            &target_branch_foo.tags().unwrap().get_tag_dict().unwrap(),
+            &maplit::hashmap! {
+                "run/log_id/main".to_string() => revid1.clone(),
+                "log_id/tag".to_string() => revid1.clone(),
+                "tag".to_string() => revid1.clone(),
+            }
+        );
+        std::mem::drop(td);
     }
 }
