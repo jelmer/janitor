@@ -468,22 +468,22 @@ mod tests {
                     Some(revid1.clone()),
                 )],
                 vec![("tag".to_string(), Some(revid1.clone()))],
-                false,
+                true,
             )
             .unwrap();
-        let target_branch_foo = breezyshim::branch::open(
-            &Url::from_directory_path(target_path.join("campaign")).unwrap(),
-        )
-        .unwrap();
+        let target_branch_foo = target.open_branch(Some("campaign/main")).unwrap();
         assert_eq!(
             &target_branch_foo.last_revision(),
-            &breezyshim::RevisionId::null()
+            &revid1
         );
         assert_eq!(
             &target_branch_foo.tags().unwrap().get_tag_dict().unwrap(),
             &maplit::hashmap! {
-                "log_id".to_string() => revid1.clone(),
+                "run/log_id/main".to_string() => revid1.clone(),
+                "log_id/tag".to_string() => revid1.clone(),
+                "tag".to_string() => revid1.clone(),
             }
         );
+        std::mem::drop(td);
     }
 }
