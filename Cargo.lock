@@ -530,9 +530,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.159"
+version = "0.1.161"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "073fa8c3ffbd3dc4f809be805c7e8083f18273315d56b8c2f3284741d4fd0d1a"
+checksum = "35bdb669acba37ab7711201bd4c46b1b9b5e518a4fc2e40168bb6dbc339b520b"
 dependencies = [
  "chrono",
  "ctor",
@@ -938,9 +938,9 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
-version = "0.158.7"
+version = "0.158.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9e1a293def727c819af5616cd60603dc69191d3e0323860395051936dd6325b"
+checksum = "9ec74e3feec53ea8cca6bce6941facaba309f40b18919c0ea66c262d301e5415"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -3277,9 +3277,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "2.1.2"
+version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29993a25686778eb88d4189742cd713c9bce943bc54251a33509dc63cbacf73d"
+checksum = "196fe16b00e106300d3e45ecfcb764fa292a535d7326a29a5875c579c7417425"
 dependencies = [
  "base64 0.22.1",
  "rustls-pki-types",
@@ -3488,9 +3488,9 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.5.28"
+version = "0.5.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd36da8178dda7ba7fe32c351f2cb6a36c58132a6b70f13b1f03dd1157d86bd8"
+checksum = "f6b24928da8681e75a950f95478da8a1f0372c83af91013042146470a8689cb0"
 dependencies = [
  "breezyshim",
  "chrono",
