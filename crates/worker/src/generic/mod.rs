@@ -13,7 +13,7 @@ pub fn generic_make_changes(
     local_tree: &WorkingTree,
     subpath: &Path,
     argv: &[&str],
-    env: HashMap<String, String>,
+    env: &HashMap<String, String>,
     log_directory: &Path,
     resume_metadata: Option<&serde_json::Value>,
 ) -> std::result::Result<GenericCommandResult, WorkerFailure> {
@@ -42,7 +42,7 @@ pub fn generic_make_changes(
         CommitPending::Auto,
         resume_metadata,
         committer.as_deref(),
-        Some(env),
+        Some(env.clone()),
         f.into(),
     ) {
         Ok(r) => Ok(r),
@@ -118,7 +118,7 @@ pub fn build_from_config(
     subpath: &std::path::Path,
     output_directory: &std::path::Path,
     config: &serde_json::Value,
-    _env: HashMap<String, String>,
+    _env: &HashMap<String, String>,
 ) -> Result<serde_json::Value, WorkerFailure> {
     let chroot = config.get("chroot").and_then(|v| v.as_str());
     let dep_server_url = config.get("dep_server_url").and_then(|v| v.as_str());
@@ -194,7 +194,15 @@ pub fn build(
     })
 }
 
-pub struct GenericTarget {}
+pub struct GenericTarget {
+    env: HashMap<String, String>,
+}
+
+impl GenericTarget {
+    pub fn new(env: HashMap<String, String>) -> Self {
+        Self { env }
+    }
+}
 
 impl crate::Target for GenericTarget {
     fn name(&self) -> String {
@@ -208,13 +216,7 @@ impl crate::Target for GenericTarget {
         output_directory: &std::path::Path,
         config: &crate::BuildConfig,
     ) -> Result<serde_json::Value, WorkerFailure> {
-        build_from_config(
-            local_tree,
-            subpath,
-            output_directory,
-            &config,
-            HashMap::new(),
-        )
+        build_from_config(local_tree, subpath, output_directory, &config, &self.env)
     }
 
     fn validate(
@@ -232,19 +234,16 @@ impl crate::Target for GenericTarget {
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,
-        resume_metadata: Option<&crate::Metadata>,
-    ) -> Result<serde_json::Value, WorkerFailure> {
+        resume_metadata: Option<&serde_json::Value>,
+    ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure> {
         generic_make_changes(
             local_tree,
             subpath,
             argv,
-            HashMap::new(),
+            &self.env,
             log_directory,
-            resume_metadata
-                .as_ref()
-                .map(|x| serde_json::to_value(x).unwrap())
-                .as_ref(),
+            resume_metadata,
         )
-        .map(|x| serde_json::to_value(&x).unwrap())
+        .map(|x| Box::new(x) as Box<dyn silver_platter::CodemodResult>)
     }
 }

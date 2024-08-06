@@ -25,7 +25,7 @@ fn main() {
         serde_json::Value::Null
     };
 
-    match janitor_worker::generic::build_from_config(
+    match janitor_worker::debian::build_from_config(
         &wt,
         &subpath,
         &args.output_directory,

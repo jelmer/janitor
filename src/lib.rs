@@ -3,3 +3,5 @@ pub mod logging;
 pub mod publish;
 pub mod state;
 pub mod vcs;
+
+pub mod api;

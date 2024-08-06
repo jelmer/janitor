@@ -1,23 +1,24 @@
-use backoff::ExponentialBackoff;
 use pyo3::prelude::*;
 
-use breezyshim::tree::WorkingTree;
+use breezyshim::controldir::ControlDirFormat;
+use breezyshim::error::Error as BrzError;
+use breezyshim::transport::Transport;
+use breezyshim::tree::{MutableTree, WorkingTree};
 pub use breezyshim::RevisionId;
-use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue};
-use reqwest::multipart::{Form, Part};
-use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
 
 use std::net::IpAddr;
-use std::path::Path;
-use tokio::io::AsyncReadExt;
 use tokio::net::lookup_host;
-use tokio::time::Duration;
+
+use janitor::api::worker::{Metadata, WorkerFailure};
+use janitor::vcs::VcsType;
+
+use url::Url;
 
 pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG_VERSION"), ")");
+
+pub mod client;
 
 #[cfg(feature = "debian")]
 pub mod debian;
@@ -70,581 +71,6 @@ pub fn get_build_arch() -> String {
     .unwrap()
     .trim()
     .to_owned()
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WorkerFailure {
-    pub code: String,
-    pub description: String,
-    pub details: Option<serde_json::Value>,
-    pub stage: Vec<String>,
-    pub transient: Option<bool>,
-}
-
-impl std::fmt::Display for WorkerFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.description)
-    }
-}
-
-impl std::error::Error for WorkerFailure {}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Codemod {
-    pub command: String,
-    pub environment: HashMap<String, String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Build {
-    pub target: String,
-    pub config: HashMap<String, String>,
-    pub environment: Option<HashMap<String, String>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Branch {
-    pub cached_url: Option<Url>,
-    pub vcs_type: String,
-    pub url: Url,
-    pub subpath: Option<String>,
-    pub additional_colocated_branches: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TargetRepository {
-    pub url: Url,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Assignment {
-    pub id: String,
-    pub queue_id: u64,
-    pub campaign: String,
-    pub codebase: String,
-    #[serde(rename = "force-build")]
-    pub force_build: bool,
-    pub branch: Branch,
-    pub resume: Option<Branch>,
-    pub target_repository: TargetRepository,
-    #[serde(rename = "skip-setup-validation")]
-    pub skip_setup_validation: bool,
-    #[serde(rename = "default-empty")]
-    pub default_empty: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Remote {
-    pub url: Url,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TargetDetails {
-    pub name: String,
-    pub details: serde_json::Value,
-}
-
-impl TargetDetails {
-    pub fn new(name: String, details: serde_json::Value) -> Self {
-        Self { name, details }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
-pub struct Metadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub queue_id: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub campaign: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<chrono::NaiveDateTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub finish_time: Option<chrono::NaiveDateTime>,
-    pub command: Option<Vec<String>>,
-    pub codebase: Option<String>,
-    pub vcs_type: Option<String>,
-    pub branch_url: Option<Url>,
-    pub subpath: Option<String>,
-    pub main_branch_revision: Option<RevisionId>,
-    pub revision: Option<RevisionId>,
-    pub codemod: Option<serde_json::Value>,
-    pub remotes: HashMap<String, Remote>,
-    pub refreshed: Option<bool>,
-    pub value: Option<u64>,
-    pub target_branch_url: Option<Url>,
-    pub branches: Vec<(
-        String,
-        Option<String>,
-        Option<RevisionId>,
-        Option<RevisionId>,
-    )>,
-    pub tags: Vec<(String, RevisionId)>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub target: Option<TargetDetails>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "details")]
-    pub failure_details: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stage: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transient: Option<bool>,
-}
-
-impl Metadata {
-    pub fn update(&mut self, failure: &WorkerFailure) {
-        self.code = Some(failure.code.clone());
-        self.description = Some(failure.description.clone());
-        self.failure_details = failure.details.clone();
-        self.stage = Some(failure.stage.join("/"));
-        self.transient = failure.transient;
-    }
-}
-
-#[derive(Debug)]
-pub enum AssignmentError {
-    Failure(String),
-    EmptyQueue,
-}
-
-impl std::fmt::Display for AssignmentError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            AssignmentError::Failure(msg) => write!(f, "AssignmentError: {}", msg),
-            AssignmentError::EmptyQueue => write!(f, "AssignmentError: EmptyQueue"),
-        }
-    }
-}
-
-impl std::error::Error for AssignmentError {}
-
-/// Get an assignment from the queue.
-pub async fn get_assignment_raw(
-    session: &reqwest::Client,
-    credentials: &Credentials,
-    my_url: Option<Url>,
-    base_url: &Url,
-    node_name: &str,
-    jenkins_build_url: Option<&str>,
-    codebase: Option<&str>,
-    campaign: Option<&str>,
-) -> Result<serde_json::Value, AssignmentError> {
-    let assign_url = base_url
-        .join("active-runs")
-        .map_err(|e| AssignmentError::Failure(format!("Failed to build assignment URL: {}", e)))?;
-    let build_arch = get_build_arch();
-    let mut json = serde_json::json!({
-        "node": node_name,
-        "archs": [build_arch],
-        "worker_link": null,
-        "codebase": codebase,
-        "campaign": campaign,
-    });
-    json["backchannel"] = if let Some(ref url) = my_url {
-        serde_json::json!({
-            "kind": "http",
-            "url": url.to_string(),
-        })
-    } else if let Some(url) = jenkins_build_url {
-        serde_json::json!({
-            "kind": "jenkins",
-            "url": url,
-        })
-    } else {
-        serde_json::json![null]
-    };
-    if let Some(url) = jenkins_build_url.or_else(|| my_url.as_ref().map(|u| u.as_str())) {
-        json["worker_link"] = serde_json::Value::String(url.to_string());
-    }
-    async fn send_assignment_request(
-        session: reqwest::Client,
-        assign_url: Url,
-        credentials: &Credentials,
-        json: &serde_json::Value,
-    ) -> Result<Response, ReqwestError> {
-        let mut builder = session.post(assign_url);
-        builder = credentials.set_credentials(builder);
-        builder = builder.header("Content-Type", "application/json");
-        debug!("Sending assignment request: {:?}", json);
-        builder = builder.json(json);
-        builder.send().await
-    }
-    let assignment = backoff::future::retry(ExponentialBackoff::default(), || async {
-        let session = session.clone();
-        let assign_url = assign_url.clone();
-        match send_assignment_request(session, assign_url, credentials, &json).await {
-            Ok(resp) => {
-                if resp.status().as_u16() == StatusCode::CREATED {
-                    let data = resp.json::<serde_json::Value>().await.map_err(|e| {
-                        backoff::Error::Permanent(AssignmentError::Failure(format!(
-                            "Failed to parse assignment response: {}",
-                            e
-                        )))
-                    })?;
-                    Ok(data)
-                } else if resp.status().as_u16() == 503 {
-                    let json = resp.json::<serde_json::Value>().await.map_err(|e| {
-                        backoff::Error::Permanent(AssignmentError::Failure(format!(
-                            "Failed to parse assignment response: {}",
-                            e
-                        )))
-                    })?;
-                    if json["reason"] == "queue empty" {
-                        Err(backoff::Error::Permanent(AssignmentError::EmptyQueue))
-                    } else {
-                        Err(backoff::Error::transient(AssignmentError::Failure(
-                            format!("Failed to get assignment: {:?}", json),
-                        )))
-                    }
-                } else if resp.status().is_server_error() {
-                    Err(backoff::Error::transient(AssignmentError::Failure(
-                        format!("Failed to get assignment: {:?}", resp),
-                    )))
-                } else {
-                    let data = resp.text().await.map_err(|e| {
-                        backoff::Error::permanent(AssignmentError::Failure(format!(
-                            "Failed to read assignment response: {}",
-                            e
-                        )))
-                    })?;
-                    Err(backoff::Error::permanent(AssignmentError::Failure(data)))
-                }
-            }
-            Err(e) => Err(backoff::Error::transient(AssignmentError::Failure(
-                e.to_string(),
-            ))),
-        }
-    })
-    .await?;
-    debug!("Got assignment: {:?}", assignment);
-    Ok(assignment)
-}
-
-/// Get an assignment from the queue.
-///
-/// # Arguments
-/// * `session` - A reqwest session.
-/// * `credentials` - Credentials for the server.
-/// * `my_url` - The URL of the worker.
-/// * `base_url` - The base URL of the server.
-/// * `node_name` - The name of the node.
-/// * `jenkins_build_url` - The URL of the Jenkins build.
-/// * `codebase` - Request an assignment for a specific codebase.
-/// * `campaign` - Request an assignment for a specific campaign.
-///
-/// # Returns
-///
-/// An assignment.
-pub async fn get_assignment(
-    session: &reqwest::Client,
-    credentials: &Credentials,
-    my_url: Option<Url>,
-    base_url: &Url,
-    node_name: &str,
-    jenkins_build_url: Option<&str>,
-    codebase: Option<&str>,
-    campaign: Option<&str>,
-) -> Result<Assignment, AssignmentError> {
-    let assignment = get_assignment_raw(
-        session,
-        credentials,
-        my_url,
-        base_url,
-        node_name,
-        jenkins_build_url,
-        codebase,
-        campaign,
-    )
-    .await?;
-    serde_json::from_value(assignment)
-        .map_err(|e| AssignmentError::Failure(format!("Failed to parse assignment: {}", e)))
-}
-
-pub struct Client {
-    client: reqwest::Client,
-    base_url: Url,
-    credentials: Credentials,
-}
-
-pub enum Credentials {
-    None,
-    Bearer {
-        token: String,
-    },
-    Basic {
-        username: String,
-        password: Option<String>,
-    },
-}
-
-impl Credentials {
-    fn set_credentials(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self {
-            Credentials::None => builder,
-            Credentials::Basic { username, password } => {
-                builder.basic_auth(username, password.as_ref())
-            }
-            Credentials::Bearer { token } => builder.bearer_auth(token),
-        }
-    }
-}
-
-impl Client {
-    pub fn new(base_url: Url, credentials: Credentials, user_agent: &str) -> Self {
-        let mut builder = reqwest::Client::builder();
-        builder = builder.user_agent(user_agent);
-        Self {
-            client: builder.build().unwrap(),
-            base_url,
-            credentials,
-        }
-    }
-
-    pub async fn get_assignment(
-        &self,
-        my_url: Option<Url>,
-        node_name: &str,
-        jenkins_build_url: Option<&str>,
-        codebase: Option<&str>,
-        campaign: Option<&str>,
-    ) -> Result<Assignment, AssignmentError> {
-        get_assignment(
-            &self.client,
-            &self.credentials,
-            my_url,
-            &self.base_url,
-            node_name,
-            jenkins_build_url,
-            codebase,
-            campaign,
-        )
-        .await
-    }
-
-    pub async fn get_assignment_raw(
-        &self,
-        my_url: Option<Url>,
-        node_name: &str,
-        jenkins_build_url: Option<&str>,
-        codebase: Option<&str>,
-        campaign: Option<&str>,
-    ) -> Result<serde_json::Value, AssignmentError> {
-        get_assignment_raw(
-            &self.client,
-            &self.credentials,
-            my_url,
-            &self.base_url,
-            node_name,
-            jenkins_build_url,
-            codebase,
-            campaign,
-        )
-        .await
-    }
-
-    pub async fn upload_results(
-        &self,
-        run_id: &str,
-        metadata: &Metadata,
-        output_directory: Option<&Path>,
-    ) -> Result<serde_json::Value, UploadFailure> {
-        upload_results(
-            &self.client,
-            &self.credentials,
-            &self.base_url,
-            run_id,
-            metadata,
-            output_directory,
-        )
-        .await
-    }
-}
-
-pub async fn bundle_results<'a>(
-    metadata: &'a Metadata,
-    directory: Option<&'a Path>,
-) -> Result<Form, Box<dyn Error + Send + Sync>> {
-    let mut form = Form::new();
-
-    let json_part = Part::text(serde_json::to_string(metadata)?)
-        .file_name("result.json")
-        .mime_str("application/json")?;
-    form = form.part("metadata", json_part);
-
-    if let Some(directory) = directory {
-        let mut dir = tokio::fs::read_dir(directory).await?;
-
-        while let Some(entry) = dir.next_entry().await? {
-            if entry.file_type().await?.is_file() {
-                let mut file = tokio::fs::File::open(entry.path()).await?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer).await?;
-
-                let part = Part::bytes(buffer)
-                    .file_name(entry.file_name().to_string_lossy().into_owned())
-                    .mime_str("application/octet-stream")?;
-                form = form.part("file", part);
-            }
-        }
-    }
-
-    Ok(form)
-}
-
-#[derive(Debug)]
-pub struct UploadFailure(String);
-
-impl std::fmt::Display for UploadFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for UploadFailure {}
-
-pub async fn upload_results(
-    client: &reqwest::Client,
-    credentials: &Credentials,
-    base_url: &Url,
-    run_id: &str,
-    metadata: &Metadata,
-    output_directory: Option<&Path>,
-) -> Result<serde_json::Value, UploadFailure> {
-    backoff::future::retry(ExponentialBackoff::default(), || async {
-        let finish_url = base_url
-            .join(&format!("active-runs/{}/finish", run_id))
-            .map_err(|e| UploadFailure(format!("Error building finish URL: {}", e)))?;
-        log::info!("Uploading results to {}", &finish_url);
-        let builder = client.post(finish_url).timeout(Duration::from_secs(60));
-        let builder = credentials.set_credentials(builder);
-        log::debug!("Uploading results: {}", serde_json::to_string(metadata).unwrap());
-        let bundle: Form = bundle_results(metadata, output_directory)
-            .await
-            .map_err(|e| {
-                backoff::Error::permanent(UploadFailure(format!("Error creating multipart: {}", e)))
-            })?;
-        let response = builder.multipart(bundle).send().await.map_err(|e| {
-            backoff::Error::permanent(UploadFailure(format!("Error creating multipart: {}", e)))
-        })?;
-
-        match response.status() {
-            StatusCode::NOT_FOUND => {
-                let resp_json = response.json::<serde_json::Value>().await.map_err(|e| {
-                    backoff::Error::permanent(UploadFailure(format!(
-                        "Error parsing 404 response: {}",
-                        e
-                    )))
-                })?;
-                let reason = resp_json
-                    .get("reason")
-                    .and_then(|r| r.as_str())
-                    .unwrap_or("Runner returned 404");
-                Err(backoff::Error::permanent(
-                    UploadFailure(reason.to_string()),
-                ))
-            }
-            StatusCode::BAD_GATEWAY | StatusCode::SERVICE_UNAVAILABLE => {
-                let status = response.status();
-                let text = response.text().await.map_err(|e| {
-                    backoff::Error::transient(UploadFailure(format!(
-                        "Error reading response text for {}: {}",
-                        status,
-                        e
-                    )))
-                })?;
-                Err(backoff::Error::transient(UploadFailure(format!(
-                    "RetriableResultUploadFailure: Unable to submit result: {}: {}",
-                    text, status
-                ))))
-            }
-            StatusCode::OK | StatusCode::CREATED => {
-                let json = response.json::<serde_json::Value>().await.map_err(|e| {
-                    backoff::Error::permanent(UploadFailure(format!(
-                        "Error parsing response: {}",
-                        e
-                    )))
-                })?;
-                if let Some(output_directory) = output_directory {
-                    let mut local_filenames: std::collections::HashSet<_> =
-                        std::collections::HashSet::new();
-                    let mut read_dir =
-                        tokio::fs::read_dir(output_directory).await.map_err(|e| {
-                            backoff::Error::permanent(UploadFailure(format!(
-                                "Error reading output directory: {}",
-                                e
-                            )))
-                        })?;
-                    while let Some(entry) = read_dir.next_entry().await.map_err(|e| {
-                        backoff::Error::permanent(UploadFailure(format!(
-                            "Error reading output directory: {}",
-                            e
-                        )))
-                    })? {
-                        let file_type = entry.file_type().await.map_err(|e| {
-                            backoff::Error::permanent(UploadFailure(format!(
-                                "Error reading output directory: {}",
-                                e
-                            )))
-                        })?;
-                        if file_type.is_file() {
-                            local_filenames.insert(entry.file_name().to_string_lossy().to_string());
-                        }
-                    }
-
-                    let runner_filenames: std::collections::HashSet<_> = json
-                        .get("filenames")
-                        .and_then(|f| f.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|name| name.as_str())
-                                .map(|name| name.to_owned())
-                                .collect()
-                        })
-                        .unwrap_or_else(std::collections::HashSet::new);
-
-                    if local_filenames != runner_filenames {
-                        log::warn!(
-                        "Difference between local filenames and runner reported filenames: {:?} != {:?}",
-                        local_filenames,
-                        runner_filenames
-                    );
-                    }
-                }
-
-                Ok(json)
-            }
-            _ => {
-                let status = response.status();
-                let text = response.text().await.map_err(|e| {
-                    backoff::Error::permanent(UploadFailure(format!(
-                        "Error reading response text for {}: {}",
-                        status,
-                        e
-                    )))
-                })?;
-                log::warn!("Error uploading results: {}: {}", status, text);
-                Err(backoff::Error::transient(UploadFailure(format!(
-                    "ResultUploadFailure: Unable to submit result: {}: {}",
-                    text, status
-                ))))
-            }
-        }
-    }).await
-}
-
-pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, description: &str) {
-    let mut metadata: Metadata = metadata.clone();
-    metadata.code = Some("aborted".to_string());
-    metadata.description = Some(description.to_string());
-    metadata.finish_time = Some(chrono::Utc::now().naive_utc());
-
-    match client.upload_results(run_id, &metadata, None).await {
-        Ok(_) => {}
-        Err(e) => {
-            log::warn!("Result upload for abort of {} failed: {}", run_id, e);
-        }
-    }
 }
 
 pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
@@ -742,8 +168,8 @@ pub trait Target {
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,
-        resume_metadata: Option<&Metadata>,
-    ) -> Result<serde_json::Value, WorkerFailure>;
+        resume_metadata: Option<&serde_json::Value>,
+    ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
 pub fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
@@ -802,4 +228,1018 @@ where
             ret.into_py(py)
         }
     })
+}
+
+pub fn run_worker(
+    codebase: &str,
+    campaign: &str,
+    main_branch_url: Option<&url::Url>,
+    run_id: &str,
+    build_config: &serde_json::Value,
+    env: HashMap<String, String>,
+    command: Vec<&str>,
+    output_directory: &std::path::Path,
+    metadata: &mut Metadata,
+    target_repo_url: &Url,
+    vendor: &str,
+    target: &str,
+    vcs_type: Option<VcsType>,
+    subpath: &std::path::Path,
+    resume_branch_url: Option<&Url>,
+    cached_branch_url: Option<&Url>,
+    mut resume_codemod_result: Option<&serde_json::Value>,
+    resume_branches: Option<Vec<(&str, &str, Option<RevisionId>, Option<RevisionId>)>>,
+    possible_transports: &mut Option<Vec<Transport>>,
+    force_build: Option<bool>,
+    tee: Option<bool>,
+    additional_colocated_branches: Option<HashMap<String, String>>,
+    skip_setup_validation: Option<bool>,
+    default_empty: Option<bool>,
+) -> Result<(), WorkerFailure> {
+    let force_build = force_build.unwrap_or(false);
+    let tee = tee.unwrap_or(false);
+    let skip_setup_validation = skip_setup_validation.unwrap_or(false);
+    let copy_output =
+        crate::tee::CopyOutput::new(&output_directory.join("worker.log"), tee).unwrap();
+    metadata.command = Some(command.iter().map(|s| s.to_string()).collect());
+    metadata.codebase = Some(codebase.to_string());
+
+    let build_target: Box<dyn Target> = match target {
+        "debian" => Box::new(crate::debian::DebianTarget::new(env)),
+        "generic" => Box::new(crate::generic::GenericTarget::new(env)),
+        n => {
+            return Err(WorkerFailure {
+                code: "target-unsupported".to_owned(),
+                description: format!("The target {} is not supported", n),
+                transient: Some(false),
+                stage: vec!["setup".to_owned()],
+                details: None,
+            });
+        }
+    };
+
+    let main_branch: Option<Box<dyn breezyshim::branch::Branch>>;
+    let empty_format: Option<ControlDirFormat>;
+
+    if let Some(main_branch_url) = main_branch_url {
+        log::info!("Opening branch at {}", main_branch_url);
+        main_branch = match janitor::vcs::open_branch_ext(
+            main_branch_url,
+            possible_transports.as_mut(),
+            None,
+        ) {
+            Ok(b) => Some(b),
+            Err(janitor::vcs::BranchOpenFailure {
+                ref code,
+                description,
+                retry_after,
+            }) => {
+                return Err(WorkerFailure {
+                    code: code.clone(),
+                    description,
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(code.contains("temporarily")),
+                    details: Some(serde_json::json!({
+                        "url": main_branch_url,
+                        "retry_after": retry_after.map(|r| r.num_seconds()),
+                    })),
+                })
+            }
+        };
+        metadata.branch_url = Some(main_branch.as_ref().unwrap().get_user_url());
+        metadata.vcs_type = Some(
+            janitor::vcs::get_branch_vcs_type(main_branch.as_ref().unwrap().as_ref()).unwrap(),
+        );
+        metadata.subpath = Some(subpath.to_string_lossy().to_string());
+        empty_format = None;
+    } else {
+        assert!(vcs_type.is_some());
+        main_branch = None;
+        metadata.branch_url = None;
+        metadata.vcs_type = vcs_type;
+        metadata.subpath = Some("".to_string());
+        empty_format = if let Some(f) =
+            breezyshim::controldir::FORMAT_REGISTRY.make_controldir(&vcs_type.unwrap().to_string())
+        {
+            Some(f)
+        } else {
+            return Err(WorkerFailure {
+                code: "vcs-type-unsupported".to_string(),
+                description: format!("Unable to find format for vcs type {}", vcs_type.unwrap()),
+                stage: vec!["setup".to_owned()],
+                transient: Some(false),
+                details: Some(serde_json::json!({"vcs_type": vcs_type})),
+            });
+        };
+    }
+
+    let cached_branch = if let Some(cached_branch_url) = cached_branch_url {
+        let probers =
+            silver_platter::probers::select_probers(vcs_type.map(|v| v.to_string()).as_deref());
+        match silver_platter::vcs::open_branch(
+            cached_branch_url,
+            possible_transports.as_mut(),
+            Some(
+                probers
+                    .iter()
+                    .map(|p| p.as_ref())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            None,
+        ) {
+            Ok(b) => {
+                log::info!(
+                    "Using cached branch {}",
+                    silver_platter::vcs::full_branch_url(b.as_ref())
+                );
+                Some(b)
+            }
+            Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
+                log::info!("Cached branch URL {} missing: {}", url, description);
+                None
+            }
+            Err(
+                silver_platter::vcs::BranchOpenError::Unavailable { url, description }
+                | silver_platter::vcs::BranchOpenError::TemporarilyUnavailable { url, description },
+            ) => {
+                log::info!("Cached branch URL {} unavailable: {}", url, description);
+                None
+            }
+            Err(
+                silver_platter::vcs::BranchOpenError::Unsupported { .. }
+                | silver_platter::vcs::BranchOpenError::Other(..)
+                | silver_platter::vcs::BranchOpenError::RateLimited { .. },
+            ) => {
+                log::info!("Error accessing cached branch URL {}", cached_branch_url);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let resume_branch = if let Some(resume_branch_url) = resume_branch_url {
+        log::info!("Using resume branch: {}", resume_branch_url);
+        let probers =
+            silver_platter::probers::select_probers(vcs_type.map(|v| v.to_string()).as_deref());
+        match silver_platter::vcs::open_branch(
+            resume_branch_url,
+            possible_transports.as_mut(),
+            Some(
+                probers
+                    .iter()
+                    .map(|p| p.as_ref())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            None,
+        ) {
+            Err(silver_platter::vcs::BranchOpenError::TemporarilyUnavailable {
+                url,
+                description,
+            }) => {
+                log::info!(
+                    "Resume branch URL {} temporarily unavailable: {}",
+                    url,
+                    description
+                );
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-temporarily-unavailable".to_owned(),
+                    description,
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(true),
+                    details: Some(serde_json::json!({
+                        "url": url,
+                    })),
+                });
+            }
+            Err(silver_platter::vcs::BranchOpenError::RateLimited {
+                url,
+                description,
+                retry_after,
+            }) => {
+                log::info!("Resume branch URL {} rate limited: {}", url, description);
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-rate-limited".to_owned(),
+                    description,
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(true),
+                    details: Some(serde_json::json!({
+                        "url": url,
+                        "retry_after": retry_after,
+                    })),
+                });
+            }
+            Err(silver_platter::vcs::BranchOpenError::Unavailable { url, description }) => {
+                log::info!("Resume branch URL {} unavailable: {}", url, description);
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-unavailable".to_owned(),
+                    description,
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(false),
+                    details: Some(serde_json::json!({
+                        "url": url
+                    })),
+                });
+            }
+            Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
+                log::info!("Resume branch URL {} missing: {}", url, description);
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-missing".to_owned(),
+                    description,
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(false),
+                    details: Some(serde_json::json!({
+                        "url": url
+                    })),
+                });
+            }
+            Err(silver_platter::vcs::BranchOpenError::Unsupported { .. }) => {
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-unsupported".to_owned(),
+                    description: "Unsupported resume branch URL".to_owned(),
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(false),
+                    details: None,
+                });
+            }
+            Err(silver_platter::vcs::BranchOpenError::Other(..)) => {
+                return Err(WorkerFailure {
+                    code: "worker-resume-branch-error".to_owned(),
+                    description: "Error opening resume branch".to_owned(),
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(false),
+                    details: None,
+                });
+            }
+            Ok(b) => Some(b),
+        }
+    } else {
+        None
+    };
+
+    let mut roles: HashMap<String, String> = additional_colocated_branches
+        .as_ref()
+        .map(|b| b.clone())
+        .unwrap_or_default();
+
+    let directory_name = if let Some(main_branch) = main_branch.as_ref() {
+        roles.insert(main_branch.name().unwrap(), "main".to_string());
+        breezyshim::urlutils::split_segment_parameters(&main_branch.get_user_url())
+            .0
+            .to_string()
+            .trim_end_matches('/')
+            .rsplit('/')
+            .last()
+            .unwrap()
+            .to_string()
+    } else {
+        roles.insert("".to_string(), "main".to_string());
+        codebase.to_string()
+    };
+
+    let mut ws_builder = silver_platter::workspace::Workspace::builder();
+    if let Some(main_branch) = main_branch {
+        ws_builder = ws_builder.main_branch(main_branch);
+    }
+
+    if let Some(resume_branch) = resume_branch {
+        ws_builder = ws_builder.resume_branch(resume_branch);
+    }
+
+    if let Some(cached_branch) = cached_branch {
+        ws_builder = ws_builder.cached_branch(cached_branch);
+    }
+
+    ws_builder = ws_builder.path(output_directory.join(directory_name));
+    if let Some(additional_colocated_branches) = additional_colocated_branches.as_ref() {
+        ws_builder =
+            ws_builder.additional_colocated_branches(additional_colocated_branches.clone());
+    }
+    if let Some(empty_format) = empty_format {
+        ws_builder = ws_builder.format(&empty_format);
+    }
+    if let Some(resume_branches) = resume_branches.as_ref() {
+        ws_builder = ws_builder.resume_branch_additional_colocated_branches(
+            resume_branches
+                .iter()
+                .filter_map(|(role, name, _, _)| {
+                    if role != &"main" {
+                        Some((name.to_string(), role.to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        );
+    }
+
+    let ws = match ws_builder.build() {
+        Ok(ws) => ws,
+        Err(silver_platter::workspace::Error::BrzError(e @ BrzError::IncompleteRead(..))) => {
+            return Err(WorkerFailure {
+                code: "incomplete-read".to_owned(),
+                description: e.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(true),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(BrzError::MalformedTransform(msg))) => {
+            return Err(WorkerFailure {
+                code: "malformed-transform".to_owned(),
+                description: msg.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(
+            e @ BrzError::TransformRenameFailed(..),
+        )) => {
+            return Err(WorkerFailure {
+                code: "transform-rename-failed".to_owned(),
+                description: e.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(e @ BrzError::ImmortalLimbo(..))) => {
+            return Err(WorkerFailure {
+                code: "transform-immortal-limbo".to_owned(),
+                description: e.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(BrzError::UnexpectedHttpStatus {
+            url,
+            code,
+            extra,
+            headers,
+        })) => {
+            if code == 502 {
+                return Err(WorkerFailure {
+                    code: "bad-gateway".to_owned(),
+                    description: if let Some(ref extra) = extra {
+                        format!("Bad gateway from {}: {}", url, extra)
+                    } else {
+                        format!("Bad gateway from {}", url)
+                    },
+                    stage: vec!["setup".to_owned(), "clone".to_owned()],
+                    transient: Some(true),
+                    details: None,
+                });
+            } else {
+                return Err(WorkerFailure {
+                    code: format!("http-{}", code),
+                    description: if let Some(ref extra) = extra {
+                        format!(
+                            "Unexpected HTTP status code {} from {}: {}",
+                            code, url, extra
+                        )
+                    } else {
+                        format!("Unexpected HTTP status code {} from {}", code, url)
+                    },
+                    stage: vec!["setup".to_owned(), "clone".to_owned()],
+                    details: Some(serde_json::json!({
+                        "status-code": code,
+                        "url": url,
+                        "extra": extra,
+                        "headers": headers,
+                    })),
+                    transient: None,
+                });
+            }
+        }
+        Err(silver_platter::workspace::Error::BrzError(BrzError::TransportError(msg))) => {
+            if msg.contains("No space left on device") {
+                return Err(WorkerFailure {
+                    code: "no-space-on-device".to_owned(),
+                    description: msg,
+                    stage: vec!["setup".to_owned(), "clone".to_owned()],
+                    transient: Some(true),
+                    details: None,
+                });
+            }
+            if msg.contains("Too many open files") {
+                return Err(WorkerFailure {
+                    code: "too-many-open-files".to_owned(),
+                    description: msg,
+                    stage: vec!["setup".to_owned(), "clone".to_owned()],
+                    transient: Some(true),
+                    details: None,
+                });
+            }
+            if msg.contains("Temporary failure in name resolution") {
+                return Err(WorkerFailure {
+                    code: "temporary-transport-error".to_owned(),
+                    description: msg,
+                    stage: vec!["setup".to_owned(), "clone".to_owned()],
+                    transient: Some(true),
+                    details: None,
+                });
+            }
+            return Err(WorkerFailure {
+                code: "transport-error".to_owned(),
+                description: msg,
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(BrzError::RemoteGitError(ref msg))) => {
+            return Err(WorkerFailure {
+                code: "git-error".to_owned(),
+                description: msg.clone(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(e @ BrzError::Timeout)) => {
+            return Err(WorkerFailure {
+                code: "timeout".to_owned(),
+                description: e.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(true),
+                details: None,
+            });
+        }
+        Err(silver_platter::workspace::Error::BrzError(BrzError::MissingNestedTree(ref msg))) => {
+            return Err(WorkerFailure {
+                code: "requires-nested-tree-support".to_owned(),
+                description: msg.display().to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+        Err(e) => {
+            return Err(WorkerFailure {
+                code: "unexpected-error".to_owned(),
+                description: e.to_string(),
+                stage: vec!["setup".to_owned(), "clone".to_owned()],
+                transient: Some(false),
+                details: None,
+            });
+        }
+    };
+
+    log::info!("Workspace ready - starting.");
+
+    if ws.local_tree().has_changes().unwrap() {
+        return Err(WorkerFailure {
+            code: "unexpected-changes-in-tree".to_owned(),
+            description: "The working tree has unexpected changes after initial clone".to_owned(),
+            stage: vec!["setup".to_owned(), "clone".to_owned()],
+            details: None,
+            transient: Some(false),
+        });
+    }
+
+    if !skip_setup_validation {
+        build_target.validate(ws.local_tree(), subpath, build_config)?;
+    }
+
+    metadata.revision = Some(if let Some(main_branch) = ws.main_branch() {
+        main_branch.last_revision()
+    } else {
+        breezyshim::RevisionId::null()
+    });
+    metadata.main_branch_revision = metadata.revision.clone();
+
+    metadata.codemod = Some(serde_json::Value::Null);
+
+    if ws.resume_branch().is_none() {
+        // If the resume branch was discarded for whatever reason, then we
+        // don't need to pass in the codemod result.
+        resume_codemod_result = None;
+    }
+
+    if let Some(main_branch) = ws.main_branch() {
+        metadata.add_remote("origin".to_string(), main_branch.get_user_url());
+    }
+
+    let r = build_target.make_changes(
+        ws.local_tree(),
+        subpath,
+        &command,
+        output_directory,
+        resume_codemod_result,
+    );
+    metadata.revision = Some(ws.local_tree().branch().last_revision());
+
+    let changer_result = match r {
+        Ok(r) => {
+            if !ws.any_branch_changes() {
+                return Err(WorkerFailure {
+                    code: "nothing-to-do".to_owned(),
+                    description: "Nothing to do.".to_owned(),
+                    stage: vec!["codemod".to_owned()],
+                    transient: Some(false),
+                    details: None,
+                });
+            }
+            r
+        }
+        Err(
+            ref e @ WorkerFailure {
+                ref code,
+                ref description,
+                ..
+            },
+        ) if code.as_str() == "nothing-to-do" => {
+            if ws.changes_since_main() {
+                // This should only ever happen if we were resuming
+                assert!(
+                    ws.resume_branch().is_some(),
+                    "Found existing changes despite not having resumed. Mainline: {}, local: {}",
+                    ws.main_branch().unwrap().last_revision(),
+                    ws.local_tree().branch().last_revision()
+                );
+                return Err(WorkerFailure {
+                    code: "nothing-new-to-do".to_owned(),
+                    description: description.clone(),
+                    stage: vec!["codemod".to_owned()],
+                    transient: Some(false),
+                    details: None,
+                });
+            } else if force_build {
+                Box::new(silver_platter::codemod::CommandResult {
+                    description: Some("No change build".to_owned()),
+                    context: None,
+                    tags: Vec::new(),
+                    value: Some(0),
+                    old_revision: ws.local_tree().last_revision().unwrap(),
+                    new_revision: ws.local_tree().last_revision().unwrap(),
+                    title: None,
+                    commit_message: None,
+                    serialized_context: None,
+                    target_branch_url: None,
+                })
+            } else {
+                return Err(e.clone());
+            }
+        }
+        Err(e) => return Err(e),
+    };
+
+    metadata.refreshed = Some(ws.refreshed());
+    metadata.value = changer_result.value().map(|i| i as u64);
+    metadata.codemod = Some(changer_result.context());
+    metadata.target_branch_url = changer_result.target_branch_url();
+    metadata.description = changer_result.description();
+
+    let mut result_branches = vec![];
+    for (name, base_revision, revision) in ws.changed_branches() {
+        let role = match roles.get(&name) {
+            Some(role) => role,
+            None => {
+                log::warn!("Unable to find role for branch {}", name);
+                continue;
+            }
+        };
+        if base_revision == revision {
+            continue;
+        }
+        result_branches.push((role.clone(), name, base_revision, revision));
+    }
+
+    let result_branch_roles = result_branches
+        .iter()
+        .map(|(role, _, _, _)| role)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        result_branch_roles.len(),
+        result_branch_roles
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        "Duplicate result branches: {:?}",
+        result_branches
+    );
+
+    for (f, n, br, r) in result_branches.iter() {
+        metadata.add_branch(f.to_string(), n.to_string(), br.clone(), r.clone());
+    }
+    for (n, r) in changer_result.tags().iter() {
+        metadata.add_tag(n.to_string(), r.clone());
+    }
+
+    let actual_vcs_type =
+        janitor::vcs::get_branch_vcs_type(ws.local_tree().branch().as_ref()).unwrap();
+
+    let vcs_type = if vcs_type.is_none() {
+        actual_vcs_type
+    } else if Some(actual_vcs_type) != vcs_type {
+        return Err(WorkerFailure {
+            code: "vcs-type-mismatch".to_owned(),
+            description: format!(
+                "Expected VCS {}, got {}",
+                vcs_type.unwrap(),
+                actual_vcs_type
+            ),
+            stage: vec!["result-push".to_owned()],
+            transient: Some(false),
+            details: None,
+        });
+    } else {
+        vcs_type.unwrap()
+    };
+
+    match vcs_type {
+        VcsType::Git => &crate::vcs::GitVcs as &dyn crate::vcs::Vcs,
+        VcsType::Bzr => &crate::vcs::BzrVcs,
+    }
+    .import_branches(
+        target_repo_url,
+        ws.local_tree().branch().as_ref(),
+        campaign,
+        run_id,
+        &result_branches,
+        changer_result.tags(),
+        false,
+    )
+    .map_err(|e| push_error_to_worker_failure(e, vec!["result-push".to_string()]))?;
+
+    let should_build = if force_build {
+        true
+    } else {
+        result_branches
+            .iter()
+            .any(|(role, _name, _br, _r)| role == "main")
+    };
+
+    metadata.target.as_mut().unwrap().details = if should_build {
+        metadata.target.as_mut().unwrap().name = build_target.name();
+
+        build_target.build(ws.local_tree(), subpath, output_directory, build_config)?
+    } else {
+        serde_json::Value::Null
+    };
+
+    log::info!("Pushing result branch to {}", target_repo_url);
+
+    match vcs_type {
+        VcsType::Git => &crate::vcs::GitVcs as &dyn crate::vcs::Vcs,
+        VcsType::Bzr => &crate::vcs::BzrVcs,
+    }
+    .import_branches(
+        target_repo_url,
+        ws.local_tree().branch().as_ref(),
+        campaign,
+        run_id,
+        &result_branches,
+        changer_result.tags(),
+        true,
+    )
+    .map_err(|e| push_error_to_worker_failure(e, vec!["result-sym".to_owned()]))?;
+
+    if let Some(cached_branch_url) = cached_branch_url.as_ref() {
+        // TODO(jelmer): integrate into import_branches_git / import_branches_bzr
+        log::info!("Pushing packaging branch cache to {}", cached_branch_url);
+
+        let vendor = vendor.to_string();
+
+        let tag_selector = move |tag_name: String| -> bool {
+            tag_name.starts_with(&format!("{}/", vendor)) || tag_name.starts_with("upstream/")
+        };
+
+        if let Some(main_branch) = ws.main_branch() {
+            match crate::vcs::push_branch(
+                ws.local_tree().branch().as_ref(),
+                cached_branch_url,
+                Some(vcs_type),
+                true,
+                Some(main_branch.last_revision()),
+                Some(Box::new(tag_selector)),
+                possible_transports,
+            ) {
+                Err(
+                    e @ BrzError::InvalidHttpResponse(..)
+                    | e @ BrzError::IncompleteRead(..)
+                    | e @ BrzError::UnexpectedHttpStatus { .. }
+                    | e @ BrzError::TransportError(..)
+                    | e @ BrzError::TransportNotPossible(..)
+                    | e @ BrzError::RemoteGitError(..),
+                ) => {
+                    log::warn!("unable to push to cache URL {}: {}", cached_branch_url, e);
+                }
+                Err(e) => {
+                    panic!(
+                        "Unexpected error pushing to cache URL {}: {}",
+                        cached_branch_url, e
+                    );
+                }
+                Ok(_) => {
+                    log::info!("Pushed packaging branch cache to {}", cached_branch_url);
+                }
+            }
+        }
+    }
+
+    std::mem::drop(copy_output);
+
+    log::info!("All done.");
+    Ok(())
+}
+
+pub async fn process_single_item(
+    client: &crate::client::Client,
+    my_url: Option<&Url>,
+    node_name: &str,
+    jenkins_build_url: Option<&Url>,
+    prometheus: Option<&Url>,
+    codebase: Option<&str>,
+    campaign: Option<&str>,
+    tee: bool,
+    output_directory_base: Option<&std::path::Path>,
+) {
+    let assignment = client
+        .get_assignment(my_url, node_name, jenkins_build_url, codebase, campaign)
+        .await
+        .unwrap();
+
+    log::debug!("Got back assignment: {:?}", &assignment);
+
+    let force_build = assignment.force_build;
+    let (resume_result, resume_branch_url, resume_branches) =
+        if let Some(resume) = &assignment.resume {
+            let resume_result = resume.result.clone();
+            let resume_branch_url = resume
+                .branch_url
+                .to_string()
+                .trim_end_matches('/')
+                .parse()
+                .unwrap();
+            let resume_branches = resume.branches.clone();
+            (
+                Some(resume_result),
+                Some(resume_branch_url),
+                Some(resume_branches),
+            )
+        } else {
+            (None, None, None)
+        };
+    let build_environment = assignment.build.environment.clone().unwrap_or_default();
+
+    let start_time = chrono::Utc::now();
+
+    let possible_transports = vec![];
+
+    let mut env = assignment.env.clone();
+
+    env.extend(build_environment.clone());
+
+    log::debug!("Environment: {:?}", env);
+
+    let vendor = build_environment
+        .get("DEB_VENDOR")
+        .map_or("debian", |x| x.as_str())
+        .to_string();
+
+    let output_directory = if let Some(output_directory_base) = output_directory_base {
+        tempfile::TempDir::with_prefix_in("janitor-worker-", output_directory_base)
+    } else {
+        tempfile::TempDir::with_prefix("janitor-worker-")
+    }
+    .unwrap();
+
+    let assignment_ = assignment.clone();
+
+    let output_directory_ = output_directory.path().to_path_buf();
+
+    let metadata = tokio::task::spawn_blocking(move || {
+        let mut metadata = Metadata {
+            queue_id: Some(assignment.queue_id),
+            start_time: Some(start_time),
+            branch_url: assignment_.branch.url.clone(),
+            vcs_type: Some(assignment.branch.vcs_type.clone()),
+            ..Metadata::default()
+        };
+
+        let result = run_worker(
+            &assignment_.codebase,
+            &assignment_.campaign,
+            assignment_.branch.url.as_ref(),
+            &assignment_.id,
+            &assignment_.build.config,
+            env,
+            shlex::split(&assignment_.codemod.command)
+                .unwrap()
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>(),
+            output_directory_.as_path(),
+            &mut metadata,
+            &assignment.target_repository.url,
+            &vendor,
+            &assignment_.build.target,
+            Some(assignment_.branch.vcs_type),
+            assignment_.branch.subpath.as_ref(),
+            resume_branch_url.as_ref(),
+            assignment.branch.cached_url.as_ref(),
+            resume_result.as_ref(),
+            resume_branches.as_ref().map(|x| {
+                {
+                    x.iter().map(|(role, name, base, revision)| {
+                        (role.as_str(), name.as_str(), base.clone(), revision.clone())
+                    })
+                }
+                .collect::<Vec<_>>()
+            }),
+            &mut Some(possible_transports),
+            Some(force_build),
+            Some(tee),
+            assignment.branch.additional_colocated_branches.map(|p| {
+                p.into_iter()
+                    .map(|k| (k.to_string(), k.to_string()))
+                    .collect()
+            }),
+            Some(assignment_.skip_setup_validation),
+            Some(assignment_.branch.default_empty),
+        );
+
+        match result {
+            Ok(_) => {
+                metadata.code = None;
+                if let Some(description) = metadata.description.as_ref() {
+                    log::info!("{}", description);
+                }
+                log::info!("Worker finished successfully");
+            }
+            Err(
+                ref e @ WorkerFailure {
+                    ref code,
+                    ref description,
+                    ref stage,
+                    ..
+                },
+            ) => {
+                metadata.update(&e);
+                log::info!("Worker failed in {:?} ({}): {}", stage, code, description);
+                // This is a failure for the worker, but returning 0 will cause
+                // jenkins to mark the job having failed, which is not really
+                // true.  We're happy if we get to successfully POST to /finish
+            }
+        }
+        let finish_time = chrono::Utc::now();
+        metadata.finish_time = Some(finish_time);
+        log::info!("Elapsed time: {}", finish_time - start_time);
+
+        metadata
+    })
+    .await
+    .unwrap();
+
+    let result = client
+        .upload_results(&assignment.id, &metadata, Some(output_directory.path()))
+        .await
+        .unwrap();
+
+    log::info!("Results uploaded");
+
+    log::debug!("Result: {:?}", result);
+
+    if let Some(prometheus) = prometheus {
+        push_to_gateway(
+            prometheus,
+            "janitor.worker",
+            maplit::hashmap! {
+                "run_id" => assignment.id.as_str(),
+                "campaign" => assignment.campaign.as_str(),
+            },
+            prometheus::default_registry(),
+        )
+        .await
+        .unwrap();
+    }
+}
+
+pub async fn push_to_gateway(
+    prometheus: &Url,
+    job: &str,
+    grouping_key: HashMap<&str, &str>,
+    registry: &prometheus::Registry,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let mut buffer = String::new();
+    let encoder = prometheus::TextEncoder::new();
+    let metric_families = registry.gather();
+    encoder.encode_utf8(&metric_families, &mut buffer).unwrap();
+    let mut url = prometheus.join("/metrics/job/").unwrap().join(job).unwrap();
+    for (k, v) in grouping_key {
+        url.query_pairs_mut().append_pair(k, v);
+    }
+    let response = client
+        .post(url)
+        .header("Content-Type", "text/plain")
+        .body(buffer)
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        return Err(format!("Unexpected status code: {}", response.status()).into());
+    }
+    Ok(())
+}
+
+fn push_error_to_worker_failure(e: BrzError, stage: Vec<String>) -> WorkerFailure {
+    match e {
+        BrzError::UnexpectedHttpStatus {
+            code: 502,
+            url,
+            extra,
+            ..
+        } => WorkerFailure {
+            code: "bad-gateway".to_string(),
+            description: if let Some(extra) = extra.as_ref() {
+                format!("Bad gateway from {}: {}", url, extra)
+            } else {
+                format!("Bad gateway from {}", url)
+            },
+            stage,
+            transient: Some(true),
+            details: Some(serde_json::json!({
+                "url": url,
+                "extra":  extra,
+            })),
+        },
+        BrzError::UnexpectedHttpStatus {
+            code, url, extra, ..
+        } => WorkerFailure {
+            code: format!("http-{}", code),
+            description: if let Some(extra) = extra.as_ref() {
+                format!("Unexpected HTTP status {} from {}: {}", code, url, extra)
+            } else {
+                format!("Unexpected HTTP status {} from {}", code, url)
+            },
+            stage,
+            details: Some(serde_json::json!({
+                "status-code": code,
+                "url": url,
+                "extra": extra,
+            })),
+            transient: None,
+        },
+        BrzError::ConnectionError(msg) => {
+            if msg.contains("Temporary failure in name resolution") {
+                WorkerFailure {
+                    code: "failed-temporarily".to_string(),
+                    description: format!("Failed to push result branch: {}", msg),
+                    stage,
+                    transient: Some(true),
+                    details: None,
+                }
+            } else {
+                WorkerFailure {
+                    code: "push-failed".to_string(),
+                    description: format!("Failed to push result branch: {}", msg),
+                    stage,
+                    details: None,
+                    transient: None,
+                }
+            }
+        }
+        BrzError::InvalidHttpResponse(..)
+        | BrzError::IncompleteRead(..)
+        | BrzError::TransportError(..) => WorkerFailure {
+            code: "push-failed".to_string(),
+            description: format!("Failed to push result branch: {}", e),
+            stage,
+            details: None,
+            transient: None,
+        },
+        BrzError::RemoteGitError(msg) if msg == "missing necessary objects" => WorkerFailure {
+            code: "git-missing-necessary-objects".to_string(),
+            description: msg,
+            stage,
+            details: None,
+            transient: None,
+        },
+        BrzError::RemoteGitError(msg) if msg == "failed to updated ref" => WorkerFailure {
+            code: "git-ref-update-failed".to_string(),
+            description: msg,
+            stage,
+            details: None,
+            transient: None,
+        },
+        BrzError::RemoteGitError(msg) => WorkerFailure {
+            code: "git-error".to_string(),
+            description: msg,
+            stage,
+            details: None,
+            transient: None,
+        },
+        e => WorkerFailure {
+            code: "unexpected-error".to_string(),
+            description: e.to_string(),
+            stage,
+            details: None,
+            transient: None,
+        },
+    }
 }
