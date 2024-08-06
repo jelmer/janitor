@@ -2,13 +2,64 @@ use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 pub fn is_authenticated_url(url: &Url) -> bool {
     ["git+ssh", "bzr+ssh"].contains(&url.scheme())
 }
 
-pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<String, BrzError> {
+// Serialize as string ("bzr" or "git")
+impl Serialize for VcsType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(match self {
+            VcsType::Bzr => "bzr",
+            VcsType::Git => "git",
+        })
+    }
+}
+
+impl<'a> Deserialize<'a> for VcsType {
+    fn deserialize<D>(deserializer: D) -> Result<VcsType, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let s = String::deserialize(deserializer)?;
+        std::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub enum VcsType {
+    Bzr,
+    Git,
+}
+
+impl std::fmt::Display for VcsType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            VcsType::Bzr => f.write_str("bzr"),
+            VcsType::Git => f.write_str("git"),
+        }
+    }
+}
+
+impl std::str::FromStr for VcsType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<VcsType, String> {
+        match s {
+            "bzr" => Ok(VcsType::Bzr),
+            "git" => Ok(VcsType::Git),
+            _ => Err(format!("Unknown VCS type: {}", s)),
+        }
+    }
+}
+
+pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<VcsType, BrzError> {
     let repository = branch.repository();
     Python::with_gil(|py| {
         let object = repository.to_object(py);
@@ -22,6 +73,11 @@ pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<String, BrzError> {
         }
     })
     .map_err(BrzError::from)
+    .map(|vcs| match vcs.as_str() {
+        "bzr" => VcsType::Bzr,
+        "git" => VcsType::Git,
+        _ => panic!("Unknown VCS type: {}", vcs),
+    })
 }
 
 pub fn is_alioth_url(url: &Url) -> bool {

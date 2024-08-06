@@ -1,10 +1,10 @@
 use nix::unistd::{close, dup, dup2};
 use std::fs::File;
 use std::io::{self, Write};
-use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::{Command, Stdio};
 
-struct CopyOutput {
+pub struct CopyOutput {
     old_stdout: RawFd,
     old_stderr: RawFd,
     tee: bool,
@@ -13,7 +13,7 @@ struct CopyOutput {
 }
 
 impl CopyOutput {
-    fn new(output_log: &str, tee: bool) -> io::Result<Self> {
+    pub fn new(output_log: &std::path::Path, tee: bool) -> io::Result<Self> {
         let old_stdout = dup(nix::libc::STDOUT_FILENO).expect("Failed to duplicate stdout");
         let old_stderr = dup(nix::libc::STDERR_FILENO).expect("Failed to duplicate stderr");
 

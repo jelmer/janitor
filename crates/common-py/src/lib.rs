@@ -6,6 +6,7 @@ fn get_branch_vcs_type(branch: PyObject) -> PyResult<String> {
     let branch = breezyshim::branch::RegularBranch::new(branch);
     janitor::vcs::get_branch_vcs_type(&branch)
         .map_err(|e| PyValueError::new_err((format!("{}", e),)))
+        .map(|vcs| vcs.to_string())
 }
 
 #[pyfunction]

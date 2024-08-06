@@ -12,7 +12,7 @@ homepage = "https://github.com/jelmer/janitor"
 url = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true }
-reqwest = { version = "0.12", features = ["json", "multipart"] }
+reqwest = { workspace = true, features = ["json", "multipart"] }
 backoff = { version = "0.4", features = ["tokio"] }
 serde_json = "1"
 log = "0.4"
@@ -29,6 +29,8 @@ askama_axum = { version = "0.4.0", features = ["serde-json", "serde-yaml", "huma
 nix = { version = "0.29.0", features = ["fs"] }
 percent-encoding = "2.3.1"
 maplit = "1.0.2"
+tempfile = "3.11.0"
+prometheus = "0.13.4"
 
 [features]
 default = ["debian", "cli"]

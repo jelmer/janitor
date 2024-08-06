@@ -471,22 +471,19 @@ impl crate::Target for DebianTarget {
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,
-        resume_metadata: Option<&crate::Metadata>,
-    ) -> Result<serde_json::Value, WorkerFailure> {
+        resume_metadata: Option<&serde_json::Value>,
+    ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure> {
         debian_make_changes(
             local_tree,
             subpath,
             argv,
             self.env.clone(),
             log_directory,
-            resume_metadata
-                .as_ref()
-                .map(|x| serde_json::to_value(x).unwrap())
-                .as_ref(),
+            resume_metadata,
             self.committer.as_deref(),
             self.update_changelog,
         )
-        .map(|x| serde_json::to_value(&x).unwrap())
+        .map(|x| Box::new(x) as Box<dyn silver_platter::CodemodResult>)
     }
 }
 

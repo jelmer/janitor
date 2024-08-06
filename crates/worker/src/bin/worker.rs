@@ -1,6 +1,6 @@
 use axum::{response::Html, response::Json, routing::get, Router};
 use clap::Parser;
-use janitor_worker::{Assignment, Metadata};
+use janitor::api::worker::{Assignment, Metadata};
 use pyo3::exceptions::PySystemExit;
 use pyo3::prelude::*;
 use std::net::SocketAddr;
