@@ -1,9 +1,10 @@
-use chrono::NaiveDateTime;
-use janitor_worker::{AssignmentError, Remote, RevisionId};
+use chrono::{DateTime, Utc};
+use janitor_worker::{RevisionId};
+use janitor::api::worker::{Remote};
 use pyo3::create_exception;
-use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use janitor_worker::debian::DebUpdateChangelog;
+use janitor_worker::client::{AssignmentError};
 
 create_exception!(
     janitor._worker,
@@ -37,7 +38,7 @@ fn gce_external_ip(py: Python) -> PyResult<Bound<PyAny>> {
 }
 
 #[pyclass]
-struct Client(std::sync::Arc<janitor_worker::Client>);
+struct Client(std::sync::Arc<janitor_worker::client::Client>);
 
 #[pymethods]
 impl Client {
@@ -53,17 +54,17 @@ impl Client {
             panic!("password specified without username");
         }
         let credentials = if let Some(username) = username {
-            janitor_worker::Credentials::Basic {
+            janitor_worker::client::Credentials::Basic {
                 username: username.to_string(),
                 password: password.map(|s| s.to_string()),
             }
         } else {
-            janitor_worker::Credentials::None
+            janitor_worker::client::Credentials::None
         };
 
         let user_agent = user_agent.unwrap_or(janitor_worker::DEFAULT_USER_AGENT);
 
-        Self(std::sync::Arc::new(janitor_worker::Client::new(
+        Self(std::sync::Arc::new(janitor_worker::client::Client::new(
             reqwest::Url::parse(base_url).unwrap(),
             credentials,
             user_agent,
@@ -89,9 +90,9 @@ impl Client {
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let assignment = client
                 .get_assignment_raw(
-                    my_url.map(|u| reqwest::Url::parse(u.as_str()).unwrap()),
+                    my_url.map(|u| reqwest::Url::parse(u.as_str()).unwrap()).as_ref(),
                     node_name.as_str(),
-                    jenkins_build_url.as_deref(),
+                    jenkins_build_url.map(|u| reqwest::Url::parse(u.as_str()).unwrap()).as_ref(),
                     codebase.as_deref(),
                     campaign.as_deref(),
                 )
@@ -140,7 +141,7 @@ fn abort_run<'a>(
     let description = description.to_string();
     let metadata = metadata.0.clone();
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        janitor_worker::abort_run(&client, run_id.as_str(), &metadata, description.as_str()).await;
+        janitor_worker::client::abort_run(&client, run_id.as_str(), &metadata, description.as_str()).await;
         Ok(())
     })
 }
@@ -175,13 +176,13 @@ fn run_lintian(
 create_exception!(janitor_worker, WorkerFailure, pyo3::exceptions::PyException);
 
 #[pyclass]
-struct Assignment(janitor_worker::Assignment);
+struct Assignment(janitor::api::worker::Assignment);
 
 #[pymethods]
 impl Assignment {}
 
 #[pyclass]
-struct MetadataTarget(janitor_worker::TargetDetails);
+struct MetadataTarget(janitor::api::worker::TargetDetails);
 
 #[pymethods]
 impl MetadataTarget {
@@ -192,7 +193,7 @@ impl MetadataTarget {
 
     #[new]
     fn new(name: &str) -> Self {
-        Self(janitor_worker::TargetDetails::new(
+        Self(janitor::api::worker::TargetDetails::new(
             name.to_string(),
             serde_json::Value::Null,
         ))
@@ -211,13 +212,13 @@ impl MetadataTarget {
 }
 
 #[pyclass]
-struct Metadata(janitor_worker::Metadata);
+struct Metadata(janitor::api::worker::Metadata);
 
 #[pymethods]
 impl Metadata {
     #[new]
     fn new() -> PyResult<Self> {
-        Ok(Self(janitor_worker::Metadata::default()))
+        Ok(Self(janitor::api::worker::Metadata::default()))
     }
 
     #[getter]
@@ -265,23 +266,23 @@ impl Metadata {
     }
 
     #[getter]
-    fn get_start_time(&self) -> PyResult<Option<NaiveDateTime>> {
+    fn get_start_time(&self) -> PyResult<Option<DateTime<Utc>>> {
         Ok(self.0.start_time)
     }
 
     #[setter]
-    fn set_start_time(&mut self, start_time: Option<NaiveDateTime>) -> PyResult<()> {
+    fn set_start_time(&mut self, start_time: Option<DateTime<Utc>>) -> PyResult<()> {
         self.0.start_time = start_time;
         Ok(())
     }
 
     #[getter]
-    fn get_finish_time(&self) -> PyResult<Option<NaiveDateTime>> {
+    fn get_finish_time(&self) -> PyResult<Option<DateTime<Utc>>> {
         Ok(self.0.finish_time)
     }
 
     #[setter]
-    fn set_finish_time(&mut self, finish_time: Option<NaiveDateTime>) -> PyResult<()> {
+    fn set_finish_time(&mut self, finish_time: Option<DateTime<Utc>>) -> PyResult<()> {
         self.0.finish_time = finish_time;
         Ok(())
     }
@@ -309,13 +310,13 @@ impl Metadata {
     }
 
     #[getter]
-    fn get_vcs_type(&self) -> PyResult<Option<&str>> {
-        Ok(self.0.vcs_type.as_deref())
+    fn get_vcs_type(&self) -> PyResult<Option<String>> {
+        Ok(self.0.vcs_type.map(|s| s.to_string()))
     }
 
     #[setter]
     fn set_vcs_type(&mut self, vcs_type: Option<&str>) -> PyResult<()> {
-        self.0.vcs_type = vcs_type.map(|s| s.to_string());
+        self.0.vcs_type = vcs_type.map(|s| s.parse().unwrap());
         Ok(())
     }
 
@@ -448,7 +449,7 @@ impl Metadata {
             Vec<String>,
             Option<bool>,
         ) = failure.extract()?;
-        let failure = janitor_worker::WorkerFailure {
+        let failure = janitor::api::worker::WorkerFailure {
             code: args.0,
             description: args.1,
             details: args
@@ -463,7 +464,7 @@ impl Metadata {
 
     #[setter]
     fn set_target_name(&mut self, name: &str) -> PyResult<()> {
-        self.0.target = Some(janitor_worker::TargetDetails::new(
+        self.0.target = Some(janitor::api::worker::TargetDetails::new(
             name.to_string(),
             serde_json::Value::Null,
         ));
@@ -640,7 +641,7 @@ fn generic_make_changes(
         &breezyshim::tree::WorkingTree::from(local_tree.into_py(py)),
         &subpath,
         argv.as_slice(),
-        env,
+        &env,
         &log_directory,
         resume_metadata
             .map(|m| janitor_worker::py_to_serde_json(&m).unwrap())
