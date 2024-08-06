@@ -1,6 +1,7 @@
 use breezyshim::error::Error as BrzError;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
+use janitor::vcs::VcsType;
 use std::collections::HashMap;
 use url::Url;
 
@@ -8,7 +9,7 @@ use url::Url;
 pub fn push_branch(
     source_branch: &dyn breezyshim::branch::Branch,
     url: &Url,
-    vcs_type: Option<&str>,
+    vcs_type: Option<VcsType>,
     overwrite: bool,
     stop_revision: Option<RevisionId>,
     tag_selector: Option<Box<dyn Fn(String) -> bool>>,
@@ -25,7 +26,7 @@ pub fn push_branch(
         || source_branch.controldir().cloning_metadir(),
         |t| {
             breezyshim::controldir::FORMAT_REGISTRY
-                .make_controldir(t)
+                .make_controldir(t.to_string().as_str())
                 .unwrap()
         },
     );
@@ -82,7 +83,7 @@ fn import_branches_bzr(
     local_branch: &dyn breezyshim::branch::Branch,
     campaign: &str,
     log_id: &str,
-    branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+    branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
     tags: Vec<(String, Option<RevisionId>)>,
     update_current: bool,
 ) -> Result<(), BrzError> {
@@ -188,7 +189,7 @@ pub trait Vcs {
         local_branch: &dyn breezyshim::branch::Branch,
         campaign: &str,
         log_id: &str,
-        branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+        branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
         tags: Vec<(String, Option<RevisionId>)>,
         update_current: bool,
     ) -> Result<(), BrzError>;
@@ -203,7 +204,7 @@ impl Vcs for BzrVcs {
         local_branch: &dyn breezyshim::branch::Branch,
         campaign: &str,
         log_id: &str,
-        branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+        branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
         tags: Vec<(String, Option<RevisionId>)>,
         update_current: bool,
     ) -> Result<(), BrzError> {
@@ -224,7 +225,7 @@ fn import_branches_git(
     local_branch: &dyn breezyshim::branch::Branch,
     campaign: &str,
     log_id: &str,
-    branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+    branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
     tags: Vec<(String, Option<RevisionId>)>,
     update_current: bool,
 ) -> Result<(), BrzError> {
@@ -261,6 +262,7 @@ fn import_branches_git(
     let log_id_ = log_id.to_string();
     let campaign_ = campaign.to_string();
     let repo_ = local_branch.repository();
+    let branches = branches.clone();
 
     let get_changed_refs = move |_refs: &HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)>| -> HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)> {
         let mut changed_refs = HashMap::new();
@@ -321,7 +323,7 @@ impl Vcs for GitVcs {
         local_branch: &dyn breezyshim::branch::Branch,
         campaign: &str,
         log_id: &str,
-        branches: Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+        branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
         tags: Vec<(String, Option<RevisionId>)>,
         update_current: bool,
     ) -> Result<(), BrzError> {
@@ -406,7 +408,7 @@ mod tests {
                 source_tree.branch().as_ref(),
                 "campaign",
                 "log_id",
-                vec![(
+                &vec![(
                     "main".to_string(),
                     "foo".to_string(),
                     None,
@@ -461,7 +463,7 @@ mod tests {
                 source_tree.branch().as_ref(),
                 "campaign",
                 "log_id",
-                vec![(
+                &vec![(
                     "main".to_string(),
                     "foo".to_string(),
                     None,
@@ -472,10 +474,7 @@ mod tests {
             )
             .unwrap();
         let target_branch_foo = target.open_branch(Some("campaign/main")).unwrap();
-        assert_eq!(
-            &target_branch_foo.last_revision(),
-            &revid1
-        );
+        assert_eq!(&target_branch_foo.last_revision(), &revid1);
         assert_eq!(
             &target_branch_foo.tags().unwrap().get_tag_dict().unwrap(),
             &maplit::hashmap! {
