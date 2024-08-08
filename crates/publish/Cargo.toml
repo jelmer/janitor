@@ -11,7 +11,9 @@ homepage = "https://github.com/jelmer/janitor"
 [dependencies]
 breezyshim.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
 tokio = { workspace = true, features = ["full"] }
+url.workspace = true
 
 [dev-dependencies]
 maplit = { workspace = true }
