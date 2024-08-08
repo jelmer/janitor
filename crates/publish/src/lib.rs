@@ -107,6 +107,7 @@ pub struct PublishOneRequest {
     pub extra_context: Option<serde_json::Value>,
     pub mode: Mode,
     pub command: Vec<String>,
+    pub external_url: Option<url::Url>,
 }
 
 #[derive(Debug)]
