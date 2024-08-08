@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
+use breezyshim::RevisionId;
 use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+use serde::ser::SerializeStruct;
 
 //pub mod publish_one;
 
@@ -65,6 +68,117 @@ pub async fn get_debdiff(differ_url: &url::Url, unchanged_id: &str, log_id: &str
         },
         _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err()))
     }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy)]
+pub enum Mode {
+    #[serde(rename = "push-derived")]
+    PushDerived,
+    #[serde(rename = "propose")]
+    Propose,
+    #[serde(rename = "push")]
+    Push,
+    #[serde(rename = "build-only")]
+    BuildOnly,
+    #[serde(rename = "skip")]
+    Skip
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct PublishOneRequest {
+    pub campaign: String,
+    pub target_branch_url: String,
+    pub role: String,
+    pub log_id: String,
+    pub reviewers: Option<Vec<String>>,
+    pub revision_id: RevisionId,
+    pub unchanged_id: String,
+    #[serde(rename = "require-binary-diff")]
+    pub require_binary_diff: bool,
+    pub differ_url: url::Url,
+    pub derived_branch_name: String,
+    pub tags: Option<HashMap<String, RevisionId>>,
+    pub allow_create_proposal: bool,
+    pub source_branch_url: url::Url,
+    pub codemod_result: serde_json::Value,
+    pub commit_message_tempalte: Option<String>,
+    pub title_template: Option<String>,
+    pub existing_mp_url: Option<url::Url>,
+    pub extra_context: Option<serde_json::Value>,
+    pub mode: Mode,
+    pub command: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum PublishError {
+    Failure {
+        code: String,
+        description: String,
+    },
+    NothingToDo(String)
+}
+
+impl PublishError {
+    pub fn code(&self) -> &str {
+        match self {
+            PublishError::Failure { code, .. } => code,
+            PublishError::NothingToDo(_) => "nothing-to-do",
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        match self {
+            PublishError::Failure { description, .. } => description,
+            PublishError::NothingToDo(description) => description,
+        }
+    }
+}
+
+impl serde::Serialize for PublishError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            PublishError::Failure { code, description } => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", code)?;
+                state.serialize_field("description", description)?;
+                state.end()
+            }
+            PublishError::NothingToDo(description) => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", "nothing-to-do")?;
+                state.serialize_field("description", description)?;
+                state.end()
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for PublishError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            PublishError::Failure { code, description } => {
+                write!(f, "PublishError::Failure: {}: {}", code, description)
+            }
+            PublishError::NothingToDo(description) => {
+                write!(f, "PublishError::PublishNothingToDo: {}", description)
+            }
+        }
+    }
+}
+
+impl std::error::Error for PublishError {}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct PublishResult {
+    proposal_url: url::Url,
+    proposal_web_url: Option<url::Url>,
+    is_new: bool,
+    branch_name: String,
+    target_branch_url: url::Url,
+    target_branch_web_url: Option<url::Url>,
 }
 
 #[cfg(test)]
