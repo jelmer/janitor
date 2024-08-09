@@ -30,15 +30,31 @@ pub fn iter_sections(text: &str) -> impl Iterator<Item = (Option<&str>, Vec<&str
     ret.into_iter()
 }
 
+/// Filter boring lines out of a wdiff
+///
+/// # Arguments
+/// * `lines` - The lines of the wdiff
+/// * `old_version` - The old version
+/// * `new_version` - The new version
+///
+/// # Returns
+/// A new Vec of lines with the boring lines removed
 pub fn filter_boring_wdiff<'a>(
-    lines: Vec<&'a str>, old_version: &'a str, new_version: &'a str
+    lines: Vec<&'a str>,
+    old_version: &'a str,
+    new_version: &'a str,
 ) -> Vec<String> {
     if lines.is_empty() {
         return Vec::new();
     }
     let (field, _changes) = match lines[0].split_once(':') {
         Some((field, changes)) => (field, changes),
-        None => return lines.iter().map(|line| line.to_string()).collect::<Vec<_>>(),
+        None => {
+            return lines
+                .iter()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>()
+        }
     };
     if field == "Installed-Size" {
         return Vec::new();
@@ -46,23 +62,30 @@ pub fn filter_boring_wdiff<'a>(
     if field == "Version" {
         return Vec::new();
     }
-    let regex = regex::Regex::new(&format!(r"\[-{}(.*?)-\] \{{\+{}\1\+\}}",
-                regex::escape(old_version),
-                regex::escape(new_version),
-            )).unwrap();
+    let regex = fancy_regex::Regex::new(&format!(
+        r"\[-{}(.*?)-\] \{{\+{}\1\+\}}",
+        regex::escape(old_version),
+        regex::escape(new_version),
+    ))
+    .unwrap();
 
-    let lines = lines.iter().map(|line| {
-        regex.replace_all(line, "").to_string()
-    }).collect::<Vec<_>>();
+    let lines = lines
+        .iter()
+        .map(|line| regex.replace_all(line, "").to_string())
+        .collect::<Vec<_>>();
     let block = lines.join("\n");
 
-    if lazy_regex::regex_find!(r"\[-.*?-\]", &block).is_none() && !lazy_regex::regex_find!(r"\{\+.*?\+\}", &block).is_none() {
+    if lazy_regex::regex_find!(r"\[-.*?-\]", &block).is_none()
+        && lazy_regex::regex_find!(r"\{\+.*?\+\}", &block).is_some()
+    {
         return Vec::new();
     }
     lines
 }
 
-fn iter_fields<'a> (lines: impl Iterator<Item = &'a str> + 'a) -> impl Iterator<Item = Vec<&'a str>> + 'a {
+fn iter_fields<'a>(
+    lines: impl Iterator<Item = &'a str> + 'a,
+) -> impl Iterator<Item = Vec<&'a str>> + 'a {
     let mut cl = Vec::new();
     let mut ret = Vec::new();
     for line in lines {
@@ -83,11 +106,20 @@ pub fn filter_boring(debdiff: &str, old_version: &str, new_version: &str) -> Str
     let mut ret = Vec::new();
     for (title, paragraph) in iter_sections(debdiff) {
         if title.is_none() {
-            ret.push((title, paragraph.iter().map(|line| line.to_string()).collect::<Vec<_>>()));
+            ret.push((
+                title,
+                paragraph
+                    .iter()
+                    .map(|line| line.to_string())
+                    .collect::<Vec<_>>(),
+            ));
             continue;
         }
         let title = title.unwrap();
-        let (package, wdiff) = if let Some((_, package)) = lazy_regex::regex_captures!(r"Control files of package (.*): lines which differ \(wdiff format\)", title) {
+        let (package, wdiff) = if let Some((_, package)) = lazy_regex::regex_captures!(
+            r"Control files of package (.*): lines which differ \(wdiff format\)",
+            title
+        ) {
             (Some(package), true)
         } else if title == "Control files: lines which differ (wdiff format)" {
             (None, true)
@@ -105,13 +137,22 @@ pub fn filter_boring(debdiff: &str, old_version: &str, new_version: &str) -> Str
                 if let Some(package) = package {
                     ret.push((None, vec![format!("No differences were encountered between the control files of package {}", package)]));
                 } else {
-                    ret.push((None, vec!["No differences were encountered in the control files".to_string()]));
+                    ret.push((
+                        None,
+                        vec!["No differences were encountered in the control files".to_string()],
+                    ));
                 }
             } else {
                 ret.push((Some(title), paragraph));
             }
         } else {
-            ret.push((Some(title), paragraph.iter().map(|line| line.to_string()).collect::<Vec<_>>()));
+            ret.push((
+                Some(title),
+                paragraph
+                    .iter()
+                    .map(|line| line.to_string())
+                    .collect::<Vec<_>>(),
+            ));
         }
     }
 
@@ -134,7 +175,9 @@ pub struct DebdiffError {
 
 impl From<tokio::io::Error> for DebdiffError {
     fn from(e: tokio::io::Error) -> Self {
-        DebdiffError { message: e.to_string() }
+        DebdiffError {
+            message: e.to_string(),
+        }
     }
 }
 
@@ -146,15 +189,25 @@ impl std::fmt::Display for DebdiffError {
 
 impl std::error::Error for DebdiffError {}
 
-pub async fn run_debdiff(old_binaries: Vec<&str>, new_binaries: Vec<&str>) -> Result<Vec<u8>, DebdiffError> {
-    let args = ["debdiff", "--from"].iter().chain(old_binaries.iter()).chain(["--to"].iter()).chain(new_binaries.iter()).collect::<Vec<_>>();
+pub async fn run_debdiff(
+    old_binaries: Vec<&str>,
+    new_binaries: Vec<&str>,
+) -> Result<Vec<u8>, DebdiffError> {
+    let args = ["debdiff", "--from"]
+        .iter()
+        .chain(old_binaries.iter())
+        .chain(["--to"].iter())
+        .chain(new_binaries.iter())
+        .collect::<Vec<_>>();
     let mut p = tokio::process::Command::new(args[0]);
     for arg in args.iter().skip(1) {
         p.arg(arg);
     }
     let output = p.output().await?;
     if !output.status.success() {
-        return Err(DebdiffError { message: String::from_utf8_lossy(&output.stderr).to_string() });
+        return Err(DebdiffError {
+            message: String::from_utf8_lossy(&output.stderr).to_string(),
+        });
     }
     Ok(output.stdout)
 }
@@ -164,7 +217,10 @@ pub fn debdiff_is_empty(debdiff: &str) -> bool {
 }
 
 pub fn section_is_wdiff(title: &str) -> (bool, Option<&str>) {
-    if let Some((_, package)) = lazy_regex::regex_captures!(r"Control files of package (.*): lines which differ \(wdiff format\)", title) {
+    if let Some((_, package)) = lazy_regex::regex_captures!(
+        r"Control files of package (.*): lines which differ \(wdiff format\)",
+        title
+    ) {
         return (true, Some(package));
     }
     if title == "Control files: lines which differ (wdiff format)" {
@@ -186,7 +242,13 @@ pub fn markdownify_debdiff(debdiff: &str) -> String {
             ret.push(format!("### {}", title));
             let (wdiff, _package) = section_is_wdiff(title);
             if wdiff {
-                ret.extend(lines.iter().filter_map(|line| if line.trim().is_empty() { None } else { Some(format!("* {}", fix_wdiff_md(line))) }));
+                ret.extend(lines.iter().filter_map(|line| {
+                    if line.trim().is_empty() {
+                        None
+                    } else {
+                        Some(format!("* {}", fix_wdiff_md(line)))
+                    }
+                }));
             } else {
                 for line in lines {
                     ret.push(format!("    {}", line));
@@ -217,7 +279,9 @@ pub fn markdownify_debdiff(debdiff: &str) -> String {
 pub fn htmlize_debdiff(debdiff: &str) -> String {
     let highlight_wdiff = |line| {
         let line = lazy_regex::regex_replace!(
-            r"\[-(.*?)-\]", r#"<span style="color:red;font-weight:bold">\1</span>"#, line
+            r"\[-(.*?)-\]",
+            r#"<span style="color:red;font-weight:bold">\1</span>"#,
+            line
         );
         let line = lazy_regex::regex_replace!(
             r"\{\+(.*?)\+\}",
@@ -236,10 +300,8 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
                 title,
             ) {
                 true
-            } else if title == "Control files: lines which differ (wdiff format)" {
-                true
             } else {
-                false
+                title == "Control files: lines which differ (wdiff format)"
             };
             if wdiff {
                 ret.push("<ul>".to_owned());
@@ -247,12 +309,20 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
                     if mlines.is_empty() {
                         continue;
                     }
-                    ret.push(format!("<li><pre>{}</pre></li>", highlight_wdiff(mlines.join("\n"))));
+                    ret.push(format!(
+                        "<li><pre>{}</pre></li>",
+                        highlight_wdiff(mlines.join("\n"))
+                    ));
                 }
                 ret.push("</ul>".to_owned());
             } else {
                 ret.push("<pre>".to_owned());
-                ret.extend(lines.iter().map(|line| line.to_string()).collect::<Vec<_>>());
+                ret.extend(
+                    lines
+                        .iter()
+                        .map(|line| line.to_string())
+                        .collect::<Vec<_>>(),
+                );
                 ret.push("</pre>".to_owned());
             }
         } else {
@@ -261,7 +331,7 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
                 if !line.trim().is_empty() {
                     let line = lazy_regex::regex_replace!(
                         "^(No differences were encountered between the control files of package) (.*)$",
-                        "\\1 <b>\\2</b>",
+                        r"\1 <b>\2</b>",
                         line,
                     ).to_string();
                     ret.push(line);
@@ -278,23 +348,26 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
     ret.join("\n")
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn test_nothing() {
-        assert_eq!(iter_sections("foo\n").collect::<Vec<_>>(), vec![(None, vec!["foo"])]);
+        assert_eq!(
+            iter_sections("foo\n").collect::<Vec<_>>(),
+            vec![(None, vec!["foo"])]
+        );
     }
 
     #[test]
     fn test_simple() {
-    assert_eq!(
+        assert_eq!(
         vec![
             (
                 None,
                 vec![
-                    "[The following lists of changes regard files as different if they have different names, permissions or owners.]",
+                    "[The following lists of changes regard files as different if they have",
+                    "different names, permissions or owners.]",
                 ],
             ),
             (
@@ -367,22 +440,20 @@ Control files of package acpi-support-base: lines which differ (wdiff format)
 -----------------------------------------------------------------------------
 Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
 "#;
-    let newdebdiff = super::filter_boring(debdiff, "0.143-4~jan+unchanged1", "0.143-5~jan+lint1");
-    assert_eq!(
-        newdebdiff,
-        r#"File lists identical (after any substitutions)
+        let newdebdiff =
+            super::filter_boring(debdiff, "0.143-4~jan+unchanged1", "0.143-5~jan+lint1");
+        assert_eq!(
+            newdebdiff,
+            r#"File lists identical (after any substitutions)
 
-No differences were encountered between the control files of package \
-acpi-fakekey
+No differences were encountered between the control files of package acpi-fakekey
 
-No differences were encountered between the control files of package \
-acpi-fakekey-dbgsym
+No differences were encountered between the control files of package acpi-fakekey-dbgsym
 
-No differences were encountered between the control files of package \
-acpi-support
+No differences were encountered between the control files of package acpi-support
 
-No differences were encountered between the control files of package \
-acpi-support-base
-"#);
+No differences were encountered between the control files of package acpi-support-base
+"#
+        );
     }
 }
