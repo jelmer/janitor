@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
 use std::collections::HashMap;
 
-//pub mod publish_one;
+pub mod publish_one;
 
 pub fn calculate_next_try_time(finish_time: DateTime<Utc>, attempt_count: usize) -> DateTime<Utc> {
     if attempt_count == 0 {
@@ -48,7 +48,7 @@ impl std::error::Error for DebdiffError {
     }
 }
 
-pub async fn get_debdiff(
+pub fn get_debdiff(
     differ_url: &url::Url,
     unchanged_id: &str,
     log_id: &str,
@@ -63,11 +63,11 @@ pub async fn get_debdiff(
     let mut headers = HeaderMap::new();
     headers.insert("Accept", "text/plain".parse().unwrap());
 
-    let client = reqwest::Client::new();
-    let response = client.get(debdiff_url).headers(headers).send().await?;
+    let client = reqwest::blocking::Client::new();
+    let response = client.get(debdiff_url).headers(headers).send()?;
 
     match response.status() {
-        reqwest::StatusCode::OK => Ok(response.bytes().await?.to_vec()),
+        reqwest::StatusCode::OK => Ok(response.bytes()?.to_vec()),
         reqwest::StatusCode::NOT_FOUND => {
             let run_id = response
                 .headers()
@@ -82,14 +82,16 @@ pub async fn get_debdiff(
         | reqwest::StatusCode::BAD_GATEWAY
         | reqwest::StatusCode::SERVICE_UNAVAILABLE
         | reqwest::StatusCode::GATEWAY_TIMEOUT => {
-            Err(DebdiffError::Unavailable(response.text().await.unwrap()))
+            Err(DebdiffError::Unavailable(response.text().unwrap()))
         }
         _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err())),
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
+    #[serde(rename = "attempt-push")]
+    AttemptPush,
     #[serde(rename = "push-derived")]
     PushDerived,
     #[serde(rename = "propose")]
@@ -100,12 +102,30 @@ pub enum Mode {
     BuildOnly,
     #[serde(rename = "skip")]
     Skip,
+    #[serde(rename = "bts")]
+    BTS,
+}
+
+impl TryFrom<Mode> for silver_platter::Mode {
+    type Error = String;
+
+    fn try_from(value: Mode) -> Result<Self, Self::Error> {
+        match value {
+            Mode::PushDerived => Ok(silver_platter::Mode::PushDerived),
+            Mode::Propose => Ok(silver_platter::Mode::Propose),
+            Mode::Push => Ok(silver_platter::Mode::Push),
+            Mode::BuildOnly => Err("Mode::BuildOnly is not supported".to_string()),
+            Mode::Skip => Err("Mode::Skip is not supported".to_string()),
+            Mode::BTS => Err("Mode::BTS is not supported".to_string()),
+            Mode::AttemptPush => Ok(silver_platter::Mode::AttemptPush),
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct PublishOneRequest {
     pub campaign: String,
-    pub target_branch_url: String,
+    pub target_branch_url: url::Url,
     pub role: String,
     pub log_id: String,
     pub reviewers: Option<Vec<String>>,
@@ -124,8 +144,9 @@ pub struct PublishOneRequest {
     pub existing_mp_url: Option<url::Url>,
     pub extra_context: Option<serde_json::Value>,
     pub mode: Mode,
-    pub command: Vec<String>,
+    pub command: String,
     pub external_url: Option<url::Url>,
+    pub derived_owner: Option<String>,
 }
 
 #[derive(Debug)]
@@ -189,12 +210,13 @@ impl std::error::Error for PublishError {}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct PublishResult {
-    proposal_url: url::Url,
+    proposal_url: Option<url::Url>,
     proposal_web_url: Option<url::Url>,
-    is_new: bool,
+    is_new: Option<bool>,
     branch_name: String,
     target_branch_url: url::Url,
     target_branch_web_url: Option<url::Url>,
+    mode: Mode,
 }
 
 #[cfg(test)]
