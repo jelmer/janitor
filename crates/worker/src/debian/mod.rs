@@ -519,7 +519,7 @@ fn validate_from_config(
         match breezyshim::debian::vcs_up_to_date::check_up_to_date(local_tree, subpath, &apt)
             .unwrap()
         {
-            breezyshim::debian::vcs_up_to_date::UpToDateStatus::UpToDate => {}
+            breezyshim::debian::vcs_up_to_date::UpToDateStatus::UpToDate => {} // codespell:ignore-line
             breezyshim::debian::vcs_up_to_date::UpToDateStatus::MissingChangelog => {
                 if !local_tree.has_filename(&subpath.join("debian")) {
                     return Err(ValidateError {

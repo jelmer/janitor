@@ -57,7 +57,11 @@ from jinja2 import (
     TemplateSyntaxError,
     select_autoescape,
 )
-from silver_platter.publish import (
+from silver_platter import (
+    BranchMissing,
+    BranchRateLimited,
+    BranchTemporarilyUnavailable,
+    BranchUnavailable,
     EmptyMergeProposal,
     InsufficientChangesForNewProposal,
     MergeProposal,
@@ -66,18 +70,12 @@ from silver_platter.publish import (
     PermissionDenied,
     PublishResult,
     SourceNotDerivedFromTarget,
-    find_existing_proposed,
-    merge_conflicts,
-    publish_changes,
-)
-from silver_platter.utils import (
-    BranchMissing,
-    BranchRateLimited,
-    BranchTemporarilyUnavailable,
-    BranchUnavailable,
     create_temp_sprout,
+    find_existing_proposed,
     full_branch_url,
+    merge_conflicts,
     open_branch,
+    publish_changes,
 )
 
 from ._launchpad import override_launchpad_consumer_name

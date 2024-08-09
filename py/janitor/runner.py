@@ -63,15 +63,16 @@ except ImportError:  # breezy >= 4
 from breezy.forge import Forge
 from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
 from redis.asyncio import Redis
-from silver_platter.probers import select_preferred_probers
-from silver_platter.proposal import (
+from silver_platter import (
+    BranchRateLimited,
     ForgeLoginRequired,
     NoSuchProject,
     UnsupportedForge,
     find_existing_proposed,
+    full_branch_url,
     get_forge,
+    select_preferred_probers,
 )
-from silver_platter.utils import BranchRateLimited, full_branch_url
 from yarl import URL
 
 from . import set_user_agent, splitout_env, state
@@ -424,7 +425,7 @@ class DebianBuilder(Builder):
         return env
 
     def additional_colocated_branches(self, main_branch):
-        from silver_platter._svp_rs.debian import (  # type: ignore
+        from silver_platter.debian import (  # type: ignore
             pick_additional_colocated_branches,
         )
 
