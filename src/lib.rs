@@ -4,4 +4,6 @@ pub mod publish;
 pub mod state;
 pub mod vcs;
 
+pub mod debdiff;
+
 pub mod api;
