@@ -61,11 +61,12 @@ try:
 except ImportError:  # breezy >= 4
     pass
 from breezy.forge import (
-    Forge, get_forge,
+    Forge,
     ForgeLoginRequired,
     NoSuchProject,
     UnsupportedForge,
-    )
+    get_forge,
+)
 from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
 from redis.asyncio import Redis
 from silver_platter import (

@@ -1,8 +1,8 @@
-use chrono::{DateTime, Utc};
 use breezyshim::RevisionId;
+use chrono::{DateTime, Utc};
 use reqwest::header::HeaderMap;
-use std::collections::HashMap;
 use serde::ser::SerializeStruct;
+use std::collections::HashMap;
 
 //pub mod publish_one;
 
@@ -48,8 +48,17 @@ impl std::error::Error for DebdiffError {
     }
 }
 
-pub async fn get_debdiff(differ_url: &url::Url, unchanged_id: &str, log_id: &str) -> Result<Vec<u8>, DebdiffError> {
-    let debdiff_url = differ_url.join(&format!("/debdiff/{}/{}?filter_boring=1", unchanged_id, log_id)).unwrap();
+pub async fn get_debdiff(
+    differ_url: &url::Url,
+    unchanged_id: &str,
+    log_id: &str,
+) -> Result<Vec<u8>, DebdiffError> {
+    let debdiff_url = differ_url
+        .join(&format!(
+            "/debdiff/{}/{}?filter_boring=1",
+            unchanged_id, log_id
+        ))
+        .unwrap();
 
     let mut headers = HeaderMap::new();
     headers.insert("Accept", "text/plain".parse().unwrap());
@@ -60,13 +69,22 @@ pub async fn get_debdiff(differ_url: &url::Url, unchanged_id: &str, log_id: &str
     match response.status() {
         reqwest::StatusCode::OK => Ok(response.bytes().await?.to_vec()),
         reqwest::StatusCode::NOT_FOUND => {
-            let run_id = response.headers().get("unavailable_run_id").unwrap().to_str().unwrap();
+            let run_id = response
+                .headers()
+                .get("unavailable_run_id")
+                .unwrap()
+                .to_str()
+                .unwrap();
             Err(DebdiffError::MissingRun(run_id.to_string()))
-        },
-        reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::INTERNAL_SERVER_ERROR | reqwest::StatusCode::BAD_GATEWAY | reqwest::StatusCode::SERVICE_UNAVAILABLE | reqwest::StatusCode::GATEWAY_TIMEOUT => {
+        }
+        reqwest::StatusCode::BAD_REQUEST
+        | reqwest::StatusCode::INTERNAL_SERVER_ERROR
+        | reqwest::StatusCode::BAD_GATEWAY
+        | reqwest::StatusCode::SERVICE_UNAVAILABLE
+        | reqwest::StatusCode::GATEWAY_TIMEOUT => {
             Err(DebdiffError::Unavailable(response.text().await.unwrap()))
-        },
-        _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err()))
+        }
+        _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err())),
     }
 }
 
@@ -81,7 +99,7 @@ pub enum Mode {
     #[serde(rename = "build-only")]
     BuildOnly,
     #[serde(rename = "skip")]
-    Skip
+    Skip,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
@@ -112,11 +130,8 @@ pub struct PublishOneRequest {
 
 #[derive(Debug)]
 pub enum PublishError {
-    Failure {
-        code: String,
-        description: String,
-    },
-    NothingToDo(String)
+    Failure { code: String, description: String },
+    NothingToDo(String),
 }
 
 impl PublishError {
