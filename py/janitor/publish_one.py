@@ -34,17 +34,22 @@ from email.utils import parseaddr
 from typing import Any, Optional
 
 from breezy.branch import Branch
-from breezy.errors import DivergedBranches, NoSuchRevision, UnexpectedHttpStatus, PermissionDenied
+from breezy.errors import (
+    DivergedBranches,
+    NoSuchRevision,
+    PermissionDenied,
+    UnexpectedHttpStatus,
+)
 from breezy.forge import (
     Forge,
     ForgeLoginRequired,
-    UnsupportedForge,
-    determine_title,
-    get_forge,
     MergeProposal,
     MergeProposalExists,
     NoSuchProject,
     SourceNotDerivedFromTarget,
+    UnsupportedForge,
+    determine_title,
+    get_forge,
 )
 from breezy.git.remote import RemoteGitBranch, RemoteGitError
 from breezy.plugins.gitlab.forge import (
