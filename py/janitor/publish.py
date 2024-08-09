@@ -71,7 +71,7 @@ from breezy.forge import (
 )
 from breezy.transport import Transport
 from redis.asyncio import Redis
-from silver_platter.utils import (
+from silver_platter import (
     BranchMissing,
     BranchRateLimited,
     BranchUnavailable,
