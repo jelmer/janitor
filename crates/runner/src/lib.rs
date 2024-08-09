@@ -35,6 +35,21 @@ pub fn is_log_filename(name: &str) -> bool {
     }
 }
 
+pub fn dpkg_vendor() -> Option<String> {
+    std::process::Command::new("dpkg-vendor")
+        .arg("--query")
+        .arg("vendor")
+        .output()
+        .map(|output| {
+            if output.status.success() {
+                Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,5 +91,11 @@ mod tests {
         assert!(!is_log_filename("foo.1.log.1"));
         assert!(!is_log_filename("foo.1.notlog"));
         assert!(!is_log_filename("foo.log.notlog"));
+    }
+
+    #[test]
+    fn test_dpkg_vendor() {
+        let vendor = dpkg_vendor();
+        assert!(vendor.is_some());
     }
 }
