@@ -68,7 +68,7 @@ from breezy.repository import Repository
 from breezy.revision import NULL_REVISION
 from breezy.transport import Transport, get_transport_from_url
 from dulwich.objects import ZERO_SHA
-from silver_platter.utils import (
+from silver_platter import (
     BranchMissing,
     BranchRateLimited,
     BranchTemporarilyUnavailable,
