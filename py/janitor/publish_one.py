@@ -34,13 +34,17 @@ from email.utils import parseaddr
 from typing import Any, Optional
 
 from breezy.branch import Branch
-from breezy.errors import DivergedBranches, NoSuchRevision, UnexpectedHttpStatus
+from breezy.errors import DivergedBranches, NoSuchRevision, UnexpectedHttpStatus, PermissionDenied
 from breezy.forge import (
     Forge,
     ForgeLoginRequired,
     UnsupportedForge,
     determine_title,
     get_forge,
+    MergeProposal,
+    MergeProposalExists,
+    NoSuchProject,
+    SourceNotDerivedFromTarget,
 )
 from breezy.git.remote import RemoteGitBranch, RemoteGitError
 from breezy.plugins.gitlab.forge import (
@@ -64,12 +68,7 @@ from silver_platter import (
     BranchUnavailable,
     EmptyMergeProposal,
     InsufficientChangesForNewProposal,
-    MergeProposal,
-    MergeProposalExists,
-    NoSuchProject,
-    PermissionDenied,
     PublishResult,
-    SourceNotDerivedFromTarget,
     create_temp_sprout,
     find_existing_proposed,
     full_branch_url,
@@ -200,11 +199,11 @@ def publish(
         labels = None
     try:
         return publish_changes(
-            source_branch,
-            target_branch,
-            resume_branch,
-            mode,
-            derived_branch_name,
+            local_branch=source_branch,
+            main_branch=target_branch,
+            resume_branch=resume_branch,
+            mode=mode,
+            name=derived_branch_name,
             get_proposal_description=get_proposal_description,
             get_proposal_commit_message=get_proposal_commit_message,
             get_proposal_title=get_proposal_title,

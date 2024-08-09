@@ -60,17 +60,18 @@ try:
     from breezy.errors import ConnectionError  # type: ignore
 except ImportError:  # breezy >= 4
     pass
-from breezy.forge import Forge
+from breezy.forge import (
+    Forge, get_forge,
+    ForgeLoginRequired,
+    NoSuchProject,
+    UnsupportedForge,
+    )
 from breezy.transport import Transport, UnsupportedProtocol, UnusableRedirect
 from redis.asyncio import Redis
 from silver_platter import (
     BranchRateLimited,
-    ForgeLoginRequired,
-    NoSuchProject,
-    UnsupportedForge,
     find_existing_proposed,
     full_branch_url,
-    get_forge,
     select_preferred_probers,
 )
 from yarl import URL
