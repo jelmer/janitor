@@ -57,7 +57,7 @@ from jinja2 import (
     TemplateSyntaxError,
     select_autoescape,
 )
-from silver_platter.publish import (
+from silver_platter import (
     EmptyMergeProposal,
     InsufficientChangesForNewProposal,
     MergeProposal,
@@ -70,7 +70,7 @@ from silver_platter.publish import (
     merge_conflicts,
     publish_changes,
 )
-from silver_platter.utils import (
+from silver_platter import (
     BranchMissing,
     BranchRateLimited,
     BranchTemporarilyUnavailable,
