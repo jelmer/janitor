@@ -11,7 +11,14 @@ homepage = "https://github.com/jelmer/janitor"
 [dependencies]
 breezyshim.workspace = true
 chrono.workspace = true
+clap = { workspace = true, features = ["derive"] }
+janitor = { version = "0.0.0", path = "../.." }
+minijinja = { version = "2", features = ["loader"] }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
+url.workspace = true
 
 [dev-dependencies]
 maplit = { workspace = true }
