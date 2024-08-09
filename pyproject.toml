@@ -32,6 +32,7 @@ module = [
     "boto3.*",
     "google.protobuf.*",
     "pytest_asyncio.*",
+    "silver_platter.*",
 ]
 ignore_missing_imports = true
 
