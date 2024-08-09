@@ -23,6 +23,9 @@ url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { workspace = true }
 silver-platter = { workspace = true }
+tokio = { workspace = true, features = ["process"] }
+regex = "1.10.6"
+lazy-regex = "3.2.0"
 
 [workspace.dependencies]
 pyo3 = { version = "0.22" }
