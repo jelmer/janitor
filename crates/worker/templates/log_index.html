@@ -1,0 +1,11 @@
+<html>
+<head><title>Log Index</title><head>
+<body>
+<h1>Logs</h1>
+<ul>
+{% for name in names %}
+  <li><a href="/logs/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>

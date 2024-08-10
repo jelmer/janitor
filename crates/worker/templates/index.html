@@ -1,0 +1,67 @@
+<html lang="en">
+<head><title>Job{% if let Some(assignment) = assignment %}{{ assignment.id }}{% endif %}</title></head>
+<body>
+
+{% if let Some(assignment) = assignment %}
+<h1>Run Details</h1>
+
+<ul>
+<li><a href="/assignment">Raw Assignment</a></li>
+<li><b>Campaign</b>: {{ assignment.campaign }}</li>
+<li><b>Codebase</b>: {{ assignment.codebase }}</li>
+{% if metadata.is_some() && metadata.unwrap().start_time.is_some() %}
+<li><b>Start Time</b>: {{ metadata.unwrap().start_time .unwrap()}}
+<li><b>Current duration</b>: {{ chrono::Utc::now() - metadata.unwrap().start_time.unwrap() }}
+{% endif %}
+<li><b>Environment</b>: <ul>
+{% for (key, value) in assignment.env.iter() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</li>
+</ul>
+
+<h2>Codemod</h2>
+
+<ul>
+<li><b>Command</b>: {{ assignment.codemod.command }}</li>
+<li><b>Environment</b>: <ul>
+{% for (key, value) in assignment.codemod.environment.iter() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</ul>
+</li>
+</ul>
+
+<h2>Build</h2>
+
+<ul>
+<li><b>Target</b>: {{ assignment.build.target }}</li>
+<li><b>Force Build</b>: {{ assignment.force_build }}</li>
+{% if let Some(build_env) = assignment.build.environment %}
+<li><b>Environment</b>: <ul>
+{% for (key, value) in build_env.iter() %}
+<li>{{ key }}: {{ value }}</li>
+{% endfor %}
+</ul>
+</li>
+{% endif %}
+</ul>
+
+{% if let Some(lognames) = lognames %}
+<h1>Logs</h1>
+<ul>
+{% for name in lognames.iter() %}
+  <li><a href="/logs/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% else %}
+
+<p>No current assignment.</p>
+
+{% endif %}
+
+</body>
+</html>
+
