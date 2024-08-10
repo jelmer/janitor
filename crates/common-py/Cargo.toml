@@ -14,7 +14,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
-pyo3-asyncio = { workspace = true, features=["tokio-runtime"] }
 janitor = { path = "../.." }
 reqwest = { version = "0.12", features = ["json"] }
 serde_json = "1"

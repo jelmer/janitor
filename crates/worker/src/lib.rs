@@ -27,7 +27,15 @@ pub mod generic;
 
 pub mod vcs;
 
+pub mod web;
+
 mod tee;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub output_directory: std::path::PathBuf,
+    pub assignment: Option<janitor::api::worker::Assignment>,
+}
 
 pub async fn is_gce_instance() -> bool {
     match lookup_host("metadata.google.internal").await {
@@ -96,47 +104,6 @@ pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
             stage: vec!["codemod".to_string()],
             transient: None,
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::WorkerFailure;
-
-    #[test]
-    fn test_convert_codemod_script_failed() {
-        assert_eq!(
-            convert_codemod_script_failed(127, "foobar"),
-            WorkerFailure {
-                code: "command-not-found".to_string(),
-                description: "Command foobar not found".to_string(),
-                stage: vec!["codemod".to_string()],
-                details: None,
-                transient: None,
-            }
-        );
-        assert_eq!(
-            convert_codemod_script_failed(137, "foobar"),
-            WorkerFailure {
-                code: "killed".to_string(),
-                description: "Process was killed (by OOM killer?)".to_string(),
-                stage: vec!["codemod".to_string()],
-
-                details: None,
-                transient: None,
-            }
-        );
-        assert_eq!(
-            convert_codemod_script_failed(1, "foobar"),
-            WorkerFailure {
-                code: "command-failed".to_string(),
-                description: "Script foobar failed to run with code 1".to_string(),
-                stage: vec!["codemod".to_string()],
-                details: None,
-                transient: None,
-            }
-        );
     }
 }
 
@@ -948,6 +915,27 @@ pub fn run_worker(
     Ok(())
 }
 
+pub enum SingleItemError {
+    AssignmentFailure(String),
+    EmptyQueue,
+    ResultUploadFailure(String),
+}
+
+impl From<client::AssignmentError> for SingleItemError {
+    fn from(e: client::AssignmentError) -> Self {
+        match e {
+            client::AssignmentError::EmptyQueue => SingleItemError::EmptyQueue,
+            client::AssignmentError::Failure(e) => SingleItemError::AssignmentFailure(e),
+        }
+    }
+}
+
+impl From<client::UploadFailure> for SingleItemError {
+    fn from(e: client::UploadFailure) -> Self {
+        SingleItemError::ResultUploadFailure(e.to_string())
+    }
+}
+
 pub async fn process_single_item(
     client: &crate::client::Client,
     my_url: Option<&Url>,
@@ -958,11 +946,13 @@ pub async fn process_single_item(
     campaign: Option<&str>,
     tee: bool,
     output_directory_base: Option<&std::path::Path>,
-) {
+    state: &mut AppState,
+) -> Result<(), SingleItemError> {
     let assignment = client
         .get_assignment(my_url, node_name, jenkins_build_url, codebase, campaign)
-        .await
-        .unwrap();
+        .await?;
+
+    state.assignment = Some(assignment.clone());
 
     log::debug!("Got back assignment: {:?}", &assignment);
 
@@ -1018,7 +1008,7 @@ pub async fn process_single_item(
             queue_id: Some(assignment.queue_id),
             start_time: Some(start_time),
             branch_url: assignment_.branch.url.clone(),
-            vcs_type: Some(assignment.branch.vcs_type.clone()),
+            vcs_type: Some(assignment.branch.vcs_type),
             ..Metadata::default()
         };
 
@@ -1080,7 +1070,7 @@ pub async fn process_single_item(
                     ..
                 },
             ) => {
-                metadata.update(&e);
+                metadata.update(e);
                 log::info!("Worker failed in {:?} ({}): {}", stage, code, description);
                 // This is a failure for the worker, but returning 0 will cause
                 // jenkins to mark the job having failed, which is not really
@@ -1098,8 +1088,7 @@ pub async fn process_single_item(
 
     let result = client
         .upload_results(&assignment.id, &metadata, Some(output_directory.path()))
-        .await
-        .unwrap();
+        .await?;
 
     log::info!("Results uploaded");
 
@@ -1118,6 +1107,8 @@ pub async fn process_single_item(
         .await
         .unwrap();
     }
+
+    Ok(())
 }
 
 pub async fn push_to_gateway(
@@ -1241,5 +1232,46 @@ fn push_error_to_worker_failure(e: BrzError, stage: Vec<String>) -> WorkerFailur
             details: None,
             transient: None,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::WorkerFailure;
+
+    #[test]
+    fn test_convert_codemod_script_failed() {
+        assert_eq!(
+            convert_codemod_script_failed(127, "foobar"),
+            WorkerFailure {
+                code: "command-not-found".to_string(),
+                description: "Command foobar not found".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(137, "foobar"),
+            WorkerFailure {
+                code: "killed".to_string(),
+                description: "Process was killed (by OOM killer?)".to_string(),
+                stage: vec!["codemod".to_string()],
+
+                details: None,
+                transient: None,
+            }
+        );
+        assert_eq!(
+            convert_codemod_script_failed(1, "foobar"),
+            WorkerFailure {
+                code: "command-failed".to_string(),
+                description: "Script foobar failed to run with code 1".to_string(),
+                stage: vec!["codemod".to_string()],
+                details: None,
+                transient: None,
+            }
+        );
     }
 }

@@ -523,9 +523,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.166"
+version = "0.1.167"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a4a2cf02e5039c0dbb651b3419fe972fdd96db82ffa32e88915d49227f99f64"
+checksum = "8acee43006f08b381c4d8f45e1ccdc3c2e6af0924f5ead02d66e02142a94b473"
 dependencies = [
  "chrono",
  "ctor",
@@ -551,6 +551,29 @@ checksum = "40723b8fb387abc38f4f4a37c09073622e41dd12327033091ef8950659e6dc0c"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "buildlog-consultant"
+version = "0.0.38"
+source = "git+https://github.com/jelmer/buildlog-consultant.git#7e3edde0c49186acec9c8720541935c5b9bb1bb3"
+dependencies = [
+ "chrono",
+ "debian-control",
+ "debversion",
+ "fancy-regex",
+ "inventory",
+ "lazy-regex",
+ "lazy_static",
+ "log",
+ "pyo3",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "shlex",
+ "text-size",
+ "textwrap",
 ]
 
 [[package]]
@@ -644,9 +667,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.14"
+version = "4.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c937d4061031a6d0c8da4b9a4f98a172fc2976dfb1c19213a9cf7d0d3c837e36"
+checksum = "11d8838454fda655dafd3accb2b6e2bea645b9e4078abe84a22ceb947235c5cc"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -654,9 +677,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.14"
+version = "4.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85379ba512b21a328adf887e85f7742d12e96eb31f3ef077df4ffc26b506ffed"
+checksum = "216aec2b177652e3846684cbfe25c9964d18ec45234f0f5da5157b207ed1aab6"
 dependencies = [
  "anstream",
  "anstyle",
@@ -697,7 +720,6 @@ dependencies = [
  "janitor",
  "log",
  "pyo3",
- "pyo3-asyncio",
  "pyo3-log",
  "reqwest",
  "serde_json",
@@ -1314,6 +1336,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+
+[[package]]
 name = "fsevent-sys"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1468,6 +1496,16 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "gethostname"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3655aa6818d65bc620d6911f05aa7b6aeb596291e1e9f79e52df85583d1e30"
+dependencies = [
+ "rustix 0.38.34",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -1885,6 +1923,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "inventory"
+version = "0.3.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f958d3d68f4167080a18141e10381e7634563984a537f2a49a30fd8e53ac5767"
+
+[[package]]
 name = "io-lifetimes"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1944,6 +1988,7 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 name = "janitor"
 version = "0.0.0"
 dependencies = [
+ "askama",
  "breezyshim",
  "chrono",
  "clap",
@@ -2014,16 +2059,19 @@ dependencies = [
 name = "janitor-worker"
 version = "0.0.0"
 dependencies = [
+ "askama",
  "askama_axum",
  "axum",
  "backoff",
  "breezyshim",
  "chrono",
  "clap",
+ "gethostname",
  "janitor",
  "log",
  "maplit",
  "nix",
+ "ognibuild",
  "percent-encoding",
  "prometheus",
  "pyo3",
@@ -2475,6 +2523,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b64972346851a39438c60b341ebc01bba47464ae329e55cf343eb93964efd9"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "ognibuild"
+version = "0.0.23"
+source = "git+https://github.com/jelmer/ognibuild.git#640426bf83cf4a3c732783cb935c5996ef3b23bd"
+dependencies = [
+ "breezyshim",
+ "buildlog-consultant",
+ "chrono",
+ "debian-changelog",
+ "debversion",
+ "fs_extra",
+ "libc",
+ "log",
+ "nix",
+ "pyo3",
+ "rand",
+ "regex",
+ "serde",
+ "serde_json",
+ "shlex",
+ "tempfile",
+ "url",
+ "whoami",
 ]
 
 [[package]]
@@ -2973,7 +3046,6 @@ dependencies = [
  "janitor-publish",
  "log",
  "pyo3",
- "pyo3-asyncio",
  "pyo3-log",
  "silver-platter",
 ]
@@ -3273,7 +3345,6 @@ dependencies = [
  "breezyshim",
  "janitor-runner",
  "pyo3",
- "pyo3-asyncio",
  "pyo3-log",
  "silver-platter",
 ]
@@ -3549,9 +3620,9 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.5.34"
+version = "0.5.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410f66b1800e21289180917997477d4f25818e75d46c9b19e3cf5b9ca8483df6"
+checksum = "97f9e2382dae4183323fad299a350246154929be7b3e362c4e8d59e0368a9cb8"
 dependencies = [
  "breezyshim",
  "chrono",
