@@ -1,0 +1,11 @@
+<html>
+<head><title>Artifact Index</title><head>
+<body>
+<h1>Artifacts</h1>
+<ul>
+{% for name in names %}
+  <li><a href="/artifacts/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>
