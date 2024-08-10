@@ -523,9 +523,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.166"
+version = "0.1.167"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a4a2cf02e5039c0dbb651b3419fe972fdd96db82ffa32e88915d49227f99f64"
+checksum = "8acee43006f08b381c4d8f45e1ccdc3c2e6af0924f5ead02d66e02142a94b473"
 dependencies = [
  "chrono",
  "ctor",
@@ -3549,9 +3549,9 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.5.34"
+version = "0.5.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "410f66b1800e21289180917997477d4f25818e75d46c9b19e3cf5b9ca8483df6"
+checksum = "97f9e2382dae4183323fad299a350246154929be7b3e362c4e8d59e0368a9cb8"
 dependencies = [
  "breezyshim",
  "chrono",

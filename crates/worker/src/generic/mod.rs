@@ -8,6 +8,15 @@ use silver_platter::CommitPending;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use ognibuild::session::{Error as SessionError, Session};
+use ognibuild::session::plain::PlainSession;
+use ognibuild::session::schroot::SchrootSession;
+use ognibuild::build::{run_build, BuildError as OgniBuildError};
+use ognibuild::resolver::auto_resolver;
+use ognibuild::fixer::InstallFixer;
+use ognibuild::log::DirectoryLogManager;
+use ognibuild::buildsystems::{BuildSystem,detect_buildsystems};
+
 
 pub fn generic_make_changes(
     local_tree: &WorkingTree,
@@ -139,59 +148,79 @@ pub fn build(
     chroot: Option<&str>,
     dep_server_url: Option<&str>,
 ) -> Result<serde_json::Value, WorkerFailure> {
-    pyo3::import_exception!(janitor.generic.build, BuildFailure);
-    pyo3::Python::with_gil(|py| -> Result<serde_json::Value, WorkerFailure> {
-        use pyo3::prelude::*;
-        let m = py.import_bound("janitor.generic.build").unwrap();
-        let build = m.getattr("build").unwrap();
-
-        match build.call1((
-            local_tree.to_object(py),
-            subpath,
-            output_directory,
-            chroot,
-            dep_server_url,
-        )) {
-            Ok(_) => Ok(serde_json::Value::Null),
-            Err(e) => {
-                if e.is_instance_of::<BuildFailure>(py) {
-                    let value = e.value_bound(py);
-                    let code = value.getattr("code").unwrap().extract::<String>().unwrap();
-                    let description = value
-                        .getattr("description")
-                        .unwrap()
-                        .extract::<String>()
-                        .unwrap();
-                    let details = value
-                        .getattr("details")
-                        .unwrap()
-                        .extract::<Option<PyObject>>()
-                        .unwrap()
-                        .map(|x| crate::py_to_serde_json(x.bind(py)).unwrap());
-                    let stage = value
-                        .getattr("stage")
-                        .unwrap()
-                        .extract::<Vec<String>>()
-                        .unwrap();
-                    Err(WorkerFailure {
-                        code,
-                        description,
-                        details,
-                        stage: vec!["build".to_string()].into_iter().chain(stage).collect(),
-                        transient: None,
-                    })
-                } else {
-                    Err(WorkerFailure {
-                        code: "internal-error".to_string(),
-                        description: e.to_string(),
-                        details: None,
-                        stage: vec!["build".to_string()],
-                        transient: None,
-                    })
-                }
+    let session = if let Some(chroot) = chroot {
+        log::info!("Using schroot {}", chroot);
+        Box::new(SchrootSession::new(chroot, None).map_err(|e| {
+            match e {
+                SessionError::SetupFailure(summary, lines) => WorkerFailure {
+                    code: "session-setup-failure".to_string(),
+                    description: summary,
+                    details: Some(lines),
+                    stage: vec!["build".to_string()],
+                    transient: None,
+                },
+                _ => unreachable!(),
             }
-        }
-    })
+        })?) as Box<dyn Session>
+    } else {
+        Box::new(PlainSession::new()) as Box<dyn Session>
+    };
+    let resolver = auto_resolver(session, dep_server_url=dep_server_url);
+    let fixers = vec![InstallFixer(resolver)];
+    let (external_dir, internal_dir) = session.setup_from_vcs(local_tree);
+    let bss = detect_buildsystems(external_dir.join(subpath)).collect::<Vec<_>>();
+    session.chdir(internal_dir.join(subpath));
+    let build_log_manager = =DirectoryLogManager::new(
+        output_directory.join(BUILD_LOG_FILENAME),
+        "redirect",
+    );
+    match run_build(
+            session,
+            bss,
+            resolver,
+            fixers,
+            build_log_manager
+        ) {
+        Err(BuildError::NotImplemented) => {
+            return Err(BuildFailure(
+                "build-action-unknown", str(e), stage=("build",)
+            ) from e
+
+            except NoBuildToolsFound as e:
+                raise BuildFailure("no-build-tools-found", str(e)) from e
+            except DetailedFailure as f:
+                raise BuildFailure(
+                    f.error.kind, str(f.error), details={"command": f.argv}
+                ) from f
+            except UnidentifiedError as e:
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise BuildFailure("build-failed", e.secondary.line) from e
+                elif len(lines) == 1:
+                    raise BuildFailure("build-failed", lines[0]) from e
+                else:
+                    raise BuildFailure(
+                        "build-failed",
+                        "%r failed with unidentified error "
+                        "(return code %d)" % (e.argv, e.retcode),
+                    ) from e
+                try:
+                    run_test(
+                        session,
+                        buildsystems=bss,
+                        resolver=resolver,
+                        fixers=fixers,
+                        log_manager=DirectoryLogManager(
+                            os.path.join(output_directory, "test.log"), "redirect"
+                        ),
+                    )
+                except NotImplementedError as e:
+                    traceback.print_exc()
+                    raise BuildFailure(
+                        "test-action-unknown", str(e), stage=("test",)
+                    ) from e
+
+    return {}
 }
 
 pub struct GenericTarget {
