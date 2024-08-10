@@ -32,4 +32,3 @@ target
 py/janitor/_*.cpython-*.so
 py/janitor/config_pb2.py
 py/janitor/config_pb2.pyi
-py/janitor/_worker.*.so

@@ -24,13 +24,13 @@ clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { workspace = true }
 silver-platter = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
-regex = "1"
-lazy-regex = ">=2"
+regex = "1.10.6"
+lazy-regex = "3.2.0"
 fancy-regex = "0.13.0"
+askama = "0.12"
 
 [workspace.dependencies]
 pyo3 = { version = "0.22" }
-pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 reqwest = { version = "0.12" }
 pyo3-log = ">=0.11"
 breezyshim = ">=0.1.78"
@@ -47,6 +47,8 @@ axum = "0.7"
 maplit = "1"
 silver-platter = "0.5"
 #silver-platter = { path = "../silver-platter" }
+ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
+pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 shlex = "1"
 
 [build-dependencies]

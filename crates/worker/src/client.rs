@@ -193,6 +193,18 @@ impl Credentials {
             Credentials::Bearer { token } => builder.bearer_auth(token),
         }
     }
+
+    pub fn from_url(url: &Url) -> Self {
+        let mut credentials = Credentials::None;
+        if !url.username().is_empty() {
+            let password = url.password().map(|p| p.to_string());
+            credentials = Credentials::Basic {
+                username: url.username().to_string(),
+                password,
+            };
+        }
+        credentials
+    }
 }
 
 impl Client {
