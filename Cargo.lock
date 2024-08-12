@@ -556,7 +556,7 @@ dependencies = [
 [[package]]
 name = "buildlog-consultant"
 version = "0.0.38"
-source = "git+https://github.com/jelmer/buildlog-consultant.git#7e3edde0c49186acec9c8720541935c5b9bb1bb3"
+source = "git+https://github.com/jelmer/buildlog-consultant.git#cbc1a4f1ec814fda61f49ab67b82e41cb8298ac4"
 dependencies = [
  "chrono",
  "debian-control",
@@ -2528,7 +2528,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.23"
-source = "git+https://github.com/jelmer/ognibuild.git#640426bf83cf4a3c732783cb935c5996ef3b23bd"
+source = "git+https://github.com/jelmer/ognibuild.git#09ff423b233c9062774c4ea61317fa8b9702e6d8"
 dependencies = [
  "breezyshim",
  "buildlog-consultant",
