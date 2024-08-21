@@ -16,7 +16,7 @@ fn main() {
     breezyshim::init();
 
     let (wt, subpath) =
-        breezyshim::tree::WorkingTree::open_containing(std::path::Path::new(".")).unwrap();
+        breezyshim::workingtree::open_containing(std::path::Path::new(".")).unwrap();
 
     let config = if let Some(config) = args.config {
         let config = std::fs::read_to_string(config).unwrap();
