@@ -25,7 +25,7 @@ pyo3 = { workspace = true }
 silver-platter = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
 regex = "1.10.6"
-lazy-regex = "3.2.0"
+lazy-regex = "3.3.0"
 fancy-regex = "0.13.0"
 askama = "0.12"
 
