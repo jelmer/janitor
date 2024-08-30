@@ -1,5 +1,6 @@
 pub mod artifacts;
 pub mod config;
+pub mod logs;
 pub mod logging;
 pub mod publish;
 pub mod queue;
