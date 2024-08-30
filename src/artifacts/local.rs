@@ -23,7 +23,7 @@ impl LocalArtifactManager {
 
 #[async_trait]
 impl ArtifactManager for LocalArtifactManager {
-    async fn store_artifacts(&self, run_id: &str, local_path: &Path, names: Option<&[String]>, _timeout: Option<std::time::Duration>) -> Result<(), Error> {
+    async fn store_artifacts(&self, run_id: &str, local_path: &Path, names: Option<&[String]>) -> Result<(), Error> {
         let run_dir = self.path.join(run_id);
         fs::create_dir(&run_dir).or_else(|e| {
             if e.kind() == ErrorKind::AlreadyExists {
@@ -44,7 +44,7 @@ impl ArtifactManager for LocalArtifactManager {
         Ok(())
     }
 
-    async fn get_artifact(&self, run_id: &str, filename: &str, _timeout: Option<std::time::Duration>) -> Result<Box<dyn std::io::Read>, Error> {
+    async fn get_artifact(&self, run_id: &str, filename: &str) -> Result<Box<dyn std::io::Read>, Error> {
         let path = self.path.join(run_id).join(filename);
         Ok(Box::new(File::open(path)?))
     }
@@ -53,7 +53,7 @@ impl ArtifactManager for LocalArtifactManager {
         url::Url::from_file_path(self.path.join(run_id).join(filename)).unwrap()
     }
 
-    async fn retrieve_artifacts(&self, run_id: &str, local_path: &Path, filter_fn: Option<&(dyn for <'a> Fn(&'a str) -> bool + Sync)>, _timeout: Option<std::time::Duration>) -> Result<(), Error> {
+    async fn retrieve_artifacts(&self, run_id: &str, local_path: &Path, filter_fn: Option<&(dyn for <'a> Fn(&'a str) -> bool + Sync)>) -> Result<(), Error> {
         let run_path = self.path.join(run_id);
         if !run_path.is_dir() {
             return Err(Error::ArtifactsMissing);

@@ -57,7 +57,6 @@ impl ArtifactManager for GCSArtifactManager {
         run_id: &str,
         local_path: &Path,
         names: Option<&[String]>,
-        timeout: Option<std::time::Duration>,
     ) -> Result<(), Error> {
         let files_to_upload = match names {
             Some(names) => names.to_vec(),
@@ -73,7 +72,6 @@ impl ArtifactManager for GCSArtifactManager {
             }
         };
 
-        let timeout = timeout.map_or(60, |t| t.as_secs());
         let tasks: Vec<_> = files_to_upload
             .into_iter()
             .map(|name| {
@@ -145,7 +143,6 @@ impl ArtifactManager for GCSArtifactManager {
         &self,
         run_id: &str,
         filename: &str,
-        _timeout: Option<std::time::Duration>,
     ) -> Result<Box<dyn std::io::Read>, Error> {
         let object_name = format!("{}/{}", run_id, filename);
         let request = GetObjectRequest {
@@ -153,8 +150,6 @@ impl ArtifactManager for GCSArtifactManager {
             object: object_name.clone(),
             ..Default::default()
         };
-
-        // TODO: Implement timeout
 
         match self.client.download_object(&request, &Range::default()).await {
             Ok(response) => Ok(Box::new(std::io::Cursor::new(response))),
@@ -178,7 +173,6 @@ impl ArtifactManager for GCSArtifactManager {
         run_id: &str,
         local_path: &Path,
         filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
-        timeout: Option<std::time::Duration>,
     ) -> Result<(), Error> {
         let prefix = format!("{}/", run_id);
         let request = ListObjectsRequest {
@@ -198,7 +192,7 @@ impl ArtifactManager for GCSArtifactManager {
             let name = object.name;
             let file_name = name.trim_start_matches(&prefix);
             if filter_fn.map_or(true, |f| f(file_name)) {
-                let mut content = self.get_artifact(run_id, file_name, timeout).await?;
+                let mut content = self.get_artifact(run_id, file_name).await?;
                 let mut file = File::create(local_path.join(file_name))?;
                 std::io::copy(&mut content, &mut file)?;
             }
