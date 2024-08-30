@@ -13,7 +13,12 @@ pub struct LoggingArgs {
 
 impl LoggingArgs {
     pub fn init(&self) {
-        init_logging(self.gcp_logging, self.debug);
+        #[cfg(feature = "gcp")]
+        let gcp_logging = self.gcp_logging;
+
+        #[cfg(not(feature = "gcp"))]
+        let gcp_logging = false;
+        init_logging(gcp_logging, self.debug);
     }
 }
 
@@ -23,6 +28,9 @@ pub fn init_logging(gcp_logging: bool, debug_mode: bool) {
         stackdriver_logger::init_with_cargo!("../Cargo.toml");
         return;
     }
+
+    #[cfg(not(feature = "gcp"))]
+    assert!(!gcp_logging, "GCP logging is not enabled");
 
     if debug_mode {
         env_logger::init();
