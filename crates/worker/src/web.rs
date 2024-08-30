@@ -20,4 +20,3 @@ pub struct ArtifactIndexTemplate<'a> {
 pub struct LogIndexTemplate<'a> {
     pub names: Vec<&'a str>,
 }
-

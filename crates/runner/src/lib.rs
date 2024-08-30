@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 pub mod queue;
-pub mod queue_processor;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     let mut env = HashMap::new();
@@ -56,16 +55,19 @@ pub fn dpkg_vendor() -> Option<String> {
 /// # Arguments
 /// * `output_directory` - Directory to scan
 pub fn gather_logs(output_directory: &std::path::Path) -> impl Iterator<Item = std::fs::DirEntry> {
-    std::fs::read_dir(output_directory).unwrap().filter_map(|entry| {
-        let entry = entry.ok()?;
-        if entry.file_type().unwrap().is_dir() && is_log_filename(entry.file_name().to_str().unwrap()) {
-            Some(entry)
-        } else {
-            None
-        }
-    })
+    std::fs::read_dir(output_directory)
+        .unwrap()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            if entry.file_type().unwrap().is_dir()
+                && is_log_filename(entry.file_name().to_str().unwrap())
+            {
+                Some(entry)
+            } else {
+                None
+            }
+        })
 }
-
 
 #[cfg(test)]
 mod tests {

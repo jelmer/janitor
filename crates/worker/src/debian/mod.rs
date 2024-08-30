@@ -578,7 +578,10 @@ mod tests {
             "COMMITTER".to_string() => "Joe Example <joe@example.com>".to_string(),
             "DEB_UPDATE_CHANGELOG".to_string() => "auto".to_string(),
         });
-        assert_eq!(target.committer, Some("Joe Example <joe@example.com>".to_string()));
+        assert_eq!(
+            target.committer,
+            Some("Joe Example <joe@example.com>".to_string())
+        );
         assert_eq!(target.update_changelog, DebUpdateChangelog::Auto);
     }
 
@@ -590,29 +593,37 @@ mod tests {
             "DEB_UPDATE_CHANGELOG".to_string() => "auto".to_string(),
         });
 
-        let tree = create_standalone_workingtree(
-            &td.path().join("main"),
-            &ControlDirFormat::default(),
-        ).unwrap();
+        let tree =
+            create_standalone_workingtree(&td.path().join("main"), &ControlDirFormat::default())
+                .unwrap();
 
         tree.mkdir(std::path::Path::new("debian")).unwrap();
         tree.put_file_bytes_non_atomic(
-            std::path::Path::new("debian/changelog"), br#"foo (0.1) unstable; urgency=low
+            std::path::Path::new("debian/changelog"),
+            br#"foo (0.1) unstable; urgency=low
 
   * Initial release.
 
  -- Joe Example <joe@example.com>  Mon, 01 Jan 2001 00:00:00 +0000
-"#).unwrap();
-        tree.add(&[std::path::Path::new("debian"), std::path::Path::new("debian/changelog")]).unwrap();
+"#,
+        )
+        .unwrap();
+        tree.add(&[
+            std::path::Path::new("debian"),
+            std::path::Path::new("debian/changelog"),
+        ])
+        .unwrap();
         let output_directory = td.path().join("output");
         std::fs::create_dir(&output_directory).unwrap();
-        let result = target.make_changes(
-            &tree,
-            std::path::Path::new(""),
-            &["sh", "-c", "touch foo; echo Do a thing"],
-            output_directory.as_ref(),
-            None
-        ).unwrap();
+        let result = target
+            .make_changes(
+                &tree,
+                std::path::Path::new(""),
+                &["sh", "-c", "touch foo; echo Do a thing"],
+                output_directory.as_ref(),
+                None,
+            )
+            .unwrap();
         assert_eq!(result.value(), None);
         assert_eq!(result.description(), Some("Do a thing\n".to_string()));
         assert_eq!(result.context(), serde_json::Value::Null);
