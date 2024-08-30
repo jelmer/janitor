@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 pub mod queue;
+pub mod queue_processor;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     let mut env = HashMap::new();

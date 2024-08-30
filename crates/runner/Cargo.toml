@@ -11,6 +11,14 @@ homepage = "https://github.com/jelmer/janitor"
 [dependencies]
 breezyshim.workspace = true
 tokio = { workspace = true, features = ["full"] }
+sqlx.workspace = true
+sqlx-core.workspace = true
+sqlx-postgres.workspace = true
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+janitor = { version = "0.0.0", path = "../..", default-features = false }
 
 [dev-dependencies]
 maplit = { workspace = true }
