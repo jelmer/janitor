@@ -1,5 +1,3 @@
-use pyo3::prelude::*;
-
 use breezyshim::controldir::ControlDirFormat;
 use breezyshim::error::Error as BrzError;
 use breezyshim::transport::Transport;
@@ -139,7 +137,8 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
-pub fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
+pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_json::Value> {
+    use pyo3::prelude::*;
     if obj.is_none() {
         Ok(serde_json::Value::Null)
     } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
@@ -171,10 +170,11 @@ pub fn py_to_serde_json(obj: &Bound<PyAny>) -> PyResult<serde_json::Value> {
     }
 }
 
-pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> Py<PyAny>
+pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> pyo3::Py<pyo3::PyAny>
 where
     'b: 'a,
 {
+    use pyo3::prelude::*;
     Python::with_gil(|py| match value {
         serde_json::Value::Null => py.None().into_py(py),
         serde_json::Value::Bool(b) => pyo3::types::PyBool::new_bound(py, *b).into_py(py),
