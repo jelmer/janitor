@@ -6,6 +6,7 @@ use async_trait::async_trait;
 
 use crate::artifacts::{ArtifactManager, Error};
 
+#[derive(Debug)]
 pub struct LocalArtifactManager {
     path: PathBuf,
 }
@@ -82,5 +83,14 @@ impl ArtifactManager for LocalArtifactManager {
             })
             .collect::<Vec<_>>();
         Box::new(entries.into_iter())
+    }
+
+    async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error> {
+        let run_path = self.path.join(run_id);
+        if !run_path.is_dir() {
+            return Err(Error::ArtifactsMissing);
+        }
+        fs::remove_dir_all(run_path)?;
+        Ok(())
     }
 }

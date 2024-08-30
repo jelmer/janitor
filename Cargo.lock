@@ -2207,6 +2207,7 @@ dependencies = [
  "sqlx-core",
  "sqlx-postgres",
  "stackdriver_logger",
+ "tempfile",
  "tokio",
  "url",
 ]

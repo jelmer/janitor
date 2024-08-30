@@ -18,6 +18,14 @@ pub struct GCSArtifactManager {
     client: Client,
 }
 
+impl std::fmt::Debug for GCSArtifactManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GCSArtifactManager")
+            .field("bucket_name", &self.bucket_name)
+            .finish()
+    }
+}
+
 impl GCSArtifactManager {
     pub async fn from_url(location: &url::Url, creds: Option<CredentialsFile>) -> Result<Self, Error> {
         if location.scheme() != "gs" {
@@ -95,6 +103,39 @@ impl ArtifactManager for GCSArtifactManager {
 
         for task in tasks {
             task.await.map_err(|e| Error::Other(e.to_string()))??;
+        }
+
+        Ok(())
+    }
+
+    async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error> {
+        let prefix = format!("{}/", run_id);
+        let request = ListObjectsRequest {
+            bucket: self.bucket_name.clone(),
+            prefix: Some(prefix.clone()),
+            ..Default::default()
+        };
+
+        let objects = match self.client.list_objects(&request).await {
+            Ok(response) => response.items.unwrap_or_default(),
+            Err(GcsError::Response(e)) if e.code == 503 => return Err(Error::ServiceUnavailable),
+            Err(GcsError::Response(e)) if e.code == 404 => return Err(Error::ArtifactsMissing),
+            Err(e) => return Err(Error::Other(e.to_string())),
+        };
+
+        for object in objects {
+            let name = object.name;
+            let request = google_cloud_storage::http::objects::delete::DeleteObjectRequest {
+                bucket: self.bucket_name.clone(),
+                object: name,
+                ..Default::default()
+            };
+
+            match self.client.delete_object(&request).await {
+                Ok(_) => (),
+                Err(GcsError::Response(e)) if e.code == 503 => return Err(Error::ServiceUnavailable),
+                Err(e) => return Err(Error::Other(e.to_string())),
+            }
         }
 
         Ok(())
