@@ -1,3 +1,4 @@
+pub mod artifacts;
 pub mod config;
 pub mod logging;
 pub mod publish;
