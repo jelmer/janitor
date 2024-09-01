@@ -13,7 +13,7 @@ breezyshim.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 debian-changelog = "0.1.12"
-janitor = { version = "0.0.0", path = "../.." }
+janitor = { version = "0.0.0", path = ".." }
 log.workspace = true
 minijinja = { version = "2", features = ["loader"] }
 pyo3.workspace = true
