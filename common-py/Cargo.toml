@@ -1,9 +1,10 @@
 [package]
-name = "worker-py"
+name = "common-py"
 version = "0.0.0"
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+publish = false
 edition = "2021"
-description = "Worker for the janitor - python bindings"
+description = "Common bindings for the janitor - python"
 license = "GPL-3.0+"
 repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
@@ -13,8 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
-pyo3-asyncio = { workspace = true, features=["tokio-runtime"] }
-janitor-worker = { path = "../worker" }
+janitor = { path = ".." }
 reqwest = { version = "0.12", features = ["json"] }
 serde_json = "1"
 pyo3-log = { workspace = true }
@@ -22,4 +22,4 @@ log = "0.4"
 chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
-janitor = { version = "0.0.0", path = "../.." }
+url.workspace = true

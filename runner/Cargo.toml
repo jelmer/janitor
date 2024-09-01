@@ -18,7 +18,7 @@ redis = { workspace = true, features = ["aio", "tokio-comp"] }
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-janitor = { version = "0.0.0", path = "../..", default-features = false }
+janitor = { version = "0.0.0", path = "..", default-features = false }
 
 [dev-dependencies]
 maplit = { workspace = true }
