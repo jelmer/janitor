@@ -1,4 +1,6 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
+use ognibuild::analyze::AnalyzedError;
+use ognibuild::installer::{Installer,InstallationScope,Error as InstallerError};
 use breezyshim::tree::WorkingTree;
 use silver_platter::codemod::{
     script_runner as generic_script_runner, CommandResult as GenericCommandResult,
@@ -113,85 +115,155 @@ pub fn generic_make_changes(
     }
 }
 
+#[derive(serde::Deserialize)]
+struct GenericBuildConfig {
+    chroot: Option<String>,
+    dep_server_url: Option<url::Url>,
+}
+
 pub fn build_from_config(
     local_tree: &WorkingTree,
     subpath: &std::path::Path,
     output_directory: &std::path::Path,
-    config: &serde_json::Value,
+    config: &GenericBuildConfig,
     _env: &HashMap<String, String>,
 ) -> Result<serde_json::Value, WorkerFailure> {
-    let chroot = config.get("chroot").and_then(|v| v.as_str());
-    let dep_server_url = config.get("dep_server_url").and_then(|v| v.as_str());
-
     build(
         local_tree,
         subpath,
         output_directory,
-        chroot,
-        dep_server_url,
+        config.chroot.as_deref(),
+        config.dep_server_url.as_ref(),
     )
 }
 
-pub fn build(
-    local_tree: &WorkingTree,
-    subpath: &std::path::Path,
-    output_directory: &std::path::Path,
-    chroot: Option<&str>,
-    dep_server_url: Option<&str>,
-) -> Result<serde_json::Value, WorkerFailure> {
-    pyo3::import_exception!(janitor.generic.build, BuildFailure);
-    pyo3::Python::with_gil(|py| -> Result<serde_json::Value, WorkerFailure> {
-        use pyo3::prelude::*;
-        let m = py.import_bound("janitor.generic.build").unwrap();
-        let build = m.getattr("build").unwrap();
+fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schroot: Option<&str>, dep_server_url: Option<&url::Url>) -> Result<serde_json::Value, WorkerFailure> {
+    use ognibuild::session::Session;
+    #[cfg(target_os = "linux")]
+    let mut session : Box<dyn Session> = if let Some(schroot) = schroot {
+        log::info!("Using schroot {:?}", schroot);
+        Box::new(ognibuild::session::schroot::SchrootSession::new(schroot, Some("janitor-worker")).map_err(|e| match e {
+            ognibuild::session::Error::SetupFailure(n, e) => WorkerFailure {
+                code: "session-setup-failure".to_string(),
+                description: format!("Failed to setup session: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None
+            },
+            e => unreachable!()
+        })?) as Box<dyn Session>
+    } else {
+        Box::new(ognibuild::session::plain::PlainSession::new()) as Box<dyn Session>
+    };
 
-        match build.call1((
-            local_tree.to_object(py),
-            subpath,
-            output_directory,
-            chroot,
-            dep_server_url,
-        )) {
-            Ok(_) => Ok(serde_json::Value::Null),
-            Err(e) => {
-                if e.is_instance_of::<BuildFailure>(py) {
-                    let value = e.value_bound(py);
-                    let code = value.getattr("code").unwrap().extract::<String>().unwrap();
-                    let description = value
-                        .getattr("description")
-                        .unwrap()
-                        .extract::<String>()
-                        .unwrap();
-                    let details = value
-                        .getattr("details")
-                        .unwrap()
-                        .extract::<Option<PyObject>>()
-                        .unwrap()
-                        .map(|x| crate::py_to_serde_json(x.bind(py)).unwrap());
-                    let stage = value
-                        .getattr("stage")
-                        .unwrap()
-                        .extract::<Vec<String>>()
-                        .unwrap();
-                    Err(WorkerFailure {
-                        code,
-                        description,
-                        details,
-                        stage: vec!["build".to_string()].into_iter().chain(stage).collect(),
-                        transient: None,
-                    })
-                } else {
-                    Err(WorkerFailure {
-                        code: "internal-error".to_string(),
-                        description: e.to_string(),
-                        details: None,
-                        stage: vec!["build".to_string()],
-                        transient: None,
-                    })
-                }
-            }
-        }
-    })
+    #[cfg(not(target_os = "linux"))]
+    let mut session: Box<dyn Session> = if schroot.is_some() {
+        return Err(WorkerFailure {
+            code: "chroot-not-supported".to_string(),
+            description: "Chroot is not supported".to_string(),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        });
+    } else {
+        Box::new(ognibuild::session::plain::PlainSession::new())
+    };
+
+    let scope = ognibuild::installer::InstallationScope::Global;
+    let (external_dir, internal_dir) = session.setup_from_vcs(local_tree, None, None).map_err(|e| WorkerFailure {
+        code: "session-setup-failure".to_string(),
+        description: format!("Failed to setup session: {}", e),
+        details: None,
+        stage: vec!["build".to_string()],
+        transient: None
+    })?;
+    session.chdir(&internal_dir).unwrap();
+    let installer = ognibuild::installer::auto_installer(session.as_ref(), scope, dep_server_url);
+    let fixers = vec![Box::new(ognibuild::fixers::InstallFixer::new(installer.as_ref(), scope)) as Box<dyn ognibuild::fix_build::BuildFixer<InstallerError>>];
+    let bss = ognibuild::buildsystem::detect_buildsystems(&external_dir.join(subpath));
+    if bss.is_empty() {
+        return Err(WorkerFailure {
+            code: "no-build-system-detected".to_string(),
+            description: "No build system detected".to_string(),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None
+        });
+    }
+
+    let mut log_manager = ognibuild::logs::DirectoryLogManager::new(output_directory.join(ognibuild::debian::build::BUILD_LOG_FILENAME), ognibuild::logs::LogMode::Redirect);
+
+    use ognibuild::buildsystem::Error as BsError;
+
+    match ognibuild::actions::build::run_build(
+        session.as_ref(),
+        bss.iter().map(|b| b.as_ref()).collect::<Vec<_>>().as_slice(),
+        installer.as_ref(),
+        fixers.iter().map(|x| x.as_ref()).collect::<Vec<_>>().as_slice(),
+        &mut log_manager
+    ) {
+        Ok(_) => Ok(serde_json::Value::Null),
+        Err(BsError::Error(AnalyzedError::MissingCommandError { command })) => Err(WorkerFailure {
+            code: "missing-command".to_string(),
+            description: format!("Missing command: {}", command),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::Error(AnalyzedError::Unidentified { retcode, lines, secondary })) => Err(WorkerFailure {
+            code: "unidentified-error".to_string(),
+            description: "Unidentified error".to_string(),
+            details: Some(serde_json::json!({
+                "retcode": retcode,
+            })),
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::Error(AnalyzedError::Detailed{ retcode, error })) => Err(WorkerFailure {
+            code: error.kind().to_string(),
+            description: error.to_string(),
+            details: Some(serde_json::json!({
+                "retcode": retcode,
+            })),
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::NoBuildSystemDetected) => Err(WorkerFailure {
+            code: "no-build-system-detected".to_string(),
+            description: "No build system detected".to_string(),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::DependencyInstallError(err)) => Err(WorkerFailure {
+            code: "dependency-install-error".to_string(),
+            description: format!("Dependency install error: {}", err),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::Unimplemented) => Err(WorkerFailure {
+            code: "build-action-unimplemented".to_string(),
+            description: "The build action is not implemented for the buildsystem".to_string(),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => Err(WorkerFailure {
+            code: "io-error".to_string(),
+            description: format!("IO error: {}", e),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+        Err(BsError::Other(e)) => Err(WorkerFailure {
+            code: "unknown-error".to_string(),
+            description: format!("Unknown error: {}", e),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        }),
+    }
 }
 
 pub struct GenericTarget {
@@ -216,6 +288,14 @@ impl crate::Target for GenericTarget {
         output_directory: &std::path::Path,
         config: &crate::BuildConfig,
     ) -> Result<serde_json::Value, WorkerFailure> {
+        let config: GenericBuildConfig = serde_json::from_value(config.clone()).map_err(|e| {
+            WorkerFailure {
+                code: "build-config-parse-failure".to_string(),
+                description: format!("Failed to parse config: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: Some(false),
+            }})?;
         build_from_config(local_tree, subpath, output_directory, &config, &self.env)
     }
 

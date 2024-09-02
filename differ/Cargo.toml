@@ -1,0 +1,25 @@
+[package]
+name = "janitor-differ"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition = "2021"
+description = "Differ for the janitor"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[dependencies]
+janitor = { version = "0.0.0", path = ".." }
+clap = { optional = true, workspace = true }
+env_logger = { optional = true, workspace = true }
+
+[dev-dependencies]
+maplit = { workspace = true }
+
+[features]
+cli = ["dep:clap", "dep:env_logger"]
+
+[[bin]]
+name = "janitor-differ"
+path = "src/main.rs"
+required-features = ["cli"]

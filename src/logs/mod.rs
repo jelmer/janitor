@@ -1,16 +1,23 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
 mod filesystem;
-
 pub use filesystem::FileSystemLogFileManager;
+
+/*
+#[cfg(feature = "gcs")]
+mod gcs;
+#[cfg(feature = "gcs")]
+pub use gcs::GCSLogFileManager;
+*/
 
 #[derive(Debug)]
 pub enum Error {
     NotFound,
     ServiceUnavailable,
     Io(io::Error),
+    Other(String),
 }
 
 impl From<io::Error> for Error {
@@ -25,6 +32,7 @@ impl std::fmt::Display for Error {
             Error::NotFound => write!(f, "Not found"),
             Error::ServiceUnavailable => write!(f, "Service unavailable"),
             Error::Io(err) => write!(f, "I/O error: {}", err),
+            Error::Other(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -65,5 +73,3 @@ pub trait LogFileManager {
         name: &str,
     ) -> Result<DateTime<Utc>, Error>;
 }
-
-
