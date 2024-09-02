@@ -3066,6 +3066,7 @@ dependencies = [
  "debian-changelog",
  "debversion",
  "gethostname",
+ "http-body-util",
  "hyper",
  "janitor",
  "log",

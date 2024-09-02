@@ -45,6 +45,7 @@ debian = ["dep:debversion", "dep:debian-analyzer", "dep:debian-changelog"]
 cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 
 [dev-dependencies]
+http-body-util = "0.1.2"
 hyper = "1.4.1"
 tempfile = "3.11.0"
 tower = { version = "0.5.0", features = ["util"] }

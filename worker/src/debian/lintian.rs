@@ -1,6 +1,6 @@
 use log::debug;
 use serde_json;
-use std::path::{PathBuf,Path};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::str;
 
@@ -19,23 +19,24 @@ impl std::fmt::Display for Error {
     }
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize)]
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
 pub struct LintianInputFile {
     pub hints: Vec<String>,
     pub path: PathBuf,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize)]
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
 pub struct LintianGroup {
     pub group_id: String,
     pub input_files: Vec<LintianInputFile>,
     pub source_name: String,
-    pub source_version: debversion::Version
+    pub source_version: debversion::Version,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, Default, serde::Serialize)]
+#[derive(serde::Deserialize, PartialEq, Eq, Default, serde::Serialize, Debug)]
 pub struct LintianResult {
     pub groups: Vec<LintianGroup>,
+    pub lintian_version: Option<debversion::Version>,
 }
 
 impl std::error::Error for Error {}
@@ -137,30 +138,28 @@ OTHER BOGUS DATA
         let result = parse_lintian_output(output_str).unwrap();
         assert_eq!(
             result,
-            serde_json::json!({
-                "groups": [
-                    {
-                        "group_id": "lintian-brush_0.148",
-                        "input_files": [
-                            {
-                                "hints": [],
-                                "path": "lintian-brush_0.148.dsc"
-                            },
-                            {
-                                "hints": [],
-                                "path": "lintian-brush_0.148_source.buildinfo"
-                            },
-                            {
-                                "hints": [],
-                                "path": "lintian-brush_0.148_source.changes"
-                            }
-                        ],
-                        "source_name": "lintian-brush",
-                        "source_version": "0.148"
-                    }
-                ],
-                "lintian_version": "2.116.3"
-            })
+            LintianResult {
+                groups: vec![LintianGroup {
+                    group_id: "lintian-brush_0.148".to_owned(),
+                    input_files: vec![
+                        LintianInputFile {
+                            hints: vec![],
+                            path: PathBuf::from("lintian-brush_0.148.dsc")
+                        },
+                        LintianInputFile {
+                            hints: vec![],
+                            path: PathBuf::from("lintian-brush_0.148_source.buildinfo")
+                        },
+                        LintianInputFile {
+                            hints: vec![],
+                            path: PathBuf::from("lintian-brush_0.148_source.changes")
+                        },
+                    ],
+                    source_name: "lintian-brush".to_owned(),
+                    source_version: "0.148".parse().unwrap(),
+                }],
+                lintian_version: Some("2.116.3".parse().unwrap())
+            }
         );
     }
 }
