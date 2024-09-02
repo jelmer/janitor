@@ -1,15 +1,14 @@
 use async_trait::async_trait;
 use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_storage::client::{Client, ClientConfig};
-use google_cloud_storage::http::objects::{download::Range, upload::UploadType, upload::Media, upload::UploadObjectRequest, get::GetObjectRequest, list::ListObjectsRequest};
+use google_cloud_storage::http::objects::{
+    download::Range, get::GetObjectRequest, list::ListObjectsRequest, upload::Media,
+    upload::UploadObjectRequest, upload::UploadType,
+};
 use google_cloud_storage::http::Error as GcsError;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use url::Url;
+use std::path::Path;
 
 use crate::artifacts::{ArtifactManager, Error};
 
@@ -27,11 +26,19 @@ impl std::fmt::Debug for GCSArtifactManager {
 }
 
 impl GCSArtifactManager {
-    pub async fn from_url(location: &url::Url, creds: Option<CredentialsFile>) -> Result<Self, Error> {
+    pub async fn from_url(
+        location: &url::Url,
+        creds: Option<CredentialsFile>,
+    ) -> Result<Self, Error> {
         if location.scheme() != "gs" {
-            return Err(Error::Other(format!("Invalid URL scheme: {}", location.scheme())));
+            return Err(Error::Other(format!(
+                "Invalid URL scheme: {}",
+                location.scheme()
+            )));
         }
-        let bucket_name = location.host_str().ok_or_else(|| Error::Other("Missing bucket name".to_string()))?;
+        let bucket_name = location
+            .host_str()
+            .ok_or_else(|| Error::Other("Missing bucket name".to_string()))?;
 
         Self::new(bucket_name.to_string(), creds).await
     }
@@ -39,14 +46,20 @@ impl GCSArtifactManager {
     pub async fn new(bucket_name: String, creds: Option<CredentialsFile>) -> Result<Self, Error> {
         let config = ClientConfig::default();
         let config = if let Some(creds) = creds {
-            config.with_credentials(creds).await.map_err(|e| Error::Other(e.to_string()))?
+            config
+                .with_credentials(creds)
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?
         } else {
             config.anonymous()
         };
 
         let client = Client::new(config);
 
-        Ok(Self { bucket_name, client })
+        Ok(Self {
+            bucket_name,
+            client,
+        })
     }
 }
 
@@ -87,14 +100,20 @@ impl ArtifactManager for GCSArtifactManager {
                         ..Default::default()
                     };
 
-                    let upload_type = UploadType::Simple(Media::new(format!("{}/{}", run_id, name)));
+                    let upload_type =
+                        UploadType::Simple(Media::new(format!("{}/{}", run_id, name)));
 
-                    client.upload_object(&request, file, &upload_type).await.map_err(|e| {
-                        if let GcsError::Response(ref e) = e {
-                            if e.code == 503 { return Error::ServiceUnavailable; }
-                        }
-                        Error::Other(e.to_string())
-                    })
+                    client
+                        .upload_object(&request, file, &upload_type)
+                        .await
+                        .map_err(|e| {
+                            if let GcsError::Response(ref e) = e {
+                                if e.code == 503 {
+                                    return Error::ServiceUnavailable;
+                                }
+                            }
+                            Error::Other(e.to_string())
+                        })
                 })
             })
             .collect();
@@ -131,7 +150,9 @@ impl ArtifactManager for GCSArtifactManager {
 
             match self.client.delete_object(&request).await {
                 Ok(_) => (),
-                Err(GcsError::Response(e)) if e.code == 503 => return Err(Error::ServiceUnavailable),
+                Err(GcsError::Response(e)) if e.code == 503 => {
+                    return Err(Error::ServiceUnavailable)
+                }
                 Err(e) => return Err(Error::Other(e.to_string())),
             }
         }
@@ -151,7 +172,11 @@ impl ArtifactManager for GCSArtifactManager {
             ..Default::default()
         };
 
-        match self.client.download_object(&request, &Range::default()).await {
+        match self
+            .client
+            .download_object(&request, &Range::default())
+            .await
+        {
             Ok(response) => Ok(Box::new(std::io::Cursor::new(response))),
             Err(GcsError::Response(e)) if e.code == 503 => Err(Error::ServiceUnavailable),
             Err(GcsError::Response(e)) if e.code == 404 => Err(Error::ArtifactsMissing),
@@ -161,11 +186,14 @@ impl ArtifactManager for GCSArtifactManager {
 
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url {
         let object_name = format!("{}/{}", run_id, filename);
-        let encoded_object_name = percent_encoding::utf8_percent_encode(&object_name, &percent_encoding::CONTROLS);
+        let encoded_object_name =
+            percent_encoding::utf8_percent_encode(&object_name, &percent_encoding::CONTROLS);
         format!(
             "https://storage.googleapis.com/{}/{}/{}",
             self.bucket_name, run_id, encoded_object_name
-        ).parse().unwrap()
+        )
+        .parse()
+        .unwrap()
     }
 
     async fn retrieve_artifacts(
@@ -208,10 +236,15 @@ impl ArtifactManager for GCSArtifactManager {
             ..Default::default()
         };
 
-        let objects = self.client.list_objects(&request).await.map_err(|e| match e {
-            GcsError::Response(e) if e.code == 503 => Error::ServiceUnavailable,
-            e => Error::Other(e.to_string()),
-        }).unwrap();
+        let objects = self
+            .client
+            .list_objects(&request)
+            .await
+            .map_err(|e| match e {
+                GcsError::Response(e) if e.code == 503 => Error::ServiceUnavailable,
+                e => Error::Other(e.to_string()),
+            })
+            .unwrap();
 
         for object in objects.items.unwrap_or_default() {
             let id = object.name.split('/').next().unwrap().to_string();

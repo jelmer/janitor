@@ -1,11 +1,4 @@
-use askama_axum::IntoResponse;
-use askama_axum::Template;
-use axum::{
-    extract::Path, extract::State, http::HeaderMap, http::StatusCode, response::Html,
-    response::Json, response::Response, routing::get, Router,
-};
 use clap::Parser;
-use janitor::api::worker::{Assignment, Metadata};
 use janitor_worker::AppState;
 use serde::Deserialize;
 use std::fs::File;
@@ -73,236 +66,6 @@ struct Args {
     tee: bool,
 }
 
-async fn index(
-    State(state): State<Arc<RwLock<AppState>>>,
-) -> janitor_worker::web::IndexTemplate<'static> {
-    let state = state.read().unwrap();
-    let lognames: Option<Vec<String>> =
-        if let Some(output_directory) = state.output_directory.as_ref() {
-            Some(
-                output_directory
-                    .read_dir()
-                    .unwrap()
-                    .filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let filename = entry.file_name();
-                        let name = filename.to_str()?;
-                        if name.ends_with(".log") {
-                            Some(name.to_owned())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect(),
-            )
-        } else {
-            None
-        };
-
-    let metadata = state.metadata;
-
-    janitor_worker::web::IndexTemplate {
-        assignment: state.assignment.as_ref(),
-        lognames,
-        metadata,
-    }
-}
-
-async fn health() -> String {
-    "ok".to_string()
-}
-
-async fn assignment(State(state): State<Arc<RwLock<AppState>>>) -> Json<Option<Assignment>> {
-    Json(state.read().unwrap().assignment.clone())
-}
-
-async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
-    let output_directory = &state.read().unwrap().output_directory;
-    if output_directory.is_none() {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Log directory not created yet".into())
-            .unwrap();
-    }
-    let output_directory = output_directory.as_ref().unwrap();
-    let names: Vec<String> = match std::fs::read_dir(output_directory) {
-        Ok(dir) => dir
-            .filter_map(|entry| {
-                let entry = entry.ok()?;
-                let path = entry.path();
-                if path.extension()?.to_str()? == "log" {
-                    Some(entry.file_name().to_str()?.to_owned())
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Err(e) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("Error reading log directory: {}", e).into())
-                .unwrap();
-        }
-    };
-
-    match headers
-        .get(axum::http::header::ACCEPT)
-        .map(|x| x.to_str().unwrap())
-    {
-        Some("application/json") => Json(names).into_response(),
-        _ => janitor_worker::web::LogIndexTemplate { names }.into_response(),
-    }
-}
-
-async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
-    let output_directory = &state.read().unwrap().output_directory;
-    if output_directory.is_none() {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Artifact directory not created yet".into())
-            .unwrap();
-    }
-    let output_directory = output_directory.as_ref().unwrap();
-    let names: Vec<String> = match std::fs::read_dir(output_directory) {
-        Ok(dir) => dir
-            .filter_map(|entry| {
-                let entry = entry.ok()?;
-                let path = entry.path();
-                if path.extension()?.to_str()? != "log" {
-                    Some(entry.file_name().to_str()?.to_owned())
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        Err(e) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("Error reading log directory: {}", e).into())
-                .unwrap();
-        }
-    };
-
-    match headers
-        .get(axum::http::header::ACCEPT)
-        .map(|x| x.to_str().unwrap())
-    {
-        Some("application/json") => Json(names).into_response(),
-        _ => janitor_worker::web::ArtifactIndexTemplate { names }.into_response(),
-    }
-}
-
-async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Json<Option<String>> {
-    Json(
-        state
-            .read()
-            .unwrap()
-            .assignment
-            .as_ref()
-            .map(|a| a.id.clone()),
-    )
-}
-
-async fn get_log_file(
-    State(state): State<Arc<RwLock<AppState>>>,
-    Path(filename): Path<String>,
-) -> Response {
-    // filenames should only contain characters that are safe to use in URLs
-    if filename.contains('/') || filename.contains('\\') {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body("Invalid filename".into())
-            .unwrap();
-    }
-
-    let p = if let Some(output_directory) = state.read().unwrap().output_directory.as_ref() {
-        output_directory.join(filename)
-    } else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Log directory not created yet".into())
-            .unwrap();
-    };
-
-    let file = match tokio::fs::File::open(&p).await {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body("No such log file".into())
-                .unwrap();
-        }
-        Err(e) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("Error opening log file: {}", e).into())
-                .unwrap();
-        }
-    };
-
-    let stream = tokio_util::io::ReaderStream::new(file);
-
-    let body = axum::body::Body::from_stream(stream);
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        axum::http::header::CONTENT_TYPE,
-        "text/plain".parse().unwrap(),
-    );
-
-    (StatusCode::OK, headers, body).into_response()
-}
-
-async fn get_artifact_file(
-    State(state): State<Arc<RwLock<AppState>>>,
-    Path(filename): Path<String>,
-) -> Response {
-    // filenames should only contain characters that are safe to use in URLs
-    if filename.contains('/') || filename.contains('\\') {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body("Invalid filename".into())
-            .unwrap();
-    }
-
-    let p = if let Some(output_directory) = state.read().unwrap().output_directory.as_ref() {
-        output_directory.join(filename)
-    } else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Artifact directory not created yet".into())
-            .unwrap();
-    };
-
-    let file = match tokio::fs::File::open(&p).await {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body("No such artifact file".into())
-                .unwrap();
-        }
-        Err(e) => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("Error opening artifact file: {}", e).into())
-                .unwrap();
-        }
-    };
-
-    let stream = tokio_util::io::ReaderStream::new(file);
-
-    let body = axum::body::Body::from_stream(stream);
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        axum::http::header::CONTENT_TYPE,
-        "application/octet-stream".parse().unwrap(),
-    );
-
-    (StatusCode::OK, headers, body).into_response()
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -312,6 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(RwLock::new(AppState {
         assignment: None,
         output_directory: None,
+        metadata: None,
     }));
 
     let global_config = breezyshim::config::global_stack().unwrap();
@@ -379,17 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log::info!("Diagnostics available at {}", my_url);
     }
 
-    // build our application with a route
-    let app = Router::new()
-        .route("/", get(index))
-        .route("/health", get(health))
-        .route("/assignment", get(assignment))
-        .route("/logs", get(get_logs))
-        .route("/logs/:filename", get(get_log_file))
-        .route("/log-id", get(get_log_id))
-        .route("/artifacts", get(get_artifacts))
-        .route("/artifacts/:filename", get(get_artifact_file))
-        .with_state(state.clone().clone());
+    let app = janitor_worker::web::app(state.clone());
 
     // run it
     let addr = SocketAddr::new(args.listen_address, args.new_port);
@@ -397,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run worker loop in background
     let state = state.clone();
-    let worker = tokio::spawn(async move {
+    tokio::spawn(async move {
         let client =
             janitor_worker::client::Client::new(base_url, auth, janitor_worker::DEFAULT_USER_AGENT);
         loop {

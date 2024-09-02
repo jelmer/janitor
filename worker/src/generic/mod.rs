@@ -1,7 +1,7 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
-use ognibuild::analyze::AnalyzedError;
-use ognibuild::installer::{Installer,InstallationScope,Error as InstallerError};
 use breezyshim::tree::WorkingTree;
+use ognibuild::analyze::AnalyzedError;
+use ognibuild::installer::Error as InstallerError;
 use silver_platter::codemod::{
     script_runner as generic_script_runner, CommandResult as GenericCommandResult,
     Error as GenericCodemodError,
@@ -137,21 +137,30 @@ pub fn build_from_config(
     )
 }
 
-fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schroot: Option<&str>, dep_server_url: Option<&url::Url>) -> Result<serde_json::Value, WorkerFailure> {
+fn build(
+    local_tree: &WorkingTree,
+    subpath: &Path,
+    output_directory: &Path,
+    schroot: Option<&str>,
+    dep_server_url: Option<&url::Url>,
+) -> Result<serde_json::Value, WorkerFailure> {
     use ognibuild::session::Session;
     #[cfg(target_os = "linux")]
-    let mut session : Box<dyn Session> = if let Some(schroot) = schroot {
+    let mut session: Box<dyn Session> = if let Some(schroot) = schroot {
         log::info!("Using schroot {:?}", schroot);
-        Box::new(ognibuild::session::schroot::SchrootSession::new(schroot, Some("janitor-worker")).map_err(|e| match e {
-            ognibuild::session::Error::SetupFailure(n, e) => WorkerFailure {
-                code: "session-setup-failure".to_string(),
-                description: format!("Failed to setup session: {}", e),
-                details: None,
-                stage: vec!["build".to_string()],
-                transient: None
-            },
-            e => unreachable!()
-        })?) as Box<dyn Session>
+        Box::new(
+            ognibuild::session::schroot::SchrootSession::new(schroot, Some("janitor-worker"))
+                .map_err(|e| match e {
+                    ognibuild::session::Error::SetupFailure(_n, e) => WorkerFailure {
+                        code: "session-setup-failure".to_string(),
+                        description: format!("Failed to setup session: {}", e),
+                        details: None,
+                        stage: vec!["build".to_string()],
+                        transient: None,
+                    },
+                    _e => unreachable!(),
+                })?,
+        ) as Box<dyn Session>
     } else {
         Box::new(ognibuild::session::plain::PlainSession::new()) as Box<dyn Session>
     };
@@ -170,16 +179,23 @@ fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schr
     };
 
     let scope = ognibuild::installer::InstallationScope::Global;
-    let (external_dir, internal_dir) = session.setup_from_vcs(local_tree, None, None).map_err(|e| WorkerFailure {
-        code: "session-setup-failure".to_string(),
-        description: format!("Failed to setup session: {}", e),
-        details: None,
-        stage: vec!["build".to_string()],
-        transient: None
-    })?;
+    let (external_dir, internal_dir) =
+        session
+            .setup_from_vcs(local_tree, None, None)
+            .map_err(|e| WorkerFailure {
+                code: "session-setup-failure".to_string(),
+                description: format!("Failed to setup session: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            })?;
     session.chdir(&internal_dir).unwrap();
     let installer = ognibuild::installer::auto_installer(session.as_ref(), scope, dep_server_url);
-    let fixers = vec![Box::new(ognibuild::fixers::InstallFixer::new(installer.as_ref(), scope)) as Box<dyn ognibuild::fix_build::BuildFixer<InstallerError>>];
+    let fixers = vec![Box::new(ognibuild::fixers::InstallFixer::new(
+        installer.as_ref(),
+        scope,
+    ))
+        as Box<dyn ognibuild::fix_build::BuildFixer<InstallerError>>];
     let bss = ognibuild::buildsystem::detect_buildsystems(&external_dir.join(subpath));
     if bss.is_empty() {
         return Err(WorkerFailure {
@@ -187,20 +203,30 @@ fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schr
             description: "No build system detected".to_string(),
             details: None,
             stage: vec!["build".to_string()],
-            transient: None
+            transient: None,
         });
     }
 
-    let mut log_manager = ognibuild::logs::DirectoryLogManager::new(output_directory.join(ognibuild::debian::build::BUILD_LOG_FILENAME), ognibuild::logs::LogMode::Redirect);
+    let mut log_manager = ognibuild::logs::DirectoryLogManager::new(
+        output_directory.join(ognibuild::debian::build::BUILD_LOG_FILENAME),
+        ognibuild::logs::LogMode::Redirect,
+    );
 
     use ognibuild::buildsystem::Error as BsError;
 
     match ognibuild::actions::build::run_build(
         session.as_ref(),
-        bss.iter().map(|b| b.as_ref()).collect::<Vec<_>>().as_slice(),
+        bss.iter()
+            .map(|b| b.as_ref())
+            .collect::<Vec<_>>()
+            .as_slice(),
         installer.as_ref(),
-        fixers.iter().map(|x| x.as_ref()).collect::<Vec<_>>().as_slice(),
-        &mut log_manager
+        fixers
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<_>>()
+            .as_slice(),
+        &mut log_manager,
     ) {
         Ok(_) => Ok(serde_json::Value::Null),
         Err(BsError::Error(AnalyzedError::MissingCommandError { command })) => Err(WorkerFailure {
@@ -210,7 +236,11 @@ fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schr
             stage: vec!["build".to_string()],
             transient: None,
         }),
-        Err(BsError::Error(AnalyzedError::Unidentified { retcode, lines, secondary })) => Err(WorkerFailure {
+        Err(BsError::Error(AnalyzedError::Unidentified {
+            retcode,
+            lines: _,
+            secondary: _,
+        })) => Err(WorkerFailure {
             code: "unidentified-error".to_string(),
             description: "Unidentified error".to_string(),
             details: Some(serde_json::json!({
@@ -219,7 +249,7 @@ fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schr
             stage: vec!["build".to_string()],
             transient: None,
         }),
-        Err(BsError::Error(AnalyzedError::Detailed{ retcode, error })) => Err(WorkerFailure {
+        Err(BsError::Error(AnalyzedError::Detailed { retcode, error })) => Err(WorkerFailure {
             code: error.kind().to_string(),
             description: error.to_string(),
             details: Some(serde_json::json!({
@@ -249,13 +279,15 @@ fn build(local_tree: &WorkingTree, subpath: &Path, output_directory: &Path, schr
             stage: vec!["build".to_string()],
             transient: None,
         }),
-        Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => Err(WorkerFailure {
-            code: "io-error".to_string(),
-            description: format!("IO error: {}", e),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
+        Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => {
+            Err(WorkerFailure {
+                code: "io-error".to_string(),
+                description: format!("IO error: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            })
+        }
         Err(BsError::Other(e)) => Err(WorkerFailure {
             code: "unknown-error".to_string(),
             description: format!("Unknown error: {}", e),
@@ -288,14 +320,14 @@ impl crate::Target for GenericTarget {
         output_directory: &std::path::Path,
         config: &crate::BuildConfig,
     ) -> Result<serde_json::Value, WorkerFailure> {
-        let config: GenericBuildConfig = serde_json::from_value(config.clone()).map_err(|e| {
-            WorkerFailure {
+        let config: GenericBuildConfig =
+            serde_json::from_value(config.clone()).map_err(|e| WorkerFailure {
                 code: "build-config-parse-failure".to_string(),
                 description: format!("Failed to parse config: {}", e),
                 details: None,
                 stage: vec!["build".to_string()],
                 transient: Some(false),
-            }})?;
+            })?;
         build_from_config(local_tree, subpath, output_directory, &config, &self.env)
     }
 
