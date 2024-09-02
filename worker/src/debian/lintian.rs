@@ -1,6 +1,6 @@
 use log::debug;
 use serde_json;
-use std::path::Path;
+use std::path::{PathBuf,Path};
 use std::process::{Command, Output};
 use std::str;
 
@@ -19,9 +19,28 @@ impl std::fmt::Display for Error {
     }
 }
 
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize)]
+pub struct LintianInputFile {
+    pub hints: Vec<String>,
+    pub path: PathBuf,
+}
+
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize)]
+pub struct LintianGroup {
+    pub group_id: String,
+    pub input_files: Vec<LintianInputFile>,
+    pub source_name: String,
+    pub source_version: debversion::Version
+}
+
+#[derive(serde::Deserialize, PartialEq, Eq, Default, serde::Serialize)]
+pub struct LintianResult {
+    pub groups: Vec<LintianGroup>,
+}
+
 impl std::error::Error for Error {}
 
-fn parse_lintian_output(text: &str) -> Result<serde_json::Value, serde_json::Error> {
+fn parse_lintian_output(text: &str) -> Result<LintianResult, serde_json::Error> {
     let lines: Vec<&str> = text.trim().split('\n').collect();
     let mut joined_lines: Vec<&str> = Vec::new();
     for line in lines {
@@ -32,26 +51,12 @@ fn parse_lintian_output(text: &str) -> Result<serde_json::Value, serde_json::Err
     }
 
     let joined_str = joined_lines.join("\n");
-    let mut result: serde_json::Value = serde_json::from_str(&joined_str)?;
+    let mut result: LintianResult = serde_json::from_str(&joined_str)?;
 
     // Strip irrelevant directory information
-    if let Some(groups) = result.get_mut("groups") {
-        if let Some(groups_array) = groups.as_array_mut() {
-            for group in groups_array {
-                if let Some(input_files) = group.get_mut("input_files") {
-                    if let Some(input_files_array) = input_files.as_array_mut() {
-                        for input_file in input_files_array {
-                            if let Some(path) = input_file.get_mut("path") {
-                                if let Some(path_str) = path.as_str() {
-                                    let basename =
-                                        Path::new(path_str).file_name().unwrap().to_str().unwrap();
-                                    *path = serde_json::Value::String(basename.to_owned());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    for group in &mut result.groups {
+        for input_file in &mut group.input_files {
+            input_file.path = Path::new(input_file.path.file_name().unwrap()).to_path_buf();
         }
     }
 
@@ -59,11 +64,11 @@ fn parse_lintian_output(text: &str) -> Result<serde_json::Value, serde_json::Err
 }
 
 pub fn run_lintian(
-    output_directory: &str,
-    changes_names: Vec<&str>,
+    output_directory: &Path,
+    changes_names: Vec<&Path>,
     profile: Option<&str>,
     suppress_tags: Option<Vec<&str>>,
-) -> Result<serde_json::Value, Error> {
+) -> Result<LintianResult, Error> {
     let mut args: Vec<String> = vec![
         "--exp-output=format=json".to_owned(),
         "--allow-root".to_owned(),
