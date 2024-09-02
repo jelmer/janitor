@@ -9,7 +9,7 @@ repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
-janitor = { version = "0.0.0", path = "../.." }
+janitor = { version = "0.0.0", path = ".." }
 clap = { optional = true, workspace = true }
 env_logger = { optional = true, workspace = true }
 
