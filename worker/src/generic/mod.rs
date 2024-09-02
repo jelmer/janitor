@@ -116,7 +116,7 @@ pub fn generic_make_changes(
 }
 
 #[derive(serde::Deserialize)]
-struct GenericBuildConfig {
+pub struct GenericBuildConfig {
     chroot: Option<String>,
     dep_server_url: Option<url::Url>,
 }

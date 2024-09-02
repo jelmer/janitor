@@ -18,11 +18,11 @@ fn main() {
     let (wt, subpath) =
         breezyshim::workingtree::open_containing(std::path::Path::new(".")).unwrap();
 
-    let config = if let Some(config) = args.config {
+    let config: janitor_worker::generic::GenericBuildConfig = if let Some(config) = args.config {
         let config = std::fs::read_to_string(config).unwrap();
         serde_json::from_str(&config).unwrap()
     } else {
-        serde_json::Value::Null
+        serde_json::from_value(serde_json::json!({})).unwrap()
     };
 
     match janitor_worker::generic::build_from_config(
