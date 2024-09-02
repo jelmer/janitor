@@ -31,7 +31,7 @@ mod tee;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub output_directory: std::path::PathBuf,
+    pub output_directory: Option<std::path::PathBuf>,
     pub assignment: Option<janitor::api::worker::Assignment>,
 }
 
@@ -946,13 +946,13 @@ pub async fn process_single_item(
     campaign: Option<&str>,
     tee: bool,
     output_directory_base: Option<&std::path::Path>,
-    state: &mut AppState,
+    state: std::sync::Arc<std::sync::RwLock<AppState>>,
 ) -> Result<(), SingleItemError> {
     let assignment = client
         .get_assignment(my_url, node_name, jenkins_build_url, codebase, campaign)
         .await?;
 
-    state.assignment = Some(assignment.clone());
+    state.write().unwrap().assignment = Some(assignment.clone());
 
     log::debug!("Got back assignment: {:?}", &assignment);
 
