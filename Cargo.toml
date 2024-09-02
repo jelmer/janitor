@@ -73,7 +73,7 @@ protobuf-codegen = "3"
 protoc-rust = "^2.0"
 
 [workspace]
-members = [ "common-py", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker-py", "worker" ]
+members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker-py", "worker" ]
 
 [features]
 default = ["gcp", "gcs"]
