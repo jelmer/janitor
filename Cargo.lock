@@ -634,8 +634,8 @@ dependencies = [
 
 [[package]]
 name = "buildlog-consultant"
-version = "0.0.39"
-source = "git+https://github.com/jelmer/buildlog-consultant#f7791903bb63ad7c0b4df26e947f7aa8e264882a"
+version = "0.0.40"
+source = "git+https://github.com/jelmer/buildlog-consultant#6c1a4c321a1a67c8418973774807f823a61ef4cb"
 dependencies = [
  "chrono",
  "clap 4.5.16",
@@ -3776,6 +3776,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.24"
+source = "git+https://github.com/jelmer/ognibuild.git#9fa1354f956ac18526926ebb72c13880fc5eee6c"
 dependencies = [
  "breezyshim",
  "buildlog-consultant",

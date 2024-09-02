@@ -67,8 +67,7 @@ axum = "0.7"
 maplit = "1"
 silver-platter = "0.5"
 #silver-platter = { path = "../silver-platter" }
-#ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
-ognibuild = { path = "../ognibuild" }
+ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 shlex = "1"
 
