@@ -1301,6 +1301,40 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
+version = "0.158.9"
+source = "git+https://salsa.debian.org/jelmer/lintian-brush#9e072c823474e4aee7fbacd3c1e3c559d870968c"
+dependencies = [
+ "breezyshim",
+ "chrono",
+ "configparser 3.1.0",
+ "deb822-lossless",
+ "debian-changelog",
+ "debian-control",
+ "debian-copyright",
+ "debversion",
+ "dep3",
+ "difflib",
+ "distro-info",
+ "lazy-regex",
+ "lazy_static",
+ "log",
+ "makefile-lossless",
+ "maplit",
+ "merge3",
+ "nix",
+ "patchkit",
+ "pyo3",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml_edit 0.22.20",
+ "url",
+]
+
+[[package]]
+name = "debian-analyzer"
 version = "0.158.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5916717056158dc390ac698110360378bca4c1b234e042425e60fc7f5fc85f5c"
@@ -3028,6 +3062,9 @@ dependencies = [
  "breezyshim",
  "chrono",
  "clap 4.5.16",
+ "debian-analyzer 0.158.9",
+ "debian-changelog",
+ "debversion",
  "gethostname",
  "janitor",
  "log",
@@ -3739,12 +3776,13 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.24"
-source = "git+https://github.com/jelmer/ognibuild.git#3c45af88b3b33a0606e958824a7bdb399d27c6ec"
 dependencies = [
  "breezyshim",
  "buildlog-consultant",
  "chrono",
  "clap 4.5.16",
+ "deb822-lossless",
+ "debian-analyzer 0.158.9",
  "debian-changelog",
  "debian-control",
  "debversion",
@@ -3759,6 +3797,7 @@ dependencies = [
  "log",
  "lz4_flex",
  "lzma-rs",
+ "makefile-lossless",
  "maplit",
  "nix",
  "pep440_rs",
@@ -3779,6 +3818,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml 0.8.19",
+ "toml_edit 0.22.20",
  "upstream-ontologist",
  "url",
  "whoami",
@@ -5232,7 +5272,7 @@ checksum = "18cb8eb18f4ab4a005a59081e67a553ebfa961d9e7308f76535d81925fa42859"
 dependencies = [
  "breezyshim",
  "chrono",
- "debian-analyzer",
+ "debian-analyzer 0.158.10",
  "debian-changelog",
  "debian-control",
  "debversion",

@@ -1,3 +1,4 @@
+pub mod build;
 pub mod lintian;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -243,7 +244,7 @@ struct DebianBuildConfig {
     #[serde(rename = "build-suffix")]
     build_suffix: Option<String>,
     #[serde(rename = "last-build-version")]
-    last_build_version: Option<String>,
+    last_build_version: Option<debversion::Version>,
     chroot: Option<String>,
     lintian: Lintian,
     #[serde(rename = "base-apt-repository")]
@@ -272,95 +273,6 @@ impl std::fmt::Display for BuildFailure {
 
 impl std::error::Error for BuildFailure {}
 
-fn build(
-    local_tree: &WorkingTree,
-    subpath: &std::path::Path,
-    output_directory: &std::path::Path,
-    committer: Option<&str>,
-    update_changelog: DebUpdateChangelog,
-    config: &DebianBuildConfig,
-) -> Result<serde_json::Value, BuildFailure> {
-    pyo3::import_exception!(janitor.debian.build, BuildFailure);
-    Python::with_gil(|py| {
-        let m = py.import_bound("janitor.debian.build").unwrap();
-        let build = m.getattr("build").unwrap();
-
-        let kwargs = PyDict::new_bound(py);
-
-        kwargs.set_item("local_tree", local_tree).unwrap();
-        kwargs.set_item("subpath", subpath).unwrap();
-        kwargs
-            .set_item("output_directory", output_directory)
-            .unwrap();
-
-        kwargs.set_item("chroot", config.chroot.as_ref()).unwrap();
-        kwargs
-            .set_item(
-                "command",
-                config
-                    .build_command
-                    .as_ref()
-                    .map_or("sbuild -A -s -v".to_string(), |x| x.clone()),
-            )
-            .unwrap();
-        kwargs.set_item("suffix", &config.build_suffix).unwrap();
-        kwargs
-            .set_item("distribution", &config.build_distribution)
-            .unwrap();
-        kwargs
-            .set_item("last_build_version", &config.last_build_version)
-            .unwrap();
-        kwargs
-            .set_item("lintian_profile", &config.lintian.profile)
-            .unwrap();
-        kwargs
-            .set_item("lintian_suppress_tags", &config.lintian.suppress_tags)
-            .unwrap();
-        kwargs.set_item("committer", committer).unwrap();
-        kwargs
-            .set_item("apt_repository", &config.apt_repository)
-            .unwrap();
-        kwargs
-            .set_item("apt_repository_key", &config.apt_repository_key)
-            .unwrap();
-        kwargs
-            .set_item("extra_repositories", &config.extra_repositories)
-            .unwrap();
-        kwargs
-            .set_item(
-                "update_changelog",
-                match update_changelog {
-                    DebUpdateChangelog::Auto => None,
-                    DebUpdateChangelog::Update => Some(true),
-                    DebUpdateChangelog::Leave => Some(false),
-                },
-            )
-            .unwrap();
-        kwargs
-            .set_item("dep_server_url", &config.dep_server_url)
-            .unwrap();
-
-        build
-            .call((), Some(&kwargs))
-            .map(|x| crate::py_to_serde_json(&x).unwrap())
-            .map_err(|e| {
-                if e.is_instance_of::<BuildFailure>(py) {
-                    let value = e.value_bound(py);
-                    let details: Option<PyObject> =
-                        value.getattr("details").unwrap().extract().unwrap();
-                    crate::debian::BuildFailure {
-                        code: value.getattr("code").unwrap().extract().unwrap(),
-                        description: value.getattr("description").unwrap().extract().unwrap(),
-                        details: details.map(|x| crate::py_to_serde_json(x.bind(py)).unwrap()),
-                        stage: value.getattr("stage").unwrap().extract().unwrap(),
-                    }
-                } else {
-                    panic!("Unexpected exception: {:?}", e)
-                }
-            })
-    })
-}
-
 pub fn build_from_config(
     local_tree: &WorkingTree,
     subpath: &std::path::Path,
@@ -384,7 +296,7 @@ pub fn build_from_config(
             DebUpdateChangelog::Auto
         }
     };
-    build(
+    crate::debian::build::build(
         local_tree,
         subpath,
         output_directory,
@@ -402,6 +314,7 @@ pub fn build_from_config(
             .collect(),
         transient: None,
     })
+    .map(|x| serde_json::to_value(x).unwrap())
 }
 
 pub struct DebianTarget {
@@ -560,6 +473,21 @@ fn validate_from_config(
                 })
             }
         }
+    }
+    Ok(())
+}
+
+fn tree_set_changelog_version(
+    tree: &WorkingTree, build_version: &debversion::Version, subpath: &Path) -> Result<(), debian_analyzer::editor::EditorError> {
+    use debian_analyzer::editor::{Editor,MutableTreeEdit};
+    let editor = tree.edit_file::<debian_changelog::ChangeLog>(&subpath.join("debian/changelog"), true, true)?;
+    if let Some(mut entry) = editor.entries().next() {
+        let version: debversion::Version = format!("{}~", entry.version().unwrap()).parse().unwrap();
+        if version > *build_version {
+            return Ok(());
+        }
+        entry.set_version(build_version.clone());
+        editor.commit()?;
     }
     Ok(())
 }
