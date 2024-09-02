@@ -33,6 +33,7 @@ mod tee;
 pub struct AppState {
     pub output_directory: Option<std::path::PathBuf>,
     pub assignment: Option<janitor::api::worker::Assignment>,
+    pub metadata: Option<Metadata>,
 }
 
 pub async fn is_gce_instance() -> bool {
@@ -1011,6 +1012,8 @@ pub async fn process_single_item(
             vcs_type: Some(assignment.branch.vcs_type),
             ..Metadata::default()
         };
+
+        // TODO: Update metadata in appstate while working
 
         let result = run_worker(
             &assignment_.codebase,

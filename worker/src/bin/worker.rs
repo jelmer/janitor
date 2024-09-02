@@ -1,13 +1,16 @@
-use axum::{response::Html, response::Json, routing::get, Router, response::Response, extract::State, http::HeaderMap, http::StatusCode, extract::Path};
-use clap::Parser;
-use janitor::api::worker::{Assignment, Metadata};
 use askama_axum::IntoResponse;
 use askama_axum::Template;
-use std::net::SocketAddr;
-use std::sync::{RwLock,Arc};
+use axum::{
+    extract::Path, extract::State, http::HeaderMap, http::StatusCode, response::Html,
+    response::Json, response::Response, routing::get, Router,
+};
+use clap::Parser;
+use janitor::api::worker::{Assignment, Metadata};
+use janitor_worker::AppState;
 use serde::Deserialize;
 use std::fs::File;
-use janitor_worker::AppState;
+use std::net::SocketAddr;
+use std::sync::{Arc, RwLock};
 
 #[derive(Parser, Debug)]
 #[command(author, version)]
@@ -70,27 +73,38 @@ struct Args {
     tee: bool,
 }
 
-async fn index(State(state): State<Arc<RwLock<AppState>>>) -> janitor_worker::web::IndexTemplate<'static> {
+async fn index(
+    State(state): State<Arc<RwLock<AppState>>>,
+) -> janitor_worker::web::IndexTemplate<'static> {
     let state = state.read().unwrap();
-    let lognames: Option<Vec<String>> = if let Some(output_directory) = state.output_directory.as_ref() {
-        Some(output_directory.read_dir().unwrap().filter_map(|entry| {
-            let entry = entry.ok()?;
-            let filename = entry.file_name();
-            let name = filename.to_str()?;
-            if name.ends_with(".log") {
-                Some(name.to_owned())
-            } else {
-                None
-            }
-        }).collect())
-    } else {
-        None
-    };
+    let lognames: Option<Vec<String>> =
+        if let Some(output_directory) = state.output_directory.as_ref() {
+            Some(
+                output_directory
+                    .read_dir()
+                    .unwrap()
+                    .filter_map(|entry| {
+                        let entry = entry.ok()?;
+                        let filename = entry.file_name();
+                        let name = filename.to_str()?;
+                        if name.ends_with(".log") {
+                            Some(name.to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
+    let metadata = state.metadata;
 
     janitor_worker::web::IndexTemplate {
         assignment: state.assignment.as_ref(),
         lognames,
-        metadata: todo!(),
+        metadata,
     }
 }
 
@@ -131,11 +145,12 @@ async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap
         }
     };
 
-    match headers.get(axum::http::header::ACCEPT).map(|x| x.to_str().unwrap()) {
+    match headers
+        .get(axum::http::header::ACCEPT)
+        .map(|x| x.to_str().unwrap())
+    {
         Some("application/json") => Json(names).into_response(),
-        _ => {
-            janitor_worker::web::LogIndexTemplate { names }.into_response()
-        }
+        _ => janitor_worker::web::LogIndexTemplate { names }.into_response(),
     }
 }
 
@@ -168,19 +183,30 @@ async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: Head
         }
     };
 
-    match headers.get(axum::http::header::ACCEPT).map(|x| x.to_str().unwrap()) {
+    match headers
+        .get(axum::http::header::ACCEPT)
+        .map(|x| x.to_str().unwrap())
+    {
         Some("application/json") => Json(names).into_response(),
-        _ => {
-            janitor_worker::web::ArtifactIndexTemplate { names }.into_response()
-        }
+        _ => janitor_worker::web::ArtifactIndexTemplate { names }.into_response(),
     }
 }
 
 async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Json<Option<String>> {
-    Json(state.read().unwrap().assignment.as_ref().map(|a| a.id.clone()))
+    Json(
+        state
+            .read()
+            .unwrap()
+            .assignment
+            .as_ref()
+            .map(|a| a.id.clone()),
+    )
 }
 
-async fn get_log_file(State(state): State<Arc<RwLock<AppState>>>, Path(filename): Path<String>) -> Response {
+async fn get_log_file(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Path(filename): Path<String>,
+) -> Response {
     // filenames should only contain characters that are safe to use in URLs
     if filename.contains('/') || filename.contains('\\') {
         return Response::builder()
@@ -227,7 +253,10 @@ async fn get_log_file(State(state): State<Arc<RwLock<AppState>>>, Path(filename)
     (StatusCode::OK, headers, body).into_response()
 }
 
-async fn get_artifact_file(State(state): State<Arc<RwLock<AppState>>>, Path(filename): Path<String>) -> Response {
+async fn get_artifact_file(
+    State(state): State<Arc<RwLock<AppState>>>,
+    Path(filename): Path<String>,
+) -> Response {
     // filenames should only contain characters that are safe to use in URLs
     if filename.contains('/') || filename.contains('\\') {
         return Response::builder()
@@ -296,27 +325,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             login: String,
             password: String,
         }
-        let creds: JsonCredentials = serde_json::from_reader(File::open(credentials).unwrap()).unwrap();
-        janitor_worker::client::Credentials::Basic{ username: creds.login, password: Some(creds.password)}
+        let creds: JsonCredentials =
+            serde_json::from_reader(File::open(credentials).unwrap()).unwrap();
+        janitor_worker::client::Credentials::Basic {
+            username: creds.login,
+            password: Some(creds.password),
+        }
     } else if let Ok(worker_name) = std::env::var("WORKER_NAME") {
-        janitor_worker::client::Credentials::Basic{ username: worker_name, password: std::env::var("WORKER_PASSWORD").ok() }
+        janitor_worker::client::Credentials::Basic {
+            username: worker_name,
+            password: std::env::var("WORKER_PASSWORD").ok(),
+        }
     } else {
         janitor_worker::client::Credentials::from_url(&base_url)
     };
 
-    let jenkins_build_url: Option<url::Url> = std::env::var("BUILD_URL").ok().map(|x| x.parse().unwrap());
+    let jenkins_build_url: Option<url::Url> =
+        std::env::var("BUILD_URL").ok().map(|x| x.parse().unwrap());
 
-    let node_name = std::env::var("NODE_NAME").unwrap_or_else(|_| gethostname::gethostname().to_str().unwrap().to_owned());
+    let node_name = std::env::var("NODE_NAME")
+        .unwrap_or_else(|_| gethostname::gethostname().to_str().unwrap().to_owned());
 
     let my_url = if let Some(my_url) = args.my_url.as_ref() {
         Some(my_url.clone())
     } else if let Some(external_address) = args.external_address {
-        Some(format!("http://{}:{}", external_address, args.site_port).parse().unwrap())
+        Some(
+            format!("http://{}:{}", external_address, args.site_port)
+                .parse()
+                .unwrap(),
+        )
     } else if let Ok(my_ip) = std::env::var("MY_IP") {
-        Some(format!("http://{}:{}", my_ip, args.site_port).parse().unwrap())
+        Some(
+            format!("http://{}:{}", my_ip, args.site_port)
+                .parse()
+                .unwrap(),
+        )
     } else if janitor_worker::is_gce_instance().await {
         if let Some(external_ip) = janitor_worker::gce_external_ip().await.unwrap() {
-            Some(format!("http://{}:{}", external_ip, args.site_port).parse().unwrap())
+            Some(
+                format!("http://{}:{}", external_ip, args.site_port)
+                    .parse()
+                    .unwrap(),
+            )
         } else {
             // TODO(jelmer): Find out kubernetes IP?
             None
@@ -348,20 +398,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run worker loop in background
     let state = state.clone();
     let worker = tokio::spawn(async move {
-        let client = janitor_worker::client::Client::new(base_url, auth, janitor_worker::DEFAULT_USER_AGENT);
+        let client =
+            janitor_worker::client::Client::new(base_url, auth, janitor_worker::DEFAULT_USER_AGENT);
         loop {
             let exit_code = match janitor_worker::process_single_item(
-                   &client,
-                    my_url.as_ref(),
-                    &node_name,
-                    jenkins_build_url.as_ref(),
-                    args.prometheus.as_ref(),
-                    args.codebase.as_deref(),
-                    args.campaign.as_deref(),
-                    args.tee,
-                   Some(&args.output_directory),
-                   state.clone()
-                ).await {
+                &client,
+                my_url.as_ref(),
+                &node_name,
+                jenkins_build_url.as_ref(),
+                args.prometheus.as_ref(),
+                args.codebase.as_deref(),
+                args.campaign.as_deref(),
+                args.tee,
+                Some(&args.output_directory),
+                state.clone(),
+            )
+            .await
+            {
                 Err(janitor_worker::SingleItemError::AssignmentFailure(e)) => {
                     log::error!("failed to get assignment: {}", e);
                     1
@@ -374,9 +427,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::info!("queue is empty");
                     0
                 }
-                Ok(_) => {
-                    0
-                }
+                Ok(_) => 0,
             };
 
             if !args.r#loop {
