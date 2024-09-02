@@ -273,7 +273,13 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
-    use tower::ServiceExt;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt; // for `collect`
+
+    async fn get_body(response: Response<Body>) -> String {
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        String::from_utf8(body[..].to_vec()).unwrap()
+    }
 
     #[tokio::test]
     async fn test_health() {
@@ -285,7 +291,295 @@ mod tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), 200);
 
-        let body = response.into_body().into_string().await.unwrap();
+        let body = get_body(response).await;
         assert_eq!(body, "ok");
+    }
+
+    #[tokio::test]
+    async fn test_assignment_empty() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/assignment")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "null");
+
+        if let Ok(mut state) = state.write() {
+            state.assignment = Some(Assignment {
+                id: "test".to_string(),
+                queue_id: 1,
+                campaign: "lintian-fixes".to_string(),
+                codebase: "foo".to_string(),
+                force_build: true,
+                branch: janitor::api::worker::Branch {
+                    cached_url: None,
+                    vcs_type: janitor::vcs::VcsType::Git,
+                    url: Some("https://example.com/vcs".parse().unwrap()),
+                    subpath: std::path::PathBuf::from(""),
+                    additional_colocated_branches: Some(vec![]),
+                    default_empty: false,
+                },
+                resume: None,
+                target_repository: janitor::api::worker::TargetRepository {
+                    url: "https://example.com/".parse().unwrap(),
+                },
+                skip_setup_validation: false,
+                codemod: janitor::api::worker::Codemod {
+                    command: "echo".to_string(),
+                    environment: std::collections::HashMap::new(),
+                },
+                env: std::collections::HashMap::new(),
+                build: janitor::api::worker::Build {
+                    config: serde_json::Value::Null,
+                    environment: None,
+                    target: "test".to_string(),
+                },
+            });
+        };
+
+        let request = Request::builder()
+            .uri("/assignment")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body: Assignment = serde_json::from_str(&get_body(response).await).unwrap();
+        assert_eq!(body.id, "test");
+        assert_eq!(body.queue_id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_logs_empty() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder().uri("/logs").body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "Log directory not created yet");
+
+        let td = tempfile::tempdir().unwrap();
+
+        if let Ok(mut state) = state.write() {
+            state.output_directory = Some(td.path().to_path_buf());
+        };
+
+        let request = Request::builder()
+            .uri("/logs")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+        assert_eq!(body, Vec::<String>::new());
+
+        // create a log file
+        std::fs::write(td.path().join("test.log"), "test content").unwrap();
+
+        let request = Request::builder()
+            .uri("/logs")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+
+        assert_eq!(body, vec!["test.log"]);
+
+        // get the log file
+        let request = Request::builder()
+            .uri("/logs/test.log")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body = get_body(response).await;
+
+        assert_eq!(body, "test content");
+    }
+
+    #[tokio::test]
+    async fn test_artifacts_empty() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "Artifact directory not created yet");
+
+        let td = tempfile::tempdir().unwrap();
+
+        if let Ok(mut state) = state.write() {
+            state.output_directory = Some(td.path().to_path_buf());
+        };
+
+        let request = Request::builder()
+            .uri("/artifacts")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+        assert_eq!(body, Vec::<String>::new());
+
+        // create a log file
+        std::fs::write(td.path().join("test.log"), "test").unwrap();
+
+        let request = Request::builder()
+            .uri("/artifacts")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+
+        assert_eq!(body, Vec::<String>::new());
+
+        // create an artifact file
+        std::fs::write(td.path().join("test.artifact"), "test").unwrap();
+
+        let request = Request::builder()
+            .uri("/artifacts")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+
+        assert_eq!(body, vec!["test.artifact"]);
+
+        // get the artifact file
+
+        let request = Request::builder()
+            .uri("/artifacts/test.artifact")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), 200);
+
+        let body = get_body(response).await;
+
+        assert_eq!(body, "test");
+    }
+
+    #[tokio::test]
+    async fn test_index() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder().uri("/").body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body = get_body(response).await;
+        assert!(body.contains("Job"));
+    }
+
+    #[tokio::test]
+    async fn test_log_id() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/log-id")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "null");
+
+        if let Ok(mut state) = state.write() {
+            state.assignment = Some(Assignment {
+                id: "test".to_string(),
+                queue_id: 1,
+                campaign: "lintian-fixes".to_string(),
+                codebase: "foo".to_string(),
+                force_build: true,
+                branch: janitor::api::worker::Branch {
+                    cached_url: None,
+                    vcs_type: janitor::vcs::VcsType::Git,
+                    url: Some("https://example.com/vcs".parse().unwrap()),
+                    subpath: std::path::PathBuf::from(""),
+                    additional_colocated_branches: Some(vec![]),
+                    default_empty: false,
+                },
+                resume: None,
+                target_repository: janitor::api::worker::TargetRepository {
+                    url: "https://example.com/".parse().unwrap(),
+                },
+                skip_setup_validation: false,
+                codemod: janitor::api::worker::Codemod {
+                    command: "echo".to_string(),
+                    environment: std::collections::HashMap::new(),
+                },
+                env: std::collections::HashMap::new(),
+                build: janitor::api::worker::Build {
+                    config: serde_json::Value::Null,
+                    environment: None,
+                    target: "test".to_string(),
+                },
+            });
+        };
+
+        let request = Request::builder()
+            .uri("/log-id")
+            .body(Body::empty())
+            .unwrap();
+
+        let app = super::app(state.clone());
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body: String = serde_json::from_str(&get_body(response).await).unwrap();
+        assert_eq!(body, "test");
     }
 }

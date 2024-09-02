@@ -353,7 +353,9 @@ mod tests {
         .unwrap();
         let target_url = Url::from_directory_path(td.path().join("target")).unwrap();
         let revid1 = source_tree
-            .commit("Initial commit", None, None, None)
+            .build_commit()
+            .message("Initial commit")
+            .commit()
             .unwrap();
         let target = breezyshim::controldir::create(
             &target_url,
@@ -391,7 +393,9 @@ mod tests {
         let target_path = td.path().join("target");
         let target_url = Url::from_directory_path(&target_path).unwrap();
         let revid1 = source_tree
-            .commit("Initial commit", None, None, None)
+            .build_commit()
+            .message("Initial commit")
+            .commit()
             .unwrap();
         let target = breezyshim::controldir::create(
             &target_url,
@@ -447,7 +451,9 @@ mod tests {
         let target_path = td.path().join("target");
         let target_url = Url::from_directory_path(&target_path).unwrap();
         let revid1 = source_tree
-            .commit("Initial commit", None, None, None)
+            .build_commit()
+            .message("Initial commit")
+            .commit()
             .unwrap();
         let target = breezyshim::controldir::create(
             &target_url,
