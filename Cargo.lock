@@ -3777,7 +3777,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.24"
-source = "git+https://github.com/jelmer/ognibuild.git#9fa1354f956ac18526926ebb72c13880fc5eee6c"
+source = "git+https://github.com/jelmer/ognibuild.git#78622a9ec8b194eeadcd4834f7251cb42768f78a"
 dependencies = [
  "breezyshim",
  "buildlog-consultant",
