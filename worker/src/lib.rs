@@ -16,6 +16,8 @@ use url::Url;
 
 pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG_VERSION"), ")");
 
+pub mod app;
+
 pub mod client;
 
 #[cfg(feature = "debian")]
@@ -29,7 +31,7 @@ pub mod web;
 
 mod tee;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AppState {
     pub output_directory: Option<std::path::PathBuf>,
     pub assignment: Option<janitor::api::worker::Assignment>,

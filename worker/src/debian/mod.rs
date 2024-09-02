@@ -234,7 +234,7 @@ struct Lintian {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct DebianBuildConfig {
+pub(crate) struct DebianBuildConfig {
     #[serde(rename = "build-distribution")]
     build_distribution: Option<String>,
     #[serde(rename = "build-command")]
@@ -476,11 +476,19 @@ fn validate_from_config(
 }
 
 fn tree_set_changelog_version(
-    tree: &WorkingTree, build_version: &debversion::Version, subpath: &Path) -> Result<(), debian_analyzer::editor::EditorError> {
-    use debian_analyzer::editor::{Editor,MutableTreeEdit};
-    let editor = tree.edit_file::<debian_changelog::ChangeLog>(&subpath.join("debian/changelog"), true, true)?;
+    tree: &WorkingTree,
+    build_version: &debversion::Version,
+    subpath: &Path,
+) -> Result<(), debian_analyzer::editor::EditorError> {
+    use debian_analyzer::editor::{Editor, MutableTreeEdit};
+    let editor = tree.edit_file::<debian_changelog::ChangeLog>(
+        &subpath.join("debian/changelog"),
+        true,
+        true,
+    )?;
     if let Some(mut entry) = editor.entries().next() {
-        let version: debversion::Version = format!("{}~", entry.version().unwrap()).parse().unwrap();
+        let version: debversion::Version =
+            format!("{}~", entry.version().unwrap()).parse().unwrap();
         if version > *build_version {
             return Ok(());
         }
