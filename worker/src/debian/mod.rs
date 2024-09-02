@@ -1,7 +1,5 @@
 pub mod build;
 pub mod lintian;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
 
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::{Tree, WorkingTree};

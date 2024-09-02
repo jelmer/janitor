@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.179"
+version = "0.1.181"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1339b3c3450245f4fd885cebdb9974bd7b745143b000df2b4b27e3ef0da02935"
+checksum = "fd110e2cfc994cf27f5a334910e9c04b0d76ce898acb4794518cdb538fb29ee2"
 dependencies = [
  "chrono",
  "ctor",
@@ -3082,6 +3082,7 @@ dependencies = [
  "silver-platter",
  "tempfile",
  "tokio",
+ "tokio-util",
  "url",
 ]
 
