@@ -16,8 +16,6 @@ use url::Url;
 
 pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG_VERSION"), ")");
 
-pub mod app;
-
 pub mod client;
 
 #[cfg(feature = "debian")]

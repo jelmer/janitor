@@ -179,24 +179,23 @@ fn build(
     };
 
     let scope = ognibuild::installer::InstallationScope::Global;
-    let (external_dir, internal_dir) =
-        session
-            .setup_from_vcs(local_tree, None, None)
-            .map_err(|e| WorkerFailure {
-                code: "session-setup-failure".to_string(),
-                description: format!("Failed to setup session: {}", e),
-                details: None,
-                stage: vec!["build".to_string()],
-                transient: None,
-            })?;
-    session.chdir(&internal_dir).unwrap();
+    let project = session
+        .project_from_vcs(local_tree, None, None)
+        .map_err(|e| WorkerFailure {
+            code: "session-setup-failure".to_string(),
+            description: format!("Failed to setup session: {}", e),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        })?;
+    session.chdir(project.internal_path()).unwrap();
     let installer = ognibuild::installer::auto_installer(session.as_ref(), scope, dep_server_url);
-    let fixers = vec![Box::new(ognibuild::fixers::InstallFixer::new(
+    let fixers = [Box::new(ognibuild::fixers::InstallFixer::new(
         installer.as_ref(),
         scope,
     ))
         as Box<dyn ognibuild::fix_build::BuildFixer<InstallerError>>];
-    let bss = ognibuild::buildsystem::detect_buildsystems(&external_dir.join(subpath));
+    let bss = ognibuild::buildsystem::detect_buildsystems(project.external_path());
     if bss.is_empty() {
         return Err(WorkerFailure {
             code: "no-build-system-detected".to_string(),
@@ -228,74 +227,200 @@ fn build(
             .as_slice(),
         &mut log_manager,
     ) {
-        Ok(_) => Ok(serde_json::Value::Null),
-        Err(BsError::Error(AnalyzedError::MissingCommandError { command })) => Err(WorkerFailure {
-            code: "missing-command".to_string(),
-            description: format!("Missing command: {}", command),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
+        Ok(_) => {}
+        Err(BsError::Error(AnalyzedError::MissingCommandError { command })) => {
+            return Err(WorkerFailure {
+                code: "missing-command".to_string(),
+                description: format!("Missing command: {}", command),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
         Err(BsError::Error(AnalyzedError::Unidentified {
             retcode,
-            lines: _,
-            secondary: _,
-        })) => Err(WorkerFailure {
-            code: "unidentified-error".to_string(),
-            description: "Unidentified error".to_string(),
-            details: Some(serde_json::json!({
-                "retcode": retcode,
-            })),
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
-        Err(BsError::Error(AnalyzedError::Detailed { retcode, error })) => Err(WorkerFailure {
-            code: error.kind().to_string(),
-            description: error.to_string(),
-            details: Some(serde_json::json!({
-                "retcode": retcode,
-            })),
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
-        Err(BsError::NoBuildSystemDetected) => Err(WorkerFailure {
-            code: "no-build-system-detected".to_string(),
-            description: "No build system detected".to_string(),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
-        Err(BsError::DependencyInstallError(err)) => Err(WorkerFailure {
-            code: "dependency-install-error".to_string(),
-            description: format!("Dependency install error: {}", err),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
-        Err(BsError::Unimplemented) => Err(WorkerFailure {
-            code: "build-action-unimplemented".to_string(),
-            description: "The build action is not implemented for the buildsystem".to_string(),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
+            lines,
+            secondary,
+        })) => {
+            return Err(WorkerFailure {
+                code: "unidentified-error".to_string(),
+                description: if let Some(secondary) = secondary {
+                    format!("Unidentified error: {}", secondary.lines().join("\n"))
+                } else {
+                    format!("Unidentified error: {}", lines.join("\n"))
+                },
+                details: Some(serde_json::json!({
+                    "retcode": retcode,
+                })),
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Error(AnalyzedError::Detailed { retcode, error })) => {
+            return Err(WorkerFailure {
+                code: error.kind().to_string(),
+                description: error.to_string(),
+                details: Some(serde_json::json!({
+                    "retcode": retcode,
+                })),
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::NoBuildSystemDetected) => {
+            return Err(WorkerFailure {
+                code: "no-build-system-detected".to_string(),
+                description: "No build system detected".to_string(),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::DependencyInstallError(err)) => {
+            return Err(WorkerFailure {
+                code: "dependency-install-error".to_string(),
+                description: format!("Dependency install error: {}", err),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Unimplemented) => {
+            return Err(WorkerFailure {
+                code: "build-action-unimplemented".to_string(),
+                description: "The build action is not implemented for the buildsystem".to_string(),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
         Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => {
-            Err(WorkerFailure {
+            return Err(WorkerFailure {
                 code: "io-error".to_string(),
                 description: format!("IO error: {}", e),
                 details: None,
                 stage: vec!["build".to_string()],
                 transient: None,
-            })
+            });
         }
-        Err(BsError::Other(e)) => Err(WorkerFailure {
-            code: "unknown-error".to_string(),
-            description: format!("Unknown error: {}", e),
-            details: None,
-            stage: vec!["build".to_string()],
-            transient: None,
-        }),
+        Err(BsError::Other(e)) => {
+            return Err(WorkerFailure {
+                code: "unknown-error".to_string(),
+                description: format!("Unknown error: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
     }
+
+    let mut log_manager = ognibuild::logs::DirectoryLogManager::new(
+        output_directory.join("test.log"),
+        ognibuild::logs::LogMode::Redirect,
+    );
+
+    match ognibuild::actions::test::run_test(
+        session.as_ref(),
+        bss.iter()
+            .map(|b| b.as_ref())
+            .collect::<Vec<_>>()
+            .as_slice(),
+        installer.as_ref(),
+        fixers
+            .iter()
+            .map(|x| x.as_ref())
+            .collect::<Vec<_>>()
+            .as_slice(),
+        &mut log_manager,
+    ) {
+        Ok(_) => {}
+        Err(BsError::Error(AnalyzedError::MissingCommandError { command })) => {
+            return Err(WorkerFailure {
+                code: "missing-command".to_string(),
+                description: format!("Missing command: {}", command),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Error(AnalyzedError::Unidentified {
+            retcode,
+            lines,
+            secondary,
+        })) => {
+            return Err(WorkerFailure {
+                code: "unidentified-error".to_string(),
+                description: if let Some(secondary) = secondary {
+                    format!("Unidentified error: {}", secondary.lines().join("\n"))
+                } else {
+                    format!("Unidentified error: {}", lines.join("\n"))
+                },
+                details: Some(serde_json::json!({
+                    "retcode": retcode,
+                })),
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Error(AnalyzedError::Detailed { retcode, error })) => {
+            return Err(WorkerFailure {
+                code: error.kind().to_string(),
+                description: error.to_string(),
+                details: Some(serde_json::json!({
+                    "retcode": retcode,
+                })),
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::NoBuildSystemDetected) => {
+            return Err(WorkerFailure {
+                code: "no-build-system-detected".to_string(),
+                description: "No build system detected".to_string(),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::DependencyInstallError(err)) => {
+            return Err(WorkerFailure {
+                code: "dependency-install-error".to_string(),
+                description: format!("Dependency install error: {}", err),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Unimplemented) => {
+            return Err(WorkerFailure {
+                code: "build-action-unimplemented".to_string(),
+                description: "The build action is not implemented for the buildsystem".to_string(),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => {
+            return Err(WorkerFailure {
+                code: "io-error".to_string(),
+                description: format!("IO error: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+        Err(BsError::Other(e)) => {
+            return Err(WorkerFailure {
+                code: "unknown-error".to_string(),
+                description: format!("Unknown error: {}", e),
+                details: None,
+                stage: vec!["build".to_string()],
+                transient: None,
+            });
+        }
+    }
+
+    Ok(serde_json::json!({}))
 }
 
 pub struct GenericTarget {
