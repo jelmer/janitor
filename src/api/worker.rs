@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use url::Url;
 
 /// Build metadata as produced by the worker.
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub struct Metadata {
     /// The ID of the item in the runner's queue.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,7 +116,7 @@ impl Metadata {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Remote {
     pub url: Url,
 }
@@ -138,7 +138,7 @@ impl std::fmt::Display for WorkerFailure {
 
 impl std::error::Error for WorkerFailure {}
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct TargetDetails {
     pub name: String,
     pub details: serde_json::Value,
@@ -150,13 +150,13 @@ impl TargetDetails {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Codemod {
     pub command: String,
     pub environment: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Build {
     pub target: String,
     pub config: serde_json::Value,

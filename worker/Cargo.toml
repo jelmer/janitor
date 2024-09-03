@@ -7,6 +7,7 @@ description = "Worker for the janitor"
 license = "GPL-3.0+"
 repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
+default-run = "janitor-worker"
 
 [dependencies]
 url = { workspace = true, features = ["serde"] }
@@ -47,7 +48,9 @@ cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 [dev-dependencies]
 http-body-util = "0.1.2"
 hyper = "1.4.1"
+serial_test = "3.1.1"
 tempfile = "3.11.0"
+test-log = "0.2.16"
 tower = { version = "0.5.0", features = ["util"] }
 
 [[bin]]
