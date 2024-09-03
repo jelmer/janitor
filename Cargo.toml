@@ -65,7 +65,7 @@ clap = { version = "4" }
 tokio = "1"
 axum = "0.7"
 maplit = "1"
-silver-platter = "0.5"
+silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 #silver-platter = { path = "../silver-platter" }
 ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
@@ -76,7 +76,7 @@ protobuf-codegen = "3"
 protoc-rust = "^2.0"
 
 [workspace]
-members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker-py", "worker" ]
+members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" ]
 
 [features]
 default = ["gcp", "gcs"]
