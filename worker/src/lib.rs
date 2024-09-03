@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use tokio::net::lookup_host;
 
-use janitor::api::worker::{Metadata, WorkerFailure};
+use janitor::api::worker::{Metadata, TargetDetails, WorkerFailure};
 use janitor::vcs::VcsType;
 
 use url::Url;
@@ -229,8 +229,9 @@ pub fn run_worker(
     let force_build = force_build.unwrap_or(false);
     let tee = tee.unwrap_or(false);
     let skip_setup_validation = skip_setup_validation.unwrap_or(false);
-    let copy_output =
-        crate::tee::CopyOutput::new(&output_directory.join("worker.log"), tee).unwrap();
+    let worker_log_path = output_directory.join("worker.log");
+    log::debug!("Writing worker log to {}", worker_log_path.display());
+    let copy_output = crate::tee::CopyOutput::new(&worker_log_path, tee).unwrap();
     metadata.command = Some(command.iter().map(|s| s.to_string()).collect());
     metadata.codebase = Some(codebase.to_string());
 
@@ -449,25 +450,16 @@ pub fn run_worker(
         None
     };
 
-    let mut roles: HashMap<String, String> = additional_colocated_branches
-        .as_ref()
-        .map(|b| b.clone())
-        .unwrap_or_default();
+    let mut roles: HashMap<String, String> =
+        additional_colocated_branches.clone().unwrap_or_default();
 
-    let directory_name = if let Some(main_branch) = main_branch.as_ref() {
+    if let Some(main_branch) = main_branch.as_ref() {
         roles.insert(main_branch.name().unwrap(), "main".to_string());
-        breezyshim::urlutils::split_segment_parameters(&main_branch.get_user_url())
-            .0
-            .to_string()
-            .trim_end_matches('/')
-            .rsplit('/')
-            .last()
-            .unwrap()
-            .to_string()
     } else {
         roles.insert("".to_string(), "main".to_string());
-        codebase.to_string()
-    };
+    }
+
+    let directory_name = codebase.to_string();
 
     let mut ws_builder = silver_platter::workspace::Workspace::builder();
     if let Some(main_branch) = main_branch {
@@ -482,7 +474,9 @@ pub fn run_worker(
         ws_builder = ws_builder.cached_branch(cached_branch);
     }
 
-    ws_builder = ws_builder.path(output_directory.join(directory_name));
+    let ws_path = output_directory.join(directory_name);
+    log::debug!("Workspace path: {}", ws_path.display());
+    ws_builder = ws_builder.path(ws_path);
     if let Some(additional_colocated_branches) = additional_colocated_branches.as_ref() {
         ws_builder =
             ws_builder.additional_colocated_branches(additional_colocated_branches.clone());
@@ -844,13 +838,16 @@ pub fn run_worker(
             .any(|(role, _name, _br, _r)| role == "main")
     };
 
-    metadata.target.as_mut().unwrap().details = if should_build {
-        metadata.target.as_mut().unwrap().name = build_target.name();
-
+    let target_details = if should_build {
         build_target.build(ws.local_tree(), subpath, output_directory, build_config)?
     } else {
         serde_json::Value::Null
     };
+
+    metadata.target = Some(TargetDetails {
+        name: build_target.name(),
+        details: target_details,
+    });
 
     log::info!("Pushing result branch to {}", target_repo_url);
 
@@ -916,6 +913,17 @@ pub fn run_worker(
 
     log::info!("All done.");
     Ok(())
+}
+
+fn derive_branch_name(url: &url::Url) -> String {
+    breezyshim::urlutils::split_segment_parameters(url)
+        .0
+        .to_string()
+        .trim_end_matches('/')
+        .rsplit_once('/')
+        .unwrap()
+        .1
+        .to_string()
 }
 
 pub enum SingleItemError {
@@ -1244,6 +1252,12 @@ fn push_error_to_worker_failure(e: BrzError, stage: Vec<String>) -> WorkerFailur
 mod tests {
     use super::*;
     use crate::WorkerFailure;
+    use breezyshim::controldir;
+    use janitor::api::worker::*;
+    use serial_test::serial;
+    use std::path::{Path, PathBuf};
+    use std::str::FromStr;
+    use test_log::test;
 
     #[test]
     fn test_convert_codemod_script_failed() {
@@ -1279,4 +1293,293 @@ mod tests {
             }
         );
     }
+
+    #[serial]
+    #[test]
+    fn test_run_worker_existing_git() {
+        test_run_worker_existing(tempfile::tempdir().unwrap().path(), VcsType::Git);
+    }
+
+    #[serial]
+    #[test]
+    fn test_run_worker_existing_bzr() {
+        test_run_worker_existing(tempfile::tempdir().unwrap().path(), VcsType::Bzr);
+    }
+
+    fn test_run_worker_existing(tmp_path: &std::path::Path, vcs_type: VcsType) {
+        let wt = breezyshim::controldir::create_standalone_workingtree(
+            &tmp_path.join("main"),
+            &breezyshim::controldir::FORMAT_REGISTRY
+                .make_controldir(&vcs_type.to_string())
+                .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            tmp_path.join("main").join("Makefile"),
+            r#"
+all:
+
+test:
+
+check:
+
+"#,
+        )
+        .unwrap();
+        wt.add(&[Path::new("Makefile")]).unwrap();
+        let old_revid = wt.build_commit().message("Add makefile").commit().unwrap();
+        std::fs::create_dir(tmp_path.join("target")).unwrap();
+        let output_dir = tmp_path.join("output");
+        std::fs::create_dir(&output_dir).unwrap();
+        let mut metadata = Metadata::default();
+        run_worker(
+            "mycodebase",
+            "mycampaign",
+            Some(&wt.branch().get_user_url()),
+            "run-id",
+            &serde_json::json!({
+                "chroot": serde_json::Value::Null,
+                "dep_server_url": serde_json::Value::Null,
+            }),
+            HashMap::new(),
+            vec!["sh", "-c", "echo foo > bar"],
+            &output_dir,
+            &mut metadata,
+            &Url::from_directory_path(tmp_path.join("target")).unwrap(),
+            "foo",
+            "generic",
+            Some(vcs_type),
+            Path::new(""),
+            None,
+            None,
+            None,
+            None,
+            &mut None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let found_logfiles = std::fs::read_dir(&output_dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_str().unwrap().to_string())
+            .collect::<std::collections::HashSet<_>>();
+
+        assert_eq!(
+            found_logfiles,
+            [
+                "codemod.log",
+                "worker.log",
+                "build.log",
+                "test.log",
+                "mycodebase"
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<std::collections::HashSet<_>>()
+        );
+        let (b, branch_name) = match vcs_type {
+            VcsType::Git => {
+                let cd = controldir::open(tmp_path.join("target").as_path(), None).unwrap();
+                let b = cd.open_branch(Some("mycampaign/main")).unwrap();
+                let branch_name = "master";
+                (b, branch_name)
+            }
+            VcsType::Bzr => {
+                let b = controldir::open(tmp_path.join("target/mycampaign").as_path(), None)
+                    .unwrap()
+                    .open_branch(None)
+                    .unwrap();
+                let branch_name = "";
+                (b, branch_name)
+            }
+        };
+        assert_eq!(
+            metadata,
+            Metadata {
+                branch_url: Some(wt.branch().get_user_url()),
+                transient: None,
+                stage: None,
+                branches: vec![(
+                    "main".to_string(),
+                    Some(branch_name.to_string()),
+                    Some(old_revid.clone()),
+                    Some(b.last_revision())
+                )],
+                campaign: None,
+                code: None,
+                failure_details: None,
+                finish_time: None,
+                codebase: Some("mycodebase".to_string()),
+                codemod: Some(serde_json::Value::Null),
+                queue_id: None,
+                start_time: None,
+                command: Some(vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    "echo foo > bar".to_owned()
+                ]),
+                description: Some("".to_string()),
+                main_branch_revision: Some(old_revid),
+                refreshed: Some(false),
+                remotes: maplit::hashmap! {
+                    "origin".to_string() =>  Remote {
+                        url: wt.branch().get_user_url()
+                    }
+                },
+                revision: Some(b.last_revision()),
+                subpath: Some("".to_string()),
+                tags: vec![],
+                target: Some(janitor::api::worker::TargetDetails {
+                    name: "generic".to_string(),
+                    details: serde_json::json!({}),
+                }),
+                target_branch_url: None,
+                value: None,
+                vcs_type: Some(vcs_type),
+            }
+        );
+    }
+
+    /*
+
+    #[test]
+    fn test_run_worker_new_git() {
+        test_run_worker_new(tempfile::tempdir().unwrap().path(), "git");
+    }
+
+    #[test]
+    fn test_run_worker_new_bzr() {
+        test_run_worker_new(tempfile::tempdir().unwrap().path(), "bzr");
+    }
+
+    fn test_run_worker_new(tmp_path: &std::path::Path, vcs_type: &str) {
+        std::fs::create_dir(tmp_path.join("target")).unwrap();
+        let output_dir = tmp_path.join("output");
+        std::fs::create_dir(&output_dir).unwrap();
+        let metadata = Metadata::default();
+        run_worker(
+            "mycodebase",
+            "mycampaign",
+            "run-id",
+            &["sh", "-c", "echo all check test: > Makefile"],
+            &metadata,
+            None,
+            &serde_json::Value::Null,
+            "generic",
+            &output_dir,
+            tmp_path.join("target").to_str().unwrap(),
+            "foo",
+            vcs_type);
+
+        assert {e.name for e in os.scandir(output_dir)} == {
+            "codemod.log",
+            "worker.log",
+            "build.log",
+            "test.log",
+            "mycodebase",
+        }
+        match vcs_type {
+            "git" => {
+                cd = ControlDir.open(str(tmp_path / "target"))
+                b = cd.open_branch(name="mycampaign/main")
+                tags = b.tags.get_tag_dict()
+                assert tags == {"run/run-id/main": b.last_revision()}
+            }
+            "bzr" => {
+                b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
+                tags = b.tags.get_tag_dict()
+                assert tags == {"run-id": b.last_revision()}
+            }
+        }
+        assert metadata.json() == {
+            "branch_url": None,
+            "branches": [["main", "", None, b.last_revision().decode("utf-8")]],
+            "codebase": "mycodebase",
+            "codemod": None,
+            "command": ["sh", "-c", "echo all check test: > Makefile"],
+            "description": "",
+            "main_branch_revision": "null:",
+            "refreshed": False,
+            "remotes": {},
+            "revision": b.last_revision().decode("utf-8"),
+            "subpath": "",
+            "tags": [],
+            "target": {"details": {}, "name": "generic"},
+            "target_branch_url": None,
+            "value": None,
+            "vcs_type": vcs_type,
+        }
+    }
+
+    #[test]
+    fn test_run_worker_build_failure_git() {
+        test_run_worker_build_failure(tempfile::tempdir().unwrap().path(), "git");
+    }
+
+    #[test]
+    fn test_run_worker_build_failure_bzr() {
+        test_run_worker_build_failure(tempfile::tempdir().unwrap().path(), "bzr");
+    }
+
+    fn test_run_worker_build_failure(path: &Path, vcs_type: &str) {
+        std::fs::create_dir(path.join("target")).unwrap();
+        let output_dir = path.join("output");
+        std::fs::create_dir(&output_dir).unwrap();
+        let metadata = Metadata::default();
+
+        with pytest.raises(_WorkerFailure, match=".*no-build-tools.*"):
+            run_worker(
+                codebase="mycodebase",
+                campaign="mycampaign",
+                run_id="run-id",
+                command=["sh", "-c", "echo foo > bar"],
+                metadata=metadata,
+                main_branch_url=None,
+                build_config={},
+                target="generic",
+                output_directory=output_dir,
+                target_repo_url=str(tmp_path / "target"),
+                vendor="foo",
+                vcs_type=vcs_type,
+                env={},
+            )
+        assert {e.name for e in os.scandir(output_dir)} == {
+            "codemod.log",
+            "worker.log",
+            "mycodebase",
+        }
+        if vcs_type == "git":
+            repo = ControlDir.open(str(tmp_path / "target")).open_repository()
+            assert list(repo._git.get_refs().keys()) == [b"refs/tags/run/run-id/main"]  # type: ignore
+            run_id_revid = repo.lookup_foreign_revision_id(  # type: ignore
+                repo._git.get_refs()[b"refs/tags/run/run-id/main"]  # type: ignore
+            )
+        elif vcs_type == "bzr":
+            b = ControlDir.open(str(tmp_path / "target" / "mycampaign")).open_branch()
+            tags = b.tags.get_tag_dict()
+            assert list(tags.keys()) == ["run-id"]
+            run_id_revid = tags["run-id"]
+        assert metadata.json() == {
+            "branch_url": None,
+            "branches": [["main", "", None, run_id_revid.decode("utf-8")]],
+            "codebase": "mycodebase",
+            "codemod": None,
+            "command": ["sh", "-c", "echo foo > bar"],
+            "description": "",
+            "main_branch_revision": "null:",
+            "refreshed": False,
+            "remotes": {},
+            "revision": run_id_revid.decode("utf-8"),
+            "subpath": "",
+            "tags": [],
+            "target": {"details": None, "name": "generic"},
+            "target_branch_url": None,
+            "value": None,
+            "vcs_type": vcs_type,
+        }
+    }
+    */
 }
