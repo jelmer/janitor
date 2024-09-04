@@ -4,13 +4,27 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 ARG DEBIAN_FRONTEND=noninteractive
 COPY . /code
 COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
+RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y \
+	build-essential \
+	cargo \
+	rustc \
+	libtdb-dev \
+	libclang-dev \
+	libssl-dev \
+	pkg-config \
+	ca-certificates \
+	libpython3-dev \
+	python3 \
+	protobuf-compiler \
+	&& cd /code && cargo build --release -p janitor-worker
+
+FROM docker.io/debian:testing-slim
 RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
 	ssh \
 	python3 \
 	pristine-tar \
 	devscripts \
-	python3-pip \
 	quilt \
 	sbuild \
 	autopkgtest \
@@ -23,29 +37,15 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	gnome-pkg-tools \
 	subversion \
 	ca-certificates \
-	swig \
-	libgpgme-dev \
-	make \
-	cython3 \
-	rustc \
-	libpython3-dev \
-	build-essential \
-	cargo \
-	debcargo \
 	mypy-protobuf \
 	protobuf-compiler \
 	ca-certificates \
-	python3-apt \
-	python3-gpg \
-	libssl-dev \
-	pkg-config \
-	libtdb-dev \
-	libclang-dev \
+	python3-breezy \
 	&& apt clean \
-	&& pip3 install --break-system-packages "/code[gcp,debian]" \
-	&& rm -rf /code \
 	&& apt-file update
+
+COPY --from=build /code/target/release/janitor-worker /bin/janitor-worker
 
 ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 EXPOSE 8080
-ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["/bin/janitor-worker", "--port=8080", "--listen-address=0.0.0.0"]

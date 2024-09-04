@@ -18,7 +18,15 @@ redis = { workspace = true, features = ["aio", "tokio-comp"] }
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-janitor = { version = "0.0.0", path = "..", default-features = false }
+janitor = { version = "0.0.0", path = "..", default-features = false, features = ["debian"] }
+async-trait = "0.1.82"
+url.workspace = true
+debversion = { workspace = true, optional = true }
+debian-control = { version = "0.1.28", optional = true }
 
 [dev-dependencies]
 maplit = { workspace = true }
+
+[features]
+default = ["debian"]
+debian = ["janitor/debian", "dep:debversion", "dep:debian-control"]

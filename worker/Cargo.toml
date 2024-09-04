@@ -7,6 +7,7 @@ description = "Worker for the janitor"
 license = "GPL-3.0+"
 repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
+default-run = "janitor-worker"
 
 [dependencies]
 url = { workspace = true, features = ["serde"] }
@@ -37,14 +38,20 @@ gethostname = "0.5.0"
 ognibuild = { workspace = true }
 debversion = { workspace = true, optional = true }
 debian-changelog = { workspace = true, optional = true }
+tokio-util = "0.7.11"
 
 [features]
 default = ["debian", "cli"]
-debian = ["dep:debversion", "dep:debian-analyzer", "dep:debian-changelog"]
+debian = ["dep:debversion", "dep:debian-analyzer", "dep:debian-changelog", "janitor/debian"]
 cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 
 [dev-dependencies]
+http-body-util = "0.1.2"
+hyper = "1.4.1"
+serial_test = "3.1.1"
 tempfile = "3.11.0"
+test-log = "0.2.16"
+tower = { version = "0.5.0", features = ["util"] }
 
 [[bin]]
 name = "janitor-worker"

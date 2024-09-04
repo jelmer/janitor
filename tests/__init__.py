@@ -29,7 +29,6 @@ def test_suite():
         "runner",
         "site",
         "vcs",
-        "worker",
     ]
     module_names = [__name__ + ".test_" + name for name in names]
     loader = unittest.TestLoader()

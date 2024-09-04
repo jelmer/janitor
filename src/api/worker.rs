@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use url::Url;
 
 /// Build metadata as produced by the worker.
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
 pub struct Metadata {
     /// The ID of the item in the runner's queue.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -116,7 +116,7 @@ impl Metadata {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Remote {
     pub url: Url,
 }
@@ -138,7 +138,7 @@ impl std::fmt::Display for WorkerFailure {
 
 impl std::error::Error for WorkerFailure {}
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct TargetDetails {
     pub name: String,
     pub details: serde_json::Value,
@@ -150,13 +150,13 @@ impl TargetDetails {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Codemod {
     pub command: String,
     pub environment: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Build {
     pub target: String,
     pub config: serde_json::Value,
@@ -210,4 +210,41 @@ pub struct Assignment {
     /// Environment used for both the build and the codemod.
     pub env: HashMap<String, String>,
     pub build: Build,
+}
+
+#[derive(Deserialize, Serialize, Default)]
+pub struct GenericBuildConfig {
+    pub chroot: Option<String>,
+    pub dep_server_url: Option<url::Url>,
+}
+
+#[cfg(feature = "debian")]
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct LintianConfig {
+    pub profile: Option<String>,
+    #[serde(rename = "suppress-tags")]
+    pub suppress_tags: Option<Vec<String>>,
+}
+
+#[cfg(feature = "debian")]
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct DebianBuildConfig {
+    #[serde(rename = "build-distribution")]
+    pub build_distribution: Option<String>,
+    #[serde(rename = "build-command")]
+    pub build_command: Option<String>,
+    #[serde(rename = "build-suffix")]
+    pub build_suffix: Option<String>,
+    #[serde(rename = "last-build-version")]
+    pub last_build_version: Option<debversion::Version>,
+    pub chroot: Option<String>,
+    pub lintian: LintianConfig,
+    #[serde(rename = "base-apt-repository")]
+    pub apt_repository: Option<String>,
+    #[serde(rename = "base-apt-repository-signed-by")]
+    pub apt_repository_key: Option<String>,
+    #[serde(rename = "build-extra-repositories")]
+    pub extra_repositories: Option<Vec<String>>,
+    #[serde(rename = "dep_server_url")]
+    pub dep_server_url: Option<String>,
 }
