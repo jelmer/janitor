@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+pub mod config_generator;
 pub mod queue;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {

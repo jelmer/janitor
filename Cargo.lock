@@ -3042,6 +3042,8 @@ dependencies = [
  "async-trait",
  "breezyshim",
  "chrono",
+ "debian-control",
+ "debversion",
  "janitor",
  "maplit",
  "redis",
