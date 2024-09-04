@@ -211,3 +211,40 @@ pub struct Assignment {
     pub env: HashMap<String, String>,
     pub build: Build,
 }
+
+#[derive(Deserialize, Serialize, Default)]
+pub struct GenericBuildConfig {
+    pub chroot: Option<String>,
+    pub dep_server_url: Option<url::Url>,
+}
+
+#[cfg(feature = "debian")]
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct LintianConfig {
+    pub profile: Option<String>,
+    #[serde(rename = "suppress-tags")]
+    pub suppress_tags: Option<Vec<String>>,
+}
+
+#[cfg(feature = "debian")]
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct DebianBuildConfig {
+    #[serde(rename = "build-distribution")]
+    pub build_distribution: Option<String>,
+    #[serde(rename = "build-command")]
+    pub build_command: Option<String>,
+    #[serde(rename = "build-suffix")]
+    pub build_suffix: Option<String>,
+    #[serde(rename = "last-build-version")]
+    pub last_build_version: Option<debversion::Version>,
+    pub chroot: Option<String>,
+    pub lintian: LintianConfig,
+    #[serde(rename = "base-apt-repository")]
+    pub apt_repository: Option<String>,
+    #[serde(rename = "base-apt-repository-signed-by")]
+    pub apt_repository_key: Option<String>,
+    #[serde(rename = "build-extra-repositories")]
+    pub extra_repositories: Option<Vec<String>>,
+    #[serde(rename = "dep_server_url")]
+    pub dep_server_url: Option<String>,
+}

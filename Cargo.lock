@@ -2961,6 +2961,7 @@ dependencies = [
  "breezyshim",
  "chrono",
  "clap 4.5.16",
+ "debversion",
  "env_logger 0.11.5",
  "fancy-regex",
  "filetime",
@@ -3038,6 +3039,7 @@ dependencies = [
 name = "janitor-runner"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "breezyshim",
  "chrono",
  "janitor",
@@ -3049,6 +3051,7 @@ dependencies = [
  "sqlx-core",
  "sqlx-postgres",
  "tokio",
+ "url",
 ]
 
 [[package]]
