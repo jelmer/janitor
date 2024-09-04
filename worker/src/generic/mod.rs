@@ -1,5 +1,6 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::WorkingTree;
+use janitor::api::worker::GenericBuildConfig;
 use ognibuild::analyze::AnalyzedError;
 use ognibuild::installer::Error as InstallerError;
 use silver_platter::codemod::{
@@ -113,12 +114,6 @@ pub fn generic_make_changes(
             transient: None,
         }),
     }
-}
-
-#[derive(serde::Deserialize)]
-pub struct GenericBuildConfig {
-    chroot: Option<String>,
-    dep_server_url: Option<url::Url>,
 }
 
 pub fn build_from_config(

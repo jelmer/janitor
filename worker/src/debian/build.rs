@@ -1,5 +1,5 @@
 use crate::debian::BuildFailure;
-use crate::debian::DebianBuildConfig;
+use janitor::api::worker::DebianBuildConfig;
 use breezyshim::tree::{Tree, WorkingTree};
 use ognibuild::debian::build::{BuildOnceError, BuildOnceResult};
 use ognibuild::debian::context::Phase;
