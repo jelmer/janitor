@@ -1,10 +1,9 @@
 pub mod build;
 pub mod lintian;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
 
 use crate::{convert_codemod_script_failed, WorkerFailure};
 use breezyshim::tree::{Tree, WorkingTree};
+use janitor::api::worker::DebianBuildConfig;
 use silver_platter::debian::codemod::{
     script_runner as debian_script_runner, CommandResult as DebianCommandResult,
     Error as DebianCodemodError,
@@ -228,35 +227,6 @@ pub fn debian_make_changes(
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct Lintian {
-    profile: Option<String>,
-    #[serde(rename = "suppress-tags")]
-    suppress_tags: Option<Vec<String>>,
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct DebianBuildConfig {
-    #[serde(rename = "build-distribution")]
-    build_distribution: Option<String>,
-    #[serde(rename = "build-command")]
-    build_command: Option<String>,
-    #[serde(rename = "build-suffix")]
-    build_suffix: Option<String>,
-    #[serde(rename = "last-build-version")]
-    last_build_version: Option<debversion::Version>,
-    chroot: Option<String>,
-    lintian: Lintian,
-    #[serde(rename = "base-apt-repository")]
-    apt_repository: Option<String>,
-    #[serde(rename = "base-apt-repository-signed-by")]
-    apt_repository_key: Option<String>,
-    #[serde(rename = "build-extra-repositories")]
-    extra_repositories: Option<Vec<String>>,
-    #[serde(rename = "dep_server_url")]
-    dep_server_url: Option<String>,
-}
-
 #[derive(Debug)]
 pub struct BuildFailure {
     pub code: String,
@@ -478,11 +448,19 @@ fn validate_from_config(
 }
 
 fn tree_set_changelog_version(
-    tree: &WorkingTree, build_version: &debversion::Version, subpath: &Path) -> Result<(), debian_analyzer::editor::EditorError> {
-    use debian_analyzer::editor::{Editor,MutableTreeEdit};
-    let editor = tree.edit_file::<debian_changelog::ChangeLog>(&subpath.join("debian/changelog"), true, true)?;
+    tree: &WorkingTree,
+    build_version: &debversion::Version,
+    subpath: &Path,
+) -> Result<(), debian_analyzer::editor::EditorError> {
+    use debian_analyzer::editor::{Editor, MutableTreeEdit};
+    let editor = tree.edit_file::<debian_changelog::ChangeLog>(
+        &subpath.join("debian/changelog"),
+        true,
+        true,
+    )?;
     if let Some(mut entry) = editor.entries().next() {
-        let version: debversion::Version = format!("{}~", entry.version().unwrap()).parse().unwrap();
+        let version: debversion::Version =
+            format!("{}~", entry.version().unwrap()).parse().unwrap();
         if version > *build_version {
             return Ok(());
         }

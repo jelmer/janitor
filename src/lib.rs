@@ -1,7 +1,7 @@
 pub mod artifacts;
 pub mod config;
-pub mod logs;
 pub mod logging;
+pub mod logs;
 pub mod publish;
 pub mod queue;
 pub mod state;

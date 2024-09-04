@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 pub mod queue;
 
@@ -23,6 +24,111 @@ pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     env
 }
 
+#[cfg(feature = "debian")]
+pub enum FindChangesError {
+    NoChangesFile(PathBuf),
+    InconsistentVersion(Vec<String>, debversion::Version, debversion::Version),
+    InconsistentSource(Vec<String>, String, String),
+    InconsistentDistribution(Vec<String>, String, String),
+    MissingChangesFileFields(&'static str),
+}
+
+pub fn find_changes(
+    path: &Path,
+) -> Result<
+    (
+        Vec<String>,
+        String,
+        debversion::Version,
+        String,
+        Vec<String>,
+    ),
+    FindChangesError,
+> {
+    let mut names: Vec<String> = Vec::new();
+    let mut source: Option<String> = None;
+    let mut version: Option<debversion::Version> = None;
+    let mut distribution: Option<String> = None;
+    let mut binary_packages: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(path).unwrap() {
+        let entry = entry.unwrap();
+        if !entry.file_name().to_str().unwrap().ends_with(".changes") {
+            continue;
+        }
+        let f = std::fs::File::open(entry.path()).unwrap();
+        let changes = debian_control::changes::Changes::read(&f).unwrap();
+        names.push(entry.file_name().to_string_lossy().to_string());
+        if let Some(version) = &version {
+            if changes.version().as_ref() != Some(version) {
+                return Err(FindChangesError::InconsistentVersion(
+                    names,
+                    changes.version().unwrap(),
+                    version.clone(),
+                ));
+            }
+        }
+        version = changes.version();
+        if let Some(source) = &source {
+            if changes.source().as_ref() != Some(source) {
+                return Err(FindChangesError::InconsistentSource(
+                    names,
+                    changes.source().unwrap(),
+                    source.to_string(),
+                ));
+            }
+        }
+        source = changes.source();
+
+        if let Some(distribution) = &distribution {
+            if changes.distribution().as_ref() != Some(distribution) {
+                return Err(FindChangesError::InconsistentDistribution(
+                    names,
+                    changes.distribution().unwrap(),
+                    distribution.to_string(),
+                ));
+            }
+        }
+        distribution = changes.distribution();
+
+        binary_packages.extend(
+            changes
+                .files()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|file| {
+                    if file.filename.ends_with(".deb") {
+                        Some(file.filename.split('_').next().unwrap().to_string())
+                    } else {
+                        None
+                    }
+                }),
+        );
+    }
+    if names.is_empty() {
+        return Err(FindChangesError::NoChangesFile(path.to_path_buf()));
+    }
+
+    if source.is_none() {
+        return Err(FindChangesError::MissingChangesFileFields("Source"));
+    }
+
+    if version.is_none() {
+        return Err(FindChangesError::MissingChangesFileFields("Version"));
+    }
+
+    if distribution.is_none() {
+        return Err(FindChangesError::MissingChangesFileFields("Distribution"));
+    }
+
+    Ok((
+        names,
+        source.unwrap(),
+        version.unwrap(),
+        distribution.unwrap(),
+        binary_packages,
+    ))
+}
+
 pub fn is_log_filename(name: &str) -> bool {
     let parts = name.split('.').collect::<Vec<_>>();
     if parts.last() == Some(&"log") {
@@ -35,6 +141,7 @@ pub fn is_log_filename(name: &str) -> bool {
     }
 }
 
+#[cfg(feature = "debian")]
 pub fn dpkg_vendor() -> Option<String> {
     std::process::Command::new("dpkg-vendor")
         .arg("--query")
@@ -48,6 +155,19 @@ pub fn dpkg_vendor() -> Option<String> {
             }
         })
         .unwrap()
+}
+
+#[cfg(feature = "debian")]
+/// Read the source filenames from a changes file.
+pub fn changes_filenames(changes_location: &Path) -> Vec<String> {
+    let mut f = std::fs::File::open(changes_location).unwrap();
+    let changes = debian_control::changes::Changes::read(&mut f).unwrap();
+    changes
+        .files()
+        .unwrap_or_default()
+        .iter()
+        .map(|file| file.filename.clone())
+        .collect()
 }
 
 /// Scan a directory for log files.

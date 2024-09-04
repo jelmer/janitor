@@ -1,7 +1,7 @@
-use sqlx::{FromRow, PgPool, Error, Row};
+use sqlx::postgres::types::PgInterval as Duration;
+use sqlx::{Error, FromRow, PgPool, Row};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use sqlx::postgres::types::PgInterval as Duration;
 
 #[derive(Debug, FromRow)]
 pub struct QueueItem {
@@ -48,15 +48,15 @@ pub struct Queue {
 
 #[derive(FromRow)]
 pub struct ETA {
-    position: i64,
-    wait_time: Duration
+    pub position: i64,
+    pub wait_time: Duration,
 }
 
 #[derive(FromRow)]
 pub struct VcsInfo {
-    branch_url: Option<String>,
-    subpath: Option<String>,
-    vcs_type: Option<String>
+    pub branch_url: Option<String>,
+    pub subpath: Option<String>,
+    pub vcs_type: Option<String>,
 }
 
 impl Queue {
@@ -64,13 +64,9 @@ impl Queue {
         Queue { pool }
     }
 
-    pub async fn get_position(
-        &self,
-        campaign: &str,
-        codebase: &str,
-    ) -> Result<Option<ETA>, Error> {
+    pub async fn get_position(&self, campaign: &str, codebase: &str) -> Result<Option<ETA>, Error> {
         let row: Option<ETA> = sqlx::query_as::<_, ETA>(
-            "SELECT position, wait_time FROM queue_positions WHERE codebase = $1 AND suite = $2"
+            "SELECT position, wait_time FROM queue_positions WHERE codebase = $1 AND suite = $2",
         )
         .bind(codebase)
         .bind(campaign)
@@ -149,7 +145,8 @@ impl Queue {
         let mut query_builder = sqlx::query(&query);
 
         if let Some(assigned_queue_items) = assigned_queue_items {
-            query_builder = query_builder.bind(assigned_queue_items.into_iter().collect::<Vec<_>>());
+            query_builder =
+                query_builder.bind(assigned_queue_items.into_iter().collect::<Vec<_>>());
         }
 
         if let Some(codebase) = codebase {
@@ -239,16 +236,18 @@ impl Queue {
     }
 
     pub async fn get_buckets(&self) -> Result<Vec<(String, i64)>, Error> {
-        let rows = sqlx::query(
-            "SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC"
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows =
+            sqlx::query("SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC")
+                .fetch_all(&self.pool)
+                .await?;
 
-        Ok(rows.into_iter().map(|row| {
-            let bucket: String = row.try_get("bucket").unwrap();
-            let count: i64 = row.try_get("count").unwrap();
-            (bucket, count)
-        }).collect())
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let bucket: String = row.try_get("bucket").unwrap();
+                let count: i64 = row.try_get("count").unwrap();
+                (bucket, count)
+            })
+            .collect())
     }
 }
