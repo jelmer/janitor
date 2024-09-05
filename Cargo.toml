@@ -66,8 +66,8 @@ clap = { version = "4" }
 tokio = "1"
 axum = "0.7"
 maplit = "1"
-silver-platter = { git = "https://github.com/jelmer/silver-platter" }
-#silver-platter = { path = "../silver-platter" }
+#silver-platter = { git = "https://github.com/jelmer/silver-platter" }
+silver-platter = { version = ">=0.5.36" }
 ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 shlex = "1"
