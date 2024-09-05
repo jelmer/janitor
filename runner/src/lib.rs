@@ -38,6 +38,7 @@ pub enum FindChangesError {
     MissingChangesFileFields(&'static str),
 }
 
+#[cfg(feature = "debian")]
 impl std::fmt::Display for FindChangesError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -66,20 +67,19 @@ impl std::fmt::Display for FindChangesError {
     }
 }
 
+#[cfg(feature = "debian")]
 impl std::error::Error for FindChangesError {}
 
-pub fn find_changes(
-    path: &Path,
-) -> Result<
-    (
-        Vec<String>,
-        String,
-        debversion::Version,
-        String,
-        Vec<String>,
-    ),
-    FindChangesError,
-> {
+#[cfg(feature = "debian")]
+pub struct ChangesSummary {
+    pub names: Vec<String>,
+    pub source: String,
+    pub version: debversion::Version,
+    pub distribution: String,
+    pub binary_packages: Vec<String>,
+}
+
+pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     let mut names: Vec<String> = Vec::new();
     let mut source: Option<String> = None;
     let mut version: Option<debversion::Version> = None;
@@ -155,13 +155,13 @@ pub fn find_changes(
         return Err(FindChangesError::MissingChangesFileFields("Distribution"));
     }
 
-    Ok((
+    Ok(ChangesSummary {
         names,
-        source.unwrap(),
-        version.unwrap(),
-        distribution.unwrap(),
+        source: source.unwrap(),
+        version: version.unwrap(),
+        distribution: distribution.unwrap(),
         binary_packages,
-    ))
+    })
 }
 
 pub fn is_log_filename(name: &str) -> bool {
