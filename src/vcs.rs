@@ -1,8 +1,13 @@
+use async_trait::async_trait;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
+use breezyshim::repository::Repository;
+use breezyshim::RevisionId;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
+use silver_platter::vcs::BranchOpenError;
+use std::path::{Path, PathBuf};
 use url::Url;
 
 pub fn is_authenticated_url(url: &Url) -> bool {
@@ -172,12 +177,9 @@ pub fn open_branch_ext(
     }
 }
 
-fn convert_branch_exception(
-    vcs_url: &Url,
-    e: silver_platter::vcs::BranchOpenError,
-) -> BranchOpenFailure {
+fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFailure {
     match e {
-        silver_platter::vcs::BranchOpenError::RateLimited {
+        BranchOpenError::RateLimited {
             retry_after,
             description,
             ..
@@ -186,7 +188,7 @@ fn convert_branch_exception(
             description,
             retry_after: retry_after.map(|x| chrono::Duration::seconds(x as i64)),
         },
-        silver_platter::vcs::BranchOpenError::Unavailable {
+        BranchOpenError::Unavailable {
             ref description, ..
         } => {
             let code = if description.contains("http code 429: Too Many Requests") {
@@ -218,14 +220,12 @@ fn convert_branch_exception(
                 retry_after: None,
             }
         }
-        silver_platter::vcs::BranchOpenError::TemporarilyUnavailable { url, description } => {
-            BranchOpenFailure {
-                code: "branch-temporarily-unavailable".to_string(),
-                description: format!("{} ({})", description, url),
-                retry_after: None,
-            }
-        }
-        silver_platter::vcs::BranchOpenError::Missing {
+        BranchOpenError::TemporarilyUnavailable { url, description } => BranchOpenFailure {
+            code: "branch-temporarily-unavailable".to_string(),
+            description: format!("{} ({})", description, url),
+            retry_after: None,
+        },
+        BranchOpenError::Missing {
             url,
             ref description,
             ..
@@ -243,7 +243,7 @@ fn convert_branch_exception(
                 retry_after: None,
             }
         }
-        silver_platter::vcs::BranchOpenError::Unsupported { description, .. } => {
+        BranchOpenError::Unsupported { description, .. } => {
             let code = if description.contains("Unsupported protocol for url ") {
                 if description.contains("anonscm.debian.org")
                     || description.contains("svn.debian.org")
@@ -273,10 +273,551 @@ fn convert_branch_exception(
                 retry_after: None,
             }
         }
-        silver_platter::vcs::BranchOpenError::Other(description) => BranchOpenFailure {
+        BranchOpenError::Other(description) => BranchOpenFailure {
             code: "unknown".to_string(),
             description,
             retry_after: None,
+        },
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RevisionInfo {
+    commit_id: Option<Vec<u8>>,
+    revision_id: RevisionId,
+    message: String,
+    link: Option<Url>,
+}
+
+pub const EMPTY_GIT_TREE: &[u8] = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+#[async_trait]
+pub trait VcsManager {
+    fn get_branch(
+        &self,
+        codebase: &str,
+        branch_name: &str,
+    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError>;
+
+    fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url;
+
+    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError>;
+
+    fn get_repository_url(&self, codebase: &str) -> Url;
+
+    fn list_repositories(&self) -> Vec<String>;
+
+    async fn get_diff(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<u8>;
+
+    async fn get_revision_info(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<RevisionInfo>;
+}
+
+pub struct LocalGitVcsManager {
+    base_path: PathBuf,
+}
+
+impl LocalGitVcsManager {
+    pub fn new(base_path: PathBuf) -> Self {
+        Self { base_path }
+    }
+}
+
+#[async_trait]
+impl VcsManager for LocalGitVcsManager {
+    fn get_branch(
+        &self,
+        codebase: &str,
+        branch_name: &str,
+    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+        let url = self.get_branch_url(codebase, branch_name);
+        match silver_platter::vcs::open_branch(
+            &url,
+            None,
+            Some(
+                silver_platter::probers::select_probers(Some("git"))
+                    .iter()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            None,
+        ) {
+            Ok(branch) => Ok(Some(branch)),
+            Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
+        let url = Url::from_directory_path(&self.base_path).unwrap();
+        let url = url.join(codebase).unwrap();
+        let mut params = std::collections::HashMap::new();
+        params.insert("branch".to_string(), branch_name.to_string());
+        breezyshim::urlutils::join_segment_parameters(&url, params)
+    }
+
+    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+        let url = self.get_repository_url(codebase);
+        match breezyshim::repository::open(&url) {
+            Ok(repo) => Ok(Some(repo)),
+            Err(BrzError::NotBranchError(..)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn get_repository_url(&self, codebase: &str) -> Url {
+        Url::from_directory_path(&self.base_path)
+            .unwrap()
+            .join(codebase)
+            .unwrap()
+    }
+
+    fn list_repositories(&self) -> Vec<String> {
+        self.base_path
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect()
+    }
+
+    async fn get_diff(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<u8> {
+        if old_revid == new_revid {
+            return vec![];
+        }
+        let repo = self.get_repository(codebase).unwrap().unwrap();
+        let old_sha = if old_revid.is_null() {
+            EMPTY_GIT_TREE.to_vec()
+        } else {
+            repo.lookup_bzr_revision_id(old_revid).unwrap().0
+        };
+        let new_sha = if new_revid.is_null() {
+            EMPTY_GIT_TREE.to_vec()
+        } else {
+            repo.lookup_bzr_revision_id(new_revid).unwrap().0
+        };
+        let output = tokio::process::Command::new("git")
+            .arg("diff")
+            .arg(std::str::from_utf8(&old_sha).unwrap())
+            .arg(std::str::from_utf8(&new_sha).unwrap())
+            .current_dir(repo.user_transport().local_abspath(Path::new(".")).unwrap())
+            .output()
+            .await
+            .unwrap();
+        if !output.status.success() {
+            panic!(
+                "git diff failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        output.stdout
+    }
+
+    async fn get_revision_info(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<RevisionInfo> {
+        let repo = self.get_repository(codebase).unwrap().unwrap();
+        let old_sha = repo.lookup_bzr_revision_id(old_revid).unwrap().0;
+        let new_sha = repo.lookup_bzr_revision_id(new_revid).unwrap().0;
+        Python::with_gil(|py| {
+            let mut ret = vec![];
+            let git = repo.to_object(py).getattr(py, "_git").unwrap();
+            let walker = git
+                .call_method1(py, "get_walker", (new_sha, old_sha))
+                .unwrap();
+
+            while let Ok(entry) = walker.call_method0(py, "__next__") {
+                let commit = entry.getattr(py, "commit").unwrap();
+                let commit_id: Vec<u8> = commit.getattr(py, "id").unwrap().extract(py).unwrap();
+                let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
+                let message = commit.getattr(py, "message").unwrap().to_string();
+                let link = None;
+                ret.push(RevisionInfo {
+                    commit_id: Some(commit_id),
+                    revision_id,
+                    message,
+                    link,
+                });
+            }
+
+            ret
+        })
+    }
+}
+
+pub struct LocalBzrVcsManager {
+    base_path: PathBuf,
+}
+
+impl LocalBzrVcsManager {
+    pub fn new(base_path: PathBuf) -> Self {
+        Self { base_path }
+    }
+}
+
+#[async_trait]
+impl VcsManager for LocalBzrVcsManager {
+    fn get_branch(
+        &self,
+        codebase: &str,
+        branch_name: &str,
+    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+        let url = self.get_branch_url(codebase, branch_name);
+        match silver_platter::vcs::open_branch(
+            &url,
+            None,
+            Some(
+                silver_platter::probers::select_probers(Some("bzr"))
+                    .iter()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            None,
+        ) {
+            Ok(branch) => Ok(Some(branch)),
+            Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
+                Ok(None)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
+        let url = Url::from_directory_path(&self.base_path).unwrap();
+        url.join(codebase).unwrap().join(branch_name).unwrap()
+    }
+
+    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+        let url = self.get_repository_url(codebase);
+        match breezyshim::repository::open(&url) {
+            Ok(repo) => Ok(Some(repo)),
+            Err(BrzError::NotBranchError(..)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn get_repository_url(&self, codebase: &str) -> Url {
+        Url::from_directory_path(&self.base_path)
+            .unwrap()
+            .join(codebase)
+            .unwrap()
+    }
+
+    fn list_repositories(&self) -> Vec<String> {
+        self.base_path
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+            .collect()
+    }
+
+    async fn get_diff(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<u8> {
+        if old_revid == new_revid {
+            return vec![];
+        }
+        let repo = self.get_repository(codebase).unwrap().unwrap();
+        let output = tokio::process::Command::new("bzr")
+            .arg("diff")
+            .arg("-r")
+            .arg(format!("{}..{}", old_revid, new_revid))
+            .current_dir(repo.user_transport().local_abspath(Path::new(".")).unwrap())
+            .output()
+            .await
+            .unwrap();
+        if !output.status.success() {
+            panic!(
+                "bzr diff failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        output.stdout
+    }
+
+    async fn get_revision_info(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<RevisionInfo> {
+        let repo = self.get_repository(codebase).unwrap().unwrap();
+
+        let lock = repo.lock_read();
+        let mut ret = vec![];
+
+        let graph = repo.get_graph();
+        let revids = graph
+            .iter_lefthand_ancestry(new_revid, Some(&[old_revid.clone()]))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        for (_revid, rev) in repo.iter_revisions(revids) {
+            if let Some(rev) = rev {
+                ret.push(RevisionInfo {
+                    revision_id: rev.revision_id,
+                    link: None,
+                    message: rev.message.to_string(),
+                    commit_id: None,
+                });
+            }
+        }
+
+        std::mem::drop(lock);
+        ret
+    }
+}
+
+pub struct RemoteGitVcsManager {
+    base_url: Url,
+}
+
+impl RemoteGitVcsManager {
+    pub fn new(base_url: Url) -> Self {
+        Self { base_url }
+    }
+
+    fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
+        if revid.is_null() {
+            default
+        } else {
+            revid.as_bytes().strip_prefix(b"git-v1:").unwrap()
+        }
+    }
+
+    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+        self.base_url
+            .join(&format!(
+                "{}/diff?old={}&new={}",
+                codebase,
+                std::str::from_utf8(RemoteGitVcsManager::lookup_revid(old_revid, EMPTY_GIT_TREE))
+                    .unwrap(),
+                std::str::from_utf8(RemoteGitVcsManager::lookup_revid(new_revid, EMPTY_GIT_TREE))
+                    .unwrap()
+            ))
+            .unwrap()
+    }
+}
+
+#[async_trait]
+impl VcsManager for RemoteGitVcsManager {
+    async fn get_diff(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<u8> {
+        if old_revid == new_revid {
+            return vec![];
+        }
+        let url = self.get_diff_url(codebase, old_revid, new_revid);
+        let client = reqwest::Client::new();
+        let resp = client.get(url).send().await.unwrap();
+        resp.bytes().await.unwrap().to_vec()
+    }
+
+    async fn get_revision_info(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<RevisionInfo> {
+        let url = self
+            .base_url
+            .join(&format!(
+                "{}/revision-info?old={}&new={}",
+                codebase,
+                std::str::from_utf8(RemoteGitVcsManager::lookup_revid(
+                    old_revid,
+                    breezyshim::git::ZERO_SHA
+                ))
+                .unwrap(),
+                std::str::from_utf8(RemoteGitVcsManager::lookup_revid(
+                    new_revid,
+                    breezyshim::git::ZERO_SHA
+                ))
+                .unwrap()
+            ))
+            .unwrap();
+        let client = reqwest::Client::new();
+        let resp = client.get(url).send().await.unwrap();
+        resp.json().await.unwrap()
+    }
+
+    fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
+        let url = self.base_url.join(codebase).unwrap();
+        let params = std::collections::HashMap::from_iter(vec![(
+            "branch".to_string(),
+            branch_name.to_string(),
+        )]);
+        breezyshim::urlutils::join_segment_parameters(&url, params)
+    }
+
+    fn get_branch(
+        &self,
+        codebase: &str,
+        branch_name: &str,
+    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+        let url = self.get_branch_url(codebase, branch_name);
+        open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
+    }
+
+    fn get_repository_url(&self, codebase: &str) -> Url {
+        self.base_url.join(codebase).unwrap()
+    }
+
+    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+        let url = self.get_repository_url(codebase);
+        match breezyshim::repository::open(&url) {
+            Ok(repo) => Ok(Some(repo)),
+            Err(BrzError::NotBranchError(..)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn list_repositories(&self) -> Vec<String> {
+        todo!()
+    }
+}
+
+pub struct RemoteBzrVcsManager {
+    base_url: Url,
+}
+
+impl RemoteBzrVcsManager {
+    pub fn new(base_url: Url) -> Self {
+        Self { base_url }
+    }
+
+    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+        self.base_url
+            .join(&format!(
+                "{}/diff?old={}&new={}",
+                codebase, old_revid, new_revid
+            ))
+            .unwrap()
+    }
+}
+
+#[async_trait]
+impl VcsManager for RemoteBzrVcsManager {
+    async fn get_diff(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<u8> {
+        if old_revid == new_revid {
+            return vec![];
+        }
+        let url = self.get_diff_url(codebase, old_revid, new_revid);
+        let client = reqwest::Client::new();
+        let resp = client.get(url).send().await.unwrap();
+        resp.bytes().await.unwrap().to_vec()
+    }
+
+    async fn get_revision_info(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Vec<RevisionInfo> {
+        let url = self
+            .base_url
+            .join(&format!(
+                "{}/revision-info?old={}&new={}",
+                codebase, old_revid, new_revid
+            ))
+            .unwrap();
+        let client = reqwest::Client::new();
+        let resp = client.get(url).send().await.unwrap();
+        resp.json().await.unwrap()
+    }
+
+    fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
+        self.base_url
+            .join(codebase)
+            .unwrap()
+            .join(branch_name)
+            .unwrap()
+    }
+
+    fn get_branch(
+        &self,
+        codebase: &str,
+        branch_name: &str,
+    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+        let url = self.get_branch_url(codebase, branch_name);
+        open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
+    }
+
+    fn get_repository_url(&self, codebase: &str) -> Url {
+        self.base_url.join(codebase).unwrap()
+    }
+
+    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+        let url = self.get_repository_url(codebase);
+        match breezyshim::repository::open(&url) {
+            Ok(repo) => Ok(Some(repo)),
+            Err(BrzError::NotBranchError(..)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn list_repositories(&self) -> Vec<String> {
+        todo!()
+    }
+}
+
+fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
+    fn convert_error(e: BrzError) -> Option<BrzError> {
+        match e {
+            BrzError::NotBranchError(..) => None,
+            BrzError::RemoteGitError(..) => None,
+            BrzError::InvalidHttpResponse(..) => None,
+            BrzError::ConnectionError(e) => {
+                log::info!("Unable to reach cache server: {}", e);
+                None
+            }
+            BrzError::BranchReferenceLoop => None,
+            e => Some(e),
+        }
+    }
+
+    // TODO(jelmer): Somehow pass in trace context headers
+    match breezyshim::transport::get_transport(url, None) {
+        Ok(transport) => match breezyshim::branch::open_from_transport(&transport).map(Some) {
+            Ok(branch) => Ok(branch),
+            Err(e) => match convert_error(e) {
+                Some(e) => Err(e),
+                None => Ok(None),
+            },
+        },
+        Err(e) => match convert_error(e) {
+            Some(e) => Err(e),
+            None => Ok(None),
         },
     }
 }
