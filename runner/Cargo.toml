@@ -25,6 +25,7 @@ debversion = { workspace = true, optional = true, features = ["sqlx"] }
 debian-control = { version = "0.1.28", optional = true }
 log.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
+reqwest.workspace = true
 
 [dev-dependencies]
 maplit = { workspace = true }
