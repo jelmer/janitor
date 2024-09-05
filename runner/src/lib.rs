@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use url::Url;
 
 //pub mod config_generator;
+pub mod backchannel;
 pub mod queue;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
