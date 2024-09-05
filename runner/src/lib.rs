@@ -6,7 +6,6 @@ use url::Url;
 
 pub mod backchannel;
 pub mod config_generator;
-pub mod queue;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     let mut env = HashMap::new();
