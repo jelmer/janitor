@@ -1,6 +1,10 @@
+use breezyshim::RevisionId;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use url::Url;
 
+//pub mod config_generator;
 pub mod queue;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
@@ -25,6 +29,7 @@ pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
 }
 
 #[cfg(feature = "debian")]
+#[derive(Debug)]
 pub enum FindChangesError {
     NoChangesFile(PathBuf),
     InconsistentVersion(Vec<String>, debversion::Version, debversion::Version),
@@ -33,18 +38,48 @@ pub enum FindChangesError {
     MissingChangesFileFields(&'static str),
 }
 
-pub fn find_changes(
-    path: &Path,
-) -> Result<
-    (
-        Vec<String>,
-        String,
-        debversion::Version,
-        String,
-        Vec<String>,
-    ),
-    FindChangesError,
-> {
+#[cfg(feature = "debian")]
+impl std::fmt::Display for FindChangesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            FindChangesError::NoChangesFile(path) => {
+                write!(f, "No changes file found in {}", path.display())
+            }
+            FindChangesError::InconsistentVersion(names, found, expected) => write!(
+                f,
+                "Inconsistent version in changes files {:?}: found {} expected {}",
+                names, found, expected
+            ),
+            FindChangesError::InconsistentSource(names, found, expected) => write!(
+                f,
+                "Inconsistent source in changes files {:?}: found {} expected {}",
+                names, found, expected
+            ),
+            FindChangesError::InconsistentDistribution(names, found, expected) => write!(
+                f,
+                "Inconsistent distribution in changes files {:?}: found {} expected {}",
+                names, found, expected
+            ),
+            FindChangesError::MissingChangesFileFields(field) => {
+                write!(f, "Missing field {} in changes files", field)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "debian")]
+impl std::error::Error for FindChangesError {}
+
+#[cfg(feature = "debian")]
+pub struct ChangesSummary {
+    pub names: Vec<String>,
+    pub source: String,
+    pub version: debversion::Version,
+    pub distribution: String,
+    pub binary_packages: Vec<String>,
+}
+
+pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     let mut names: Vec<String> = Vec::new();
     let mut source: Option<String> = None;
     let mut version: Option<debversion::Version> = None;
@@ -120,13 +155,13 @@ pub fn find_changes(
         return Err(FindChangesError::MissingChangesFileFields("Distribution"));
     }
 
-    Ok((
+    Ok(ChangesSummary {
         names,
-        source.unwrap(),
-        version.unwrap(),
-        distribution.unwrap(),
+        source: source.unwrap(),
+        version: version.unwrap(),
+        distribution: distribution.unwrap(),
         binary_packages,
-    ))
+    })
 }
 
 pub fn is_log_filename(name: &str) -> bool {
@@ -187,6 +222,58 @@ pub fn gather_logs(output_directory: &std::path::Path) -> impl Iterator<Item = s
                 None
             }
         })
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct JanitorResult {
+    log_id: String,
+    branch_url: Url,
+    subpath: Option<String>,
+    code: String,
+    transient: Option<bool>,
+    codebase: String,
+    campaign: String,
+    description: String,
+    codemod: serde_json::Value,
+    value: Option<u64>,
+    logfilenames: Vec<String>,
+
+    start_time: chrono::DateTime<chrono::Utc>,
+    finish_time: chrono::DateTime<chrono::Utc>,
+    duration: std::time::Duration,
+
+    revision: Option<RevisionId>,
+    main_branch_revision: Option<RevisionId>,
+
+    change_set: Option<String>,
+
+    tags: Option<Vec<(String, Option<RevisionId>)>>,
+    remotes: Option<HashMap<String, ResultRemote>>,
+
+    branches: Option<Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>>,
+
+    failure_details: Option<serde_json::Value>,
+    failure_stage: Option<Vec<String>>,
+
+    resume: Option<ResultResume>,
+
+    target: Option<ResultTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ResultResume {
+    run_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ResultTarget {
+    name: String,
+    details: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ResultRemote {
+    url: Url,
 }
 
 #[cfg(test)]
