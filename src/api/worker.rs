@@ -212,14 +212,14 @@ pub struct Assignment {
     pub build: Build,
 }
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 pub struct GenericBuildConfig {
     pub chroot: Option<String>,
     pub dep_server_url: Option<url::Url>,
 }
 
 #[cfg(feature = "debian")]
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Default)]
 pub struct LintianConfig {
     pub profile: Option<String>,
     #[serde(rename = "suppress-tags")]
@@ -227,7 +227,7 @@ pub struct LintianConfig {
 }
 
 #[cfg(feature = "debian")]
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Default)]
 pub struct DebianBuildConfig {
     #[serde(rename = "build-distribution")]
     pub build_distribution: Option<String>,
