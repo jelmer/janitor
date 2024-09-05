@@ -21,8 +21,10 @@ serde_json.workspace = true
 janitor = { version = "0.0.0", path = "..", default-features = false, features = ["debian"] }
 async-trait = "0.1.82"
 url.workspace = true
-debversion = { workspace = true, optional = true }
+debversion = { workspace = true, optional = true, features = ["sqlx"] }
 debian-control = { version = "0.1.28", optional = true }
+log.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }
 
 [dev-dependencies]
 maplit = { workspace = true }
