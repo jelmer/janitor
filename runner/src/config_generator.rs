@@ -1,9 +1,9 @@
-use crate::queue::Item as QueueItem;
 use async_trait::async_trait;
 use breezyshim::branch::Branch;
 use debversion::Version;
 use janitor::api::worker::LintianConfig;
 use janitor::config::{Campaign, Distribution};
+use janitor::queue::QueueItem;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
