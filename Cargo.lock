@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.181"
+version = "0.1.185"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd110e2cfc994cf27f5a334910e9c04b0d76ce898acb4794518cdb538fb29ee2"
+checksum = "20ae65189d5461df26d61f76386fe949c3297d061e2db3edc73170fc0ce26d21"
 dependencies = [
  "chrono",
  "ctor",
@@ -2980,6 +2980,7 @@ dependencies = [
  "protoc-rust",
  "pyo3",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "silver-platter",
