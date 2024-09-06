@@ -1,6 +1,8 @@
+use breezyshim::error::Error as BrzError;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
+use janitor::publish::Mode;
 use janitor::vcs::VcsManager;
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
@@ -9,27 +11,7 @@ use std::path::PathBuf;
 
 pub mod publish_one;
 pub mod rate_limiter;
-
-#[derive(
-    Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, std::hash::Hash,
-)]
-pub enum MergeProposalStatus {
-    Open,
-    Merged,
-    Applied,
-    Closed,
-}
-
-impl From<breezyshim::forge::MergeProposalStatus> for MergeProposalStatus {
-    fn from(status: breezyshim::forge::MergeProposalStatus) -> Self {
-        match status {
-            breezyshim::forge::MergeProposalStatus::Open => MergeProposalStatus::Open,
-            breezyshim::forge::MergeProposalStatus::Merged => MergeProposalStatus::Merged,
-            breezyshim::forge::MergeProposalStatus::Closed => MergeProposalStatus::Closed,
-            breezyshim::forge::MergeProposalStatus::All => unreachable!(),
-        }
-    }
-}
+pub mod state;
 
 use rate_limiter::RateLimiter;
 
@@ -112,40 +94,6 @@ pub fn get_debdiff(
             Err(DebdiffError::Unavailable(response.text().unwrap()))
         }
         _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err())),
-    }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    #[serde(rename = "attempt-push")]
-    AttemptPush,
-    #[serde(rename = "push-derived")]
-    PushDerived,
-    #[serde(rename = "propose")]
-    Propose,
-    #[serde(rename = "push")]
-    Push,
-    #[serde(rename = "build-only")]
-    BuildOnly,
-    #[serde(rename = "skip")]
-    Skip,
-    #[serde(rename = "bts")]
-    BTS,
-}
-
-impl TryFrom<Mode> for silver_platter::Mode {
-    type Error = String;
-
-    fn try_from(value: Mode) -> Result<Self, Self::Error> {
-        match value {
-            Mode::PushDerived => Ok(silver_platter::Mode::PushDerived),
-            Mode::Propose => Ok(silver_platter::Mode::Propose),
-            Mode::Push => Ok(silver_platter::Mode::Push),
-            Mode::BuildOnly => Err("Mode::BuildOnly is not supported".to_string()),
-            Mode::Skip => Err("Mode::Skip is not supported".to_string()),
-            Mode::BTS => Err("Mode::BTS is not supported".to_string()),
-            Mode::AttemptPush => Ok(silver_platter::Mode::AttemptPush),
-        }
     }
 }
 
@@ -550,6 +498,72 @@ fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32
         // Assume yes, if the run doesn't have an associated value or if there is no threshold configured.
         true
     }
+}
+
+fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
+    if let Some(remote_branch_name) = remote_branch_name {
+        let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(
+            &url.to_string().trim_end_matches('/').parse().unwrap(),
+        );
+
+        params.insert(
+            "branch".to_owned(),
+            breezyshim::urlutils::escape_utf8(remote_branch_name, Some("")),
+        );
+
+        breezyshim::urlutils::join_segment_parameters(&base_url, params)
+    } else {
+        url.clone()
+    }
+}
+
+fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+    use silver_platter::vcs::{open_branch, BranchOpenError};
+    if url_a == url_b {
+        return true;
+    }
+    if url_a.is_none() || url_b.is_none() {
+        return false;
+    }
+    let url_a = url_a.unwrap();
+    let url_b = url_b.unwrap();
+    let (base_url_a, _params_a) = breezyshim::urlutils::split_segment_parameters(
+        &url_a.to_string().trim_end_matches('/').parse().unwrap(),
+    );
+    let (base_url_b, _params_b) = breezyshim::urlutils::split_segment_parameters(
+        &url_b.to_string().trim_end_matches('/').parse().unwrap(),
+    );
+    // TODO(jelmer): Support following redirects
+    if base_url_a.to_string().trim_end_matches('/') != base_url_b.to_string().trim_end_matches('/')
+    {
+        return false;
+    }
+    let branch_a = match open_branch(url_a, None, None, None) {
+        Ok(branch) => branch,
+        Err(BranchOpenError::Missing { .. }) => return false,
+        Err(e) => panic!("Unexpected error: {:?}", e),
+    };
+    let branch_b = match open_branch(url_b, None, None, None) {
+        Ok(branch) => branch,
+        Err(BranchOpenError::Missing { .. }) => return false,
+        Err(e) => panic!("Unexpected error: {:?}", e),
+    };
+    branch_a.name() == branch_b.name()
+}
+
+fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
+    let hostname = if let Some(host) = url.host_str() {
+        host
+    } else {
+        return Ok(None);
+    };
+
+    let forge = match breezyshim::forge::get_forge_by_hostname(hostname) {
+        Ok(forge) => forge,
+        Err(BrzError::UnsupportedForge(..)) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    Ok(Some(forge.get_user_url(user)?))
 }
 
 #[cfg(test)]

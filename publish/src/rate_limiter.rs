@@ -1,4 +1,4 @@
-use crate::MergeProposalStatus;
+use janitor::publish::MergeProposalStatus;
 use std::collections::HashMap;
 
 pub struct RateLimitStats {
