@@ -1,3 +1,4 @@
+use breezyshim::error::Error as BrzError;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
@@ -601,6 +602,21 @@ fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
         Err(e) => panic!("Unexpected error: {:?}", e),
     };
     branch_a.name() == branch_b.name()
+}
+
+fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
+    let hostname = if let Some(host) = url.host_str() {
+        host
+    } else {
+        return Ok(None);
+    };
+
+    let forge = match breezyshim::forge::get_forge_by_hostname(hostname) {
+        Ok(forge) => forge,
+        Err(BrzError::UnsupportedForge(..)) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    Ok(Some(forge.get_user_url(user)?))
 }
 
 #[cfg(test)]
