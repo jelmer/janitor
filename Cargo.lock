@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.185"
+version = "0.1.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ae65189d5461df26d61f76386fe949c3297d061e2db3edc73170fc0ce26d21"
+checksum = "eb4a9ce0accc1385eb4e2ac43d7bd6f5e6607227dda05219ed5db596e2eedbae"
 dependencies = [
  "chrono",
  "ctor",
@@ -614,6 +614,7 @@ dependencies = [
  "lazy_static",
  "log",
  "patchkit",
+ "percent-encoding",
  "pyo3",
  "pyo3-filelike",
  "serde",
@@ -2258,9 +2259,9 @@ dependencies = [
 
 [[package]]
 name = "gix-path"
-version = "0.10.10"
+version = "0.10.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d5b8722112fa2fa87135298780bc833b0e9f6c56cc82795d209804b3a03484"
+checksum = "ebfc4febd088abdcbc9f1246896e57e37b7a34f6909840045a1767c6dafac7af"
 dependencies = [
  "bstr",
  "gix-trace",
@@ -2317,9 +2318,9 @@ dependencies = [
 
 [[package]]
 name = "gix-trace"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f924267408915fddcd558e3f37295cc7d6a3e50f8bd8b606cee0808c3915157e"
+checksum = "6cae0e8661c3ff92688ce1c8b8058b3efb312aba9492bbe93661a21705ab431b"
 
 [[package]]
 name = "gix-utils"
