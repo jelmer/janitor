@@ -74,7 +74,7 @@ fn main() {
         },
     );
 
-    let publish_result: janitor_publish::PublishResult =
+    let publish_result: janitor_publish::PublishOneResult =
         match janitor_publish::publish_one::publish_one(template_env, &request, &mut None) {
             Ok(result) => result,
             Err(e) => {

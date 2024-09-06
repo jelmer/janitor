@@ -1,10 +1,15 @@
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
+use janitor::vcs::VcsManager;
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub mod publish_one;
+pub mod rate_limiter;
+
+use rate_limiter::RateLimiter;
 
 pub fn calculate_next_try_time(finish_time: DateTime<Utc>, attempt_count: usize) -> DateTime<Utc> {
     if attempt_count == 0 {
@@ -139,7 +144,7 @@ pub struct PublishOneRequest {
     pub allow_create_proposal: bool,
     pub source_branch_url: url::Url,
     pub codemod_result: serde_json::Value,
-    pub commit_message_tempalte: Option<String>,
+    pub commit_message_template: Option<String>,
     pub title_template: Option<String>,
     pub existing_mp_url: Option<url::Url>,
     pub extra_context: Option<serde_json::Value>,
@@ -153,6 +158,7 @@ pub struct PublishOneRequest {
 pub enum PublishError {
     Failure { code: String, description: String },
     NothingToDo(String),
+    BranchBusy(url::Url),
 }
 
 impl PublishError {
@@ -160,6 +166,7 @@ impl PublishError {
         match self {
             PublishError::Failure { code, .. } => code,
             PublishError::NothingToDo(_) => "nothing-to-do",
+            PublishError::BranchBusy(_) => "branch-busy",
         }
     }
 
@@ -167,6 +174,7 @@ impl PublishError {
         match self {
             PublishError::Failure { description, .. } => description,
             PublishError::NothingToDo(description) => description,
+            PublishError::BranchBusy(_) => "Branch is busy",
         }
     }
 }
@@ -189,6 +197,12 @@ impl serde::Serialize for PublishError {
                 state.serialize_field("description", description)?;
                 state.end()
             }
+            PublishError::BranchBusy(url) => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", "branch-busy")?;
+                state.serialize_field("description", &format!("Branch is busy: {}", url))?;
+                state.end()
+            }
         }
     }
 }
@@ -202,6 +216,9 @@ impl std::fmt::Display for PublishError {
             PublishError::NothingToDo(description) => {
                 write!(f, "PublishError::PublishNothingToDo: {}", description)
             }
+            PublishError::BranchBusy(url) => {
+                write!(f, "PublishError::BranchBusy: Branch is busy: {}", url)
+            }
         }
     }
 }
@@ -209,7 +226,7 @@ impl std::fmt::Display for PublishError {
 impl std::error::Error for PublishError {}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
-pub struct PublishResult {
+pub struct PublishOneResult {
     proposal_url: Option<url::Url>,
     proposal_web_url: Option<url::Url>,
     is_new: Option<bool>,
@@ -217,6 +234,289 @@ pub struct PublishResult {
     target_branch_url: url::Url,
     target_branch_web_url: Option<url::Url>,
     mode: Mode,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct PublishOneError {
+    code: String,
+    description: String,
+}
+
+pub struct PublishWorker {
+    template_env_path: Option<PathBuf>,
+    external_url: Option<url::Url>,
+    differ_url: url::Url,
+    redis: Option<redis::aio::MultiplexedConnection>,
+    lock_manager: Option<rslock::LockManager>,
+}
+
+#[derive(Debug)]
+pub enum WorkerInvalidResponse {
+    Io(std::io::Error),
+    Serde(serde_json::Error),
+    WorkerError(String),
+}
+
+impl From<std::io::Error> for WorkerInvalidResponse {
+    fn from(e: std::io::Error) -> Self {
+        WorkerInvalidResponse::Io(e)
+    }
+}
+
+impl From<serde_json::Error> for WorkerInvalidResponse {
+    fn from(e: serde_json::Error) -> Self {
+        WorkerInvalidResponse::Serde(e)
+    }
+}
+
+impl From<String> for WorkerInvalidResponse {
+    fn from(e: String) -> Self {
+        WorkerInvalidResponse::WorkerError(e)
+    }
+}
+
+impl std::fmt::Display for WorkerInvalidResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            WorkerInvalidResponse::Io(e) => write!(f, "IO error: {}", e),
+            WorkerInvalidResponse::Serde(e) => write!(f, "Serde error: {}", e),
+            WorkerInvalidResponse::WorkerError(e) => write!(f, "Worker error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for WorkerInvalidResponse {}
+
+async fn run_worker_process(
+    args: Vec<String>,
+    request: PublishOneRequest,
+) -> Result<(i32, serde_json::Value), WorkerInvalidResponse> {
+    let mut p = tokio::process::Command::new(args[0].clone())
+        .args(&args[1..])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    p.stdin
+        .as_mut()
+        .unwrap()
+        .write_all(serde_json::to_string(&request).unwrap().as_bytes())
+        .await?;
+
+    let status = p.wait().await?;
+
+    if status.success() {
+        let mut stdout = p.stdout.take().unwrap();
+        let _stderr = p.stderr.take().unwrap();
+        let mut output = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
+
+        let response =
+            serde_json::from_reader(&mut output.as_slice()).map_err(WorkerInvalidResponse::from)?;
+        return Ok((status.code().unwrap(), response));
+    } else if status.code() == Some(1) {
+        let mut stdout = p.stdout.take().unwrap();
+        let mut stderr = p.stderr.take().unwrap();
+        let mut output = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
+        let response =
+            serde_json::from_reader(&mut output.as_slice()).map_err(WorkerInvalidResponse::from)?;
+        let mut error = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut error).await?;
+        use std::io::Write;
+        std::io::stderr().write_all(&error)?;
+        return Ok((status.code().unwrap(), response));
+    } else {
+        let mut stderr = p.stderr.take().unwrap();
+        let mut error = Vec::new();
+        tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut error).await?;
+        return Err(WorkerInvalidResponse::from(
+            String::from_utf8(error).unwrap(),
+        ));
+    }
+}
+
+impl PublishWorker {
+    async fn new(
+        template_env_path: Option<PathBuf>,
+        external_url: Option<url::Url>,
+        differ_url: url::Url,
+        redis: Option<redis::Client>,
+        lock_manager: Option<rslock::LockManager>,
+    ) -> Self {
+        let redis = if let Some(redis) = redis {
+            Some(redis.get_multiplexed_async_connection().await.unwrap())
+        } else {
+            None
+        };
+        Self {
+            template_env_path,
+            external_url,
+            differ_url,
+            redis,
+            lock_manager,
+        }
+    }
+
+    /// Publish a single run in some form.
+    ///
+    /// # Arguments
+    /// * `campaign` - The campaign name
+    /// * `command` - Command that was run
+    async fn publish_one(
+        &mut self,
+        campaign: &str,
+        codebase: &str,
+        command: &str,
+        target_branch_url: &url::Url,
+        mode: Mode,
+        role: &str,
+        revision: &RevisionId,
+        log_id: &str,
+        unchanged_id: &str,
+        derived_branch_name: &str,
+        rate_limit_bucket: Option<&str>,
+        vcs_manager: &dyn VcsManager,
+        mut bucket_rate_limiter: Option<&dyn RateLimiter>,
+        require_binary_diff: bool,
+        allow_create_proposal: bool,
+        reviewers: Option<Vec<&str>>,
+        tags: Option<Vec<(String, RevisionId)>>,
+        commit_message_template: Option<&str>,
+        title_template: Option<&str>,
+        codemod_result: &serde_json::Value,
+        existing_mp_url: Option<&url::Url>,
+        extra_context: Option<&serde_json::Value>,
+        derived_owner: Option<&str>,
+    ) -> Result<PublishOneResult, PublishError> {
+        let local_branch_url =
+            vcs_manager.get_branch_url(codebase, &format!("{}/{}", campaign, role));
+
+        let request = PublishOneRequest {
+            campaign: campaign.to_owned(),
+            command: command.to_owned(),
+            codemod_result: codemod_result.clone(),
+            target_branch_url: target_branch_url.clone(),
+            source_branch_url: local_branch_url,
+            existing_mp_url: existing_mp_url.cloned(),
+            derived_branch_name: derived_branch_name.to_owned(),
+            mode,
+            role: role.to_owned(),
+            log_id: log_id.to_owned(),
+            unchanged_id: unchanged_id.to_owned(),
+            require_binary_diff,
+            allow_create_proposal,
+            external_url: self.external_url.clone(),
+            differ_url: self.differ_url.clone(),
+            revision_id: revision.clone(),
+            reviewers: reviewers.map(|r| r.iter().map(|s| s.to_string()).collect()),
+            commit_message_template: commit_message_template.map(|s| s.to_string()),
+            title_template: title_template.map(|s| s.to_string()),
+            extra_context: extra_context.cloned(),
+            tags: tags.map(|t| t.into_iter().collect()),
+            derived_owner: derived_owner.map(|s| s.to_string()),
+        };
+
+        let mut args = vec!["janitor-publish-one".to_string()];
+
+        if let Some(template_env_path) = self.template_env_path.as_ref() {
+            args.push(format!(
+                "--template-env-path={}",
+                template_env_path.display()
+            ));
+        }
+
+        let (returncode, response) = if let Some(lock_manager) = &self.lock_manager {
+            match lock_manager
+                .lock(
+                    format!("publish:{}", target_branch_url).as_bytes(),
+                    std::time::Duration::from_secs(60),
+                )
+                .await
+            {
+                Ok(rl) => {
+                    let (returncode, response) = match run_worker_process(args, request).await {
+                        Ok((returncode, response)) => (returncode, response),
+                        Err(e) => {
+                            return Err(PublishError::Failure {
+                                code: "publisher-invalid-response".to_string(),
+                                description: e.to_string(),
+                            });
+                        }
+                    };
+                    lock_manager.unlock(&rl).await;
+                    (returncode, response)
+                }
+                Err(_) => {
+                    return Err(PublishError::BranchBusy(target_branch_url.clone()));
+                }
+            }
+        } else {
+            match run_worker_process(args, request).await {
+                Ok((returncode, response)) => (returncode, response),
+                Err(e) => {
+                    return Err(PublishError::Failure {
+                        code: "publisher-invalid-response".to_string(),
+                        description: e.to_string(),
+                    });
+                }
+            }
+        };
+
+        if returncode == 1 {
+            let error: PublishOneError =
+                serde_json::from_value(response).map_err(|e| PublishError::Failure {
+                    code: "publisher-invalid-response".to_string(),
+                    description: e.to_string(),
+                })?;
+            return Err(PublishError::Failure {
+                code: error.code,
+                description: error.description,
+            });
+        }
+
+        if returncode == 0 {
+            let result: PublishOneResult =
+                serde_json::from_value(response).map_err(|e| PublishError::Failure {
+                    code: "publisher-invalid-response".to_string(),
+                    description: e.to_string(),
+                })?;
+
+            if result.proposal_url.is_some() && result.is_new.unwrap() {
+                use redis::AsyncCommands;
+                if let Some(redis) = self.redis.as_mut() {
+                    let _: () = redis
+                        .publish(
+                            "merge-proposal".to_string(),
+                            serde_json::to_string(&serde_json::json!({
+                                "url": result.proposal_url,
+                                "web_url": result.proposal_web_url,
+                                "status": "open",
+                                "codebase": codebase,
+                                "campaign": campaign,
+                                "target_branch_url": result.target_branch_url,
+                                "target_branch_web_url": result.target_branch_web_url,
+                            }))
+                            .unwrap(),
+                        )
+                        .await
+                        .unwrap();
+                }
+
+                if let Some(bucket) = rate_limit_bucket {
+                    if let Some(rate_limiter) = bucket_rate_limiter.as_mut() {
+                        rate_limiter.inc(bucket);
+                    }
+                }
+            }
+
+            return Ok(result);
+        }
+
+        unreachable!();
+    }
 }
 
 #[cfg(test)]
