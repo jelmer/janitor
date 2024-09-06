@@ -42,6 +42,7 @@ debversion = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["json"] }
 
 [workspace.dependencies]
+rslock = { version = "0.4.0" }
 debian-changelog = "0.1.12"
 debian-analyzer = { git = "https://salsa.debian.org/jelmer/lintian-brush" }
 debversion = { version = "0.4" }

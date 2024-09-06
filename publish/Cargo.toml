@@ -17,6 +17,8 @@ janitor = { version = "0.0.0", path = ".." }
 log.workspace = true
 minijinja = { version = "2", features = ["loader"] }
 pyo3.workspace = true
+redis = { workspace = true, features = ["tokio-comp", "json"] }
+rslock = { workspace = true, default-features = false, features = ["tokio-comp"] }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

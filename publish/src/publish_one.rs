@@ -41,7 +41,7 @@ pub fn publish_one(
     template_env: Environment,
     request: &crate::PublishOneRequest,
     possible_transports: &mut Option<Vec<Transport>>,
-) -> Result<(PublishResult, String), PublishError> {
+) -> Result<(PublishOneResult, String), PublishError> {
     let mut args = shlex::split(&request.command).unwrap();
     drop_env(&mut args);
 
@@ -372,7 +372,7 @@ pub fn publish_one(
     let result = publish(
         template_env,
         &request.campaign,
-        request.commit_message_tempalte.as_deref(),
+        request.commit_message_template.as_deref(),
         request.title_template.as_deref(),
         &request.codemod_result,
         request.mode,
@@ -422,7 +422,7 @@ pub fn publish(
     stop_revision: Option<&RevisionId>,
     extra_context: Option<serde_json::Value>,
     derived_owner: Option<String>,
-) -> Result<(PublishResult, String), PublishError> {
+) -> Result<(PublishOneResult, String), PublishError> {
     let get_proposal_description = |description_format: DescriptionFormat,
                                     _existing_proposal: Option<&MergeProposal>|
      -> String {
@@ -618,7 +618,7 @@ pub fn publish(
             std::mem::drop(target_lock);
             std::mem::drop(source_lock);
             Ok((
-                PublishResult {
+                PublishOneResult {
                     mode,
                     proposal: publish_result.proposal,
                     is_new: publish_result.is_new,
@@ -635,7 +635,7 @@ pub fn publish(
     }
 }
 
-pub struct PublishResult {
+pub struct PublishOneResult {
     mode: Mode,
     proposal: Option<MergeProposal>,
     is_new: Option<bool>,
@@ -643,11 +643,11 @@ pub struct PublishResult {
     forge: Option<Forge>,
 }
 
-impl From<(PublishResult, String)> for crate::PublishResult {
-    fn from(publish_result: (PublishResult, String)) -> crate::PublishResult {
+impl From<(PublishOneResult, String)> for crate::PublishOneResult {
+    fn from(publish_result: (PublishOneResult, String)) -> crate::PublishOneResult {
         let branch_name = publish_result.1;
         let publish_result = publish_result.0;
-        crate::PublishResult {
+        crate::PublishOneResult {
             proposal_url: publish_result
                 .proposal
                 .as_ref()
