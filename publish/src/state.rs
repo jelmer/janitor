@@ -78,3 +78,68 @@ async fn store_publish(
 
     tx.commit().await
 }
+
+async fn already_published(
+    conn: &PgPool,
+    target_branch_url: &Url,
+    branch_name: &str,
+    revision: &RevisionId,
+    modes: &[Mode],
+) -> Result<bool, sqlx::Error> {
+    let modes = modes.iter().map(|m| m.to_string()).collect::<Vec<_>>();
+    let row = sqlx::query(
+        "SELECT * FROM publish WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND target_branch_url = $3 AND branch_name = $4").bind(modes).bind(revision.to_string()).bind(target_branch_url.to_string()).bind(branch_name).fetch_optional(&*conn).await?;
+    Ok(row.is_some())
+}
+
+async fn get_open_merge_proposal(
+    conn: &PgPool,
+    codebase: &str,
+    branch_name: &str,
+) -> Result<Option<(RevisionId, Url)>, sqlx::Error> {
+    let row: Option<(String, String)> = sqlx::query_as(
+        r###"
+SELECT
+    merge_proposal.revision,
+    merge_proposal.url
+FROM
+    merge_proposal
+INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
+WHERE
+    merge_proposal.status = 'open' AND
+    merge_proposal.codebase = $1 AND
+    publish.branch_name = $2
+ORDER BY timestamp DESC
+"###,
+    )
+    .bind(codebase)
+    .bind(branch_name)
+    .fetch_optional(&*conn)
+    .await?;
+
+    Ok(row.map(|(revision, url)| {
+        (
+            RevisionId::from(revision.as_bytes().to_vec()),
+            Url::parse(&url).unwrap(),
+        )
+    }))
+}
+
+async fn check_last_published(
+    conn: &PgPool,
+    campaign: &str,
+    codebase: &str,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, sqlx::Error> {
+    let row: Option<(Option<chrono::DateTime<chrono::Utc>>,)> = sqlx::query_as(
+        r###"
+SELECT timestamp from publish left join run on run.revision = publish.revision
+WHERE run.suite = $1 and run.codebase = $2 AND publish.result_code = 'success'
+order by timestamp desc limit 1
+"###,
+    )
+    .bind(campaign)
+    .bind(codebase)
+    .fetch_optional(conn)
+    .await?;
+    Ok(row.and_then(|(timestamp,)| timestamp))
+}
