@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "breezyshim"
-version = "0.1.185"
+version = "0.1.187"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ae65189d5461df26d61f76386fe949c3297d061e2db3edc73170fc0ce26d21"
+checksum = "a2e38219b1781c1dd77373b29a15556876f0085c6a697a6db2977f1ae19c3e5a"
 dependencies = [
  "chrono",
  "ctor",
@@ -614,6 +614,7 @@ dependencies = [
  "lazy_static",
  "log",
  "patchkit",
+ "percent-encoding",
  "pyo3",
  "pyo3-filelike",
  "serde",
@@ -2258,9 +2259,9 @@ dependencies = [
 
 [[package]]
 name = "gix-path"
-version = "0.10.10"
+version = "0.10.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d5b8722112fa2fa87135298780bc833b0e9f6c56cc82795d209804b3a03484"
+checksum = "ebfc4febd088abdcbc9f1246896e57e37b7a34f6909840045a1767c6dafac7af"
 dependencies = [
  "bstr",
  "gix-trace",
@@ -2317,9 +2318,9 @@ dependencies = [
 
 [[package]]
 name = "gix-trace"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f924267408915fddcd558e3f37295cc7d6a3e50f8bd8b606cee0808c3915157e"
+checksum = "6cae0e8661c3ff92688ce1c8b8058b3efb312aba9492bbe93661a21705ab431b"
 
 [[package]]
 name = "gix-utils"
@@ -3037,6 +3038,7 @@ dependencies = [
  "serde_json",
  "shlex",
  "silver-platter",
+ "sqlx",
  "tokio",
  "url",
 ]
@@ -4712,7 +4714,6 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
 dependencies = [
- "async-std",
  "async-trait",
  "bytes",
  "combine",
