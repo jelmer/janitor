@@ -569,6 +569,40 @@ fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url
     }
 }
 
+fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+    use silver_platter::vcs::{open_branch, BranchOpenError};
+    if url_a == url_b {
+        return true;
+    }
+    if url_a.is_none() || url_b.is_none() {
+        return false;
+    }
+    let url_a = url_a.unwrap();
+    let url_b = url_b.unwrap();
+    let (base_url_a, _params_a) = breezyshim::urlutils::split_segment_parameters(
+        &url_a.to_string().trim_end_matches('/').parse().unwrap(),
+    );
+    let (base_url_b, _params_b) = breezyshim::urlutils::split_segment_parameters(
+        &url_b.to_string().trim_end_matches('/').parse().unwrap(),
+    );
+    // TODO(jelmer): Support following redirects
+    if base_url_a.to_string().trim_end_matches('/') != base_url_b.to_string().trim_end_matches('/')
+    {
+        return false;
+    }
+    let branch_a = match open_branch(url_a, None, None, None) {
+        Ok(branch) => branch,
+        Err(BranchOpenError::Missing { .. }) => return false,
+        Err(e) => panic!("Unexpected error: {:?}", e),
+    };
+    let branch_b = match open_branch(url_b, None, None, None) {
+        Ok(branch) => branch,
+        Err(BranchOpenError::Missing { .. }) => return false,
+        Err(e) => panic!("Unexpected error: {:?}", e),
+    };
+    branch_a.name() == branch_b.name()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
