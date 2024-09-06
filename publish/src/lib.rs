@@ -2,6 +2,7 @@ use breezyshim::error::Error as BrzError;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
+use janitor::publish::Mode;
 use janitor::vcs::VcsManager;
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
@@ -11,27 +12,6 @@ use std::path::PathBuf;
 pub mod publish_one;
 pub mod rate_limiter;
 pub mod state;
-
-#[derive(
-    Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, std::hash::Hash,
-)]
-pub enum MergeProposalStatus {
-    Open,
-    Merged,
-    Applied,
-    Closed,
-}
-
-impl From<breezyshim::forge::MergeProposalStatus> for MergeProposalStatus {
-    fn from(status: breezyshim::forge::MergeProposalStatus) -> Self {
-        match status {
-            breezyshim::forge::MergeProposalStatus::Open => MergeProposalStatus::Open,
-            breezyshim::forge::MergeProposalStatus::Merged => MergeProposalStatus::Merged,
-            breezyshim::forge::MergeProposalStatus::Closed => MergeProposalStatus::Closed,
-            breezyshim::forge::MergeProposalStatus::All => unreachable!(),
-        }
-    }
-}
 
 use rate_limiter::RateLimiter;
 
@@ -114,54 +94,6 @@ pub fn get_debdiff(
             Err(DebdiffError::Unavailable(response.text().unwrap()))
         }
         _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err())),
-    }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    #[serde(rename = "attempt-push")]
-    AttemptPush,
-    #[serde(rename = "push-derived")]
-    PushDerived,
-    #[serde(rename = "propose")]
-    Propose,
-    #[serde(rename = "push")]
-    Push,
-    #[serde(rename = "build-only")]
-    BuildOnly,
-    #[serde(rename = "skip")]
-    Skip,
-    #[serde(rename = "bts")]
-    BTS,
-}
-
-impl std::fmt::Display for Mode {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Mode::PushDerived => write!(f, "push-derived"),
-            Mode::Propose => write!(f, "propose"),
-            Mode::Push => write!(f, "push"),
-            Mode::BuildOnly => write!(f, "build-only"),
-            Mode::Skip => write!(f, "skip"),
-            Mode::BTS => write!(f, "bts"),
-            Mode::AttemptPush => write!(f, "attempt-push"),
-        }
-    }
-}
-
-impl TryFrom<Mode> for silver_platter::Mode {
-    type Error = String;
-
-    fn try_from(value: Mode) -> Result<Self, Self::Error> {
-        match value {
-            Mode::PushDerived => Ok(silver_platter::Mode::PushDerived),
-            Mode::Propose => Ok(silver_platter::Mode::Propose),
-            Mode::Push => Ok(silver_platter::Mode::Push),
-            Mode::BuildOnly => Err("Mode::BuildOnly is not supported".to_string()),
-            Mode::Skip => Err("Mode::Skip is not supported".to_string()),
-            Mode::BTS => Err("Mode::BTS is not supported".to_string()),
-            Mode::AttemptPush => Ok(silver_platter::Mode::AttemptPush),
-        }
     }
 }
 

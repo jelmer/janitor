@@ -134,7 +134,7 @@ pub fn publish_one(
         }
     };
 
-    assert_ne!(request.mode, Mode::BTS);
+    assert_ne!(request.mode, Mode::Bts);
 
     let forge: Option<Forge> = match breezyshim::forge::get_forge(target_branch.as_ref()) {
         Err(e @ BrzError::UnsupportedForge(..)) => {
