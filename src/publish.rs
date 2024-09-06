@@ -2,14 +2,27 @@ use chrono::Duration;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, std::hash::Hash)]
 pub enum MergeProposalStatus {
     #[serde(rename = "open")]
     Open,
     #[serde(rename = "merged")]
     Merged,
+    #[serde(rename = "applied")]
+    Applied,
     #[serde(rename = "closed")]
     Closed,
+}
+
+impl From<breezyshim::forge::MergeProposalStatus> for MergeProposalStatus {
+    fn from(status: breezyshim::forge::MergeProposalStatus) -> Self {
+        match status {
+            breezyshim::forge::MergeProposalStatus::Open => MergeProposalStatus::Open,
+            breezyshim::forge::MergeProposalStatus::Merged => MergeProposalStatus::Merged,
+            breezyshim::forge::MergeProposalStatus::Closed => MergeProposalStatus::Closed,
+            breezyshim::forge::MergeProposalStatus::All => unreachable!(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -27,8 +40,8 @@ pub struct MergeProposalNotification {
     pub target_branch_web_url: Option<Url>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub enum PublishMode {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Mode {
     #[serde(rename = "skip")]
     Skip,
     #[serde(rename = "build-only")]
@@ -43,6 +56,36 @@ pub enum PublishMode {
     AttemptPush,
     #[serde(rename = "bts")]
     Bts,
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Mode::PushDerived => write!(f, "push-derived"),
+            Mode::Propose => write!(f, "propose"),
+            Mode::Push => write!(f, "push"),
+            Mode::BuildOnly => write!(f, "build-only"),
+            Mode::Skip => write!(f, "skip"),
+            Mode::Bts => write!(f, "bts"),
+            Mode::AttemptPush => write!(f, "attempt-push"),
+        }
+    }
+}
+
+impl TryFrom<Mode> for silver_platter::Mode {
+    type Error = String;
+
+    fn try_from(value: Mode) -> Result<Self, Self::Error> {
+        match value {
+            Mode::PushDerived => Ok(silver_platter::Mode::PushDerived),
+            Mode::Propose => Ok(silver_platter::Mode::Propose),
+            Mode::Push => Ok(silver_platter::Mode::Push),
+            Mode::BuildOnly => Err("Mode::BuildOnly is not supported".to_string()),
+            Mode::Skip => Err("Mode::Skip is not supported".to_string()),
+            Mode::Bts => Err("Mode::BTS is not supported".to_string()),
+            Mode::AttemptPush => Ok(silver_platter::Mode::AttemptPush),
+        }
+    }
 }
 
 fn serialize_duration<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
@@ -73,7 +116,7 @@ pub struct PublishNotification {
     pub codebase: String,
     pub campaign: String,
     pub proposal_url: Option<Url>,
-    pub mode: PublishMode,
+    pub mode: Mode,
     pub main_branch_url: Option<Url>,
     pub main_branch_web_url: Option<Url>,
     pub branch_name: Option<String>,
