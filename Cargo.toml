@@ -39,6 +39,7 @@ google-cloud-auth = { workspace = true, optional = true }
 flate2 = "1.0.33"
 filetime = "0.2.25"
 debversion = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["json"] }
 
 [workspace.dependencies]
 debian-changelog = "0.1.12"
