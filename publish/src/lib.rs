@@ -1,5 +1,6 @@
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
+use janitor::config::Campaign;
 use janitor::vcs::VcsManager;
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
@@ -8,6 +9,27 @@ use std::path::PathBuf;
 
 pub mod publish_one;
 pub mod rate_limiter;
+
+#[derive(
+    Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, std::hash::Hash,
+)]
+pub enum MergeProposalStatus {
+    Open,
+    Merged,
+    Applied,
+    Closed,
+}
+
+impl From<breezyshim::forge::MergeProposalStatus> for MergeProposalStatus {
+    fn from(status: breezyshim::forge::MergeProposalStatus) -> Self {
+        match status {
+            breezyshim::forge::MergeProposalStatus::Open => MergeProposalStatus::Open,
+            breezyshim::forge::MergeProposalStatus::Merged => MergeProposalStatus::Merged,
+            breezyshim::forge::MergeProposalStatus::Closed => MergeProposalStatus::Closed,
+            breezyshim::forge::MergeProposalStatus::All => unreachable!(),
+        }
+    }
+}
 
 use rate_limiter::RateLimiter;
 
@@ -379,7 +401,7 @@ impl PublishWorker {
         derived_branch_name: &str,
         rate_limit_bucket: Option<&str>,
         vcs_manager: &dyn VcsManager,
-        mut bucket_rate_limiter: Option<&dyn RateLimiter>,
+        mut bucket_rate_limiter: Option<&mut dyn RateLimiter>,
         require_binary_diff: bool,
         allow_create_proposal: bool,
         reviewers: Option<Vec<&str>>,
@@ -516,6 +538,17 @@ impl PublishWorker {
         }
 
         unreachable!();
+    }
+}
+
+fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32>) -> bool {
+    if let (Some(run_value), Some(threshold)) =
+        (run_value, &campaign_config.merge_proposal.value_threshold)
+    {
+        run_value >= *threshold
+    } else {
+        // Assume yes, if the run doesn't have an associated value or if there is no threshold configured.
+        true
     }
 }
 
