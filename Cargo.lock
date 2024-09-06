@@ -3038,6 +3038,7 @@ dependencies = [
  "serde_json",
  "shlex",
  "silver-platter",
+ "sqlx",
  "tokio",
  "url",
 ]

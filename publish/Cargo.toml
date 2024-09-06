@@ -26,6 +26,7 @@ shlex.workspace = true
 silver-platter.workspace = true
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true
+sqlx.workspace = true
 
 [dev-dependencies]
 maplit = { workspace = true }
