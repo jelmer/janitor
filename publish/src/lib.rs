@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 pub mod publish_one;
 pub mod rate_limiter;
+pub mod state;
 
 #[derive(
     Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialEq, Eq, std::hash::Hash,
@@ -132,6 +133,20 @@ pub enum Mode {
     Skip,
     #[serde(rename = "bts")]
     BTS,
+}
+
+impl std::fmt::Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Mode::PushDerived => write!(f, "push-derived"),
+            Mode::Propose => write!(f, "propose"),
+            Mode::Push => write!(f, "push"),
+            Mode::BuildOnly => write!(f, "build-only"),
+            Mode::Skip => write!(f, "skip"),
+            Mode::BTS => write!(f, "bts"),
+            Mode::AttemptPush => write!(f, "attempt-push"),
+        }
+    }
 }
 
 impl TryFrom<Mode> for silver_platter::Mode {
