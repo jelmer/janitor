@@ -22,7 +22,7 @@ url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { workspace = true }
 silver-platter = { workspace = true }
-tokio = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 regex = "1.10.6"
 lazy-regex = "3.2.0"
 fancy-regex = "0.13.0"
@@ -38,7 +38,7 @@ google-cloud-storage = { workspace = true, optional = true }
 google-cloud-auth = { workspace = true, optional = true }
 flate2 = "1.0.33"
 filetime = "0.2.25"
-debversion = { workspace = true, optional = true }
+debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
 debian-control = "0.1.28"
 shlex.workspace = true
