@@ -9,6 +9,7 @@ repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
+axum = { workspace = true }
 breezyshim.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
@@ -27,6 +28,8 @@ silver-platter.workspace = true
 tokio = { workspace = true, features = ["full"] }
 url.workspace = true
 sqlx = { workspace = true, features = ["chrono"] }
+maplit.workspace = true
+prometheus = "0.13.4"
 
 [dev-dependencies]
 maplit = { workspace = true }

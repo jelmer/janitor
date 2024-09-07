@@ -1,4 +1,5 @@
-use sqlx::postgres::types::PgInterval as Duration;
+use chrono::TimeDelta;
+use sqlx::postgres::types::PgInterval;
 use sqlx::{Error, FromRow, PgPool, Row};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
@@ -8,7 +9,7 @@ pub struct QueueItem {
     pub id: i32,
     pub context: Option<String>,
     pub command: String,
-    pub estimated_duration: Option<Duration>,
+    pub estimated_duration: PgInterval,
     pub campaign: String,
     pub refresh: bool,
     pub requester: Option<String>,
@@ -42,14 +43,14 @@ impl Hash for QueueItem {
     }
 }
 
-pub struct Queue {
-    pool: PgPool,
+pub struct Queue<'a> {
+    pool: &'a PgPool,
 }
 
 #[derive(FromRow)]
 pub struct ETA {
     pub position: i64,
-    pub wait_time: Duration,
+    pub wait_time: PgInterval,
 }
 
 #[derive(FromRow)]
@@ -59,8 +60,8 @@ pub struct VcsInfo {
     pub vcs_type: Option<String>,
 }
 
-impl Queue {
-    pub fn new(pool: PgPool) -> Self {
+impl<'a> Queue<'a> {
+    pub fn new(pool: &'a PgPool) -> Self {
         Queue { pool }
     }
 
@@ -70,7 +71,7 @@ impl Queue {
         )
         .bind(codebase)
         .bind(campaign)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool)
         .await?;
 
         Ok(row)
@@ -83,7 +84,7 @@ impl Queue {
              WHERE id = $1"
         )
         .bind(queue_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool)
         .await?;
 
         Ok(row)
@@ -161,7 +162,7 @@ impl Queue {
             query_builder = query_builder.bind(exclude_hosts.into_iter().collect::<Vec<_>>());
         }
 
-        let row = query_builder.fetch_optional(&self.pool).await?;
+        let row = query_builder.fetch_optional(self.pool).await?;
 
         if let Some(row) = row {
             let vcs_info = VcsInfo::from_row(&row)?;
@@ -183,7 +184,7 @@ impl Queue {
         offset: f64,
         bucket: &str,
         context: Option<&str>,
-        estimated_duration: Option<Duration>,
+        estimated_duration: Option<TimeDelta>,
         refresh: bool,
         requester: Option<&str>,
     ) -> Result<(i32, String), Error> {
@@ -213,7 +214,7 @@ impl Queue {
         .bind(requester)
         .bind(change_set)
         .bind(codebase)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool)
         .await?;
 
         if let Some(row) = row {
@@ -227,7 +228,7 @@ impl Queue {
             .bind(codebase)
             .bind(campaign)
             .bind(change_set.unwrap_or(""))
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool)
             .await?;
             let id: i32 = row.try_get("id")?;
             let bucket: String = row.try_get("bucket")?;
@@ -238,7 +239,7 @@ impl Queue {
     pub async fn get_buckets(&self) -> Result<Vec<(String, i64)>, Error> {
         let rows =
             sqlx::query("SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC")
-                .fetch_all(&self.pool)
+                .fetch_all(self.pool)
                 .await?;
 
         Ok(rows

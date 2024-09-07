@@ -5,7 +5,7 @@ pub struct RateLimitStats {
     pub per_bucket: HashMap<String, usize>,
 }
 
-pub trait RateLimiter {
+pub trait RateLimiter: Send + Sync {
     fn set_mps_per_bucket(
         &mut self,
         mps_per_bucket: &HashMap<MergeProposalStatus, HashMap<String, usize>>,
