@@ -35,6 +35,7 @@ pub struct Run {
     pub result_tags: Option<Vec<(String, String)>>,
     pub target_branch_url: Option<String>,
     pub change_set: String,
+    pub failure_details: Option<serde_json::Value>,
     pub failure_transient: Option<bool>,
     pub failure_stage: Option<String>,
     pub codebase: String,

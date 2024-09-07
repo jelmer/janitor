@@ -1,4 +1,5 @@
 use breezyshim::error::Error as BrzError;
+use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
@@ -12,6 +13,7 @@ use std::path::PathBuf;
 pub mod publish_one;
 pub mod rate_limiter;
 pub mod state;
+pub mod web;
 
 use rate_limiter::RateLimiter;
 
@@ -213,11 +215,11 @@ pub struct PublishOneError {
 }
 
 pub struct PublishWorker {
-    template_env_path: Option<PathBuf>,
-    external_url: Option<url::Url>,
-    differ_url: url::Url,
-    redis: Option<redis::aio::MultiplexedConnection>,
-    lock_manager: Option<rslock::LockManager>,
+    pub template_env_path: Option<PathBuf>,
+    pub external_url: Option<url::Url>,
+    pub differ_url: url::Url,
+    pub redis: Option<redis::aio::MultiplexedConnection>,
+    pub lock_manager: Option<rslock::LockManager>,
 }
 
 #[derive(Debug)]
@@ -285,7 +287,7 @@ async fn run_worker_process(
 
         let response =
             serde_json::from_reader(&mut output.as_slice()).map_err(WorkerInvalidResponse::from)?;
-        return Ok((status.code().unwrap(), response));
+        Ok((status.code().unwrap(), response))
     } else if status.code() == Some(1) {
         let mut stdout = p.stdout.take().unwrap();
         let mut stderr = p.stderr.take().unwrap();
@@ -564,6 +566,55 @@ fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>
         Err(e) => return Err(e),
     };
     Ok(Some(forge.get_user_url(user)?))
+}
+
+pub async fn process_queue_loop(
+    db: &sqlx::PgPool,
+    redis: &redis::aio::MultiplexedConnection,
+    config: &janitor::config::Config,
+    publish_worker: &PublishWorker,
+    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
+    forge_rate_limiter: &mut HashMap<Forge, chrono::DateTime<Utc>>,
+    vcs_managers: Vec<Box<dyn VcsManager>>,
+    interval: chrono::Duration,
+    auto_publish: bool,
+    push_limit: Option<i32>,
+    modify_mp_limit: Option<i32>,
+    require_binary_diff: bool,
+) {
+    todo!();
+}
+
+pub async fn publish_pending_ready(
+    db: &sqlx::PgPool,
+    redis: &redis::aio::MultiplexedConnection,
+    config: &janitor::config::Config,
+    publish_worker: &PublishWorker,
+    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
+    vcs_managers: Vec<Box<dyn VcsManager>>,
+    push_limit: Option<i32>,
+    require_binary_diff: bool,
+) {
+    todo!();
+}
+
+pub async fn refresh_bucket_mp_counts(
+    db: &sqlx::PgPool,
+    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
+) {
+    todo!();
+}
+
+pub async fn listen_to_runner(
+    db: &sqlx::PgPool,
+    redis: &redis::aio::MultiplexedConnection,
+    config: &janitor::config::Config,
+    publish_worker: &PublishWorker,
+    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
+    vcs_managers: Vec<Box<dyn VcsManager>>,
+    require_binary_diff: bool,
+) {
+    todo!();
 }
 
 #[cfg(test)]
