@@ -72,6 +72,23 @@ impl std::fmt::Display for Mode {
     }
 }
 
+impl std::str::FromStr for Mode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "push-derived" => Ok(Mode::PushDerived),
+            "propose" => Ok(Mode::Propose),
+            "push" => Ok(Mode::Push),
+            "build-only" => Ok(Mode::BuildOnly),
+            "skip" => Ok(Mode::Skip),
+            "bts" => Ok(Mode::Bts),
+            "attempt-push" => Ok(Mode::AttemptPush),
+            _ => Err(format!("Unknown mode: {}", s)),
+        }
+    }
+}
+
 impl TryFrom<Mode> for silver_platter::Mode {
     type Error = String;
 
