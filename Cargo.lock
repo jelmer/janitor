@@ -2965,6 +2965,7 @@ dependencies = [
  "breezyshim",
  "chrono",
  "clap 4.5.17",
+ "debian-control",
  "debversion",
  "env_logger 0.11.5",
  "fancy-regex",
@@ -2976,6 +2977,7 @@ dependencies = [
  "lazy-regex",
  "log",
  "percent-encoding",
+ "prometheus",
  "protobuf 3.5.1",
  "protobuf-codegen 3.5.1",
  "protoc-rust",
@@ -2984,6 +2986,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "shlex",
  "silver-platter",
  "sqlx",
  "sqlx-core",
@@ -3022,6 +3025,7 @@ dependencies = [
 name = "janitor-publish"
 version = "0.0.0"
 dependencies = [
+ "axum",
  "breezyshim",
  "chrono",
  "clap 4.5.17",
@@ -3030,6 +3034,7 @@ dependencies = [
  "log",
  "maplit",
  "minijinja",
+ "prometheus",
  "pyo3",
  "redis 0.26.1",
  "reqwest",
@@ -4393,6 +4398,7 @@ dependencies = [
  "memchr",
  "parking_lot",
  "protobuf 2.28.0",
+ "reqwest",
  "thiserror",
 ]
 
