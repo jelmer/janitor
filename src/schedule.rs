@@ -27,7 +27,7 @@ fn publish_mode_value(mode: &Mode) -> usize {
 }
 
 #[derive(sqlx::FromRow)]
-struct ScheduleRequest {
+pub struct ScheduleRequest {
     codebase: String,
     branch_url: String,
     campaign: String,
@@ -36,6 +36,60 @@ struct ScheduleRequest {
     success_chance: f64,
     command: String,
     change_set: Option<String>,
+}
+
+pub async fn iter_schedule_requests_from_candidates(
+    conn: &PgPool,
+    codebases: Option<Vec<&str>>,
+    campaign: Option<&str>,
+) -> Result<impl Iterator<Item = ScheduleRequest>, sqlx::Error> {
+    let mut query = sqlx::QueryBuilder::new(
+        r###"
+SELECT
+  codebase.name AS codebase,
+  codebase.branch_url AS branch_url,
+  candidate.suite AS campaign,
+  candidate.context AS context,
+  candidate.value AS value,
+  candidate.success_chance AS success_chance,
+  array_agg(named_publish_policy.per_branch_policy.mode) AS publish_modes,
+  candidate.command AS command,
+  candidate.change_set AS change_set
+FROM candidate
+INNER JOIN codebase on codebase.name = candidate.codebase
+INNER JOIN named_publish_policy ON
+    named_publish_policy.name = candidate.publish_policy
+INNER JOIN branch_publish_policy ON branch_publish_policy.role = ANY(named_publish_policy.per_branch_policy)
+"###,
+    );
+    if let Some(codebases) = codebases {
+        query.push(" AND codebase.name = ANY(");
+        query.push_bind(codebases);
+        query.push("::text[])");
+    }
+    if let Some(campaign) = campaign {
+        query.push(" AND candidate.suite = ");
+        query.push_bind(campaign);
+    }
+
+    let query = query.build();
+
+    let rows = query.fetch_all(conn).await?;
+
+    Ok(rows.into_iter().map(|row| {
+        use sqlx::FromRow;
+        use sqlx::Row;
+        let mut req = ScheduleRequest::from_row(&row).unwrap();
+
+        let pm = row.get::<Vec<String>, _>("publish_modes");
+
+        req.value += pm
+            .iter()
+            .map(|m| publish_mode_value(&m.parse().unwrap()))
+            .sum::<usize>() as i64;
+
+        req
+    }))
 }
 
 async fn estimate_duration_campaign_codebase(
@@ -361,7 +415,7 @@ async fn do_schedule_regular(
     Ok((offset, estimated_duration, queue_id, bucket))
 }
 
-async fn bulk_add_to_queue(
+pub async fn bulk_add_to_queue(
     conn: &PgPool,
     todo: &[ScheduleRequest],
     dry_run: bool,
@@ -472,7 +526,7 @@ async fn deps_satisfied(
     Ok(true)
 }
 
-async fn do_schedule_control(
+pub async fn do_schedule_control(
     conn: &PgPool,
     codebase: &str,
     change_set: Option<&str>,
@@ -526,7 +580,7 @@ impl From<sqlx::Error> for Error {
     }
 }
 
-async fn do_schedule(
+pub async fn do_schedule(
     conn: &PgPool,
     campaign: &str,
     codebase: &str,
