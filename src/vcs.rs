@@ -7,6 +7,7 @@ use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use silver_platter::vcs::BranchOpenError;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
 
@@ -37,7 +38,7 @@ impl<'a> Deserialize<'a> for VcsType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, std::hash::Hash)]
 pub enum VcsType {
     Bzr,
     Git,
@@ -292,7 +293,7 @@ pub struct RevisionInfo {
 pub const EMPTY_GIT_TREE: &[u8] = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 #[async_trait]
-pub trait VcsManager: Send + Sync{
+pub trait VcsManager: Send + Sync {
     fn get_branch(
         &self,
         codebase: &str,
@@ -820,4 +821,80 @@ fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
             None => Ok(None),
         },
     }
+}
+
+pub fn get_vcs_managers(location: &str) -> HashMap<VcsType, Box<dyn VcsManager>> {
+    if !location.contains("=") {
+        vec![
+            (
+                VcsType::Git,
+                Box::new(RemoteGitVcsManager::new(
+                    Url::parse(location).unwrap().join("git").unwrap(),
+                )) as Box<dyn VcsManager>,
+            ),
+            (
+                VcsType::Bzr,
+                Box::new(RemoteBzrVcsManager::new(
+                    Url::parse(location).unwrap().join("bzr").unwrap(),
+                )) as Box<dyn VcsManager>,
+            ),
+        ]
+        .into_iter()
+        .collect()
+    } else {
+        let mut ret: HashMap<VcsType, Box<dyn VcsManager>> = HashMap::new();
+        for p in location.split(",") {
+            match p.split_once("=") {
+                Some(("git", v)) => {
+                    ret.insert(
+                        VcsType::Git,
+                        Box::new(RemoteGitVcsManager::new(Url::parse(v).unwrap())),
+                    );
+                }
+                Some(("bzr", v)) => {
+                    ret.insert(
+                        VcsType::Bzr,
+                        Box::new(RemoteBzrVcsManager::new(Url::parse(v).unwrap())),
+                    );
+                }
+                _ => panic!("unsupported vcs"),
+            }
+        }
+        ret
+    }
+}
+
+pub fn get_vcs_managers_from_config(
+    config: &crate::config::Config,
+) -> HashMap<VcsType, Box<dyn VcsManager>> {
+    let mut ret: HashMap<VcsType, Box<dyn VcsManager>> = HashMap::new();
+    if let Some(git_location) = config.git_location.as_ref() {
+        let url = Url::parse(git_location).unwrap();
+        if url.scheme() == "file" {
+            ret.insert(
+                VcsType::Git,
+                Box::new(LocalGitVcsManager::new(url.to_file_path().unwrap())),
+            );
+        } else {
+            ret.insert(
+                VcsType::Git,
+                Box::new(RemoteGitVcsManager::new(url.clone())),
+            );
+        }
+    }
+    if let Some(bzr_location) = config.bzr_location.as_ref() {
+        let url = Url::parse(bzr_location).unwrap();
+        if url.scheme() == "file" {
+            ret.insert(
+                VcsType::Bzr,
+                Box::new(LocalBzrVcsManager::new(url.to_file_path().unwrap())),
+            );
+        } else {
+            ret.insert(
+                VcsType::Bzr,
+                Box::new(RemoteBzrVcsManager::new(url.clone())),
+            );
+        }
+    }
+    ret
 }
