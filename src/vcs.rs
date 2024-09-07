@@ -292,7 +292,7 @@ pub struct RevisionInfo {
 pub const EMPTY_GIT_TREE: &[u8] = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 #[async_trait]
-pub trait VcsManager {
+pub trait VcsManager: Send + Sync{
     fn get_branch(
         &self,
         codebase: &str,
