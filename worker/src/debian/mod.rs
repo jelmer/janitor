@@ -227,22 +227,6 @@ pub fn debian_make_changes(
     }
 }
 
-#[derive(Debug)]
-pub struct BuildFailure {
-    pub code: String,
-    pub description: String,
-    pub details: Option<serde_json::Value>,
-    pub stage: Vec<String>,
-}
-
-impl std::fmt::Display for BuildFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.description)
-    }
-}
-
-impl std::error::Error for BuildFailure {}
-
 pub fn build_from_config(
     local_tree: &WorkingTree,
     subpath: &std::path::Path,
