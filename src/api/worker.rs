@@ -91,7 +91,7 @@ impl Metadata {
     pub fn update(&mut self, failure: &WorkerFailure) {
         self.code = Some(failure.code.clone());
         self.description = Some(failure.description.clone());
-        self.failure_details = failure.details.clone();
+        self.failure_details.clone_from(&failure.details);
         self.stage = Some(failure.stage.join("/"));
         self.transient = failure.transient;
     }
