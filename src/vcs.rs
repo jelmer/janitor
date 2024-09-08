@@ -323,6 +323,7 @@ pub trait VcsManager: Send + Sync {
     ) -> Vec<RevisionInfo>;
 }
 
+#[derive(Clone, Debug)]
 pub struct LocalGitVcsManager {
     base_path: PathBuf,
 }
@@ -465,6 +466,7 @@ impl VcsManager for LocalGitVcsManager {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct LocalBzrVcsManager {
     base_path: PathBuf,
 }
@@ -591,6 +593,7 @@ impl VcsManager for LocalBzrVcsManager {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct RemoteGitVcsManager {
     base_url: Url,
 }
@@ -703,6 +706,7 @@ impl VcsManager for RemoteGitVcsManager {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct RemoteBzrVcsManager {
     base_url: Url,
 }
