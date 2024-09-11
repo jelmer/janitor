@@ -57,3 +57,8 @@ tower = { version = "0.5.1", features = ["util"] }
 name = "janitor-worker"
 path = "src/bin/worker.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "janitor-dist"
+path = "src/bin/dist.rs"
+required-features = ["cli"]
