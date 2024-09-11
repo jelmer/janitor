@@ -94,31 +94,35 @@ pub fn debian_make_changes(
     })
     .unwrap();
 
-    let mut dist_command = format!(
-        "PYTHONPATH={} {} -m janitor.debian.dist --log-directory={} '",
-        sys_path,
-        sys_executable,
-        log_directory.display()
-    );
+    let mut dist_command = vec!["janitor-dist".to_string(), format!("--log-directory={}", log_directory.display())];
+    let mut dist_env = HashMap::new();
 
     if let Some(chroot) = env.get("CHROOT") {
-        dist_command = format!("SCHROOT={} {}", chroot, dist_command);
+        dist_env.insert("SCHROOT".to_string(), chroot.to_string());
     }
 
     let debian_path = subpath.join("debian");
 
     if local_tree.has_filename(&debian_path) {
-        dist_command.push_str(
+        dist_command.push(
             format!(
-                " --packaging={}",
+                "--packaging={}",
                 local_tree.abspath(&debian_path).unwrap().display()
             )
-            .as_str(),
         );
     }
 
     // Prevent 404s because files have gone away:
-    dist_command.push_str(" --apt-update --apt-dist-upgrade");
+    dist_command.push("--apt-update".to_string());
+    dist_command.push("--apt-dist-upgrade".to_string());
+
+    let dist_env = dist_env.into_iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(" ");
+    let dist_command = shlex::try_join(dist_command.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap();
+    let dist_command = if !dist_env.is_empty() {
+        format!("{} {}", dist_env, dist_command)
+    } else {
+        format!("{}", dist_command)
+    };
 
     let mut extra_env = HashMap::new();
     extra_env.insert("DIST".to_string(), dist_command);
