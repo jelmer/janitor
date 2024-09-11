@@ -1,11 +1,11 @@
-use clap::Parser;
-use std::path::PathBuf;
 use breezyshim::error::Error as BrzError;
+use clap::Parser;
 use ognibuild::analyze::AnalyzedError;
-use ognibuild::logs::{LogManager, NoLogManager, DirectoryLogManager, LogMode};
 use ognibuild::buildsystem::Error;
 use ognibuild::dist::dist;
+use ognibuild::logs::{DirectoryLogManager, LogManager, LogMode, NoLogManager};
 use ognibuild::session::Session;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Args {
@@ -64,28 +64,34 @@ fn main() -> Result<(), i32> {
     let package = std::env::var("PACKAGE").ok();
     let version = std::env::var("VERSION").ok();
 
-    let subdir = package.unwrap_or_else(||"package".to_owned());
+    let subdir = package.unwrap_or_else(|| "package".to_owned());
 
     #[cfg(target_os = "linux")]
-    let session = ognibuild::session::schroot::SchrootSession::new(&args.schroot, None).unwrap();
+    let mut session: Box<dyn Session> = if let Some(schroot) = args.schroot {
+        Box::new(ognibuild::session::schroot::SchrootSession::new(&schroot, None).unwrap())
+    } else {
+        Box::new(ognibuild::session::plain::PlainSession::new())
+    };
 
     #[cfg(not(target_os = "linux"))]
-    let mut session = ognibuild::session::plain::PlainSession::new();
+    let mut session: Box<dyn Session> = Box::new(ognibuild::session::plain::PlainSession::new());
 
     #[cfg(feature = "debian")]
     if args.apt_update {
-        ognibuild::debian::apt::run_apt(&session, vec!["update"], vec![]).unwrap();
+        ognibuild::debian::apt::run_apt(session.as_ref(), vec!["update"], vec![]).unwrap();
     }
     #[cfg(feature = "debian")]
     if args.apt_dist_upgrade {
-        ognibuild::debian::apt::run_apt(&session, vec!["dist-upgrade"], vec![]).unwrap();
+        ognibuild::debian::apt::run_apt(session.as_ref(), vec!["dist-upgrade"], vec![]).unwrap();
     }
 
     let project = match breezyshim::workingtree::open(&args.directory) {
-        Ok(tree) => session.project_from_vcs(&tree, Some(true), Some(&subdir)).unwrap(),
-        Err(BrzError::NotBranchError(..)) => {
-            session.project_from_directory(&args.directory, Some(&subdir)).unwrap()
-        }
+        Ok(tree) => session
+            .project_from_vcs(&tree, Some(true), Some(&subdir))
+            .unwrap(),
+        Err(BrzError::NotBranchError(..)) => session
+            .project_from_directory(&args.directory, Some(&subdir))
+            .unwrap(),
         Err(e) => {
             report_failure("vcs-error", &format!("Error opening working tree: {}", e));
         }
@@ -93,43 +99,71 @@ fn main() -> Result<(), i32> {
 
     #[cfg(feature = "debian")]
     let (packaging_tree, packaging_debian_path) = if let Some(packaging) = args.packaging {
-        let (packaging_tree, packaging_debian_path) = breezyshim::workingtree::open_containing(
-            &packaging
-        ).unwrap();
+        let (packaging_tree, packaging_debian_path) =
+            breezyshim::workingtree::open_containing(&packaging).unwrap();
 
-        match ognibuild::debian::satisfy_build_deps(&session, &packaging_tree, &packaging_debian_path) {
+        match ognibuild::debian::satisfy_build_deps(
+            session.as_ref(),
+            &packaging_tree,
+            &packaging_debian_path,
+        ) {
             Ok(_) => (Some(packaging_tree), Some(packaging_debian_path)),
             Err(ognibuild::debian::apt::Error::Detailed { error, .. }) => {
                 let error = error.unwrap();
-                log::warn!("Ignoring error installing declared build dependencies ({}): {:?}", error.kind(), error);
+                log::warn!(
+                    "Ignoring error installing declared build dependencies ({}): {:?}",
+                    error.kind(),
+                    error
+                );
                 if args.require_declared {
                     report_failure(error.kind().as_ref(), &error.to_string());
                 }
                 (None, None)
             }
-            Err(ognibuild::debian::apt::Error::Unidentified { lines, secondary, args: argv, ..}) => {
+            Err(ognibuild::debian::apt::Error::Unidentified {
+                lines,
+                secondary,
+                args: argv,
+                ..
+            }) => {
                 if let Some(secondary) = secondary {
-                    log::warn!("Ignoring error installing declared build dependencies ({:?}): {}", argv, secondary.line());
+                    log::warn!(
+                        "Ignoring error installing declared build dependencies ({:?}): {}",
+                        argv,
+                        secondary.line()
+                    );
                     if args.require_declared {
                         report_failure("command-failed", &secondary.line());
                     }
                 } else if lines.len() == 1 {
-                    log::warn!("Ignoring error installing declared build dependencies ({:?}): {}", argv, lines[0]);
+                    log::warn!(
+                        "Ignoring error installing declared build dependencies ({:?}): {}",
+                        argv,
+                        lines[0]
+                    );
                 } else {
-                    log::warn!("Ignoring error installing declared build dependencies ({:?}): {:?}", argv, lines);
+                    log::warn!(
+                        "Ignoring error installing declared build dependencies ({:?}): {:?}",
+                        argv,
+                        lines
+                    );
                 }
                 if args.require_declared {
                     report_failure("command-failed", &lines.join("\n"));
                 }
                 (None, None)
             }
-            Err(ognibuild::debian::apt::Error::Session(ognibuild::session::Error::SetupFailure(e, _))) => {
+            Err(ognibuild::debian::apt::Error::Session(
+                ognibuild::session::Error::SetupFailure(e, _),
+            )) => {
                 report_failure("session-setup-failure", &e.to_string());
             }
             Err(ognibuild::debian::apt::Error::Session(ognibuild::session::Error::IoError(e))) => {
                 report_failure("session-io-error", &e.to_string());
             }
-            Err(ognibuild::debian::apt::Error::Session(ognibuild::session::Error::CalledProcessError(e))) => {
+            Err(ognibuild::debian::apt::Error::Session(
+                ognibuild::session::Error::CalledProcessError(e),
+            )) => {
                 report_failure("session-process-error", &e.to_string());
             }
         }
@@ -137,15 +171,30 @@ fn main() -> Result<(), i32> {
         (None, None)
     };
 
-    let target_dir = args.directory.join(&args.target_dir).canonicalize().unwrap();
+    let target_dir = args
+        .directory
+        .join(&args.target_dir)
+        .canonicalize()
+        .unwrap();
 
     let mut log_manager: Box<dyn LogManager> = if let Some(log_directory) = args.log_directory {
-        Box::new(DirectoryLogManager::new(log_directory.join("dist.log"), LogMode::Redirect))
+        Box::new(DirectoryLogManager::new(
+            log_directory.join("dist.log"),
+            LogMode::Redirect,
+        ))
     } else {
         Box::new(NoLogManager)
     };
 
-    match dist(&mut session, project.external_path(), project.internal_path(), &target_dir, log_manager.as_mut(), version.as_deref().as_deref(), !args.logging.debug) {
+    match dist(
+        session.as_mut(),
+        project.external_path(),
+        project.internal_path(),
+        &target_dir,
+        log_manager.as_mut(),
+        version.as_deref().as_deref(),
+        !args.logging.debug,
+    ) {
         Ok(t) => {
             log::info!("Dist tarball {} created successfully", t.to_str().unwrap());
         }
@@ -156,7 +205,11 @@ fn main() -> Result<(), i32> {
             log::warn!("No build system detected, falling back to simple export.");
             return Err(2);
         }
-        Err(Error::Error(AnalyzedError::Unidentified { retcode, lines, secondary })) => {
+        Err(Error::Error(AnalyzedError::Unidentified {
+            retcode,
+            lines,
+            secondary,
+        })) => {
             if let Some(secondary) = secondary {
                 report_failure("command-failed", &secondary.line());
             } else if lines.len() == 1 {
