@@ -4,11 +4,12 @@ use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
 use janitor::publish::Mode;
-use janitor::vcs::VcsManager;
+use janitor::vcs::{VcsManager, VcsType};
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 pub mod publish_one;
 pub mod rate_limiter;
@@ -218,7 +219,7 @@ pub struct PublishWorker {
     pub template_env_path: Option<PathBuf>,
     pub external_url: Option<url::Url>,
     pub differ_url: url::Url,
-    pub redis: Option<redis::aio::MultiplexedConnection>,
+    pub redis: Option<redis::aio::ConnectionManager>,
     pub lock_manager: Option<rslock::LockManager>,
 }
 
@@ -270,7 +271,7 @@ async fn run_worker_process(
         .stderr(std::process::Stdio::piped())
         .spawn()?;
 
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::io::AsyncWriteExt;
     p.stdin
         .as_mut()
         .unwrap()
@@ -311,18 +312,13 @@ async fn run_worker_process(
 }
 
 impl PublishWorker {
-    async fn new(
+    pub async fn new(
         template_env_path: Option<PathBuf>,
         external_url: Option<url::Url>,
         differ_url: url::Url,
-        redis: Option<redis::Client>,
+        redis: Option<redis::aio::ConnectionManager>,
         lock_manager: Option<rslock::LockManager>,
     ) -> Self {
-        let redis = if let Some(redis) = redis {
-            Some(redis.get_multiplexed_async_connection().await.unwrap())
-        } else {
-            None
-        };
         Self {
             template_env_path,
             external_url,
@@ -569,13 +565,13 @@ fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>
 }
 
 pub async fn process_queue_loop(
-    db: &sqlx::PgPool,
-    redis: &redis::aio::MultiplexedConnection,
+    db: sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
-    publish_worker: &PublishWorker,
-    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
-    forge_rate_limiter: &mut HashMap<Forge, chrono::DateTime<Utc>>,
-    vcs_managers: Vec<Box<dyn VcsManager>>,
+    publish_worker: Arc<Mutex<PublishWorker>>,
+    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<Utc>>>>,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     interval: chrono::Duration,
     auto_publish: bool,
     push_limit: Option<i32>,
@@ -586,32 +582,32 @@ pub async fn process_queue_loop(
 }
 
 pub async fn publish_pending_ready(
-    db: &sqlx::PgPool,
-    redis: &redis::aio::MultiplexedConnection,
+    db: sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
-    publish_worker: &PublishWorker,
-    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
-    vcs_managers: Vec<Box<dyn VcsManager>>,
+    publish_worker: Arc<Mutex<PublishWorker>>,
+    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     push_limit: Option<i32>,
     require_binary_diff: bool,
-) {
+) -> Result<(), PublishError> {
     todo!();
 }
 
 pub async fn refresh_bucket_mp_counts(
-    db: &sqlx::PgPool,
-    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
+    db: sqlx::PgPool,
+    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
 ) {
     todo!();
 }
 
 pub async fn listen_to_runner(
-    db: &sqlx::PgPool,
-    redis: &redis::aio::MultiplexedConnection,
+    db: sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
-    publish_worker: &PublishWorker,
-    bucket_rate_limiter: &mut dyn rate_limiter::RateLimiter,
-    vcs_managers: Vec<Box<dyn VcsManager>>,
+    publish_worker: Arc<Mutex<PublishWorker>>,
+    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     require_binary_diff: bool,
 ) {
     todo!();
