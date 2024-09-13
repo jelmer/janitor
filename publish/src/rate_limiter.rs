@@ -39,12 +39,12 @@ impl RateLimiter for NonRateLimiter {
 }
 
 pub struct FixedRateLimiter {
-    max_mps_per_bucket: Option<usize>,
+    max_mps_per_bucket: usize,
     open_mps_per_bucket: Option<HashMap<String, usize>>,
 }
 
 impl FixedRateLimiter {
-    pub fn new(max_mps_per_bucket: Option<usize>) -> Self {
+    pub fn new(max_mps_per_bucket: usize) -> Self {
         FixedRateLimiter {
             max_mps_per_bucket,
             open_mps_per_bucket: None,
@@ -61,16 +61,11 @@ impl RateLimiter for FixedRateLimiter {
     }
 
     fn check_allowed(&self, bucket: &str) -> bool {
-        if let Some(max_mps_per_bucket) = self.max_mps_per_bucket {
-            if let Some(open_mps_per_bucket) = &self.open_mps_per_bucket {
-                if let Some(current) = open_mps_per_bucket.get(bucket) {
-                    if *current > max_mps_per_bucket {
-                        return false;
-                    }
+        if let Some(open_mps_per_bucket) = &self.open_mps_per_bucket {
+            if let Some(current) = open_mps_per_bucket.get(bucket) {
+                if *current > self.max_mps_per_bucket {
+                    return false;
                 }
-            } else {
-                // Be conservative
-                return false;
             }
         } else {
             // Be conservative
@@ -89,13 +84,11 @@ impl RateLimiter for FixedRateLimiter {
     }
 
     fn get_stats(&self) -> Option<RateLimitStats> {
-        if let Some(open_mps_per_bucket) = &self.open_mps_per_bucket {
-            Some(RateLimitStats {
+        self.open_mps_per_bucket
+            .as_ref()
+            .map(|open_mps_per_bucket| RateLimitStats {
                 per_bucket: open_mps_per_bucket.clone(),
             })
-        } else {
-            None
-        }
     }
 }
 

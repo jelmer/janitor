@@ -1,10 +1,25 @@
-use crate::debian::BuildFailure;
-use janitor::api::worker::DebianBuildConfig;
 use breezyshim::tree::{Tree, WorkingTree};
+use janitor::api::worker::DebianBuildConfig;
 use ognibuild::debian::build::{BuildOnceError, BuildOnceResult};
 use ognibuild::debian::context::Phase;
 use ognibuild::debian::fix_build::IterateBuildError;
 use ognibuild::session::Session;
+
+#[derive(Debug)]
+pub struct BuildFailure {
+    pub code: String,
+    pub description: String,
+    pub details: Option<serde_json::Value>,
+    pub stage: Vec<String>,
+}
+
+impl std::fmt::Display for BuildFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.description)
+    }
+}
+
+impl std::error::Error for BuildFailure {}
 
 pub(crate) fn build(
     local_tree: &WorkingTree,
