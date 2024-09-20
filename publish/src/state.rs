@@ -1,4 +1,5 @@
 use crate::Mode;
+use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
 use sqlx::PgPool;
 use url::Url;
@@ -142,4 +143,144 @@ order by timestamp desc limit 1
     .fetch_optional(conn)
     .await?;
     Ok(row.and_then(|(timestamp,)| timestamp))
+}
+
+async fn guess_codebase_from_branch_url(
+    conn: &PgPool,
+    url: &url::Url,
+    possible_transports: Option<&mut Vec<Transport>>,
+) -> Result<Option<String>, sqlx::Error> {
+    let url = url
+        .to_string()
+        .trim_end_matches('/')
+        .parse::<Url>()
+        .unwrap();
+    // TODO(jelmer): use codebase table
+    let query = sqlx::query_as::<_, (String, String)>(
+        r#"""
+SELECT
+  name, branch_url
+FROM
+  codebase
+WHERE
+  TRIM(trailing '/' from branch_url) = ANY($1::text[])
+ORDER BY length(branch_url) DESC
+"""#,
+    );
+    let (repo_url, params) = breezyshim::urlutils::split_segment_parameters(&url);
+    let branch = params
+        .get("branch")
+        .map(|b| breezyshim::urlutils::unescape_utf8(b));
+    let result = query
+        .bind(url.to_string())
+        .bind(repo_url.to_string().trim_end_matches('/'))
+        .fetch_optional(&*conn)
+        .await?;
+
+    if result.is_none() {
+        return Ok(None);
+    }
+
+    let result = result.unwrap();
+
+    if &url.to_string() == result.1.trim_end_matches('/') {
+        return Ok(Some(result.0));
+    }
+
+    let source_branch = tokio::task::spawn_blocking(move || {
+        silver_platter::vcs::open_branch(&result.1.parse().unwrap(), Some(&mut vec![]), None, None)
+    })
+    .await
+    .unwrap()
+    .unwrap();
+    if source_branch
+        .get_user_url()
+        .to_string()
+        .trim_end_matches("/")
+        != url.to_string().trim_end_matches("/")
+        && source_branch.name() != branch
+    {
+        log::info!(
+            "Did not resolve branch URL to codebase: {} ({}) != {} ({})",
+            source_branch.get_user_url(),
+            source_branch.name().unwrap_or("".to_string()),
+            url,
+            branch.unwrap_or("".to_string()),
+        );
+        return Ok(None);
+    }
+    Ok(Some(result.0))
+}
+
+#[derive(sqlx::FromRow)]
+pub struct MergeProposalRun {
+    id: String,
+    campaign: String,
+    branch_url: String,
+    command: String,
+    value: i64,
+    role: String,
+    remote_branch_name: String,
+    revision: RevisionId,
+    codebase: String,
+    change_set: String,
+}
+
+async fn get_merge_proposal_run(
+    conn: &PgPool,
+    mp_url: &url::Url,
+) -> Result<Option<MergeProposalRun>, sqlx::Error> {
+    sqlx::query_as::<_, MergeProposalRun>(
+        r#"
+SELECT
+    run.id AS id,
+    run.suite AS campaign,
+    run.branch_url AS branch_url,
+    run.command AS command,
+    run.value AS value,
+    rb.role AS role,
+    rb.remote_name AS remote_branch_name,
+    rb.revision AS revision,
+    run.codebase AS codebase,
+    run.change_set AS change_set
+FROM new_result_branch rb
+RIGHT JOIN run ON rb.run_id = run.id
+WHERE rb.revision IN (
+    SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
+ORDER BY run.finish_time DESC
+LIMIT 1
+"#,
+    )
+    .bind(mp_url.to_string())
+    .fetch_optional(conn)
+    .await
+}
+
+async fn get_last_effective_run(
+    conn: &PgPool,
+    codebase: &str,
+    campaign: &str,
+) -> Result<Option<janitor::state::Run>, sqlx::Error> {
+    sqlx::query_as(
+        r#"""
+SELECT
+    id, command, start_time, finish_time, description,
+    result_code,
+    value, main_branch_revision, revision, context, result, suite,
+    instigated_context, vcs_type, branch_url, logfilenames,
+    worker,
+    array(SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+    result_tags, target_branch_url, change_set AS change_set,
+    failure_transient, failure_stage, codebase
+FROM
+    last_effective_runs
+WHERE codebase = $1 AND suite = $2
+LIMIT 1
+"""#,
+    )
+    .bind(codebase)
+    .bind(campaign)
+    .fetch_optional(&*conn)
+    .await
 }
