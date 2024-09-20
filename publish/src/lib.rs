@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+pub mod proposal_info;
 pub mod publish_one;
 pub mod rate_limiter;
 pub mod state;
