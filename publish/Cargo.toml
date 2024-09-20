@@ -10,7 +10,7 @@ homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
 axum = { workspace = true }
-breezyshim.workspace = true
+breezyshim = { workspace = true, features = ["sqlx"] }
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 debian-changelog = "0.1.12"
