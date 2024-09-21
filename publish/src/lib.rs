@@ -575,10 +575,6 @@ fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>
 
 pub async fn process_queue_loop(
     state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     interval: chrono::Duration,
     auto_publish: bool,
     modify_mp_limit: Option<i32>,
@@ -589,10 +585,6 @@ pub async fn process_queue_loop(
 
 pub async fn publish_pending_ready(
     state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     require_binary_diff: bool,
 ) -> Result<(), PublishError> {
     todo!();
@@ -629,14 +621,7 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
     Ok(())
 }
 
-pub async fn listen_to_runner(
-    state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    require_binary_diff: bool,
-) {
+pub async fn listen_to_runner(state: Arc<AppState>, require_binary_diff: bool) {
     todo!();
 }
 
@@ -676,4 +661,40 @@ pub struct AppState {
     pub bucket_rate_limiter: Mutex<Box<dyn rate_limiter::RateLimiter>>,
     pub forge_rate_limiter: Mutex<HashMap<Forge, chrono::DateTime<Utc>>>,
     pub push_limit: Option<usize>,
+    pub redis: Option<redis::aio::ConnectionManager>,
+    pub config: &'static janitor::config::Config,
+    pub publish_worker: PublishWorker,
+    pub vcs_managers: HashMap<VcsType, Box<dyn VcsManager>>,
+}
+
+#[derive(Debug)]
+pub enum CheckMpError {
+    NoRunForMergeProposal(url::Url),
+    BranchRateLimited,
+}
+
+impl std::fmt::Display for CheckMpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            CheckMpError::NoRunForMergeProposal(url) => {
+                write!(f, "No run for merge proposal: {}", url)
+            }
+            CheckMpError::BranchRateLimited => write!(f, "Branch is rate limited"),
+        }
+    }
+}
+
+impl std::error::Error for CheckMpError {}
+
+async fn check_existing_mp(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    mp: &breezyshim::forge::MergeProposal,
+    status: &str,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+) -> Result<(), CheckMpError> {
+    todo!()
 }
