@@ -2747,8 +2747,10 @@ name = "janitor-runner"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "axum",
  "breezyshim",
  "chrono",
+ "clap",
  "debian-control",
  "debversion",
  "janitor",
