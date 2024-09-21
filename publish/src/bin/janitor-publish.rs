@@ -52,7 +52,7 @@ struct Args {
 
     /// Limit number of pushes per cycle.
     #[clap(long)]
-    push_limit: Option<i32>,
+    push_limit: Option<usize>,
 
     /// Require a binary diff when publishing merge requests.
     #[clap(long)]
@@ -104,7 +104,7 @@ async fn main() -> Result<(), i32> {
             Box::new(NonRateLimiter) as Box<dyn RateLimiter>
         });
 
-    let forge_rate_limiter = Arc::new(Mutex::new(HashMap::new()));
+    let forge_rate_limiter = Mutex::new(HashMap::new());
 
     let vcs_managers = Box::new(janitor::vcs::get_vcs_managers_from_config(config));
     let vcs_managers: &'static _ = Box::leak(vcs_managers);
@@ -150,6 +150,8 @@ async fn main() -> Result<(), i32> {
     let state = Arc::new(janitor_publish::AppState {
         conn: db.clone(),
         bucket_rate_limiter,
+        forge_rate_limiter,
+        push_limit: args.push_limit,
     });
 
     if args.once {
@@ -159,7 +161,6 @@ async fn main() -> Result<(), i32> {
             config,
             publish_worker.clone(),
             vcs_managers,
-            args.push_limit,
             args.require_binary_diff,
         )
         .await
@@ -184,11 +185,9 @@ async fn main() -> Result<(), i32> {
             redis_async_connection.clone(),
             config,
             publish_worker.clone(),
-            forge_rate_limiter.clone(),
             vcs_managers,
             chrono::Duration::seconds(args.interval),
             !args.no_auto_publish,
-            args.push_limit,
             args.modify_mp_limit,
             args.require_binary_diff,
         ));
@@ -207,11 +206,9 @@ async fn main() -> Result<(), i32> {
         let app = janitor_publish::web::app(
             state.clone(),
             publish_worker.clone(),
-            forge_rate_limiter.clone(),
             vcs_managers,
             args.require_binary_diff,
             args.modify_mp_limit,
-            args.push_limit,
             redis_async_connection.clone(),
             config,
         );

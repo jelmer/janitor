@@ -578,11 +578,9 @@ pub async fn process_queue_loop(
     redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
     publish_worker: Arc<Mutex<PublishWorker>>,
-    forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<Utc>>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     interval: chrono::Duration,
     auto_publish: bool,
-    push_limit: Option<i32>,
     modify_mp_limit: Option<i32>,
     require_binary_diff: bool,
 ) {
@@ -595,7 +593,6 @@ pub async fn publish_pending_ready(
     config: &janitor::config::Config,
     publish_worker: Arc<Mutex<PublishWorker>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    push_limit: Option<i32>,
     require_binary_diff: bool,
 ) -> Result<(), PublishError> {
     todo!();
@@ -677,4 +674,6 @@ mod tests {
 pub struct AppState {
     pub conn: sqlx::PgPool,
     pub bucket_rate_limiter: Mutex<Box<dyn rate_limiter::RateLimiter>>,
+    pub forge_rate_limiter: Mutex<HashMap<Forge, chrono::DateTime<Utc>>>,
+    pub push_limit: Option<usize>,
 }
