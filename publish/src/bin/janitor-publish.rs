@@ -106,8 +106,7 @@ async fn main() -> Result<(), i32> {
 
     let forge_rate_limiter = Mutex::new(HashMap::new());
 
-    let vcs_managers = Box::new(janitor::vcs::get_vcs_managers_from_config(config));
-    let vcs_managers: &'static _ = Box::leak(vcs_managers);
+    let vcs_managers = janitor::vcs::get_vcs_managers_from_config(config);
     let db = janitor::state::create_pool(config).await.map_err(|e| {
         log::error!("Failed to create database pool: {}", e);
         1
@@ -136,38 +135,33 @@ async fn main() -> Result<(), i32> {
         .as_deref()
         .map(|redis_location| rslock::LockManager::new(vec![redis_location]));
 
-    let publish_worker = Arc::new(Mutex::new(
-        janitor_publish::PublishWorker::new(
-            args.template_env_path,
-            args.external_url,
-            args.differ_url,
-            redis_async_connection.clone(),
-            lock_manager,
-        )
-        .await,
-    ));
+    let publish_worker = janitor_publish::PublishWorker::new(
+        args.template_env_path,
+        args.external_url,
+        args.differ_url,
+        redis_async_connection.clone(),
+        lock_manager,
+    )
+    .await;
 
     let state = Arc::new(janitor_publish::AppState {
         conn: db.clone(),
         bucket_rate_limiter,
         forge_rate_limiter,
         push_limit: args.push_limit,
+        config,
+        redis: redis_async_connection,
+        vcs_managers,
+        publish_worker,
     });
 
     if args.once {
-        janitor_publish::publish_pending_ready(
-            state,
-            redis_async_connection.clone(),
-            config,
-            publish_worker.clone(),
-            vcs_managers,
-            args.require_binary_diff,
-        )
-        .await
-        .map_err(|e| {
-            log::error!("Failed to publish pending proposals: {}", e);
-            1
-        })?;
+        janitor_publish::publish_pending_ready(state, args.require_binary_diff)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to publish pending proposals: {}", e);
+                1
+            })?;
 
         if let Some(prometheus) = args.prometheus.as_ref() {
             janitor::prometheus::push_to_gateway(
@@ -182,10 +176,6 @@ async fn main() -> Result<(), i32> {
     } else {
         tokio::spawn(janitor_publish::process_queue_loop(
             state.clone(),
-            redis_async_connection.clone(),
-            config,
-            publish_worker.clone(),
-            vcs_managers,
             chrono::Duration::seconds(args.interval),
             !args.no_auto_publish,
             args.modify_mp_limit,
@@ -196,21 +186,13 @@ async fn main() -> Result<(), i32> {
 
         tokio::spawn(janitor_publish::listen_to_runner(
             state.clone(),
-            redis_async_connection.clone(),
-            config,
-            publish_worker.clone(),
-            vcs_managers,
             args.require_binary_diff,
         ));
 
         let app = janitor_publish::web::app(
             state.clone(),
-            publish_worker.clone(),
-            vcs_managers,
             args.require_binary_diff,
             args.modify_mp_limit,
-            redis_async_connection.clone(),
-            config,
         );
 
         // run it

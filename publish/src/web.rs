@@ -1,6 +1,6 @@
 use crate::rate_limiter::RateLimiter;
 use crate::AppState;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post, put};
@@ -83,8 +83,47 @@ async fn check_stragglers() {
     unimplemented!()
 }
 
-async fn refresh_status() {
-    unimplemented!()
+async fn refresh_status(
+    State(state): State<Arc<AppState>>,
+    Query(url): Query<url::Url>,
+) -> impl IntoResponse {
+    log::info!("Request to refresh proposal status for {}", url);
+
+    async fn scan(state: Arc<AppState>, url: url::Url) {
+        let mp = breezyshim::forge::get_proposal_by_url(&url).unwrap();
+        let status = if mp.is_merged().unwrap() {
+            "merged"
+        } else if mp.is_closed().unwrap() {
+            "closed"
+        } else {
+            "open"
+        };
+        match crate::check_existing_mp(
+            &state.conn,
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &mp,
+            status,
+            &state.vcs_managers,
+            &state.bucket_rate_limiter,
+        )
+        .await
+        {
+            Ok(_) => {
+                log::info!("Refreshed proposal status for {}", url);
+            }
+            Err(crate::CheckMpError::NoRunForMergeProposal(url)) => {
+                log::info!("Unable to find stored metadata for {}, skipping", url);
+            }
+            Err(crate::CheckMpError::BranchRateLimited) => {
+                log::info!("Rate-limited accessing {}, skipping", url);
+            }
+        }
+    }
+
+    tokio::spawn(scan(state.clone(), url));
+    (StatusCode::ACCEPTED, "Refresh of proposal status started")
 }
 
 async fn autopublish() {
@@ -477,12 +516,8 @@ WHERE run.id = $1
 
 pub fn app(
     state: Arc<AppState>,
-    worker: Arc<Mutex<crate::PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     require_binary_diff: bool,
     modify_mp_limit: Option<i32>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
 ) -> Router {
     Router::new()
         .route(
