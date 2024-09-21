@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
 use janitor::vcs::{VcsManager, VcsType};
 use sqlx::PgPool;
@@ -63,8 +64,89 @@ async fn publish() {
     unimplemented!()
 }
 
-async fn get_credentials() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ForgeCredentials {
+    kind: String,
+    name: String,
+    url: url::Url,
+    user: Option<String>,
+    user_url: Option<url::Url>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Credentials {
+    ssh_keys: Vec<String>,
+    pgp_keys: Vec<String>,
+    hosting: Vec<ForgeCredentials>,
+}
+
+async fn get_credentials(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut ssh_keys = vec![];
+
+    let ssh_dir = std::env::home_dir().unwrap().join(".ssh");
+
+    for entry in std::fs::read_dir(ssh_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().unwrap() == "pub" {
+            let f = std::fs::File::open(path).unwrap();
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(f);
+            let lines = reader.lines();
+            ssh_keys.extend(lines.map(|l| l.unwrap().trim().to_string()));
+        }
+    }
+
+    let mut pgp_keys = vec![];
+    for gpg_entry in state.gpg.keylist(true) {
+        pgp_keys.push(String::from_utf8(state.gpg.key_export_minimal(&gpg_entry.fpr)).unwrap());
+    }
+
+    let mut hosting = vec![];
+    for instance in breezyshim::forge::iter_forge_instances() {
+        let current_user = match instance.get_current_user() {
+            Ok(user) => user,
+            Err(BrzError::ForgeLoginRequired) => continue,
+            Err(BrzError::UnsupportedForge(..)) => {
+                // WTF? Well, whatever.
+                continue;
+            }
+            Err(BrzError::RedirectRequested { .. }) => {
+                // This should never happen; forge implementation is meant to either ignore or handle this redirect.
+                continue;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Error getting current user for {}: {}",
+                    instance.forge_name(),
+                    e
+                );
+                continue;
+            }
+        };
+        let current_user_url = if let Some(current_user) = current_user.as_ref() {
+            Some(instance.get_user_url(&current_user).unwrap())
+        } else {
+            None
+        };
+        let forge = ForgeCredentials {
+            kind: instance.forge_kind(),
+            name: instance.forge_name(),
+            url: instance.base_url(),
+            user: current_user,
+            user_url: current_user_url,
+        };
+        hosting.push(forge);
+    }
+
+    (
+        StatusCode::OK,
+        Json(Credentials {
+            ssh_keys,
+            pgp_keys,
+            hosting,
+        }),
+    )
 }
 
 async fn health() -> &'static str {
