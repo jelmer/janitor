@@ -95,14 +95,14 @@ async fn main() -> Result<(), i32> {
 
     let config: &'static _ = Box::leak(config);
 
-    let bucket_rate_limiter: std::sync::Arc<Mutex<Box<dyn RateLimiter>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(if args.slowstart {
-            Box::new(SlowStartRateLimiter::new(args.max_mps_per_bucket))
+    let bucket_rate_limiter: Mutex<Box<dyn RateLimiter>> =
+        std::sync::Mutex::new(if args.slowstart {
+            Box::new(SlowStartRateLimiter::new(args.max_mps_per_bucket)) as Box<dyn RateLimiter>
         } else if let Some(max_mps_per_bucket) = args.max_mps_per_bucket {
-            Box::new(FixedRateLimiter::new(max_mps_per_bucket))
+            Box::new(FixedRateLimiter::new(max_mps_per_bucket)) as Box<dyn RateLimiter>
         } else {
-            Box::new(NonRateLimiter)
-        }));
+            Box::new(NonRateLimiter) as Box<dyn RateLimiter>
+        });
 
     let forge_rate_limiter = Arc::new(Mutex::new(HashMap::new()));
 
@@ -147,13 +147,17 @@ async fn main() -> Result<(), i32> {
         .await,
     ));
 
+    let state = Arc::new(janitor_publish::AppState {
+        conn: db.clone(),
+        bucket_rate_limiter,
+    });
+
     if args.once {
         janitor_publish::publish_pending_ready(
-            db.clone(),
+            state,
             redis_async_connection.clone(),
             config,
             publish_worker.clone(),
-            bucket_rate_limiter.clone(),
             vcs_managers,
             args.push_limit,
             args.require_binary_diff,
@@ -176,11 +180,10 @@ async fn main() -> Result<(), i32> {
         }
     } else {
         tokio::spawn(janitor_publish::process_queue_loop(
-            db.clone(),
+            state.clone(),
             redis_async_connection.clone(),
             config,
             publish_worker.clone(),
-            bucket_rate_limiter.clone(),
             forge_rate_limiter.clone(),
             vcs_managers,
             chrono::Duration::seconds(args.interval),
@@ -190,27 +193,22 @@ async fn main() -> Result<(), i32> {
             args.require_binary_diff,
         ));
 
-        tokio::spawn(janitor_publish::refresh_bucket_mp_counts(
-            db.clone(),
-            bucket_rate_limiter.clone(),
-        ));
+        tokio::spawn(janitor_publish::refresh_bucket_mp_counts(state.clone()));
 
         tokio::spawn(janitor_publish::listen_to_runner(
-            db.clone(),
+            state.clone(),
             redis_async_connection.clone(),
             config,
             publish_worker.clone(),
-            bucket_rate_limiter.clone(),
             vcs_managers,
             args.require_binary_diff,
         ));
 
         let app = janitor_publish::web::app(
+            state.clone(),
             publish_worker.clone(),
-            bucket_rate_limiter.clone(),
             forge_rate_limiter.clone(),
             vcs_managers,
-            db.clone(),
             args.require_binary_diff,
             args.modify_mp_limit,
             args.push_limit,

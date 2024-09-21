@@ -1,4 +1,8 @@
 use crate::rate_limiter::RateLimiter;
+use crate::AppState;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use breezyshim::forge::Forge;
@@ -95,16 +99,297 @@ async fn get_all_rate_limits() {
     unimplemented!()
 }
 
-async fn get_blockers() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Blocker<D> {
+    result: bool,
+    details: D,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerSuccessDetails {
+    result_code: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerInactiveDetails {
+    inactive: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerCommandDetails {
+    correct: String,
+    actual: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Review {
+    reviewer: String,
+    reviewed_at: chrono::DateTime<chrono::Utc>,
+    comment: String,
+    verdict: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerPublishStatusDetails {
+    status: String,
+    reviews: HashMap<String, Review>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerBackoffDetails {
+    attempt_count: usize,
+    next_try_time: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerProposeRateLimitDetails {
+    open: Option<usize>,
+    max_open: Option<usize>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerChangeSetDetails {
+    change_set_id: String,
+    change_set_state: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerPreviousMpDetails {
+    url: String,
+    status: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerInfo {
+    success: Blocker<BlockerSuccessDetails>,
+    inactive: Blocker<BlockerInactiveDetails>,
+    command: Blocker<BlockerCommandDetails>,
+    publish_status: Blocker<BlockerPublishStatusDetails>,
+    backoff: Blocker<BlockerBackoffDetails>,
+    propose_rate_limit: Blocker<BlockerProposeRateLimitDetails>,
+    change_set: Blocker<BlockerChangeSetDetails>,
+    previous_mp: Blocker<Vec<BlockerPreviousMpDetails>>,
+}
+
+async fn get_blockers(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    #[derive(sqlx::FromRow)]
+    struct RunDetails {
+        id: String,
+        codebase: String,
+        campaign: String,
+        finish_time: chrono::DateTime<chrono::Utc>,
+        run_command: String,
+        publish_status: String,
+        rate_limit_bucket: Option<String>,
+        revision: Option<breezyshim::RevisionId>,
+        policy_command: String,
+        result_code: String,
+        change_set_state: String,
+        change_set: String,
+        inactive: bool,
+    };
+
+    let run = sqlx::query_as::<_, RunDetails>(
+        r#"""
+SELECT
+  run.id AS id,
+  run.codebase AS codebase,
+  run.suite AS campaign,
+  run.finish_time AS finish_time,
+  run.command AS run_command,
+  run.publish_status AS publish_status,
+  named_publish_policy.rate_limit_bucket AS rate_limit_bucket,
+  run.revision AS revision,
+  candidate.command AS policy_command,
+  run.result_code AS result_code,
+  change_set.state AS change_set_state,
+  change_set.id AS change_set,
+  codebase.inactive AS inactive
+FROM run
+INNER JOIN codebase ON codebase.name = run.codebase
+INNER JOIN candidate ON candidate.codebase = run.codebase AND candidate.suite = run.suite
+INNER JOIN named_publish_policy ON candidate.publish_policy = named_publish_policy.name
+INNER JOIN change_set ON change_set.id = run.change_set
+WHERE run.id = $1
+"""#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.conn)
+    .await
+    .unwrap();
+
+    let run = if let Some(run) = run {
+        run
+    } else {
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such publish-ready run",
+                "run_id": id,
+            })),
+        );
+    };
+
+    #[derive(sqlx::FromRow)]
+    struct ReviewDetails {
+        reviewer: String,
+        reviewed_at: chrono::DateTime<chrono::Utc>,
+        comment: String,
+        verdict: String,
+    }
+
+    let reviews = sqlx::query_as::<_, ReviewDetails>("SELECT * FROM review WHERE run_id = $1")
+        .bind(&id)
+        .fetch_all(&state.conn)
+        .await
+        .unwrap();
+
+    let attempt_count = if let Some(revision) = run.revision {
+        crate::state::get_publish_attempt_count(&state.conn, &revision, &["differ-unreachable"])
+            .await
+            .unwrap()
+    } else {
+        0
+    };
+
+    let last_mps = crate::state::get_previous_mp_status(&state.conn, &run.codebase, &run.campaign)
+        .await
+        .unwrap();
+
+    let success = Blocker {
+        result: run.result_code == "success",
+        details: BlockerSuccessDetails {
+            result_code: run.result_code,
+        },
+    };
+
+    let inactive = Blocker {
+        result: !run.inactive,
+        details: BlockerInactiveDetails {
+            inactive: run.inactive,
+        },
+    };
+
+    let command = Blocker {
+        result: run.run_command == run.policy_command,
+        details: BlockerCommandDetails {
+            correct: run.policy_command,
+            actual: run.run_command,
+        },
+    };
+
+    let publish_status = Blocker {
+        result: run.publish_status == "approved",
+        details: BlockerPublishStatusDetails {
+            status: run.publish_status,
+            reviews: reviews
+                .into_iter()
+                .map(|row| {
+                    (
+                        row.reviewer.clone(),
+                        Review {
+                            reviewer: row.reviewer,
+                            reviewed_at: row.reviewed_at,
+                            comment: row.comment,
+                            verdict: row.verdict,
+                        },
+                    )
+                })
+                .collect(),
+        },
+    };
+
+    let next_try_time = crate::calculate_next_try_time(run.finish_time, attempt_count);
+
+    let backoff = Blocker {
+        result: chrono::Utc::now() >= next_try_time,
+        details: BlockerBackoffDetails {
+            attempt_count,
+            next_try_time,
+        },
+    };
+
+    // TODO(jelmer): include forge rate limits?
+
+    let propose_rate_limit = {
+        if let Some(bucket) = run.rate_limit_bucket {
+            let open = state
+                .bucket_rate_limiter
+                .lock()
+                .unwrap()
+                .get_stats()
+                .and_then(|stats| stats.per_bucket.get(&bucket).cloned());
+            let max_open = state
+                .bucket_rate_limiter
+                .lock()
+                .unwrap()
+                .get_max_open(&bucket);
+            Blocker {
+                result: state
+                    .bucket_rate_limiter
+                    .lock()
+                    .unwrap()
+                    .check_allowed(&bucket),
+                details: BlockerProposeRateLimitDetails { open, max_open },
+            }
+        } else {
+            Blocker {
+                result: true,
+                details: BlockerProposeRateLimitDetails {
+                    open: None,
+                    max_open: None,
+                },
+            }
+        }
+    };
+
+    let change_set = Blocker {
+        result: ["publishing", "ready"].contains(&run.change_set_state.as_str()),
+        details: BlockerChangeSetDetails {
+            change_set_id: run.change_set,
+            change_set_state: run.change_set_state,
+        },
+    };
+
+    let previous_mp = Blocker {
+        result: last_mps
+            .iter()
+            .all(|last_mp| last_mp.1 != "rejected" && last_mp.1 != "closed"),
+        details: last_mps
+            .iter()
+            .map(|last_mp| BlockerPreviousMpDetails {
+                url: last_mp.0.clone(),
+                status: last_mp.1.clone(),
+            })
+            .collect(),
+    };
+
+    (
+        StatusCode::OK,
+        Json(
+            serde_json::to_value(&BlockerInfo {
+                success,
+                previous_mp,
+                change_set,
+                inactive,
+                command,
+                publish_status,
+                backoff,
+                propose_rate_limit,
+            })
+            .unwrap(),
+        ),
+    )
 }
 
 pub fn app(
+    state: Arc<AppState>,
     worker: Arc<Mutex<crate::PublishWorker>>,
-    bucket_rate_limiter: Arc<Mutex<Box<dyn RateLimiter>>>,
     forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<chrono::Utc>>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    db: PgPool,
     require_binary_diff: bool,
     modify_mp_limit: Option<i32>,
     push_limit: Option<i32>,
@@ -142,4 +427,5 @@ pub fn app(
         .route("/rate-limits/:bucket", get(get_rate_limit))
         .route("/rate-limits", get(get_all_rate_limits))
         .route("/blockers/:id", get(get_blockers))
+        .with_state(state)
 }

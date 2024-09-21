@@ -16,6 +16,10 @@ pub trait RateLimiter: Send + Sync {
     fn inc(&mut self, bucket: &str);
 
     fn get_stats(&self) -> Option<RateLimitStats>;
+
+    fn get_max_open(&self, bucket: &str) -> Option<usize> {
+        None
+    }
 }
 
 pub struct NonRateLimiter;
