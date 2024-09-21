@@ -91,8 +91,47 @@ async fn autopublish() {
     unimplemented!()
 }
 
-async fn get_rate_limit() {
-    unimplemented!()
+async fn get_rate_limit(
+    State(state): State<Arc<AppState>>,
+    Path(bucket): Path<String>,
+) -> impl IntoResponse {
+    let stats = state.bucket_rate_limiter.lock().unwrap().get_stats();
+
+    if let Some(stats) = stats {
+        if let Some(current_open) = stats.per_bucket.get(&bucket) {
+            let max_open = state
+                .bucket_rate_limiter
+                .lock()
+                .unwrap()
+                .get_max_open(&bucket);
+            (
+                StatusCode::OK,
+                Json(
+                    serde_json::to_value(&BucketRateLimit {
+                        open: Some(*current_open),
+                        max_open,
+                        remaining: max_open.map(|max_open| max_open - *current_open),
+                    })
+                    .unwrap(),
+                ),
+            )
+        } else {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "reason": "No such rate limit bucket",
+                    "bucket": bucket,
+                })),
+            )
+        }
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No rate limit stats available",
+            })),
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
