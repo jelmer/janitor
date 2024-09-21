@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+pub mod proposal_info;
 pub mod publish_one;
 pub mod rate_limiter;
 pub mod state;
@@ -487,6 +488,14 @@ impl PublishWorker {
     }
 }
 
+/// Check if a run is sufficient to create a merge proposal.
+///
+/// # Arguments
+/// * `campaign_config` - The campaign configuration
+/// * `run_value` - The value associated with the run
+///
+/// # Returns
+/// * `true` if the run is sufficient to create a merge proposal, `false` otherwise.
 fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32>) -> bool {
     if let (Some(run_value), Some(threshold)) =
         (run_value, &campaign_config.merge_proposal.value_threshold)
@@ -597,8 +606,34 @@ pub async fn publish_pending_ready(
 pub async fn refresh_bucket_mp_counts(
     db: sqlx::PgPool,
     bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
-) {
-    todo!();
+) -> Result<(), sqlx::Error> {
+    let mut per_bucket: HashMap<janitor::publish::MergeProposalStatus, HashMap<String, usize>> =
+        HashMap::new();
+
+    let rows = sqlx::query_as::<_, (String, String, i64)>(
+        r#"
+        SELECT
+        rate_limit_bucket AS rate_limit_bucket,
+        status AS status,
+        count(*) as c
+        FROM merge_proposal
+        GROUP BY 1, 2
+        "#,
+    )
+    .fetch_all(&db)
+    .await?;
+
+    for row in rows {
+        per_bucket
+            .entry(row.1.parse().unwrap())
+            .or_default()
+            .insert(row.0, row.2 as usize);
+    }
+    bucket_rate_limiter
+        .lock()
+        .unwrap()
+        .set_mps_per_bucket(&per_bucket);
+    Ok(())
 }
 
 pub async fn listen_to_runner(

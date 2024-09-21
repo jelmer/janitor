@@ -14,6 +14,31 @@ pub enum MergeProposalStatus {
     Closed,
 }
 
+impl std::fmt::Display for MergeProposalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            MergeProposalStatus::Open => write!(f, "open"),
+            MergeProposalStatus::Merged => write!(f, "merged"),
+            MergeProposalStatus::Applied => write!(f, "applied"),
+            MergeProposalStatus::Closed => write!(f, "closed"),
+        }
+    }
+}
+
+impl std::str::FromStr for MergeProposalStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "open" => Ok(MergeProposalStatus::Open),
+            "merged" => Ok(MergeProposalStatus::Merged),
+            "applied" => Ok(MergeProposalStatus::Applied),
+            "closed" => Ok(MergeProposalStatus::Closed),
+            _ => Err(format!("Unknown merge proposal status: {}", s)),
+        }
+    }
+}
+
 impl From<breezyshim::forge::MergeProposalStatus> for MergeProposalStatus {
     fn from(status: breezyshim::forge::MergeProposalStatus) -> Self {
         match status {

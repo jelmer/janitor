@@ -31,6 +31,17 @@ impl Config {
             .find(|c| c.name.as_ref().unwrap() == name)
     }
 
+    pub fn find_campaign_by_branch_name(&self, branch_name: &str) -> Option<(&str, &str)> {
+        for campaign in &self.campaign {
+            if let Some(campaign_branch_name) = &campaign.branch_name {
+                if branch_name == campaign_branch_name {
+                    return Some((campaign.name.as_ref().unwrap(), "main"));
+                }
+            }
+        }
+        None
+    }
+
     pub async fn pg_pool(&self) -> std::result::Result<sqlx::PgPool, sqlx::Error> {
         if let Some(db_location) = self.database_location.as_ref() {
             sqlx::postgres::PgPool::connect(db_location.as_str()).await
