@@ -75,11 +75,63 @@ async fn ready() -> &'static str {
     "OK"
 }
 
-async fn scan() {
-    unimplemented!()
+async fn check_straggler(
+    proposal_info_manager: &crate::proposal_info::ProposalInfoManager,
+    url: &url::Url,
+) {
+    // Find the canonical URL
+    match reqwest::get(url.to_string()).await {
+        Ok(resp) => {
+            if resp.status() == 200 && resp.url() != url {
+                proposal_info_manager
+                    .update_canonical_url(url, resp.url())
+                    .await
+                    .unwrap();
+            }
+            if resp.status() == 404 {
+                // TODO(jelmer): Keep it but leave a tumbestone around?
+                proposal_info_manager
+                    .delete_proposal_info(url)
+                    .await
+                    .unwrap();
+            }
+        }
+        Err(e) => {
+            log::warn!("Got error loading straggler {}: {}", url, e);
+        }
+    }
 }
 
-async fn check_stragglers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn check_stragglers(
+    State(state): State<Arc<AppState>>,
+    Query(ndays): Query<usize>,
+) -> impl IntoResponse {
+    async fn scan(conn: PgPool, redis: Option<redis::aio::ConnectionManager>, urls: Vec<url::Url>) {
+        let proposal_info_manager =
+            crate::proposal_info::ProposalInfoManager::new(conn.clone(), redis.clone()).await;
+        for url in urls {
+            check_straggler(&proposal_info_manager, &url).await;
+        }
+    }
+
+    let proposal_info_manager =
+        crate::proposal_info::ProposalInfoManager::new(state.conn.clone(), state.redis.clone())
+            .await;
+
+    let urls = proposal_info_manager
+        .iter_outdated_proposal_info_urls(chrono::Duration::days(ndays as i64))
+        .await
+        .unwrap();
+
+    let conn = state.conn.clone();
+    let redis = state.redis.clone();
+
+    tokio::spawn(scan(conn, redis, urls.clone()));
+
+    (StatusCode::OK, Json(serde_json::json!(urls)))
+}
+
+async fn scan(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     async fn scan(state: Arc<AppState>) {
         crate::check_existing(
             state.conn.clone(),
