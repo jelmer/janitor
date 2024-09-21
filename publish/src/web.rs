@@ -528,7 +528,7 @@ async fn get_blockers(
         change_set_state: String,
         change_set: String,
         inactive: bool,
-    };
+    }
 
     let run = sqlx::query_as::<_, RunDetails>(
         r#"""
