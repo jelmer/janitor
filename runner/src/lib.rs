@@ -6,6 +6,7 @@ use url::Url;
 
 pub mod backchannel;
 pub mod config_generator;
+pub mod web;
 
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     let mut env = HashMap::new();
@@ -275,6 +276,8 @@ pub struct ResultTarget {
 pub struct ResultRemote {
     url: Url,
 }
+
+pub struct AppState {}
 
 #[cfg(test)]
 mod tests {

@@ -26,6 +26,8 @@ debian-control = { version = "0.1.28", optional = true }
 log.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 reqwest.workspace = true
+clap = { workspace = true, features = ["derive"], optional = true }
+axum.workspace = true
 
 [dev-dependencies]
 maplit = { workspace = true }
@@ -33,3 +35,9 @@ maplit = { workspace = true }
 [features]
 default = ["debian"]
 debian = ["janitor/debian", "dep:debversion", "dep:debian-control"]
+cli = ["dep:clap"]
+
+[[bin]]
+name = "janitor-runner"
+path = "src/main.rs"
+required-features = ["cli"]
