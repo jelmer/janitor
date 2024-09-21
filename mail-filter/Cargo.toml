@@ -2,7 +2,7 @@
 name = "janitor-mail-filter"
 version = "0.0.0"
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
-edition = "2018"
+edition.workspace = true
 description = "Mail filter for the janitor"
 license = "Apache-2.0"
 repository = "https://github.com/jelmer/janitor.git"

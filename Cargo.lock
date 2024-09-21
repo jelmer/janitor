@@ -651,6 +651,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "428d9aa8fbc0670b7b8d6030a7fadd0f86151cae55e4dbbece15f3780a3dfaf3"
 
 [[package]]
+name = "bzr-store"
+version = "0.1.0"
+
+[[package]]
 name = "castaway"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2692,6 +2696,10 @@ dependencies = [
  "janitor",
  "maplit",
 ]
+
+[[package]]
+name = "janitor-git-store"
+version = "0.1.0"
 
 [[package]]
 name = "janitor-mail-filter"

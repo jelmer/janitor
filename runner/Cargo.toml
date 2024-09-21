@@ -2,7 +2,7 @@
 name = "janitor-runner"
 version = "0.0.0"
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
-edition = "2021"
+edition.workspace = true
 description = "Runner for the janitor"
 license = "GPL-3.0+"
 repository = "https://github.com/jelmer/janitor.git"

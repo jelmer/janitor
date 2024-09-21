@@ -2,7 +2,7 @@
 name = "publish-py"
 version = "0.0.0"
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
-edition = "2021"
+edition.workspace = true
 description = "Publisher for the janitor - python bindings"
 publish = false
 license = "GPL-3.0+"
