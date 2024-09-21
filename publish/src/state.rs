@@ -1,7 +1,7 @@
 use crate::Mode;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool, Row};
 use url::Url;
 
 async fn store_publish(
@@ -324,6 +324,40 @@ WHERE run_id = (
     )
     .bind(codebase)
     .bind(campaign)
-    .fetch_all(&*conn)
+    .fetch_all(conn)
     .await
+}
+
+pub async fn iter_publish_ready(
+    conn: &PgPool,
+    run_id: Option<&str>,
+) -> Result<Vec<(janitor::state::Run, String, String, Vec<String>)>, sqlx::Error> {
+    let mut query = sqlx::QueryBuilder::new("SELECT * FROM publish_ready WHERE ");
+    if let Some(run_id) = run_id {
+        query.push("id = ");
+        query.push_bind(run_id);
+    } else {
+        query.push("True");
+    }
+    query.push(" AND publish_status = 'approved'");
+    query.push(" AND change_set_state IN ('ready', 'publishing')");
+    query.push("and exists (select from unnest(unpublished_branches) where mode in ('propose', 'attempt-push', 'push-derived', 'push'))");
+    query.push(
+        " ORDER BY change_set_state = 'publishing' DESC, value DESC NULLS LAST, finish_time DESC",
+    );
+
+    let query = query.build();
+
+    let rows = query.fetch_all(conn).await?;
+
+    let mut result = vec![];
+    for row in rows {
+        result.push((
+            janitor::state::Run::from_row(&row).unwrap(),
+            row.get("rate_limit_bucket"),
+            row.get("policy_command"),
+            row.get("unpublished_branches"),
+        ));
+    }
+    Ok(result)
 }
