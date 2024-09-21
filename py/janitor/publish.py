@@ -1785,37 +1785,12 @@ async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
     async with request.app["db"].acquire() as conn:
         row = await conn.fetchrow(
-            """
-SELECT
-  codebase,
-  branch_name,
-  main_branch_revision,
-  revision,
-  mode,
-  merge_proposal_url,
-  target_branch_url,
-  result_code,
-  description
-FROM publish
-LEFT JOIN codebase
-ON codebase.branch_url = publish.target_branch_url
-WHERE id = $1
-""",
             publish_id,
         )
         if row:
             raise web.HTTPNotFound(text=f"no such publish: {publish_id}")
     return web.json_response(
         {
-            "codebase": row["codebase"],
-            "target_branch_url": row["target_branch_url"],
-            "branch": row["branch_name"],
-            "main_branch_revision": row["main_branch_revision"],
-            "revision": row["revision"],
-            "mode": row["mode"],
-            "merge_proposal_url": row["merge_proposal_url"],
-            "result_code": row["result_code"],
-            "description": row["description"],
         }
     )
 
