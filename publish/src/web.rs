@@ -95,8 +95,59 @@ async fn get_rate_limit() {
     unimplemented!()
 }
 
-async fn get_all_rate_limits() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BucketRateLimit {
+    open: Option<usize>,
+    max_open: Option<usize>,
+    remaining: Option<usize>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RateLimitsInfo {
+    per_bucket: HashMap<String, BucketRateLimit>,
+    per_forge: HashMap<String, chrono::DateTime<chrono::Utc>>,
+    push_limit: Option<usize>,
+}
+
+async fn get_all_rate_limits(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let stats = state.bucket_rate_limiter.lock().unwrap().get_stats();
+
+    let per_bucket = if let Some(stats) = stats {
+        let mut per_bucket = HashMap::new();
+        for (bucket, current_open) in stats.per_bucket.iter() {
+            let max_open = state
+                .bucket_rate_limiter
+                .lock()
+                .unwrap()
+                .get_max_open(bucket);
+            per_bucket.insert(
+                bucket.clone(),
+                BucketRateLimit {
+                    open: Some(*current_open),
+                    max_open,
+                    remaining: max_open.map(|max_open| max_open - *current_open),
+                },
+            );
+        }
+        per_bucket
+    } else {
+        HashMap::new()
+    };
+
+    Json(
+        serde_json::to_value(&RateLimitsInfo {
+            per_bucket,
+            per_forge: state
+                .forge_rate_limiter
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|(f, t)| (f.forge_name().to_string(), *t))
+                .collect(),
+            push_limit: state.push_limit,
+        })
+        .unwrap(),
+    )
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -388,11 +439,9 @@ WHERE run.id = $1
 pub fn app(
     state: Arc<AppState>,
     worker: Arc<Mutex<crate::PublishWorker>>,
-    forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<chrono::Utc>>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     require_binary_diff: bool,
     modify_mp_limit: Option<i32>,
-    push_limit: Option<i32>,
     redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
 ) -> Router {
