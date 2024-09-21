@@ -12,6 +12,10 @@ pub enum MergeProposalStatus {
     Applied,
     #[serde(rename = "closed")]
     Closed,
+    #[serde(rename = "abandoned")]
+    Abandoned,
+    #[serde(rename = "rejected")]
+    Rejected,
 }
 
 impl std::fmt::Display for MergeProposalStatus {
@@ -21,6 +25,8 @@ impl std::fmt::Display for MergeProposalStatus {
             MergeProposalStatus::Merged => write!(f, "merged"),
             MergeProposalStatus::Applied => write!(f, "applied"),
             MergeProposalStatus::Closed => write!(f, "closed"),
+            MergeProposalStatus::Abandoned => write!(f, "abandoned"),
+            MergeProposalStatus::Rejected => write!(f, "rejected"),
         }
     }
 }
@@ -34,6 +40,8 @@ impl std::str::FromStr for MergeProposalStatus {
             "merged" => Ok(MergeProposalStatus::Merged),
             "applied" => Ok(MergeProposalStatus::Applied),
             "closed" => Ok(MergeProposalStatus::Closed),
+            "abandoned" => Ok(MergeProposalStatus::Abandoned),
+            "rejected" => Ok(MergeProposalStatus::Rejected),
             _ => Err(format!("Unknown merge proposal status: {}", s)),
         }
     }
