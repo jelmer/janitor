@@ -1,0 +1,8 @@
+[package]
+name = "janitor-git-store"
+version = "0.1.0"
+edition.workspace = true
+
+[lib]
+
+[dependencies]

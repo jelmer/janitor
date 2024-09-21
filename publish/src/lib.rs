@@ -574,16 +574,13 @@ fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>
 }
 
 pub async fn process_queue_loop(
-    db: sqlx::PgPool,
+    state: Arc<AppState>,
     redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
     publish_worker: Arc<Mutex<PublishWorker>>,
-    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
-    forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<Utc>>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     interval: chrono::Duration,
     auto_publish: bool,
-    push_limit: Option<i32>,
     modify_mp_limit: Option<i32>,
     require_binary_diff: bool,
 ) {
@@ -591,22 +588,17 @@ pub async fn process_queue_loop(
 }
 
 pub async fn publish_pending_ready(
-    db: sqlx::PgPool,
+    state: Arc<AppState>,
     redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
     publish_worker: Arc<Mutex<PublishWorker>>,
-    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    push_limit: Option<i32>,
     require_binary_diff: bool,
 ) -> Result<(), PublishError> {
     todo!();
 }
 
-pub async fn refresh_bucket_mp_counts(
-    db: sqlx::PgPool,
-    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
-) -> Result<(), sqlx::Error> {
+pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::Error> {
     let mut per_bucket: HashMap<janitor::publish::MergeProposalStatus, HashMap<String, usize>> =
         HashMap::new();
 
@@ -620,7 +612,7 @@ pub async fn refresh_bucket_mp_counts(
         GROUP BY 1, 2
         "#,
     )
-    .fetch_all(&db)
+    .fetch_all(&state.conn)
     .await?;
 
     for row in rows {
@@ -629,7 +621,8 @@ pub async fn refresh_bucket_mp_counts(
             .or_default()
             .insert(row.0, row.2 as usize);
     }
-    bucket_rate_limiter
+    state
+        .bucket_rate_limiter
         .lock()
         .unwrap()
         .set_mps_per_bucket(&per_bucket);
@@ -637,11 +630,10 @@ pub async fn refresh_bucket_mp_counts(
 }
 
 pub async fn listen_to_runner(
-    db: sqlx::PgPool,
+    state: Arc<AppState>,
     redis: Option<redis::aio::ConnectionManager>,
     config: &janitor::config::Config,
     publish_worker: Arc<Mutex<PublishWorker>>,
-    bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     require_binary_diff: bool,
 ) {
@@ -677,4 +669,11 @@ mod tests {
         let next_try_time = calculate_next_try_time(finish_time, attempt_count);
         assert_eq!(finish_time + chrono::Duration::days(7), next_try_time);
     }
+}
+
+pub struct AppState {
+    pub conn: sqlx::PgPool,
+    pub bucket_rate_limiter: Mutex<Box<dyn rate_limiter::RateLimiter>>,
+    pub forge_rate_limiter: Mutex<HashMap<Forge, chrono::DateTime<Utc>>>,
+    pub push_limit: Option<usize>,
 }
