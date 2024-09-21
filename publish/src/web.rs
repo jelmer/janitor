@@ -7,6 +7,7 @@ use axum::routing::{delete, get, post, put};
 use axum::Router;
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
+use breezyshim::RevisionId;
 use janitor::vcs::{VcsManager, VcsType};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -56,8 +57,57 @@ async fn consider() {
     unimplemented!()
 }
 
-async fn get_publish_by_id() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct PublishDetails {
+    codebase: String,
+    target_branch_url: String,
+    branch: String,
+    main_branch_revision: RevisionId,
+    revision: RevisionId,
+    mode: String,
+    merge_proposal_url: String,
+    result_code: String,
+    description: String,
+}
+
+async fn get_publish_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let publish = sqlx::query_as::<_, PublishDetails>(
+        r#"""
+SELECT
+  codebase,
+  branch_name,
+  main_branch_revision,
+  revision,
+  mode,
+  merge_proposal_url,
+  target_branch_url,
+  result_code,
+  description
+FROM publish
+LEFT JOIN codebase
+ON codebase.branch_url = publish.target_branch_url
+WHERE id = $1
+"""#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.conn)
+    .await
+    .unwrap();
+
+    if let Some(details) = publish {
+        (StatusCode::OK, Json(serde_json::to_value(details).unwrap()))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such publish",
+                "id": id,
+            })),
+        )
+    }
 }
 
 async fn publish() {
