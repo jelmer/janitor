@@ -65,7 +65,7 @@ async fn main() -> Result<(), i32> {
 
     args.logging.init();
 
-    let state = Arc::new(RwLock::new(AppState {}));
+    let state = Arc::new(AppState {});
 
     let app = janitor_runner::web::app(state.clone());
 
