@@ -79,8 +79,24 @@ async fn scan() {
     unimplemented!()
 }
 
-async fn check_stragglers() {
-    unimplemented!()
+async fn check_stragglers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    async fn scan(state: Arc<AppState>) {
+        crate::check_existing(
+            state.conn.clone(),
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &state.bucket_rate_limiter,
+            state.forge_rate_limiter.clone(),
+            &state.vcs_managers,
+            state.modify_mp_limit,
+            state.unexpected_mp_limit,
+        )
+        .await;
+    }
+
+    tokio::spawn(scan(state));
+    (StatusCode::ACCEPTED, "Scan started")
 }
 
 async fn refresh_status(
@@ -92,11 +108,11 @@ async fn refresh_status(
     async fn scan(state: Arc<AppState>, url: url::Url) {
         let mp = breezyshim::forge::get_proposal_by_url(&url).unwrap();
         let status = if mp.is_merged().unwrap() {
-            "merged"
+            breezyshim::forge::MergeProposalStatus::Merged
         } else if mp.is_closed().unwrap() {
-            "closed"
+            breezyshim::forge::MergeProposalStatus::Closed
         } else {
-            "open"
+            breezyshim::forge::MergeProposalStatus::Open
         };
         match crate::check_existing_mp(
             &state.conn,
@@ -107,6 +123,9 @@ async fn refresh_status(
             status,
             &state.vcs_managers,
             &state.bucket_rate_limiter,
+            false,
+            None,
+            None,
         )
         .await
         {
@@ -116,8 +135,14 @@ async fn refresh_status(
             Err(crate::CheckMpError::NoRunForMergeProposal(url)) => {
                 log::info!("Unable to find stored metadata for {}, skipping", url);
             }
-            Err(crate::CheckMpError::BranchRateLimited) => {
+            Err(crate::CheckMpError::BranchRateLimited { retry_after }) => {
                 log::info!("Rate-limited accessing {}, skipping", url);
+            }
+            Err(crate::CheckMpError::UnexpectedHttpStatus {}) => {
+                log::info!("Unexpected HTTP status {} for {}, skipping", status, url);
+            }
+            Err(crate::CheckMpError::ForgeLoginRequired {}) => {
+                log::info!("Forge login required for {}, skipping", url);
             }
         }
     }
@@ -217,10 +242,10 @@ async fn get_all_rate_limits(State(state): State<Arc<AppState>>) -> impl IntoRes
             per_bucket,
             per_forge: state
                 .forge_rate_limiter
-                .lock()
+                .read()
                 .unwrap()
                 .iter()
-                .map(|(f, t)| (f.forge_name().to_string(), *t))
+                .map(|(f, t)| (f.to_string(), *t))
                 .collect(),
             push_limit: state.push_limit,
         })
