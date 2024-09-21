@@ -284,3 +284,46 @@ LIMIT 1
     .fetch_optional(&*conn)
     .await
 }
+
+pub async fn get_publish_attempt_count(
+    conn: &PgPool,
+    revision: &RevisionId,
+    transient_result_codes: &[&str],
+) -> Result<usize, sqlx::Error> {
+    Ok(sqlx::query_scalar::<_, i64>(
+        "select count(*) from publish where revision = $1 and result_code != ALL($2::text[])",
+    )
+    .bind(revision)
+    .bind(transient_result_codes)
+    .fetch_one(&*conn)
+    .await? as usize)
+}
+
+pub async fn get_previous_mp_status(
+    conn: &PgPool,
+    codebase: &str,
+    campaign: &str,
+) -> Result<Vec<(String, String)>, sqlx::Error> {
+    sqlx::query_as(
+        r#"""
+WITH per_run_mps AS (
+    SELECT run.id AS run_id, run.finish_time,
+    merge_proposal.url AS mp_url, merge_proposal.status AS mp_status
+    FROM run
+    LEFT JOIN merge_proposal ON run.revision = merge_proposal.revision
+    WHERE run.codebase = $1
+    AND run.suite = $2
+    AND run.result_code = 'success'
+    AND merge_proposal.status NOT IN ('open', 'abandoned')
+    GROUP BY run.id, merge_proposal.url
+)
+SELECT mp_url, mp_status FROM per_run_mps
+WHERE run_id = (
+    SELECT run_id FROM per_run_mps ORDER BY finish_time DESC LIMIT 1)
+"""#,
+    )
+    .bind(codebase)
+    .bind(campaign)
+    .fetch_all(&*conn)
+    .await
+}
