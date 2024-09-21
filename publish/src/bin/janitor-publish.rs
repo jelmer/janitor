@@ -159,6 +159,7 @@ async fn main() -> Result<(), i32> {
         publish_worker,
         modify_mp_limit: args.modify_mp_limit,
         unexpected_mp_limit: args.unexpected_mp_limit,
+        gpg: breezyshim::gpg::GPGContext::new(),
     });
 
     if args.once {

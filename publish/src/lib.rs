@@ -666,6 +666,7 @@ pub struct AppState {
     pub vcs_managers: HashMap<VcsType, Box<dyn VcsManager>>,
     pub modify_mp_limit: Option<i32>,
     pub unexpected_mp_limit: Option<i32>,
+    pub gpg: breezyshim::gpg::GPGContext,
 }
 
 #[derive(Debug)]
