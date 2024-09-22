@@ -49,8 +49,49 @@ async fn update_merge_proposal() {
     unimplemented!()
 }
 
-async fn delete_policy() {
-    unimplemented!()
+async fn delete_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let result = match sqlx::query("DELETE FROM named_publish_policy WHERE name = $1")
+        .bind(&name)
+        .execute(&state.conn)
+        .await
+    {
+        Ok(result) => result,
+        Err(e)
+            if e.as_database_error()
+                .map(|e| e.is_foreign_key_violation())
+                .unwrap_or(false) =>
+        {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "reason": "Policy in use",
+                    "name": name,
+                })),
+            );
+        }
+        Err(e) => {
+            log::warn!("Error deleting policy {}: {}", name, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Error deleting policy".into()),
+            );
+        }
+    };
+
+    if result.rows_affected() == 0 {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such policy",
+                "name": name,
+            })),
+        )
+    } else {
+        (StatusCode::NO_CONTENT, Json(serde_json::Value::Null))
+    }
 }
 
 async fn consider(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
@@ -80,10 +121,13 @@ async fn consider(State(state): State<Arc<AppState>>, Path(id): Path<String>) ->
             &command,
             state.push_limit,
             state.require_binary_diff,
-        );
+        )
+        .await
+        .unwrap();
     }
 
     tokio::spawn(run(state.clone(), id));
+    (StatusCode::ACCEPTED, "Consider started")
 }
 
 #[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
@@ -203,11 +247,9 @@ async fn get_credentials(State(state): State<Arc<AppState>>) -> impl IntoRespons
                 continue;
             }
         };
-        let current_user_url = if let Some(current_user) = current_user.as_ref() {
-            Some(instance.get_user_url(&current_user).unwrap())
-        } else {
-            None
-        };
+        let current_user_url = current_user
+            .as_ref()
+            .map(|current_user| instance.get_user_url(&current_user).unwrap());
         let forge = ForgeCredentials {
             kind: instance.forge_kind(),
             name: instance.forge_name(),
