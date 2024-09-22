@@ -667,6 +667,7 @@ pub struct AppState {
     pub modify_mp_limit: Option<i32>,
     pub unexpected_mp_limit: Option<i32>,
     pub gpg: breezyshim::gpg::GPGContext,
+    pub require_binary_diff: bool,
 }
 
 #[derive(Debug)]
@@ -884,4 +885,21 @@ async fn check_existing(
             forge_rate_limiter
         );
     }
+}
+
+async fn consider_publish_run(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    run: &janitor::state::Run,
+    rate_limit_bucket: &str,
+    unpublished_branches: &[crate::state::UnpublishedBranch],
+    command: &str,
+    push_limit: Option<usize>,
+    require_binary_diff: bool,
+) -> HashMap<String, Option<String>> {
+    unimplemented!()
 }

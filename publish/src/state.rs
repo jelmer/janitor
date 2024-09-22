@@ -328,10 +328,20 @@ WHERE run_id = (
     .await
 }
 
+#[derive(Debug, sqlx::Type)]
+pub struct UnpublishedBranch {
+    pub role: String,
+    pub remote_name: String,
+    pub base_revision: RevisionId,
+    pub revision: RevisionId,
+    pub publish_mode: Mode,
+    pub max_frequency_days: Option<i32>,
+}
+
 pub async fn iter_publish_ready(
     conn: &PgPool,
     run_id: Option<&str>,
-) -> Result<Vec<(janitor::state::Run, String, String, Vec<String>)>, sqlx::Error> {
+) -> Result<Vec<(janitor::state::Run, String, String, Vec<UnpublishedBranch>)>, sqlx::Error> {
     let mut query = sqlx::QueryBuilder::new("SELECT * FROM publish_ready WHERE ");
     if let Some(run_id) = run_id {
         query.push("id = ");
