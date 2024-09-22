@@ -160,6 +160,7 @@ async fn main() -> Result<(), i32> {
         modify_mp_limit: args.modify_mp_limit,
         unexpected_mp_limit: args.unexpected_mp_limit,
         gpg: breezyshim::gpg::GPGContext::new(),
+        require_binary_diff: args.require_binary_diff,
     });
 
     if args.once {

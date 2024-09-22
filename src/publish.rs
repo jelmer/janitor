@@ -73,21 +73,29 @@ pub struct MergeProposalNotification {
     pub target_branch_web_url: Option<Url>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy, sqlx::Type)]
+#[sqlx(type_name = "publish_mode")]
 pub enum Mode {
     #[serde(rename = "skip")]
+    #[sqlx(rename = "skip")]
     Skip,
     #[serde(rename = "build-only")]
+    #[sqlx(rename = "build-only")]
     BuildOnly,
     #[serde(rename = "push")]
+    #[sqlx(rename = "push")]
     Push,
     #[serde(rename = "push-derived")]
+    #[sqlx(rename = "push-derived")]
     PushDerived,
     #[serde(rename = "propose")]
+    #[sqlx(rename = "propose")]
     Propose,
     #[serde(rename = "attempt-push")]
+    #[sqlx(rename = "attempt-push")]
     AttemptPush,
     #[serde(rename = "bts")]
+    #[sqlx(rename = "bts")]
     Bts,
 }
 

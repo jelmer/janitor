@@ -53,8 +53,37 @@ async fn delete_policy() {
     unimplemented!()
 }
 
-async fn consider() {
-    unimplemented!()
+async fn consider(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    async fn run(state: Arc<AppState>, id: String) {
+        let (run, rate_limit_bucket, command, unpublished_branches) =
+            match crate::state::iter_publish_ready(&state.conn, Some(&id))
+                .await
+                .unwrap()
+                .into_iter()
+                .next()
+            {
+                Some((run, rate_limit_bucket, command, unpublished_branches)) => {
+                    (run, rate_limit_bucket, command, unpublished_branches)
+                }
+                None => return,
+            };
+        crate::consider_publish_run(
+            &state.conn,
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &state.vcs_managers,
+            &state.bucket_rate_limiter,
+            &run,
+            &rate_limit_bucket,
+            unpublished_branches.as_slice(),
+            &command,
+            state.push_limit,
+            state.require_binary_diff,
+        );
+    }
+
+    tokio::spawn(run(state.clone(), id));
 }
 
 #[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
