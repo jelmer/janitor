@@ -794,11 +794,7 @@ WHERE run.id = $1
     )
 }
 
-pub fn app(
-    state: Arc<AppState>,
-    require_binary_diff: bool,
-    modify_mp_limit: Option<i32>,
-) -> Router {
+pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/:campaign/merge-proposals",
