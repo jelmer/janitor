@@ -900,6 +900,6 @@ async fn consider_publish_run(
     command: &str,
     push_limit: Option<usize>,
     require_binary_diff: bool,
-) -> HashMap<String, Option<String>> {
+) -> Result<HashMap<String, Option<String>>, sqlx::Error> {
     unimplemented!()
 }
