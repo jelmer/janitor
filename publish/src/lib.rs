@@ -577,15 +577,11 @@ pub async fn process_queue_loop(
     state: Arc<AppState>,
     interval: chrono::Duration,
     auto_publish: bool,
-    require_binary_diff: bool,
 ) {
     todo!();
 }
 
-pub async fn publish_pending_ready(
-    state: Arc<AppState>,
-    require_binary_diff: bool,
-) -> Result<(), PublishError> {
+pub async fn publish_pending_ready(state: Arc<AppState>) -> Result<(), PublishError> {
     todo!();
 }
 
@@ -620,7 +616,7 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
     Ok(())
 }
 
-pub async fn listen_to_runner(state: Arc<AppState>, require_binary_diff: bool) {
+pub async fn listen_to_runner(state: Arc<AppState>) {
     todo!();
 }
 

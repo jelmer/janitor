@@ -164,7 +164,7 @@ async fn main() -> Result<(), i32> {
     });
 
     if args.once {
-        janitor_publish::publish_pending_ready(state, args.require_binary_diff)
+        janitor_publish::publish_pending_ready(state)
             .await
             .map_err(|e| {
                 log::error!("Failed to publish pending proposals: {}", e);
@@ -186,21 +186,13 @@ async fn main() -> Result<(), i32> {
             state.clone(),
             chrono::Duration::seconds(args.interval),
             !args.no_auto_publish,
-            args.require_binary_diff,
         ));
 
         tokio::spawn(janitor_publish::refresh_bucket_mp_counts(state.clone()));
 
-        tokio::spawn(janitor_publish::listen_to_runner(
-            state.clone(),
-            args.require_binary_diff,
-        ));
+        tokio::spawn(janitor_publish::listen_to_runner(state.clone()));
 
-        let app = janitor_publish::web::app(
-            state.clone(),
-            args.require_binary_diff,
-            args.modify_mp_limit,
-        );
+        let app = janitor_publish::web::app(state.clone());
 
         // run it
         let addr = SocketAddr::new(args.listen_address, args.port);
