@@ -1,11 +1,13 @@
 use crate::rate_limiter::RateLimiter;
 use crate::AppState;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
+use breezyshim::RevisionId;
 use janitor::vcs::{VcsManager, VcsType};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -47,24 +49,225 @@ async fn update_merge_proposal() {
     unimplemented!()
 }
 
-async fn delete_policy() {
-    unimplemented!()
+async fn delete_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let result = match sqlx::query("DELETE FROM named_publish_policy WHERE name = $1")
+        .bind(&name)
+        .execute(&state.conn)
+        .await
+    {
+        Ok(result) => result,
+        Err(e)
+            if e.as_database_error()
+                .map(|e| e.is_foreign_key_violation())
+                .unwrap_or(false) =>
+        {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "reason": "Policy in use",
+                    "name": name,
+                })),
+            );
+        }
+        Err(e) => {
+            log::warn!("Error deleting policy {}: {}", name, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Error deleting policy".into()),
+            );
+        }
+    };
+
+    if result.rows_affected() == 0 {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such policy",
+                "name": name,
+            })),
+        )
+    } else {
+        (StatusCode::NO_CONTENT, Json(serde_json::Value::Null))
+    }
 }
 
-async fn consider() {
-    unimplemented!()
+async fn consider(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    async fn run(state: Arc<AppState>, id: String) {
+        let (run, rate_limit_bucket, command, unpublished_branches) =
+            match crate::state::iter_publish_ready(&state.conn, Some(&id))
+                .await
+                .unwrap()
+                .into_iter()
+                .next()
+            {
+                Some((run, rate_limit_bucket, command, unpublished_branches)) => {
+                    (run, rate_limit_bucket, command, unpublished_branches)
+                }
+                None => return,
+            };
+        crate::consider_publish_run(
+            &state.conn,
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &state.vcs_managers,
+            &state.bucket_rate_limiter,
+            &run,
+            &rate_limit_bucket,
+            unpublished_branches.as_slice(),
+            &command,
+            state.push_limit,
+            state.require_binary_diff,
+        )
+        .await
+        .unwrap();
+    }
+
+    tokio::spawn(run(state.clone(), id));
+    (StatusCode::ACCEPTED, "Consider started")
 }
 
-async fn get_publish_by_id() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct PublishDetails {
+    codebase: String,
+    target_branch_url: String,
+    branch: String,
+    main_branch_revision: RevisionId,
+    revision: RevisionId,
+    mode: String,
+    merge_proposal_url: String,
+    result_code: String,
+    description: String,
+}
+
+async fn get_publish_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let publish = sqlx::query_as::<_, PublishDetails>(
+        r#"""
+SELECT
+  codebase,
+  branch_name,
+  main_branch_revision,
+  revision,
+  mode,
+  merge_proposal_url,
+  target_branch_url,
+  result_code,
+  description
+FROM publish
+LEFT JOIN codebase
+ON codebase.branch_url = publish.target_branch_url
+WHERE id = $1
+"""#,
+    )
+    .bind(&id)
+    .fetch_optional(&state.conn)
+    .await
+    .unwrap();
+
+    if let Some(details) = publish {
+        (StatusCode::OK, Json(serde_json::to_value(details).unwrap()))
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such publish",
+                "id": id,
+            })),
+        )
+    }
 }
 
 async fn publish() {
     unimplemented!()
 }
 
-async fn get_credentials() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ForgeCredentials {
+    kind: String,
+    name: String,
+    url: url::Url,
+    user: Option<String>,
+    user_url: Option<url::Url>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Credentials {
+    ssh_keys: Vec<String>,
+    pgp_keys: Vec<String>,
+    hosting: Vec<ForgeCredentials>,
+}
+
+async fn get_credentials(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let mut ssh_keys = vec![];
+
+    let ssh_dir = std::env::home_dir().unwrap().join(".ssh");
+
+    for entry in std::fs::read_dir(ssh_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().unwrap() == "pub" {
+            let f = std::fs::File::open(path).unwrap();
+            use std::io::BufRead;
+            let reader = std::io::BufReader::new(f);
+            let lines = reader.lines();
+            ssh_keys.extend(lines.map(|l| l.unwrap().trim().to_string()));
+        }
+    }
+
+    let mut pgp_keys = vec![];
+    for gpg_entry in state.gpg.keylist(true) {
+        pgp_keys.push(String::from_utf8(state.gpg.key_export_minimal(&gpg_entry.fpr)).unwrap());
+    }
+
+    let mut hosting = vec![];
+    for instance in breezyshim::forge::iter_forge_instances() {
+        let current_user = match instance.get_current_user() {
+            Ok(user) => user,
+            Err(BrzError::ForgeLoginRequired) => continue,
+            Err(BrzError::UnsupportedForge(..)) => {
+                // WTF? Well, whatever.
+                continue;
+            }
+            Err(BrzError::RedirectRequested { .. }) => {
+                // This should never happen; forge implementation is meant to either ignore or handle this redirect.
+                continue;
+            }
+            Err(e) => {
+                log::warn!(
+                    "Error getting current user for {}: {}",
+                    instance.forge_name(),
+                    e
+                );
+                continue;
+            }
+        };
+        let current_user_url = current_user
+            .as_ref()
+            .map(|current_user| instance.get_user_url(&current_user).unwrap());
+        let forge = ForgeCredentials {
+            kind: instance.forge_kind(),
+            name: instance.forge_name(),
+            url: instance.base_url(),
+            user: current_user,
+            user_url: current_user_url,
+        };
+        hosting.push(forge);
+    }
+
+    (
+        StatusCode::OK,
+        Json(Credentials {
+            ssh_keys,
+            pgp_keys,
+            hosting,
+        }),
+    )
 }
 
 async fn health() -> &'static str {
@@ -75,16 +278,132 @@ async fn ready() -> &'static str {
     "OK"
 }
 
-async fn scan() {
-    unimplemented!()
+async fn check_straggler(
+    proposal_info_manager: &crate::proposal_info::ProposalInfoManager,
+    url: &url::Url,
+) {
+    // Find the canonical URL
+    match reqwest::get(url.to_string()).await {
+        Ok(resp) => {
+            if resp.status() == 200 && resp.url() != url {
+                proposal_info_manager
+                    .update_canonical_url(url, resp.url())
+                    .await
+                    .unwrap();
+            }
+            if resp.status() == 404 {
+                // TODO(jelmer): Keep it but leave a tumbestone around?
+                proposal_info_manager
+                    .delete_proposal_info(url)
+                    .await
+                    .unwrap();
+            }
+        }
+        Err(e) => {
+            log::warn!("Got error loading straggler {}: {}", url, e);
+        }
+    }
 }
 
-async fn check_stragglers() {
-    unimplemented!()
+async fn check_stragglers(
+    State(state): State<Arc<AppState>>,
+    Query(ndays): Query<usize>,
+) -> impl IntoResponse {
+    async fn scan(conn: PgPool, redis: Option<redis::aio::ConnectionManager>, urls: Vec<url::Url>) {
+        let proposal_info_manager =
+            crate::proposal_info::ProposalInfoManager::new(conn.clone(), redis.clone()).await;
+        for url in urls {
+            check_straggler(&proposal_info_manager, &url).await;
+        }
+    }
+
+    let proposal_info_manager =
+        crate::proposal_info::ProposalInfoManager::new(state.conn.clone(), state.redis.clone())
+            .await;
+
+    let urls = proposal_info_manager
+        .iter_outdated_proposal_info_urls(chrono::Duration::days(ndays as i64))
+        .await
+        .unwrap();
+
+    let conn = state.conn.clone();
+    let redis = state.redis.clone();
+
+    tokio::spawn(scan(conn, redis, urls.clone()));
+
+    (StatusCode::OK, Json(serde_json::json!(urls)))
 }
 
-async fn refresh_status() {
-    unimplemented!()
+async fn scan(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    async fn scan(state: Arc<AppState>) {
+        crate::check_existing(
+            state.conn.clone(),
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &state.bucket_rate_limiter,
+            state.forge_rate_limiter.clone(),
+            &state.vcs_managers,
+            state.modify_mp_limit,
+            state.unexpected_mp_limit,
+        )
+        .await;
+    }
+
+    tokio::spawn(scan(state));
+    (StatusCode::ACCEPTED, "Scan started")
+}
+
+async fn refresh_status(
+    State(state): State<Arc<AppState>>,
+    Query(url): Query<url::Url>,
+) -> impl IntoResponse {
+    log::info!("Request to refresh proposal status for {}", url);
+
+    async fn scan(state: Arc<AppState>, url: url::Url) {
+        let mp = breezyshim::forge::get_proposal_by_url(&url).unwrap();
+        let status = if mp.is_merged().unwrap() {
+            breezyshim::forge::MergeProposalStatus::Merged
+        } else if mp.is_closed().unwrap() {
+            breezyshim::forge::MergeProposalStatus::Closed
+        } else {
+            breezyshim::forge::MergeProposalStatus::Open
+        };
+        match crate::check_existing_mp(
+            &state.conn,
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &mp,
+            status,
+            &state.vcs_managers,
+            &state.bucket_rate_limiter,
+            false,
+            None,
+            None,
+        )
+        .await
+        {
+            Ok(_) => {
+                log::info!("Refreshed proposal status for {}", url);
+            }
+            Err(crate::CheckMpError::NoRunForMergeProposal(url)) => {
+                log::info!("Unable to find stored metadata for {}, skipping", url);
+            }
+            Err(crate::CheckMpError::BranchRateLimited { retry_after }) => {
+                log::info!("Rate-limited accessing {}, skipping", url);
+            }
+            Err(crate::CheckMpError::UnexpectedHttpStatus {}) => {
+                log::info!("Unexpected HTTP status {} for {}, skipping", status, url);
+            }
+            Err(crate::CheckMpError::ForgeLoginRequired {}) => {
+                log::info!("Forge login required for {}, skipping", url);
+            }
+        }
+    }
+
+    tokio::spawn(scan(state.clone(), url));
+    (StatusCode::ACCEPTED, "Refresh of proposal status started")
 }
 
 async fn autopublish() {
@@ -178,10 +497,10 @@ async fn get_all_rate_limits(State(state): State<Arc<AppState>>) -> impl IntoRes
             per_bucket,
             per_forge: state
                 .forge_rate_limiter
-                .lock()
+                .read()
                 .unwrap()
                 .iter()
-                .map(|(f, t)| (f.forge_name().to_string(), *t))
+                .map(|(f, t)| (f.to_string(), *t))
                 .collect(),
             push_limit: state.push_limit,
         })
@@ -280,7 +599,7 @@ async fn get_blockers(
         change_set_state: String,
         change_set: String,
         inactive: bool,
-    };
+    }
 
     let run = sqlx::query_as::<_, RunDetails>(
         r#"""
@@ -475,15 +794,7 @@ WHERE run.id = $1
     )
 }
 
-pub fn app(
-    state: Arc<AppState>,
-    worker: Arc<Mutex<crate::PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    require_binary_diff: bool,
-    modify_mp_limit: Option<i32>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-) -> Router {
+pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/:campaign/merge-proposals",

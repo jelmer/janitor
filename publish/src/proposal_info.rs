@@ -15,7 +15,7 @@ struct ProposalInfo {
     codebase: Option<String>,
 }
 
-struct ProposalInfoManager {
+pub struct ProposalInfoManager {
     conn: PgPool,
     redis: Option<redis::aio::ConnectionManager>,
 }
@@ -36,7 +36,10 @@ impl ProposalInfoManager {
         Ok(urls.iter().map(|url| url.parse().unwrap()).collect())
     }
 
-    async fn get_proposal_info(&self, url: &url::Url) -> Result<Option<ProposalInfo>, sqlx::Error> {
+    pub async fn get_proposal_info(
+        &self,
+        url: &url::Url,
+    ) -> Result<Option<ProposalInfo>, sqlx::Error> {
         let query = sqlx::query_as::<_, ProposalInfo>(
             r#"SELECT
                 merge_proposal.rate_limit_bucket AS rate_limit_bucket,
@@ -54,7 +57,7 @@ impl ProposalInfoManager {
         query.bind(url.to_string()).fetch_optional(&self.conn).await
     }
 
-    async fn delete_proposal_info(&self, url: &url::Url) -> Result<(), sqlx::Error> {
+    pub async fn delete_proposal_info(&self, url: &url::Url) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM merge_proposal WHERE url = $1")
             .bind(url.to_string())
             .execute(&self.conn)
@@ -62,7 +65,7 @@ impl ProposalInfoManager {
         Ok(())
     }
 
-    async fn update_canonical_url(
+    pub async fn update_canonical_url(
         &self,
         old_url: &url::Url,
         canonical_url: &url::Url,

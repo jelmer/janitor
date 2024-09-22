@@ -3,13 +3,13 @@ use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
-use janitor::publish::Mode;
+use janitor::publish::{MergeProposalStatus, Mode};
 use janitor::vcs::{VcsManager, VcsType};
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub mod proposal_info;
 pub mod publish_one;
@@ -575,26 +575,13 @@ fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>
 
 pub async fn process_queue_loop(
     state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
     interval: chrono::Duration,
     auto_publish: bool,
-    modify_mp_limit: Option<i32>,
-    require_binary_diff: bool,
 ) {
     todo!();
 }
 
-pub async fn publish_pending_ready(
-    state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    require_binary_diff: bool,
-) -> Result<(), PublishError> {
+pub async fn publish_pending_ready(state: Arc<AppState>) -> Result<(), PublishError> {
     todo!();
 }
 
@@ -629,14 +616,7 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
     Ok(())
 }
 
-pub async fn listen_to_runner(
-    state: Arc<AppState>,
-    redis: Option<redis::aio::ConnectionManager>,
-    config: &janitor::config::Config,
-    publish_worker: Arc<Mutex<PublishWorker>>,
-    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
-    require_binary_diff: bool,
-) {
+pub async fn listen_to_runner(state: Arc<AppState>) {
     todo!();
 }
 
@@ -674,6 +654,248 @@ mod tests {
 pub struct AppState {
     pub conn: sqlx::PgPool,
     pub bucket_rate_limiter: Mutex<Box<dyn rate_limiter::RateLimiter>>,
-    pub forge_rate_limiter: Mutex<HashMap<Forge, chrono::DateTime<Utc>>>,
+    pub forge_rate_limiter: Arc<RwLock<HashMap<String, chrono::DateTime<Utc>>>>,
     pub push_limit: Option<usize>,
+    pub redis: Option<redis::aio::ConnectionManager>,
+    pub config: &'static janitor::config::Config,
+    pub publish_worker: PublishWorker,
+    pub vcs_managers: HashMap<VcsType, Box<dyn VcsManager>>,
+    pub modify_mp_limit: Option<i32>,
+    pub unexpected_mp_limit: Option<i32>,
+    pub gpg: breezyshim::gpg::GPGContext,
+    pub require_binary_diff: bool,
+}
+
+#[derive(Debug)]
+pub enum CheckMpError {
+    NoRunForMergeProposal(url::Url),
+    BranchRateLimited {
+        retry_after: Option<chrono::Duration>,
+    },
+    UnexpectedHttpStatus,
+    ForgeLoginRequired,
+}
+
+impl From<BrzError> for CheckMpError {
+    fn from(e: BrzError) -> Self {
+        match e {
+            BrzError::UnexpectedHttpStatus { .. } => CheckMpError::UnexpectedHttpStatus,
+            BrzError::ForgeLoginRequired => CheckMpError::ForgeLoginRequired,
+            _ => CheckMpError::UnexpectedHttpStatus,
+        }
+    }
+}
+
+impl std::fmt::Display for CheckMpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            CheckMpError::NoRunForMergeProposal(url) => {
+                write!(f, "No run for merge proposal: {}", url)
+            }
+            CheckMpError::BranchRateLimited { retry_after } => write!(f, "Branch is rate limited"),
+            CheckMpError::UnexpectedHttpStatus => write!(f, "Unexpected HTTP status"),
+            CheckMpError::ForgeLoginRequired => write!(f, "Forge login required"),
+        }
+    }
+}
+
+impl std::error::Error for CheckMpError {}
+
+async fn check_existing_mp(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    mp: &breezyshim::forge::MergeProposal,
+    status: breezyshim::forge::MergeProposalStatus,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    check_only: bool,
+    mps_per_bucket: Option<
+        &mut HashMap<janitor::publish::MergeProposalStatus, HashMap<String, usize>>,
+    >,
+    possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
+) -> Result<bool, CheckMpError> {
+    todo!()
+}
+
+/// Iterate over all existing merge proposals.
+pub fn iter_all_mps(
+    statuses: Option<&[breezyshim::forge::MergeProposalStatus]>,
+) -> impl Iterator<
+    Item = Result<
+        (
+            Forge,
+            breezyshim::forge::MergeProposal,
+            breezyshim::forge::MergeProposalStatus,
+        ),
+        BrzError,
+    >,
+> + '_ {
+    let statuses = statuses.unwrap_or(&[
+        breezyshim::forge::MergeProposalStatus::Open,
+        breezyshim::forge::MergeProposalStatus::Closed,
+        breezyshim::forge::MergeProposalStatus::Merged,
+    ]);
+    breezyshim::forge::iter_forge_instances().flat_map(|instance| {
+        statuses.iter().flat_map(move |status| {
+            let proposals = instance.iter_my_proposals(Some(*status), None).unwrap();
+            let value = instance.clone();
+
+            proposals.map(move |proposal| Ok((value.clone(), proposal, *status)))
+        })
+    })
+}
+
+async fn check_existing(
+    conn: sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    forge_rate_limiter: Arc<RwLock<HashMap<String, chrono::DateTime<Utc>>>>,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    modify_limit: Option<i32>,
+    unexpected_limit: Option<i32>,
+) {
+    let mut mps_per_bucket = maplit::hashmap! {
+        MergeProposalStatus::Open => maplit::hashmap! {},
+        MergeProposalStatus::Closed => maplit::hashmap! {},
+        MergeProposalStatus::Merged => maplit::hashmap! {},
+        MergeProposalStatus::Applied => maplit::hashmap! {},
+        MergeProposalStatus::Abandoned => maplit::hashmap! {},
+        MergeProposalStatus::Rejected => maplit::hashmap! {},
+    };
+    let mut possible_transports = Vec::new();
+    let mut status_count = maplit::hashmap! {
+        MergeProposalStatus::Open => 0,
+        MergeProposalStatus::Closed => 0,
+        MergeProposalStatus::Merged => 0,
+        MergeProposalStatus::Applied => 0,
+        MergeProposalStatus::Abandoned => 0,
+        MergeProposalStatus::Rejected => 0,
+    };
+
+    let mut modified_mps = 0;
+    let mut unexpected = 0;
+    let mut check_only = false;
+    let mut was_forge_ratelimited = false;
+
+    for (forge, mp, status) in iter_all_mps(None).filter_map(Result::ok) {
+        *status_count.entry(status.into()).or_insert(0) += 1;
+        if let Some(retry_after) = forge_rate_limiter.read().unwrap().get(&forge.forge_name()) {
+            if chrono::Utc::now() < *retry_after {
+                forge_rate_limiter
+                    .write()
+                    .unwrap()
+                    .remove(&forge.forge_name());
+            } else {
+                was_forge_ratelimited = true;
+                continue;
+            }
+        }
+        let modified = match check_existing_mp(
+            &conn,
+            redis.clone(),
+            config,
+            publish_worker,
+            &mp,
+            status,
+            vcs_managers,
+            bucket_rate_limiter,
+            check_only,
+            Some(&mut mps_per_bucket),
+            Some(&mut possible_transports),
+        )
+        .await
+        {
+            Ok(modified) => modified,
+            Err(CheckMpError::NoRunForMergeProposal(url)) => {
+                log::warn!("Unable to find metadata for {}, skipping.", url);
+                false
+            }
+            Err(CheckMpError::ForgeLoginRequired) => {
+                log::warn!("Login required, skipping.");
+                false
+            }
+            Err(CheckMpError::BranchRateLimited { retry_after }) => {
+                log::warn!(
+                    "Rate-limited accessing {}. Skipping {:?} for this cycle.",
+                    mp.url().unwrap(),
+                    forge
+                );
+                let retry_after = if let Some(retry_after) = retry_after {
+                    retry_after
+                } else {
+                    chrono::Duration::minutes(30)
+                };
+                forge_rate_limiter
+                    .write()
+                    .unwrap()
+                    .insert(forge.forge_name(), chrono::Utc::now() + retry_after);
+                continue;
+            }
+            Err(CheckMpError::UnexpectedHttpStatus) => {
+                log::warn!("Got unexpected HTTP status for {}", mp.url().unwrap());
+                // TODO(jelmer): print traceback?
+                unexpected += 1;
+                true
+            }
+        };
+
+        if unexpected_limit.map(|ul| unexpected > ul).unwrap_or(false) {
+            log::warn!(
+                "Saw {} unexpected HTTP responses, over threshold of {}. Giving up for now.",
+                unexpected,
+                unexpected_limit.unwrap(),
+            );
+            return;
+        }
+
+        if modified {
+            modified_mps += 1;
+            if modify_limit.map(|ml| modified_mps > ml).unwrap_or(false) {
+                log::warn!(
+                    "Already modified {} merge proposals, waiting with the rest.",
+                    modified_mps,
+                );
+                check_only = true;
+            }
+        }
+    }
+
+    log::info!("Successfully scanned existing merge proposals");
+
+    if !was_forge_ratelimited {
+        let mut total = 0;
+        for (bucket, count) in mps_per_bucket
+            .get(&janitor::publish::MergeProposalStatus::Open)
+            .unwrap_or(&maplit::hashmap! {})
+            .iter()
+        {
+            total += count;
+        }
+    } else {
+        log::info!(
+            "Rate-Limited for forges {:?}. Not updating stats",
+            forge_rate_limiter
+        );
+    }
+}
+
+async fn consider_publish_run(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    run: &janitor::state::Run,
+    rate_limit_bucket: &str,
+    unpublished_branches: &[crate::state::UnpublishedBranch],
+    command: &str,
+    push_limit: Option<usize>,
+    require_binary_diff: bool,
+) -> Result<HashMap<String, Option<String>>, sqlx::Error> {
+    unimplemented!()
 }
