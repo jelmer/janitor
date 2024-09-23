@@ -106,7 +106,7 @@ dev = [
     "pytest-aiohttp",
     "fakeredis",
     "python-subunit",
-    "ruff==0.6.5",
+    "ruff==0.6.7",
     "types-PyYAML",
     "types-protobuf",
     "types-mock",
