@@ -23,7 +23,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 pyo3 = { workspace = true }
 silver-platter = { workspace = true }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
-regex = "1.10.6"
+regex = "1.11.0"
 lazy-regex = "3.2.0"
 fancy-regex = "0.13.0"
 askama = "0.12"
