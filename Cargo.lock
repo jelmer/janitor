@@ -4937,9 +4937,9 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.5.38"
+version = "0.5.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea6b7ceafa554c91fb4796172b3c1d77acc3feac7b457f0e69f36e354b30e38"
+checksum = "c7e2831e2981e580c29ee046ae83781a736fdf61eb8c749281161d472d97ae57"
 dependencies = [
  "breezyshim",
  "chrono",
