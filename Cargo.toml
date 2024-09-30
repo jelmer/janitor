@@ -36,7 +36,7 @@ percent-encoding = "2.3.1"
 tempfile.workspace = true
 google-cloud-storage = { workspace = true, optional = true }
 google-cloud-auth = { workspace = true, optional = true }
-flate2 = "1.0.33"
+flate2 = "1.0.34"
 filetime = "0.2.25"
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
