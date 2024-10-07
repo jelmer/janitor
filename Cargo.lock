@@ -1070,41 +1070,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling"
-version = "0.20.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f63b86c8a8826a49b8c21f08a2d07338eec8d900540f8630dc76284be802989"
-dependencies = [
- "darling_core",
- "darling_macro",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.20.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95133861a8032aaea082871032f5815eb9e98cef03fa916ab4500513994df9e5"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim",
- "syn 2.0.79",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.20.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
-dependencies = [
- "darling_core",
- "quote",
- "syn 2.0.79",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1122,12 +1087,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "deb822-derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b6e5cafe61e77421a090e2a33b8a2e4e2ff1b106fd906ebade111307064d981"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
+]
+
+[[package]]
 name = "deb822-lossless"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a3282376f8ff540293a247cc4b875d00c95de27ac8049e8e388bc5752659af7"
 dependencies = [
- "deb822-derive",
+ "deb822-derive 0.1.1",
+ "regex",
+ "rowan",
+ "serde",
+]
+
+[[package]]
+name = "deb822-lossless"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "607abd8f5e3d131f03a1f351f5a5c8426ba4bf820ad10a2c59a1d4fd6d8eb1d9"
+dependencies = [
+ "deb822-derive 0.2.0",
  "pyo3",
  "regex",
  "rowan",
@@ -1159,7 +1147,7 @@ dependencies = [
  "breezyshim",
  "chrono",
  "configparser",
- "deb822-lossless",
+ "deb822-lossless 0.1.27",
  "debian-changelog",
  "debian-control",
  "debian-copyright",
@@ -1203,12 +1191,12 @@ dependencies = [
 
 [[package]]
 name = "debian-control"
-version = "0.1.37"
+version = "0.1.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9597b6d2961a9dda53e20390f5f548fafb315399d059fe92722eae805dcf81a"
+checksum = "eaf55e0dedfa829500f3d707d7e3689cf4101be13e23536a47e0cee56d868093"
 dependencies = [
  "chrono",
- "deb822-lossless",
+ "deb822-lossless 0.2.1",
  "debversion",
  "pyo3",
  "regex",
@@ -1222,7 +1210,7 @@ version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70c67f0e99e0de82d1f48ee8123ef1b8759fb033502c596f11a13d6a7410662"
 dependencies = [
- "deb822-lossless",
+ "deb822-lossless 0.1.27",
  "debversion",
  "regex",
 ]
@@ -1259,7 +1247,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a70a2eea1431de0923428866df2e7f9e843d2587bfa580fa6ad538fb822921df"
 dependencies = [
  "chrono",
- "deb822-lossless",
+ "deb822-lossless 0.1.27",
  "url",
 ]
 
@@ -2251,18 +2239,12 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.1.0",
- "indexmap 2.6.0",
+ "indexmap",
  "slab",
  "tokio",
  "tokio-util",
  "tracing",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
@@ -2555,12 +2537,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ident_case"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
-
-[[package]]
 name = "idna"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2584,17 +2560,6 @@ dependencies = [
  "same-file",
  "walkdir",
  "winapi-util",
-]
-
-[[package]]
-name = "indexmap"
-version = "1.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
-dependencies = [
- "autocfg",
- "hashbrown 0.12.3",
- "serde",
 ]
 
 [[package]]
@@ -2839,7 +2804,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "serde_with",
  "silver-platter",
  "sqlx",
  "sqlx-core",
@@ -3545,7 +3509,7 @@ dependencies = [
  "buildlog-consultant",
  "chrono",
  "clap",
- "deb822-lossless",
+ "deb822-lossless 0.1.27",
  "debian-analyzer",
  "debian-changelog",
  "debian-control",
@@ -3843,7 +3807,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
- "indexmap 2.6.0",
+ "indexmap",
 ]
 
 [[package]]
@@ -4148,7 +4112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06f45f16b522d92336e839b5e40680095a045e36a1e7f742ba682ddc85236772"
 dependencies = [
  "anyhow",
- "indexmap 2.6.0",
+ "indexmap",
  "log",
  "protobuf 3.6.0",
  "protobuf-support",
@@ -4340,7 +4304,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef7061023bcb58a0fc4a4bbe9819c13b0dca7c2abc14da14f5ecc1532ab3a36a"
 dependencies = [
- "indexmap 2.6.0",
+ "indexmap",
  "pep440_rs 0.6.6",
  "pep508_rs",
  "serde",
@@ -4389,7 +4353,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c563814ace27b1f4c91e1f48ab86c395f2e07ac13e29491cd3a63b8b27b34d94"
 dependencies = [
- "deb822-lossless",
+ "deb822-lossless 0.1.27",
  "url",
 ]
 
@@ -4653,7 +4617,7 @@ dependencies = [
  "bytecheck",
  "bytes",
  "hashbrown 0.14.5",
- "indexmap 2.6.0",
+ "indexmap",
  "munge",
  "ptr_meta",
  "rancor",
@@ -5007,42 +4971,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_with"
-version = "3.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9720086b3357bcb44fce40117d769a4d068c70ecfa190850a980a71755f66fcc"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "hex",
- "indexmap 1.9.3",
- "indexmap 2.6.0",
- "serde",
- "serde_derive",
- "serde_json",
- "serde_with_macros",
- "time",
-]
-
-[[package]]
-name = "serde_with_macros"
-version = "3.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f1abbfe725f27678f4663bcacb75a83e829fd464c25d78dd038a3a29e307cec"
-dependencies = [
- "darling",
- "proc-macro2",
- "quote",
- "syn 2.0.79",
-]
-
-[[package]]
 name = "serde_yaml"
 version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
- "indexmap 2.6.0",
+ "indexmap",
  "itoa",
  "ryu",
  "serde",
@@ -5323,7 +5257,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "hashlink",
  "hex",
- "indexmap 2.6.0",
+ "indexmap",
  "log",
  "memchr",
  "native-tls",
@@ -5970,7 +5904,7 @@ version = "0.22.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
- "indexmap 2.6.0",
+ "indexmap",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -6838,7 +6772,7 @@ dependencies = [
  "crossbeam-utils",
  "displaydoc",
  "flate2",
- "indexmap 2.6.0",
+ "indexmap",
  "num_enum",
  "thiserror",
 ]
