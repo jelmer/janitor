@@ -40,7 +40,7 @@ flate2 = "1.0.34"
 filetime = "0.2.25"
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
-debian-control = "0.1.28"
+debian-control = "0.1.38"
 shlex.workspace = true
 prometheus = { version = "0.13.4", features = ["reqwest"] }
 

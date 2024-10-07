@@ -22,7 +22,7 @@ janitor = { version = "0.0.0", path = "..", default-features = false, features =
 async-trait = "0.1.83"
 url.workspace = true
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
-debian-control = { version = "0.1.28", optional = true }
+debian-control = { version = "0.1.38", optional = true }
 log.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 reqwest.workspace = true
