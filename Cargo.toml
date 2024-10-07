@@ -27,7 +27,7 @@ regex = "1.11.0"
 lazy-regex = "3.2.0"
 fancy-regex = "0.13.0"
 askama = "0.12"
-futures = "0.3.30"
+futures = "0.3.31"
 sqlx = { workspace = true, features = ["chrono"] }
 sqlx-core = { workspace = true, features = ["chrono"] }
 sqlx-postgres = { workspace = true, features = ["chrono"] }
