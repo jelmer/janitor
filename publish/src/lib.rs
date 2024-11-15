@@ -6,7 +6,7 @@ use janitor::config::Campaign;
 use janitor::publish::{MergeProposalStatus, Mode};
 use janitor::vcs::{VcsManager, VcsType};
 use reqwest::header::HeaderMap;
-use serde::ser::SerializeStruct;
+use serde::set::SerializeStruct;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
