@@ -25,16 +25,10 @@ import asyncpg
 from aiohttp import ClientConnectorError, ClientResponseError, ClientTimeout
 from breezy.forge import Forge, UnsupportedForge, get_forge_by_hostname
 from breezy.revision import NULL_REVISION
-from buildlog_consultant.sbuild import (
-    SbuildLog,
-    find_build_failure_description,
-    worker_failure_from_sbuild_log,
-)
-from ognibuild.build import BUILD_LOG_FILENAME
-from ognibuild.dist import DIST_LOG_FILENAME
 from yarl import URL
 
 from janitor import state
+from janitor._site import find_build_log_failure, find_dist_log_failure
 from janitor.logs import LogRetrievalError
 from janitor.queue import Queue
 from janitor.site import BuildDiffUnavailable, DebdiffRetrievalError, get_archive_diff
@@ -45,59 +39,10 @@ from .common import get_unchanged_run
 
 FAIL_BUILD_LOG_LEN = 15
 
+BUILD_LOG_FILENAME = "build.log"
+DIST_LOG_FILENAME = "dist.log"
 WORKER_LOG_FILENAME = "worker.log"
 CODEMOD_LOG_FILENAME = "codemod.log"
-
-
-def find_build_log_failure(logf, length):
-    sbuildlog = SbuildLog.parse(logf)
-    linecount = sbuildlog.sections[-1].offsets[1]
-    failure = worker_failure_from_sbuild_log(sbuildlog)
-
-    if failure.match and failure.section:
-        abs_offset = failure.section.offsets[0] + failure.match.lineno
-        include_lines = (
-            max(1, abs_offset - length // 2),
-            abs_offset + min(length // 2, len(failure.section.lines)),
-        )
-        highlight_lines = [abs_offset]
-        return (linecount, include_lines, highlight_lines)
-
-    if failure.match:
-        include_lines = (
-            max(1, failure.match.lineno - length // 2),
-            failure.match.lineno + min(length // 2, linecount),
-        )
-        highlight_lines = [failure.match.lineno]
-        return (linecount, include_lines, highlight_lines)
-
-    if failure.section:
-        include_lines = (
-            max(1, failure.section.offsets[1] - length),
-            failure.section.offsets[1],
-        )
-    elif length < linecount:
-        include_lines = (linecount - length, None)
-    else:
-        include_lines = (1, linecount)
-
-    return (linecount, include_lines, [])
-
-
-def find_dist_log_failure(logf, length):
-    lines = [line.decode("utf-8", "replace") for line in logf.readlines()]
-    match, unused_err = find_build_failure_description(lines)
-    if match is not None:
-        highlight_lines = getattr(match, "linenos", None)
-    else:
-        highlight_lines = None
-
-    include_lines = (
-        max(1, len(lines) - length),
-        len(lines),
-    )
-
-    return (len(lines), include_lines, highlight_lines)
 
 
 def in_line_boundaries(i, boundaries):

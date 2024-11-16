@@ -25,7 +25,7 @@ silver-platter = { workspace = true }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 regex = "1.11.0"
 lazy-regex = "3.2.0"
-fancy-regex = "0.13.0"
+fancy-regex = "0.14.0"
 askama = "0.12"
 futures = "0.3.30"
 sqlx = { workspace = true, features = ["chrono"] }
@@ -43,16 +43,18 @@ reqwest = { workspace = true, features = ["json"] }
 debian-control = "0.1.28"
 shlex.workspace = true
 prometheus = { version = "0.13.4", features = ["reqwest"] }
+buildlog-consultant = { workspace = true }
+tracing = "0.1.40"
 
 [workspace.dependencies]
-rslock = { default-features = false, version = "0.4.0" }
-debian-changelog = "0.1.12"
+rslock = { default-features = false, version = "0.5.0" }
+debian-changelog = "0.2.0"
 debian-analyzer = "0.158.11"
 debversion = { version = "0.4" }
-google-cloud-storage = { version = "0.20.0" }
-google-cloud-auth = { version = "0.16.0" }
+google-cloud-storage = "0.22.1"
+google-cloud-auth = "0.17.1"
 tempfile = "3.13.0"
-redis = "0.26.1"
+redis = "0.27.5"
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
@@ -76,13 +78,14 @@ silver-platter = { version = ">=0.5.36" }
 ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 shlex = "1"
+buildlog-consultant = { git = "https://github.com/jelmer/buildlog-consultant" }
 
 [build-dependencies]
 protobuf-codegen = "3"
 protoc-rust = "^2.0"
 
 [workspace]
-members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store"]
+members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store", "site", "site-py" ]
 
 [workspace.package]
 edition = "2021"
