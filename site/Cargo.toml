@@ -1,0 +1,12 @@
+[package]
+name = "janitor-site"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition.workspace = true
+description = "Basic site for the janitor"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[dependencies]
+buildlog-consultant = { version = "0.1.0", default-features = false }

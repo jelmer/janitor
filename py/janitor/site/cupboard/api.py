@@ -24,14 +24,16 @@ from aiohttp import ClientConnectorError, ClientResponseError, ClientSession, we
 from aiohttp_apispec import docs
 from aiojobs.aiohttp import setup as setup_aiojobs
 from aiojobs.aiohttp import spawn
-from ognibuild.build import BUILD_LOG_FILENAME
-from ognibuild.dist import DIST_LOG_FILENAME
 from yarl import URL
 
 from janitor import CAMPAIGN_REGEX
 
 from .. import check_admin
 from ..setup import setup_logfile_manager, setup_postgres
+
+BUILD_LOG_FILENAME = "build.log"
+DIST_LOG_FILENAME = "dist.log"
+
 
 routes = web.RouteTableDef()
 

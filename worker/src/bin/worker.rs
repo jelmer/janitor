@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let global_config = breezyshim::config::global_stack().unwrap();
-    global_config.set("branch.fetch_tags", &true).unwrap();
+    global_config.set("branch.fetch_tags", true).unwrap();
 
     let base_url = args.base_url;
 
