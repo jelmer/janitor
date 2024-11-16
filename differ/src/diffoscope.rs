@@ -1,14 +1,17 @@
-use tracing::debug;
+use patchkit::unified::{iter_hunks, Hunk, HunkLine};
+use std::path::PathBuf;
+use tracing::{debug, warn};
 
 #[derive(Debug, serde::Deserialize)]
-struct DiffoscopeOutput {
+#[allow(unused)]
+pub struct DiffoscopeOutput {
     #[serde(
         rename = "diffoscope-json-version",
         skip_serializing_if = "Option::is_none"
     )]
     diffoscope_json_version: Option<u8>,
-    source1: String,
-    source2: String,
+    source1: PathBuf,
+    source2: PathBuf,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     comments: Vec<String>,
     #[serde(default)]
@@ -75,7 +78,7 @@ async fn _run_diffoscope(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let mut output = tokio::time::timeout(
+    let output = tokio::time::timeout(
         std::time::Duration::from_secs_f64(timeout.unwrap_or(5.0)),
         cmd.output(),
     )
@@ -90,10 +93,117 @@ async fn _run_diffoscope(
                 &output.stdout,
             ))?));
         }
-        return Err(DiffoscopeError::new(&stderr));
+        Err(DiffoscopeError::new(&stderr))
     } else {
-        return Ok(None);
+        Ok(None)
     }
+}
+
+pub fn filter_irrelevant(diff: &mut DiffoscopeOutput) {
+    diff.source1 = diff.source1.file_name().unwrap().into();
+    diff.source2 = diff.source2.file_name().unwrap().into();
+}
+
+pub fn filter_boring_udiff(
+    udiff: &str,
+    old_version: &str,
+    new_version: &str,
+    display_version: &str,
+) -> Result<String, patchkit::unified::Error> {
+    let mut lines = udiff.lines().map(|line| line.as_bytes());
+    let mut hunks = vec![];
+    for hunk in iter_hunks(&mut lines) {
+        let mut hunk = hunk?;
+        for line in &mut hunk.lines {
+            match line {
+                HunkLine::RemoveLine(line) => {
+                    *line = String::from_utf8(line.to_vec())
+                        .unwrap()
+                        .replace(old_version, display_version)
+                        .into_bytes();
+                }
+                HunkLine::InsertLine(line) => {
+                    *line = String::from_utf8(line.to_vec())
+                        .unwrap()
+                        .replace(new_version, display_version)
+                        .into_bytes();
+                }
+                HunkLine::ContextLine(_line) => {}
+            }
+        }
+        hunks.push(hunk);
+    }
+    Ok(hunks
+        .iter()
+        .map(|hunk| String::from_utf8(hunk.as_bytes()).unwrap())
+        .collect())
+}
+
+pub fn filter_boring_detail(
+    detail: &mut DiffoscopeOutput,
+    old_version: &str,
+    new_version: &str,
+    display_version: &str,
+) -> bool {
+    if let Some(unified_diff) = &detail.unified_diff {
+        detail.unified_diff =
+            match filter_boring_udiff(unified_diff, old_version, new_version, display_version) {
+                Ok(udiff) => Some(udiff),
+                Err(e) => {
+                    warn!("Error parsing hunk: {:?}", e);
+                    None
+                }
+            };
+    }
+    detail.source1 = detail
+        .source1
+        .to_str()
+        .unwrap()
+        .replace(old_version, display_version)
+        .into();
+    detail.source2 = detail
+        .source2
+        .to_str()
+        .unwrap()
+        .replace(new_version, display_version)
+        .into();
+    if !detail.details.is_empty() {
+        let subdetails = detail.details.drain(..).filter_map(|mut subdetail| {
+            if !filter_boring_detail(&mut subdetail, old_version, new_version, display_version) {
+                return None;
+            }
+            Some(subdetail)
+        });
+        detail.details = subdetails.collect();
+    }
+    !(detail.unified_diff.is_none() && detail.details.is_empty())
+}
+
+pub fn filter_boring(
+    diff: &mut DiffoscopeOutput,
+    old_version: &str,
+    old_campaign: &str,
+    new_version: &str,
+    new_campaign: &str,
+) {
+    let display_version = new_version.rsplit_once("~").map_or(new_version, |(v, _)| v);
+    // Changes file differences
+    pub const BORING_FIELDS: &[&str] = &["Date", "Distribution", "Version"];
+    let new_details = diff.details.drain(..).filter_map(|mut detail| {
+        let boring = BORING_FIELDS.contains(&detail.source1.to_str().unwrap())
+            && BORING_FIELDS.contains(&detail.source2.to_str().unwrap());
+        if boring {
+            return None;
+        }
+        if detail.source1.ends_with(".buildinfo") && detail.source2.ends_with(".buildinfo") {
+            return None;
+        }
+        if !filter_boring_detail(&mut detail, old_version, new_version, display_version) {
+            return None;
+        }
+        Some(detail)
+    });
+    diff.details = new_details.collect();
 }
 
 pub async fn run_diffoscope(
@@ -104,8 +214,8 @@ pub async fn run_diffoscope(
 ) -> Result<DiffoscopeOutput, DiffoscopeError> {
     let mut ret = DiffoscopeOutput {
         diffoscope_json_version: Some(1),
-        source1: "old version".to_string(),
-        source2: "new version".to_string(),
+        source1: "old version".into(),
+        source2: "new version".into(),
         comments: vec![],
         unified_diff: None,
         details: vec![],
@@ -115,8 +225,8 @@ pub async fn run_diffoscope(
     {
         let sub = _run_diffoscope(old_path, new_path, diffoscope_command, timeout).await?;
         if let Some(mut sub) = sub {
-            sub.source1 = old_name.to_string();
-            sub.source2 = new_name.to_string();
+            sub.source1 = old_name.into();
+            sub.source2 = new_name.into();
             sub.diffoscope_json_version = None;
             ret.details.push(sub);
         }

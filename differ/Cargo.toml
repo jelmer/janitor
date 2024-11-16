@@ -12,6 +12,12 @@ homepage = "https://github.com/jelmer/janitor"
 janitor = { version = "0.0.0", path = ".." }
 clap = { optional = true, workspace = true }
 env_logger = { optional = true, workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.40"
+serde.workspace = true
+shlex.workspace = true
+patchkit = "0.1.8"
 
 [dev-dependencies]
 maplit = { workspace = true }
