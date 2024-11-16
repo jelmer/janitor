@@ -512,7 +512,7 @@ pub fn run_worker(
         Err(silver_platter::workspace::Error::BrzError(BrzError::MalformedTransform(msg))) => {
             return Err(WorkerFailure {
                 code: "malformed-transform".to_owned(),
-                description: msg.to_string(),
+                description: format!("Malformed transform: {:?}", msg),
                 stage: vec!["setup".to_owned(), "clone".to_owned()],
                 transient: Some(false),
                 details: None,

@@ -94,7 +94,10 @@ pub fn debian_make_changes(
     })
     .unwrap();
 
-    let mut dist_command = vec!["janitor-dist".to_string(), format!("--log-directory={}", log_directory.display())];
+    let mut dist_command = vec![
+        "janitor-dist".to_string(),
+        format!("--log-directory={}", log_directory.display()),
+    ];
     let mut dist_env = HashMap::new();
 
     if let Some(chroot) = env.get("CHROOT") {
@@ -104,20 +107,23 @@ pub fn debian_make_changes(
     let debian_path = subpath.join("debian");
 
     if local_tree.has_filename(&debian_path) {
-        dist_command.push(
-            format!(
-                "--packaging={}",
-                local_tree.abspath(&debian_path).unwrap().display()
-            )
-        );
+        dist_command.push(format!(
+            "--packaging={}",
+            local_tree.abspath(&debian_path).unwrap().display()
+        ));
     }
 
     // Prevent 404s because files have gone away:
     dist_command.push("--apt-update".to_string());
     dist_command.push("--apt-dist-upgrade".to_string());
 
-    let dist_env = dist_env.into_iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(" ");
-    let dist_command = shlex::try_join(dist_command.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap();
+    let dist_env = dist_env
+        .into_iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let dist_command =
+        shlex::try_join(dist_command.iter().map(|s| s.as_str()).collect::<Vec<_>>()).unwrap();
     let dist_command = if !dist_env.is_empty() {
         format!("{} {}", dist_env, dist_command)
     } else {
@@ -446,13 +452,13 @@ fn tree_set_changelog_version(
         true,
         true,
     )?;
-    if let Some(mut entry) = editor.entries().next() {
+    if let Some(mut entry) = editor.iter().next() {
         let version: debversion::Version =
             format!("{}~", entry.version().unwrap()).parse().unwrap();
         if version > *build_version {
             return Ok(());
         }
-        entry.set_version(build_version.clone());
+        entry.set_version(build_version);
         editor.commit()?;
     }
     Ok(())

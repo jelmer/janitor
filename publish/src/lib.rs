@@ -126,6 +126,7 @@ pub struct PublishOneRequest {
     pub command: String,
     pub external_url: Option<url::Url>,
     pub derived_owner: Option<String>,
+    pub auto_merge: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -359,6 +360,7 @@ impl PublishWorker {
         existing_mp_url: Option<&url::Url>,
         extra_context: Option<&serde_json::Value>,
         derived_owner: Option<&str>,
+        auto_merge: Option<bool>,
     ) -> Result<PublishOneResult, PublishError> {
         let local_branch_url =
             vcs_manager.get_branch_url(codebase, &format!("{}/{}", campaign, role));
@@ -386,6 +388,7 @@ impl PublishWorker {
             extra_context: extra_context.cloned(),
             tags: tags.map(|t| t.into_iter().collect()),
             derived_owner: derived_owner.map(|s| s.to_string()),
+            auto_merge,
         };
 
         let mut args = vec!["janitor-publish-one".to_string()];

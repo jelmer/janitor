@@ -80,8 +80,6 @@ dependencies = [
     "breezy[git,launchpad,workspace,pgp]",
     "jinja2",
     "dulwich",
-    "ognibuild",
-    "buildlog-consultant",
     "silver-platter",
     "aiohttp-openmetrics",
     "paramiko",

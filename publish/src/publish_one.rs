@@ -391,6 +391,7 @@ pub fn publish_one(
         Some(&request.revision_id),
         request.extra_context.clone(),
         request.derived_owner.clone(),
+        request.auto_merge.clone(),
     )?;
 
     if let Some(temp_sprout) = temp_sprout {
@@ -422,6 +423,7 @@ pub fn publish(
     stop_revision: Option<&RevisionId>,
     extra_context: Option<serde_json::Value>,
     derived_owner: Option<String>,
+    auto_merge: Option<bool>,
 ) -> Result<(PublishOneResult, String), PublishError> {
     let get_proposal_description = |description_format: DescriptionFormat,
                                     _existing_proposal: Option<&MergeProposal>|
@@ -469,10 +471,16 @@ pub fn publish(
                     .unwrap(),
             )
         } else {
-            Some(determine_title(&get_proposal_description(
+            match determine_title(&get_proposal_description(
                 DescriptionFormat::Plain,
                 existing_proposal,
-            )))
+            )) {
+                Ok(title) => Some(title),
+                Err(e) => {
+                    log::warn!("Failed to determine title: {}", e);
+                    None
+                }
+            }
         }
     };
 
@@ -534,6 +542,7 @@ pub fn publish(
         derived_owner.as_deref(),
         Some(true),
         stop_revision,
+        auto_merge,
     ) {
         Err(SvpPublishError::Other(BrzError::DivergedBranches)) => Err(PublishError::Failure {
             description: "Upstream branch has diverged from local changes.".to_string(),
