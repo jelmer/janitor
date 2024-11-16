@@ -46,7 +46,7 @@ struct Args {
     #[clap(long)]
     slowstart: bool,
 
-    /// Only publish chnages that were reviewed.
+    /// Only publish changes that were reviewed.
     #[clap(long)]
     reviewed_only: bool,
 
