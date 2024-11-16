@@ -590,9 +590,9 @@ checksum = "7f839cdf7e2d3198ac6ca003fd8ebc61715755f41c1cad15ff13df67531e00ed"
 
 [[package]]
 name = "breezyshim"
-version = "0.1.224"
+version = "0.1.226"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "906d929f8f79614eb91c03506a112bd5073ee0144bb5769cd49f309d72c86afc"
+checksum = "53ed390ace12d4bcb4c0f67bd7c899d4a76f53807ee1ca0dea71c8cab96c18da"
 dependencies = [
  "chrono",
  "ctor",
@@ -604,7 +604,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "patchkit",
+ "patchkit 0.2.1",
  "percent-encoding",
  "pyo3",
  "pyo3-filelike",
@@ -1175,9 +1175,9 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
-version = "0.158.22"
+version = "0.158.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019e4736d6d1a837e532fd2fce477cce757eb03f00b343f189517c5a6a64d094"
+checksum = "c0864a87f6f5e9c2963d72541469594e5ff7d79ea7b5939f747db51931816988"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -1198,7 +1198,7 @@ dependencies = [
  "makefile-lossless",
  "maplit",
  "merge3",
- "patchkit",
+ "patchkit 0.2.1",
  "pyo3",
  "quote",
  "reqwest",
@@ -2933,6 +2933,12 @@ dependencies = [
  "env_logger 0.11.5",
  "janitor",
  "maplit",
+ "patchkit 0.1.9",
+ "serde",
+ "serde_json",
+ "shlex",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3862,9 +3868,22 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "patchkit"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1628449e4d9f7e8501e9389daf6242adfd8284c2364a3f2a87e16176756b6768"
+checksum = "eeb23e4c6b118129db3c1d9ab32a00bd1dc4b04b5517f346bb9a03e3e29d3937"
+dependencies = [
+ "chrono",
+ "lazy-regex",
+ "lazy_static",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "patchkit"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31e00ed52656b51f535293e40caf6579b4cf09f25e660fc6e6936ab70e78972f"
 dependencies = [
  "chrono",
  "lazy-regex",
