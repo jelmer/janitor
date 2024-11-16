@@ -94,7 +94,7 @@ pub(crate) fn build(
                     subpath,
                     committer.map(breezyshim::config::parse_username),
                     update_changelog == crate::debian::DebUpdateChangelog::Update,
-                    Box::new(breezyshim::commit::NullCommitReporter::new()),
+                    Some(Box::new(breezyshim::commit::NullCommitReporter::new()))
                 );
                 let fixers = ognibuild::debian::fixers::default_fixers(&packaging_context, &apt);
 

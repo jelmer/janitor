@@ -1,0 +1,19 @@
+[package]
+name = "site-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition.workspace = true
+description = "Site for the janitor - python bindings"
+publish = false
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
+janitor-site = { path = "../site" }
+pyo3-log = { workspace = true }
+log = "0.4"
