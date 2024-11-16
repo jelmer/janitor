@@ -653,6 +653,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "buildlog-consultant"
+version = "0.1.0"
+source = "git+https://github.com/jelmer/buildlog-consultant#0652a83e0492d06e3767a697a6ab81afee9c0105"
+dependencies = [
+ "chrono",
+ "clap",
+ "debian-control",
+ "debversion",
+ "env_logger 0.11.5",
+ "fancy-regex",
+ "inventory",
+ "lazy-regex",
+ "lazy_static",
+ "log",
+ "maplit",
+ "pep508_rs",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "shlex",
+ "text-size",
+ "textwrap",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2863,6 +2889,7 @@ dependencies = [
  "askama",
  "async-trait",
  "breezyshim",
+ "buildlog-consultant 0.1.0 (git+https://github.com/jelmer/buildlog-consultant)",
  "chrono",
  "clap",
  "debian-control",
@@ -2894,6 +2921,7 @@ dependencies = [
  "stackdriver_logger",
  "tempfile",
  "tokio",
+ "tracing",
  "url",
 ]
 
@@ -2983,7 +3011,7 @@ dependencies = [
 name = "janitor-site"
 version = "0.0.0"
 dependencies = [
- "buildlog-consultant",
+ "buildlog-consultant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3666,7 +3694,7 @@ source = "git+https://github.com/jelmer/ognibuild.git#e0169f7e66e2c9f84b9d3313d3
 dependencies = [
  "axum",
  "breezyshim",
- "buildlog-consultant",
+ "buildlog-consultant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono",
  "clap",
  "deb822-lossless",

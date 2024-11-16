@@ -43,6 +43,8 @@ reqwest = { workspace = true, features = ["json"] }
 debian-control = "0.1.28"
 shlex.workspace = true
 prometheus = { version = "0.13.4", features = ["reqwest"] }
+buildlog-consultant = { workspace = true }
+tracing = "0.1.40"
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.0" }
@@ -76,6 +78,7 @@ silver-platter = { version = ">=0.5.36" }
 ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
 pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
 shlex = "1"
+buildlog-consultant = { git = "https://github.com/jelmer/buildlog-consultant" }
 
 [build-dependencies]
 protobuf-codegen = "3"
