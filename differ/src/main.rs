@@ -294,7 +294,7 @@ async fn handle_diffoscope(
 
     let best = match accept.negotiate(&available) {
         Ok(b) => b,
-        Err(e) => return (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
+        Err(_) => return (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
     };
 
     let (old_run, new_run) = match get_run_pair(&state.pool, &old_id, &new_id).await {
@@ -313,7 +313,7 @@ async fn handle_diffoscope(
         .as_ref()
         .map(|p| determine_diffoscope_cache_path(p, &old_run.id, &new_run.id));
 
-    let mut diffoscope_diff = if let Some(ref cache_path) = cache_path {
+    let diffoscope_diff = if let Some(ref cache_path) = cache_path {
         if cache_path.exists() {
             let f = std::fs::File::open(cache_path).unwrap();
             let diff: janitor_differ::diffoscope::DiffoscopeOutput =
@@ -435,12 +435,13 @@ async fn handle_diffoscope(
         best.essence_str(),
         &title,
         query.css_url.as_deref(),
-    );
+    )
+    .unwrap();
 
     (StatusCode::OK, formatted).into_response()
 }
 
-async fn create_app(
+fn create_app(
     cache_path: Option<&std::path::Path>,
     artifact_manager: Arc<Box<dyn ArtifactManager>>,
     task_memory_limit: Option<usize>,
@@ -515,7 +516,7 @@ pub async fn main() -> Result<(), i8> {
     })?;
 
     let artifact_manager =
-        janitor::artifacts::get_artifact_manager(&config.artifact_location.unwrap())
+        janitor::artifacts::get_artifact_manager(&config.artifact_location.clone().unwrap())
             .await
             .map_err(|e| {
                 error!("Failed to create artifact manager: {}", e);
@@ -536,10 +537,9 @@ pub async fn main() -> Result<(), i8> {
         Arc::new(artifact_manager),
         args.task_memory_limit,
         args.task_timeout,
-        db,
+        db.clone(),
         args.diffoscope_command,
-    )
-    .await;
+    );
 
     // run it
     let addr = std::net::SocketAddr::new(args.listen_address, args.port);
@@ -566,12 +566,7 @@ pub async fn main() -> Result<(), i8> {
         tokio::spawn(listen_to_runner(connman, db));
     }
 
-    axum::serve(listener, app.into_make_service())
-        .await
-        .map_err(|e| {
-            error!("Failed to serve: {}", e);
-            1
-        })?;
+    axum::serve(listener, app).await.unwrap();
 
     Ok(())
 }

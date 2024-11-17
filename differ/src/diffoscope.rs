@@ -2,7 +2,7 @@ use patchkit::unified::{iter_hunks, Hunk, HunkLine};
 use std::path::PathBuf;
 use tracing::{debug, warn};
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq, Clone)]
 #[allow(unused)]
 pub struct DiffoscopeOutput {
     #[serde(
@@ -12,10 +12,11 @@ pub struct DiffoscopeOutput {
     diffoscope_json_version: Option<u8>,
     pub source1: PathBuf,
     pub source2: PathBuf,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub comments: Vec<String>,
     #[serde(default)]
     pub unified_diff: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub details: Vec<DiffoscopeOutput>,
 }
 
@@ -249,10 +250,11 @@ pub fn format_diffoscope(
     content_type: &str,
     title: &str,
     css_url: Option<&str>,
-) -> String {
+) -> Result<String, pyo3::PyErr> {
     use pyo3::prelude::*;
+    pyo3::prepare_freethreaded_python();
     if content_type == "application/json" {
-        return serde_json::to_string(diff).unwrap();
+        return Ok(serde_json::to_string(diff).unwrap());
     }
 
     Python::with_gil(|py| {
@@ -269,7 +271,6 @@ pub fn format_diffoscope(
                 let sysm = py.import_bound("sys")?;
 
                 let old_stdout = sysm.getattr("stdout")?;
-                sysm.setattr("stdout", p.getattr("stdout")?)?;
                 let io = py.import_bound("io")?;
                 let f = io.getattr("StringIO")?.call0()?;
                 sysm.setattr("stdout", f.clone())?;
@@ -291,17 +292,34 @@ pub fn format_diffoscope(
             }
             "text/markdown" => {
                 let m = py.import_bound("diffoscope.presenters.markdown")?;
-                let out = pyo3::types::PyList::empty_bound(py);
+                let out = std::sync::Arc::new(pyo3::types::PyList::empty_bound(py).to_object(py));
 
-                let presenter = m
-                    .getattr("MarkdownPresenter")?
-                    .call1((out.getattr("append")?,))?;
-                let markdown = presenter.call_method1("start", (root_differ,))?;
-                Ok(markdown.extract::<String>()?)
+                let println_out = out.clone();
+
+                // Define a python callback that can take a string or no arguments
+                // and append it to the out list
+                let println = move |args: &Bound<pyo3::types::PyTuple>,
+                                    _kwargs: Option<&Bound<pyo3::types::PyDict>>|
+                      -> pyo3::PyResult<()> {
+                    let s = if args.len() == 1 {
+                        args.get_item(0).unwrap().extract::<String>()?
+                    } else {
+                        "".to_string()
+                    };
+                    Python::with_gil(|py| println_out.call_method1(py, "append", (s,)))?;
+                    Ok(())
+                };
+
+                let pyprintln =
+                    pyo3::types::PyCFunction::new_closure_bound(py, None, None, println)?;
+
+                let presenter = m.getattr("MarkdownTextPresenter")?.call1((pyprintln,))?;
+                presenter.call_method1("start", (root_differ,))?;
+                Ok(out.extract::<Vec<String>>(py)?.join("\n"))
             }
             "text/plain" => {
                 let m = py.import_bound("diffoscope.presenters.text")?;
-                let out = pyo3::types::PyString::new_bound(py, "");
+                let out = pyo3::types::PyList::empty_bound(py);
 
                 let presenter = m
                     .getattr("TextPresenter")?
@@ -315,7 +333,6 @@ pub fn format_diffoscope(
             )),
         }
     })
-    .unwrap()
 }
 
 pub async fn run_diffoscope(
@@ -352,4 +369,216 @@ pub async fn run_diffoscope(
         }
     }
     Ok(ret)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_run() {
+        let td = tempfile::tempdir().unwrap();
+        let old = td.path().join("old.json");
+        let new = td.path().join("new.json");
+
+        std::fs::write(&old, r#"{"foo": "bar"}"#).unwrap();
+        std::fs::write(&new, r#"{"foo": "baz"}"#).unwrap();
+
+        let diff = super::run_diffoscope(
+            &[("old", old.to_str().unwrap())],
+            &[("new", new.to_str().unwrap())],
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            diff,
+            DiffoscopeOutput {
+                diffoscope_json_version: Some(1),
+                source1: "old version".into(),
+                source2: "new version".into(),
+                comments: vec![],
+                unified_diff: None,
+                details: vec![DiffoscopeOutput {
+                    diffoscope_json_version: None,
+                    source1: "old".into(),
+                    source2: "new".into(),
+                    comments: vec![],
+                    unified_diff: None,
+                    details: vec![
+                        DiffoscopeOutput {
+                            diffoscope_json_version: None,
+                            source1: "Pretty-printed".into(),
+                            source2: "Pretty-printed".into(),
+                            comments: vec!["Similarity: 0.5%".to_string(), "Differences: {\"'foo'\": \"'baz'\"}".to_string()],
+                            unified_diff: Some("@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n".to_string()),
+                            details: vec![]
+                        }
+                    ]
+
+                }]
+            }
+        );
+    }
+
+    #[test]
+    fn test_format_markdown() {
+        let diff = DiffoscopeOutput {
+            diffoscope_json_version: Some(1),
+            source1: "old version".into(),
+            source2: "new version".into(),
+            comments: vec![],
+            unified_diff: None,
+            details: vec![DiffoscopeOutput {
+                diffoscope_json_version: None,
+                source1: "old".into(),
+                source2: "new".into(),
+                comments: vec![],
+                unified_diff: Some(
+                    "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                        .to_string(),
+                ),
+                details: vec![DiffoscopeOutput {
+                    diffoscope_json_version: None,
+                    source1: "Pretty-printed".into(),
+                    source2: "Pretty-printed".into(),
+                    comments: vec![
+                        "Similarity: 0.5%".to_string(),
+                        "Differences: {\"'foo'\": \"'baz'\"}".to_string(),
+                    ],
+                    unified_diff: Some(
+                        "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                            .to_string(),
+                    ),
+                    details: vec![],
+                }],
+            }],
+        };
+
+        let markdown = format_diffoscope(&diff, "text/markdown", "title", None).unwrap();
+        assert_eq!(markdown, "# Comparing `old version` & `new version`\n\n## Comparing `old` & `new`\n\n```diff\n@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n```\n\n### Pretty-printed\n\n * *Similarity: 0.5%*\n\n * *Differences: {\"'foo'\": \"'baz'\"}*\n\n```diff\n@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n```\n");
+    }
+
+    #[test]
+    fn test_format_html() {
+        let diff = DiffoscopeOutput {
+            diffoscope_json_version: Some(1),
+            source1: "old version".into(),
+            source2: "new version".into(),
+            comments: vec![],
+            unified_diff: None,
+            details: vec![DiffoscopeOutput {
+                diffoscope_json_version: None,
+                source1: "old".into(),
+                source2: "new".into(),
+                comments: vec![],
+                unified_diff: Some(
+                    "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                        .to_string(),
+                ),
+                details: vec![DiffoscopeOutput {
+                    diffoscope_json_version: None,
+                    source1: "Pretty-printed".into(),
+                    source2: "Pretty-printed".into(),
+                    comments: vec![
+                        "Similarity: 0.5%".to_string(),
+                        "Differences: {\"'foo'\": \"'baz'\"}".to_string(),
+                    ],
+                    unified_diff: Some(
+                        "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                            .to_string(),
+                    ),
+                    details: vec![],
+                }],
+            }],
+        };
+
+        let html = format_diffoscope(&diff, "text/html", "title", None).unwrap();
+        assert!(html.starts_with("<!DOCTYPE html>"));
+    }
+
+    #[test]
+    fn test_format_json() {
+        let diff = DiffoscopeOutput {
+            diffoscope_json_version: Some(1),
+            source1: "old version".into(),
+            source2: "new version".into(),
+            comments: vec![],
+            unified_diff: None,
+            details: vec![DiffoscopeOutput {
+                diffoscope_json_version: None,
+                source1: "old".into(),
+                source2: "new".into(),
+                comments: vec![],
+                unified_diff: Some(
+                    "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                        .to_string(),
+                ),
+                details: vec![DiffoscopeOutput {
+                    diffoscope_json_version: None,
+                    source1: "Pretty-printed".into(),
+                    source2: "Pretty-printed".into(),
+                    comments: vec![
+                        "Similarity: 0.5%".to_string(),
+                        "Differences: {\"'foo'\": \"'baz'\"}".to_string(),
+                    ],
+                    unified_diff: Some(
+                        "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                            .to_string(),
+                    ),
+                    details: vec![],
+                }],
+            }],
+        };
+
+        let json = format_diffoscope(&diff, "application/json", "title", None).unwrap();
+        assert_eq!(
+            json,
+            "{\"diffoscope-json-version\":1,\"source1\":\"old version\",\"source2\":\"new version\",\"unified_diff\":null,\"details\":[{\"source1\":\"old\",\"source2\":\"new\",\"unified_diff\":\"@@ -1,3 +1,3 @@\\n {\\n-    \\\"foo\\\": \\\"bar\\\"\\n+    \\\"foo\\\": \\\"baz\\\"\\n }\\n\",\"details\":[{\"source1\":\"Pretty-printed\",\"source2\":\"Pretty-printed\",\"comments\":[\"Similarity: 0.5%\",\"Differences: {\\\"'foo'\\\": \\\"'baz'\\\"}\"],\"unified_diff\":\"@@ -1,3 +1,3 @@\\n {\\n-    \\\"foo\\\": \\\"bar\\\"\\n+    \\\"foo\\\": \\\"baz\\\"\\n }\\n\"}]}]}"
+        );
+    }
+
+    #[test]
+    fn test_format_text() {
+        let diff = DiffoscopeOutput {
+            diffoscope_json_version: Some(1),
+            source1: "old version".into(),
+            source2: "new version".into(),
+            comments: vec![],
+            unified_diff: None,
+            details: vec![DiffoscopeOutput {
+                diffoscope_json_version: None,
+                source1: "old".into(),
+                source2: "new".into(),
+                comments: vec![],
+                unified_diff: Some(
+                    "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                        .to_string(),
+                ),
+                details: vec![DiffoscopeOutput {
+                    diffoscope_json_version: None,
+                    source1: "Pretty-printed".into(),
+                    source2: "Pretty-printed".into(),
+                    comments: vec![
+                        "Similarity: 0.5%".to_string(),
+                        "Differences: {\"'foo'\": \"'baz'\"}".to_string(),
+                    ],
+                    unified_diff: Some(
+                        "@@ -1,3 +1,3 @@\n {\n-    \"foo\": \"bar\"\n+    \"foo\": \"baz\"\n }\n"
+                            .to_string(),
+                    ),
+                    details: vec![],
+                }],
+            }],
+        };
+
+        let text = format_diffoscope(&diff, "text/plain", "title", None).unwrap();
+        assert_eq!(
+            text,
+            "--- old version\n+++ new version\n│   --- old\n├── +++ new\n│ @@ -1,3 +1,3 @@\n│  {\n│ -    \"foo\": \"bar\"\n│ +    \"foo\": \"baz\"\n│  }\n│ ├── Pretty-printed\n│ │┄ Similarity: 0.5%\n│ │┄ Differences: {\"'foo'\": \"'baz'\"}\n│ │ @@ -1,3 +1,3 @@\n│ │  {\n│ │ -    \"foo\": \"bar\"\n│ │ +    \"foo\": \"baz\"\n│ │  }"
+        );
+    }
 }
