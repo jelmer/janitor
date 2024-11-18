@@ -47,7 +47,7 @@ buildlog-consultant = { workspace = true }
 tracing = "0.1.40"
 
 [workspace.dependencies]
-rslock = { default-features = false, version = "0.5.0" }
+rslock = { default-features = false, version = "0.5.1" }
 debian-changelog = "0.2.0"
 debian-analyzer = "0.158.11"
 debversion = { version = "0.4" }
