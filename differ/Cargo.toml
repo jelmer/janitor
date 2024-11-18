@@ -17,7 +17,7 @@ tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.40"
 serde.workspace = true
 shlex.workspace = true
-patchkit = "0.1.8"
+patchkit = "0.2.1"
 
 [dev-dependencies]
 maplit = { workspace = true }
