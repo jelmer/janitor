@@ -604,7 +604,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "patchkit 0.2.1",
+ "patchkit",
  "percent-encoding",
  "pyo3",
  "pyo3-filelike",
@@ -1198,7 +1198,7 @@ dependencies = [
  "makefile-lossless",
  "maplit",
  "merge3",
- "patchkit 0.2.1",
+ "patchkit",
  "pyo3",
  "quote",
  "reqwest",
@@ -2933,7 +2933,7 @@ dependencies = [
  "env_logger 0.11.5",
  "janitor",
  "maplit",
- "patchkit 0.1.9",
+ "patchkit",
  "serde",
  "serde_json",
  "shlex",
@@ -3865,19 +3865,6 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
-name = "patchkit"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eeb23e4c6b118129db3c1d9ab32a00bd1dc4b04b5517f346bb9a03e3e29d3937"
-dependencies = [
- "chrono",
- "lazy-regex",
- "lazy_static",
- "once_cell",
- "regex",
-]
 
 [[package]]
 name = "patchkit"
