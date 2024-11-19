@@ -3030,6 +3030,7 @@ dependencies = [
  "serde_json",
  "shlex",
  "sqlx",
+ "static_assertions",
  "tempfile",
  "tokio",
  "tracing",

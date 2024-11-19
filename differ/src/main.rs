@@ -3,6 +3,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::TypedHeader;
+use breezyshim::RevisionId;
 use clap::Parser;
 use janitor::artifacts::ArtifactManager;
 use std::path::PathBuf;
@@ -49,6 +50,7 @@ struct Args {
 enum Error {
     ArtifactsMissing(String),
     Sqlx(sqlx::Error),
+    RetrievalFailed(String),
 }
 
 impl From<sqlx::Error> for Error {
@@ -66,6 +68,9 @@ struct AppState {
     debdiff_cache_path: Option<PathBuf>,
     diffoscope_command: String,
 }
+
+#[cfg(test)]
+static_assertions::assert_impl_all!(AppState: Send, Sync);
 
 async fn health() -> &'static str {
     "OK"
@@ -93,6 +98,28 @@ async fn get_run(conn: &sqlx::PgPool, run_id: &str) -> Result<Option<Run>, sqlx:
     query.fetch_optional(conn).await
 }
 
+async fn get_unchanged_run(
+    conn: &sqlx::PgPool,
+    codebase: &str,
+    main_branch_revision: &RevisionId,
+) -> Result<Option<Run>, sqlx::Error> {
+    let query = sqlx::query_as::<_, Run>(
+        r#"SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
+WHERE
+    revision = $1 AND
+    codebase = $2 AND
+    result_code = 'success' AND
+    run.id = run.change_set
+ORDER BY finish_time DESC
+"#).bind(main_branch_revision).bind(codebase);
+
+    query.fetch_optional(conn).await
+}
+
 /// Precache the diff between two runs.
 async fn precache(
     artifact_manager: Arc<Box<dyn ArtifactManager>>,
@@ -107,7 +134,7 @@ async fn precache(
     let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
     let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
 
-    tokio::join!(
+    let (old_result, new_result) = tokio::join!(
         artifact_manager.retrieve_artifacts(
             &old_id,
             old_dir.path(),
@@ -119,6 +146,26 @@ async fn precache(
             Some(&janitor_differ::is_binary)
         ),
     );
+
+    match old_result {
+        Ok(()) => {}
+        Err(janitor::artifacts::Error::ArtifactsMissing) => {
+            return Err(Error::ArtifactsMissing(old_id));
+        }
+        Err(e) => {
+            return Err(Error::RetrievalFailed(e.to_string()));
+        }
+    };
+
+    match new_result {
+        Ok(()) => {}
+        Err(janitor::artifacts::Error::ArtifactsMissing) => {
+            return Err(Error::ArtifactsMissing(new_id));
+        }
+        Err(e) => {
+            return Err(Error::RetrievalFailed(e.to_string()));
+        }
+    };
 
     let old_binaries = janitor_differ::find_binaries(old_dir.path()).collect::<Vec<_>>();
     if old_binaries.is_empty() {
@@ -352,13 +399,35 @@ async fn handle_diffoscope(
         let old_artifact_manager = state.artifact_manager.clone();
         let new_artifact_manager = state.artifact_manager.clone();
 
-        tokio::join! {
+        let (old_result, new_result) = tokio::join! {
             old_artifact_manager.retrieve_artifacts(
                 &old_clone_id, old_dir.path(), Some(&janitor_differ::is_binary)
             ),
             new_artifact_manager.retrieve_artifacts(
                 &new_clone_id, new_dir.path(), Some(&janitor_differ::is_binary)
             )
+        };
+
+        match old_result {
+            Ok(()) => {}
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to retrieve artifacts for {}: {}", old_run.id, e),
+                )
+                    .into_response();
+            }
+        };
+
+        match new_result {
+            Ok(()) => {}
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to retrieve artifacts for {}: {}", new_run.id, e),
+                )
+                    .into_response();
+            }
         };
 
         let old_binaries = janitor_differ::find_binaries(old_dir.path()).collect::<Vec<_>>();
@@ -441,32 +510,167 @@ async fn handle_diffoscope(
     (StatusCode::OK, formatted).into_response()
 }
 
-fn create_app(
-    cache_path: Option<&std::path::Path>,
-    artifact_manager: Arc<Box<dyn ArtifactManager>>,
-    task_memory_limit: Option<usize>,
-    task_timeout: Option<usize>,
-    pool: sqlx::PgPool,
-    diffoscope_command: String,
-) -> axum::Router<Arc<AppState>> {
-    let state = Arc::new(AppState {
-        pool,
-        artifact_manager,
-        task_memory_limit,
-        task_timeout,
-        diffoscope_command,
-        diffoscope_cache_path: cache_path.map(|p| p.join("diffoscope")),
-        debdiff_cache_path: cache_path.map(|p| p.join("debdiff")),
-    });
+#[derive(Debug, serde::Deserialize)]
+struct DebdiffQuery {
+    #[serde(default)]
+    filter_boring: bool,
+}
 
-    let app = axum::Router::new()
-        .route("/health", get(health))
-        .route("/ready", get(ready))
-        .route("/precache/:old_id/:new_id", post(handle_precache))
-        .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
-        .with_state(state);
+async fn handle_debdiff(
+    Path((old_id, new_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<DebdiffQuery>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let (old_run, new_run) = match get_run_pair(&state.pool, &old_id, &new_id).await {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to retrieve runs: {:?}", e),
+            )
+                .into_response();
+        }
+    };
 
-    app
+    let cache_path = state
+        .debdiff_cache_path
+        .as_ref()
+        .map(|p| determine_debdiff_cache_path(p, &old_run.id, &new_run.id));
+
+    let debdiff = if let Some(cache_path) = cache_path.as_ref() {
+        std::fs::read_to_string(cache_path).ok()
+    } else {
+        None
+    };
+
+    let mut debdiff = if let Some(debdiff) = debdiff {
+        debdiff
+    } else {
+        info!(
+            "Generating debdiff between {} ({}/{}/{}) and {} ({}/{}/{})",
+            old_run.id,
+            old_run.build_source,
+            old_run.build_version,
+            old_run.campaign,
+            new_run.id,
+            new_run.build_source,
+            new_run.build_version,
+            new_run.campaign,
+        );
+
+        let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
+        let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
+
+        let (old_result, new_result) = tokio::join!(
+            state.artifact_manager.retrieve_artifacts(
+                &old_run.id,
+                old_dir.path(),
+                Some(&janitor_differ::is_binary)
+            ),
+            state.artifact_manager.retrieve_artifacts(
+                &new_run.id,
+                new_dir.path(),
+                Some(&janitor_differ::is_binary)
+            )
+        );
+
+        match old_result {
+            Ok(()) => {}
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to retrieve artifacts for {}: {}", old_run.id, e),
+                )
+                    .into_response();
+            }
+        };
+
+        match new_result {
+            Ok(()) => {}
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to retrieve artifacts for {}: {}", new_run.id, e),
+                )
+                    .into_response();
+            }
+        };
+
+        let old_binaries = janitor_differ::find_binaries(old_dir.path()).collect::<Vec<_>>();
+        if old_binaries.is_empty() {
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("unavailable_run_id", old_run.id.parse().unwrap());
+            return (StatusCode::NOT_FOUND, headers, "No artifacts for run id").into_response();
+        }
+
+        let new_binaries = janitor_differ::find_binaries(new_dir.path()).collect::<Vec<_>>();
+        if new_binaries.is_empty() {
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("unavailable_run_id", new_run.id.parse().unwrap());
+            return (StatusCode::NOT_FOUND, headers, "No artifacts for run id").into_response();
+        }
+
+        let debdiff = janitor::debdiff::run_debdiff(
+            old_binaries
+                .iter()
+                .map(|(_n, p)| p.to_str().unwrap())
+                .collect(),
+            new_binaries
+                .iter()
+                .map(|(_n, p)| p.to_str().unwrap())
+                .collect(),
+        )
+        .await
+        .unwrap();
+
+        if let Some(cache_path) = cache_path.as_ref() {
+            std::fs::write(cache_path, &debdiff).unwrap();
+        }
+        String::from_utf8(debdiff).unwrap()
+    };
+
+    if query.filter_boring {
+        debdiff = janitor::debdiff::filter_boring(
+            &debdiff,
+            &old_run.build_version,
+            &new_run.build_version,
+        );
+    }
+
+    use std::str::FromStr;
+    let accept = accept_header::Accept::from_str(
+        headers
+            .get("Accept")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/json"),
+    )
+    .unwrap();
+
+    let available = vec![
+        mime::Mime::from_str("application/json").unwrap(),
+        mime::Mime::from_str("text/html").unwrap(),
+        mime::Mime::from_str("text/plain").unwrap(),
+        mime::Mime::from_str("text/x-diff").unwrap(),
+    ];
+
+    let best = match accept.negotiate(&available) {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
+    };
+
+    match best.essence_str() {
+        "text/x-diff" | "text/plain" => (StatusCode::OK, debdiff).into_response(),
+        "text/markdown" => (
+            StatusCode::OK,
+            janitor::debdiff::markdownify_debdiff(&debdiff),
+        )
+            .into_response(),
+        "text/html" => {
+            (StatusCode::OK, janitor::debdiff::htmlize_debdiff(&debdiff)).into_response()
+        }
+        _ => (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
+    }
 }
 
 fn determine_diffoscope_cache_path(
@@ -532,14 +736,23 @@ pub async fn main() -> Result<(), i8> {
         }
     }
 
-    let app = create_app(
-        args.cache_path.as_deref(),
-        Arc::new(artifact_manager),
-        args.task_memory_limit,
-        args.task_timeout,
-        db.clone(),
-        args.diffoscope_command,
-    );
+    let state = Arc::new(AppState {
+        pool: db.clone(),
+        artifact_manager: Arc::new(artifact_manager),
+        task_memory_limit: args.task_memory_limit,
+        task_timeout: args.task_timeout,
+        diffoscope_command: args.diffoscope_command,
+        diffoscope_cache_path: args.cache_path.as_ref().map(|p| p.join("diffoscope")),
+        debdiff_cache_path: args.cache_path.as_ref().map(|p| p.join("debdiff")),
+    });
+
+    let app = axum::Router::new()
+        .route("/health", get(health))
+        .route("/ready", get(ready))
+        .route("/precache/:old_id/:new_id", post(handle_precache))
+        .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
+        .route("/debdiff/:old_id/:new_id", get(handle_debdiff))
+        .with_state(state);
 
     // run it
     let addr = std::net::SocketAddr::new(args.listen_address, args.port);
