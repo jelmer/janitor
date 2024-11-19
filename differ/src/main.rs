@@ -441,6 +441,138 @@ async fn handle_diffoscope(
     (StatusCode::OK, formatted).into_response()
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct DebdiffQuery {
+    #[serde(default)]
+    filter_boring: bool,
+}
+
+async fn handle_debdiff(
+    Path((old_id, new_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<DebdiffQuery>,
+) -> impl IntoResponse {
+    let (old_run, new_run) = match get_run_pair(&state.pool, &old_id, &new_id).await {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to retrieve runs: {:?}", e),
+            )
+                .into_response();
+        }
+    };
+
+    let cache_path = cache_path.as_ref().map(|p| determine_debdiff_cache_path(p, &old_run.id, &new_run.id));
+
+    let debdiff = if let Some(cache_path) = cache_path {
+        std::fs::read_to_string(&cache_path).ok()
+    } else {
+        None
+    };
+
+    let debdiff = if let Some(debdiff) = debdiff {
+        debdiff
+    } else {
+        info!(
+            "Generating debdiff between {} ({}/{}/{}) and {} ({}/{}/{})",
+            old_run.id,
+            old_run.build_source,
+            old_run.build_version,
+            old_run.campaign,
+            new_run.id,
+            new_run.build_source,
+            new_run.build_version,
+            new_run.campaign,
+        );
+
+        let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
+        let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).unwrap();
+
+        tokio::join! {
+        try:
+                await asyncio.gather(
+                    request.app["artifact_manager"].retrieve_artifacts(
+                        old_run["id"], old_dir, filter_fn=is_binary
+                    ),
+                    request.app["artifact_manager"].retrieve_artifacts(
+                        new_run["id"], new_dir, filter_fn=is_binary
+                    ),
+                )
+        except ArtifactsMissing as e:
+            raise web.HTTPNotFound(
+                text=f"No artifacts for run id: {e!r}",
+                headers={"unavailable_run_id": e.args[0]},
+            ) from e
+        except asyncio.TimeoutError as e:
+            raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts") from e
+
+        let old_binaries = janitor_differ::find_binaries(old_dir).collect::<Vec<_>>();
+        if old_binaries.is_empty() {
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("unavailable_run_id", old_run["id"].parse().unwrap());
+            return (StatusCode::NOT_FOUND, headers, "No artifacts for run id").into_response();
+        }
+
+        let new_binaries = janitor_differ::find_binaries(new_dir).collect::<Vec<_>>();
+        if new_binaries.is_empty() {
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert("unavailable_run_id", new_run["id"].parse().unwrap());
+            return (StatusCode::NOT_FOUND, headers, "No artifacts for run id").into_response();
+        }
+
+        let debdiff = run_debdiff(
+            [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
+        ).await;
+        assert debdiff
+
+        if cache_path:
+            with open(cache_path, "wb") as f:
+                f.write(debdiff)
+
+    if query.filter_boring {
+        debdiff = janitor::debdiff::filter_boring(
+            debdiff,
+            str(old_run["build_version"]),
+            str(new_run["build_version"]),
+        );
+    }
+
+    use std::str::FromStr;
+    let accept = accept_header::Accept::from_str(
+        headers
+            .get("Accept")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/json"),
+    )
+    .unwrap();
+
+    let available = vec![
+        mime::Mime::from_str("application/json").unwrap(),
+        mime::Mime::from_str("text/html").unwrap(),
+        mime::Mime::from_str("text/plain").unwrap(),
+        mime::Mime::from_str("text/x-diff").unwrap(),
+    ];
+
+    let best = match accept.negotiate(&available) {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
+    };
+
+    match best {
+        "text/x-diff" | "text/plain" => {
+            (StatusCode::OK, debdiff).into_response()
+        }
+        "text/markdown" => {
+            (StatusCode::OK, markdownify_debdiff(debdiff.decode())).into_response()
+        }
+        "text/html" => {
+            (StatusCode::OK, htmlize_debdiff(debdiff.decode())).into_response()
+        }
+        _ => (StatusCode::NOT_ACCEPTABLE, "No acceptable media type").into_response(),
+    }
+}
+
 fn create_app(
     cache_path: Option<&std::path::Path>,
     artifact_manager: Arc<Box<dyn ArtifactManager>>,
@@ -464,6 +596,7 @@ fn create_app(
         .route("/ready", get(ready))
         .route("/precache/:old_id/:new_id", post(handle_precache))
         .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
+        .route("/debdiff/:old_id/:new_id", get(handle_debdiff))
         .with_state(state);
 
     app
@@ -492,6 +625,7 @@ fn determine_debdiff_cache_path(
     }
     base_path.join(format!("{}_{}", old_id, new_id))
 }
+
 
 async fn listen_to_runner(redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
     todo!();
