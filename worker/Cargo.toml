@@ -47,7 +47,7 @@ cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 
 [dev-dependencies]
 http-body-util = "0.1.2"
-hyper = "1.4.1"
+hyper = "1.5.1"
 serial_test = "3.1.1"
 tempfile = "3.13.0"
 test-log = "0.2.16"
