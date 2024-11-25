@@ -49,7 +49,7 @@ tracing = "0.1.40"
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.1" }
 debian-changelog = "0.2.0"
-debian-analyzer = "0.158.11"
+debian-analyzer = "0.158.24"
 debversion = { version = "0.4" }
 google-cloud-storage = "0.22.1"
 google-cloud-auth = "0.17.1"
