@@ -1175,9 +1175,9 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
-version = "0.158.23"
+version = "0.158.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0864a87f6f5e9c2963d72541469594e5ff7d79ea7b5939f747db51931816988"
+checksum = "5a82b2f48997e6d74e716beb0bd364ed3678ba28f615c25f7841a32d115d71da"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -1351,6 +1351,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,6 +1367,18 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if",
  "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3696,7 +3717,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.31"
-source = "git+https://github.com/jelmer/ognibuild.git#e0169f7e66e2c9f84b9d3313d305260849bc6bb2"
+source = "git+https://github.com/jelmer/ognibuild.git#c0aec57e0ff627bf5b558627884a89b86664a069"
 dependencies = [
  "axum",
  "breezyshim",
@@ -3708,6 +3729,7 @@ dependencies = [
  "debian-changelog",
  "debian-control",
  "debversion",
+ "dirs",
  "env_logger 0.11.5",
  "flate2",
  "fs_extra",
@@ -3805,6 +3827,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-multimap"
