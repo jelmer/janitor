@@ -102,3 +102,16 @@ async fn has_cotenants(
         _ => Some(true),
     })
 }
+
+async fn iter_publishable_suites(
+    conn: &PgPool,
+    codebase: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT suite FROM publish_ready WHERE codebase = $1")
+            .bind(codebase)
+            .fetch_all(conn)
+            .await?;
+
+    Ok(rows.into_iter().map(|row| row.0).collect::<Vec<_>>())
+}
