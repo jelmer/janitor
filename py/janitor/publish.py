@@ -33,7 +33,7 @@ from collections.abc import AsyncIterable, Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import aioredlock
 import aiozipkin
@@ -459,7 +459,7 @@ class PublishWorker:
         role: str,
         revision: bytes,
         log_id: str,
-        unchanged_id: str,
+        unchanged_id: str | None,
         derived_branch_name: str,
         rate_limit_bucket: Optional[str],
         vcs_manager: VcsManager,
@@ -1190,7 +1190,7 @@ async def publish_from_policy(
             role=role,
             revision=revision,
             log_id=run.id,
-            unchanged_id=(unchanged_run["id"] if unchanged_run else None),
+            unchanged_id=(cast(str, unchanged_run["id"]) if unchanged_run else None),
             derived_branch_name=await derived_branch_name(
                 conn, campaign_config, run, role
             ),
@@ -1789,10 +1789,7 @@ async def handle_publish_id(request):
         )
         if row:
             raise web.HTTPNotFound(text=f"no such publish: {publish_id}")
-    return web.json_response(
-        {
-        }
-    )
+    return web.json_response({})
 
 
 @routes.post("/{campaign}/{codebase}/publish", name="publish")
@@ -2389,7 +2386,7 @@ LIMIT 1
 class ProposalInfo:
     can_be_merged: Optional[bool]
     status: str
-    revision: bytes
+    revision: Optional[bytes]
     target_branch_url: Optional[str]
     rate_limit_bucket: Optional[str] = None
     codebase: Optional[str] = None
@@ -2519,7 +2516,7 @@ class ProposalInfoManager:
             return None
         return ProposalInfo(
             rate_limit_bucket=row["rate_limit_bucket"],
-            revision=row["revision"].encode("utf-8") if row[1] else None,
+            revision=cast(bytes, row["revision"].encode("utf-8")) if row[1] else None,
             status=row["status"],
             target_branch_url=row["target_branch_url"],
             can_be_merged=row["can_be_merged"],
