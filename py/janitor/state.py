@@ -162,7 +162,7 @@ class Run:
                     name,
                     br.encode("utf-8") if br else None,
                     r.encode("utf-8") if r else None,
-                )
+                )  # type: ignore
                 for (role, name, br, r) in result_branches
             ]
         if result_tags is None:
