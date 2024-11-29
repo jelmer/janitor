@@ -182,7 +182,7 @@ WHERE followup.origin = $1""",
                     revid.encode("utf-8"),
                 )
         except ClientResponseError as e:
-            return "Unable to retrieve diff; error %d" % e.status
+            return f"Unable to retrieve diff; error {e.status}"
         except ClientConnectorError as e:
             return f"Unable to retrieve diff; error {e}"
         except NotImplementedError:
@@ -306,8 +306,8 @@ WHERE followup.origin = $1""",
     elif primary_log == "build":
         kwargs["earlier_build_log_names"] = []
         i = 1
-        while has_log(BUILD_LOG_FILENAME + ".%d" % i):
-            log_name = "%s.%d" % (BUILD_LOG_FILENAME, i)
+        while has_log(f"{BUILD_LOG_FILENAME}.{i}"):
+            log_name = f"{BUILD_LOG_FILENAME}.{i}"
             kwargs["earlier_build_log_names"].append((i, log_name))
             i += 1
 
@@ -401,10 +401,10 @@ async def generate_ready_list(
         args = []
         if suite:
             args.append(suite)
-            conditions.append("suite = $%d" % len(args))
+            conditions.append(f"suite = ${len(args)}")
         if publish_status:
             args.append(publish_status)
-            conditions.append("publish_status = $%d" % len(args))
+            conditions.append(f"publish_status = ${len(args)}")
 
         query += " WHERE " + " AND ".join(conditions)
 

@@ -49,7 +49,7 @@ async def iter_queue_items_with_last_run(
             items.append(item)
             vals.append(item.codebase)
             vals.append(item.campaign)
-            qs.append("(codebase = $%d AND suite = $%d)" % (len(vals) - 1, len(vals)))
+            qs.append(f"(codebase = ${len(vals) - 1} AND suite = ${len(vals)})")
 
         runs = {}
         if qs:

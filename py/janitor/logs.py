@@ -207,7 +207,7 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 403:
                 return False
             raise LogRetrievalError(
-                "Unexpected response code %d: %s" % (resp.status, await resp.text())
+                "Unexpected response code {{resp.status}}: ".format()
             )
 
     async def get_log(
@@ -225,7 +225,7 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 403:
                 raise PermissionError(await resp.text())
             raise LogRetrievalError(
-                "Unexpected response code %d: %s" % (resp.status, await resp.text())
+                f"Unexpected response code {resp.status}: {await resp.text()}"
             )
 
     async def import_log(
