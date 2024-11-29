@@ -224,8 +224,7 @@ class BucketRateLimited(RateLimited):
 
     def __init__(self, bucket, open_mps, max_open_mps) -> None:
         super().__init__(
-            "Bucke %s already has %d merge proposal open (max: %d)"
-            % (bucket, open_mps, max_open_mps)
+            f"Bucket {bucket} already has {open_mps} merge proposal open (max: {max_open_mps})"
         )
         self.bucket = bucket
         self.open_mps = open_mps
@@ -736,7 +735,7 @@ SELECT * FROM publish_ready
     conditions = []
     if run_id is not None:
         args.append(run_id)
-        conditions.append("id = $%d" % len(args))
+        conditions.append(f"id = ${len(args)}")
     conditions.append("publish_status = 'approved'")
     conditions.append("change_set_state IN ('ready', 'publishing')")
 
@@ -1505,10 +1504,10 @@ async def handle_merge_proposal_list(request):
         cond = []
         if codebase is not None:
             args.append(codebase)
-            cond.append("run.codebase = $%d" % (len(args),))
+            cond.append(f"run.codebase = ${len(args)}")
         if campaign:
             args.append(campaign)
-            cond.append("run.suite = $%d" % (len(args),))
+            cond.append(f"run.suite = ${len(args)}")
         if cond:
             query += "WHERE " + " AND ".join(cond)
         query += " ORDER BY merge_proposal.url, run.finish_time DESC"
@@ -1526,7 +1525,7 @@ async def handle_absorbed(request):
         args = []
     else:
         args = [since]
-        extra = " AND absorbed_at >= $%d" % len(args)
+        extra = f" AND absorbed_at >= ${len(args)}"
 
     ret = []
     async with request.app["db"].acquire() as conn:
@@ -2489,9 +2488,7 @@ class ProposalInfoManager:
         return [
             row["url"]
             for row in await self.conn.fetch(
-                "SELECT url FROM merge_proposal WHERE "
-                "last_scanned is NULL OR now() - last_scanned > interval '%d days'"
-                % days
+                f"SELECT url FROM merge_proposal WHERE last_scanned is NULL OR now() - last_scanned > interval '{days} days'"
             )
         ]
 
@@ -3006,8 +3003,7 @@ applied independently.
                     change_set=last_run.change_set,
                     bucket="update-existing-mp",
                     refresh=False,
-                    requester="publisher (retrying failed run after %d days)"
-                    % last_run_age.days,
+                    requester=f"publisher (retrying failed run after {last_run_age.days} days)",
                     codebase=last_run.codebase,
                 )
             except CandidateUnavailable as e:

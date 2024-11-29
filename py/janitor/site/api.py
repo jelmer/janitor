@@ -133,7 +133,7 @@ async def handle_run_reschedule(request):
             return web.json_response(await resp.json())
     except ContentTypeError as e:
         return web.json_response(
-            {"error": "runner returned error %d" % e.code}, status=400
+            {"error": f"runner returned error {e.code}"}, status=400
         )
     except ClientConnectorError:
         return web.json_response({"error": "unable to contact runner"}, status=502)
@@ -179,7 +179,7 @@ async def handle_schedule_control(request):
             queue_position = await resp.json()
     except ContentTypeError as e:
         return web.json_response(
-            {"error": "runner returned error %d" % e.code}, status=400
+            {"error": f"runner returned error {e.code}"}, status=400
         )
     except ClientConnectorError:
         return web.json_response({"error": "unable to contact runner"}, status=502)
@@ -329,7 +329,7 @@ async def handle_diff(request):
             text="Acceptable content types: text/html, text/x-diff"
         )
     except ContentTypeError as e:
-        return web.Response(text="publisher returned error %d" % e.code, status=400)
+        return web.Response(text=f"publisher returned error {e.code}", status=400)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=502)
     except ClientOSError:
