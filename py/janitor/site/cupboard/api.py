@@ -202,7 +202,7 @@ async def handle_needs_review(request):
 @docs()
 @routes.post("/run/{run_id}/reprocess-logs", name="admin-reprocess-logs-run")
 async def handle_run_reprocess_logs(request):
-    from ...reprocess_logs import (
+    from ...reprocess_logs import (  # type: ignore
         process_dist_log,
         process_sbuild_log,
         reprocess_run_logs,
