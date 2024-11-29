@@ -61,9 +61,9 @@ worker as worker_name, finish_time - start_time AS duration,
 result_code, id, description, failure_transient FROM run
 ORDER BY finish_time DESC"""
     if offset:
-        query += " OFFSET %d" % offset
+        query += f" OFFSET {offset}"
     if limit:
-        query += " LIMIT %d" % limit
+        query += f" LIMIT {limit}"
     async with request.app["pool"].acquire() as conn:
         runs = await conn.fetch(query)
     return {"count": limit, "history": runs}
@@ -549,7 +549,7 @@ async def handle_ready_proposals(request):
         args = []
         if publish_status:
             args.append(publish_status)
-            conditions.append("publish_status = $%d" % len(args))
+            conditions.append(f"publish_status = ${len(args)}")
 
         query += " WHERE " + " AND ".join(conditions)
 
@@ -571,7 +571,7 @@ async def handle_done_proposals(request):
     else:
         # Default to beginning of the month
         since = datetime.fromisoformat(
-            "%04d-%02d-01" % (date.today().year, date.today().month)
+            f"{date.today().year:04d}-{date.today().month:02d}-01"
         )
 
     async with request.app["pool"].acquire() as conn:
@@ -671,7 +671,7 @@ async def iter_needs_review(
     conditions = []
     if campaigns is not None:
         args.append(campaigns)
-        conditions.append("suite = ANY($%d::text[])" % len(args))
+        conditions.append(f"suite = ANY(${len(args)}::text[])")
 
     publishable_condition = (
         "exists (select from unnest(unpublished_branches) where "
@@ -695,8 +695,7 @@ async def iter_needs_review(
     if reviewer is not None:
         args.append(reviewer)
         conditions.append(
-            "not exists (select from review where reviewer = $%d and run_id = id)"
-            % (len(args))
+            f"not exists (select from review where reviewer = ${len(args)} and run_id = id)"
         )
 
     if conditions:
@@ -708,7 +707,7 @@ async def iter_needs_review(
         query += " ORDER BY " + ", ".join(order_by) + " "
 
     if limit is not None:
-        query += " LIMIT %d" % limit
+        query += f" LIMIT {limit}"
     return await conn.fetch(query, *args)
 
 

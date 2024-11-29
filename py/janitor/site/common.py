@@ -298,7 +298,7 @@ WHERE run.codebase = $1 AND run.suite = $2
                 )
                 return diff.decode("utf-8", "replace")
         except ClientResponseError as e:
-            return "Unable to retrieve diff; error %d" % e.status
+            return f"Unable to retrieve diff; error {e.status}"
         except ClientConnectorError as e:
             return f"Unable to retrieve diff; error {e}"
 

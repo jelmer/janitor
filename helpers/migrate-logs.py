@@ -36,10 +36,8 @@ async def reprocess_run(pool, codebase, log_id, logfilenames):
         if await from_manager.has_log(codebase, log_id, BUILD_LOG_FILENAME):
             logfilenames.append(BUILD_LOG_FILENAME)
         i = 1
-        while await from_manager.has_log(
-            codebase, log_id, "%s.%d" % (BUILD_LOG_FILENAME, i)
-        ):
-            log_name = "%s.%d" % (BUILD_LOG_FILENAME, i)
+        while await from_manager.has_log(codebase, log_id, f"{BUILD_LOG_FILENAME}.{i}"):
+            log_name = f"{BUILD_LOG_FILENAME}.{i}"
             logfilenames.append(log_name)
             i += 1
 

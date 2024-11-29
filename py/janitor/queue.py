@@ -150,20 +150,18 @@ LEFT JOIN codebase ON codebase.name = queue.codebase
         args: list[Any] = []
         if assigned_queue_items:
             args.append(assigned_queue_items)
-            conditions.append("NOT (queue.id = ANY($%d::int[]))" % len(args))
+            conditions.append(f"NOT (queue.id = ANY(${len(args)}::int[]))")
         if codebase:
             args.append(codebase)
-            conditions.append("queue.codebase = $%d" % len(args))
+            conditions.append(f"queue.codebase = ${len(args)}")
         if campaign:
             args.append(campaign)
-            conditions.append("queue.suite = $%d" % len(args))
+            conditions.append("queue.suite = ${len(args)}")
         if exclude_hosts:
             args.append(exclude_hosts)
             # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
             conditions.append(
-                "NOT (codebase.branch_url IS NOT NULL AND "
-                "SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY($%d::text[]))"
-                % len(args)
+                f"NOT (codebase.branch_url IS NOT NULL AND SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY(${len(args)}::text[]))"
             )
 
         if conditions:
@@ -209,7 +207,7 @@ FROM
         args: list[Any] = []
         if campaign:
             args.append(campaign)
-            conditions.append("queue.suite = $%d" % len(args))
+            conditions.append(f"queue.suite = ${len(args)}")
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -221,7 +219,7 @@ queue.priority ASC,
 queue.id ASC
 """
         if limit:
-            query += " LIMIT %d" % limit
+            query += f" LIMIT {limit}"
         for row in await self.conn.fetch(query, *args):
             yield QueueItem.from_row(row)
 

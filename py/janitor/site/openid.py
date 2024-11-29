@@ -69,7 +69,7 @@ async def handle_oauth_callback(request):
                 status=resp.status,
                 data={
                     "error": "token-error",
-                    "message": "received response %d" % resp.status,
+                    "message": f"received response {resp.status}",
                 },
             )
         resp = await resp.json()

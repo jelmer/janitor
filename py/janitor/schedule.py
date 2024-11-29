@@ -118,10 +118,10 @@ SELECT AVG(finish_time - start_time) FROM run
 WHERE failure_transient is not True """
     args: list[str] = []
     if codebase is not None:
-        query += " AND codebase = $%d" % (len(args) + 1)
+        query += f" AND codebase = ${len(args) + 1}"
         args.append(codebase)
     if campaign is not None:
-        query += " AND suite = $%d" % (len(args) + 1)
+        query += f" AND suite = ${len(args) + 1}"
         args.append(campaign)
     return await conn.fetchval(query, *args)
 
