@@ -1,6 +1,8 @@
 use crate::config::Config;
 use breezyshim::RevisionId;
+use log::warn;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions, Postgres};
+use sqlx::PgPool;
 use sqlx::Pool;
 
 pub async fn create_pool(config: &Config) -> Result<Pool<Postgres>, sqlx::Error> {
@@ -66,4 +68,50 @@ impl Run {
                 .map(|(_, n, br, r)| (n.clone(), r.clone(), br.clone()))
         })
     }
+}
+
+async fn has_cotenants(
+    conn: &PgPool,
+    codebase: &str,
+    url: &url::Url,
+) -> Result<Option<bool>, sqlx::Error> {
+    #[derive(Debug, Clone, sqlx::FromRow)]
+    struct Codebase {
+        pub name: String,
+    }
+    let url = breezyshim::urlutils::split_segment_parameters(url)
+        .0
+        .to_string();
+
+    let rows: Vec<Codebase> =
+        sqlx::query_as("SELECT name FROM codebase where branch_url = $1 or url = $1")
+            .bind(url.trim_end_matches('/'))
+            .fetch_all(conn)
+            .await?;
+
+    Ok(match rows.len() {
+        0 => {
+            // Uhm, we actually don't really know
+            warn!(
+                "Unable to figure out if {} has cotenants on {}",
+                codebase, url
+            );
+            None
+        }
+        1 => Some(rows[0].name != codebase),
+        _ => Some(true),
+    })
+}
+
+async fn iter_publishable_suites(
+    conn: &PgPool,
+    codebase: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT DISTINCT suite FROM publish_ready WHERE codebase = $1")
+            .bind(codebase)
+            .fetch_all(conn)
+            .await?;
+
+    Ok(rows.into_iter().map(|row| row.0).collect::<Vec<_>>())
 }
