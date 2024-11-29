@@ -571,7 +571,7 @@ async def handle_done_proposals(request):
     else:
         # Default to beginning of the month
         since = datetime.fromisoformat(
-                f"{date.today().year:04d}-{date.today().month:02d}-01"
+            f"{date.today().year:04d}-{date.today().month:02d}-01"
         )
 
     async with request.app["pool"].acquire() as conn:
