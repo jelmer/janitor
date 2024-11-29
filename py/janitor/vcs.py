@@ -420,7 +420,7 @@ class LocalBzrVcsManager(VcsManager):
         if p.returncode != 3:
             return stdout
 
-        raise RuntimeError("diff returned %d" % p.returncode)
+        raise RuntimeError(f"diff returned {p.returncode}")
 
     async def get_revision_info(self, codebase, old_revid, new_revid):
         repo = self.get_repository(codebase)

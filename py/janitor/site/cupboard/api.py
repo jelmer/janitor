@@ -66,10 +66,10 @@ async def handle_mass_reschedule(request):
         ]
         if campaign:
             params.append(campaign)
-            where.append("c.suite = $%d" % len(params))
+            where.append(f"c.suite = ${len(params)}")
         else:
             params.append(all_campaigns)
-            where.append("c.suite = ANY($%d::text[])" % len(params))
+            where.append(f"c.suite = ANY(${len(params)}::text[])")
     else:
         if include_transient:
             table = "last_runs"
@@ -91,21 +91,21 @@ AND """
         params = []
         if result_code is not None:
             params.append(result_code)
-            where.append("result_code = $%d" % len(params))
+            where.append(f"result_code = ${len(params)}")
         if campaign:
             params.append(campaign)
-            where.append("suite = $%d" % len(params))
+            where.append(f"suite = ${len(params)}")
         else:
             params.append(all_campaigns)
-            where.append("suite = ANY($%d::text[])" % len(params))
+            where.append(f"suite = ANY(${len(params)}::text[])")
         if rejected:
             where.append("publish_status = 'rejected'")
         if description_re:
             params.append(description_re)
-            where.append("description ~ $%d" % len(params))
+            where.append(f"description ~ ${len(params)}")
         if min_age:
             params.append(datetime.utcnow() - timedelta(days=min_age))
-            where.append("finish_time < $%d" % len(params))
+            where.append(f"finish_time < ${len(params)}")
     query += " AND ".join(where)
 
     async with request.app["pool"].acquire() as conn:

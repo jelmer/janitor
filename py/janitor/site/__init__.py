@@ -68,7 +68,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
 
 def json_chart_data(max_age=None):
     if max_age is not None:
-        headers = {"Cache-Control": "max-age=%d" % max_age}
+        headers = {"Cache-Control": f"max-age={max_age}"}
     else:
         headers = {}
 
@@ -110,20 +110,20 @@ def update_vars_from_request(vs, request):
 
 def format_duration(duration):
     weeks = duration.days // 7
-    days = duration.days % 7
+    duration.days % 7
     if weeks:
-        return "%dw%dd" % (weeks, days)
+        return "f{weeks}w{days}d"
     if duration.days:
-        return "%dd%dh" % (duration.days, duration.seconds // (60 * 60))
+        return f"{duration.days}d{duration.seconds//(60*60)}h"
     hours = duration.seconds // (60 * 60)
     seconds = duration.seconds % (60 * 60)
     minutes = seconds // 60
     seconds %= 60
     if hours:
-        return "%dh%dm" % (hours, minutes)
+        return f"{hours}h{minutes}m"
     if minutes:
-        return "%dm%ds" % (minutes, seconds)
-    return "%ds" % seconds
+        return f"{minutes}m{seconds}s"
+    return f"{seconds}s"
 
 
 def format_timestamp(ts):
