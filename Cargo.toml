@@ -1,6 +1,6 @@
 [package]
 name = "janitor"
-version = "0.0.0"
+version = { workspace = true }
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
 edition = "2021"
 description = "Automated VCS change management platform"
@@ -86,10 +86,11 @@ protobuf-codegen = "3"
 protoc-rust = "^2.0"
 
 [workspace]
-members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store", "site", "site-py" ]
+members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store", "site", "site-py" , "archive"]
 
 [workspace.package]
 edition = "2021"
+version = "0.1.0"
 
 [features]
 default = ["gcp", "gcs", "debian"]
