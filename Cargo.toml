@@ -53,7 +53,7 @@ debian-changelog = "0.2.0"
 debian-analyzer = "0.158.24"
 debversion = { version = "0.4" }
 google-cloud-storage = "0.22.1"
-google-cloud-auth = "0.17.1"
+google-cloud-auth = "0.17.2"
 tempfile = "3.13.0"
 redis = "0.27.5"
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
