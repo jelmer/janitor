@@ -44,7 +44,7 @@ debian-control = "0.1.28"
 shlex.workspace = true
 prometheus = { version = "0.13.4", features = ["reqwest"] }
 buildlog-consultant = { workspace = true }
-tracing = "0.1.40"
+tracing = "0.1.41"
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.1" }
