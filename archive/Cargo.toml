@@ -1,0 +1,11 @@
+[package]
+name = "janitor-archive"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures = "0.3.31"
+tokio = { workspace = true, features = ["full"] }
+tracing = "0.1.41"
+deb822-lossless = { git = "https://github.com/jelmer/deb822-rs" }
+debian-control = { git = "https://github.com/jelmer/deb822-rs" }

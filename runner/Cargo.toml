@@ -1,6 +1,6 @@
 [package]
 name = "janitor-runner"
-version = "0.0.0"
+version.workspace = true
 authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
 edition.workspace = true
 description = "Runner for the janitor"
@@ -18,7 +18,7 @@ redis = { workspace = true, features = ["aio", "tokio-comp"] }
 chrono = { workspace = true, features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
-janitor = { version = "0.0.0", path = "..", default-features = false, features = ["debian"] }
+janitor = { path = "..", default-features = false, features = ["debian"] }
 async-trait = "0.1.83"
 url.workspace = true
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
