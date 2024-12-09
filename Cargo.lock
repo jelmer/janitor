@@ -3344,9 +3344,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.167"
+version = "0.2.168"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d6582e104315a817dff97f75133544b2e094ee22447d2acf4a74e189ba06fc"
+checksum = "5aaeb2981e0606ca11d79718f8bb01164f1d6ed75080182d3abf017e6d244b6d"
 
 [[package]]
 name = "libm"
@@ -3838,7 +3838,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.32"
-source = "git+https://github.com/jelmer/ognibuild.git#98d5bd23b943f8af878f23cec4517a397141fb51"
+source = "git+https://github.com/jelmer/ognibuild.git#1633d145e9e3ba6cfb52eaa6f52b04b18fce21f0"
 dependencies = [
  "axum",
  "breezyshim",
