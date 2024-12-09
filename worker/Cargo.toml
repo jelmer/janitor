@@ -38,7 +38,7 @@ gethostname = "0.5.0"
 ognibuild = { workspace = true }
 debversion = { workspace = true, optional = true }
 debian-changelog = { workspace = true, optional = true }
-tokio-util = "0.7.11"
+tokio-util = "0.7.13"
 
 [features]
 default = ["debian", "cli"]
