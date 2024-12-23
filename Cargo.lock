@@ -680,7 +680,7 @@ dependencies = [
  "clap",
  "debian-control 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "debversion",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "fancy-regex",
  "inventory",
  "lazy-regex",
@@ -706,7 +706,7 @@ dependencies = [
  "clap",
  "debian-control 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "debversion",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "fancy-regex",
  "inventory",
  "lazy-regex",
@@ -1608,9 +1608,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.11.5"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+checksum = "dcaee3d8e3cfc3fd92428d477bc97fc29ec8716d180c0d74c643bb26166660e0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1632,7 +1632,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3021,7 +3021,7 @@ dependencies = [
  "clap",
  "debian-control 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "debversion",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "fancy-regex",
  "filetime",
  "flate2",
@@ -3072,7 +3072,7 @@ dependencies = [
  "axum-extra",
  "breezyshim",
  "clap",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "janitor",
  "maplit",
  "mime",
@@ -3216,7 +3216,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db69f08d4fb10524cacdb074c10b296299d71274ddbc830a8ee65666867002e9"
 dependencies = [
  "jiff-tzdb-platform",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3860,7 +3860,7 @@ dependencies = [
  "debian-control 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "debversion",
  "dirs",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "flate2",
  "fs_extra",
  "inventory",
@@ -5023,7 +5023,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.14",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5383,7 +5383,7 @@ dependencies = [
  "debian-changelog",
  "debian-control 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "debversion",
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "flate2",
  "lazy-regex",
  "lazy_static",
@@ -5788,7 +5788,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5948,7 +5948,7 @@ dependencies = [
  "fastrand 2.3.0",
  "once_cell",
  "rustix 0.38.42",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6010,7 +6010,7 @@ version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
 dependencies = [
- "env_logger 0.11.5",
+ "env_logger 0.11.6",
  "test-log-macros",
  "tracing-subscriber",
 ]
@@ -6865,7 +6865,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
