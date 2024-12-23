@@ -1192,7 +1192,7 @@ dependencies = [
 [[package]]
 name = "deb822-derive"
 version = "0.2.0"
-source = "git+https://github.com/jelmer/deb822-rs#8133fae85d6a051bf927fcb474745733bedc1806"
+source = "git+https://github.com/jelmer/deb822-rs#92a2c8c29e8adaee6317825566f9ab79c27968ab"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1215,7 +1215,7 @@ dependencies = [
 [[package]]
 name = "deb822-lossless"
 version = "0.2.4"
-source = "git+https://github.com/jelmer/deb822-rs#8133fae85d6a051bf927fcb474745733bedc1806"
+source = "git+https://github.com/jelmer/deb822-rs#92a2c8c29e8adaee6317825566f9ab79c27968ab"
 dependencies = [
  "deb822-derive 0.2.0 (git+https://github.com/jelmer/deb822-rs)",
  "regex",
@@ -1310,7 +1310,7 @@ dependencies = [
 [[package]]
 name = "debian-control"
 version = "0.1.40"
-source = "git+https://github.com/jelmer/deb822-rs#8133fae85d6a051bf927fcb474745733bedc1806"
+source = "git+https://github.com/jelmer/deb822-rs#92a2c8c29e8adaee6317825566f9ab79c27968ab"
 dependencies = [
  "chrono",
  "deb822-lossless 0.2.4 (git+https://github.com/jelmer/deb822-rs)",
@@ -4672,7 +4672,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8ce9b776c5b0430f08ba021444cbb5868a2d8d706fd4ba987233e3729172da9"
 dependencies = [
  "deb822-lossless 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "rowan 0.16.1",
+ "rowan 0.15.16",
  "serde",
  "url",
 ]
