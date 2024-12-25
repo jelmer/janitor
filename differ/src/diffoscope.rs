@@ -85,6 +85,19 @@ fn _set_limits(limit_mb: Option<u64>) {
     .unwrap();
 }
 
+/// Run diffoscope on two binaries
+///
+/// # Arguments
+/// * `old_binary` - The path to the old binary
+/// * `new_binary` - The path to the new binary
+/// * `diffoscope_command` - The command to run diffoscope
+/// * `timeout` - The maximum time to run diffoscope
+/// * `memory_limit` - The maximum memory to use
+///
+/// # Returns
+/// * `Ok(Some(diffoscope_output))` - If diffoscope ran successfully
+/// * `Ok(None)` - If diffoscope ran successfully but there were no differences
+/// * `Err(DiffoscopeError)` - If there was an error running diffoscope
 async fn _run_diffoscope(
     old_binary: &str,
     new_binary: &str,
@@ -138,11 +151,17 @@ async fn _run_diffoscope(
     }
 }
 
+/// Filter out irrelevant information from the diff
+/// (e.g. the full path to the binaries)
+///
+/// # Arguments
+/// * `diff` - The diff to filter
 pub fn filter_irrelevant(diff: &mut DiffoscopeOutput) {
     diff.source1 = diff.source1.file_name().unwrap().into();
     diff.source2 = diff.source2.file_name().unwrap().into();
 }
 
+/// Filter out boring information from the diff
 pub fn filter_boring_udiff(
     udiff: &str,
     old_version: &str,
@@ -335,6 +354,14 @@ pub fn format_diffoscope(
     })
 }
 
+/// Run diffoscope on two binaries
+///
+/// # Arguments
+/// * `old_binaries` - A list of tuples containing the name and path of the old binaries
+/// * `new_binaries` - A list of tuples containing the name and path of the new binaries
+/// * `timeout` - The maximum time to run diffoscope
+/// * `memory_limit` - The maximum memory to use
+/// * `diffoscope_command` - The command to run diffoscope
 pub async fn run_diffoscope(
     old_binaries: &[(&str, &str)],
     new_binaries: &[(&str, &str)],
