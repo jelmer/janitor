@@ -1,3 +1,11 @@
+//! Artifact management for storing and retrieving artifacts from various locations.
+//!
+//! The `ArtifactManager` trait defines the interface for storing and retrieving artifacts.
+//!
+//! The following implementations are provided:
+//!
+//! - `LocalArtifactManager`: Store artifacts on the local filesystem.
+//! - `GCSArtifactManager`: Store artifacts in Google Cloud Storage.
 use async_trait::async_trait;
 use std::path::Path;
 
@@ -38,27 +46,39 @@ impl From<std::io::Error> for Error {
     }
 }
 
+/// A trait for storing and retrieving artifacts.
 #[async_trait]
 pub trait ArtifactManager: std::fmt::Debug + Send + Sync {
+    /// Store artifacts from a local directory.
     async fn store_artifacts(
         &self,
         run_id: &str,
         local_path: &Path,
         names: Option<&[String]>,
     ) -> Result<(), Error>;
+
+    /// Get an artifact as a Read trait object.
     async fn get_artifact(
         &self,
         run_id: &str,
         filename: &str,
     ) -> Result<Box<dyn std::io::Read>, Error>;
+
+    /// Get a URL for a public artifact.
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url;
+
+    /// Retrieve artifacts to a local directory.
     async fn retrieve_artifacts(
         &self,
         run_id: &str,
         local_path: &Path,
         filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
     ) -> Result<(), Error>;
+
+    /// Iterate over all run IDs.
     async fn iter_ids(&self) -> Box<dyn Iterator<Item = String>>;
+
+    /// Delete artifacts for a run.
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error>;
 }
 
