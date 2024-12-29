@@ -12,3 +12,6 @@ pub mod queue;
 pub mod schedule;
 pub mod state;
 pub mod vcs;
+
+/// The type of a run ID.
+pub type RunId = String;
