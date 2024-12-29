@@ -3064,6 +3064,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "janitor-auto-upload"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "silver-platter",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "janitor-differ"
 version = "0.0.0"
 dependencies = [
