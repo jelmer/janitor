@@ -699,6 +699,68 @@ fn determine_debdiff_cache_path(
 
 async fn listen_to_runner(redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
     todo!();
+
+    /*
+    db = await state.create_pool(db_location)
+
+    async def handle_result_message(msg):
+        result = json.loads(msg["data"])
+        if result["code"] != "success":
+            return
+        async with db.acquire() as conn:
+            to_precache = []
+            if result["revision"] == result["main_branch_revision"]:
+                for row in await conn.fetch(
+                    "select id from run where result_code = 'success' "
+                    "and main_branch_revision = $1",
+                    result["revision"],
+                ):
+                    to_precache.append((result["log_id"], row[0]))
+            else:
+                unchanged_run = await get_unchanged_run(
+                    conn, result["codebase"], result["main_branch_revision"]
+                )
+                if unchanged_run:
+                    to_precache.append((unchanged_run["id"], result["log_id"]))
+        # This could be concurrent, but risks hitting resource constraints
+        # for large packages.
+        for old_id, new_id in to_precache:
+            try:
+                await precache(
+                    app["artifact_manager"],
+                    old_id,
+                    new_id,
+                    task_memory_limit=app["task_memory_limit"],
+                    task_timeout=app["task_timeout"],
+                    diffoscope_cache_path=app["diffoscope_cache_path"],
+                    debdiff_cache_path=app["debdiff_cache_path"],
+                    diffoscope_command=app["diffoscope_command"],
+                )
+            except ArtifactsMissing as e:
+                logging.info(
+                    "Artifacts missing while precaching diff for " "new result %s: %r",
+                    result["log_id"],
+                    e,
+                )
+            except ArtifactRetrievalTimeout as e:
+                logging.info("Timeout retrieving artifacts: %s", e)
+            except DiffCommandTimeout as e:
+                logging.info("Timeout diffing artifacts: %s", e)
+            except DiffCommandMemoryError as e:
+                logging.info("Memory error diffing artifacts: %s", e)
+            except DiffCommandError as e:
+                logging.info("Error diff artifacts: %s", e)
+            except Exception as e:
+                logging.info("Error precaching diff for %s: %r", result["log_id"], e)
+                traceback.print_exc()
+
+    try:
+        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
+            await ch.subscribe("result", result=handle_result_message)
+            await ch.run()
+    finally:
+        await redis.close()
+    */
 }
 
 #[tokio::main]
