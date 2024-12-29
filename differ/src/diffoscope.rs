@@ -1,4 +1,4 @@
-use patchkit::unified::{iter_hunks, Hunk, HunkLine};
+use patchkit::unified::{iter_hunks, HunkLine};
 use std::path::PathBuf;
 use tracing::{debug, warn};
 
@@ -240,9 +240,9 @@ pub fn filter_boring_detail(
 pub fn filter_boring(
     diff: &mut DiffoscopeOutput,
     old_version: &str,
-    old_campaign: &str,
+    _old_campaign: &str,
     new_version: &str,
-    new_campaign: &str,
+    _new_campaign: &str,
 ) {
     let display_version = new_version.rsplit_once("~").map_or(new_version, |(v, _)| v);
     // Changes file differences
