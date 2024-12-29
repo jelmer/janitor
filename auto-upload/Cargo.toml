@@ -1,5 +1,5 @@
 [package]
-name = "janitor-archive"
+name = "janitor-auto-upload"
 version.workspace = true
 edition.workspace = true
 
@@ -7,5 +7,4 @@ edition.workspace = true
 futures = "0.3.31"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.41"
-deb822-lossless.workspace = true
-debian-control.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }
