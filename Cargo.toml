@@ -77,7 +77,7 @@ maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 silver-platter = { version = ">=0.5.36" }
 ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
-pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
+pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22", features = ["tokio-runtime"] }
 shlex = "1"
 buildlog-consultant = { git = "https://github.com/jelmer/buildlog-consultant" }
 

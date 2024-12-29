@@ -898,10 +898,12 @@ dependencies = [
  "janitor",
  "log",
  "pyo3",
+ "pyo3-asyncio",
  "pyo3-log",
  "reqwest",
  "serde_json",
  "silver-platter",
+ "tokio",
  "url",
 ]
 
@@ -4548,6 +4550,18 @@ dependencies = [
  "pyo3-macros",
  "serde",
  "unindent",
+]
+
+[[package]]
+name = "pyo3-asyncio"
+version = "0.22.0"
+source = "git+https://github.com/jelmer/pyo3-asyncio?branch=pyo3-0.22#058e59118477e438c45760934040ddfbd9ab6996"
+dependencies = [
+ "futures",
+ "once_cell",
+ "pin-project-lite",
+ "pyo3",
+ "tokio",
 ]
 
 [[package]]

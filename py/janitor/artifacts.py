@@ -28,6 +28,19 @@ from typing import TYPE_CHECKING, Optional
 from aiohttp import ClientResponseError, ClientSession
 from yarl import URL
 
+from . import _common
+
+__all__ = [
+    'ArtifactManager',
+    'GCSArtifactManager',
+    'LocalArtifactManager',
+    'ServiceUnavailable',
+    'ArtifactsMissing',
+    'get_artifact_manager',
+    'upload_backup_artifacts',
+    'store_artifacts_with_backup',
+]
+
 DEFAULT_GCS_TIMEOUT = 60
 
 
@@ -244,68 +257,6 @@ class GCSArtifactManager(ArtifactManager):
         )
 
 
-def get_artifact_manager(location, trace_configs=None):
-    if location.startswith("gs://"):
-        return GCSArtifactManager(location, trace_configs=trace_configs)
-    return LocalArtifactManager(location)
-
-
-async def list_ids(manager):
-    async with manager:
-        async for id in manager.iter_ids():
-            print(id)
-
-
-async def upload_backup_artifacts(
-    backup_artifact_manager, artifact_manager, timeout=None
-):
-    async for run_id in backup_artifact_manager.iter_ids():
-        with tempfile.TemporaryDirectory(prefix="janitor-artifacts") as td:
-            await backup_artifact_manager.retrieve_artifacts(
-                run_id, td, timeout=timeout
-            )
-            try:
-                await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
-            except Exception as e:
-                logging.warning(
-                    "Unable to upload backup artifacts (%r): %s",
-                    run_id,
-                    e,
-                    extra={"run_id": run_id},
-                )
-            else:
-                await backup_artifact_manager.delete_artifacts(run_id)
-
-
-async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id, names):
-    try:
-        await manager.store_artifacts(run_id, from_dir, names)
-    except Exception as e:
-        logging.warning(
-            "Unable to upload artifacts for %r: %r", run_id, e, extra={"run_id": run_id}
-        )
-        if backup_manager:
-            await backup_manager.store_artifacts(run_id, from_dir, names)
-            logging.info(
-                "Uploading results to backup artifact " "location %r.",
-                backup_manager,
-                extra={"run_id": run_id},
-            )
-        else:
-            logging.warning(
-                "No backup artifact manager set. ", extra={"run_id": run_id}
-            )
-            raise
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command")
-    list_parser = subparsers.add_parser("list")
-    list_parser.add_argument("location", type=str)
-    args = parser.parse_args()
-    if args.command == "list":
-        manager = get_artifact_manager(args.location)
-        asyncio.run(list_ids(manager))
+get_artifact_manager = _common.get_artifact_manager
+upload_backup_artifacts = _common.upload_backup_artifacts
+store_artifacts_with_backup = _common.store_artifacts_with_backup
