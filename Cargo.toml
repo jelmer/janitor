@@ -31,7 +31,7 @@ futures = "0.3.30"
 sqlx = { workspace = true, features = ["chrono"] }
 sqlx-core = { workspace = true, features = ["chrono"] }
 sqlx-postgres = { workspace = true, features = ["chrono"] }
-async-trait = "0.1.83"
+async-trait = "0.1.85"
 percent-encoding = "2.3.1"
 tempfile.workspace = true
 google-cloud-storage = { workspace = true, optional = true }
