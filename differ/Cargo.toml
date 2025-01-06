@@ -24,7 +24,7 @@ redis = { workspace = true, features = ["aio", "connection-manager", "tokio", "t
 tempfile.workspace = true
 breezyshim = { workspace = true, features = ["sqlx"] }
 nix = { version = "0.29.0", features = ["resource"] }
-axum-extra = { version = "0.9.6", features = ["typed-header"] }
+axum-extra = { version = "0.10.0", features = ["typed-header"] }
 mime = "0.3.17"
 accept-header = "0.2.3"
 pyo3.workspace = true
