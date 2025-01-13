@@ -3913,7 +3913,7 @@ dependencies = [
 [[package]]
 name = "ognibuild"
 version = "0.0.32"
-source = "git+https://github.com/jelmer/ognibuild.git#eb4a162112a3fedb46977e0edbffeedc2161b7e3"
+source = "git+https://github.com/jelmer/ognibuild.git#b1e44829417278914669affb9bd03d97a27bd563"
 dependencies = [
  "axum 0.8.1",
  "breezyshim",
