@@ -7,10 +7,10 @@ COPY . /code
 
 COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
-RUN apt-get update \
- && apt-get -y install auto-apt-proxy \
+RUN apt-get update --yes \
+ && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
- && apt-get install --no-install-recommends -y \
+ && apt-get satisfy --yes --no-install-recommends \
         build-essential \
         ca-certificates \
         cargo \
@@ -22,6 +22,7 @@ RUN apt-get update \
         protobuf-compiler \
         python3 \
         rustc \
+ && apt-get clean \
  && cd /code \
  && cargo build --release -p janitor-worker
 
@@ -30,10 +31,11 @@ RUN apt-get update \
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-RUN apt-get update \
- && apt-get -y install \
+RUN apt-get update --yes \
+ && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
- && apt-get install --no-install-recommends -y \
+ && apt-get upgrade --yes \
+ && apt-get satisfy --yes --no-install-recommends \
         autoconf \
         apt-file \
         autopkgtest \

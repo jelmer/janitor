@@ -3,11 +3,11 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get -y update \
- && apt-get -y install --no-install-recommends \
+RUN apt-get update --yes \
+ && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
- && apt-get -y upgrade \
- && apt-get satisfy --no-install-recommends -y \
+ && apt-get upgrade --yes \
+ && apt-get satisfy --yes --no-install-recommends \
         ca-certificates \
         cargo \
         gcc \
@@ -28,7 +28,8 @@ RUN apt-get -y update \
         python3-wheel \
         python3-wheel-whl \
         rustc \
-        swig
+        swig \
+ && apt-get clean
 
 COPY . /code
 
@@ -36,10 +37,9 @@ VOLUME /bzr
 
 EXPOSE 9929
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
+RUN apt-get satisfy --yes --no-install-recommends \
         libjs-sphinxdoc \
- && pip3 install --break-system-packages "/code[bzr_web,gcp]" \
+ && pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
  && rm -rf /code
 
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]
