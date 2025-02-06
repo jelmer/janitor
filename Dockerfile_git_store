@@ -22,8 +22,6 @@ RUN apt -y update \
         python3-pip \
         libgpgme-dev \
         swig \
-        rustc \
-        cargo \
         gcc \
         mypy-protobuf \
         python3-gpg \

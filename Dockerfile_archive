@@ -21,8 +21,6 @@ RUN apt -y update \
         python3-setuptools-protobuf \
         ca-certificates \
         python3-pip \
-        rustc \
-        cargo \
         gcc \
         mypy-protobuf \
         python3-apt \
