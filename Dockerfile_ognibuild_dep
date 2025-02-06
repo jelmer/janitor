@@ -4,10 +4,13 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt -y update && apt -y --no-install-recommends install auto-apt-proxy aptitude apt-file && apt-file update && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
 
+
+
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
+
 RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-recommends -y autoconf \
 	apt-file \
 	dpkg-dev \
@@ -25,6 +28,7 @@ RUN apt update && apt -y install auto-apt-proxy && apt install --no-install-reco
 	&& apt-file update
 
 RUN rm -rf /usr/share/aclocal
+
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
 RUN pip3 install --break-system-packages python_apt@git+https://salsa.debian.org/apt-team/python-apt
@@ -32,4 +36,5 @@ RUN pip3 install --break-system-packages python_apt@git+https://salsa.debian.org
 RUN pip3 install --break-system-packages "ognibuild[dep_server,gcp,debian]@git+https://github.com/jelmer/ognibuild.git"
 
 EXPOSE 9934
+
 ENTRYPOINT ["python3", "-m", "ognibuild.dep_server", "--port=9934", "--listen-address=0.0.0.0"]
