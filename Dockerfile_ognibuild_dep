@@ -8,6 +8,7 @@ RUN apt-get update --yes \
         apt-file \
         aptitude \
         auto-apt-proxy \
+        iproute2 \
  && apt-get clean \
  && apt-file update \
  && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
@@ -22,6 +23,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
+        iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
         apt-file \
