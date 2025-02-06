@@ -3,8 +3,8 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt -y update \
- && apt -y --no-install-recommends install \
+RUN apt-get -y update \
+ && apt-get -y --no-install-recommends install \
         apt-file \
         aptitude \
         auto-apt-proxy \
@@ -18,10 +18,10 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt update \
- && apt -y install \
+RUN apt-get update \
+ && apt-get -y install \
         auto-apt-proxy \
- && apt install --no-install-recommends -y \
+ && apt-get install --no-install-recommends -y \
         apt-file \
         autoconf \
         ca-certificates \
@@ -35,7 +35,7 @@ RUN apt update \
         make \
         python3-pip \
         rustc \
- && apt clean \
+ && apt-get clean \
  && apt-file update
 
 RUN rm -rf /usr/share/aclocal

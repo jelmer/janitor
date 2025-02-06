@@ -7,10 +7,10 @@ COPY . /code
 
 COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
-RUN apt update \
- && apt -y install
+RUN apt-get update \
+ && apt-get -y install auto-apt-proxy \
         auto-apt-proxy \
- && apt install --no-install-recommends -y \
+ && apt-get install --no-install-recommends -y \
         build-essential \
         ca-certificates \
         cargo \
@@ -30,10 +30,10 @@ RUN apt update \
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-RUN apt update \
- && apt -y install \
+RUN apt-get update \
+ && apt-get -y install \
         auto-apt-proxy \
- && apt install --no-install-recommends -y \
+ && apt-get install --no-install-recommends -y \
         autoconf \
         apt-file \
         autopkgtest \
@@ -54,7 +54,7 @@ RUN apt update \
         sbuild \
         ssh \
         subversion \
- && apt clean \
+ && apt-get clean \
  && apt-file update
 
 COPY --from=build /code/target/release/janitor-worker /bin/janitor-worker
