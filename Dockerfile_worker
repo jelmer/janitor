@@ -45,7 +45,6 @@ RUN apt update \
         autopkgtest \
         debootstrap \
         git-buildpackage \
-        pristine-tar \
         lintian \
         perl-doc \
         dpkg \
@@ -54,7 +53,6 @@ RUN apt update \
         ca-certificates \
         mypy-protobuf \
         protobuf-compiler \
-        ca-certificates \
         python3-breezy \
  && apt clean \
  && apt-file update
