@@ -5,9 +5,9 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt -y update \
  && apt -y --no-install-recommends install \
-        auto-apt-proxy \
-        aptitude \
         apt-file \
+        aptitude \
+        auto-apt-proxy \
  && apt-file update \
  && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
 
@@ -22,19 +22,19 @@ RUN apt update \
  && apt -y install \
         auto-apt-proxy \
  && apt install --no-install-recommends -y \
-        autoconf \
         apt-file \
-        dpkg-dev \
-        git \
-        make \
-        rustc \
-        libpython3-dev \
-        python3-pip \
+        autoconf \
         ca-certificates \
-        gnome-pkg-tools \
         cargo \
-        libapt-pkg-dev \
+        dpkg-dev \
         g++ \
+        git \
+        gnome-pkg-tools \
+        libapt-pkg-dev \
+        libpython3-dev \
+        make \
+        python3-pip \
+        rustc \
  && apt clean \
  && apt-file update
 

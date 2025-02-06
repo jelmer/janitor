@@ -8,28 +8,28 @@ RUN apt -y update \
         auto-apt-proxy \
  && apt -y upgrade \
  && apt satisfy --no-install-recommends -y \
-        git \
+        ca-certificates \
         cargo \
-        rustc \
+        dpkg-dev \
+        gcc \
+        git \
+        libclang-dev \
         libpython3-dev \
+        libssl-dev \
+        libtdb-dev \
+        make \
+        mypy-protobuf \
+        pkg-config \
+        protobuf-compiler \
+        python3-apt \
+        python3-gpg \
+        python3-pip \
+        python3-setuptools \
+        python3-setuptools-protobuf \
+        python3-setuptools-rust \
         python3-wheel \
         python3-wheel-whl \
-        make \
-        protobuf-compiler \
-        python3-setuptools \
-        python3-setuptools-rust \
-        python3-setuptools-protobuf \
-        ca-certificates \
-        python3-pip \
-        gcc \
-        mypy-protobuf \
-        python3-apt \
-        dpkg-dev \
-        python3-gpg \
-        libssl-dev \
-        pkg-config \
-        libtdb-dev \
-        libclang-dev
+        rustc
 
 COPY . /code
 
