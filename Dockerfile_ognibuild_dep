@@ -1,4 +1,5 @@
 FROM docker.io/debian:testing-slim AS m4
+MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
