@@ -3,11 +3,11 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt -y update \
- && apt -y install --no-install-recommends \
+RUN apt-get -y update \
+ && apt-get -y install --no-install-recommends \
         auto-apt-proxy \
- && apt -y upgrade \
- && apt satisfy --no-install-recommends -y \
+ && apt-get -y upgrade \
+ && apt-get satisfy --no-install-recommends -y \
         ca-certificates \
         cargo \
         gcc \
@@ -36,8 +36,8 @@ VOLUME /bzr
 
 EXPOSE 9929
 
-RUN apt update \
- && apt install -y --no-install-recommends \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
         libjs-sphinxdoc \
  && pip3 install --break-system-packages "/code[bzr_web,gcp]" \
  && rm -rf /code

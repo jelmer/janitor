@@ -3,11 +3,11 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt -y update \
- && apt -y install --no-install-recommends \
+RUN apt-get -y update \
+ && apt-get -y install --no-install-recommends \
         auto-apt-proxy \
- && apt -y upgrade \
- && apt satisfy --no-install-recommends -y \
+ && apt-get -y upgrade \
+ && apt-get satisfy --no-install-recommends -y \
         ca-certificates \
         cargo \
         gcc \
@@ -36,8 +36,8 @@ VOLUME /git
 
 EXPOSE 9923
 
-RUN apt update \
- && apt install --no-install-recommends -y \
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y \
         cargo \
         libjs-sphinxdoc \
         libpython3-dev \
