@@ -45,10 +45,10 @@ COPY . /code
 RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
  && rm -rf /code
 
-EXPOSE 9912
-
 RUN apt-get satisfy --yes --no-install-recommends \
         gnupg \
         openssh-client
+
+EXPOSE 9912
 
 ENTRYPOINT ["python3", "-m", "janitor.publish", "--port=9912", "--listen-address=0.0.0.0"]
