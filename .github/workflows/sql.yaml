@@ -30,5 +30,6 @@ jobs:
       - name: Load SQL
         run: |
           set -x
-          cat janitor/state.sql janitor/debian/debian.sql \
+          set -o pipefail
+          cat py/janitor/state.sql py/janitor/debian/debian.sql \
             | pg_virtualenv psql -v ON_ERROR_STOP=1
