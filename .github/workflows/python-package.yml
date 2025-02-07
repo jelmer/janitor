@@ -130,6 +130,12 @@ jobs:
           set -x
           pip install --break-system-packages --upgrade \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
+          pushd /tmp/ognibuild/
+          cargo build --verbose
       - name: Python static typing checks (mypy)
         continue-on-error: true
         run: |
