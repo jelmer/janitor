@@ -36,6 +36,11 @@ jobs:
         run: |
           set -x
           make yamllint PYTHON=python
+      - name: Rust style checks (rustfmt)
+        if: always()
+        run: |
+          set -x
+          cargo fmt --check --all
       - name: Check common misspellings (codespell)
         if: always()
         run: |
