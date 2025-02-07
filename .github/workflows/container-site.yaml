@@ -1,5 +1,5 @@
 ---
-name: Dockerfile_differ
+name: Dockerfile_site
 
 "on":
   push:
@@ -10,7 +10,7 @@ name: Dockerfile_differ
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 env:
-  container: differ
+  container: site
 
 jobs:
   # Define job to build and publish container image
