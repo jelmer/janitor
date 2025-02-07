@@ -42,10 +42,6 @@ COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-VOLUME /git
-
-EXPOSE 9923
-
 RUN apt-get satisfy --yes --no-install-recommends \
         cargo \
         libjs-sphinxdoc \
@@ -53,5 +49,9 @@ RUN apt-get satisfy --yes --no-install-recommends \
         rustc \
  && pip3 install --break-system-packages --upgrade "/code[git_web,gcp]" \
  && rm -rf /code
+
+VOLUME /git
+
+EXPOSE 9923
 
 ENTRYPOINT ["python3", "-m", "janitor.git_store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]

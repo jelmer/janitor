@@ -42,13 +42,13 @@ COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-VOLUME /bzr
-
-EXPOSE 9929
-
 RUN apt-get satisfy --yes --no-install-recommends \
         libjs-sphinxdoc \
  && pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
  && rm -rf /code
+
+VOLUME /bzr
+
+EXPOSE 9929
 
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]

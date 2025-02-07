@@ -45,8 +45,6 @@ COPY . /code
 RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
  && rm -rf /code
 
-EXPOSE 8082
-
 # TODO: config
 # TODO: service discovery
 RUN apt-get satisfy --yes --no-install-recommends \
@@ -55,5 +53,7 @@ RUN apt-get satisfy --yes --no-install-recommends \
         libjs-jquery-datatables \
         libjs-jquery-typeahead \
         libjs-moment
+
+EXPOSE 8082
 
 ENTRYPOINT ["python3", "-m", "janitor.site.serve", "--port=8082", "--host=0.0.0.0"]
