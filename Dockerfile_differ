@@ -9,6 +9,7 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
+       ## Standard packages
         ca-certificates \
         cargo \
         gcc \
@@ -25,12 +26,13 @@ RUN apt-get update --yes \
         python3-gpg \
         python3-pip \
         python3-setuptools \
-        python3-setuptools-protobuf \
         python3-setuptools-rust \
         python3-wheel \
         python3-wheel-whl \
         rustc \
         swig \
+       ## Extra packages
+        python3-setuptools-protobuf \
  && apt-get clean
 
 COPY . /code
