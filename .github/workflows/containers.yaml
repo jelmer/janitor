@@ -1,5 +1,5 @@
 ---
-name: Dockerfile_differ
+name: Build and push container images
 
 "on":
   push:
@@ -9,16 +9,26 @@ name: Dockerfile_differ
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
-env:
-  container: differ
-
 jobs:
-  # Define job to build and publish container image
   build:
-    name: build container
+    name: Build and Push
+    # https://github.com/actions/runner-images
     runs-on: ubuntu-latest
 
-    # Steps to perform in job
+    strategy:
+      matrix:
+        dockerfile_suffix:
+          - 'archive'
+          - 'bzr_store'
+          - 'differ'
+          - 'git_store'
+          - 'ognibuild_dep'
+          - 'publish'
+          - 'runner'
+          - 'site'
+          - 'worker'
+      fail-fast: false
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,25 +45,19 @@ jobs:
           echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
         if: ${{ github.event_name == 'push' }}
 
-      - name: Build ${{ env.container }} image
+      - name: Build ${{ matrix.dockerfile_suffix }} image
         id: build-image
         uses: redhat-actions/buildah-build@v2
         with:
-          containerfiles: "Dockerfile_${{ env.container }}"
-          image: ghcr.io/${{ github.repository }}/${{ env.container }}
+          containerfiles: "Dockerfile_${{ matrix.dockerfile_suffix }}"
+          image: |
+            ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
           tags: ${{ env.TAGS }}
 
-  push:
-    name: push container
-    needs: build
-    if: |
-      ${{ github.event_name != 'pull_request' }} &&
-      ${{ github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-
-    # Steps to perform in job
-    steps:
       - name: Login to GitHub Packages
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
@@ -61,6 +65,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push ${{ env.container }} image to ghcr.io
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
         uses: redhat-actions/push-to-registry@v2
         with:
           image: ${{ steps.build-image.outputs.image }}
