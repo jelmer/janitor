@@ -23,9 +23,11 @@ jobs:
           submodules: recursive
       - name: Install dependencies
         run: |
+          set -x
           sudo apt install postgresql-${PG_MAJOR} postgresql-common \
             postgresql-${PG_MAJOR}-debversion
       - name: Load SQL
         run: |
+          set -x
           cat janitor/state.sql janitor/debian/debian.sql | \
             pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1
