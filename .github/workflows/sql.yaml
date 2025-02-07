@@ -11,13 +11,12 @@ name: SQL
 
 jobs:
   build:
-
+    name: Test SQL
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           set -x
@@ -26,7 +25,7 @@ jobs:
           sudo apt-get satisfy --yes --no-install-recommends \
             postgresql \
             ${PSQL_DEB} \
-            postgresql-common \
+            postgresql-common
       - name: Load SQL
         run: |
           set -x
