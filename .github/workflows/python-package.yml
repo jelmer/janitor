@@ -2,7 +2,6 @@
 name: Check, build and test Python package
 
 env:
-  PG_MAJOR: "16"
   # Enable forward compatibility with newer versions of Python
   PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
 
@@ -73,17 +72,69 @@ jobs:
       - name: Install dependencies (apt)
         run: |
           set -x
-          sudo apt -y update
-          sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
-            libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
-            libjs-jquery-datatables postgresql-$PG_MAJOR \
-            postgresql-$PG_MAJOR-debversion libssl-dev pkg-config codespell libtdb-dev
-      - name: Install dependencies (pip)
+          sudo apt-get update --yes
+          # Matches default: ./Dockerfile_*
+          sudo apt-get satisfy --yes --no-install-recommends \
+            ca-certificates
+            cargo
+            gcc
+            git
+            libclang-dev
+            libgpgme-dev
+            libpython3-dev
+            libssl-dev
+            libtdb-dev
+            make
+            mypy-protobuf
+            pkg-config
+            protobuf-compiler
+            python3-gpg
+            python3-pip
+            python3-setuptools
+            python3-setuptools-rust
+            python3-wheel
+            python3-wheel-whl
+            rustc
+            swig
+          # Matches extra packages: ./Dockerfile_*
+          sudo apt-get satisfy --yes --no-install-recommends \
+            apt-file
+            autoconf
+            autopkgtest
+            debootstrap
+            devscripts
+            diffoscope
+            dpkg
+            dpkg-dev
+            g++
+            git-buildpackage
+            gnome-pkg-tools
+            gnupg
+            libapt-pkg-dev
+            libjs-chart.js
+            libjs-jquery
+            libjs-jquery-datatables
+            libjs-jquery-typeahead
+            libjs-moment
+            libjs-sphinxdoc
+            lintian
+            mypy-protobuf
+            openssh-client
+            perl-doc
+            pristine-tar
+            python3
+            python3-breezy
+            python3-setuptools-protobuf
+            quilt
+            sbuild
+            ssh
+            subversion
+      - name: Install dependencies (rust)
         run: |
           set -x
-          python -m pip install --upgrade pip setuptools setuptools-protobuf \
-            setuptools-rust wheel mypy-protobuf \
-            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git@2.5.0
+          git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
+          pushd /tmp/ognibuild/
+          cargo build --verbose
       - name: PIP install & setup
         run: |
           set -x
