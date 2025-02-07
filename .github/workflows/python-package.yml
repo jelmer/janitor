@@ -130,6 +130,11 @@ jobs:
           set -x
           pip install --break-system-packages --upgrade \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+      - name: Python static typing checks (mypy)
+        continue-on-error: true
+        run: |
+          set -x
+          make typing PYTHON=python
       - name: PIP install/setup
         run: |
           set -x
@@ -137,11 +142,6 @@ jobs:
           python setup.py develop
           python setup.py build_ext -i
           make
-      - name: Python static typing checks (mypy)
-        continue-on-error: true
-        run: |
-          set -x
-          make typing PYTHON=python
       - name: Make
         run: |
           set -x
