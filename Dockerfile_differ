@@ -1,3 +1,4 @@
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -35,6 +36,9 @@ RUN apt-get update --yes \
         rustc \
         swig \
        ## Extra packages
+        devscripts \
+        diffoscope \
+        libjs-jquery \
         python3-setuptools-protobuf \
  && apt-get clean
 
@@ -44,12 +48,6 @@ COPY . /code
 
 RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
  && rm -rf /code
-
-RUN apt-get satisfy --yes --no-install-recommends \
-        devscripts \
-        diffoscope \
-        libjs-jquery \
- && apt-get clean
 
 EXPOSE 9920
 

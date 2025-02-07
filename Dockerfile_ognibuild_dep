@@ -1,3 +1,4 @@
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS m4
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -15,6 +16,7 @@ RUN apt-get update --yes \
 
 
 
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -59,18 +61,16 @@ RUN apt-get update --yes \
         gnome-pkg-tools \
         libapt-pkg-dev \
  && apt-get clean \
- && apt-file update
-
-RUN rm -rf /usr/share/aclocal
+ && apt-file update \
+ && rm -rf /usr/share/aclocal
 
 COPY ./scripts/ /usr/local/bin/
 
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
-RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt"
-
-RUN git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/ \
- && cd /build/ognibuild/ \
+RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt" \
+ && git clone https://github.com/jelmer/ognibuild.git /code/ \
+ && cd /code/ \
  && cargo build --verbose
 
 EXPOSE 9934
