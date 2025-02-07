@@ -25,26 +25,33 @@ jobs:
         if: always()
         run: |
           set -x
+          pip install --break-system-packages --upgrade ruff
           make ruff PYTHON=python
       - name: HTML style checks (djLint)
         if: always()
         run: |
           set -x
+          pip install --break-system-packages --upgrade djlint
           make djlint PYTHON=python
       - name: YAML style checks (yamllint)
         if: always()
         run: |
           set -x
+          pip install --break-system-packages --upgrade yamllint
           make yamllint PYTHON=python
       - name: Rust style checks (rustfmt)
         if: always()
         run: |
           set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            rustc
           cargo fmt --check --all
       - name: Check common misspellings (codespell)
         if: always()
         run: |
           set -x
+          pip install --break-system-packages --upgrade codespell
           codespell
 
   build:
