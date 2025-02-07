@@ -1,5 +1,5 @@
 ---
-name: Python package
+name: Check, build and test Python package
 
 env:
   PG_MAJOR: "16"
@@ -15,8 +15,30 @@ env:
     - cron: '0 6 * * *'    # Daily 6AM UTC build
 
 jobs:
-  build:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
 
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Style checks (ruff)
+        run: |
+          make ruff PYTHON=python
+      - name: Style checks (djlint)
+        if: always()
+        run: |
+          make djlint PYTHON=python
+      - name: Style checks (yamllint)
+        if: always()
+        run: |
+          make yamllint PYTHON=python
+      - name: codespell
+        run: |
+          codespell
+
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,6 +46,7 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.9', '3.13']
       fail-fast: false
 
+    # Steps to perform in job
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,39 +62,44 @@ jobs:
           mkdir -pv "$HOME/.local/bin"
           cp -vr ./scripts/* "$HOME/.local/bin/"
           echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
-      - name: Install dependencies
+      - name: Install dependencies (apt)
         run: |
           sudo apt -y update
           sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
             libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
             libjs-jquery-datatables postgresql-$PG_MAJOR \
             postgresql-$PG_MAJOR-debversion libssl-dev pkg-config codespell libtdb-dev
+      - name: Install dependencies (pip)
+        run: |
           python -m pip install --upgrade pip setuptools setuptools-protobuf \
             setuptools-rust wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git@2.5.0
+      - name: PIP install & setup
+        run: |
           pip install -U -e .[dev,debian]
           python setup.py develop
           python setup.py build_ext -i
+      - name: Make
+        run: |
           make
-      - name: Style checks (ruff)
-        run: |
-          make ruff PYTHON=python
-      - name: Style checks (djlint)
-        if: always()
-        run: |
-          make djlint PYTHON=python
-      - name: Style checks (yamllint)
-        if: always()
-        run: |
-          make yamllint PYTHON=python
       - name: Typing checks
         if: always()
         run: |
           make typing PYTHON=python
-      - name: Build
+      - name: Make all
         if: always()
         run: |
           make all PYTHON=python
+
+  test:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Test suite run
         run: |
           make test PYTHON=python
