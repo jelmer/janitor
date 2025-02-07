@@ -35,15 +35,26 @@ jobs:
         with:
           submodules: 'true'
 
-      - name: Determine tags to set (pull_request)
+      - name: Determine image tags to set
         run: |
-          echo "TAGS=${{ github.sha }}" >> $GITHUB_ENV
-        if: ${{ github.event_name == 'pull_request' }}
-
-      - name: Determine tags to set (push)
-        run: |
-          echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
-        if: ${{ github.event_name == 'push' }}
+          TAGS=""
+          if [[ '${{ github.event_name }}' == 'push' ]]; then
+            TAGS="${TAGS} ${{ github.sha }}"
+            if [[ '${{ github.ref_name }}' == 'main' ]]; then
+              TAGS="${TAGS} latest"
+            else
+              TAGS="${TAGS} ${{ github.ref_name }}"
+            fi
+          elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
+            TAGS="${TAGS} ${{ github.sha }}"
+          elif [[ '${{ github.event_name }}' == 'schedule' ]]; then
+            TAGS="${TAGS} latest"
+          else
+            echo "Skipping tags: ${{ github.event_name }}" 1>&2
+            exit 1
+          fi
+          echo "TAGS=${TAGS}" \
+            | tee -a $GITHUB_ENV
 
       - name: Build ${{ matrix.dockerfile_suffix }} image
         id: build-image
