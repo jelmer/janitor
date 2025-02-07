@@ -1,5 +1,5 @@
 ---
-name: Python package
+name: Check, build and test Python package
 
 env:
   PG_MAJOR: "16"
@@ -15,8 +15,30 @@ env:
     - cron: '0 6 * * *'    # Daily 6AM UTC build
 
 jobs:
-  build:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
 
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Style checks (ruff)
+        run: |
+          make ruff PYTHON=python
+      - name: Style checks (djlint)
+        if: always()
+        run: |
+          make djlint PYTHON=python
+      - name: Style checks (yamllint)
+        if: always()
+        run: |
+          make yamllint PYTHON=python
+      - name: codespell
+        run: |
+          codespell
+
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -24,6 +46,7 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.9', '3.13']
       fail-fast: false
 
+    # Steps to perform in job
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,17 +75,6 @@ jobs:
           python setup.py develop
           python setup.py build_ext -i
           make
-      - name: Style checks (ruff)
-        run: |
-          make ruff PYTHON=python
-      - name: Style checks (djlint)
-        if: always()
-        run: |
-          make djlint PYTHON=python
-      - name: Style checks (yamllint)
-        if: always()
-        run: |
-          make yamllint PYTHON=python
       - name: Typing checks
         if: always()
         run: |
@@ -71,14 +83,21 @@ jobs:
         if: always()
         run: |
           make all PYTHON=python
+
+  test:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Test suite run
         run: |
           make test PYTHON=python
         env:
           PYTHONHASHSEED: random
-      - name: codespell
-        run: |
-          codespell
       - name: Config compat test
         if: always()
         run: |
