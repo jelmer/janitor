@@ -1,21 +1,24 @@
 ---
-name: Build and Publish Worker Container Images
+name: Dockerfile_worker
 
 "on":
-  # run it on push to the default repository branch
   push:
+    branches:
+      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
+env:
+  container: worker
+
 jobs:
-  # define job to build and publish container image
-  build-and-push-worker-container-image:
-    name: Build Container image and push to repositories
-    # run only when code is compiling and tests are passing
+  # Define job to build and publish container image
+  build:
+    name: build container
     runs-on: ubuntu-latest
 
-    # steps to perform in job
+    # Steps to perform in job
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,27 +35,36 @@ jobs:
           echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" >> $GITHUB_ENV
         if: ${{ github.event_name == 'push' }}
 
-      - name: Login to Github Packages
+      - name: Build ${{ env.container }} image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: "Dockerfile_${{ env.container }}"
+          image: ghcr.io/${{ github.repository }}/${{ env.container }}
+          tags: ${{ env.TAGS }}
+
+  push:
+    name: push container
+    needs: build
+    if: |
+      ${{ github.event_name != 'pull_request' }} &&
+      ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Login to GitHub Packages
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build worker image
-        id: build-image-worker
-        uses: redhat-actions/buildah-build@v2
-        with:
-          containerfiles: "Dockerfile_worker"
-          image: ghcr.io/jelmer/janitor/worker
-          tags: ${{ env.TAGS }}
-
-      - name: Push worker image to ghcr.io
-        if: ${{ github.event_name != 'pull_request' }}
+      - name: Push ${{ env.container }} image to ghcr.io
         uses: redhat-actions/push-to-registry@v2
         with:
-          image: ${{ steps.build-image-worker.outputs.image }}
-          tags: ${{ steps.build-image-worker.outputs.tags }}
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
