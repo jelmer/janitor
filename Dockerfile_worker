@@ -1,3 +1,4 @@
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -24,13 +25,13 @@ RUN apt-get update --yes \
         pkg-config \
         protobuf-compiler \
         python3 \
-        rustc \
  && apt-get clean \
  && cd /code \
  && cargo build --release -p janitor-worker
 
 
 
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -86,7 +87,7 @@ RUN apt-get update --yes \
       subversion \
  && apt-file update
 
-COPY --from=build /code/target/release/janitor-worker /bin/janitor-worker
+COPY --from=build /code/target/release/janitor-worker /usr/local/bin/janitor-worker
 
 ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 
