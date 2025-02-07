@@ -135,14 +135,17 @@ jobs:
         run: |
           set -x
           make typing PYTHON=python
-      - name: PIP install/setup
+      - name: PIP install & setup
         run: |
           set -x
           pip install -U -e .[dev,debian]
           python setup.py develop
           python setup.py build_ext -i
-          make
       - name: Make
+        run: |
+          set -x
+          make
+      - name: Make all
         run: |
           set -x
           make all PYTHON=python
