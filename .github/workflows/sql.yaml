@@ -9,9 +9,6 @@ name: SQL
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
-env:
-  PG_MAJOR: "16"
-
 jobs:
   build:
 
@@ -25,12 +22,13 @@ jobs:
         run: |
           set -x
           sudo apt-get update --yes
+          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' | awk '{print $1}' | tail -n 1 )
           sudo apt-get satisfy --yes --no-install-recommends \
-            postgresql-${PG_MAJOR} \
-            postgresql-${PG_MAJOR}-debversion \
+            postgresql \
+            ${PSQL_DEB} \
             postgresql-common \
       - name: Load SQL
         run: |
           set -x
           cat janitor/state.sql janitor/debian/debian.sql \
-            | pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1
+            | pg_virtualenv psql -v ON_ERROR_STOP=1
