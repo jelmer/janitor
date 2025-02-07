@@ -8,8 +8,6 @@ env:
 
 "on":
   push:
-    branches:
-      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'    # Daily 6AM UTC build
@@ -24,6 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Style checks (ruff)
+        if: always()
         run: |
           make ruff PYTHON=python
       - name: Style checks (djlint)
@@ -35,6 +34,7 @@ jobs:
         run: |
           make yamllint PYTHON=python
       - name: codespell
+        if: always()
         run: |
           codespell
 
@@ -87,7 +87,6 @@ jobs:
         run: |
           make typing PYTHON=python
       - name: Make all
-        if: always()
         run: |
           make all PYTHON=python
 
