@@ -25,30 +25,41 @@ jobs:
         if: always()
         run: |
           set -x
+          pip3 install --break-system-packages --upgrade \
+            ruff
           make ruff
 
       - name: HTML style checks (djLint)
         if: always()
         run: |
           set -x
+          pip3 install --break-system-packages --upgrade \
+            djlint
           make djlint
 
       - name: YAML style checks (yamllint)
         if: always()
         run: |
           set -x
+          pip3 install --break-system-packages --upgrade \
+            yamllint
           make yamllint
 
       - name: Rust style checks (rustfmt)
         if: always()
         run: |
           set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            rustc
           cargo fmt --check --all
 
       - name: Check common misspellings (codespell)
         if: always()
         run: |
           set -x
+          pip3 install --break-system-packages --upgrade \
+            codespell
           codespell
 
   build:
@@ -172,12 +183,16 @@ jobs:
         if: always()
         run: |
           set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            python3-breezy.tests
           make typing
 
       - name: Test config (janitor.debian.net)
         if: always()
         run: |
           set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            git
           git clone https://salsa.debian.org/janitor-team/janitor.debian.net \
             janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
