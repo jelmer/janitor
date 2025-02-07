@@ -35,6 +35,11 @@ jobs:
         run: |
           set -x
           make yamllint PYTHON=python
+      - name: Rust style checks (rustfmt)
+        if: always()
+        run: |
+          set -x
+          cargo fmt --check --all
       - name: Check common misspellings (codespell)
         if: always()
         run: |
@@ -145,45 +150,38 @@ jobs:
         run: |
           set -x
           make
+      - name: Make all
+        run: |
+          set -x
+          make all PYTHON=python
       - name: Python static typing checks (mypy)
         if: always()
         run: |
           set -x
           make typing PYTHON=python
-      - name: Make all
-        run: |
-          set -x
-          make all PYTHON=python
-
-  test:
-    name: Tests
-    needs: build
-    runs-on: ubuntu-latest
-
-    # Steps to perform in job
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Test suite run
-        run: |
-          set -x
-          make test PYTHON=python
-        env:
-          PYTHONHASHSEED: random
-      - name: Rust style checks (rustfmt)
+      - name: Test config (janitor.debian.net)
         if: always()
         run: |
           set -x
-          cargo fmt --check --all
-      - name: codespell
-        run: |
-          set -x
-          codespell
-      - name: Config compat test
-        if: always()
-        run: |
-          set -x
-          git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ \
+          git clone https://salsa.debian.org/janitor-team/janitor.debian.net \
             janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
             python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+      - name: Test using ./tests/test_*.py (unittest)
+        if: always()
+        run: |
+          set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            postgresql
+          pip3 install --break-system-packages --upgrade \
+            .[test]
+          if test "$(id -u)" = "0"; then
+            echo "-- Switching to postgres user"
+            chown -R postgres: .
+            su postgres -c 'make test'
+          else
+            echo "-- Running as: $(whoami)"
+            make test
+          fi
+        env:
+          PYTHONHASHSEED: random
