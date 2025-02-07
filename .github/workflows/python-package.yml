@@ -39,11 +39,16 @@ jobs:
           codespell
 
   build:
-    runs-on: ${{ matrix.os }}
+    name: Ubuntu-latest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.9', '3.13']
+        python-version:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
       fail-fast: false
 
     # Steps to perform in job
