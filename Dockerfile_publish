@@ -32,17 +32,14 @@ RUN apt-get update --yes \
         rustc \
         swig \
        ## Extra packages
-       #N/A
+        gnupg \
+        openssh-client \
  && apt-get clean
 
 COPY . /code
 
 RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
  && rm -rf /code
-
-RUN apt-get satisfy --yes --no-install-recommends \
-        gnupg \
-        openssh-client
 
 EXPOSE 9912
 

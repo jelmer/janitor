@@ -32,14 +32,12 @@ RUN apt-get update --yes \
         rustc \
         swig \
        ## Extra packages
-       #N/A
+        libjs-sphinxdoc \
  && apt-get clean
 
 COPY . /code
 
-RUN apt-get satisfy --yes --no-install-recommends \
-        libjs-sphinxdoc \
- && pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
+RUN pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
  && rm -rf /code
 
 VOLUME /bzr

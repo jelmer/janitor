@@ -32,17 +32,12 @@ RUN apt-get update --yes \
         rustc \
         swig \
        ## Extra packages
-       #N/A
+        libjs-sphinxdoc \
  && apt-get clean
 
 COPY . /code
 
-RUN apt-get satisfy --yes --no-install-recommends \
-        cargo \
-        libjs-sphinxdoc \
-        libpython3-dev \
-        rustc \
- && pip3 install --break-system-packages --upgrade "/code[git_web,gcp]" \
+RUN pip3 install --break-system-packages --upgrade "/code[git_web,gcp]" \
  && rm -rf /code
 
 VOLUME /git
