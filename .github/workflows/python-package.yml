@@ -1,16 +1,76 @@
 ---
 name: Check, build and test Python package
 
-env:
-  PG_MAJOR: "16"
-  # Enable forward compatibility with newer versions of Python
-  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
-
 "on":
   push:
   pull_request:
   schedule:
     - cron: '0 6 * * *'    # Daily 6AM UTC build
+
+env:
+  PG_MAJOR: "16"
+  # Enable forward compatibility with newer versions of Python
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+  # Matches default: ./Dockerfile_*
+  #   Dirty hack for the lack of YAML anchors
+  CORE_DEB: |
+            ca-certificates
+            cargo
+            gcc
+            git
+            libclang-dev
+            libgpgme-dev
+            libpython3-dev
+            libssl-dev
+            libtdb-dev
+            make
+            mypy-protobuf
+            pkg-config
+            protobuf-compiler
+            python3-gpg
+            python3-pip
+            python3-setuptools
+            python3-setuptools-rust
+            python3-wheel
+            python3-wheel-whl
+            rustc
+            swig
+  # Matches extra packages: ./Dockerfile_*
+  #   Dirty hack for the lack of YAML anchors
+  EXTRA_DEB: |
+            apt-file
+            autoconf
+            autopkgtest
+            debootstrap
+            devscripts
+            diffoscope
+            dpkg
+            dpkg-dev
+            g++
+            git-buildpackage
+            gnome-pkg-tools
+            gnupg
+            libapt-pkg-dev
+            libjs-chart.js
+            libjs-jquery
+            libjs-jquery-datatables
+            libjs-jquery-typeahead
+            libjs-moment
+            libjs-sphinxdoc
+            lintian
+            mypy-protobuf
+            openssh-client
+            perl-doc
+            pristine-tar
+            python3
+            python3-breezy
+            python3-setuptools-protobuf
+            quilt
+            sbuild
+            ssh
+            subversion
+           #python3-apt # Skipping due to PIP install
 
 jobs:
   checks:
@@ -85,63 +145,10 @@ jobs:
         run: |
           set -x
           sudo apt-get update --yes
-          # Matches default: ./Dockerfile_*
           sudo apt-get satisfy --yes --no-install-recommends \
-            ca-certificates
-            cargo
-            gcc
-            git
-            libclang-dev
-            libgpgme-dev
-            libpython3-dev
-            libssl-dev
-            libtdb-dev
-            make
-            mypy-protobuf
-            pkg-config
-            protobuf-compiler
-            python3-gpg
-            python3-pip
-            python3-setuptools
-            python3-setuptools-rust
-            python3-wheel
-            python3-wheel-whl
-            rustc
-            swig
-          # Matches extra packages: ./Dockerfile_*
+            ${CORE_DEB}
           sudo apt-get satisfy --yes --no-install-recommends \
-            apt-file
-            autoconf
-            autopkgtest
-            debootstrap
-            devscripts
-            diffoscope
-            dpkg
-            dpkg-dev
-            g++
-            git-buildpackage
-            gnome-pkg-tools
-            gnupg
-            libapt-pkg-dev
-            libjs-chart.js
-            libjs-jquery
-            libjs-jquery-datatables
-            libjs-jquery-typeahead
-            libjs-moment
-            libjs-sphinxdoc
-            lintian
-            mypy-protobuf
-            openssh-client
-            perl-doc
-            pristine-tar
-            python3
-            python3-breezy
-            python3-setuptools-protobuf
-            quilt
-            sbuild
-            ssh
-            subversion
-            #python3-apt # Skipping due to PIP install
+            ${EXTRA_DEB}
       - name: Install dependencies (pip)
         run: |
           set -x
@@ -153,13 +160,6 @@ jobs:
           git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
           pushd /tmp/ognibuild/
           cargo build --verbose
-      - name: Python static typing checks (mypy)
-        continue-on-error: true
-        run: |
-          set -x
-          apt-get satisfy --yes --no-install-recommends \
-            python3-mypy
-          make typing PYTHON=python
       - name: PIP install & setup
         run: |
           set -x
@@ -175,6 +175,64 @@ jobs:
         run: |
           set -x
           make all PYTHON=python
+
+  build-container:
+    name: Debian-testing
+    runs-on: ubuntu-latest
+    container:
+      # This is to match: ./Dockerfile_*
+      #   https://hub.docker.com/_/debian
+      image: docker.io/debian:testing-slim
+
+    # There is a lot here that is duplicated here (build-container) and above (build)
+    #   Can be made 'better' when GitLab actions support YAML anchors
+    #   https://github.com/actions/runner/issues/1182
+    #   Using system environments as a temp/dirty hack
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies (apt)
+        run: |
+          set -x
+          apt-get update --yes
+          apt-get satisfy --yes --no-install-recommends \
+            ${CORE_DEB}
+          apt-get satisfy --yes --no-install-recommends \
+            ${EXTRA_DEB}
+      - name: Install dependencies (pip)
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/
+          cd /build/ognibuild/
+          cargo build --verbose
+      - name: Python static typing checks (mypy)
+        continue-on-error: true
+        run: |
+          set -x
+          apt-get satisfy --yes --no-install-recommends \
+            python3-mypy
+          make typing PYTHON=python3
+      - name: PIP install & setup
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade --editable \
+            .[dev,debian]
+          python3 setup.py develop
+          python3 setup.py build_ext -i
+      - name: Make
+        run: |
+          set -x
+          make
+      - name: Make all
+        run: |
+          set -x
+          make all PYTHON=python3
 
   test:
     name: Tests
