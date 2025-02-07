@@ -21,21 +21,25 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Style checks (ruff)
+      - name: Python style checks (Ruff)
         if: always()
         run: |
+          set -x
           make ruff PYTHON=python
-      - name: Style checks (djlint)
+      - name: HTML style checks (djLint)
         if: always()
         run: |
+          set -x
           make djlint PYTHON=python
-      - name: Style checks (yamllint)
+      - name: YAML style checks (yamllint)
         if: always()
         run: |
+          set -x
           make yamllint PYTHON=python
-      - name: codespell
+      - name: Check common misspellings (codespell)
         if: always()
         run: |
+          set -x
           codespell
 
   build:
@@ -53,9 +57,8 @@ jobs:
 
     # Steps to perform in job
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -69,6 +72,7 @@ jobs:
           echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
       - name: Install dependencies (apt)
         run: |
+          set -x
           sudo apt -y update
           sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
             libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
@@ -76,23 +80,28 @@ jobs:
             postgresql-$PG_MAJOR-debversion libssl-dev pkg-config codespell libtdb-dev
       - name: Install dependencies (pip)
         run: |
+          set -x
           python -m pip install --upgrade pip setuptools setuptools-protobuf \
             setuptools-rust wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git@2.5.0
       - name: PIP install & setup
         run: |
+          set -x
           pip install -U -e .[dev,debian]
           python setup.py develop
           python setup.py build_ext -i
       - name: Make
         run: |
+          set -x
           make
-      - name: Typing checks
+      - name: Python static typing checks (mypy)
         if: always()
         run: |
+          set -x
           make typing PYTHON=python
       - name: Make all
         run: |
+          set -x
           make all PYTHON=python
 
   test:
@@ -106,6 +115,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Test suite run
         run: |
+          set -x
           make test PYTHON=python
         env:
           PYTHONHASHSEED: random
@@ -116,10 +126,12 @@ jobs:
           cargo fmt --check --all
       - name: codespell
         run: |
+          set -x
           codespell
       - name: Config compat test
         if: always()
         run: |
+          set -x
           git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ \
             janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
