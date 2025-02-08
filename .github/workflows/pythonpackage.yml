@@ -27,6 +27,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install GPG backward compatibility hacks
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cp .github/gpgme-config "$HOME/.local/bin/gpgme-config"
+          cp .github/gpg-error-config "$HOME/.local/bin/gpg-error-config"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: |
           sudo apt -y update
