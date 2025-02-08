@@ -1,6 +1,9 @@
 ---
 name: Python package
 
+env:
+  PG_MAJOR: "16"
+
 "on":
   push:
     branches:
@@ -38,8 +41,8 @@ jobs:
           sudo apt -y update
           sudo apt -y install devscripts bzr protobuf-compiler libapt-pkg-dev \
             libgpg-error-dev libgpgme-dev subunit yamllint python3-wheel \
-            libjs-jquery-datatables postgresql-14 \
-            postgresql-14-debversion libssl-dev pkg-config codespell libtdb-dev
+            libjs-jquery-datatables postgresql-$PG_MAJOR \
+            postgresql-$PG_MAJOR-debversion libssl-dev pkg-config codespell libtdb-dev
           python -m pip install --upgrade pip setuptools setuptools-protobuf \
             setuptools-rust wheel mypy-protobuf \
             python_apt@git+https://salsa.debian.org/apt-team/python-apt.git@2.5.0

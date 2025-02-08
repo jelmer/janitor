@@ -10,7 +10,7 @@ name: SQL
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
 env:
-  PG_MAJOR: "14"
+  PG_MAJOR: "16"
 
 jobs:
   build:
