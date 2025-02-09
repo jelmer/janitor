@@ -160,6 +160,17 @@ jobs:
           git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
           pushd /tmp/ognibuild/
           cargo build --verbose
+      # Not sure why "apt install python3-setuptools-rust" isn't enough/working here
+      #   Works if using Debian/Ubuntu in docker - just not with GitHub Action SaaS
+      - name: Install dependencies (Ubuntu & GitLab Actions)
+        run: |
+          set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            python3-setuptools-rust
+          python -c 'import setuptools_rust' || \
+          pip install --break-system-packages --upgrade \
+            setuptools-rust
+          python -c 'import setuptools_rust'
       - name: PIP install & setup
         run: |
           set -x
