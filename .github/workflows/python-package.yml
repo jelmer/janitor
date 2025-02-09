@@ -180,7 +180,7 @@ jobs:
       - name: Make
         run: |
           set -x
-          make
+          make PYTHON=python
       - name: Make all
         run: |
           set -x

@@ -5,7 +5,6 @@ core: py/janitor/site/_static/pygments.css build-inplace
 
 build-inplace:
 	$(PYTHON) setup.py build_ext -i
-	$(PYTHON) setup.py build_protobuf
 
 all: core
 
