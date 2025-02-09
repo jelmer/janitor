@@ -2,9 +2,43 @@ FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y install --no-install-recommends auto-apt-proxy && apt -y upgrade && apt satisfy --no-install-recommends -y git cargo rustc libpython3-dev python3-wheel python3-wheel-whl make protobuf-compiler python3-setuptools python3-setuptools-rust ca-certificates python3-pip libgpgme-dev swig rustc cargo gcc mypy-protobuf python3-apt python3-gpg libssl-dev pkg-config openssh-client libtdb-dev libclang-dev
+
+RUN apt-get update --yes \
+ && apt-get install --yes --no-install-recommends \
+        auto-apt-proxy \
+        iproute2 \
+ && apt-get upgrade --yes \
+ && apt-get satisfy --yes --no-install-recommends \
+        ca-certificates \
+        cargo \
+        gcc \
+        git \
+        libclang-dev \
+        libgpgme-dev \
+        libpython3-dev \
+        libssl-dev \
+        libtdb-dev \
+        make \
+        mypy-protobuf \
+        openssh-client \
+        pkg-config \
+        protobuf-compiler \
+        python3-apt \
+        python3-gpg \
+        python3-pip \
+        python3-setuptools \
+        python3-setuptools-rust \
+        python3-wheel \
+        python3-wheel-whl \
+        rustc \
+        swig \
+ && apt-get clean
 
 COPY . /code
-RUN pip3 install --break-system-packages /code[debian,gcp] && rm -rf /code
+
+RUN pip3 install --break-system-packages --upgrade "/code[debian,gcp]" \
+ && rm -rf /code
+
 EXPOSE 9911
+
 ENTRYPOINT ["python3", "-m", "janitor.runner", "--port=9911", "--listen-address=0.0.0.0"]
