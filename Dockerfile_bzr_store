@@ -35,6 +35,8 @@ RUN apt-get update --yes \
         swig \
  && apt-get clean
 
+COPY ./scripts/ /usr/local/bin/
+
 COPY . /code
 
 VOLUME /bzr
