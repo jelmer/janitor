@@ -32,6 +32,9 @@ RUN apt-get update --yes \
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
+# Enable forward compatibility with newer versions of Python
+#ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY="1"
+
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
