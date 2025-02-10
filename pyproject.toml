@@ -107,6 +107,7 @@ dev = [
     "fakeredis",
     "python-subunit",
     "ruff==0.9.6",
+    "setuptools-rust",
     "types-PyYAML",
     "types-protobuf",
     "types-mock",
