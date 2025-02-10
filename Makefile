@@ -5,7 +5,6 @@ core: py/janitor/site/_static/pygments.css build-inplace
 
 build-inplace:
 	$(PYTHON) setup.py build_ext -i
-	$(PYTHON) setup.py build_protobuf
 
 all: core
 
@@ -80,7 +79,7 @@ docker-%: core
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
-docker-all: docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-differ docker-ognibuild_dep
+docker-all: docker-archive docker-bzr_store docker-differ docker-git_store docker-ognibuild_dep docker-publish docker-runner docker-site docker-worker
 
 reformat:: reformat-html
 

@@ -1,0 +1,269 @@
+---
+name: Check, build and test Python package
+
+"on":
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'    # Daily 6AM UTC build
+
+env:
+  # Enable forward compatibility with newer versions of Python
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+  # Matches default: ./Dockerfile_*
+  #   Dirty hack for the lack of YAML anchors
+  CORE_DEB: |
+            ca-certificates
+            cargo
+            gcc
+            git
+            libclang-dev
+            libgpgme-dev
+            libpython3-dev
+            libssl-dev
+            libtdb-dev
+            make
+            mypy-protobuf
+            pkg-config
+            protobuf-compiler
+            python3-gpg
+            python3-pip
+            python3-setuptools
+            python3-setuptools-rust
+            python3-wheel
+            python3-wheel-whl
+            rustc
+            swig
+  # Matches extra packages: ./Dockerfile_*
+  #   Dirty hack for the lack of YAML anchors
+  EXTRA_DEB: |
+            apt-file
+            autoconf
+            autopkgtest
+            debootstrap
+            devscripts
+            diffoscope
+            dpkg
+            dpkg-dev
+            g++
+            git-buildpackage
+            gnome-pkg-tools
+            gnupg
+            libapt-pkg-dev
+            libjs-chart.js
+            libjs-jquery
+            libjs-jquery-datatables
+            libjs-jquery-typeahead
+            libjs-moment
+            libjs-sphinxdoc
+            lintian
+            mypy-protobuf
+            openssh-client
+            perl-doc
+            pristine-tar
+            python3
+            python3-breezy
+            python3-setuptools-protobuf
+            quilt
+            sbuild
+            ssh
+            subversion
+           #python3-apt # Skipping due to PIP install
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Python style checks (Ruff)
+        if: always()
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade ruff
+          make ruff PYTHON=python
+      - name: HTML style checks (djLint)
+        if: always()
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade djlint
+          make djlint PYTHON=python
+      - name: YAML style checks (yamllint)
+        if: always()
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade yamllint
+          make yamllint PYTHON=python
+      - name: Rust style checks (rustfmt)
+        if: always()
+        run: |
+          set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            rustc
+          cargo fmt --check --all
+      - name: Check common misspellings (codespell)
+        if: always()
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade codespell
+          codespell
+
+  build:
+    name: Ubuntu-latest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+      fail-fast: false
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install GPG backward compatibility hacks
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cp .github/gpgme-config "$HOME/.local/bin/gpgme-config"
+          cp .github/gpg-error-config "$HOME/.local/bin/gpg-error-config"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Install dependencies (apt)
+        run: |
+          set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            ${CORE_DEB}
+          sudo apt-get satisfy --yes --no-install-recommends \
+            ${EXTRA_DEB}
+      - name: Install dependencies (pip)
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade \
+            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
+          pushd /tmp/ognibuild/
+          cargo build --verbose
+      ## Not sure why "apt install python3-setuptools-rust" isn't enough/working here
+      ##   Works if using Debian/Ubuntu in docker - just not with GitHub Action SaaS
+      - name: Install dependencies (Ubuntu & GitLab Actions)
+        run: |
+          set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            python3-setuptools-rust
+          python -c 'import setuptools_rust' || \
+          pip install --break-system-packages --upgrade \
+            setuptools-rust
+          python -c 'import setuptools_rust'
+      - name: PIP install & setup
+        run: |
+          set -x
+          pip install --break-system-packages --upgrade --editable \
+            .[dev,debian]
+          python setup.py develop
+          python setup.py build_ext -i
+      - name: Make
+        run: |
+          set -x
+          make PYTHON=python
+      - name: Make all
+        run: |
+          set -x
+          make all PYTHON=python
+
+  build-container:
+    name: Debian-testing
+    runs-on: ubuntu-latest
+    container:
+      # This is to match: ./Dockerfile_*
+      #   https://hub.docker.com/_/debian
+      image: docker.io/debian:testing-slim
+
+    # There is a lot here that is duplicated here (build-container) and above (build)
+    #   Can be made 'better' when GitLab actions support YAML anchors
+    #   https://github.com/actions/runner/issues/1182
+    #   Using system environments as a temp/dirty hack
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies (apt)
+        run: |
+          set -x
+          apt-get update --yes
+          apt-get satisfy --yes --no-install-recommends \
+            ${CORE_DEB}
+          apt-get satisfy --yes --no-install-recommends \
+            ${EXTRA_DEB}
+      - name: Install dependencies (pip)
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            python_apt@git+https://salsa.debian.org/apt-team/python-apt.git
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/
+          cd /build/ognibuild/
+          cargo build --verbose
+      - name: Python static typing checks (mypy)
+        continue-on-error: true
+        run: |
+          set -x
+          apt-get satisfy --yes --no-install-recommends \
+            python3-mypy
+          make typing PYTHON=python3
+      - name: PIP install & setup
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade --editable \
+            .[dev,debian]
+          python3 setup.py develop
+          python3 setup.py build_ext -i
+      - name: Make
+        run: |
+          set -x
+          make
+      - name: Make all
+        run: |
+          set -x
+          make all PYTHON=python3
+
+  test:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Test suite run
+        run: |
+          set -x
+          make test PYTHON=python
+        env:
+          PYTHONHASHSEED: random
+      - name: Config compat test
+        if: always()
+        run: |
+          set -x
+          git clone https://salsa.debian.org/janitor-team/janitor.debian.net.git \
+            janitor.debian.net
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
+            python -m janitor.config janitor.debian.net/k8s/janitor.conf

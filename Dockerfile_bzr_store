@@ -9,6 +9,7 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
+       ## Standard packages
         ca-certificates \
         cargo \
         gcc \
@@ -30,17 +31,17 @@ RUN apt-get update --yes \
         python3-wheel-whl \
         rustc \
         swig \
+       ## Extra packages
+        libjs-sphinxdoc \
  && apt-get clean
 
 COPY . /code
 
+RUN pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
+ && rm -rf /code
+
 VOLUME /bzr
 
 EXPOSE 9929
-
-RUN apt-get satisfy --yes --no-install-recommends \
-        libjs-sphinxdoc \
- && pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \
- && rm -rf /code
 
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]

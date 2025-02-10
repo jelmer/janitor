@@ -9,6 +9,7 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
+       ## Standard packages
         ca-certificates \
         cargo \
         gcc \
@@ -20,10 +21,8 @@ RUN apt-get update --yes \
         libtdb-dev \
         make \
         mypy-protobuf \
-        openssh-client \
         pkg-config \
         protobuf-compiler \
-        python3-apt \
         python3-gpg \
         python3-pip \
         python3-setuptools \
@@ -32,6 +31,9 @@ RUN apt-get update --yes \
         python3-wheel-whl \
         rustc \
         swig \
+       ## Extra packages
+        openssh-client \
+        python3-apt \
  && apt-get clean
 
 COPY . /code

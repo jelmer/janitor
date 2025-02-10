@@ -1,0 +1,78 @@
+---
+name: Build and push container images
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'  # Daily 6AM UTC build
+
+jobs:
+  build:
+    name: Build and Push
+    # https://github.com/actions/runner-images
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        dockerfile_suffix:
+          - 'archive'
+          - 'bzr_store'
+          - 'differ'
+          - 'git_store'
+          - 'ognibuild_dep'
+          - 'publish'
+          - 'runner'
+          - 'site'
+          - 'worker'
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
+      - name: Determine image tags to set
+        run: |
+          if [[ '${{ github.event_name }}' == 'pull_request' ]]; then
+            echo "TAGS=${{ github.sha }}" | tee -a $GITHUB_ENV
+          elif [[ '${{ github.event_name }}' == 'push' ]]; then
+            echo "TAGS=${{ github.sha }} ${{ github.ref_name }}" \
+              | tee -a $GITHUB_ENV
+          else
+            echo "Skipping: ${{ github.event_name }}"
+          fi
+
+      - name: Build ${{ matrix.dockerfile_suffix }} image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: "Dockerfile_${{ matrix.dockerfile_suffix }}"
+          image: |
+            ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
+          tags: ${{ env.TAGS }}
+
+      - name: Login to GitHub Packages
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push ${{ env.container }} image to ghcr.io
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}

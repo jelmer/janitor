@@ -38,27 +38,47 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        autoconf \
-        apt-file \
-        autopkgtest \
-        ca-certificates \
-        debootstrap \
-        devscripts \
-        dpkg \
-        git-buildpackage \
-        gnome-pkg-tools \
-        lintian \
-        mypy-protobuf \
-        perl-doc \
-        pristine-tar \
-        protobuf-compiler \
-        python3 \
-        python3-breezy \
-        quilt \
-        sbuild \
-        ssh \
-        subversion \
- && apt-get clean \
+     ## Standard packages
+      ca-certificates \
+     #cargo \
+     #gcc \
+     #git \
+     #libclang-dev \
+     #libgpgme-dev \
+     #libpython3-dev \
+     #libssl-dev \
+     #libtdb-dev \
+     #make \
+      mypy-protobuf \
+     #pkg-config \
+     protobuf-compiler \
+     #python3-gpg \
+     #python3-pip \
+     #python3-setuptools \
+     #python3-setuptools-rust \
+     #python3-wheel \
+     #python3-wheel-whl \
+     #rustc \
+     #swig \
+     ## Extra packages
+      apt-file \
+      autoconf \
+      autopkgtest \
+      debootstrap \
+      devscripts \
+      dpkg \
+      git-buildpackage \
+      gnome-pkg-tools \
+      lintian \
+      mypy-protobuf \
+      perl-doc \
+      pristine-tar \
+      python3 \
+      python3-breezy \
+      quilt \
+      sbuild \
+      ssh \
+      subversion \
  && apt-file update
 
 COPY --from=build /code/target/release/janitor-worker /bin/janitor-worker

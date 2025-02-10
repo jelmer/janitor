@@ -26,29 +26,45 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        apt-file \
-        autoconf \
+       ## Standard packages
         ca-certificates \
         cargo \
+       #gcc \
+        git \
+       #libclang-dev \
+       #libgpgme-dev \
+        libpython3-dev \
+        libssl-dev \
+        libtdb-dev \
+        make \
+       #mypy-protobuf \
+        pkg-config \
+        protobuf-compiler \
+       #python3-gpg \
+        python3-pip \
+       #python3-setuptools \
+       #python3-setuptools-rust \
+       #python3-wheel \
+       #python3-wheel-whl \
+        rustc \
+       #swig \
+       ## Extra packages
+        apt-file \
+        autoconf \
         dpkg-dev \
         g++ \
-        git \
         gnome-pkg-tools \
         libapt-pkg-dev \
-        libpython3-dev \
-        make \
-        python3-pip \
-        rustc \
  && apt-get clean \
- && apt-file update
-
-RUN rm -rf /usr/share/aclocal
+ && apt-file update \
+ && rm -rf /usr/share/aclocal
 
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
-RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt"
-
-RUN pip3 install --break-system-packages --upgrade "ognibuild[dep_server,gcp,debian]@git+https://github.com/jelmer/ognibuild.git"
+RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt" \
+ && git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/ \
+ && cd /build/ognibuild/ \
+ && cargo build --verbose
 
 EXPOSE 9934
 

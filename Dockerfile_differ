@@ -9,6 +9,7 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
+       ## Standard packages
         ca-certificates \
         cargo \
         gcc \
@@ -25,12 +26,16 @@ RUN apt-get update --yes \
         python3-gpg \
         python3-pip \
         python3-setuptools \
-        python3-setuptools-protobuf \
         python3-setuptools-rust \
         python3-wheel \
         python3-wheel-whl \
         rustc \
         swig \
+       ## Extra packages
+        devscripts \
+        diffoscope \
+        libjs-jquery \
+        python3-setuptools-protobuf \
  && apt-get clean
 
 COPY . /code
@@ -39,11 +44,5 @@ RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
  && rm -rf /code
 
 EXPOSE 9920
-
-RUN apt-get satisfy --yes --no-install-recommends \
-        devscripts \
-        diffoscope \
-        libjs-jquery \
- && apt-get clean
 
 ENTRYPOINT ["python3", "-m", "janitor.differ", "--port=9920", "--listen-address=0.0.0.0"]
