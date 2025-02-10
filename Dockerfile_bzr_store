@@ -38,6 +38,8 @@ RUN apt-get update --yes \
         libjs-sphinxdoc \
  && apt-get clean
 
+COPY ./scripts/ /usr/local/bin/
+
 COPY . /code
 
 RUN pip3 install --break-system-packages --upgrade "/code[bzr_web,gcp]" \

@@ -39,6 +39,8 @@ RUN apt-get update --yes \
         python3-apt \
  && apt-get clean
 
+COPY ./scripts/ /usr/local/bin/
+
 COPY . /code
 
 RUN pip3 install --break-system-packages --upgrade "/code[debian,gcp]" \

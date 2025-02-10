@@ -134,12 +134,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install GPG backward compatibility hacks
+      # Due to pypi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3 as gpgme-config being removed
+      - name: Install PyPi GPG backward compatibility hacks
         run: |
-          mkdir -p "$HOME/.local/bin"
-          cp .github/gpgme-config "$HOME/.local/bin/gpgme-config"
-          cp .github/gpg-error-config "$HOME/.local/bin/gpg-error-config"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          set -x
+          mkdir -pv "$HOME/.local/bin"
+          cp -vr ./scripts/* "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
       - name: Install dependencies (apt)
         run: |
           set -x
