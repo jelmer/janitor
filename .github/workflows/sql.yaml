@@ -1,5 +1,5 @@
 ---
-name: SQL
+name: SQL - Check database
 
 "on":
   push:
@@ -17,15 +17,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           set -x
           sudo apt-get update --yes
-          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' | awk '{print $1}' | tail -n 1 )
+          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' \
+                        | awk '{print $1}' \
+                        | tail -n 1 )
           sudo apt-get satisfy --yes --no-install-recommends \
             postgresql \
             ${PSQL_DEB} \
             postgresql-common
+
       - name: Load SQL
         run: |
           set -x
