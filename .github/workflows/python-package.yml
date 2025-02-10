@@ -170,25 +170,31 @@ jobs:
           set -x
           make all
       - name: Python static typing checks (mypy)
-        continue-on-error: true
+        if: always()
         run: |
           set -x
           sudo apt-get satisfy --yes --no-install-recommends \
-            python3-mypy
+            python3-breezy.tests
           make typing
-      - name: Config compat test
+      - name: Test config (janitor.debian.net)
         if: always()
         run: |
           set -x
           sudo apt-get satisfy --yes --no-install-recommends \
             git
-          git clone https://salsa.debian.org/janitor-team/janitor.debian.net/ \
+          git clone https://salsa.debian.org/janitor-team/janitor.debian.net \
             janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
             python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
-      - name: Test suite run
+      - name: Test using ./tests/test_*.py (unittest)
+        if: always()
         run: |
           set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            postgresql
+           #libjs-jquery-datatable # Ubuntu 24.10 & Debian 12 (Not current Ubuntu LTS)
+          pip3 install --break-system-packages --upgrade \
+            .[test]
           make test
         env:
           PYTHONHASHSEED: random
@@ -240,8 +246,8 @@ jobs:
       - name: Make
         run: |
           set -x
-          make PYTHON=python3
+          make
       - name: Make all
         run: |
           set -x
-          make all PYTHON=python3
+          make all
