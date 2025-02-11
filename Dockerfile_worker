@@ -27,7 +27,7 @@ RUN apt-get update --yes \
         python3 \
  && apt-get clean \
  && cd /code \
- && cargo build --release -p janitor-worker
+ && cargo build --verbose --release -p janitor-worker
 
 
 
@@ -93,4 +93,4 @@ ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 
 EXPOSE 8080
 
-ENTRYPOINT ["/bin/janitor-worker", "--port=8080", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["/bin/janitor-worker", "--site-port=8080", "--listen-address=0.0.0.0"]

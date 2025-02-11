@@ -55,4 +55,4 @@ RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
 
 EXPOSE 8082
 
-ENTRYPOINT ["python3", "-m", "janitor.site.serve", "--port=8082", "--host=0.0.0.0"]
+ENTRYPOINT ["python3", "-m", "janitor.site.simple", "--port=8082", "--host=0.0.0.0"]
