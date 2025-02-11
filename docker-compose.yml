@@ -1,0 +1,133 @@
+# Pull (Pre-Built):
+#   $ docker-compose pull
+# Update & Run:
+#   $ docker-compose pull; \
+#     docker-compose --project-name janitor down; \
+#     docker-compose --project-name janitor up --detach --remove-orphans; \
+#     docker-compose --project-name janitor logs --follow
+# Build:
+#   $ docker-compose build
+# Build & Run:
+#   $ docker-compose --project-name janitor up --build --force-recreate
+# Run:
+#   $ docker-compose --project-name janitor up
+# Debug:
+#   $ docker-compose --project-name janitor logs
+#   $ docker exec -it janitor-archive bash
+#   $ docker exec -it janitor-bzr_store bash
+#   $ docker exec -it janitor-differ bash
+#   $ docker exec -it janitor-git_store bash
+#   $ docker exec -it janitor-ognibuild_dep bash
+#   $ docker exec -it janitor-publish bash
+#   $ docker exec -it janitor-runner bash
+#   $ docker exec -it janitor-site bash
+#   $ docker exec -it janitor-worker bash
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+services:
+  archive:
+    build:
+      context: .
+      dockerfile: Dockerfile_archive
+    image: ghcr.io/jelmer/janitor/archive:latest
+    container_name: janitor-archive
+    hostname: archive
+    restart: always
+    ports:
+      - 9914:9914
+
+  bzr_store:
+    build:
+      context: .
+      dockerfile: Dockerfile_bzr_store
+    image: ghcr.io/jelmer/janitor/bzr_store:latest
+    container_name: janitor-bzr_store
+    hostname: bzr_store
+    restart: always
+    ports:
+      - 9929:9929
+    volumes:
+      - bzr:/bzr
+
+  differ:
+    build:
+      context: .
+      dockerfile: Dockerfile_differ
+    image: ghcr.io/jelmer/janitor/differ:latest
+    container_name: janitor-differ
+    hostname: differ
+    restart: always
+    ports:
+      - 9920:9920
+
+  git_store:
+    build:
+      context: .
+      dockerfile: Dockerfile_git_store
+    image: ghcr.io/jelmer/janitor/git_store:latest
+    container_name: janitor-git_store
+    hostname: git_store
+    restart: always
+    ports:
+      - 9923:9923
+    volumes:
+      - git:/git
+
+  ognibuild_dep:
+    build:
+      context: .
+      dockerfile: Dockerfile_ognibuild_dep
+    image: ghcr.io/jelmer/janitor/ognibuild_dep:latest
+    container_name: janitor-ognibuild_dep
+    hostname: ognibuild_dep
+    restart: always
+    ports:
+      - 9934:9934
+
+  publish:
+    build:
+      context: .
+      dockerfile: Dockerfile_publish
+    image: ghcr.io/jelmer/janitor/publish:latest
+    container_name: janitor-publish
+    hostname: publish
+    restart: always
+    ports:
+      - 9912:9912
+
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile_runner
+    image: ghcr.io/jelmer/janitor/runner:latest
+    container_name: janitor-runner
+    hostname: runner
+    restart: always
+    ports:
+      - 9911:9911
+
+  site:
+    build:
+      context: .
+      dockerfile: Dockerfile_site
+    image: ghcr.io/jelmer/janitor/site:latest
+    container_name: janitor-site
+    hostname: site
+    restart: always
+    ports:
+      - 8082:8082
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile_worker
+    image: ghcr.io/jelmer/janitor/worker:latest
+    container_name: janitor-worker
+    hostname: worker
+    restart: always
+    ports:
+      - 8080:8080
+
+volumes:
+  bzr:
+  git:
