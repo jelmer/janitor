@@ -11,6 +11,3 @@ CREATE TABLE debian_build (
 );
 CREATE INDEX ON debian_build (run_id);
 CREATE INDEX ON debian_build (distribution, source, version);
-
-
-
