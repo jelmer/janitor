@@ -53,7 +53,6 @@ $ pip3 install --editable .[dev]
 To run the tests, use:
 
 ```console
-
 $ make test
 ```
 

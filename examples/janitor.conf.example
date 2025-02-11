@@ -2,7 +2,7 @@
 #  + a local file path
 #  + a GCS location (gs://BUCKET-NAME/)
 #  + a S3 location (https://...)
-logs_location: 'https://s3.nl-ams.scw.cloud'
+logs_location: '/home/janitor/logs' #'https://s3.nl-ams.scw.cloud'
 
 # Artifact location: used to store build results. Can be:
 #  + a local file path
@@ -10,17 +10,17 @@ logs_location: 'https://s3.nl-ams.scw.cloud'
 artifact_location: '/home/janitor/artifacts'
 
 # Database location: must be a valid postgresql URL
-database_location: 'postgresql://janitor@example.com:5432/janitor'
+database_location: 'postgresql://janitor:password@database:5432/janitor' #'postgresql://user@db.example.com:5432/janitor'
 
 # Redis
-redis_location: 'redis://localhost'
+redis_location: 'redis://caching:6379' #'redis://redis.example.com:6379'
 
 # Set the default committer; if unset defaults to current users' preferences
 # (i.e. ~/.gitconfig)
-committer: 'Janitor Bot <janitor@jelmer.uk>'
+committer: 'Janitor Bot <janitor@git.example.com>'
 
 # Origin set in published archives
-origin: "janitor.debian.net"
+origin: "janitor.example.com"
 
 bugtracker {
   kind: gitlab
