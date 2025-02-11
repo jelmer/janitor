@@ -13,34 +13,24 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-       ## Standard packages
-        ca-certificates \
+       ## Standard packages: ./CONTRIBUTING.md
         cargo \
+        g++ \
         gcc \
-        git \
-        libclang-dev \
-       #libgpgme-dev \
+        libgpgme-dev \
         libpython3-dev \
         libssl-dev \
-        libtdb-dev \
-        make \
-        mypy-protobuf \
         pkg-config \
         protobuf-compiler \
-        python3-gpg \
-        python3-pip \
-        python3-setuptools \
-        python3-setuptools-rust \
-        python3-wheel \
-        python3-wheel-whl \
-        rustc \
-       #swig \
+        swig \
        ## Extra packages
         dpkg-dev \
-        python3-apt \
-        python3-setuptools-protobuf \
+        git \
+        libapt-pkg-dev \
+        python3-pip \
  && apt-get clean
 
+# Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
 COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
