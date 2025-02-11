@@ -39,7 +39,7 @@ RUN apt-get update --yes \
         python3 \
  && apt-get clean \
  && cd /code \
- && cargo build --release -p janitor-worker
+ && cargo build --verbose --release -p janitor-worker
 
 
 
