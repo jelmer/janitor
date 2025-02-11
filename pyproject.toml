@@ -95,6 +95,37 @@ file = "README.md"
 content-type = "text/markdown"
 
 [project.optional-dependencies]
+# Janitor service (./Dockerfile_archive)
+archive = [
+    "python-debian",
+]
+# Janitor service (./Dockerfile_bzr_store)
+bzr_store = [
+    "loggerhead",
+    "python-debian",
+]
+# Janitor service (./Dockerfile_differ)
+differ = [
+    "python-debian",
+]
+# Janitor service (./Dockerfile_git_store)
+git_store = [
+    "aiohttp-wsgi",
+    "klaus@git+https://github.com/jonashaag/klaus",
+    "python-debian",
+]
+# Janitor service (./Dockerfile_publish)
+publish = []
+# Janitor service (./Dockerfile_runner)
+runner = [
+    "python-debian",
+]
+# Janitor service (./Dockerfile_site)
+site = [
+    "python-debian",
+]
+
+# Development (./CONTRIBUTING.md)
 dev = [
     "boto3",
     "djlint",
@@ -106,6 +137,7 @@ dev = [
     "pytest",
     "pytest-aiohttp",
     "pytest-cov",
+    "python-debian",
     "python-subunit",
     "ruff==0.9.6",
     "setuptools-protobuf",
@@ -122,6 +154,7 @@ dev = [
     "types-redis",
     "yamllint",
 ]
+
 debian = [
     "brz-debian@git+https://github.com/breezy-team/breezy-debian",
     "iniparse",
@@ -129,19 +162,15 @@ debian = [
     "python-debian",
     "silver-platter[debian]",
 ]
+
+# Google Cloud Platform
 gcp = [
     "gcloud-aio-storage",
     "google-cloud-logging",
 ]
+
 s3 = [
     "boto3",
-]
-git_web = [
-    "aiohttp-wsgi",
-    "klaus@git+https://github.com/jonashaag/klaus",
-]
-bzr_web = [
-    "loggerhead",
 ]
 
 [project.scripts]
