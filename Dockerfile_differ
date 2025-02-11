@@ -1,3 +1,16 @@
+# Pull (Pre-Built):
+#   $ docker pull ghcr.io/jelmer/janitor/differ:latest
+# Build:
+#   $ docker build -t ghcr.io/jelmer/janitor/differ:latest -f Dockerfile_differ .
+#   $ buildah build -t ghcr.io/jelmer/janitor/differ:latest -f Dockerfile_differ .
+# Run:
+#   $ docker run --rm --publish 9920:9920 --name janitor-differ --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/differ:latest --config /mnt/janitor/janitor.conf.example
+# Troubleshoot:
+#   $ docker run -it --rm -p 9920:9920 --entrypoint=/bin/bash ghcr.io/jelmer/janitor/differ:latest
+#   $ docker run --interactive --tty --rm --publish 9920:9920 --entrypoint=/bin/bash --volume $( pwd ):/mnt/janitor --workdir /mnt/janitor ghcr.io/jelmer/janitor/differ:latest
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 

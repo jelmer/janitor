@@ -1,6 +1,18 @@
+# Pull (Pre-Built):
+#   $ docker pull ghcr.io/jelmer/janitor/site:latest
+# Build:
+#   $ docker build -t ghcr.io/jelmer/janitor/site:latest -f Dockerfile_site .
+#   $ buildah build -t ghcr.io/jelmer/janitor/site:latest -f Dockerfile_site .
+# Run:
+#   $ docker run --rm --publish 8082:8082 --name janitor-site ghcr.io/jelmer/janitor/site:latest
+# Troubleshoot:
+#   $ docker run -it --rm -p 8082:8082 --entrypoint=/bin/bash ghcr.io/jelmer/janitor/site:latest
+#   $ docker run --interactive --tty --rm --publish 8082:8082 --entrypoint=/bin/bash --volume $( pwd ):/mnt/janitor --workdir /mnt/janitor ghcr.io/jelmer/janitor/site:latest
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # TODO: config
 # TODO: service discovery
 
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
