@@ -70,8 +70,8 @@ COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
 RUN git clone https://github.com/jelmer/ognibuild.git /code/ \
  && cd /code/ \
- && cargo build --verbose
+ && cargo build --verbose --release -p ognibuild
 
 EXPOSE 9934
 
-ENTRYPOINT ["python3", "-m", "ognibuild.dep_server", "--port=9934", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["/code/target/release/ognibuild-deb", "--port=9934", "--listen-address=0.0.0.0"]
