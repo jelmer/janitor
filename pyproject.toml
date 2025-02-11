@@ -68,24 +68,24 @@ requires-python = ">=3.9"
 dependencies = [
     "aiohttp",
     "aiohttp-apispec",
-    "aiohttp_jinja2",
+    "aiohttp-openmetrics",
+    "aiohttp-jinja2",
     "aiojobs",
     "aioredlock",
     "aiozipkin",
     "asyncpg",
     "backoff",
-    "bs4",
-    "python-mimeparse",
-    "pygments",
     "breezy[git,launchpad,workspace,pgp]",
-    "jinja2",
+    "bs4",
     "dulwich",
-    "silver-platter",
-    "aiohttp-openmetrics",
-    "paramiko",
-    "redis>=4.2.0",
     "iso8601",
+    "jinja2",
+    "paramiko",
     "protobuf",
+    "pygments",
+    "python-mimeparse",
+    "redis>=4.2.0",
+    "silver-platter",
     "uvloop",
 ]
 dynamic = ["version"]
@@ -96,50 +96,53 @@ content-type = "text/markdown"
 
 [project.optional-dependencies]
 dev = [
+    "boto3",
     "djlint",
+    "fakeredis",
+    "gcloud-aio-storage",
+    "google-cloud-logging",
     "mock",
     "mypy",
-    "yamllint",
-    "testtools",
     "pytest",
-    "pytest-cov",
     "pytest-aiohttp",
-    "fakeredis",
+    "pytest-cov",
     "python-subunit",
     "ruff==0.9.6",
     "setuptools-rust",
-    "types-PyYAML",
-    "types-protobuf",
-    "types-mock",
-    "types-redis",
-    "types-protobuf",
-    "types-beautifulsoup4",
-    "types-Pygments",
-    "types-flask",
-    "boto3",
-    "types-boto3",
-    "google-cloud-logging",
-    "gcloud-aio-storage",
     "testing.postgresql",
+    "testtools",
+    "types-beautifulsoup4",
+    "types-boto3",
+    "types-flask",
+    "types-mock",
+    "types-protobuf",
+    "types-Pygments",
+    "types-PyYAML",
+    "types-redis",
+    "yamllint",
 ]
 debian = [
-    "python_apt",
-    "python_debian",
-    "silver-platter[debian]",
-    "ognibuild[debian,dep_server]",
     "brz-debian@git+https://github.com/breezy-team/breezy-debian",
     "iniparse",
+    "ognibuild[debian,dep_server]",
+    "python-debian",
+    "python_apt",
+    "silver-platter[debian]",
 ]
 gcp = [
     "gcloud-aio-storage",
     "google-cloud-logging",
 ]
-s3 = ["boto3"]
-git_web = [
-    "klaus@git+https://github.com/jonashaag/klaus",
-    "aiohttp-wsgi",
+s3 = [
+    "boto3",
 ]
-bzr_web = ["loggerhead"]
+git_web = [
+    "aiohttp-wsgi",
+    "klaus@git+https://github.com/jonashaag/klaus",
+]
+bzr_web = [
+    "loggerhead",
+]
 
 [project.scripts]
 janitor-runner = "janitor.run:main"
