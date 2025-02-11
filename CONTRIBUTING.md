@@ -57,3 +57,16 @@ $ sudo apt install \
     make
 $ make build-all
 ```
+
+- - -
+
+Running the containers can be done however is best to suite your environment,
+such as using Docker or Kubernetes.
+
+Example, using Docker:
+
+```console
+$ sudo apt install \
+    podman-compose
+$ podman-compose --project-name janitor up --build --force-recreate
+```
