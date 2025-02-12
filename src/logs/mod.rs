@@ -41,12 +41,7 @@ impl std::error::Error for Error {}
 
 #[async_trait]
 pub trait LogFileManager {
-    async fn has_log(
-        &self,
-        codebase: &str,
-        run_id: &str,
-        name: &str,
-    ) -> Result<bool, Error>;
+    async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error>;
 
     async fn get_log(
         &self,

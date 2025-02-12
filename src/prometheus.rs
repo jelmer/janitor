@@ -1,6 +1,6 @@
 use reqwest::Client;
-use url::Url;
 use std::collections::HashMap;
+use url::Url;
 
 pub async fn push_to_gateway(
     prometheus: &Url,
