@@ -24,17 +24,17 @@ jobs:
         if: always()
         run: |
           set -x
-          make ruff PYTHON=python
+          make ruff
       - name: HTML style checks (djLint)
         if: always()
         run: |
           set -x
-          make djlint PYTHON=python
+          make djlint
       - name: YAML style checks (yamllint)
         if: always()
         run: |
           set -x
-          make yamllint PYTHON=python
+          make yamllint
       - name: Rust style checks (rustfmt)
         if: always()
         run: |
@@ -138,9 +138,10 @@ jobs:
       - name: PIP install & setup
         run: |
           set -x
-          pip install -U -e .[dev,debian]
-          python setup.py develop
-          python setup.py build_ext -i
+          pip3 install --break-system-packages --upgrade --editable \
+            .[dev,debian]
+          python3 setup.py develop
+          python3 setup.py build_ext -i
       - name: Make
         run: |
           set -x
@@ -148,12 +149,14 @@ jobs:
       - name: Make all
         run: |
           set -x
-          make all PYTHON=python
+          make all
       - name: Python static typing checks (mypy)
         continue-on-error: true
         run: |
           set -x
-          make typing PYTHON=python
+          apt-get satisfy --yes --no-install-recommends \
+            python3-mypy
+          make typing
       - name: Config compat test
         if: always()
         run: |
@@ -165,6 +168,6 @@ jobs:
       - name: Test suite run
         run: |
           set -x
-          make test PYTHON=python
+          make test
         env:
           PYTHONHASHSEED: random
