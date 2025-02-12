@@ -1,8 +1,8 @@
+use async_trait::async_trait;
+use std::fs;
+use std::fs::File;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::fs::File;
-use std::fs;
-use async_trait::async_trait;
 
 use crate::artifacts::{ArtifactManager, Error};
 
@@ -23,7 +23,12 @@ impl LocalArtifactManager {
 
 #[async_trait]
 impl ArtifactManager for LocalArtifactManager {
-    async fn store_artifacts(&self, run_id: &str, local_path: &Path, names: Option<&[String]>) -> Result<(), Error> {
+    async fn store_artifacts(
+        &self,
+        run_id: &str,
+        local_path: &Path,
+        names: Option<&[String]>,
+    ) -> Result<(), Error> {
         let run_dir = self.path.join(run_id);
         fs::create_dir(&run_dir).or_else(|e| {
             if e.kind() == ErrorKind::AlreadyExists {
@@ -32,19 +37,26 @@ impl ArtifactManager for LocalArtifactManager {
                 Err(e)
             }
         })?;
-        let names = names.map_or_else(|| {
-            fs::read_dir(local_path)
-                .unwrap()
-                .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-                .collect::<Vec<_>>()
-        }, |names| names.to_vec());
+        let names = names.map_or_else(
+            || {
+                fs::read_dir(local_path)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+                    .collect::<Vec<_>>()
+            },
+            |names| names.to_vec(),
+        );
         for name in names {
             fs::copy(local_path.join(&name), run_dir.join(&name))?;
         }
         Ok(())
     }
 
-    async fn get_artifact(&self, run_id: &str, filename: &str) -> Result<Box<dyn std::io::Read>, Error> {
+    async fn get_artifact(
+        &self,
+        run_id: &str,
+        filename: &str,
+    ) -> Result<Box<dyn std::io::Read>, Error> {
         let path = self.path.join(run_id).join(filename);
         Ok(Box::new(File::open(path)?))
     }
@@ -53,7 +65,12 @@ impl ArtifactManager for LocalArtifactManager {
         url::Url::from_file_path(self.path.join(run_id).join(filename)).unwrap()
     }
 
-    async fn retrieve_artifacts(&self, run_id: &str, local_path: &Path, filter_fn: Option<&(dyn for <'a> Fn(&'a str) -> bool + Sync)>) -> Result<(), Error> {
+    async fn retrieve_artifacts(
+        &self,
+        run_id: &str,
+        local_path: &Path,
+        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
+    ) -> Result<(), Error> {
         let run_path = self.path.join(run_id);
         if !run_path.is_dir() {
             return Err(Error::ArtifactsMissing);
@@ -70,7 +87,7 @@ impl ArtifactManager for LocalArtifactManager {
         Ok(())
     }
 
-    async fn iter_ids(&self) -> Box<dyn Iterator<Item=String>> {
+    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String>> {
         let entries = fs::read_dir(&self.path)
             .unwrap()
             .filter_map(|entry| {

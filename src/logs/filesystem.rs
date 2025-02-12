@@ -1,11 +1,11 @@
-use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
-use std::os::unix::fs::MetadataExt;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use std::fs;
 use std::io::Read;
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
 
-use crate::logs::{Error,LogFileManager};
+use crate::logs::{Error, LogFileManager};
 
 #[derive(Debug)]
 pub struct FileSystemLogFileManager {
@@ -23,19 +23,17 @@ impl FileSystemLogFileManager {
         }
         vec![
             self.log_directory.join(codebase).join(run_id).join(name),
-            self.log_directory.join(codebase).join(run_id).join(format!("{}.gz", name)),
+            self.log_directory
+                .join(codebase)
+                .join(run_id)
+                .join(format!("{}.gz", name)),
         ]
     }
 }
 
 #[async_trait]
 impl LogFileManager for FileSystemLogFileManager {
-    async fn has_log(
-        &self,
-        codebase: &str,
-        run_id: &str,
-        name: &str,
-    ) -> Result<bool, Error> {
+    async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error> {
         Ok(self
             .get_paths(codebase, run_id, name)
             .iter()
@@ -53,10 +51,10 @@ impl LogFileManager for FileSystemLogFileManager {
                 if path.extension().and_then(|ext| ext.to_str()) == Some("gz") {
                     let file = std::fs::File::open(path)?;
                     let gz = flate2::read::GzDecoder::new(file);
-                    return Ok(Box::new(gz))
+                    return Ok(Box::new(gz));
                 } else {
                     let file = std::fs::File::open(path)?;
-                    return Ok(Box::new(file))
+                    return Ok(Box::new(file));
                 }
             }
         }
@@ -76,7 +74,8 @@ impl LogFileManager for FileSystemLogFileManager {
 
         let mut inf = fs::File::open(orig_path)?;
 
-        let basename = basename.unwrap_or_else(|| Path::new(orig_path).file_name().unwrap().to_str().unwrap());
+        let basename =
+            basename.unwrap_or_else(|| Path::new(orig_path).file_name().unwrap().to_str().unwrap());
         let dest_path = dest_dir.join(format!("{}.gz", basename));
 
         let mut outf = fs::File::create(&dest_path)?;
@@ -87,7 +86,11 @@ impl LogFileManager for FileSystemLogFileManager {
         std::mem::drop(outf);
 
         if let Some(mtime) = mtime {
-            filetime::set_file_times(dest_path, filetime::FileTime::from_system_time(mtime.into()), filetime::FileTime::from_system_time(mtime.into()))?;
+            filetime::set_file_times(
+                dest_path,
+                filetime::FileTime::from_system_time(mtime.into()),
+                filetime::FileTime::from_system_time(mtime.into()),
+            )?;
         }
 
         Ok(())
