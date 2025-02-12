@@ -76,6 +76,11 @@ jobs:
           make test PYTHON=python
         env:
           PYTHONHASHSEED: random
+      - name: Rust style checks (rustfmt)
+        if: always()
+        run: |
+          set -x
+          cargo fmt --check --all
       - name: codespell
         run: |
           codespell
