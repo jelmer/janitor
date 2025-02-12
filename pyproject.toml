@@ -127,7 +127,6 @@ debian = [
     "iniparse",
     "ognibuild[debian,dep_server]",
     "python-debian",
-    "python_apt",
     "silver-platter[debian]",
 ]
 gcp = [
