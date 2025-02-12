@@ -1,5 +1,5 @@
 ---
-name: SQL
+name: SQL - Check database
 
 "on":
   push:
@@ -9,23 +9,30 @@ name: SQL
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
-env:
-  PG_MAJOR: "16"
-
 jobs:
   build:
-
+    name: Test SQL
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
-          sudo apt install postgresql-${PG_MAJOR} postgresql-common \
-            postgresql-${PG_MAJOR}-debversion
+          set -x
+          sudo apt-get update --yes
+          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' \
+                        | awk '{print $1}' \
+                        | tail -n 1 )
+          sudo apt-get satisfy --yes --no-install-recommends \
+            postgresql \
+            ${PSQL_DEB} \
+            postgresql-common
+
       - name: Load SQL
         run: |
-          cat janitor/state.sql janitor/debian/debian.sql | \
-            pg_virtualenv -v${PG_MAJOR} psql -v ON_ERROR_STOP=1
+          set -x
+          set -o pipefail
+          cat py/janitor/state.sql py/janitor/debian/debian.sql \
+            | pg_virtualenv psql -v ON_ERROR_STOP=1
