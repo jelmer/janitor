@@ -47,6 +47,8 @@ RUN apt-get update --yes \
 
 RUN rm -rf /usr/share/aclocal
 
+COPY ./scripts/ /usr/local/bin/
+
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
 RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt"
