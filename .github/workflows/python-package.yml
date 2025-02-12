@@ -1,5 +1,5 @@
 ---
-name: Check, build and test Python package
+name: Python package - Check, build and test
 
 env:
   # Enable forward compatibility with newer versions of Python
@@ -20,26 +20,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Python style checks (Ruff)
         if: always()
         run: |
           set -x
-          make ruff PYTHON=python
+          make ruff
+
       - name: HTML style checks (djLint)
         if: always()
         run: |
           set -x
-          make djlint PYTHON=python
+          make djlint
+
       - name: YAML style checks (yamllint)
         if: always()
         run: |
           set -x
-          make yamllint PYTHON=python
+          make yamllint
+
       - name: Rust style checks (rustfmt)
         if: always()
         run: |
           set -x
           cargo fmt --check --all
+
       - name: Check common misspellings (codespell)
         if: always()
         run: |
@@ -61,19 +66,22 @@ jobs:
 
     # Steps to perform in job
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      # Due to pypi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3 as gpgme-config being removed
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
       - name: Install PyPi GPG backward compatibility hacks
         run: |
           set -x
           mkdir -pv "$HOME/.local/bin"
           cp -vr ./scripts/* "$HOME/.local/bin/"
           echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
+
       - name: Install dependencies (apt)
         run: |
           set -x
@@ -134,31 +142,38 @@ jobs:
             sbuild
             ssh
             subversion
+
       - name: Install dependencies (rust)
         run: |
           set -x
           git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
           pushd /tmp/ognibuild/
           cargo build --verbose
+
       - name: PIP install & setup
         run: |
           set -x
-          pip install -U -e .[dev,debian]
-          python setup.py develop
-          python setup.py build_ext -i
+          pip3 install --break-system-packages --upgrade --editable \
+            .[dev,debian]
+          python3 setup.py develop
+          python3 setup.py build_ext -i
+
       - name: Make
         run: |
           set -x
           make
+
       - name: Make all
         run: |
           set -x
-          make all PYTHON=python
+          make all
+
       - name: Python static typing checks (mypy)
         if: always()
         run: |
           set -x
-          make typing PYTHON=python
+          make typing
+
       - name: Test config (janitor.debian.net)
         if: always()
         run: |
@@ -167,6 +182,7 @@ jobs:
             janitor.debian.net
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
             python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+
       - name: Test using ./tests/test_*.py (unittest)
         if: always()
         run: |
