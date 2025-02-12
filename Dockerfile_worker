@@ -3,6 +3,8 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+COPY ./scripts/ /usr/local/bin/
+
 COPY . /code
 
 COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
