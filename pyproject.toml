@@ -108,6 +108,7 @@ dev = [
     "pytest-cov",
     "python-subunit",
     "ruff==0.9.6",
+    "setuptools-protobuf",
     "setuptools-rust",
     "testing.postgresql",
     "testtools",
