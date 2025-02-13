@@ -1,7 +1,9 @@
 DOCKER_TAG ?= latest
 PYTHON ?= python3
+SHA = $(shell git rev-parse HEAD)
+DOCKERFILES = $(shell ls Dockerfile_* | sed 's/Dockerfile_//' )
 
-core: py/janitor/site/_static/pygments.css build-inplace
+.PHONY: all check
 
 build-inplace:
 	$(PYTHON) setup.py build_ext -i
@@ -9,7 +11,7 @@ build-inplace:
 
 all: core
 
-.PHONY: all check
+core: py/janitor/site/_static/pygments.css build-inplace
 
 check:: typing
 
@@ -73,14 +75,31 @@ py/janitor/site/_static/pygments.css:
 
 clean:
 
-SHA=$(shell git rev-parse HEAD)
+docker-%:
+	$(MAKE) build-$*
+	$(MAKE) push-$*
 
-docker-%: core
+build-%:
 	buildah build --no-cache -t ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG) -t ghcr.io/jelmer/janitor/$*:$(SHA) -f Dockerfile_$* .
+
+push-%:
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
-docker-all: docker-site docker-runner docker-publish docker-archive docker-worker docker-git_store docker-bzr_store docker-differ docker-ognibuild_dep
+docker-all:
+	for df in $(DOCKERFILES); do \
+		$(MAKE) docker-$$df; \
+	done
+
+build-all:
+	for df in $(DOCKERFILES); do \
+		$(MAKE) build-$$df; \
+	done
+
+push-all:
+	for df in $(DOCKERFILES); do \
+		$(MAKE) push-$$df; \
+	done
 
 reformat:: reformat-html
 
