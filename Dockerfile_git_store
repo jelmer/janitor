@@ -1,3 +1,16 @@
+# Pull (Pre-Built):
+#   $ docker pull ghcr.io/jelmer/janitor/git_store:latest
+# Build:
+#   $ docker build -t ghcr.io/jelmer/janitor/git_store:latest -f Dockerfile_git_store .
+#   $ buildah build -t ghcr.io/jelmer/janitor/git_store:latest -f Dockerfile_git_store .
+# Run:
+#   $ docker run --rm --publish 9923:9923 --name janitor-git_store --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/git_store:latest --config /mnt/janitor/janitor.conf.example
+# Troubleshoot:
+#   $ docker run -it --rm -p 9923:9923 --entrypoint=/bin/bash ghcr.io/jelmer/janitor/git_store:latest
+#   $ docker run --interactive --tty --rm --publish 9923:9923 --entrypoint=/bin/bash --volume $( pwd ):/mnt/janitor --workdir /mnt/janitor ghcr.io/jelmer/janitor/git_store:latest
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -12,43 +25,31 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        ca-certificates \
+       ## Standard packages: ./CONTRIBUTING.md
         cargo \
+        g++ \
         gcc \
-        git \
-        libclang-dev \
         libgpgme-dev \
         libpython3-dev \
         libssl-dev \
-        libtdb-dev \
-        make \
-        mypy-protobuf \
         pkg-config \
         protobuf-compiler \
-        python3-gpg \
-        python3-pip \
-        python3-setuptools \
-        python3-setuptools-rust \
-        python3-wheel \
-        python3-wheel-whl \
-        rustc \
         swig \
+       ## Extra packages
+        git \
+        python3-pip \
  && apt-get clean
 
+# Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
 COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
+RUN pip3 install --break-system-packages --upgrade "/code[gcp,git_store]" \
+ && rm -rf /code
+
 VOLUME /git
 
 EXPOSE 9923
-
-RUN apt-get satisfy --yes --no-install-recommends \
-        cargo \
-        libjs-sphinxdoc \
-        libpython3-dev \
-        rustc \
- && pip3 install --break-system-packages --upgrade "/code[git_web,gcp]" \
- && rm -rf /code
 
 ENTRYPOINT ["python3", "-m", "janitor.git_store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]

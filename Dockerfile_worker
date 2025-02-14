@@ -1,72 +1,69 @@
+# Pull (Pre-Built):
+#   $ docker pull ghcr.io/jelmer/janitor/worker:latest
+# Build:
+#   $ docker build -t ghcr.io/jelmer/janitor/worker:latest -f Dockerfile_worker .
+#   $ buildah build -t ghcr.io/jelmer/janitor/worker:latest -f Dockerfile_worker .
+# Run:
+#   $ docker run --rm --publish 8080:8080 --name janitor-worker ghcr.io/jelmer/janitor/worker:latest
+# Troubleshoot:
+#   $ docker run -it --rm -p 8080:8080 --entrypoint=/bin/bash ghcr.io/jelmer/janitor/worker:latest
+#   $ docker run --interactive --tty --rm --publish 8080:8080 --entrypoint=/bin/bash --volume $( pwd ):/mnt/janitor --workdir /mnt/janitor ghcr.io/jelmer/janitor/worker:latest
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-COPY ./scripts/ /usr/local/bin/
-
 COPY . /code
-
-COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
         iproute2 \
  && apt-get satisfy --yes --no-install-recommends \
-        build-essential \
         ca-certificates \
         cargo \
-        libclang-dev \
         libpython3-dev \
         libssl-dev \
-        libtdb-dev \
         pkg-config \
         protobuf-compiler \
-        python3 \
-        rustc \
+        python3-minimal \
  && apt-get clean \
  && cd /code \
- && cargo build --release -p janitor-worker
+ && cargo build --verbose --release -p janitor-worker
 
 
 
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 # Enable forward compatibility with newer versions of Python
+#   Not needed as no Python!
 #ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY="1"
+
+ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
-         uto-apt-proxy \
+        auto-apt-proxy \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        autoconf \
-        apt-file \
-        autopkgtest \
-        ca-certificates \
-        debootstrap \
-        devscripts \
-        dpkg \
-        git-buildpackage \
-        gnome-pkg-tools \
-        lintian \
-        mypy-protobuf \
-        perl-doc \
-        pristine-tar \
-        protobuf-compiler \
-        python3 \
+       ## Extra packages
+        libpython3-dev \
         python3-breezy \
-        quilt \
-        sbuild \
-        ssh \
-        subversion \
- && apt-get clean \
- && apt-file update
+ && apt-get clean
 
 COPY --from=build /code/target/release/janitor-worker /bin/janitor-worker
+
+## Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
+#   Not needed as no Python!
+#COPY ./scripts/ /usr/local/bin/
+
+COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
 ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 
