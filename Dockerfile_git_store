@@ -33,7 +33,7 @@ COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[git_web,gcp]" \
+RUN pip3 install --break-system-packages --upgrade "/code[gcp,git-store]" \
  && rm -rf /code
 
 VOLUME /git
