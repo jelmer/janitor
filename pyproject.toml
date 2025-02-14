@@ -68,8 +68,8 @@ requires-python = ">=3.9"
 dependencies = [
     "aiohttp",
     "aiohttp-apispec",
-    "aiohttp-openmetrics",
     "aiohttp-jinja2",
+    "aiohttp-openmetrics",
     "aiojobs",
     "aioredlock",
     "aiozipkin",
@@ -125,6 +125,20 @@ site = [
     "python-debian",
 ]
 
+# unittest ($ make test)
+test = [
+    "fakeredis",
+    "pytest",
+    "pytest-aiohttp",
+    "pytest-asyncio",
+    "pytest-cov",
+    "python-debian",
+    "setuptools-protobuf",
+    "setuptools-rust",
+    "testing.postgresql",
+    "testtools",
+]
+
 # Development (./CONTRIBUTING.md)
 dev = [
     "boto3",
@@ -153,20 +167,6 @@ dev = [
     "types-PyYAML",
     "types-redis",
     "yamllint",
-]
-
-# unittest ($ make test)
-test = [
-    "fakeredis",
-    "pytest",
-    "pytest-aiohttp",
-    "pytest-asyncio",
-    "pytest-cov",
-    "python-debian",
-    "setuptools-protobuf",
-    "setuptools-rust",
-    "testing.postgresql",
-    "testtools",
 ]
 
 debian = [
