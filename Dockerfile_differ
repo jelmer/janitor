@@ -32,7 +32,7 @@ COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp]" \
+RUN pip3 install --break-system-packages --upgrade "/code[gcp,differ]" \
  && rm -rf /code
 
 EXPOSE 9920
