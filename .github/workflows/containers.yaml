@@ -1,0 +1,87 @@
+---
+name: Containers - Build and push images
+
+"on":
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 6 * * *'  # Daily 6AM UTC build
+
+jobs:
+  build:
+    name: Build and Push
+    # https://github.com/actions/runner-images
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        dockerfile_suffix:
+          - 'archive'
+          - 'bzr_store'
+          - 'differ'
+          - 'git_store'
+          - 'ognibuild_dep'
+          - 'publish'
+          - 'runner'
+          - 'site'
+          - 'worker'
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
+      - name: Determine image tags to set
+        run: |
+          TAGS=""
+          if [[ '${{ github.event_name }}' == 'push' ]]; then
+            TAGS="${TAGS} ${{ github.sha }}"
+            if [[ '${{ github.ref_name }}' == 'main' ]]; then
+              TAGS="${TAGS} latest"
+            else
+              TAGS="${TAGS} ${{ github.ref_name }}"
+            fi
+          elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
+            TAGS="${TAGS} ${{ github.sha }}"
+          elif [[ '${{ github.event_name }}' == 'schedule' ]]; then
+            TAGS="${TAGS} latest"
+          else
+            echo "Skipping tags: ${{ github.event_name }}" 1>&2
+            exit 1
+          fi
+          echo "TAGS=${TAGS}" \
+            | tee -a $GITHUB_ENV
+
+      - name: Build ${{ matrix.dockerfile_suffix }} image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: "Dockerfile_${{ matrix.dockerfile_suffix }}"
+          image: |
+            ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
+          tags: ${{ env.TAGS }}
+
+      - name: Login to GitHub Packages (ghcr.io)
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push ${{ env.container }} image to https://github.com/${{ github.repository_owner }}?tab=packages&repo_name=${{ github.event.repository.name }}
+        if: |
+          ${{ github.event_name != 'pull_request' }} &&
+          ${{ github.ref == 'refs/heads/main' }}
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
