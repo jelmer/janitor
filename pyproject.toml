@@ -155,6 +155,20 @@ dev = [
     "yamllint",
 ]
 
+# unittest ($ make test)
+test = [
+    "fakeredis",
+    "pytest",
+    "pytest-aiohttp",
+    "pytest-asyncio",
+    "pytest-cov",
+    "python-debian",
+    "setuptools-protobuf",
+    "setuptools-rust",
+    "testing.postgresql",
+    "testtools",
+]
+
 debian = [
     "brz-debian@git+https://github.com/breezy-team/breezy-debian",
     "iniparse",
