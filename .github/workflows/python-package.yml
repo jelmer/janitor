@@ -1,0 +1,247 @@
+---
+name: Python package - Check, build and test
+
+"on":
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'    # Daily 6AM UTC build
+
+env:
+  # Enable forward compatibility with newer versions of Python
+  PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
+
+  # Standard packages: ./CONTRIBUTING.md (also ./Dockerfile_*)
+  #   Dirty hack for the lack of YAML anchors
+  CORE_DEB: |
+            cargo
+            g++
+            gcc
+            git
+            libgpgme-dev
+            libpython3-dev
+            libssl-dev
+            pkg-config
+            protobuf-compiler
+            swig
+  EXTRA_DEB: |
+            ca-certificates
+            dpkg-dev
+            libapt-pkg-dev
+            libc6-dev
+            python3-minimal
+            python3-pip
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Python style checks (Ruff)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            ruff
+          make ruff
+
+      - name: HTML style checks (djLint)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            djlint
+          make djlint
+
+      - name: YAML style checks (yamllint)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            yamllint
+          make yamllint
+
+      - name: Rust style checks (rustfmt)
+        if: always()
+        run: |
+          set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            rustc
+          cargo fmt --check --all
+
+      - name: Check common misspellings (codespell)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            codespell
+          codespell
+
+  build:
+    name: Ubuntu-latest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+      fail-fast: false
+
+    # Steps to perform in job
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
+      - name: Install PyPi GPG backward compatibility hacks
+        run: |
+          set -x
+          mkdir -pv "$HOME/.local/bin"
+          cp -vr ./scripts/* "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
+
+      - name: Install dependencies (apt)
+        run: |
+          set -x
+          sudo apt-get update --yes
+          sudo apt-get satisfy --yes --no-install-recommends \
+            ${CORE_DEB}
+          sudo apt-get satisfy --yes --no-install-recommends \
+            ${EXTRA_DEB}
+
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
+          pushd /tmp/ognibuild/
+          cargo build --verbose
+
+      - name: PIP install & setup
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade --editable \
+            .
+          python3 setup.py develop
+          python3 setup.py build_ext -i
+
+      - name: Make
+        run: |
+          set -x
+          make
+
+      - name: Make all
+        run: |
+          set -x
+          make all
+
+      - name: Python static typing checks (mypy)
+        if: always()
+        run: |
+          set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            python3-breezy.tests
+          pip3 install --break-system-packages --upgrade \
+            mypy
+          make typing
+
+      - name: Test config (janitor.debian.net)
+        if: always()
+        run: |
+          set -x
+          sudo apt-get satisfy --yes --no-install-recommends \
+            git
+          git clone https://salsa.debian.org/janitor-team/janitor.debian.net \
+            janitor.debian.net
+          PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python PYTHONPATH=py \
+            python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
+
+      - name: Test using ./tests/test_*.py (unittest)
+        if: always()
+        run: |
+          set -x
+          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' \
+                        | awk '{print $1}' \
+                        | tail -n 1 )
+          sudo apt-get satisfy --yes --no-install-recommends \
+            dpkg-dev \
+            postgresql \
+            ${PSQL_DEB} \
+            libjs-jquery-datatables
+          pip3 install --break-system-packages --upgrade --editable \
+            .[test]
+          make test
+        env:
+          PYTHONHASHSEED: random
+
+  build-container:
+    name: Debian-testing
+    runs-on: ubuntu-latest
+    container:
+      # This is to match: ./Dockerfile_*
+      #   https://hub.docker.com/_/debian
+      image: docker.io/debian:testing-slim
+
+    # There is a lot here that is duplicated (build-container & build)
+    #   Can be made 'better' when GitLab actions support YAML anchors
+    #   https://github.com/actions/runner/issues/1182
+    #   Using system environments as a temp/dirty hack
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
+      - name: Install PyPi GPG backward compatibility hacks
+        run: |
+          set -x
+          mkdir -pv "$HOME/.local/bin"
+          cp -vr ./scripts/* "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" | tee -a $GITHUB_PATH
+
+      - name: Install dependencies (apt)
+        run: |
+          set -x
+          apt-get update --yes
+          apt-get satisfy --yes --no-install-recommends \
+            ${CORE_DEB}
+          apt-get satisfy --yes --no-install-recommends \
+            ${EXTRA_DEB}
+
+      - name: Install dependencies (rust)
+        run: |
+          set -x
+          git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/
+          cd /build/ognibuild/
+          cargo build --verbose
+
+      - name: PIP install & setup
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade --editable \
+            .
+          python3 setup.py develop
+          python3 setup.py build_ext -i
+
+      - name: Make
+        run: |
+          set -x
+          make
+
+      - name: Make all
+        run: |
+          set -x
+          make all
