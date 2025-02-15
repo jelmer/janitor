@@ -40,4 +40,4 @@ RUN pip3 install --break-system-packages --upgrade "/code[gcp,runner]" \
 
 EXPOSE 9911
 
-ENTRYPOINT ["python3", "-m", "janitor.runner", "--port=9911", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["janitor-runner", "--port=9911", "--listen-address=0.0.0.0"]
