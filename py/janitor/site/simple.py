@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from datetime import datetime
 from typing import Any
@@ -618,7 +619,7 @@ async def create_app(
     return private_app, app
 
 
-async def main(argv=None):
+async def main_async(argv=None):
     import argparse
 
     from janitor.config import read_config
@@ -719,9 +720,9 @@ async def main(argv=None):
     while True:
         await asyncio.sleep(3600)
 
+def main(argv):
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    sys.exit(asyncio.run(main_async(sys.argv)))
 
 if __name__ == "__main__":
-    import sys
-
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    sys.exit(asyncio.run(main(sys.argv)))
+    main(sys.argv[1:])

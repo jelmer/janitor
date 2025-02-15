@@ -20,6 +20,7 @@
 import asyncio
 import logging
 import os
+import sys
 import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
@@ -639,7 +640,7 @@ async def create_web_app(
     return app, public_app
 
 
-async def main(argv=None):
+async def main_async(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.git_store")
@@ -725,12 +726,12 @@ async def main(argv=None):
     while True:
         await asyncio.sleep(3600)
 
-
-if __name__ == "__main__":
-    import sys
-
+def main(argv):
     import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-    sys.exit(asyncio.run(main(sys.argv)))
+    sys.exit(asyncio.run(main_async(sys.argv)))
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
