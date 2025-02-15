@@ -191,12 +191,15 @@ s3 = [
 ]
 
 [project.scripts]
-janitor-runner = "janitor.run:main"
-janitor-publisher = "janitor.publish:main"
-janitor-apt = "janitor.debian.archive:main"
-janitor-git-store = "janitor.git_store:main"
+janitor-archive = "janitor.debian.archive:main"
 janitor-bzr-store = "janitor.git_store:main"
 janitor-differ = "janitor.differ:main"
+janitor-git-store = "janitor.git_store:main"
+janitor-ognibuild = "ognibuild.dep_server:main"
+janitor-publisher = "janitor.publish:main"
+janitor-runner = "janitor.runner:main"
+janitor-site = "janitor.site.simple:main"
+#janitor-worker == rust
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
