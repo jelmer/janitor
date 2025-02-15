@@ -2984,7 +2984,7 @@ async def create_app(queue_processor, config, db, tracer=None):
     return app
 
 
-async def main(argv=None):
+async def main_async(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.runner")
@@ -3160,7 +3160,9 @@ async def main(argv=None):
         while True:
             await asyncio.sleep(3600)
 
+def main(argv):
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    sys.exit(asyncio.run(main_async(sys.argv)))
 
 if __name__ == "__main__":
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    sys.exit(asyncio.run(main(sys.argv)))
+    main(sys.argv[1:])
