@@ -117,7 +117,9 @@ git-store = [
     "python-debian",
 ]
 # Janitor service (./Dockerfile_publish)
-publish = []
+publish = [
+    "python-debian",
+]
 # Janitor service (./Dockerfile_runner)
 runner = [
     "python-debian",
