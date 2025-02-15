@@ -129,6 +129,17 @@ site = [
     "python-debian",
 ]
 
+# mypy ($ make typing)
+typing = [
+    "mypy",
+    "gcloud-aio-storage",
+    "python-debian",
+    "pytest",
+    "google-cloud-logging",
+    "pygments",
+    "types-flask",
+]
+
 # unittest ($ make test)
 test = [
     "fakeredis",
