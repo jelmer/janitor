@@ -37,4 +37,4 @@ RUN pip3 install --break-system-packages --upgrade "/code[gcp,differ]" \
 
 EXPOSE 9920
 
-ENTRYPOINT ["python3", "-m", "janitor.differ", "--port=9920", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["janitor-differ", "--port=9920", "--listen-address=0.0.0.0"]
