@@ -51,4 +51,5 @@ VOLUME /bzr
 
 EXPOSE 9929
 
+# $ janitor-bzr-store
 ENTRYPOINT ["python3", "-m", "janitor.bzr_store", "--port=9929", "--listen-address=0.0.0.0", "--vcs-path=/bzr"]

@@ -52,4 +52,5 @@ VOLUME /git
 
 EXPOSE 9923
 
+# $ janitor-git-store
 ENTRYPOINT ["python3", "-m", "janitor.git_store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]

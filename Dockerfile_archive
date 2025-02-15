@@ -52,4 +52,5 @@ RUN pip3 install --break-system-packages --upgrade "/code[gcp,archive]" \
 
 EXPOSE 9914
 
+# $ janitor-archive
 ENTRYPOINT ["python3", "-m", "janitor.debian.archive", "--port=9914", "--listen-address=0.0.0.0"]
