@@ -86,6 +86,8 @@ dependencies = [
     "python-mimeparse",
     "redis>=4.2.0",
     "silver-platter",
+    "setuptools-rust",
+    "setuptools-protobuf",
     "uvloop",
 ]
 dynamic = ["version"]
@@ -133,8 +135,6 @@ test = [
     "pytest-asyncio",
     "pytest-cov",
     "python-debian",
-    "setuptools-protobuf",
-    "setuptools-rust",
     "testing.postgresql",
     "testtools",
 ]
@@ -157,8 +157,6 @@ dev = [
     "python-debian",
     "python-subunit",
     "ruff==0.9.6",
-    "setuptools-protobuf",
-    "setuptools-rust",
     "testing.postgresql",
     "testtools",
     "types-beautifulsoup4",
