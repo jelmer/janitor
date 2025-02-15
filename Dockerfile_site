@@ -12,8 +12,8 @@
 # TODO: config
 # TODO: service discovery
 
-# https://hub.docker.com/_/debian
-FROM docker.io/debian:testing-slim AS build
+# https://hub.docker.com/_/rust
+FROM docker.io/rust:slim-bookworm AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 # Enable forward compatibility with newer versions of Python
