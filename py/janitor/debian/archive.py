@@ -908,7 +908,7 @@ async def loop_publish(config, generator_manager: GeneratorManager) -> None:
         await asyncio.sleep(60 * 60 * 12)
 
 
-async def main(argv=None):
+async def main_async(argv=None):
     import argparse
 
     from redis.asyncio import Redis
@@ -1007,7 +1007,9 @@ async def main(argv=None):
     async with package_info_provider:
         await asyncio.gather(*tasks)
 
+def main(argv):
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    sys.exit(asyncio.run(main_async(sys.argv)))
 
 if __name__ == "__main__":
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    sys.exit(asyncio.run(main(sys.argv)))
+    main(sys.argv[1:])

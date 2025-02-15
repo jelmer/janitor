@@ -68,8 +68,8 @@ requires-python = ">=3.9"
 dependencies = [
     "aiohttp",
     "aiohttp-apispec",
-    "aiohttp-openmetrics",
     "aiohttp-jinja2",
+    "aiohttp-openmetrics",
     "aiojobs",
     "aioredlock",
     "aiozipkin",
@@ -86,6 +86,8 @@ dependencies = [
     "python-mimeparse",
     "redis>=4.2.0",
     "silver-platter",
+    "setuptools-rust",
+    "setuptools-protobuf",
     "uvloop",
 ]
 dynamic = ["version"]
@@ -100,7 +102,7 @@ archive = [
     "python-debian",
 ]
 # Janitor service (./Dockerfile_bzr_store)
-bzr_store = [
+bzr-store = [
     "loggerhead",
     "python-debian",
 ]
@@ -109,13 +111,15 @@ differ = [
     "python-debian",
 ]
 # Janitor service (./Dockerfile_git_store)
-git_store = [
+git-store = [
     "aiohttp-wsgi",
     "klaus@git+https://github.com/jonashaag/klaus",
     "python-debian",
 ]
 # Janitor service (./Dockerfile_publish)
-publish = []
+publish = [
+    "python-debian",
+]
 # Janitor service (./Dockerfile_runner)
 runner = [
     "python-debian",
@@ -125,13 +129,39 @@ site = [
     "python-debian",
 ]
 
+# mypy ($ make typing)
+typing = [
+    "mypy",
+    "gcloud-aio-storage",
+    "python-debian",
+    "pytest",
+    "google-cloud-logging",
+    "pygments",
+    "types-flask",
+]
+
+# unittest ($ make test)
+test = [
+    "fakeredis",
+    "pytest",
+    "pytest-aiohttp",
+    "pytest-asyncio",
+    "pytest-cov",
+    "python-debian",
+    "testing.postgresql",
+    "testtools",
+]
+
 # Development (./CONTRIBUTING.md)
 dev = [
+    "aiohttp-wsgi",
     "boto3",
     "djlint",
     "fakeredis",
     "gcloud-aio-storage",
     "google-cloud-logging",
+    "klaus@git+https://github.com/jonashaag/klaus",
+    "loggerhead",
     "mock",
     "mypy",
     "pytest",
@@ -140,8 +170,6 @@ dev = [
     "python-debian",
     "python-subunit",
     "ruff==0.9.6",
-    "setuptools-protobuf",
-    "setuptools-rust",
     "testing.postgresql",
     "testtools",
     "types-beautifulsoup4",
@@ -153,20 +181,6 @@ dev = [
     "types-PyYAML",
     "types-redis",
     "yamllint",
-]
-
-# unittest ($ make test)
-test = [
-    "fakeredis",
-    "pytest",
-    "pytest-aiohttp",
-    "pytest-asyncio",
-    "pytest-cov",
-    "python-debian",
-    "setuptools-protobuf",
-    "setuptools-rust",
-    "testing.postgresql",
-    "testtools",
 ]
 
 debian = [
@@ -188,12 +202,15 @@ s3 = [
 ]
 
 [project.scripts]
-janitor-runner = "janitor.run:main"
-janitor-publisher = "janitor.publish:main"
-janitor-apt = "janitor.debian.archive:main"
-janitor-git-store = "janitor.git_store:main"
+janitor-archive = "janitor.debian.archive:main"
 janitor-bzr-store = "janitor.git_store:main"
 janitor-differ = "janitor.differ:main"
+janitor-git-store = "janitor.git_store:main"
+janitor-ognibuild = "ognibuild.dep_server:main"
+janitor-publisher = "janitor.publish:main"
+janitor-runner = "janitor.runner:main"
+janitor-site = "janitor.site.simple:main"
+#janitor-worker == rust
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
