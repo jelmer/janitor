@@ -141,11 +141,14 @@ test = [
 
 # Development (./CONTRIBUTING.md)
 dev = [
+    "aiohttp-wsgi",
     "boto3",
     "djlint",
     "fakeredis",
     "gcloud-aio-storage",
     "google-cloud-logging",
+    "klaus@git+https://github.com/jonashaag/klaus",
+    "loggerhead",
     "mock",
     "mypy",
     "pytest",
