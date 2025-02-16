@@ -2,6 +2,9 @@ DOCKER_TAG ?= latest
 PYTHON ?= python3
 SHA = $(shell git rev-parse HEAD)
 DOCKERFILES = $(shell ls Dockerfile_* | sed 's/Dockerfile_//' )
+DOCKER_TARGETS := $(patsubst %,docker-%,$(DOCKERFILES))
+BUILD_TARGETS := $(patsubst %,build-%,$(DOCKERFILES))
+PUSH_TARGETS := $(patsubst %,push-%,$(DOCKERFILES))
 
 .PHONY: all check
 
@@ -86,20 +89,11 @@ push-%:
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
-docker-all:
-	for df in $(DOCKERFILES); do \
-		$(MAKE) docker-$$df; \
-	done
+docker-all: $(DOCKER_TARGETS)
 
-build-all:
-	for df in $(DOCKERFILES); do \
-		$(MAKE) build-$$df; \
-	done
+build-all: $(BUILD_TARGETS)
 
-push-all:
-	for df in $(DOCKERFILES); do \
-		$(MAKE) push-$$df; \
-	done
+push-all: $(PUSH_TARGETS)
 
 reformat:: reformat-html
 
