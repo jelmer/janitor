@@ -136,8 +136,8 @@ typing = [
     "python-debian",
     "pytest",
     "google-cloud-logging",
-    "pygments",
     "types-flask",
+    "types-Pygments",
 ]
 
 # unittest ($ make test)
