@@ -1,4 +1,17 @@
-FROM docker.io/debian:testing-slim AS build
+# Pull (Pre-Built):
+#   $ podman pull ghcr.io/jelmer/janitor/runner:latest
+# Build:
+#   $ podman build -t ghcr.io/jelmer/janitor/runner:latest -f Dockerfile_runner .
+#   $ buildah build -t ghcr.io/jelmer/janitor/runner:latest -f Dockerfile_runner .
+# Run:
+#   $ podman run --rm --publish 9911:9911 --name janitor-runner --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/runner:latest --config /mnt/janitor/janitor.conf.example
+# Troubleshoot:
+#   $ podman run -it --rm -p 9911:9911 --entrypoint=/bin/bash ghcr.io/jelmer/janitor/runner:latest
+#   $ podman run --interactive --tty --rm --publish 9911:9911 --entrypoint=/bin/bash --volume $( pwd ):/mnt/janitor --workdir /mnt/janitor ghcr.io/jelmer/janitor/runner:latest
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# https://hub.docker.com/_/rust
+FROM docker.io/rust:slim-bookworm AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 # Enable forward compatibility with newer versions of Python
@@ -12,38 +25,32 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        ca-certificates \
+       ## Standard packages: ./CONTRIBUTING.md
         cargo \
+        g++ \
         gcc \
-        git \
-        libclang-dev \
         libgpgme-dev \
         libpython3-dev \
         libssl-dev \
-        libtdb-dev \
-        make \
-        mypy-protobuf \
-        openssh-client \
         pkg-config \
         protobuf-compiler \
-        python3-apt \
-        python3-gpg \
-        python3-pip \
-        python3-setuptools \
-        python3-setuptools-rust \
-        python3-wheel \
-        python3-wheel-whl \
-        rustc \
         swig \
+       ## Extra packages
+        dpkg-dev \
+        git \
+        libapt-pkg-dev \
+        python3-pip \
  && apt-get clean
 
+# Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
 COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[debian,gcp]" \
+RUN pip3 install --break-system-packages --upgrade "/code[gcp,runner]" \
  && rm -rf /code
 
 EXPOSE 9911
 
+# $ janitor-runner
 ENTRYPOINT ["python3", "-m", "janitor.runner", "--port=9911", "--listen-address=0.0.0.0"]
