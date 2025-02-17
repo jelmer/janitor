@@ -75,7 +75,7 @@ dependencies = [
     "aiozipkin",
     "asyncpg",
     "backoff",
-    "breezy[git,launchpad,workspace,pgp]",
+    "breezy[git,launchpad,workspace]",
     "bs4",
     "dulwich",
     "iso8601",
@@ -160,7 +160,7 @@ test = [
 dev = [
     "aiohttp-debugtoolbar",
     "djlint",
-    "gpg",
+    #"gpg", # Using python3-gpg instead ~ https://github.com/jelmer/janitor/issues/931
     "marshmallow",
     "mock",
     "python-subunit",
