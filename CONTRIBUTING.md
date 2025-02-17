@@ -17,12 +17,11 @@ $ sudo apt install \
     cargo \
     gcc \
     git \
-    libgpgme-dev \
     libpython3-dev \
     libssl-dev \
     pkg-config \
     protobuf-compiler \
-    swig
+    python3-gpg
 ```
 
 - - -
@@ -36,7 +35,6 @@ $ sudo apt install \
 $ git clone https://github.com/jelmer/janitor.git
 $ cd janitor/
 $ python3 -m venv .venv
-$ cp -v ./scripts/* ./.venv/bin/
 $ . ./.venv/bin/activate
 $ pip3 install --editable .[dev]
 ```
