@@ -17,19 +17,15 @@ RUN apt-get update --yes \
         cargo \
         g++ \
         gcc \
-        libgpgme-dev \
         libpython3-dev \
         libssl-dev \
         pkg-config \
         protobuf-compiler \
-        swig \
        ## Extra packages
         git \
+        python3-gpg \
         python3-pip \
  && apt-get clean
-
-# Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
-COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 

@@ -48,10 +48,6 @@ RUN apt-get update --yes \
 FROM docker.io/debian:testing-slim
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-# Enable forward compatibility with newer versions of Python
-#   Not needed as no Python!
-#ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY="1"
-
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update --yes \
@@ -60,15 +56,10 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-       ## Extra packages
         libpython3-dev \
         python3-breezy \
  && apt-get clean \
  && rm -rf /usr/share/aclocal
-
-## Due to PyPi's gpg v1.10.0 needing libgpgme-dev < 1.18.0-3
-#   Not needed as no Python!
-#COPY ./scripts/ /usr/local/bin/
 
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
