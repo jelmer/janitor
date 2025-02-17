@@ -17,12 +17,11 @@ $ sudo apt install \
     cargo \
     gcc \
     git \
-    libgpgme-dev \
     libpython3-dev \
     libssl-dev \
     pkg-config \
     protobuf-compiler \
-    swig
+    python3-gpg
 ```
 
 <!--
@@ -37,6 +36,9 @@ In order (Package, command, error):
   - libssl-dev           $ pip3 install --editable .                           # warning: openssl-sys@0.9.105: Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.
   - g++                  $ pip3 install --editable .                           # error: linking with `cc` failed: exit status: 1 -> distutils.errors.CompileError: `cargo build --manifest-path worker/Cargo.toml --message-format=json-render-diagnostics -v --features 'cli debian'` failed with code 101
   - swig                 $ pip3 install --editable .                           # Running setup.py install for gpg ... error -> Using gpgme.h from /usr/include/gpgme.h -> error: command 'swig' failed: No such file or directory
+
+- Using python3-gpg over PyPi GPG as having issues with Debian Testing (okay with Debian 12)
+  https://github.com/jelmer/janitor/issues/931
 
 Dependencies
   - cargo -> rustc
@@ -53,7 +55,6 @@ $ sudo apt install \
 $ git clone https://github.com/jelmer/janitor.git
 $ cd janitor/
 $ python3 -m venv .venv
-$ cp -v ./scripts/* ./.venv/bin/
 $ . ./.venv/bin/activate
 $ pip3 install --editable .[dev]
 ```
