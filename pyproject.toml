@@ -75,20 +75,22 @@ dependencies = [
     "aiozipkin",
     "asyncpg",
     "backoff",
-    "breezy[git,launchpad,workspace,pgp]",
+    "breezy[git,launchpad,workspace]",
     "bs4",
     "dulwich",
     "iso8601",
     "jinja2",
+    "launchpadlib",
     "paramiko",
     "protobuf",
     "pygments",
     "python-mimeparse",
     "redis>=4.2.0",
-    "silver-platter",
-    "setuptools-rust",
     "setuptools-protobuf",
+    "setuptools-rust",
+    "silver-platter",
     "uvloop",
+    "yarl",
 ]
 dynamic = ["version"]
 
@@ -108,11 +110,13 @@ bzr-store = [
 ]
 # Janitor service (./Dockerfile_differ)
 differ = [
+    "diffoscope",
     "python-debian",
 ]
 # Janitor service (./Dockerfile_git_store)
 git-store = [
     "aiohttp-wsgi",
+    "flask",
     "klaus@git+https://github.com/jonashaag/klaus",
     "python-debian",
 ]
@@ -154,30 +158,17 @@ test = [
 
 # Development (./CONTRIBUTING.md)
 dev = [
-    "aiohttp-wsgi",
-    "boto3",
+    "aiohttp-debugtoolbar",
     "djlint",
-    "fakeredis",
-    "gcloud-aio-storage",
-    "google-cloud-logging",
-    "klaus@git+https://github.com/jonashaag/klaus",
-    "loggerhead",
+    #"gpg", # Using python3-gpg instead ~ https://github.com/jelmer/janitor/issues/931
+    "marshmallow",
     "mock",
-    "mypy",
-    "pytest",
-    "pytest-aiohttp",
-    "pytest-cov",
-    "python-debian",
     "python-subunit",
     "ruff==0.9.6",
-    "testing.postgresql",
-    "testtools",
     "types-beautifulsoup4",
     "types-boto3",
-    "types-flask",
     "types-mock",
     "types-protobuf",
-    "types-Pygments",
     "types-PyYAML",
     "types-redis",
     "yamllint",
