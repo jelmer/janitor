@@ -36,6 +36,7 @@ jobs:
 
       - name: Determine image tags to set
         run: |
+          set -x
           TAGS=""
           if [[ '${{ github.event_name }}' == 'push' ]]; then
             TAGS="${TAGS} ${{ github.sha }}"
@@ -63,6 +64,11 @@ jobs:
           image: |
             ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
           tags: ${{ env.TAGS }}
+
+      - name: Test ${{ matrix.dockerfile_suffix }} image
+        run: |
+          set -x
+          podman run ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }} --help
 
       - name: Login to GitHub Packages (ghcr.io)
         if: |
