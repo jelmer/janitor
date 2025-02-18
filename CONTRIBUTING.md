@@ -46,7 +46,7 @@ _Python's package management over OS network apt package, as they may be too dat
 
 ### Production Environment
 
-We would recommend using containers to run each of the Janitor services.
+We would recommend using [containers](Dockerfiles_.md) to run each of the Janitor services.
 
 There are (daily) [pre-built containers](https://github.com/jelmer?tab=packages&repo_name=janitor),
 otherwise you can create them yourself:
