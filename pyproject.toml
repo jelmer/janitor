@@ -78,6 +78,7 @@ dependencies = [
     "breezy[git,launchpad,workspace]",
     "bs4",
     "dulwich",
+    #"gpg", # Using python3-gpg instead ~ https://github.com/jelmer/janitor/issues/931
     "iso8601",
     "jinja2",
     "launchpadlib",
@@ -160,17 +161,10 @@ test = [
 dev = [
     "aiohttp-debugtoolbar",
     "djlint",
-    #"gpg", # Using python3-gpg instead ~ https://github.com/jelmer/janitor/issues/931
     "marshmallow",
     "mock",
     "python-subunit",
     "ruff==0.9.6",
-    "types-beautifulsoup4",
-    "types-boto3",
-    "types-mock",
-    "types-protobuf",
-    "types-PyYAML",
-    "types-redis",
     "yamllint",
 ]
 
