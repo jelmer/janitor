@@ -27,49 +27,6 @@ $ sudo apt install \
 
 - - -
 
-Even when using the latest [Debian](https://tracker.debian.org/pkg/rustc)
-stable or [Ubuntu](https://packages.ubuntu.com/search?keywords=rustc) LTS version,
-as the base OS/chroot, their included OS network apt package repositories may have an an
-unsupported outdated version of `cargo`, and `rustc`.
-_As a result, would need to use [rustup](https://rustup.rs/) will bring you to the latest version._
-
-```console
-$ sudo apt purge rustc
-$ sudo apt install \
-    curl \
-  && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh \
-  && . "$HOME/.cargo/env"
-```
-<!--
-If updating the packages above, check:
-  - ./.github/workflows/python-package.yml
-  - ./CONTRIBUTING.md
-  - ./Dockerfile_*
-
-- - -
-
-rustup should be in Debian 13
-  Switch to using this package when its out & drop curl command/line and this comment section
-  https://tracker.debian.org/pkg/rustup
-  https://wiki.debian.org/Rust
-  https://rust-lang.github.io/rustup/installation/other.html
-
-- - -
-
-Debian "bookworm" 12 is the current stable version which has rustc@1.63.0
-> lock file version `4` was found, but this version of Cargo does not understand this lock file, perhaps Cargo needs to be updated?
-
-Ubuntu "Noble Numbat" 24.04 is the current LTS version which has rustc@1.75.0
-> lock file version 4 requires `-Znext-lockfile-bump`
-
-GitHub Actions (SaaS) uses package(s) outside of the standard network apt repos:
-> $ dpkg -l | grep "cargo\|rustc" -> "empty"
-> $ cargo --version -> 1.84.1 (66221abde 2024-11-19) // $ rustc --version -> 1.84.1 (e71f9a9a9 2025-01-27)
-
-REF: https://github.com/rust-lang/cargo/issues/14655#issuecomment-2400237392
-> Lockfile v4 has been stable since Rust 1.78.
--->
-
 In addition to these packages, will need to use Python's PIP and a virtual
 environment to install the rest of the Python-based dependencies:
 
