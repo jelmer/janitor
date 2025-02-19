@@ -1,3 +1,4 @@
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -12,37 +13,27 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        ca-certificates \
+       ## Standard packages: ./CONTRIBUTING.md
         cargo \
-        dpkg-dev \
+        g++ \
         gcc \
-        git \
-        libclang-dev \
         libpython3-dev \
         libssl-dev \
-        libtdb-dev \
-        make \
-        mypy-protobuf \
         pkg-config \
         protobuf-compiler \
-        python3-apt \
+       ## Extra packages
+        dpkg-dev \
+        git \
+        libapt-pkg-dev \
         python3-gpg \
         python3-pip \
-        python3-setuptools \
-        python3-setuptools-protobuf \
-        python3-setuptools-rust \
-        python3-wheel \
-        python3-wheel-whl \
-        rustc \
  && apt-get clean
-
-COPY ./scripts/ /usr/local/bin/
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp,debian]" \
+RUN pip3 install --break-system-packages --upgrade "/code[gcp,archive]" \
  && rm -rf /code
 
 EXPOSE 9914
 
-ENTRYPOINT ["python3", "-m", "janitor.debian.archive", "--port=9914", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["janitor-archive", "--port=9914", "--listen-address=0.0.0.0"]

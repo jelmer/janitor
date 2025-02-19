@@ -1,3 +1,4 @@
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS m4
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
@@ -5,21 +6,47 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
-        apt-file \
-        aptitude \
         auto-apt-proxy \
         iproute2 \
+ && apt-get satisfy --yes --no-install-recommends \
+        apt-file \
+        aptitude \
  && apt-get clean \
  && apt-file update \
  && apt-file search /usr/share/aclocal/.*.m4 --regex -l | xargs aptitude -y install
 
 
 
+# https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-# Enable forward compatibility with newer versions of Python
-ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY="1"
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update --yes \
+ && apt-get install --yes --no-install-recommends \
+        auto-apt-proxy \
+        iproute2 \
+ && apt-get satisfy --yes --no-install-recommends \
+        ca-certificates \
+        cargo \
+        gcc \
+        git \
+        libc6-dev \
+        libpython3-dev \
+        libssl-dev \
+        pkg-config \
+        python3-minimal \
+ && apt-get clean \
+ && git clone https://github.com/jelmer/ognibuild.git /code/ \
+ && cd /code/ \
+ && cargo build --verbose --release #-p dep-server
+
+
+
+# https://hub.docker.com/_/debian
+FROM docker.io/debian:testing-slim
+MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -29,34 +56,16 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-        apt-file \
-        autoconf \
-        ca-certificates \
-        cargo \
-        dpkg-dev \
-        g++ \
-        git \
-        gnome-pkg-tools \
-        libapt-pkg-dev \
         libpython3-dev \
-        make \
-        python3-pip \
-        rustc \
+        python3-breezy \
  && apt-get clean \
- && apt-file update
-
-RUN rm -rf /usr/share/aclocal
-
-COPY ./scripts/ /usr/local/bin/
+ && rm -rf /usr/share/aclocal
 
 COPY --from=m4 /usr/share/aclocal /usr/share/aclocal
 
-RUN pip3 install --break-system-packages --upgrade "python_apt@git+https://salsa.debian.org/apt-team/python-apt"
-
-RUN git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/ \
- && cd /build/ognibuild/ \
- && cargo build --verbose
+COPY --from=build /code/target/release/ /usr/local/bin/
 
 EXPOSE 9934
 
-ENTRYPOINT ["python3", "-m", "ognibuild.dep_server", "--port=9934", "--listen-address=0.0.0.0"]
+# $ janitor-ognibuild
+ENTRYPOINT ["dep-server", "--port=9934", "--listen-address=0.0.0.0"]
