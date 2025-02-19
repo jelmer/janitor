@@ -1284,7 +1284,7 @@ dependencies = [
  "debversion",
  "lazy-regex",
  "log",
- "mailparse",
+ "mailparse 0.15.0",
  "maplit",
  "reqwest",
  "tokio",
@@ -3202,7 +3202,7 @@ dependencies = [
  "clap",
  "isahc",
  "log",
- "mailparse",
+ "mailparse 0.16.0",
  "reqwest",
  "select",
  "serde_json",
@@ -3605,6 +3605,17 @@ name = "mailparse"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3da03d5980411a724e8aaf7b61a7b5e386ec55a7fb49ee3d0ff79efc7e5e7c7e"
+dependencies = [
+ "charset",
+ "data-encoding",
+ "quoted_printable",
+]
+
+[[package]]
+name = "mailparse"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdd4a624f609f8ea7366324724b7ff41cb0f982eb665a54ac825bc1c0efc07a3"
 dependencies = [
  "charset",
  "data-encoding",
@@ -4756,7 +4767,7 @@ checksum = "c21f58880fc45e91d29b2f639ab4051aaa6a2b054534c2d343a953347d0dd600"
 dependencies = [
  "flate2",
  "fs-err",
- "mailparse",
+ "mailparse 0.15.0",
  "rfc2047-decoder",
  "tar",
  "thiserror 2.0.11",
