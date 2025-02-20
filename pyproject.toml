@@ -176,13 +176,12 @@ debian = [
     "silver-platter[debian]",
 ]
 
-# Google Cloud Platform
-gcp = [
+# Logging (./janitor.conf.example:logs_location)
+cloud = [
+    # GCP - Google Cloud Platform
     "gcloud-aio-storage",
     "google-cloud-logging",
-]
-
-s3 = [
+    # S3
     "boto3",
 ]
 

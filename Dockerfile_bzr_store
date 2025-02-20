@@ -28,7 +28,7 @@ RUN apt-get update --yes \
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp,bzr-store]" \
+RUN pip3 install --break-system-packages --upgrade "/code[bzr-store,cloud]" \
  && rm -rf /code
 
 VOLUME /bzr

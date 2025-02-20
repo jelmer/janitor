@@ -28,7 +28,7 @@ RUN apt-get update --yes \
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp,publish]" \
+RUN pip3 install --break-system-packages --upgrade "/code[publish,cloud]" \
  && rm -rf /code
 
 EXPOSE 9912

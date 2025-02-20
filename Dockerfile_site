@@ -31,7 +31,7 @@ RUN apt-get update --yes \
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp,site]" \
+RUN pip3 install --break-system-packages --upgrade "/code[site,cloud]" \
  && rm -rf /code
 
 EXPOSE 8082
