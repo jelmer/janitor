@@ -15,7 +15,7 @@ site/history.rst
 build.log
 debian_janitor.egg-info/
 .mypy_cache/
-env
+.venv
 .eggs
 janitor.egg-info
 pyvenv.cfg

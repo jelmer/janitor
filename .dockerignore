@@ -16,3 +16,4 @@ tests/
 build/
 lib/
 include/
+.venv
