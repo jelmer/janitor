@@ -25,6 +25,7 @@ RUN apt-get update --yes \
         pkg-config \
         protobuf-compiler \
        ## Extra packages
+        libjs-jquery-datatables \
         python3-gpg \
         python3-pip \
  && apt-get clean
