@@ -388,27 +388,34 @@ async def handle_broken_mps(request):
     async with request.app["pool"].acquire() as conn:
         broken_mps = await conn.fetch(
             """\
-select
-url,
-last_run.suite,
-last_run.codebase,
-last_run.id,
-last_run.result_code,
-last_run.finish_time,
-last_run.description
-from
-(select
- distinct on (url) url, run.suite, run.codebase, run.finish_time,
- run.codebase, merge_proposal.revision as current_revision
-from merge_proposal join run on
- merge_proposal.revision = run.revision where status = 'open')
-as current_run left join last_runs last_run
-on
-current_run.suite = last_run.suite and
-current_run.codebase = last_run.codebase
-where
-last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
-order by url, last_run.finish_time desc
+SELECT
+  current_run.url,
+  last_run.suite,
+  last_run.codebase,
+  last_run.id,
+  last_run.result_code,
+  last_run.finish_time,
+  last_run.description
+FROM
+  (SELECT DISTINCT ON (merge_proposal.url)
+     merge_proposal.url,
+     run.suite,
+     run.codebase,
+     run.finish_time,
+     merge_proposal.revision AS current_revision
+   FROM merge_proposal
+   JOIN run ON merge_proposal.revision = run.revision
+   WHERE merge_proposal.status = 'open'
+  ) AS current_run
+LEFT JOIN last_runs AS last_run
+ON
+  current_run.suite = last_run.suite
+  AND current_run.codebase = last_run.codebase
+WHERE
+  last_run.result_code NOT IN ('success', 'nothing-to-do', 'nothing-new-to-do')
+ORDER BY
+  current_run.url,
+  last_run.finish_time DESC;
 """
         )
 
