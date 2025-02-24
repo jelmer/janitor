@@ -534,6 +534,13 @@ async def create_app(
             f"/_static/{entry.name}",
             functools.partial(handle_static_file, entry.path),
         )
+    app.router.add_get(
+        "/favicon.ico",
+        functools.partial(
+            handle_static_file,
+            os.path.join(os.path.dirname(__file__), '_static', 'favicon.ico')
+        )
+    )
     app.router.add_static(
         "/_static/images/datatables", "/usr/share/javascript/jquery-datatables/images"
     )
