@@ -74,7 +74,7 @@ from silver_platter import (
     BranchTemporarilyUnavailable,
     BranchUnavailable,
     BranchUnsupported,
-    open_branch,
+    _open_branch as open_branch,
 )
 from yarl import URL
 
@@ -178,7 +178,10 @@ def open_branch_ext(
     vcs_url: str, possible_transports: Optional[list[Transport]] = None, probers=None
 ) -> Branch:
     try:
-        return open_branch(vcs_url, possible_transports, probers=probers)
+        try:
+            return open_branch(vcs_url, possible_transports, probers=probers)
+        except TypeError as e:
+            return open_branch(vcs_url)
     except (
         BranchUnavailable,
         BranchMissing,
