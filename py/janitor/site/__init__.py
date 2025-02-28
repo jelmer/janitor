@@ -110,10 +110,10 @@ def update_vars_from_request(vs, request):
 
 def format_duration(duration):
     weeks = duration.days // 7
-    duration.days % 7
-    if weeks:
-        return "f{weeks}w{days}d"
-    if duration.days:
+    days = duration.days % 7
+    if weeks > 0:
+        return f"{weeks}w{days}d"
+    if duration.days > 0:
         return f"{duration.days}d{duration.seconds//(60*60)}h"
     hours = duration.seconds // (60 * 60)
     seconds = duration.seconds % (60 * 60)
