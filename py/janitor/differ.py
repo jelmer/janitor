@@ -646,7 +646,7 @@ async def listen_to_runner(redis, db_location: str, app: web.Application):
                 )
             except ArtifactsMissing as e:
                 logging.info(
-                    "Artifacts missing while precaching diff for " "new result %s: %r",
+                    "Artifacts missing while precaching diff for new result %s: %r",
                     result["log_id"],
                     e,
                 )
@@ -804,6 +804,7 @@ def main(argv=None):
         loop.create_task(listen_to_runner(redis, config.database_location, app))
 
     loop.run_forever()
+
 
 if __name__ == "__main__":
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

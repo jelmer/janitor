@@ -149,7 +149,7 @@ push_limit_count = Counter(
 
 missing_branch_url_count = Counter(
     "missing_branch_url_count",
-    "Number of runs that weren't published because they had a " "missing branch URL",
+    "Number of runs that weren't published because they had a missing branch URL",
 )
 
 rejected_last_mp_count = Counter("rejected_last_mp", "Last merge proposal was rejected")
@@ -191,7 +191,7 @@ forge_rate_limited_count = Counter(
 
 unexpected_http_response_count = Counter(
     "unexpected_http_response_count",
-    "Number of unexpected HTTP responses during checks of existing " "proposals",
+    "Number of unexpected HTTP responses during checks of existing proposals",
 )
 
 
@@ -1567,7 +1567,7 @@ async def handle_policy_get(request):
     name = request.match_info["name"]
     async with request.app["db"].acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * " "FROM named_publish_policy WHERE name = $1", name
+            "SELECT * FROM named_publish_policy WHERE name = $1", name
         )
     if not row:
         return web.json_response({"reason": "Publish policy not found"}, status=404)
@@ -3119,7 +3119,7 @@ has changed from {} to {}.
         branches_match, mp_run["branch_url"], last_run.branch_url
     ):
         logger.warning(
-            "%s: Remote branch URL appears to have have changed: " "%s ⇒ %s, skipping.",
+            "%s: Remote branch URL appears to have have changed: %s ⇒ %s, skipping.",
             mp.url,
             mp_run["branch_url"],
             last_run.branch_url,
@@ -3261,8 +3261,7 @@ applied independently.
                     description = f"Permission denied closing merge request: {f}"
                 code = "success"
                 description = (
-                    "Closing merge request for which changes were "
-                    "applied independently"
+                    "Closing merge request for which changes were applied independently"
                 )
             if code != "success":
                 logger.info(
@@ -3471,7 +3470,7 @@ async def check_existing(
             modified_mps += 1
             if modify_limit and modified_mps > modify_limit:
                 logger.warning(
-                    "Already modified %d merge proposals, " "waiting with the rest.",
+                    "Already modified %d merge proposals, waiting with the rest.",
                     modified_mps,
                 )
                 check_only = True
@@ -3839,9 +3838,11 @@ async def main_async(argv=None):
             )
             await asyncio.gather(*tasks)
 
+
 def main():
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
+
 
 if __name__ == "__main__":
     main()

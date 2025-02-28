@@ -267,8 +267,7 @@ WHERE run.codebase = $1 AND run.suite = $2
         if run_id:
             with span.new_child("sql:reviews"):
                 reviews = await conn.fetch(
-                    "SELECT * FROM review WHERE run_id = $1 "
-                    "ORDER BY reviewed_at ASC",
+                    "SELECT * FROM review WHERE run_id = $1 ORDER BY reviewed_at ASC",
                     run_id,
                 )
         else:

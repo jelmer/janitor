@@ -592,7 +592,7 @@ async def handle_done_proposals(request):
             )
         else:
             orig_runs = await conn.fetch(
-                "SELECT * FROM absorbed_runs " "ORDER BY absorbed_at DESC NULLS LAST"
+                "SELECT * FROM absorbed_runs ORDER BY absorbed_at DESC NULLS LAST"
             )
 
     mp_user_url_resolver = MergeProposalUserUrlResolver()

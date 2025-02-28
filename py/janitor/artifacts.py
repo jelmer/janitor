@@ -287,7 +287,7 @@ async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id,
         if backup_manager:
             await backup_manager.store_artifacts(run_id, from_dir, names)
             logging.info(
-                "Uploading results to backup artifact " "location %r.",
+                "Uploading results to backup artifact location %r.",
                 backup_manager,
                 extra={"run_id": run_id},
             )

@@ -114,7 +114,7 @@ def format_duration(duration):
     if weeks > 0:
         return f"{weeks}w{days}d"
     if duration.days > 0:
-        return f"{duration.days}d{duration.seconds//(60*60)}h"
+        return f"{duration.days}d{duration.seconds // (60 * 60)}h"
     hours = duration.seconds // (60 * 60)
     seconds = duration.seconds % (60 * 60)
     minutes = seconds // 60

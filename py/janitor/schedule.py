@@ -249,9 +249,9 @@ def calculate_offset(
     normalized_codebase_value = max(
         MINIMUM_NORMALIZED_CODEBASE_VALUE, normalized_codebase_value
     )
-    assert (
-        normalized_codebase_value > 0.0
-    ), f"normalized codebase value is {normalized_codebase_value}"
+    assert normalized_codebase_value > 0.0, (
+        f"normalized codebase value is {normalized_codebase_value}"
+    )
 
     if candidate_value is None:
         candidate_value = 1.0
@@ -342,9 +342,9 @@ async def do_schedule_regular(
         conn, codebase, campaign, context
     )
 
-    assert estimated_duration >= timedelta(
-        0
-    ), f"{codebase}: estimated duration < 0.0: {estimated_duration!r}"
+    assert estimated_duration >= timedelta(0), (
+        f"{codebase}: estimated duration < 0.0: {estimated_duration!r}"
+    )
 
     if normalized_codebase_value is None:
         normalized_codebase_value = await conn.fetchval(
@@ -596,7 +596,7 @@ async def do_schedule(
     assert codebase is not None
     if command is None:
         candidate = await conn.fetchrow(
-            "SELECT command " "FROM candidate WHERE codebase = $1 AND suite = $2",
+            "SELECT command FROM candidate WHERE codebase = $1 AND suite = $2",
             codebase,
             campaign,
         )

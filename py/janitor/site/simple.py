@@ -720,9 +720,11 @@ async def main_async(argv=None):
     while True:
         await asyncio.sleep(3600)
 
+
 def main():
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
+
 
 if __name__ == "__main__":
     main()

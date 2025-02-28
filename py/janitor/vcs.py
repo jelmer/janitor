@@ -133,7 +133,7 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
         return BranchOpenFailure(code, msg)
     if isinstance(e, BranchMissing):
         if str(e).startswith(
-            "Branch does not exist: Not a branch: " '"https://anonscm.debian.org'
+            'Branch does not exist: Not a branch: "https://anonscm.debian.org'
         ):
             code = "hosted-on-alioth"
         else:
@@ -180,7 +180,7 @@ def open_branch_ext(
     try:
         try:
             return open_branch(vcs_url, possible_transports, probers=probers)
-        except TypeError as e:
+        except TypeError:
             return open_branch(vcs_url)
     except (
         BranchUnavailable,
