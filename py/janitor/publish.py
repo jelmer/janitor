@@ -75,7 +75,9 @@ from silver_platter import (
     BranchMissing,
     BranchRateLimited,
     BranchUnavailable,
-    open_branch,
+)
+from silver_platter import (
+    _open_branch as open_branch,
 )
 from yarl import URL
 
