@@ -526,9 +526,7 @@ async def handle_ready(request):
     )
     if missing:
         return web.Response(
-            text=(
-                "missing: {}".format(", ".join(missing)) + "\n\n" "present:\n" + status
-            ),
+            text=("missing: {}".format(", ".join(missing)) + "\n\npresent:\n" + status),
             status=500,
         )
     return web.Response(text=status)
@@ -1007,9 +1005,11 @@ async def main_async(argv=None):
     async with package_info_provider:
         await asyncio.gather(*tasks)
 
+
 def main():
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
+
 
 if __name__ == "__main__":
     main()

@@ -995,7 +995,7 @@ class JenkinsBackchannel(Backchannel):
                 # expect anything to be uploaded
                 if job.get("result") == "FAILURE":
                     raise PingFatalFailure(
-                        f'Jenkins lists job {job["id"]} for run {expected_log_id} as failed'
+                        f"Jenkins lists job {job['id']} for run {expected_log_id} as failed"
                     )
 
     def json(self):
@@ -1322,9 +1322,9 @@ async def store_run(
 
     if result_branches:
         roles = [role for (role, remote_name, br, r) in result_branches]
-        assert len(roles) == len(
-            set(roles)
-        ), f"Duplicate result branches: {result_branches!r}"
+        assert len(roles) == len(set(roles)), (
+            f"Duplicate result branches: {result_branches!r}"
+        )
         await conn.executemany(
             "INSERT INTO new_result_branch "
             "(run_id, role, remote_name, base_revision, revision) "
@@ -1780,7 +1780,7 @@ async def handle_schedule_control(request):
         else:
             with span.new_child("sql:find-run"):
                 run = await conn.fetchrow(
-                    "SELECT main_branch_revision, codebase FROM run " "WHERE id = $1",
+                    "SELECT main_branch_revision, codebase FROM run WHERE id = $1",
                     run_id,
                 )
             if run is None:
@@ -1844,7 +1844,7 @@ async def handle_schedule(request):
             else None
         )
         command = await conn.fetchval(
-            "SELECT command " "FROM candidate WHERE codebase = $1 AND suite = $2",
+            "SELECT command FROM candidate WHERE codebase = $1 AND suite = $2",
             codebase,
             campaign,
         )
@@ -2223,7 +2223,7 @@ async def handle_candidates_upload(request):
                             requester = "candidate update"
 
                         if candidate.get("requester"):
-                            requester += f' {candidate["requester"]}'
+                            requester += f" {candidate['requester']}"
 
                         with span.new_child("sql:insert-followups"):
                             for origin in candidate.get("followup_for", []):
@@ -3160,9 +3160,11 @@ async def main_async(argv=None):
         while True:
             await asyncio.sleep(3600)
 
+
 def main():
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
+
 
 if __name__ == "__main__":
     main()

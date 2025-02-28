@@ -276,11 +276,13 @@ queue.id ASC
                 campaign,
                 change_set or "",
             )
-            assert row, f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
+            assert row, (
+                f"Unable to add or retrieve queue entry for {campaign}/{codebase}/{change_set}"
+            )
             return row
         return row
 
     async def get_buckets(self):
         return await self.conn.fetch(
-            "SELECT bucket, count(*) FROM queue GROUP BY bucket " "ORDER BY bucket ASC"
+            "SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC"
         )
