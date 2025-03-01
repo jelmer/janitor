@@ -624,60 +624,60 @@ async def main_async(argv=None):
 
     from janitor.config import read_config
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="janitor.site.simnple", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=8080)
     parser.add_argument(
-        "--debugtoolbar",
-        type=str,
-        action="append",
-        help="IP to allow debugtoolbar queries from.",
+        "--public-port", type=int, help="Public listen port for a reverse proxy", default=8090
     )
-    parser.add_argument("--host", type=str, help="Host to listen on")
-    parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
+    parser.add_argument("--host", type=str, help="Listen address", default="localhost")
     parser.add_argument(
-        "--public-port", type=int, help="Public port to listen on", default=8090
-    )
-    parser.add_argument(
-        "--publisher-url",
-        type=str,
-        default="http://localhost:9912/",
-        help="URL for publisher.",
-    )
-    parser.add_argument(
-        "--vcs-store-url",
-        type=str,
-        default="http://localhost:9921/",
-        help="URL for VCS store.",
-    )
-    parser.add_argument(
-        "--runner-url",
-        type=str,
-        default="http://localhost:9911/",
-        help="URL for runner.",
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
     )
     parser.add_argument(
         "--archiver-url",
         type=str,
         default="http://localhost:9914/",
-        help="URL for archiver.",
+        help="URL for archiver",
     )
     parser.add_argument(
         "--differ-url",
         type=str,
         default="http://localhost:9920/",
-        help="URL for differ.",
+        help="URL for differ",
+    )
+    parser.add_argument("--external-url", type=str, default=None, help="External URL")
+    parser.add_argument(
+        "--publisher-url",
+        type=str,
+        default="http://localhost:9912/",
+        help="URL for publisher",
     )
     parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--runner-url",
+        type=str,
+        default="http://localhost:9911/",
+        help="URL for runner",
+    )
+    parser.add_argument(
+        "--vcs-store-url",
+        type=str,
+        default="http://localhost:9921/",
+        help="URL for VCS store",
+    )
+    parser.add_argument(
+        "--debugtoolbar",
+        type=str,
+        action="append",
+        help="IP to allow debugtoolbar queries from",
+    )
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
     )
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debugging mode. For example, avoid minified JS.",
+        help="Show debug output (plus avoid minified JS)",
     )
-    parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging."
-    )
-    parser.add_argument("--external-url", type=str, default=None, help="External URL")
 
     args = parser.parse_args()
 
