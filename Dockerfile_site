@@ -35,6 +35,8 @@ COPY . /code
 RUN pip3 install --break-system-packages --upgrade "/code[gcp,site]" \
  && rm -rf /code
 
-EXPOSE 8082
+EXPOSE 8080
 
-ENTRYPOINT ["janitor-site", "--port=8082", "--host=0.0.0.0"]
+EXPOSE 8090
+
+ENTRYPOINT ["janitor-site", "--port=8080", "--public-port=8090", "--host=0.0.0.0"]
