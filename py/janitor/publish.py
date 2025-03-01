@@ -3687,11 +3687,6 @@ async def main_async(argv=None):
         "--slowstart", action="store_true", help="Use slow start rate limiter"
     )
     parser.add_argument(
-        "--reviewed-only",
-        action="store_true",
-        help="Only publish changes that were reviewed",
-    )
-    parser.add_argument(
         "--push-limit", type=int, help="Limit number of pushes per cycle"
     )
     parser.add_argument(

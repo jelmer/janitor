@@ -659,12 +659,6 @@ async def main_async(argv=None):
         help="URL for runner",
     )
     parser.add_argument(
-        "--vcs-store-url",
-        type=str,
-        default="http://localhost:9921/",
-        help="URL for VCS store",
-    )
-    parser.add_argument(
         "--debugtoolbar",
         type=str,
         action="append",

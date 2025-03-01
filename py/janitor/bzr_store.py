@@ -366,9 +366,6 @@ async def main_async(argv=None):
         help="Path to configuration",
     )
     parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to"
-    )
-    parser.add_argument(
         "--vcs-path", default=None, type=str, help="Path to local vcs storage"
     )
     parser.add_argument(
