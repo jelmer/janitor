@@ -68,7 +68,8 @@ jobs:
       - name: Test ${{ matrix.dockerfile_suffix }} image
         run: |
           set -x
-          podman run ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }} --help
+          tag="$( echo ${{ env.TAGS }} | awk '{print $1}' )"
+          podman run ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}:${tag} --help
 
       - name: Login to GitHub Packages (ghcr.io)
         if: |
