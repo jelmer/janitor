@@ -46,6 +46,10 @@ COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
 ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 
-EXPOSE 8080
+# In-case: --new-port 9820
+EXPOSE 9820
 
-ENTRYPOINT ["janitor-worker", "--site-port=8080", "--listen-address=0.0.0.0"]
+# In-case: [PORT] (there isn't a default defined port)
+EXPOSE 9821
+
+ENTRYPOINT ["janitor-worker", "--listen-address=0.0.0.0"]

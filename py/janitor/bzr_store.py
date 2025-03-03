@@ -351,22 +351,22 @@ async def create_web_app(
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.bzr_store")
+    parser = argparse.ArgumentParser(prog="janitor.bzr_store", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9929)
     parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to."
+        "--public-port", type=int, help="Public listen port for a reverse proxy", default=9930
     )
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
-    )
-    parser.add_argument("--port", type=int, help="Listen port", default=9929)
-    parser.add_argument(
-        "--public-port", type=int, help="Public listen port", default=9930
     )
     parser.add_argument(
         "--config",
         type=str,
         default="janitor.conf",
-        help="Path to load configuration from.",
+        help="Path to configuration",
+    )
+    parser.add_argument(
+        "--vcs-path", default=None, type=str, help="Path to local vcs storage"
     )
     parser.add_argument(
         "--client-max-size",
@@ -374,11 +374,8 @@ async def main_async(argv=None):
         default=1024**3,
         help="Maximum client body size (0 for no limit)",
     )
-    parser.add_argument("--debug", action="store_true", help="Show debug info")
-    parser.add_argument(
-        "--vcs-path", default=None, type=str, help="Path to local vcs storage"
-    )
-    parser.add_argument("--gcp-logging", action="store_true")
+    parser.add_argument("--gcp-logging", action="store_true", help="Use Google cloud logging")
+    parser.add_argument("--debug", action="store_true", help="Show debug output")
 
     args = parser.parse_args()
 

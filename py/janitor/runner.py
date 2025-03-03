@@ -2987,27 +2987,27 @@ async def create_app(queue_processor, config, db, tracer=None):
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.runner")
+    parser = argparse.ArgumentParser(prog="janitor.runner", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9911)
+    parser.add_argument("--public-port", type=int, help="Public listen port for a reverse proxy", default=9919)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
-    parser.add_argument("--port", type=int, help="Listen port", default=9911)
-    parser.add_argument("--public-port", type=int, help="Listen port", default=9919)
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
+    )
     parser.add_argument(
         "--pre-check",
-        help="Command to run to check whether to process codebase.",
+        help="Command to run to check whether to process codebase",
         type=str,
     )
     parser.add_argument(
         "--post-check",
-        help="Command to run to check codebase before pushing.",
+        help="Command to run to check codebase before pushing",
         type=str,
     )
     parser.add_argument(
-        "--use-cached-only", action="store_true", help="Use cached branches only."
-    )
-    parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--use-cached-only", action="store_true", help="Use cached branches only"
     )
     parser.add_argument(
         "--backup-directory",
@@ -3019,12 +3019,6 @@ async def main_async(argv=None):
         ),
     )
     parser.add_argument(
-        "--public-vcs-location",
-        type=str,
-        default=None,
-        help="Public vcs location (used for URLs handed to worker)",
-    )
-    parser.add_argument(
         "--public-apt-archive-location",
         type=str,
         default=None,
@@ -3032,9 +3026,11 @@ async def main_async(argv=None):
     )
     parser.add_argument("--public-dep-server-url", type=str, default=None)
     parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging."
+        "--public-vcs-location",
+        type=str,
+        default=None,
+        help="Public vcs location (used for URLs handed to worker)",
     )
-    parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
         "--run-timeout",
         type=int,
@@ -3048,6 +3044,11 @@ async def main_async(argv=None):
         default=[],
         action="append",
     )
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
+    )
+    parser.add_argument("--debug", action="store_true", help="Show debug output")
+
     args = parser.parse_args()
 
     if args.gcp_logging:

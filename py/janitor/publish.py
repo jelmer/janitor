@@ -3647,25 +3647,31 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.publish")
+    parser = argparse.ArgumentParser(prog="janitor.publish", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9912)
+    parser.add_argument(
+        "--listen-address", type=str, help="Listen address", default="localhost"
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="janitor.conf",
+        help="Path to configuration",
+    )
+    parser.add_argument(
+        "--prometheus", type=str, help="Prometheus push gateway to export to"
+    )
     parser.add_argument(
         "--max-mps-per-bucket",
         default=0,
         type=int,
-        help="Maximum number of open merge proposals per bucket.",
-    )
-    parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to."
+        help="Maximum number of open merge proposals per bucket",
     )
     parser.add_argument(
         "--once",
         action="store_true",
-        help="Just do one pass over the queue, don't run as a daemon.",
+        help="Just do one pass over the queue, don't run as a daemon",
     )
-    parser.add_argument(
-        "--listen-address", type=str, help="Listen address", default="localhost"
-    )
-    parser.add_argument("--port", type=int, help="Listen port", default=9912)
     parser.add_argument(
         "--interval",
         type=int,
@@ -3675,48 +3681,37 @@ async def main_async(argv=None):
     parser.add_argument(
         "--no-auto-publish",
         action="store_true",
-        help="Do not create merge proposals automatically.",
+        help="Do not create merge proposals automatically",
     )
     parser.add_argument(
-        "--config",
-        type=str,
-        default="janitor.conf",
-        help="Path to load configuration from.",
+        "--slowstart", action="store_true", help="Use slow start rate limiter"
     )
     parser.add_argument(
-        "--slowstart", action="store_true", help="Use slow start rate limiter."
-    )
-    parser.add_argument(
-        "--reviewed-only",
-        action="store_true",
-        help="Only publish changes that were reviewed.",
-    )
-    parser.add_argument(
-        "--push-limit", type=int, help="Limit number of pushes per cycle."
+        "--push-limit", type=int, help="Limit number of pushes per cycle"
     )
     parser.add_argument(
         "--require-binary-diff",
         action="store_true",
         default=False,
-        help="Require a binary diff when publishing merge requests.",
+        help="Require a binary diff when publishing merge requests",
     )
     parser.add_argument(
         "--modify-mp-limit",
         type=int,
         default=10,
-        help="Maximum number of merge proposals to update per cycle.",
+        help="Maximum number of merge proposals to update per cycle",
+    )
+    parser.add_argument(
+        "--differ-url", type=str, help="URL for differ", default="http://localhost:9920/"
     )
     parser.add_argument("--external-url", type=str, help="External URL", default=None)
-    parser.add_argument("--debug", action="store_true", help="Print debugging info")
-    parser.add_argument(
-        "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
-    )
-    parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging."
-    )
     parser.add_argument(
         "--template-env-path", type=str, help="Path to merge proposal templates"
     )
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
+    )
+    parser.add_argument("--debug", action="store_true", help="Show debug output")
 
     args = parser.parse_args()
 

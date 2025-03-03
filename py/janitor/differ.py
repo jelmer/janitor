@@ -720,24 +720,24 @@ def create_app(
 def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.differ")
+    parser = argparse.ArgumentParser(prog="janitor.differ", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9920)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
-    parser.add_argument("--port", type=int, help="Listen port", default=9920)
     parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
     )
-    parser.add_argument("--cache-path", type=str, default=None, help="Path to cache.")
+    parser.add_argument("--cache-path", type=str, default=None, help="Cache directory")
     parser.add_argument(
         "--task-memory-limit", help="Task memory limit (in MB)", type=int, default=1500
     )
     parser.add_argument(
         "--task-timeout", help="Task timeout (in seconds)", type=int, default=60
     )
-    parser.add_argument("--gcp-logging", action="store_true")
     parser.add_argument("--diffoscope-command", type=str, default="diffoscope")
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--gcp-logging", action="store_true", help="Use Google cloud logging")
+    parser.add_argument("--debug", action="store_true", help="Show debug output")
 
     args = parser.parse_args()
 

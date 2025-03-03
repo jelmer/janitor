@@ -911,20 +911,20 @@ async def main_async(argv=None):
 
     from redis.asyncio import Redis
 
-    parser = argparse.ArgumentParser(prog="janitor.debian.archive")
+    parser = argparse.ArgumentParser(prog="janitor.debian.archive", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9914)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
-    parser.add_argument("--port", type=int, help="Listen port", default=9914)
     parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
     )
-    parser.add_argument("--dists-directory", type=str, help="Dists directory")
     parser.add_argument("--cache-directory", type=str, help="Cache directory")
-    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--dists-directory", type=str, help="Dists directory")
     parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging."
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
     )
+    parser.add_argument("--verbose", action="store_true", help="Show more detailed output")
 
     args = parser.parse_args()
     if not args.dists_directory:
