@@ -110,6 +110,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_name = std::env::var("NODE_NAME")
         .unwrap_or_else(|_| gethostname::gethostname().to_str().unwrap().to_owned());
 
+    // Run it
+    let addr = SocketAddr::new(args.listen_address, args.port.unwrap_or(0));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let addr = listener.local_addr()?;
+    log::info!("listening on {}", addr);
+
+    // Extract actual port
+    let port = addr.port();
+
+    // Find worker URL
     let my_url = if let Some(my_url) = args.my_url.as_ref() {
         Some(my_url.clone())
     } else if let Some(external_address) = args.external_address {
@@ -139,17 +149,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
+    // Show worker URL
     if let Some(my_url) = my_url.as_ref() {
         log::info!("Diagnostics available at {}", my_url);
     }
 
-    let app = janitor_worker::web::app(state.clone());
-
-    // run it
-    let addr = SocketAddr::new(args.listen_address, args.new_port);
-    log::info!("listening on {}", addr);
-
     // Run worker loop in background
+    let app = janitor_worker::web::app(state.clone());
     let state = state.clone();
     tokio::spawn(async move {
         let client =
@@ -190,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    // Start the server
     axum::serve(listener, app.into_make_service()).await?;
     Ok(())
 }
