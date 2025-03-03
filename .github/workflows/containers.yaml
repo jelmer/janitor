@@ -18,9 +18,11 @@ jobs:
       matrix:
         dockerfile_suffix:
           - 'archive'
+          - 'auto_upload'
           - 'bzr_store'
           - 'differ'
           - 'git_store'
+          - 'mail_filter'
           - 'ognibuild_dep'
           - 'publish'
           - 'runner'
