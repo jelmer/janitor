@@ -28,7 +28,7 @@ $ podman run --rm                     --name janitor-mail-filter                
 $ podman run --rm                     --name janitor-publish       --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/publish:latest       --config /mnt/janitor/janitor.conf.example --differ-url http://localhost:9920/ --external-url http://localhost/
 $ podman run --rm --publish 9919:9919 --name janitor-runner        --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/runner:latest        --config /mnt/janitor/janitor.conf.example
 $ podman run --rm --publish 8090:8090 --name janitor-site          --volume $( pwd ):/mnt/janitor ghcr.io/jelmer/janitor/site:latest          --config /mnt/janitor/janitor.conf.example --archiver-url http://localhost:9914/ --differ-url http://localhost:9920/ --external-url http://localhost/ --publisher-url http://localhost:9912/ --runner-url http://localhost:9911/
-$ podman run --rm                     --name janitor-worker                                       ghcr.io/jelmer/janitor/worker:latest                                                   --base-url http://localhost/ --site-port 8080 --new-port 9820 9821
+$ podman run --rm                     --name janitor-worker                                       ghcr.io/jelmer/janitor/worker:latest                                                   --base-url http://localhost/ --site-port 8080
 ```
 
 **Troubleshooting**:

@@ -30,10 +30,6 @@ struct Args {
     /// Port to use for diagnostics web server
     port: Option<u16>,
 
-    /// Port to use for diagnostics web server (rust)
-    #[clap(long, default_value_t = 9820)]
-    new_port: u16,
-
     /// Request run for specified codebase
     #[clap(long)]
     codebase: Option<String>,
