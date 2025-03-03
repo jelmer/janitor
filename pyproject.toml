@@ -104,6 +104,10 @@ content-type = "text/markdown"
 archive = [
     "python-debian",
 ]
+# Janitor service (./Dockerfile_auto_upload)
+auto-upload = [
+    "python-debian",
+]
 # Janitor service (./Dockerfile_bzr_store)
 bzr-store = [
     "loggerhead",
@@ -120,6 +124,9 @@ git-store = [
     "flask",
     "klaus@git+https://github.com/jonashaag/klaus",
     "python-debian",
+]
+# Janitor service (./Dockerfile_mail_filter)
+mail-filter = [
 ]
 # Janitor service (./Dockerfile_publish)
 publish = [
@@ -187,14 +194,17 @@ s3 = [
 ]
 
 [project.scripts]
+janitor-auto-upload = "janitor.debian.auto_upload:main"
 janitor-archive = "janitor.debian.archive:main"
 janitor-bzr-store = "janitor.git_store:main"
 janitor-differ = "janitor.differ:main"
 janitor-git-store = "janitor.git_store:main"
-#janitor-ognibuild = "ognibuild.dep_server:main"
+#janitor-mail-filter == rust
+#janitor-ognibuild = "ognibuild.dep_server:main" # rust
 janitor-publish = "janitor.publish:main"
 janitor-runner = "janitor.runner:main"
 janitor-site = "janitor.site.simple:main"
+janitor-webhook = "janitor.site.webhook:main"
 #janitor-worker == rust
 
 [tool.pytest.ini_options]
