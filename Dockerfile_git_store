@@ -36,4 +36,6 @@ VOLUME /git
 
 EXPOSE 9923
 
-ENTRYPOINT ["janitor-git-store", "--port=9923", "--listen-address=0.0.0.0", "--vcs-path=/git"]
+EXPOSE 9924
+
+ENTRYPOINT ["janitor-git-store", "--port=9923", "--public-port=9924", "--listen-address=0.0.0.0"]
