@@ -101,6 +101,5 @@ a development environment.
 If you're interested in working on adding another campaign for a janitor
 instance, see [adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
 
-Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC
-(irc.oftc.net) or
-[#debian-janitor:matrix.debian.social](https://matrix.to/#/#debian-janitor:matrix.debian.social).
+The Matrix channel for the Janitor project can be found at
+[#janitor:matrix.org](https://matrix.to/#/#janitor:matrix.org).
