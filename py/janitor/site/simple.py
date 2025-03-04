@@ -612,6 +612,8 @@ async def create_app(
     if debugtoolbar:
         import aiohttp_debugtoolbar
 
+        logging.info("Debug toolbar enabled for %s", args.debugtoolbar)
+
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
 
