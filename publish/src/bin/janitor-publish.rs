@@ -46,10 +46,6 @@ struct Args {
     #[clap(long)]
     slowstart: bool,
 
-    /// Only publish changes that were reviewed.
-    #[clap(long)]
-    reviewed_only: bool,
-
     /// Limit number of pushes per cycle.
     #[clap(long)]
     push_limit: Option<usize>,
