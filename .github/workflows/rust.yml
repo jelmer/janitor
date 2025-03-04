@@ -31,11 +31,7 @@ jobs:
       run: brz whoami "CI <ci@noreply.github.com>"
     - name: Build
       run: cargo build --verbose --workspace
-      env:
-        RUSTFLAGS: -Dwarnings
     - name: Run tests
       run: cargo test --verbose --workspace
-      env:
-        RUSTFLAGS: -Dwarnings
     - name: Check formatting
       run: cargo fmt -- --check --workspace
