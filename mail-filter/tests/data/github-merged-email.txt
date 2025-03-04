@@ -5,7 +5,7 @@ Date: Fri, 04 Nov 2022 06:18:29 -0700
 From: Some User <notifications@github.com>
 Reply-To: UbuntuBudgie/budgie-desktop <reply+AKT4UUMF3LHYRIQTBKZCJRGBOJB2LEVBNHHFICBOZM@reply.github.com>
 To: UbuntuBudgie/budgie-desktop <budgie-desktop@noreply.github.com>
-Cc: Debian Janitor <janitor@jelmer.uk>, 
+Cc: Janitor Bot <janitor@jelmer.uk>,
  Author <author@noreply.github.com>
 Message-ID: <UbuntuBudgie/budgie-desktop/pull/78/issue_event/7740657652@github.com>
 In-Reply-To: <UbuntuBudgie/budgie-desktop/pull/78@github.com>
