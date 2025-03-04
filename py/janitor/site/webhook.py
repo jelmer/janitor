@@ -310,7 +310,7 @@ def main(argv=None):
 
     from janitor.vcs import BranchMissing, BranchUnavailable, open_branch
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="janitor.site.webhook", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--runner-url", type=str)
     parser.add_argument("callback_url", type=str)
     args = parser.parse_args()

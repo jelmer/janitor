@@ -236,22 +236,21 @@ async def backfill(
             )
 
 
-async def main(argv=None):
+async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.debian.auto_upload")
+    parser = argparse.ArgumentParser(prog="janitor.debian.auto_upload", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--port", type=int, help="Listen port", default=9933)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
-    parser.add_argument("--port", type=int, help="Listen port", default=9933)
     parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
     )
-    parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--dput-host", type=str, help="dput host to upload to.")
-    parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
+    parser.add_argument("--dput-host", type=str, help="dput host to upload to")
+    parser.add_argument("--debsign-keyid", type=str, help="Key ID to use for signing")
     parser.add_argument(
-        "--backfill", action="store_true", help="Upload previously built packages."
+        "--backfill", action="store_true", help="Upload previously built packages"
     )
     parser.add_argument(
         "--source-only", action="store_true", help="Only upload source-only changes"
@@ -259,6 +258,7 @@ async def main(argv=None):
     parser.add_argument(
         "--distribution", action="append", help="Build distributions to upload"
     )
+    parser.add_argument("--verbose", action="store_true", help="Show more detailed output")
 
     args = parser.parse_args()
 
@@ -324,6 +324,8 @@ async def main(argv=None):
 
     await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 
+def main():
+    sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main(sys.argv)))
+    main()
