@@ -707,12 +707,15 @@ async def main_async(argv=None):
     public_runner = web.AppRunner(public_app)
     await private_runner.setup()
     await public_runner.setup()
+
     site = web.TCPSite(private_runner, args.host, port=args.port)
     await site.start()
-    logging.info("Listening on %s:%s", args.host, args.port)
+    logging.info("Admin API listening on %s:%s", args.host, args.port)
+
     site = web.TCPSite(public_runner, args.host, port=args.public_port)
     await site.start()
-    logging.info("Listening on %s:%s", args.host, args.public_port)
+    logging.info("Public website and API listening on %s:%s", args.host, args.public_port)
+
     while True:
         await asyncio.sleep(3600)
 
