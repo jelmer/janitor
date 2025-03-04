@@ -469,32 +469,32 @@ async def deps_satisfied(conn: asyncpg.Connection, campaign: str, dependencies) 
     return True
 
 
-async def main():
+async def main_async():
     import argparse
 
     from aiohttp_openmetrics import REGISTRY, Gauge, push_to_gateway
 
     from janitor import state
 
-    parser = argparse.ArgumentParser(prog="janitor.schedule")
+    parser = argparse.ArgumentParser(prog="janitor.schedule", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration"
+    )
     parser.add_argument(
         "--dry-run",
-        help="Create branches but don't push or propose anything.",
+        help="Create branches but don't push or propose anything",
         action="store_true",
         default=False,
     )
     parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to."
+        "--prometheus", type=str, help="Prometheus push gateway to export to"
     )
+    parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign")
     parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
     )
-    parser.add_argument("--campaign", type=str, help="Restrict to a specific campaign.")
-    parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging."
-    )
-    parser.add_argument("codebases", help="Codebase to process.", nargs="*")
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--debug", action="store_true", help="Show debug output")
+    parser.add_argument("codebases", help="Codebase to process", nargs="*")
 
     args = parser.parse_args()
 
@@ -620,8 +620,11 @@ async def do_schedule(
     return offset, estimated_duration, queue_id, bucket
 
 
-if __name__ == "__main__":
+def main():
     import asyncio
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(main_async())
+
+if __name__ == "__main__":
+    main()
