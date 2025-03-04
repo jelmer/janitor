@@ -5,6 +5,7 @@ name: Containers - Build and push images
   push:
     branches:
       - main
+  pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
