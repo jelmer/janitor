@@ -517,8 +517,6 @@ async def main_async():
         "job_last_success_unixtime", "Last time a batch job successfully finished"
     )
 
-    logging.info("Reading configuration")
-
     try:
         with open(args.config) as f:
              config = read_config(f)
