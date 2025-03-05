@@ -1,6 +1,8 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+mod artifacts;
+
 #[pyfunction]
 fn get_branch_vcs_type(branch: PyObject) -> PyResult<String> {
     let branch = breezyshim::branch::GenericBranch::new(branch);
@@ -25,10 +27,15 @@ fn is_alioth_url(url: &str) -> PyResult<bool> {
 }
 
 #[pymodule]
-pub fn _common(m: &Bound<PyModule>) -> PyResult<()> {
+pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(is_authenticated_url, m)?)?;
     m.add_function(wrap_pyfunction!(is_alioth_url, m)?)?;
     m.add_function(wrap_pyfunction!(get_branch_vcs_type, m)?)?;
+
+    let artifactsm = pyo3::types::PyModule::new_bound(py, "artifacts")?;
+    crate::artifacts::init(py, &artifactsm)?;
+
+    m.add_submodule(&artifactsm)?;
     Ok(())
 }
