@@ -3647,7 +3647,9 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.publish", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.publish", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=9912)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
@@ -3702,7 +3704,10 @@ async def main_async(argv=None):
         help="Maximum number of merge proposals to update per cycle",
     )
     parser.add_argument(
-        "--differ-url", type=str, help="URL for differ", default="http://localhost:9920/"
+        "--differ-url",
+        type=str,
+        help="URL for differ",
+        default="http://localhost:9920/",
     )
     parser.add_argument("--external-url", type=str, help="External URL", default=None)
     parser.add_argument(
