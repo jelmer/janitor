@@ -56,7 +56,7 @@ impl ArtifactManager for LocalArtifactManager {
         &self,
         run_id: &str,
         filename: &str,
-    ) -> Result<Box<dyn std::io::Read>, Error> {
+    ) -> Result<Box<dyn std::io::Read + Send + Sync>, Error> {
         let path = self.path.join(run_id).join(filename);
         Ok(Box::new(File::open(path)?))
     }
@@ -69,7 +69,7 @@ impl ArtifactManager for LocalArtifactManager {
         &self,
         run_id: &str,
         local_path: &Path,
-        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
+        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error> {
         let run_path = self.path.join(run_id);
         if !run_path.is_dir() {
@@ -87,7 +87,7 @@ impl ArtifactManager for LocalArtifactManager {
         Ok(())
     }
 
-    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String>> {
+    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send> {
         let entries = fs::read_dir(&self.path)
             .unwrap()
             .filter_map(|entry| {

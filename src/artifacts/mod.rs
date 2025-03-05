@@ -50,16 +50,24 @@ pub trait ArtifactManager: std::fmt::Debug + Send + Sync {
         &self,
         run_id: &str,
         filename: &str,
-    ) -> Result<Box<dyn std::io::Read>, Error>;
+    ) -> Result<Box<dyn std::io::Read + Sync + Send>, Error>;
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url;
     async fn retrieve_artifacts(
         &self,
         run_id: &str,
         local_path: &Path,
-        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
+        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error>;
-    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String>>;
+    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send>;
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error>;
+}
+
+pub async fn list_ids(manager: &dyn ArtifactManager) -> Result<(), Error> {
+    for id in manager.iter_ids().await {
+        println!("{}", id);
+    }
+
+    Ok(())
 }
 
 pub async fn get_artifact_manager(location: &str) -> Result<Box<dyn ArtifactManager>, Error> {
