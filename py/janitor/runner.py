@@ -3152,7 +3152,7 @@ async def main_async(argv=None):
                 public_runner, args.listen_address, port=args.public_port
             )
             await public_site.start()
-            logging.info("Public website and API listening on %s:%s", args.listen_address, args.public_port)
+            logging.info("Public API listening on %s:%s", args.listen_address, args.public_port)
 
         app = await create_app(queue_processor, config, db, tracer=tracer)
         runner = web.AppRunner(app)
