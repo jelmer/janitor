@@ -25,8 +25,11 @@ $ sudo apt install \
 
 - - -
 
-In addition to these packages, will need to use Python's PIP and a virtual
-environment to install the rest of the Python-based dependencies:
+In addition to these packages, you will need to install a number of
+Python dependencies. These can be installed from the OS package manager,
+or using a Python virtual environment.
+
+For example, on Debian-based systems:
 
 ```console
 $ sudo apt install \
@@ -37,8 +40,4 @@ $ python3 -m venv .venv
 $ . ./.venv/bin/activate
 $ pip3 install --editable .[dev]
 ```
-<!--
-Via python3-venv, there will be: `./.venv/bin/pip` (which is why don't need python3-pip)
--->
 
-_Python's package management over OS network apt package, as they may be too dated._
