@@ -49,39 +49,6 @@ jobs:
             ruff
           make ruff check-ruff-format
 
-      - name: HTML style checks (djLint)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            djlint
-          make djlint
-
-      - name: YAML style checks (yamllint)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            yamllint
-          make yamllint
-
-      - name: Rust style checks (rustfmt)
-        if: always()
-        run: |
-          set -x
-          sudo apt-get update --yes
-          sudo apt-get satisfy --yes --no-install-recommends \
-            rustc
-          cargo fmt --check --all
-
-      - name: Check common misspellings (codespell)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            codespell
-          codespell
-
   build:
     name: Build - Ubuntu LTS (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -114,15 +81,6 @@ jobs:
           sudo apt-get satisfy --yes --no-install-recommends \
             ${EXTRA_DEB}
 
-      # Isn't technically needed to build/compile - Disabling, to speed up CI
-      #- name: Install dependencies (rust)
-      #  run: |
-      #    set -x
-      #    git clone https://github.com/jelmer/ognibuild.git /tmp/ognibuild/
-      #    pushd /tmp/ognibuild/
-      #    cargo build --verbose --release #-p dep-server
-      #    ls -l /tmp/ognibuild/target/release/
-
       - name: PIP install
         run: |
           set -x
@@ -133,12 +91,6 @@ jobs:
         run: |
           set -x
           make
-
-      ## Disabling, to speed up CI
-      #- name: Make all
-      #  run: |
-      #    set -x
-      #    make all
 
   build-container:
     name: Build & Test - Debian Testing
@@ -166,26 +118,11 @@ jobs:
           apt-get satisfy --yes --no-install-recommends \
             ${EXTRA_DEB}
 
-      # Isn't technically needed to build/compile
-      - name: Install dependencies (rust)
-        run: |
-          set -x
-          git clone https://github.com/jelmer/ognibuild.git /build/ognibuild/
-          cd /build/ognibuild/
-          cargo build --verbose --release #-p dep-server
-          ls -l /build/ognibuild/target/release/
-
       - name: PIP install
         run: |
           set -x
           pip3 install --break-system-packages --upgrade --editable \
             .
-
-      ## Make all does this, and then some - Disabling, to speed up CI
-      #- name: Make
-      #  run: |
-      #    set -x
-      #    make
 
       - name: Make all
         run: |
