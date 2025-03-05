@@ -22,8 +22,11 @@ parser.add_argument("from_location", type=str, nargs=1)
 parser.add_argument("to_location", type=str, nargs=1)
 args = parser.parse_args()
 
-with open(args.config) as f:
-    config = read_config(f)
+try:
+    with open(args.config) as f:
+         config = read_config(f)
+except FileNotFoundError:
+    parser.error(f"config path {args.config} does not exist")
 
 from_manager = get_log_manager(args.from_location)
 to_manager = get_log_manager(args.to_location)

@@ -518,8 +518,12 @@ async def main_async():
     )
 
     logging.info("Reading configuration")
-    with open(args.config) as f:
-        config = read_config(f)
+
+    try:
+        with open(args.config) as f:
+             config = read_config(f)
+    except FileNotFoundError:
+        parser.error(f"config path {args.config} does not exist")
 
     set_user_agent(config.user_agent)
 
