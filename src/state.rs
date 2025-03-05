@@ -5,6 +5,13 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions, Postgres};
 use sqlx::PgPool;
 use sqlx::Pool;
 
+/// Create a connection pool to the database
+///
+/// # Arguments
+/// * `config` - The configuration to use for the database connection
+///
+/// # Returns
+/// A connection pool to the database
 pub async fn create_pool(config: &Config) -> Result<Pool<Postgres>, sqlx::Error> {
     let pool_options = PgPoolOptions::new().max_connections(5);
     let pool = if let Some(ref database_url) = config.database_location {
