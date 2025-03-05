@@ -401,7 +401,7 @@ async def main_async(argv=None):
         config = read_config(f)
 
     if not os.path.exists(args.vcs_path):
-        raise RuntimeError(f"vcs path {args.vcs_path} does not exist")
+        parser.error(f"vcs path {args.vcs_path} does not exist")
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
