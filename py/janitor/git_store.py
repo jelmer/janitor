@@ -714,12 +714,15 @@ async def main_async(argv=None):
     public_runner = web.AppRunner(public_app)
     await runner.setup()
     await public_runner.setup()
+
     site = web.TCPSite(runner, args.listen_address, port=args.port)
     await site.start()
-    logging.info("Listening on %s:%s", args.listen_address, args.port)
+    logging.info("Admin API listening on %s:%s", args.host, args.port)
+
     site = web.TCPSite(public_runner, args.listen_address, port=args.public_port)
     await site.start()
-    logging.info("Listening on %s:%s", args.listen_address, args.public_port)
+    logging.info("Public website and API listening on %s:%s", args.host, args.public_port)
+
     while True:
         await asyncio.sleep(3600)
 
@@ -728,7 +731,6 @@ def main():
     import uvloop
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
 
