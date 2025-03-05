@@ -19,7 +19,7 @@
 
 import asyncio
 
-from ._common import artifacts
+from ._common import artifacts  # noqa: F401
 
 ArtifactManager = artifacts.ArtifactManager
 GCSArtifactManager = artifacts.GCSArtifactManager
