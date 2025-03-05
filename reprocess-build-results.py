@@ -28,9 +28,6 @@ loop = asyncio.get_event_loop()
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--config", type=str, default="janitor.conf", help="Path to configuration."
-)
-parser.add_argument(
     "--log-timeout",
     type=int,
     default=60,
