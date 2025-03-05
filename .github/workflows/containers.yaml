@@ -79,8 +79,7 @@ jobs:
 
       - name: Login to GitHub Packages (ghcr.io)
         if: |
-          ${{ github.event_name != 'pull_request' }} &&
-          ${{ github.ref == 'refs/heads/main' }}
+          github.event_name != 'pull_request'
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
@@ -92,8 +91,7 @@ jobs:
           https://github.com/${{ github.repository_owner }}?\
           tab=packages&repo_name=${{ github.event.repository.name }}
         if: |
-          ${{ github.event_name != 'pull_request' }} &&
-          ${{ github.ref == 'refs/heads/main' }}
+          github.event_name != 'pull_request'
         uses: redhat-actions/push-to-registry@v2
         with:
           image: ${{ steps.build-image.outputs.image }}
