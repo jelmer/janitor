@@ -83,12 +83,15 @@ jobs:
         uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # ${{ github.repository_owner }} - Does not handle nicely with PRs
+      #   It goes to that new namespace (aka destination), rather than the person who open'd up it up (aka source)
+      #   Thus the person who open the PR may not have access to write
       - name: >
-          Push ${{ env.container }} image to
-          https://github.com/${{ github.repository_owner }}?\
+          Push ${{ matrix.dockerfile_suffix }} image to
+          https://github.com/${{ github.actor }}?\
           tab=packages&repo_name=${{ github.event.repository.name }}
         if: |
           ${{ github.event_name != 'pull_request' }}
@@ -97,5 +100,5 @@ jobs:
           image: ${{ steps.build-image.outputs.image }}
           tags: ${{ steps.build-image.outputs.tags }}
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
