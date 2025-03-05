@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 
 from iniparse import RawConfigParser
+
 from janitor.config import get_distribution, read_config
 
 

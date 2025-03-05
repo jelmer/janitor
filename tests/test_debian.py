@@ -17,6 +17,7 @@
 
 from breezy.tests import TestCaseWithTransport
 from debian.changelog import Version
+
 from janitor.debian import dpkg_vendor, tree_set_changelog_version
 
 
