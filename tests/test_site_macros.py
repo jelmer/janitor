@@ -15,8 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.site import template_loader
 from jinja2 import Environment, select_autoescape
+
+from janitor.site import template_loader
 
 env = Environment(loader=template_loader, autoescape=select_autoescape(["html", "xml"]))
 

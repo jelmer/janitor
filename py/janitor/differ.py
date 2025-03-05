@@ -720,7 +720,9 @@ def create_app(
 def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.differ", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.differ", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=9920)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
@@ -736,7 +738,9 @@ def main(argv=None):
         "--task-timeout", help="Task timeout (in seconds)", type=int, default=60
     )
     parser.add_argument("--diffoscope-command", type=str, default="diffoscope")
-    parser.add_argument("--gcp-logging", action="store_true", help="Use Google cloud logging")
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
+    )
     parser.add_argument("--debug", action="store_true", help="Show debug output")
 
     args = parser.parse_args()

@@ -19,6 +19,7 @@
 from io import BytesIO
 
 import pytest
+
 from janitor.config import get_campaign_config, get_distribution, read_config
 
 
