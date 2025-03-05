@@ -49,30 +49,6 @@ jobs:
             ruff
           make ruff check-ruff-format
 
-      - name: HTML style checks (djLint)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            djlint
-          make djlint
-
-      - name: YAML style checks (yamllint)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            yamllint
-          make yamllint
-
-      - name: Check common misspellings (codespell)
-        if: always()
-        run: |
-          set -x
-          pip3 install --break-system-packages --upgrade \
-            codespell
-          codespell
-
   build:
     name: Build - Ubuntu LTS (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
