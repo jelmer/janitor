@@ -3,11 +3,10 @@ projects, and those are where most of the interesting things happen.
 You may want to check out one of them.
 They're probably also easier to setup and run, unlike the Janitor.
 
-## Environments
+## Development Environment
 
-It is recommended to use Debian Testing as the base OS/chroot.
-
-### Development Environment
+Debian testing or unstable are the recommended base environments for development,
+but other Linux distributions should work too.
 
 You'll want to install various bits of software.
 On a Debian-based OS, run:
@@ -43,17 +42,3 @@ Via python3-venv, there will be: `./.venv/bin/pip` (which is why don't need pyth
 -->
 
 _Python's package management over OS network apt package, as they may be too dated._
-
-### Production Environment
-
-We would recommend using [containers](Dockerfiles_.md) to run each of the Janitor services.
-
-There are (daily) [pre-built containers](https://github.com/jelmer?tab=packages&repo_name=janitor),
-otherwise you can create them yourself:
-
-```console
-$ sudo apt install \
-    buildah \
-    make
-$ make build-all
-```
