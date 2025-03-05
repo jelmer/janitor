@@ -476,7 +476,9 @@ async def main_async():
 
     from janitor import state
 
-    parser = argparse.ArgumentParser(prog="janitor.schedule", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.schedule", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--config", type=str, default="janitor.conf", help="Path to configuration"
     )
@@ -625,6 +627,7 @@ def main():
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main_async())
+
 
 if __name__ == "__main__":
     main()

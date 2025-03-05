@@ -643,10 +643,15 @@ async def create_web_app(
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.git_store", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.git_store", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=9923)
     parser.add_argument(
-        "--public-port", type=int, help="Public listen port for a reverse proxy", default=9924
+        "--public-port",
+        type=int,
+        help="Public listen port for a reverse proxy",
+        default=9924,
     )
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
@@ -671,7 +676,9 @@ async def main_async(argv=None):
         action="store_true",
         help="Use dulwich server implementation",
     )
-    parser.add_argument("--gcp-logging", action="store_true", help="Use Google cloud logging")
+    parser.add_argument(
+        "--gcp-logging", action="store_true", help="Use Google cloud logging"
+    )
     parser.add_argument("--debug", action="store_true", help="Show debug output")
 
     args = parser.parse_args()
@@ -721,7 +728,9 @@ async def main_async(argv=None):
 
     site = web.TCPSite(public_runner, args.listen_address, port=args.public_port)
     await site.start()
-    logging.info("Public website and API listening on %s:%s", args.host, args.public_port)
+    logging.info(
+        "Public website and API listening on %s:%s", args.host, args.public_port
+    )
 
     while True:
         await asyncio.sleep(3600)

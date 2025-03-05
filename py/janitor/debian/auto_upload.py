@@ -239,7 +239,10 @@ async def backfill(
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.debian.auto_upload", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.debian.auto_upload",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=9933)
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
@@ -258,7 +261,9 @@ async def main_async(argv=None):
     parser.add_argument(
         "--distribution", action="append", help="Build distributions to upload"
     )
-    parser.add_argument("--verbose", action="store_true", help="Show more detailed output")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Show more detailed output"
+    )
 
     args = parser.parse_args()
 
@@ -324,8 +329,10 @@ async def main_async(argv=None):
 
     await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 
+
 def main():
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
+
 
 if __name__ == "__main__":
     main()

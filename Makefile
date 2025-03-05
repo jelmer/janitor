@@ -26,7 +26,9 @@ check:: ruff
 
 check:: check-format
 
-check-format::
+check-format:: check-ruff-format
+
+check-ruff-format:
 	ruff format --check py tests
 
 check-format::
@@ -45,8 +47,10 @@ cargo-fix:
 ruff-fix:
 	ruff check --fix .
 
-reformat::
+reformat-ruff:
 	ruff format py tests
+
+reformat:: reformat-ruff
 
 reformat::
 	cargo fmt --all

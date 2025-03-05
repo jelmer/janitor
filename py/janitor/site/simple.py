@@ -612,7 +612,7 @@ async def create_app(
     if debugtoolbar:
         import aiohttp_debugtoolbar
 
-        logging.info("Debug toolbar enabled for %s", args.debugtoolbar)
+        logging.info("Debug toolbar enabled for %s", debugtoolbar)
 
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
@@ -626,10 +626,16 @@ async def main_async(argv=None):
 
     from janitor.config import read_config
 
-    parser = argparse.ArgumentParser(prog="janitor.site.simnple", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.site.simnple",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=8080)
     parser.add_argument(
-        "--public-port", type=int, help="Public listen port for a reverse proxy", default=8090
+        "--public-port",
+        type=int,
+        help="Public listen port for a reverse proxy",
+        default=8090,
     )
     parser.add_argument("--host", type=str, help="Listen address", default="localhost")
     parser.add_argument(
@@ -714,7 +720,9 @@ async def main_async(argv=None):
 
     site = web.TCPSite(public_runner, args.host, port=args.public_port)
     await site.start()
-    logging.info("Public website and API listening on %s:%s", args.host, args.public_port)
+    logging.info(
+        "Public website and API listening on %s:%s", args.host, args.public_port
+    )
 
     while True:
         await asyncio.sleep(3600)

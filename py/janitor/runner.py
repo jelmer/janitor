@@ -2987,9 +2987,16 @@ async def create_app(queue_processor, config, db, tracer=None):
 async def main_async(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.runner", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="janitor.runner", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument("--port", type=int, help="Listen port", default=9911)
-    parser.add_argument("--public-port", type=int, help="Public listen port for a reverse proxy", default=9919)
+    parser.add_argument(
+        "--public-port",
+        type=int,
+        help="Public listen port for a reverse proxy",
+        default=9919,
+    )
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
@@ -3152,7 +3159,9 @@ async def main_async(argv=None):
                 public_runner, args.listen_address, port=args.public_port
             )
             await public_site.start()
-            logging.info("Public API listening on %s:%s", args.listen_address, args.public_port)
+            logging.info(
+                "Public API listening on %s:%s", args.listen_address, args.public_port
+            )
 
         app = await create_app(queue_processor, config, db, tracer=tracer)
         runner = web.AppRunner(app)
