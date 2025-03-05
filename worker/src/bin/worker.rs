@@ -28,6 +28,7 @@ struct Args {
     prometheus: Option<url::Url>,
 
     /// Port to use for diagnostics web server
+    #[clap(long)]
     port: Option<u16>,
 
     /// Request run for specified codebase
@@ -46,8 +47,11 @@ struct Args {
     #[clap(long)]
     external_address: Option<String>,
 
+    /// Optional port to advertise that this worker can be contacted on
+    /// Only necessary if this is different from the port the worker is listening on
+    /// (e.g. because of NAT / port forwarding)
     #[clap(long)]
-    site_port: u16,
+    site_port: Option<u16>,
 
     /// URL this instance can be reached on by runner
     #[clap(long)]
@@ -106,7 +110,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_name = std::env::var("NODE_NAME")
         .unwrap_or_else(|_| gethostname::gethostname().to_str().unwrap().to_owned());
 
-    // Run it
     let addr = SocketAddr::new(args.listen_address, args.port.unwrap_or(0));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let addr = listener.local_addr()?;
@@ -115,25 +118,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Extract actual port
     let port = addr.port();
 
+    let site_port = args.site_port.unwrap_or(port);
+
     // Find worker URL
     let my_url = if let Some(my_url) = args.my_url.as_ref() {
         Some(my_url.clone())
     } else if let Some(external_address) = args.external_address {
         Some(
-            format!("http://{}:{}", external_address, args.site_port)
+            format!("http://{}:{}", external_address, site_port)
                 .parse()
                 .unwrap(),
         )
     } else if let Ok(my_ip) = std::env::var("MY_IP") {
-        Some(
-            format!("http://{}:{}", my_ip, args.site_port)
-                .parse()
-                .unwrap(),
-        )
+        Some(format!("http://{}:{}", my_ip, site_port).parse().unwrap())
     } else if janitor_worker::is_gce_instance().await {
         if let Some(external_ip) = janitor_worker::gce_external_ip().await.unwrap() {
             Some(
-                format!("http://{}:{}", external_ip, args.site_port)
+                format!("http://{}:{}", external_ip, site_port)
                     .parse()
                     .unwrap(),
             )

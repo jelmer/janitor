@@ -18,10 +18,11 @@ RUN apt-get update --yes \
         python3-minimal \
  && apt-get clean
 
-
 COPY . /code
 
 RUN cargo build --verbose --release --manifest-path /code/worker/Cargo.toml
+
+
 
 # https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim
@@ -45,7 +46,6 @@ COPY autopkgtest-wrapper /usr/local/bin/autopkgtest-wrapper
 
 ENV AUTOPKGTEST=/usr/local/bin/autopkgtest-wrapper
 
-# In-case: [PORT] (there isn't a default defined port)
 EXPOSE 9821
 
-ENTRYPOINT ["janitor-worker", "9821", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["janitor-worker", "--port=9821", "--listen-address=0.0.0.0"]
