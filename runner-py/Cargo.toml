@@ -13,8 +13,11 @@ homepage = "https://github.com/jelmer/janitor"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = {workspace = true, features=["extension-module", "serde", "chrono"]}
+pyo3 = {workspace = true, features=["serde", "chrono"]}
 janitor-runner = { path = "../runner" }
 pyo3-log = { workspace = true }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
+
+[features]
+extension-module = ["pyo3/extension-module"]
