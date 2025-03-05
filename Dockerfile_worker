@@ -4,8 +4,6 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-COPY . /code
-
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
@@ -18,11 +16,12 @@ RUN apt-get update --yes \
         pkg-config \
         protobuf-compiler \
         python3-minimal \
- && apt-get clean \
- && cd /code \
- && cargo build --verbose --release -p janitor-worker
+ && apt-get clean
 
 
+COPY . /code
+
+RUN cargo build --verbose --release --manifest-path /code/worker/Cargo.toml
 
 # https://hub.docker.com/_/debian
 FROM docker.io/debian:testing-slim
