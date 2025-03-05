@@ -2,9 +2,6 @@
 FROM docker.io/debian:testing-slim AS build
 MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
-# Enable forward compatibility with newer versions of Python
-ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY="1"
-
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update --yes \
@@ -13,21 +10,21 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
-       ## Standard packages: ./CONTRIBUTING.md
+        ca-certificates \
         cargo \
-        g++ \
-        gcc \
         libpython3-dev \
         libssl-dev \
         pkg-config \
         protobuf-compiler \
-       ## Extra packages
-        python3-pip \
+        python3-minimal \
  && apt-get clean
 
 COPY . /code
 
-RUN pip3 install --break-system-packages --upgrade "/code[gcp,mail-filter]" \
- && rm -rf /code
+RUN cargo build --release --manifest-path /code/mail-filter/Cargo.toml
+
+FROM docker.io/debian:testing-slim
+
+COPY --from=build /code/target/release/janitor-mail-filter /usr/local/bin/janitor-mail-filter
 
 ENTRYPOINT ["janitor-mail-filter"]
