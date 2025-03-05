@@ -3152,12 +3152,16 @@ async def main_async(argv=None):
                 public_runner, args.listen_address, port=args.public_port
             )
             await public_site.start()
+            logging.info("Public website and API listening on %s:%s", args.listen_address, args.public_port)
 
         app = await create_app(queue_processor, config, db, tracer=tracer)
         runner = web.AppRunner(app)
         await runner.setup()
+
         site = web.TCPSite(runner, args.listen_address, port=args.port)
         await site.start()
+        logging.info("Admin API listening on %s:%s", args.host, args.port)
+
         while True:
             await asyncio.sleep(3600)
 
