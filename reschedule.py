@@ -27,9 +27,6 @@ from yarl import URL
 parser = argparse.ArgumentParser("reschedule")
 parser.add_argument("result_code", type=str)
 parser.add_argument("description_re", type=str, nargs="?")
-parser.add_argument(
-    "--config", type=str, default="janitor.conf", help="Path to configuration."
-)
 parser.add_argument("--refresh", action="store_true", help="Force run from scratch.")
 parser.add_argument("--offset", type=int, default=0, help="Schedule offset.")
 parser.add_argument(
