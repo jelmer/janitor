@@ -1,0 +1,60 @@
+---
+name: Linting
+
+"on":
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'    # Daily 6AM UTC build
+
+jobs:
+  yamllint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: YAML style checks (yamllint)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            yamllint
+          make yamllint
+
+  djlint:
+    name: HTML Lint
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: HTML style checks (djLint)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            djlint
+          make djlint
+
+  codespell:
+    name: Check common misspellings
+    runs-on: ubuntu-latest
+
+    # Steps to perform in job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check common misspellings (codespell)
+        if: always()
+        run: |
+          set -x
+          pip3 install --break-system-packages --upgrade \
+            codespell
+          codespell
