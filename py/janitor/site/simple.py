@@ -692,8 +692,11 @@ async def main_async(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    with open(args.config) as f:
-        config = read_config(f)
+    try:
+        with open(args.config) as f:
+             config = read_config(f)
+    except FileNotFoundError:
+        parser.error(f"config path {args.config} does not exist")
 
     private_app, public_app = await create_app(
         config,

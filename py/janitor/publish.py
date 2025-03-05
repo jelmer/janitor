@@ -3737,8 +3737,11 @@ async def main_async(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter("always", ResourceWarning)
 
-    with open(args.config) as f:
-        config = read_config(f)
+    try:
+        with open(args.config) as f:
+             config = read_config(f)
+    except FileNotFoundError:
+        parser.error(f"config path {args.config} does not exist")
 
     set_user_agent(config.user_agent)
 

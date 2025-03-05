@@ -30,10 +30,11 @@ args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-
-with open(args.config) as f:
-    config = read_config(f)
-
+try:
+    with open(args.config) as f:
+         config = read_config(f)
+except FileNotFoundError:
+    parser.error(f"config path {args.config} does not exist")
 
 template_env = load_template_env(args.template_env_path)
 

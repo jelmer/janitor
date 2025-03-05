@@ -91,8 +91,11 @@ parser.add_argument("--run-command", type=str, action="append")
 parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
-with open(args.config) as f:
-    config = read_config(f)
+try:
+    with open(args.config) as f:
+         config = read_config(f)
+except FileNotFoundError:
+    parser.error(f"config path {args.config} does not exist")
 
 if not args.distribution:
     args.distribution = [d.name for d in config.distribution]

@@ -3072,8 +3072,11 @@ async def main_async(argv=None):
 
     debug.set_debug_flags_from_config()
 
-    with open(args.config) as f:
-        config = read_config(f)
+    try:
+        with open(args.config) as f:
+             config = read_config(f)
+    except FileNotFoundError:
+        parser.error(f"config path {args.config} does not exist")
 
     set_user_agent(config.user_agent)
 
