@@ -21,6 +21,7 @@ import asyncio
 import logging
 import os
 import sys
+import uvloop
 import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
@@ -725,8 +726,6 @@ async def main_async(argv=None):
 
 
 def main():
-    import uvloop
-
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
