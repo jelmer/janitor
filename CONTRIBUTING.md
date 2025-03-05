@@ -41,3 +41,13 @@ $ . ./.venv/bin/activate
 $ pip3 install --editable .[dev]
 ```
 
+## Running the tests
+
+To run the tests, use:
+
+```console
+
+$ make test
+```
+
+This will run both the Python and Rust tests.
