@@ -34,5 +34,12 @@ jobs:
         run: cargo build --verbose --workspace
       - name: Run tests
         run: cargo test --verbose --workspace
+
+  rust-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rustfmt
+        run: sudo apt -y install rustfmt cargo
       - name: Check formatting
         run: cargo fmt --all -- --check
