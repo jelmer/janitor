@@ -114,7 +114,7 @@ impl ArtifactManager {
         })
     }
 
-    #[pyo3(signature = (run_id, local_path, filter_fn))]
+    #[pyo3(signature = (run_id, local_path, filter_fn=None))]
     fn retrieve_artifacts<'a>(
         &self,
         py: Python<'a>,
