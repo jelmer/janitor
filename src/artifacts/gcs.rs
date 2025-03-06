@@ -164,7 +164,7 @@ impl ArtifactManager for GCSArtifactManager {
         &self,
         run_id: &str,
         filename: &str,
-    ) -> Result<Box<dyn std::io::Read>, Error> {
+    ) -> Result<Box<dyn std::io::Read + Send + Sync>, Error> {
         let object_name = format!("{}/{}", run_id, filename);
         let request = GetObjectRequest {
             bucket: self.bucket_name.clone(),
@@ -200,7 +200,7 @@ impl ArtifactManager for GCSArtifactManager {
         &self,
         run_id: &str,
         local_path: &Path,
-        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync)>,
+        filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error> {
         let prefix = format!("{}/", run_id);
         let request = ListObjectsRequest {
@@ -229,7 +229,7 @@ impl ArtifactManager for GCSArtifactManager {
         Ok(())
     }
 
-    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String>> {
+    async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send> {
         let mut ids = HashSet::new();
         let request = ListObjectsRequest {
             bucket: self.bucket_name.clone(),
