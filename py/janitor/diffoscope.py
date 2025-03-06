@@ -15,15 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
+__all__ = [
+    "run_diffoscope",
+]
+
 import json
 import logging
 import os
-import shlex
 import sys
-from contextlib import suppress
 from io import StringIO
-from typing import Any
 
 from breezy.patches import (
     ContextLine,
@@ -32,6 +32,8 @@ from breezy.patches import (
     RemoveLine,
     iter_hunks,
 )
+
+from ._differ import run_diffoscope  # type: ignore
 
 
 class DiffoscopeError(Exception):
@@ -155,73 +157,3 @@ async def format_diffoscope(root_difference, content_type, title, css_url=None):
         p.start(root_difference)
         return "".join(out)
     raise AssertionError(f"unknown content type {content_type!r}")
-
-
-async def _run_diffoscope(
-    old_binary, new_binary, *, diffoscope_command=None, timeout=None, preexec_fn=None
-):
-    if diffoscope_command is None:
-        diffoscope_command = "diffoscope"
-    args = shlex.split(diffoscope_command) + [
-        "--json=-",
-        "--exclude-directory-metadata=yes",
-    ]
-    args.extend([old_binary, new_binary])
-    logging.debug("running %r", args)
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        preexec_fn=preexec_fn,
-    )
-    communicate = p.communicate(b"")
-    if timeout is not None:
-        communicate = asyncio.wait_for(communicate, timeout)
-    try:
-        stdout, stderr = await communicate
-    except asyncio.TimeoutError:
-        with suppress(ProcessLookupError):
-            p.kill()
-        raise
-    if p.returncode == 0:
-        return None
-    if p.returncode != 1:
-        raise DiffoscopeError(stderr.decode(errors="replace"))
-    try:
-        return json.loads(stdout.decode("utf-8"))
-    except json.JSONDecodeError as e:
-        raise DiffoscopeError(f"Error parsing JSON: {e}") from e
-
-
-async def run_diffoscope(
-    old_binaries,
-    new_binaries,
-    *,
-    preexec_fn=None,
-    timeout=None,
-    diffoscope_command=None,
-):
-    ret: dict[str, Any] = {
-        "diffoscope-json-version": 1,
-        "source1": "old version",
-        "source2": "new version",
-        "unified_diff": None,
-        "details": [],
-    }
-
-    for (old_name, old_path), (new_name, new_path) in zip(old_binaries, new_binaries):
-        sub = await _run_diffoscope(
-            old_path,
-            new_path,
-            preexec_fn=preexec_fn,
-            timeout=timeout,
-            diffoscope_command=diffoscope_command,
-        )
-        if sub is None:
-            continue
-        sub["source1"] = old_name
-        sub["source2"] = new_name
-        del sub["diffoscope-json-version"]
-        ret["details"].append(sub)
-    return ret
