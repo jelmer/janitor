@@ -700,11 +700,14 @@ async def main_async(argv=None):
         loop.slow_callback_duration = 0.001
         warnings.simplefilter("always", ResourceWarning)
 
-    with open(args.config) as f:
-        config = read_config(f)
-
     if not os.path.exists(args.vcs_path):
         parser.error(f"vcs path {args.vcs_path} does not exist")
+
+    try:
+        with open(args.config) as f:
+             config = read_config(f)
+    except FileNotFoundError:
+        parser.error(f"config path {args.config} does not exist")
 
     db = await state.create_pool(config.database_location)
     app, public_app = await create_web_app(
