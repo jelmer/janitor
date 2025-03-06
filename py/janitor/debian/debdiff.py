@@ -22,6 +22,7 @@ from typing import Optional
 from .._common import debdiff
 
 debdiff_is_empty = debdiff.debdiff_is_empty  # type: ignore
+filter_boring = debdiff.filter_boring  # type: ignore
 
 
 def iter_sections(text: str) -> Iterator[tuple[Optional[str], list[str]]]:
@@ -86,63 +87,6 @@ def _iter_fields(lines: Iterable[str]) -> Iterator[list[str]]:
             cl = [line]
     if cl:
         yield cl
-
-
-def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
-    lines: list[str] = []
-    ret: list[tuple[Optional[str], list[str]]] = []
-    for title, paragraph in iter_sections(debdiff):
-        if not title:
-            ret.append((title, paragraph))
-            continue
-        package: Optional[str]
-        m = re.match(
-            r"Control files of package (.*): lines which differ " r"\(wdiff format\)",
-            title,
-        )
-        if m:
-            package = m.group(1)
-            wdiff = True
-        elif title == "Control files: lines which differ (wdiff format)":
-            package = None
-            wdiff = True
-        else:
-            package = None
-            wdiff = False
-        if wdiff:
-            paragraph_unfiltered: list[str] = []
-            for lines in _iter_fields(paragraph):
-                newlines = filter_boring_wdiff(lines, old_version, new_version)
-                paragraph_unfiltered.extend(newlines)
-            paragraph = [line for line in paragraph_unfiltered if line is not None]
-            if any([line.strip() for line in paragraph]):
-                ret.append((title, paragraph))
-            else:
-                if package:
-                    ret.append(
-                        (
-                            None,
-                            [
-                                "No differences were encountered between the control "
-                                f"files of package {package}"
-                            ],
-                        )
-                    )
-                else:
-                    ret.append(
-                        (None, ["No differences were encountered in the control files"])
-                    )
-        else:
-            ret.append((title, paragraph))
-
-    lines = []
-    for title, paragraph in ret:
-        if title is not None:
-            lines.append(title)
-            lines.append(len(title) * "-")
-        lines.extend(paragraph)
-        lines.append("")
-    return "\n".join(lines)
 
 
 class DebdiffError(Exception):
