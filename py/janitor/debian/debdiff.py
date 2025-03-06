@@ -19,6 +19,9 @@ import asyncio
 import re
 from collections.abc import Iterable, Iterator
 from typing import Optional
+from .._common import debdiff
+
+debdiff_is_empty = debdiff.debdiff_is_empty  # type: ignore
 
 
 def iter_sections(text: str) -> Iterator[tuple[Optional[str], list[str]]]:
@@ -158,10 +161,6 @@ async def run_debdiff(old_binaries: list[str], new_binaries: list[str]) -> bytes
     if p.returncode not in (0, 1):
         raise DebdiffError(stderr.decode(errors="replace"))
     return stdout
-
-
-def debdiff_is_empty(debdiff: str) -> bool:
-    return not any([title is not None for (title, paragraph) in iter_sections(debdiff)])
 
 
 def section_is_wdiff(title: str) -> tuple[bool, Optional[str]]:
