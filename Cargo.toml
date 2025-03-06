@@ -88,7 +88,7 @@ protobuf-codegen = "3"
 protoc-rust = "^2.0"
 
 [workspace]
-members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store", "site", "site-py" , "archive", "auto-upload" ]
+members = [ "common-py", "differ", "mail-filter", "publish-py", "publish", "runner-py", "runner", "worker" , "bzr-store", "git-store", "site", "site-py" , "archive", "auto-upload", "differ-py" ]
 
 [workspace.package]
 edition = "2021"

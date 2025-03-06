@@ -1,0 +1,27 @@
+[package]
+name = "differ-py"
+version = "0.0.0"
+authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
+edition.workspace = true
+description = "Differ for the janitor - python bindings"
+publish = false
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = {workspace = true, features=["serde", "chrono"]}
+janitor-publish = { path = "../publish" }
+pyo3-log = { workspace = true }
+log = "0.4"
+chrono = { workspace = true, features = ["serde"] }
+breezyshim.workspace = true
+silver-platter = { workspace = true, features = ["debian"] }
+janitor-differ = { path = "../differ" }
+pyo3-asyncio = { workspace = true, features = ["tokio-runtime"] }
+
+[features]
+extension-module = ["pyo3/extension-module"]
