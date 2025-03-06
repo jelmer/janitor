@@ -67,7 +67,7 @@ test::
 style:: yamllint
 
 yamllint:
-	yamllint .github/
+	yamllint -s .github/
 
 style:: djlint
 
