@@ -23,6 +23,13 @@ $ sudo apt install \
     python3-gpg
 ```
 
+If you're working on Debian-targeted code, you may also want to install:
+
+```console
+$ sudo apt install \
+    devscripts
+```
+
 - - -
 
 In addition to these packages, you will need to install a number of

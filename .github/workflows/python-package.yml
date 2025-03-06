@@ -30,6 +30,7 @@ env:
             python3-gpg
             python3-minimal
             python3-pip
+            devscripts
 
 jobs:
   checks:
