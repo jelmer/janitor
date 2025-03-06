@@ -32,7 +32,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 try:
     with open(args.config) as f:
-         config = read_config(f)
+        config = read_config(f)
 except FileNotFoundError:
     parser.error(f"config path {args.config} does not exist")
 

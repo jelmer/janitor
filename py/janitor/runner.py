@@ -3074,7 +3074,7 @@ async def main_async(argv=None):
 
     try:
         with open(args.config) as f:
-             config = read_config(f)
+            config = read_config(f)
     except FileNotFoundError:
         parser.error(f"config path {args.config} does not exist")
 
