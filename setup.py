@@ -11,6 +11,12 @@ setup(
             features=["extension-module"],
         ),
         RustExtension(
+            "janitor._differ",
+            "differ-py/Cargo.toml",
+            binding=Binding.PyO3,
+            features=["extension-module"],
+        ),
+        RustExtension(
             "janitor._publish",
             "publish-py/Cargo.toml",
             binding=Binding.PyO3,
