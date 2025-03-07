@@ -72,7 +72,10 @@ jobs:
         run: |
           set -x
           tag="$( echo ${{ env.TAGS }} | awk '{print $1}' )"
-          podman run ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}:${tag} --help
+          podman run \
+            ghcr.io/${{ github.repository }}/\
+          ${{ matrix.dockerfile_suffix }}:${tag} \
+            --help
 
       - name: Login to GitHub Packages (ghcr.io)
         if: |
@@ -84,7 +87,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push ${{ env.container }} image to https://github.com/${{ github.repository_owner }}?tab=packages&repo_name=${{ github.event.repository.name }}
+      - name: >
+          Push ${{ env.container }} image to
+          https://github.com/${{ github.repository_owner }}?\
+          tab=packages&repo_name=${{ github.event.repository.name }}
         if: |
           ${{ github.event_name != 'pull_request' }} &&
           ${{ github.ref == 'refs/heads/main' }}

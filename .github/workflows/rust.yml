@@ -1,7 +1,7 @@
 ---
 name: Rust build
 
-on:
+"on":
   push:
   pull_request:
 
@@ -22,11 +22,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt -y update
-          sudo apt -y install devscripts libapt-pkg-dev libtdb-dev libssl-dev pkg-config libgpgme-dev protobuf-compiler devscripts
+          sudo apt -y install devscripts libapt-pkg-dev libtdb-dev libssl-dev \
+            pkg-config libgpgme-dev protobuf-compiler devscripts
       - name: Upgrade pip
         run: python -m pip install --upgrade pip setuptools_rust setuptools
       - name: Install breezy, diffoscope
-        run: python -m pip install --upgrade breezy diffoscope jsondiff "brz-debian@git+https://github.com/breezy-team/breezy-debian"
+        run: python -m pip install --upgrade breezy diffoscope jsondiff \
+            "brz-debian@git+https://github.com/breezy-team/breezy-debian"
       # TODO(jelmer): Add proper test isolation so this isn't necessary
       - name: Setup bzr identity
         run: brz whoami "CI <ci@noreply.github.com>"
