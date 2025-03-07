@@ -38,7 +38,15 @@ pub async fn get_assignment_raw(
     let assign_url = base_url
         .join("active-runs")
         .map_err(|e| AssignmentError::Failure(format!("Failed to build assignment URL: {}", e)))?;
-    let build_arch = get_build_arch();
+    let build_arch = match get_build_arch() {
+        Ok(arch) => arch,
+        Err(e) => {
+            return Err(AssignmentError::Failure(format!(
+                "Failed to get build arch: {}",
+                e
+            )))
+        }
+    };
     let mut json = serde_json::json!({
         "node": node_name,
         "archs": [build_arch],

@@ -68,17 +68,44 @@ pub async fn gce_external_ip() -> Result<Option<String>, reqwest::Error> {
     }
 }
 
-pub fn get_build_arch() -> String {
-    String::from_utf8(
-        std::process::Command::new("dpkg-architecture")
-            .arg("-qDEB_BUILD_ARCH")
-            .output()
-            .unwrap()
-            .stdout,
-    )
-    .unwrap()
-    .trim()
-    .to_owned()
+#[derive(Debug)]
+pub enum DpkgArchitectureError {
+    MissingCommand,
+    Other(String),
+}
+
+impl std::fmt::Display for DpkgArchitectureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DpkgArchitectureError::MissingCommand => write!(
+                f,
+                "dpkg-architecture command not found; is dpkg-dev installed?"
+            ),
+            DpkgArchitectureError::Other(ref e) => write!(f, "{}", e),
+        }
+    }
+}
+
+/// Get the architecture dpkg is building for
+pub fn get_build_arch() -> Result<String, DpkgArchitectureError> {
+    let output = std::process::Command::new("dpkg-architecture")
+        .arg("-qDEB_BUILD_ARCH")
+        .output();
+
+    let output = match output {
+        Ok(output) => output,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(DpkgArchitectureError::MissingCommand);
+        }
+        Err(e) => {
+            return Err(DpkgArchitectureError::Other(format!(
+                "Error running dpkg-architecture: {}",
+                e
+            )));
+        }
+    };
+
+    Ok(String::from_utf8(output.stdout).unwrap().trim().to_owned())
 }
 
 pub fn convert_codemod_script_failed(i: i32, command: &str) -> WorkerFailure {
