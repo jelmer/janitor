@@ -1,20 +1,26 @@
 {% extends "layout.html" %}
+
 {% block page_title %}
     About
 {% endblock page_title %}
+
 {% block body %}
-    <div class="section" id="about">
-        <h1>About</h1>
-        <p>
-            The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.
-        </p>
-        <p>
-            The code for the Debian-specific instance has now been split out into a <a href="https://salsa.debian.org/janitor-team/janitor.debian.net/">separate
-        repository</a>.
+<div class="section" id="about">
+    <h1>About</h1>
+    <p>
+        The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.
     </p>
-    <p>Many thanks to everybody who has provided feedback and helped make the Janitor better.</p>
+    <p>
+        The code for the Debian-specific instance has now been split out into a <a href="https://salsa.debian.org/janitor-team/janitor.debian.net/">separate
+    repository</a>.
+    </p>
+    <p>
+        Many thanks to everybody who has provided feedback and helped make the Janitor bot better.
+    </p>
     <h2>Source Code</h2>
-    <p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
+    <p>
+        The Janitor bot itself is mostly written in Python, using the following libraries and services:
+    </p>
     <ul>
         <li>
             The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.
