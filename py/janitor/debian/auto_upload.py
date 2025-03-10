@@ -31,6 +31,8 @@ from redis.asyncio import Redis
 from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
 
+from silver_platter.debian import debsign, dput_changes, DebsignFailure, DputFailure
+
 logger = logging.getLogger("janitor.debian.auto_upload")
 debsign_failed_count = Counter(
     "debsign_failed", "Number of packages for which signing failed."
@@ -49,53 +51,6 @@ async def run_web_server(listen_addr, port, config):
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
-
-
-class DebsignFailure(Exception):
-    """Debsign failed to run."""
-
-    def __init__(self, returncode, reason) -> None:
-        self.returncode = returncode
-        self.reason = reason
-
-
-async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = None):
-    if debsign_keyid:
-        args = [f"-k{debsign_keyid}"]
-    else:
-        args = []
-    p = await asyncio.create_subprocess_exec(
-        "debsign",
-        *args,
-        changes_filename,
-        cwd=directory,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    (stdout, stderr) = await p.communicate()
-    if p.returncode == 0:
-        return
-    raise DebsignFailure(p.returncode, stderr.decode())
-
-
-class DputFailure(Exception):
-    def __init__(self, returncode, reason) -> None:
-        self.returncode = returncode
-        self.reason = reason
-
-
-async def dput(directory, changes_filename, dput_host):
-    p = await asyncio.create_subprocess_exec(
-        "dput",
-        dput_host,
-        changes_filename,
-        cwd=directory,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    (stdout, stderr) = await p.communicate()
-    if p.returncode == 0:
-        return
-
-    raise DputFailure(p.returncode, stderr.decode())
 
 
 async def upload_build_result(
