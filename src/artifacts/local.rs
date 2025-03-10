@@ -16,7 +16,9 @@ impl LocalArtifactManager {
         if !path.is_dir() {
             fs::create_dir_all(&path)?;
         }
-        Ok(Self { path: path.canonicalize()? })
+        Ok(Self {
+            path: path.canonicalize()?,
+        })
     }
 }
 
