@@ -69,8 +69,8 @@ async fn main() -> Result<(), i32> {
 
     let app = janitor_runner::web::app(state.clone());
 
-    // run it
-    let addr = SocketAddr::new(args.listen_address, args.new_port);
+    // Run it
+    let addr = SocketAddr::new(args.listen_address, args.port);
     log::info!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
