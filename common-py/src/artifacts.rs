@@ -130,7 +130,7 @@ impl ArtifactManager {
                 move |x: &str| -> bool {
                     Python::with_gil(|py| {
                         let r = f.call1(py, (x,))?;
-                        Ok::<bool, PyErr>(r.is_true(py)?)
+                        Ok::<bool, PyErr>(r.is_truthy(py)?)
                     })
                     .unwrap()
                 }
@@ -151,9 +151,8 @@ pub struct LocalArtifactManager;
 #[pymethods]
 impl LocalArtifactManager {
     #[new]
-    fn new(path: &str) -> PyResult<(Self, ArtifactManager)> {
-        let path = std::path::Path::new(path);
-        let artifact_manager = janitor::artifacts::LocalArtifactManager::new(path)?;
+    fn new(path: std::path::PathBuf) -> PyResult<(Self, ArtifactManager)> {
+        let artifact_manager = janitor::artifacts::LocalArtifactManager::new(path.as_path())?;
         Ok((
             LocalArtifactManager,
             ArtifactManager(Arc::new(artifact_manager)),
