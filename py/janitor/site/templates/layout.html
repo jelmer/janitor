@@ -23,17 +23,23 @@
         <script src="/_static/chart.js"></script>
         <script src="/_static/janitor.js"></script>
         {% include "analytics.html" ignore missing without context %}
+        {% if layout != 'plain' %}
         <div class="document">
-            {% block sidebar %}
-            {% endblock sidebar %}
             <div class="documentwrapper">
                 <div class="bodywrapper">
-                    <main>
-                        {% block body %}
-                        {% endblock body %}
-                    </main>
+        {% else %}
+        <div class="plain-document">
+        {% endif %}
+            {% block sidebar %}
+            {% endblock sidebar %}
+            <main>
+                {% block body %}
+                {% endblock body %}
+            </main>
+        {% if layout != 'plain' %}
                 </div>
             </div>
+        {% endif %}
         </div>
         {% include "footer.html" %}
     </body>
