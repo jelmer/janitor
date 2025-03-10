@@ -75,7 +75,7 @@ tokio = "1"
 axum = "0.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
-silver-platter = { version = ">=0.5.36" }
+silver-platter = { version = ">=0.5.47" }
 ognibuild  = "0.0.33"
 pyo3-async-runtimes = "0.22"
 shlex = "1"
