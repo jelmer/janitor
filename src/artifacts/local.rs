@@ -13,11 +13,12 @@ pub struct LocalArtifactManager {
 
 impl LocalArtifactManager {
     pub fn new(path: &Path) -> io::Result<Self> {
-        let path = fs::canonicalize(path)?;
         if !path.is_dir() {
             fs::create_dir_all(&path)?;
         }
-        Ok(Self { path })
+        Ok(Self {
+            path: path.canonicalize()?,
+        })
     }
 }
 

@@ -130,7 +130,7 @@ impl ArtifactManager {
                 move |x: &str| -> bool {
                     Python::with_gil(|py| {
                         let r = f.call1(py, (x,))?;
-                        Ok::<bool, PyErr>(r.is_true(py)?)
+                        Ok::<bool, PyErr>(r.is_truthy(py)?)
                     })
                     .unwrap()
                 }
@@ -142,6 +142,22 @@ impl ArtifactManager {
                 .map_err(|e| artifact_err_to_py_err(e))
         })
     }
+
+    fn __aenter__<'a>(slf: pyo3::Bound<Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
+        let slf = slf.clone().to_object(py);
+        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(slf) })
+    }
+
+    fn __aexit__<'a>(
+        &self,
+        py: Python<'a>,
+        _exc_type: PyObject,
+        _exc_value: PyObject,
+        _traceback: PyObject,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let none = py.None();
+        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(none) })
+    }
 }
 
 /// Local Artifact Manager
@@ -151,9 +167,8 @@ pub struct LocalArtifactManager;
 #[pymethods]
 impl LocalArtifactManager {
     #[new]
-    fn new(path: &str) -> PyResult<(Self, ArtifactManager)> {
-        let path = std::path::Path::new(path);
-        let artifact_manager = janitor::artifacts::LocalArtifactManager::new(path)?;
+    fn new(path: std::path::PathBuf) -> PyResult<(Self, ArtifactManager)> {
+        let artifact_manager = janitor::artifacts::LocalArtifactManager::new(path.as_path())?;
         Ok((
             LocalArtifactManager,
             ArtifactManager(Arc::new(artifact_manager)),
