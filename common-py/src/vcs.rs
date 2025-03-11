@@ -1,5 +1,5 @@
 use breezyshim::RevisionId;
-use pyo3::exceptions::{PyValueError, PyNotImplementedError};
+use pyo3::exceptions::{PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
