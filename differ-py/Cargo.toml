@@ -21,7 +21,7 @@ chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 janitor-differ = { path = "../differ" }
-pyo3-asyncio = { workspace = true, features = ["tokio-runtime"] }
+pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
 
 [features]
 extension-module = ["pyo3/extension-module"]
