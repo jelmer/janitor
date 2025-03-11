@@ -22,6 +22,8 @@ import tempfile
 import unittest
 from typing import Callable
 
+import pytest
+
 from janitor.artifacts import ArtifactManager, ArtifactsMissing, LocalArtifactManager
 
 
@@ -31,6 +33,7 @@ class ArtifactManagerTests:
     assertEqual: Callable
     assertRaises: Callable
 
+    @pytest.mark.asyncio
     async def test_store_twice(self):
         with tempfile.TemporaryDirectory() as td:
             with open(os.path.join(td, "somefile"), "w") as f:
@@ -38,6 +41,7 @@ class ArtifactManagerTests:
             await self.manager.store_artifacts("some-run-id", td)
             await self.manager.store_artifacts("some-run-id", td)
 
+    @pytest.mark.asyncio
     async def test_store_and_retrieve(self):
         with tempfile.TemporaryDirectory() as td:
             with open(os.path.join(td, "somefile"), "w") as f:
@@ -48,6 +52,7 @@ class ArtifactManagerTests:
             loop.run_until_complete(self.manager.retrieve_artifacts("some-run-id", td))
             self.assertEqual(["somefile"], os.listdir(td))
 
+    @pytest.mark.asyncio
     async def test_retrieve_nonexistent(self):
         loop = asyncio.get_event_loop()
         with tempfile.TemporaryDirectory() as td:

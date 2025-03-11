@@ -574,11 +574,12 @@ async def create_app(
     app["publisher_url"] = publisher_url
     app["vcs_managers"] = vcs_managers
 
-    if hasattr(vcs_managers.get("bzr"), "base_url"):
-        app.router.add_get("/bzr/", handle_repo_list, name="repo-list-bzr")
+    if vcs_managers is not None:
+        if hasattr(vcs_managers.get("bzr"), "base_url"):
+            app.router.add_get("/bzr/", handle_repo_list, name="repo-list-bzr")
 
-    if hasattr(vcs_managers.get("git"), "base_url"):
-        app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
+        if hasattr(vcs_managers.get("git"), "base_url"):
+            app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
 
     if external_url:
         app["external_url"] = URL(external_url)
