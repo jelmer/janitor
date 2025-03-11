@@ -145,7 +145,7 @@ impl ArtifactManager {
 
     fn __aenter__<'a>(slf: pyo3::Bound<Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
         let slf = slf.clone().to_object(py);
-        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(slf) })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(slf) })
     }
 
     fn __aexit__<'a>(
@@ -156,7 +156,7 @@ impl ArtifactManager {
         _traceback: PyObject,
     ) -> PyResult<Bound<'a, PyAny>> {
         let none = py.None();
-        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(none) })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(none) })
     }
 }
 
