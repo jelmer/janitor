@@ -26,7 +26,7 @@ import re
 import sys
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp_jinja2
 import aiozipkin
@@ -39,8 +39,9 @@ from aiohttp_openmetrics import metrics, metrics_middleware
 from jinja2 import select_autoescape
 
 from .. import state
+from ..config import Config
 from ..schedule import do_schedule
-from ..vcs import get_vcs_managers_from_config
+from ..vcs import get_vcs_managers_from_config, VcsManager
 from . import TEMPLATE_ENV, template_loader
 from .common import html_template, render_template_for_request
 from .openid import setup_openid
@@ -354,18 +355,18 @@ async def handle_webhook(request):
 
 
 async def create_app(
-    config,
+    config: Config,
     *,
-    minified=False,
-    external_url=None,
+    minified: bool = False,
+    external_url: Optional[str] = None,
     debugtoolbar=None,
-    runner_url=None,
-    publisher_url=None,
-    archiver_url=None,
-    vcs_managers=None,
-    differ_url=None,
-    listen_address=None,
-    port=None,
+    runner_url: Optional[str] = None,
+    publisher_url: Optional[str] = None,
+    archiver_url: Optional[str] = None,
+    vcs_managers: Optional[dict[str, VcsManager]] = None,
+    differ_url: Optional[str] = None,
+    listen_address: Optional[str] = None,
+    port: Optional[int] = None,
     redis=None,
 ):
     if minified:
@@ -591,11 +592,11 @@ async def create_app(
     app.add_subapp(
         "/api",
         create_api_app(
-            publisher_url,
-            runner_url,  # type: ignore
-            vcs_managers,
-            differ_url,
-            config,
+            publisher_url=publisher_url,
+            runner_url=runner_url,  # type: ignore
+            vcs_managers=vcs_managers,
+            differ_url=differ_url,
+            config=config,
             external_url=(
                 app["external_url"].join(URL("api")) if app["external_url"] else None
             ),
