@@ -76,12 +76,12 @@ axum = "0.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 silver-platter = { version = ">=0.5.36" }
-ognibuild  = { git = "https://github.com/jelmer/ognibuild.git" }
-pyo3-asyncio = { git = "https://github.com/jelmer/pyo3-asyncio", branch = "pyo3-0.22" }
+ognibuild  = "0.0.33"
+pyo3-async-runtimes = "0.22"
 shlex = "1"
-buildlog-consultant = { git = "https://github.com/jelmer/buildlog-consultant" }
-deb822-lossless = { git = "https://github.com/jelmer/deb822-rs" }
-debian-control = { git = "https://github.com/jelmer/deb822-rs" }
+buildlog-consultant = "0.1.1"
+deb822-lossless = "0.2.4"
+debian-control = "0.1.40"
 
 [build-dependencies]
 protobuf-codegen = "3"

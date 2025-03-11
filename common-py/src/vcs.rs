@@ -1,5 +1,5 @@
 use breezyshim::RevisionId;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyValueError, PyNotImplementedError};
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
@@ -56,9 +56,8 @@ impl RemoteGitVcsManager {
         codebase: &str,
         old_revid: RevisionId,
         new_revid: RevisionId,
-    ) -> String {
-        let url = self.0.get_diff_url(codebase, old_revid, new_revid);
-        url.to_string()
+    ) -> PyResult<String> {
+        Err(PyNotImplementedError::new_err("Not implemented"))
     }
 }
 
@@ -95,9 +94,8 @@ impl RemoteBzrVcsManager {
         codebase: &str,
         old_revid: RevisionId,
         new_revid: RevisionId,
-    ) -> String {
-        let url = self.0.get_diff_url(codebase, old_revid, new_revid);
-        url.to_string()
+    ) -> PyResult<String> {
+        Err(PyNotImplementedError::new_err("Not implemented"))
     }
 }
 
