@@ -1,3 +1,4 @@
+use breezyshim::RevisionId;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -49,6 +50,16 @@ impl RemoteGitVcsManager {
         let vcs_manager = Box::new(janitor::vcs::RemoteGitVcsManager::new(base_url));
         Ok((manager, VcsManager(vcs_manager)))
     }
+
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: RevisionId,
+        new_revid: RevisionId,
+    ) -> String {
+        let url = self.0.get_diff_url(codebase, old_revid, new_revid);
+        url.to_string()
+    }
 }
 
 #[pyclass(extends=VcsManager)]
@@ -77,6 +88,16 @@ impl RemoteBzrVcsManager {
             url::Url::parse(base_url).map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         let vcs_manager = Box::new(janitor::vcs::RemoteBzrVcsManager::new(base_url));
         Ok((manager, VcsManager(vcs_manager)))
+    }
+
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: RevisionId,
+        new_revid: RevisionId,
+    ) -> String {
+        let url = self.0.get_diff_url(codebase, old_revid, new_revid);
+        url.to_string()
     }
 }
 
