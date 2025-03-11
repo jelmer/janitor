@@ -81,9 +81,7 @@ def setup_artifact_manager(app):
     from ..artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
-        app["artifact_manager"] = get_artifact_manager(
-            app["config"].artifact_location
-        )
+        app["artifact_manager"] = get_artifact_manager(app["config"].artifact_location)
         await app["artifact_manager"].__aenter__()
 
     async def turndown_artifact_manager(app):

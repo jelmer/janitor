@@ -41,7 +41,7 @@ from jinja2 import select_autoescape
 from .. import state
 from ..config import Config
 from ..schedule import do_schedule
-from ..vcs import get_vcs_managers_from_config, VcsManager
+from ..vcs import VcsManager, get_vcs_managers_from_config
 from . import TEMPLATE_ENV, template_loader
 from .common import html_template, render_template_for_request
 from .openid import setup_openid
@@ -301,7 +301,6 @@ async def handle_generic_codebase(request):
     )
 
 
-@routes.get("/{vcs:git|bzr}/", name="repo-list")
 @aiohttp_jinja2.template("repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
@@ -574,6 +573,13 @@ async def create_app(
     app["differ_url"] = differ_url
     app["publisher_url"] = publisher_url
     app["vcs_managers"] = vcs_managers
+
+    if hasattr(vcs_managers.get("bzr"), "base_url"):
+        app.router.add_get("/bzr/", handle_repo_list, name="repo-list-bzr")
+
+    if hasattr(vcs_managers.get("git"), "base_url"):
+        app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
+
     if external_url:
         app["external_url"] = URL(external_url)
     else:
