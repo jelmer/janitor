@@ -655,10 +655,11 @@ async def handle_get_active_run(request):
 
 
 def create_app(
-    publisher_url: str,
+    *,
+    publisher_url: Optional[str],
     runner_url: str,
-    vcs_managers: VcsManager,
-    differ_url: str,
+    vcs_managers: Optional[dict[str, VcsManager]],
+    differ_url: Optional[str],
     config: Config,
     external_url: Optional[URL] = None,
     trace_configs=None,
