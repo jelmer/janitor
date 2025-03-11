@@ -1,3 +1,6 @@
+// Necessary since create_exception!() uses cfg!(feature = "gil-refs"),
+// but we don't have that feature.
+#![allow(unexpected_cfgs)]
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
