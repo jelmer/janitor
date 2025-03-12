@@ -105,7 +105,15 @@ necessary, and how easily it can bitrot.
 ### Keep Changes Small and Self-Contained
 
 Try to keep changes small and self-contained. This makes it easier to review
-them and to understand the impact of the change.
+them and to understand the impact of the change. If you're fixing two unrelated
+bugs, they should be in separate PRs.
+
+Formatting changes should be separate from functional changes. However,
+please consider whether it is worth making formatting or reordering changes at all.
+These changes can make it harder to understand the history of a file
+(e.g. when using `git blame`). They can also make it harder to merge changes
+from other branches. And they make it harder to understand the impact of a change
+for reviewers.
 
 In general, changes should be preceded by a discussion in an issue.
 PRs or commits should reference the issue they are addressing.
