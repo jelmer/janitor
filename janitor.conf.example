@@ -22,10 +22,28 @@ committer: 'Janitor Bot <janitor@jelmer.uk>'
 # Origin set in published archives
 origin: "janitor.debian.net"
 
+oauth2_provider {
+  client_id: "some-client-id"
+  client_secret: "totally-secret"
+  base_url: "https://gitlab.com"
+  qa_reviewer_group: "janitor-team/qa-reviewers"
+  admin_group: "janitor-team/admins"
+}
+
 bugtracker {
   kind: gitlab
   url: "https://salsa.debian.org/jelmer/some-project"
   name: "some project"
+}
+
+# Note that you'll need to run janitor.debian.archive to publish apt archives0
+apt_repository {
+  name: "lintian-fixes"
+  description: "Builds of lintian fixes"
+  base: "unstable"
+  select {
+    campaign: "lintian-fixes"
+  }
 }
 
 distribution {
@@ -127,23 +145,5 @@ campaign {
   branch_name: "upstream-unchanged"
   generic_build {
     chroot: "unstable-amd64-sbuild"
-  }
-}
-
-oauth2_provider {
-  client_id: "some-client-id"
-  client_secret: "totally-secret"
-  base_url: "https://gitlab.com"
-  qa_reviewer_group: "janitor-team/qa-reviewers"
-  admin_group: "janitor-team/admins"
-}
-
-# Note that you'll need to run janitor.debian.archive to publish apt archives0
-apt_repository {
-  name: "lintian-fixes"
-  description: "Builds of lintian fixes"
-  base: "unstable"
-  select {
-    campaign: "lintian-fixes"
   }
 }
