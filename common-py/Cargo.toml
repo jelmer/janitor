@@ -23,7 +23,7 @@ chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 url.workspace = true
-pyo3-asyncio = { workspace = true, features = ["tokio-runtime"] }
+pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
 tokio.workspace = true
 
 [features]

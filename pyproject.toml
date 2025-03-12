@@ -212,6 +212,7 @@ asyncio_mode = "auto"
 addopts = """
 --cov=janitor
 --cov-report=html"""
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.setuptools]
 script-files = [
