@@ -1,14 +1,3 @@
-# Logs location; can be:
-#  + a local file path
-#  + a GCS location (gs://BUCKET-NAME/)
-#  + a S3 location (https://...)
-logs_location: 'https://s3.nl-ams.scw.cloud'
-
-# Artifact location: used to store build results. Can be:
-#  + a local file path
-#  + a GCS location (gs://BUCKET-NAME/)
-artifact_location: '/home/janitor/artifacts'
-
 # Database location: must be a valid postgresql URL
 database_location: 'postgresql://janitor@example.com:5432/janitor'
 
@@ -21,6 +10,17 @@ committer: 'Janitor Bot <janitor@jelmer.uk>'
 
 # Origin set in published archives
 origin: "janitor.debian.net"
+
+# Artifact location: used to store build results. Can be:
+#  + a local file path
+#  + a GCS location (gs://BUCKET-NAME/)
+artifact_location: '/home/janitor/artifacts'
+
+# Logs location; can be:
+#  + a local file path
+#  + a GCS location (gs://BUCKET-NAME/)
+#  + a S3 location (https://...)
+logs_location: 'https://s3.nl-ams.scw.cloud'
 
 oauth2_provider {
   client_id: "some-client-id"
@@ -39,18 +39,18 @@ bugtracker {
 # Note that you'll need to run janitor.debian.archive to publish apt archives0
 apt_repository {
   name: "lintian-fixes"
-  description: "Builds of lintian fixes"
   base: "unstable"
   select {
     campaign: "lintian-fixes"
   }
+  description: "Builds of lintian fixes"
 }
 
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
-  component: "main"
   chroot: "unstable-amd64-sbuild"
+  component: "main"
   lintian_profile: "debian"
   lintian_suppress_tag: "bad-distribution-in-changes-file"
   lintian_suppress_tag: "no-nmu-in-changelog"
@@ -66,9 +66,9 @@ campaign {
   command: "lintian-brush"
   branch_name: "lintian-fixes"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "lintian-fixes"
     build_suffix: "jan+lint"
-    base_distribution: "unstable"
     build_command: "sbuild -Asv"
   }
   bugtracker {
@@ -83,20 +83,20 @@ campaign {
   command: "true"
   branch_name: "master"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "unchanged"
     build_suffix: "jan+unchanged"
-    base_distribution: "unstable"
   }
 }
 
 campaign {
   name: "fresh-releases"
-  branch_name: "new-upstream"
   command: "deb-new-upstream"
+  branch_name: "new-upstream"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "fresh-releases"
     build_suffix: "jan+nur"
-    base_distribution: "unstable"
   }
 }
 
@@ -104,9 +104,9 @@ campaign {
   name: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "fresh-snapshots"
     build_suffix: "jan+nus"
-    base_distribution: "unstable"
   }
 }
 
@@ -114,9 +114,9 @@ campaign {
   name: "multiarch-fixes"
   branch_name: "multiarch-fixes"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "multiarch-fixes"
     build_suffix: "jan+maf"
-    base_distribution: "unstable"
   }
 }
 
@@ -124,9 +124,9 @@ campaign {
   name: "uncommitted"
   branch_name: "uncommitted"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "uncommitted"
     build_suffix: "jan+unc"
-    base_distribution: "unstable"
   }
 }
 
@@ -134,9 +134,9 @@ campaign {
   name: "debianize"
   branch_name: "debianize"
   debian_build {
+    base_distribution: "unstable"
     build_distribution: "debianize"
     build_suffix: "jan+deb"
-    base_distribution: "unstable"
   }
 }
 

@@ -8,36 +8,36 @@ message Env {
 };
 
 message Config {
-  // Location to store logs. Can either be a filesystem path or a http
-  // location, for use with GCS or S3.
-  optional string logs_location = 2;
-
   // postgresql URL for database connection
-  optional string database_location = 4;
-
-  // Default committer to use when committing changes.
-  optional string committer = 5;
-
-  // Origin in published archives
-  optional string origin = 8;
-
-  // Location to store build results
-  optional string artifact_location = 10;
-
-  // Location for zipkin server
-  optional string zipkin_address = 12;
-
-  // Location of git storage
-  optional string git_location = 14;
-
-  // Location of bzr storage
-  optional string bzr_location = 15;
+  optional string database_location = 5;
 
   // Location of the redis server
-  optional string redis_location = 16;
+  optional string redis_location = 10;
+
+  // Location for zipkin server
+  optional string zipkin_address = 15;
+
+  // Default committer to use when committing changes.
+  optional string committer = 20;
+
+  // Origin in published archives
+  optional string origin = 25;
+
+  // Location to store build results
+  optional string artifact_location = 30;
+
+  // Location to store logs. Can either be a filesystem path or a http
+  // location, for use with GCS or S3.
+  optional string logs_location = 35;
+
+  // Location of bzr storage
+  optional string bzr_location = 40;
+
+  // Location of git storage
+  optional string git_location = 45;
 
   // User agent string
-  optional string user_agent = 18;
+  optional string user_agent = 50;
 
   optional OAuth2Provider oauth2_provider = 9;
 
@@ -155,6 +155,9 @@ message Campaign {
   // Name of the campaign. E.g. "lintian-fixes"
   optional string name = 1;
 
+  // Default command, can be overridden on a per-package basis
+  optional string command = 9;
+
   // VCS branch name to use
   optional string branch_name = 2;
 
@@ -174,6 +177,4 @@ message Campaign {
 
   repeated BugTracker bugtracker = 8;
 
-  // Default command, can be overridden on a per-package basis
-  optional string command = 9;
 }
