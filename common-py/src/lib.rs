@@ -1,7 +1,11 @@
+// Necessary since create_exception!() uses cfg!(feature = "gil-refs"),
+// but we don't have that feature.
+#![allow(unexpected_cfgs)]
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod artifacts;
+mod vcs;
 
 #[pyfunction]
 fn get_branch_vcs_type(branch: PyObject) -> PyResult<String> {
@@ -35,7 +39,11 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     let artifactsm = pyo3::types::PyModule::new_bound(py, "artifacts")?;
     crate::artifacts::init(py, &artifactsm)?;
-
     m.add_submodule(&artifactsm)?;
+
+    let vcsm = pyo3::types::PyModule::new_bound(py, "vcs")?;
+    crate::vcs::init(py, &vcsm)?;
+    m.add_submodule(&vcsm)?;
+
     Ok(())
 }

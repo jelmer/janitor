@@ -77,13 +77,11 @@ def setup_logfile_manager(app, trace_configs=None):
     app.on_cleanup.append(teardown_logfile_manager)
 
 
-def setup_artifact_manager(app, trace_configs=None):
+def setup_artifact_manager(app):
     from ..artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
-        app["artifact_manager"] = get_artifact_manager(
-            app["config"].artifact_location, trace_configs=trace_configs
-        )
+        app["artifact_manager"] = get_artifact_manager(app["config"].artifact_location)
         await app["artifact_manager"].__aenter__()
 
     async def turndown_artifact_manager(app):

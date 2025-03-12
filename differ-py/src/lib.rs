@@ -11,7 +11,7 @@ fn run_diffoscope<'a>(
     memory_limit: Option<u64>,
     diffoscope_command: Option<String>,
 ) -> PyResult<Bound<'a, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let old_binaries = old_binaries
             .iter()
             .map(|(path, hash)| (path.as_str(), hash.as_str()))

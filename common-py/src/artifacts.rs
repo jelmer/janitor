@@ -68,7 +68,7 @@ impl ArtifactManager {
         let local_path = std::path::PathBuf::from(local_path);
         let run_id = run_id.to_string();
         let z = self.0.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.store_artifacts(&run_id, &local_path, names.as_deref())
                 .await
                 .map_err(|e| artifact_err_to_py_err(e))
@@ -86,7 +86,7 @@ impl ArtifactManager {
         let run_id = run_id.to_string();
         let filename = filename.to_string();
         let z = self.0.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let r = tokio::time::timeout(
                 std::time::Duration::from_secs(timeout.unwrap_or(60)),
                 z.get_artifact(&run_id, &filename),
@@ -107,7 +107,7 @@ impl ArtifactManager {
     fn delete_artifacts<'a>(&self, py: Python<'a>, run_id: &str) -> PyResult<Bound<'a, PyAny>> {
         let run_id = run_id.to_string();
         let z = self.0.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.delete_artifacts(&run_id)
                 .await
                 .map_err(|e| artifact_err_to_py_err(e))
@@ -136,7 +136,7 @@ impl ArtifactManager {
                 }
             }) as Box<dyn Fn(&str) -> bool + Sync + Send>
         });
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.retrieve_artifacts(&run_id, &local_path, filter_fn.as_deref())
                 .await
                 .map_err(|e| artifact_err_to_py_err(e))
@@ -145,7 +145,7 @@ impl ArtifactManager {
 
     fn __aenter__<'a>(slf: pyo3::Bound<Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
         let slf = slf.clone().to_object(py);
-        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(slf) })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(slf) })
     }
 
     fn __aexit__<'a>(
@@ -156,7 +156,7 @@ impl ArtifactManager {
         _traceback: PyObject,
     ) -> PyResult<Bound<'a, PyAny>> {
         let none = py.None();
-        pyo3_asyncio::tokio::future_into_py(py, async move { Ok(none) })
+        pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(none) })
     }
 }
 
@@ -183,7 +183,7 @@ pub struct GCSArtifactManager {}
 #[pyfunction]
 fn list_ids<'a>(py: Python<'a>, artifact_manager: &ArtifactManager) -> PyResult<Bound<'a, PyAny>> {
     let z = artifact_manager.0.clone();
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         janitor::artifacts::list_ids(z.as_ref())
             .await
             .map_err(|e| artifact_err_to_py_err(e))
@@ -209,7 +209,7 @@ fn upload_backup_artifacts<'a>(
 ) -> PyResult<Bound<'a, PyAny>> {
     let z = backup_artifact_manager.0.clone();
     let y = artifact_manager.0.clone();
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let r = tokio::time::timeout(
             std::time::Duration::from_secs(timeout.unwrap_or(60)),
             janitor::artifacts::upload_backup_artifacts(z.as_ref(), y.as_ref()),
@@ -236,7 +236,7 @@ fn store_artifacts_with_backup<'a>(
     let run_id = run_id.to_string();
     let z = manager.0.clone();
     let y = backup_manager.as_ref().map(|x| x.0.clone());
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         janitor::artifacts::store_artifacts_with_backup(
             z.as_ref(),
             y.as_ref().map(|v| &**v),
