@@ -23,10 +23,10 @@ bzr_location: "file:///home/janitor/vcs/bzr-store"
 git_location: "file:///home/janitor/vcs/git-store"
 
 # Database location; must be a valid PostgreSQL URL
-database_location: "postgresql://janitor@example.com:5432/janitor"
+database_location: "postgresql://janitor:password@example.com:5432/janitor"
 
 # Redis location; must be a valid Redis URL
-redis_location: "redis://localhost"
+redis_location: "redis://default:password@localhost"
 
 # Zipkin server location
 # If unset defaults to a local aiohttp server
