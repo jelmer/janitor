@@ -30,7 +30,6 @@ from typing import Any, Optional
 
 import aiohttp_jinja2
 import aiozipkin
-import gpg
 import uvloop
 from aiohttp import ClientConnectorError, ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -127,6 +126,7 @@ async def handle_merge_proposal(request):
 @routes.get("/credentials", name="credentials")
 @html_template("credentials.html", headers={"Vary": "Cookie"})
 async def handle_credentials(request):
+    import gpg
     try:
         credentials = await get_credentials(
             request.app["http_client_session"], request.app["publisher_url"]
@@ -189,7 +189,6 @@ async def handle_pgp_keys(request):
         )
 
 
-@routes.get(r"/archive-keyring{extension:(\.asc|\.gpg)}", name="archive-keyring")
 async def handle_archive_keyring(request):
     url = URL(request.app["archiver_url"]) / "pgp_keys"
     async with request.app["http_client_session"].get(url=url) as resp:
@@ -580,6 +579,9 @@ async def create_app(
 
         if hasattr(vcs_managers.get("git"), "base_url"):
             app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
+
+    if archiver_url:
+        app.router.add_get(r"/archive-keyring{extension:(\.asc|\.gpg)}", name="archive-keyring")
 
     if external_url:
         app["external_url"] = URL(external_url)
