@@ -3099,9 +3099,7 @@ async def main_async(argv=None):
         parser.error(f"Unsupported protocol in --public-vcs-location: {e.path}")
 
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
-    artifact_manager = get_artifact_manager(
-        config.artifact_location, trace_configs=trace_configs
-    )
+    artifact_manager = get_artifact_manager(config.artifact_location)
 
     loop = asyncio.get_event_loop()
     if args.debug:
