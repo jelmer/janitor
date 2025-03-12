@@ -91,6 +91,31 @@ jobs:
           set -x
           make
 
+      - name: Test using ./tests/test_*.py (unittest)
+        if: always()
+        run: |
+          set -x
+          PSQL_DEB=$( apt-cache search 'postgresql-.*-debversion' \
+                        | awk '{print $1}' \
+                        | tail -n 1 )
+          sudo apt satisfy --yes --no-install-recommends \
+            dpkg-dev \
+            postgresql \
+            ${PSQL_DEB} \
+            libjs-jquery-datatables
+          pip3 install --break-system-packages --upgrade --editable \
+            .[test]
+          if test "$(id -u)" = "0"; then
+            echo "-- Switching to postgres user"
+            chown -R postgres: .
+            su postgres -c 'make test'
+          else
+            echo "-- Running as: $(whoami)"
+            make test
+          fi
+        env:
+          PYTHONHASHSEED: random
+
   build-container:
     name: Build & Test - Debian Testing
     runs-on: ubuntu-latest
