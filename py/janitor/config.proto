@@ -28,45 +28,49 @@ message Distribution {
 }
 
 message Config {
-  // Location to store logs. Can either be a filesystem path or a http
-  // location, for use with GCS or S3.
+  // Logs storage location
   optional string logs_location = 2;
 
-  // postgresql URL for database connection
+  // Database location; must be a valid PostgreSQL URL
   optional string database_location = 4;
 
-  // Default committer to use when committing changes.
+  // Default committer to use when committing changes
   optional string committer = 5;
 
+  // Debian distribution
   repeated Distribution distribution = 7;
 
   // Origin in published archives
   optional string origin = 8;
 
+  // OAuth authorization, OpenID authentication
   optional OAuth2Provider oauth2_provider = 9;
 
-  // Location to store build results
+  // Artifact location: used to store build results
   optional string artifact_location = 10;
 
-  // Location for zipkin server
+  // Zipkin server location
   optional string zipkin_address = 12;
 
+  // Janitor campaigns
   repeated Campaign campaign = 13;
 
-  // Location of git storage
+  // Git VCS (git-store) storage location
   optional string git_location = 14;
 
-  // Location of bzr storage
+  // Bazaar VCS (bzr-store) storage location
   optional string bzr_location = 15;
 
-  // Location of the redis server
+  // Redis location; must be a valid Redis URL
   optional string redis_location = 16;
 
-  // User agent string
+  // User-agent string when making a connection
   optional string user_agent = 18;
 
+  // Default bugtracker to file bug tickets
   repeated BugTracker bugtracker = 17;
 
+  // Provide apt archives
   repeated AptRepository apt_repository = 19;
 }
 
@@ -81,7 +85,7 @@ message MergeProposalConfig {
 };
 
 message Campaign {
-  // Name of the campaign. E.g. "lintian-fixes"
+  // Name of the campaign
   optional string name = 1;
 
   // VCS branch name to use
@@ -89,7 +93,7 @@ message Campaign {
 
   optional MergeProposalConfig merge_proposal = 5;
 
-  // Force building even if the command did not make any changes.
+  // Force building even if the command did not make any changes
   optional bool force_build = 6 [default=false];
 
   optional bool skip_setup_validation = 10 [default=false];
@@ -123,7 +127,7 @@ message DebianBuild {
   // Distribution to target when building
   optional string build_distribution = 6;
 
-  // Suffix to add to version in changelog on build.
+  // Suffix to add to version in changelog on build
   optional string build_suffix = 7;
 
   optional string build_command = 8;
@@ -131,10 +135,8 @@ message DebianBuild {
 
 message OAuth2Provider {
   optional string client_id = 1;
-
   optional string client_secret = 2;
 
-  // A URL such as https://salsa.debian.org/
   // Used for finding e.g. token and authorize URLs
   optional string base_url = 3;
 
@@ -169,6 +171,6 @@ message AptRepository {
     optional string base = 3;
     repeated Select select = 2;
 
-    // Human-readable description of the archive. Used in e.g. apt Release file.
+    // Human-readable description of the archive used in
     optional string description = 5;
 };
