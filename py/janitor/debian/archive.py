@@ -394,7 +394,7 @@ async def write_suite_files(
     components,
     arches,
     origin,
-    gpg_context,
+    gpg_context: Optional[gpg.Context],
     timestamp: Optional[datetime] = None,
 ):
     SUFFIXES: dict[str, Any] = {
@@ -473,16 +473,18 @@ async def write_suite_files(
         r.dump(f)
 
     logger.debug("Writing Release.gpg file for %s", suite_name)
-    data = gpg.Data(r.dump())
-    with open(os.path.join(base_path, "Release.gpg"), "wb") as f:
-        signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
-        f.write(signature)
 
-    logger.debug("Writing InRelease file for %s", suite_name)
-    data = gpg.Data(r.dump())
-    with open(os.path.join(base_path, "InRelease"), "wb") as f:
-        signature, result = gpg_context.sign(data, mode=gpg_mode.CLEAR)
-        f.write(signature)
+    if gpg_context:
+        data = gpg.Data(r.dump())
+        with open(os.path.join(base_path, "Release.gpg"), "wb") as f:
+            signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
+            f.write(signature)
+
+        logger.debug("Writing InRelease file for %s", suite_name)
+        data = gpg.Data(r.dump())
+        with open(os.path.join(base_path, "InRelease"), "wb") as f:
+            signature, result = gpg_context.sign(data, mode=gpg_mode.CLEAR)
+            f.write(signature)
 
 
 # TODO(jelmer): Don't hardcode this
@@ -585,8 +587,8 @@ async def serve_dists_component_hash_file(request):
 
 
 async def refresh_on_demand_dists(
-    dists_dir, db, config, package_info_provider, gpg_context, kind, id
-):
+    dists_dir, db, config, package_info_provider, gpg_context: gpg.Context, kind, id
+) -> None:
     os.makedirs(os.path.join(dists_dir, kind, id), exist_ok=True)
     release_path = os.path.join(dists_dir, kind, id, "Release")
     try:
@@ -818,8 +820,8 @@ async def publish_repository(
     package_info_provider,
     config,
     apt_repository_config,
-    gpg_context,
-):
+    gpg_context: Optional[gpg.Context],
+) -> None:
     start_time = datetime.utcnow()
     logger.info("Publishing %s", apt_repository_config.name)
     distribution = get_distribution(config, apt_repository_config.base)
