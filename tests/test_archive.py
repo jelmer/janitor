@@ -30,7 +30,7 @@ async def create_client(aiohttp_client, config=None):
     if config is None:
         config = Config()
     return await aiohttp_client(
-        await create_app(None, config, "/tmp", None, gpg_sign=False)
+        await create_app(None, config, "/tmp", None, gpg_context=None)
     )
 
 

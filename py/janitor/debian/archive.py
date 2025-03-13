@@ -33,10 +33,9 @@ from datetime import datetime
 from email.utils import formatdate, parsedate_to_datetime
 from functools import partial
 from time import mktime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import aiozipkin
-import gpg
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Gauge, setup_metrics
@@ -47,6 +46,9 @@ from .. import state
 from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import AptRepository as AptRepositoryConfig
 from ..config import get_campaign_config, get_distribution, read_config
+
+if TYPE_CHECKING:
+    import gpg
 
 TMP_PREFIX = "janitor-apt"
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -392,7 +394,7 @@ async def write_suite_files(
     components,
     arches,
     origin,
-    gpg_context: Optional[gpg.Context],
+    gpg_context: Optional["gpg.Context"],
     timestamp: Optional[datetime] = None,
 ):
     SUFFIXES: dict[str, Any] = {
@@ -586,7 +588,13 @@ async def serve_dists_component_hash_file(request):
 
 
 async def refresh_on_demand_dists(
-    dists_dir, db, config, package_info_provider, gpg_context: gpg.Context, kind, id
+    dists_dir,
+    db,
+    config,
+    package_info_provider,
+    gpg_context: Optional["gpg.Context"],
+    kind,
+    id,
 ) -> None:
     os.makedirs(os.path.join(dists_dir, kind, id), exist_ok=True)
     release_path = os.path.join(dists_dir, kind, id, "Release")
@@ -740,15 +748,18 @@ async def serve_on_demand_dists_component_hash_file(request):
     return web.FileResponse(path)
 
 
-async def create_app(generator_manager, config, dists_dir, db, gpg_sign: bool = True):
+async def create_app(
+    generator_manager,
+    config,
+    dists_dir,
+    db,
+    gpg_context: Optional["gpg.Context"] = None,
+) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware]
     )
-    if gpg_sign:
-        app["gpg"] = gpg.Context(armor=True)
-    else:
-        app["gpg"] = None
+    app["gpg"] = gpg_context
     app["dists_dir"] = dists_dir
     app["config"] = config
     app["generator_manager"] = generator_manager
@@ -768,7 +779,7 @@ async def create_app(generator_manager, config, dists_dir, db, gpg_sign: bool = 
         serve_dists_component_hash_file,
     )
 
-    if gpg:
+    if gpg_context is not None:
         app.router.add_get("/pgp_keys", handle_pgp_keys, name="pgp-keys")
 
     CAMPAIGNS_REGEX = "|".join(re.escape(c.name) for c in config.campaign)
@@ -792,9 +803,18 @@ async def create_app(generator_manager, config, dists_dir, db, gpg_sign: bool = 
 
 
 async def run_web_server(
-    listen_addr, port, dists_dir, config, db, generator_manager, tracer
-):
-    app = await create_app(generator_manager, config, dists_dir, db)
+    listen_addr,
+    port,
+    dists_dir,
+    config,
+    db,
+    generator_manager,
+    tracer,
+    gpg_context: Optional["gpg.Context"] = None,
+) -> None:
+    app = await create_app(
+        generator_manager, config, dists_dir, db, gpg_context=gpg_context
+    )
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -825,7 +845,7 @@ async def publish_repository(
     package_info_provider,
     config,
     apt_repository_config,
-    gpg_context: Optional[gpg.Context],
+    gpg_context: Optional["gpg.Context"],
 ) -> None:
     start_time = datetime.utcnow()
     logger.info("Publishing %s", apt_repository_config.name)
@@ -865,7 +885,12 @@ async def publish_repository(
 
 class GeneratorManager:
     def __init__(
-        self, dists_dir, db, config, package_info_provider, gpg_context
+        self,
+        dists_dir,
+        db,
+        config,
+        package_info_provider,
+        gpg_context: Optional["gpg.Context"],
     ) -> None:
         self.dists_dir = dists_dir
         self.db = db
@@ -937,6 +962,7 @@ async def main_async(argv=None):
     parser.add_argument(
         "--verbose", action="store_true", help="Show more detailed output"
     )
+    parser.add_argument("--no-gpg", action="store_true", help="Don't sign with GPG")
 
     args = parser.parse_args()
     if not args.dists_directory:
@@ -976,7 +1002,11 @@ async def main_async(argv=None):
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
-    gpg_context = gpg.Context()
+    gpg_context: Optional[gpg.Context]
+    if not args.no_pgp:
+        gpg_context = gpg.Context(armor=True)
+    else:
+        gpg_context = None
 
     package_info_provider: PackageInfoProvider
     package_info_provider = GeneratingPackageInfoProvider(artifact_manager)
@@ -1005,6 +1035,7 @@ async def main_async(argv=None):
                 db,
                 generator_manager,
                 tracer,
+                gpg_context=gpg_context,
             )
         ),
         loop.create_task(loop_publish(config, generator_manager)),
