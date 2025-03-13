@@ -42,7 +42,6 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Gauge, setup_metrics
 from aiojobs import Job, Scheduler
 from debian.deb822 import Packages, Release, Sources
-from gpg.constants.sig import mode as gpg_mode
 
 from .. import state
 from ..artifacts import ArtifactsMissing, get_artifact_manager
@@ -474,6 +473,8 @@ async def write_suite_files(
     logger.debug("Writing Release.gpg file for %s", suite_name)
 
     if gpg_context:
+        from gpg.constants.sig import mode as gpg_mode
+
         data = gpg.Data(r.dump())
         with open(os.path.join(base_path, "Release.gpg"), "wb") as f:
             signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
@@ -538,7 +539,6 @@ async def handle_index(request):
     return web.Response(text="")
 
 
-@routes.get("/pgp_keys", name="pgp-keys")
 async def handle_pgp_keys(request):
     pgp_keys = []
     for entry in list(request.app["gpg"].keylist(secret=True)):
@@ -740,12 +740,15 @@ async def serve_on_demand_dists_component_hash_file(request):
     return web.FileResponse(path)
 
 
-async def create_app(generator_manager, config, dists_dir, db):
+async def create_app(generator_manager, config, dists_dir, db, gpg_sign: bool = True):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
         middlewares=[trailing_slash_redirect, state.asyncpg_error_middleware]
     )
-    app["gpg"] = gpg.Context(armor=True)
+    if gpg_sign:
+        app["gpg"] = gpg.Context(armor=True)
+    else:
+        app["gpg"] = None
     app["dists_dir"] = dists_dir
     app["config"] = config
     app["generator_manager"] = generator_manager
@@ -764,6 +767,9 @@ async def create_app(generator_manager, config, dists_dir, db):
         "/dists/{release}/{component}/{arch}/" r"by-hash/{hash_type}/{hash}",
         serve_dists_component_hash_file,
     )
+
+    if gpg:
+        app.router.add_get("/pgp_keys", handle_pgp_keys, name="pgp-keys")
 
     CAMPAIGNS_REGEX = "|".join(re.escape(c.name) for c in config.campaign)
     app.router.add_get(
@@ -1014,6 +1020,7 @@ async def main_async(argv=None):
 
 def main():
     import uvloop
+
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
