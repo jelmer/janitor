@@ -30,7 +30,6 @@ from typing import Any, Optional
 
 import aiohttp_jinja2
 import aiozipkin
-import gpg
 import uvloop
 from aiohttp import ClientConnectorError, ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -77,8 +76,8 @@ def create_background_task(fn, title):
     return task
 
 
-async def get_credentials(session, publisher_url):
-    url = URL(publisher_url) / "credentials"
+async def get_credentials(session, publisher_url: URL):
+    url = publisher_url / "credentials"
     async with session.get(url=url) as resp:
         if resp.status != 200:
             raise Exception("unexpected response")
@@ -124,9 +123,10 @@ async def handle_merge_proposal(request):
     return await write_merge_proposal(request.app["pool"], url)
 
 
-@routes.get("/credentials", name="credentials")
 @html_template("credentials.html", headers={"Vary": "Cookie"})
 async def handle_credentials(request):
+    import gpg
+
     try:
         credentials = await get_credentials(
             request.app["http_client_session"], request.app["publisher_url"]
@@ -157,7 +157,6 @@ async def handle_credentials(request):
     }
 
 
-@routes.get("/ssh_keys", name="ssh-keys")
 async def handle_ssh_keys(request):
     credentials = await get_credentials(
         request.app["http_client_session"], request.app["publisher_url"]
@@ -167,7 +166,6 @@ async def handle_ssh_keys(request):
     )
 
 
-@routes.get(r"/pgp_keys{extension:(\.asc)?}", name="pgp-keys")
 async def handle_pgp_keys(request):
     credentials = await get_credentials(
         request.app["http_client_session"], request.app["publisher_url"]
@@ -189,7 +187,6 @@ async def handle_pgp_keys(request):
         )
 
 
-@routes.get(r"/archive-keyring{extension:(\.asc|\.gpg)}", name="archive-keyring")
 async def handle_archive_keyring(request):
     url = URL(request.app["archiver_url"]) / "pgp_keys"
     async with request.app["http_client_session"].get(url=url) as resp:
@@ -571,7 +568,7 @@ async def create_app(
     app["runner_url"] = runner_url
     app["archiver_url"] = archiver_url
     app["differ_url"] = differ_url
-    app["publisher_url"] = publisher_url
+    app["publisher_url"] = URL(publisher_url) if publisher_url else None
     app["vcs_managers"] = vcs_managers
 
     if vcs_managers is not None:
@@ -581,10 +578,24 @@ async def create_app(
         if hasattr(vcs_managers.get("git"), "base_url"):
             app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
 
+    if archiver_url:
+        app.router.add_get(
+            r"/archive-keyring{extension:(\.asc|\.gpg)}",
+            handle_archive_keyring,
+            name="archive-keyring",
+        )
+
     if external_url:
         app["external_url"] = URL(external_url)
     else:
         app["external_url"] = None
+
+    if publisher_url:
+        app.router.add_get("/credentials", handle_credentials, name="credentials")
+        app.router.add_get(
+            r"/pgp_keys{extension:(\.asc)?}", handle_pgp_keys, name="pgp-keys"
+        )
+        app.router.add_get("/ssh_keys", handle_ssh_keys, name="ssh-keys")
 
     setup_postgres(app)
 
