@@ -727,12 +727,14 @@ async def main_async(argv=None):
 
     site = web.TCPSite(runner, args.listen_address, port=args.port)
     await site.start()
-    logging.info("Admin API listening on %s:%s", args.host, args.port)
+    logging.info("Admin API listening on %s:%s", args.listen_address, args.port)
 
     site = web.TCPSite(public_runner, args.listen_address, port=args.public_port)
     await site.start()
     logging.info(
-        "Public website and API listening on %s:%s", args.host, args.public_port
+        "Public website and API listening on %s:%s",
+        args.listen_address,
+        args.public_port,
     )
 
     while True:
