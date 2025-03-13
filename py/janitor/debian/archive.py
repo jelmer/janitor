@@ -966,11 +966,8 @@ async def main_async(argv=None):
         )
     else:
         tracer = await aiozipkin.create_custom(endpoint)
-    trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    artifact_manager = get_artifact_manager(
-        config.artifact_location, trace_configs=trace_configs
-    )
+    artifact_manager = get_artifact_manager(config.artifact_location)
 
     gpg_context = gpg.Context()
 
