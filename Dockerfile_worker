@@ -38,7 +38,7 @@ RUN apt-get update --yes \
  && apt-get satisfy --yes --no-install-recommends \
         libpython3-dev \
         python3-breezy \
-        dpkg-dev \  # for dpkg-architecture
+        dpkg-dev \
  && apt-get clean
 
 COPY --from=build /code/target/release/janitor-worker /usr/local/bin/janitor-worker
