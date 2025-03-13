@@ -3845,6 +3845,7 @@ async def main_async(argv=None):
 
 def main():
     import uvloop
+
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 

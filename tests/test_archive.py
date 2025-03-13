@@ -29,7 +29,9 @@ from janitor.debian.archive import HashedFileWriter, create_app
 async def create_client(aiohttp_client, config=None):
     if config is None:
         config = Config()
-    return await aiohttp_client(await create_app(None, config, "/tmp", None))
+    return await aiohttp_client(
+        await create_app(None, config, "/tmp", None, gpg_sign=False)
+    )
 
 
 async def test_health(aiohttp_client):
