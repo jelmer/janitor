@@ -43,7 +43,6 @@ import breezy.plugins.github  # noqa: F401
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
 import gpg
-import uvloop
 from aiohttp import ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_apispec import setup_aiohttp_apispec
@@ -3845,6 +3844,8 @@ async def main_async(argv=None):
 
 
 def main():
+    import uvloop
+
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
