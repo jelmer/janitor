@@ -1003,7 +1003,7 @@ async def main_async(argv=None):
     artifact_manager = get_artifact_manager(config.artifact_location)
 
     gpg_context: Optional[gpg.Context]
-    if not args.no_pgp:
+    if not args.no_gpg:
         gpg_context = gpg.Context(armor=True)
     else:
         gpg_context = None
