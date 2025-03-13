@@ -165,7 +165,7 @@ def _git_check_service(service: str, allow_writes: bool = False) -> None:
         if not allow_writes:
             raise web.HTTPUnauthorized(
                 text="git-receive-pack requires login",
-                headers={"WWW-Authenticate": 'Basic Realm="Janitor Bot"'},
+                headers={"WWW-Authenticate": 'Basic Realm="Janitor"'},
             )
         return
 
