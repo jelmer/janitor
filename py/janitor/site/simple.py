@@ -30,7 +30,6 @@ from typing import Any, Optional
 
 import aiohttp_jinja2
 import aiozipkin
-import uvloop
 from aiohttp import ClientConnectorError, ClientSession, web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp.web_urldispatcher import URL
@@ -753,6 +752,7 @@ async def main_async(argv=None):
 
 
 def main():
+    import uvloop
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
