@@ -37,7 +37,6 @@ from typing import Any, Optional
 
 import aiozipkin
 import gpg
-import uvloop
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Gauge, setup_metrics
@@ -1014,6 +1013,7 @@ async def main_async(argv=None):
 
 
 def main():
+    import uvloop
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     sys.exit(asyncio.run(main_async(sys.argv[1:])))
 
