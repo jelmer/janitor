@@ -3172,7 +3172,7 @@ async def main_async(argv=None):
 
         site = web.TCPSite(runner, args.listen_address, port=args.port)
         await site.start()
-        logging.info("Admin API listening on %s:%s", args.host, args.port)
+        logging.info("Admin API listening on %s:%s", args.listen_address, args.port)
 
         while True:
             await asyncio.sleep(3600)
