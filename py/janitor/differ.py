@@ -780,11 +780,8 @@ def main(argv=None):
         )
     else:
         tracer = loop.run_until_complete(aiozipkin.create_custom(endpoint))
-    trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    artifact_manager = get_artifact_manager(
-        config.artifact_location, trace_configs=trace_configs
-    )
+    artifact_manager = get_artifact_manager(config.artifact_location)
 
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
