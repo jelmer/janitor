@@ -23,10 +23,10 @@
         <script src="/_static/chart.js"></script>
         <script src="/_static/janitor.js"></script>
         {% include "analytics.html" ignore missing without context %}
-        <div class="{% if layout != 'plain' %}document{% else %}plain-document{% endif %}">
+        <div class="{% if self.sidebar() | trim | length > 0 %}document{% else %}plain-document{% endif %}">
+            {% if self.sidebar() | trim | length > 0 %}
             {% block sidebar %}
             {% endblock sidebar %}
-            {% if layout != 'plain' %}
             <div class="documentwrapper">
                 <div class="bodywrapper">
             {% endif %}
@@ -34,7 +34,7 @@
                 {% block body %}
                 {% endblock body %}
             </main>
-            {% if layout != 'plain' %}
+            {% if self.sidebar() | trim | length > 0 %}
                 </div>
             </div>
             {% endif %}
