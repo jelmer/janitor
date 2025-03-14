@@ -11,6 +11,17 @@ create_exception!(
     pyo3::exceptions::PyException
 );
 
+fn convert_logs_error_to_py(err: janitor::logs::Error) -> PyErr {
+    match err {
+        janitor::logs::Error::ServiceUnavailable => {
+            ServiceUnavailable::new_err("Service unavailable")
+        }
+        janitor::logs::Error::NotFound => pyo3::exceptions::PyKeyError::new_err("Log not found"),
+        janitor::logs::Error::Io(e) => e.into(),
+        janitor::logs::Error::Other(e) => PyRuntimeError::new_err(e),
+    }
+}
+
 #[pyclass(subclass)]
 pub struct LogFileManager(Arc<dyn janitor::logs::LogFileManager + Send + Sync>);
 
@@ -35,7 +46,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| PyRuntimeError::new_err(e.to_string()))
+            r.map_err(|e| convert_logs_error_to_py(e))
                 .map(|r| Python::with_gil(|py| r.into_py(py)))
         })
     }
@@ -59,7 +70,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            let readable = r.map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            let readable = r.map_err(|e| convert_logs_error_to_py(e))?;
             Ok(Readable::new(readable))
         })
     }
@@ -85,7 +96,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            r.map_err(|e| convert_logs_error_to_py(e))?;
             Ok(Python::with_gil(|py| py.None()))
         })
     }
@@ -103,7 +114,7 @@ impl LogFileManager {
             let r = z
                 .get_ctime(&codebase, &run_id, &name)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(|e| convert_logs_error_to_py(e))?;
             Ok(Python::with_gil(|py| r.into_py(py)))
         })
     }
