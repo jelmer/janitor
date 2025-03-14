@@ -307,7 +307,7 @@ async def handle_repo_list(request):
     else:
         url = vcs.base_url
     async with request.app["http_client_session"].get(url) as resp:
-        return {"vcs": vcs, "repositories": await resp.json()}
+        return {"vcs": vcs_name, "repositories": await resp.json()}
 
 
 @private_routes.get("/health", name="health")
