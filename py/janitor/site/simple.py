@@ -299,10 +299,11 @@ async def handle_generic_codebase(request):
 
 @aiohttp_jinja2.template("repo-list.html")
 async def handle_repo_list(request):
-    vcs = request.match_info["vcs"]
-    if vcs != "bzr" or vcs != "git":
+    vcs_name = request.match_info["vcs"]
+    try:
+        vcs = request.app["vcs_managers"][vcs_name]
+    except KeyError:
         raise web.HTTPNotFound()
-    url = request.app["vcs_managers"][vcs].base_url
     async with request.app["http_client_session"].get(url) as resp:
         return {"vcs": vcs, "repositories": await resp.json()}
 
