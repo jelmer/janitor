@@ -303,7 +303,7 @@ async def handle_repo_list(request):
     try:
         vcs = request.app["vcs_managers"][vcs_name]
     except KeyError:
-        raise web.HTTPNotFound()
+        raise web.HTTPNotFound() from None
     else:
         url = vcs.base_url
     async with request.app["http_client_session"].get(url) as resp:
