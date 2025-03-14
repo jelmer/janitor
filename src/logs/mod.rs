@@ -39,17 +39,39 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// A trait for managing logs.
+///
+/// This trait is implemented by various log file managers, which
+/// can be either local or remote.
 #[async_trait]
 pub trait LogFileManager {
+    /// Check if a log exists.
     async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error>;
 
+    /// Get a log.
+    ///
+    /// # Arguments
+    /// * `codebase` - The codebase name.
+    /// * `run_id` - The run ID.
+    /// * `name` - The log name.
+    ///
+    /// # Returns
+    /// A reader for the log file.
     async fn get_log(
         &self,
         codebase: &str,
         run_id: &str,
         name: &str,
-    ) -> Result<Box<dyn Read + Send>, Error>;
+    ) -> Result<Box<dyn Read + Send + Sync>, Error>;
 
+    /// Import a log.
+    ///
+    /// # Arguments
+    /// * `codebase` - The codebase name.
+    /// * `run_id` - The run ID.
+    /// * `orig_path` - The original path of the log.
+    /// * `mtime` - The modification time of the log.
+    /// * `basename` - The basename of the log.
     async fn import_log(
         &self,
         codebase: &str,
@@ -59,8 +81,15 @@ pub trait LogFileManager {
         basename: Option<&str>,
     ) -> Result<(), Error>;
 
+    /// List logs.
     async fn iter_logs(&self) -> Box<dyn Iterator<Item = (String, String, Vec<String>)>>;
 
+    /// Get the creation time of a log.
+    ///
+    /// # Arguments
+    /// * `codebase` - The codebase name.
+    /// * `run_id` - The run ID.
+    /// * `name` - The log name.
     async fn get_ctime(
         &self,
         codebase: &str,

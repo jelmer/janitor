@@ -1,7 +1,8 @@
+use crate::io::Readable;
 use pyo3::create_exception;
 use pyo3::exceptions::{PyRuntimeError, PyTimeoutError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBytes, PyString};
+use pyo3::types::PyAny;
 use std::sync::Arc;
 
 create_exception!(
@@ -25,23 +26,6 @@ fn artifact_err_to_py_err(e: janitor::artifacts::Error) -> PyErr {
         }
         janitor::artifacts::Error::IoError(e) => e.into(),
         janitor::artifacts::Error::Other(e) => PyRuntimeError::new_err(e),
-    }
-}
-
-#[pyclass]
-struct Readable(Box<dyn std::io::Read + Send + Sync>);
-
-#[pymethods]
-impl Readable {
-    #[pyo3(signature = (size=None))]
-    fn read(&mut self, py: Python, size: Option<usize>) -> PyResult<PyObject> {
-        let mut buf = vec![0; size.unwrap_or(4096)];
-        let n = self
-            .0
-            .read(&mut buf)
-            .map_err(|e| PyRuntimeError::new_err(e))?;
-        buf.truncate(n);
-        Ok(PyBytes::new_bound(py, &buf).into())
     }
 }
 
@@ -95,7 +79,7 @@ impl ArtifactManager {
             .map_err(|_| PyTimeoutError::new_err("Timeout"))?
             .map_err(|e| artifact_err_to_py_err(e))?;
 
-            Ok(Readable(r))
+            Ok(Readable::new(r))
         })
     }
 

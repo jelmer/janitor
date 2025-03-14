@@ -5,6 +5,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod artifacts;
+mod io;
+mod logs;
 mod vcs;
 
 #[pyfunction]
@@ -44,6 +46,10 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     let vcsm = pyo3::types::PyModule::new_bound(py, "vcs")?;
     crate::vcs::init(py, &vcsm)?;
     m.add_submodule(&vcsm)?;
+
+    let logsm = pyo3::types::PyModule::new_bound(py, "logs")?;
+    crate::logs::init(py, &logsm)?;
+    m.add_submodule(&logsm)?;
 
     Ok(())
 }
