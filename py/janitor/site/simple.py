@@ -299,10 +299,15 @@ async def handle_generic_codebase(request):
 
 @aiohttp_jinja2.template("repo-list.html")
 async def handle_repo_list(request):
-    vcs = request.match_info["vcs"]
-    url = request.app["vcs_managers"][vcs].base_url
+    vcs_name = request.match_info["vcs"]
+    try:
+        vcs = request.app["vcs_managers"][vcs_name]
+    except KeyError:
+        raise web.HTTPNotFound() from None
+    else:
+        url = vcs.base_url
     async with request.app["http_client_session"].get(url) as resp:
-        return {"vcs": vcs, "repositories": await resp.json()}
+        return {"vcs": vcs_name, "repositories": await resp.json()}
 
 
 @private_routes.get("/health", name="health")
@@ -574,10 +579,10 @@ async def create_app(
 
     if vcs_managers is not None:
         if hasattr(vcs_managers.get("bzr"), "base_url"):
-            app.router.add_get("/bzr/", handle_repo_list, name="repo-list-bzr")
+            app.router.add_get("/{vcs:bzr}/", handle_repo_list, name="repo-list-bzr")
 
         if hasattr(vcs_managers.get("git"), "base_url"):
-            app.router.add_get("/git/", handle_repo_list, name="repo-list-git")
+            app.router.add_get("/{vcs:git}/", handle_repo_list, name="repo-list-git")
 
     if archiver_url:
         app.router.add_get(
