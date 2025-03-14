@@ -45,7 +45,7 @@ impl LogFileManager for FileSystemLogFileManager {
         codebase: &str,
         run_id: &str,
         name: &str,
-    ) -> Result<Box<dyn Read + Send>, Error> {
+    ) -> Result<Box<dyn Read + Send + Sync>, Error> {
         for path in self.get_paths(codebase, run_id, name) {
             if path.exists() {
                 if path.extension().and_then(|ext| ext.to_str()) == Some("gz") {
