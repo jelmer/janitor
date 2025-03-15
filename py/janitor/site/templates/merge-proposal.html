@@ -29,29 +29,19 @@
                     <li>Can not be merged</li>
                 {% endif %}
             {% endif %}
-            {% if proposal.last_scanned %}
-                <li>Last scanned: {{ format_timestamp(proposal.last_scanned) }}</li>
-            {% endif %}
+            {% if proposal.last_scanned %}<li>Last scanned: {{ format_timestamp(proposal.last_scanned) }}</li>{% endif %}
             <li>
                 Status:
                 {% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
                     <select id="status" name='status' onchange="submit_status(this.value)">
                         <option value="closed"
-                                {% if proposal.status == 'closed' %} selected="true"{% endif %}>
-                            Closed
-                        </option>
+                                {% if proposal.status == 'closed' %}selected="true"{% endif %}>Closed</option>
                         <option value="abandoned"
-                                {% if proposal.status == 'abandoned' %} selected="true"{% endif %}>
-                            Abandoned
-                        </option>
+                                {% if proposal.status == 'abandoned' %}selected="true"{% endif %}>Abandoned</option>
                         <option value="rejected"
-                                {% if proposal.status == 'rejected' %} selected="true"{% endif %}>
-                            Rejected
-                        </option>
+                                {% if proposal.status == 'rejected' %}selected="true"{% endif %}>Rejected</option>
                         <option value="applied"
-                                {% if proposal.status == 'applied' %} selected="true"{% endif %}>
-                            Applied
-                        </option>
+                                {% if proposal.status == 'applied' %}selected="true"{% endif %}>Applied</option>
                     </select>
                     <script>
                         function submit_status(status) {
@@ -64,7 +54,9 @@
                     </script>
                 {% elif proposal.status == 'merged' %}
                     Merged
-                    {% if proposal.merged_at %}at {{ format_timestamp(proposal.merged_at) }}{% endif %}
+                    {% if proposal.merged_at %}
+                        at {{ format_timestamp(proposal.merged_at) }}
+                    {% endif %}
                     {% if proposal.merged_by %}by {{ proposal.merged_by }}{% endif %}
                 {% else %}
                     {{ proposal.status }}

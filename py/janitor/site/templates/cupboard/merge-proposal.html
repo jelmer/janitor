@@ -11,13 +11,13 @@
     Cupboard - Merge Proposal Status - {{ proposal.url }}
 {% endblock page_title %}
 {% block body %}
-<script>
+    <script>
 $(document).ready(function() {
     $("#refresh").click(function() {
        $.post("/api/refresh-proposal-status", { url: "{{ proposal.url }}" } );
     });
 });
-</script>
+    </script>
     <div class="section" id="merge-proposal-status">
         <h1>Merge Proposal Status</h1>
         <ul>
@@ -37,29 +37,19 @@ $(document).ready(function() {
                     <li>Can not be merged</li>
                 {% endif %}
             {% endif %}
-            {% if proposal.last_scanned %}
-                <li>Last scanned: {{ format_timestamp(proposal.last_scanned) }}</li>
-            {% endif %}
+            {% if proposal.last_scanned %}<li>Last scanned: {{ format_timestamp(proposal.last_scanned) }}</li>{% endif %}
             <li>
                 Status:
                 {% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
                     <select id="status" name='status' onchange="submit_status(this.value)">
                         <option value="closed"
-                                {% if proposal.status == 'closed' %} selected="true"{% endif %}>
-                            Closed
-                        </option>
+                                {% if proposal.status == 'closed' %}selected="true"{% endif %}>Closed</option>
                         <option value="abandoned"
-                                {% if proposal.status == 'abandoned' %} selected="true"{% endif %}>
-                            Abandoned
-                        </option>
+                                {% if proposal.status == 'abandoned' %}selected="true"{% endif %}>Abandoned</option>
                         <option value="rejected"
-                                {% if proposal.status == 'rejected' %} selected="true"{% endif %}>
-                            Rejected
-                        </option>
+                                {% if proposal.status == 'rejected' %}selected="true"{% endif %}>Rejected</option>
                         <option value="applied"
-                                {% if proposal.status == 'applied' %} selected="true"{% endif %}>
-                            Applied
-                        </option>
+                                {% if proposal.status == 'applied' %}selected="true"{% endif %}>Applied</option>
                     </select>
                     <script>
                         function submit_status(status) {
@@ -72,8 +62,12 @@ $(document).ready(function() {
                     </script>
                 {% elif proposal.status == 'merged' %}
                     Merged
-                    {% if proposal.merged_at %}at {{ format_timestamp(proposal.merged_at) }}{% endif %}
-                    {% if proposal.merged_by %}by {{ proposal.merged_by }}{% endif %}
+                    {% if proposal.merged_at %}
+                        at {{ format_timestamp(proposal.merged_at) }}
+                    {% endif %}
+                    {% if proposal.merged_by %}
+                        by {{ proposal.merged_by }}
+                    {% endif %}
                 {% else %}
                     {{ proposal.status }}
                 {% endif %}
@@ -92,13 +86,9 @@ $(document).ready(function() {
                     {% if '\n' in publish.description %}
                         <pre>{{ publish.description }}</pre>
                     {% else %}
-                {% if publish.run_id %}
-            <a href="/cupboard/c/{{ proposal.codebase }}/{{ publish.run_id }}">
-            {% endif %}
-                        {{ publish.description }}<!-- {{ publish.revision }} -->
-                {% if publish.run_id %}
-            </a>
-            {% endif %}
+                        {% if publish.run_id %}<a href="/cupboard/c/{{ proposal.codebase }}/{{ publish.run_id }}">{% endif %}
+                            {{ publish.description }}<!-- {{ publish.revision }} -->
+                            {% if publish.run_id %}</a>{% endif %}
                     {% endif %}
                 </li>
             {% endfor %}

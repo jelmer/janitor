@@ -78,7 +78,8 @@ def test_display_publish_blockers():
 
     <ul>
         
-            <li>☑ codebase is not inactive</li>
+            <li>☑
+                codebase is not inactive</li>
         
     </ul>
 """
