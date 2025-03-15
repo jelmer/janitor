@@ -284,10 +284,10 @@ fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFail
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RevisionInfo {
-    commit_id: Option<Vec<u8>>,
-    revision_id: RevisionId,
-    message: String,
-    link: Option<Url>,
+    pub commit_id: Option<Vec<u8>>,
+    pub revision_id: RevisionId,
+    pub message: String,
+    pub link: Option<Url>,
 }
 
 pub const EMPTY_GIT_TREE: &[u8] = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -300,14 +300,19 @@ pub trait VcsManager: Send + Sync {
         branch_name: &str,
     ) -> Result<Option<Box<dyn Branch>>, BranchOpenError>;
 
+    /// Get the URL for the branch.
     fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url;
 
+    /// Get the repository for the codebase.
     fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError>;
 
+    /// Get the URL for the repository.
     fn get_repository_url(&self, codebase: &str) -> Url;
 
+    /// List all repositories.
     fn list_repositories(&self) -> Vec<String>;
 
+    /// Get the diff between two revisions.
     async fn get_diff(
         &self,
         codebase: &str,
