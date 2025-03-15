@@ -22,7 +22,6 @@ __all__ = [
     "open_branch_ext",
     "MirrorFailure",
     "UnsupportedVcs",
-    "open_cached_branch",
     "VcsManager",
     "LocalGitVcsManager",
     "LocalBzrVcsManager",
@@ -203,29 +202,6 @@ class MirrorFailure(Exception):
 
 class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
-
-
-def open_cached_branch(
-    url, trace_context: Optional[TraceContext] = None
-) -> Optional[Branch]:
-    # TODO(jelmer): Somehow pass in trace context headers
-    try:
-        transport = get_transport_from_url(url)
-        return Branch.open_from_transport(transport)
-    except NotBranchError:
-        return None
-    except RemoteGitError:
-        return None
-    except InvalidHttpResponse:
-        return None
-    except ConnectionError as e:
-        logging.info("Unable to reach cache server: %s", e)
-        return None
-    except BranchReferenceLoop:
-        return None
-    except ssl.SSLCertVerificationError as e:
-        logging.warning("Unable to access cache branch at %s: %r", url, e)
-        raise
 
 
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
