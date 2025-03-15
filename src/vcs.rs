@@ -284,10 +284,10 @@ fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFail
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RevisionInfo {
-    commit_id: Option<Vec<u8>>,
-    revision_id: RevisionId,
-    message: String,
-    link: Option<Url>,
+    pub commit_id: Option<Vec<u8>>,
+    pub revision_id: RevisionId,
+    pub message: String,
+    pub link: Option<Url>,
 }
 
 pub const EMPTY_GIT_TREE: &[u8] = b"4b825dc642cb6eb9a060e54bf8d69288fbee4904";
@@ -300,14 +300,19 @@ pub trait VcsManager: Send + Sync {
         branch_name: &str,
     ) -> Result<Option<Box<dyn Branch>>, BranchOpenError>;
 
+    /// Get the URL for the branch.
     fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url;
 
+    /// Get the repository for the codebase.
     fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError>;
 
+    /// Get the URL for the repository.
     fn get_repository_url(&self, codebase: &str) -> Url;
 
+    /// List all repositories.
     fn list_repositories(&self) -> Vec<String>;
 
+    /// Get the diff between two revisions.
     async fn get_diff(
         &self,
         codebase: &str,
@@ -323,7 +328,7 @@ pub trait VcsManager: Send + Sync {
     ) -> Vec<RevisionInfo>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalGitVcsManager {
     base_path: PathBuf,
 }
@@ -331,6 +336,10 @@ pub struct LocalGitVcsManager {
 impl LocalGitVcsManager {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
+    }
+
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
     }
 }
 
@@ -380,7 +389,8 @@ impl VcsManager for LocalGitVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        Url::from_directory_path(&self.base_path)
+        let abspath = self.base_path.canonicalize().unwrap();
+        Url::from_directory_path(&abspath)
             .unwrap()
             .join(codebase)
             .unwrap()
@@ -466,7 +476,7 @@ impl VcsManager for LocalGitVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalBzrVcsManager {
     base_path: PathBuf,
 }
@@ -474,6 +484,10 @@ pub struct LocalBzrVcsManager {
 impl LocalBzrVcsManager {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
+    }
+
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
     }
 }
 
@@ -520,7 +534,8 @@ impl VcsManager for LocalBzrVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        Url::from_directory_path(&self.base_path)
+        let abspath = self.base_path.canonicalize().unwrap();
+        Url::from_directory_path(&abspath)
             .unwrap()
             .join(codebase)
             .unwrap()
@@ -593,7 +608,7 @@ impl VcsManager for LocalBzrVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteGitVcsManager {
     base_url: Url,
 }
@@ -603,7 +618,11 @@ impl RemoteGitVcsManager {
         Self { base_url }
     }
 
-    fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
+    pub fn base_url(&self) -> &Url {
+        &self.base_url
+    }
+
+    pub fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
         if revid.is_null() {
             default
         } else {
@@ -611,7 +630,12 @@ impl RemoteGitVcsManager {
         }
     }
 
-    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
@@ -706,7 +730,7 @@ impl VcsManager for RemoteGitVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteBzrVcsManager {
     base_url: Url,
 }
@@ -716,7 +740,16 @@ impl RemoteBzrVcsManager {
         Self { base_url }
     }
 
-    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn base_url(&self) -> &Url {
+        &self.base_url
+    }
+
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
