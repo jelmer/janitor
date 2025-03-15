@@ -4,7 +4,10 @@ use protobuf::text_format;
 use std::fs::File;
 use std::io::Read;
 
-pub use config::{AptRepository, Campaign, Config, Distribution, OAuth2Provider, BugTracker, MergeProposalConfig, DebianBuild, GenericBuild, BugTrackerKind, Select};
+pub use config::{
+    AptRepository, BugTracker, BugTrackerKind, Campaign, Config, DebianBuild, Distribution,
+    GenericBuild, MergeProposalConfig, OAuth2Provider, Select,
+};
 
 pub fn read_file(file_path: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
     let mut file = File::open(file_path)?;

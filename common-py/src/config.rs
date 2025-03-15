@@ -1,6 +1,6 @@
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
-use pyo3::exceptions::{PyValueError, PyKeyError};
 
 #[pyclass]
 pub struct Config(pub(crate) janitor::config::Config);
@@ -8,7 +8,9 @@ pub struct Config(pub(crate) janitor::config::Config);
 #[pymethods]
 impl Config {
     pub fn find_distribution(&self, name: &str) -> PyResult<Distribution> {
-        let d = self.0.distribution
+        let d = self
+            .0
+            .distribution
             .iter()
             .find(|d| d.name.as_ref().unwrap() == name)
             .map(|d| Distribution(d.clone()));
@@ -16,12 +18,17 @@ impl Config {
         if let Some(d) = d {
             Ok(d)
         } else {
-            Err(PyKeyError::new_err(format!("No distribution named '{}'", name)))
+            Err(PyKeyError::new_err(format!(
+                "No distribution named '{}'",
+                name
+            )))
         }
     }
 
     pub fn find_campaign(&self, name: &str) -> PyResult<Campaign> {
-        let c = self.0.campaign
+        let c = self
+            .0
+            .campaign
             .iter()
             .find(|c| c.name.as_ref().unwrap() == name)
             .map(|c| Campaign(c.clone()));
@@ -49,7 +56,11 @@ impl Config {
 
     #[getter]
     pub fn distribution(&self) -> Vec<Distribution> {
-        self.0.distribution.iter().map(|d| Distribution(d.clone())).collect()
+        self.0
+            .distribution
+            .iter()
+            .map(|d| Distribution(d.clone()))
+            .collect()
     }
 
     #[getter]
@@ -64,7 +75,10 @@ impl Config {
 
     #[getter]
     pub fn oauth2_provider(&self) -> Option<OAuth2Provider> {
-        self.0.oauth2_provider.as_ref().map(|p| OAuth2Provider(p.clone()))
+        self.0
+            .oauth2_provider
+            .as_ref()
+            .map(|p| OAuth2Provider(p.clone()))
     }
 
     #[getter]
@@ -74,7 +88,11 @@ impl Config {
 
     #[getter]
     pub fn campaign(&self) -> Vec<Campaign> {
-        self.0.campaign.iter().map(|c| Campaign(c.clone())).collect()
+        self.0
+            .campaign
+            .iter()
+            .map(|c| Campaign(c.clone()))
+            .collect()
     }
 
     #[getter]
@@ -99,12 +117,20 @@ impl Config {
 
     #[getter]
     pub fn bugtracker(&self) -> Vec<BugTracker> {
-        self.0.bugtracker.iter().map(|b| BugTracker(b.clone())).collect()
+        self.0
+            .bugtracker
+            .iter()
+            .map(|b| BugTracker(b.clone()))
+            .collect()
     }
 
     #[getter]
     pub fn apt_repository(&self) -> Vec<AptRepository> {
-        self.0.apt_repository.iter().map(|a| AptRepository(a.clone())).collect()
+        self.0
+            .apt_repository
+            .iter()
+            .map(|a| AptRepository(a.clone()))
+            .collect()
     }
 }
 
@@ -181,7 +207,10 @@ impl Campaign {
 
     #[getter]
     pub fn merge_propsoal(&self) -> Option<MergeProposalConfig> {
-        self.0.merge_proposal.as_ref().map(|m| MergeProposalConfig(m.clone()))
+        self.0
+            .merge_proposal
+            .as_ref()
+            .map(|m| MergeProposalConfig(m.clone()))
     }
 
     #[getter]
@@ -201,13 +230,19 @@ impl Campaign {
 
     #[getter]
     pub fn bugtracker(&self) -> Vec<BugTracker> {
-        self.0.bugtracker.iter().map(|b| BugTracker(b.clone())).collect()
+        self.0
+            .bugtracker
+            .iter()
+            .map(|b| BugTracker(b.clone()))
+            .collect()
     }
 
     #[getter]
     pub fn debian_build(&self) -> Option<DebianBuild> {
         self.0.build.as_ref().and_then(|b| match b {
-            janitor::config::config::campaign::Build::DebianBuild(d) => Some(DebianBuild(d.clone())),
+            janitor::config::config::campaign::Build::DebianBuild(d) => {
+                Some(DebianBuild(d.clone()))
+            }
             _ => None,
         })
     }
@@ -215,7 +250,9 @@ impl Campaign {
     #[getter]
     pub fn generic_build(&self) -> Option<GenericBuild> {
         self.0.build.as_ref().and_then(|b| match b {
-            janitor::config::config::campaign::Build::GenericBuild(g) => Some(GenericBuild(g.clone())),
+            janitor::config::config::campaign::Build::GenericBuild(g) => {
+                Some(GenericBuild(g.clone()))
+            }
             _ => None,
         })
     }
@@ -223,8 +260,12 @@ impl Campaign {
     #[getter]
     pub fn build(&self, py: Python) -> Option<PyObject> {
         match self.0.build.as_ref() {
-            Some(janitor::config::config::campaign::Build::DebianBuild(d)) => Some(DebianBuild(d.clone()).into_py(py)),
-            Some(janitor::config::config::campaign::Build::GenericBuild(g)) => Some(GenericBuild(g.clone()).into_py(py)),
+            Some(janitor::config::config::campaign::Build::DebianBuild(d)) => {
+                Some(DebianBuild(d.clone()).into_py(py))
+            }
+            Some(janitor::config::config::campaign::Build::GenericBuild(g)) => {
+                Some(GenericBuild(g.clone()).into_py(py))
+            }
             Some(_) => unreachable!(),
             None => None,
         }
@@ -243,7 +284,11 @@ pub struct DebianBuild(pub(crate) janitor::config::DebianBuild);
 impl DebianBuild {
     #[getter]
     pub fn extra_build_distribution(&self) -> Vec<&str> {
-        self.0.extra_build_distribution.iter().map(|s| s.as_str()).collect()
+        self.0
+            .extra_build_distribution
+            .iter()
+            .map(|s| s.as_str())
+            .collect()
     }
 
     #[getter]
@@ -349,7 +394,11 @@ impl Distribution {
     }
 
     pub fn lintian_suppress_tag(&self) -> Vec<&str> {
-        self.0.lintian_suppress_tag.iter().map(|s| s.as_str()).collect()
+        self.0
+            .lintian_suppress_tag
+            .iter()
+            .map(|s| s.as_str())
+            .collect()
     }
 
     pub fn build_command(&self) -> Option<&str> {
@@ -405,7 +454,8 @@ impl Select {
 #[pyfunction]
 pub fn read_config(f: PyObject) -> PyResult<Config> {
     let f = pyo3_filelike::PyBinaryFile::from(f);
-    let config = janitor::config::read_readable(f).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let config =
+        janitor::config::read_readable(f).map_err(|e| PyValueError::new_err(e.to_string()))?;
     Ok(Config(config))
 }
 
@@ -415,7 +465,7 @@ pub fn get_campaign_config(config: &Config, campaign: &str) -> PyResult<Campaign
 }
 
 #[pyfunction]
-pub fn get_distribution_config(config: &Config, distribution: &str) -> PyResult<Distribution> {
+pub fn get_distribution(config: &Config, distribution: &str) -> PyResult<Distribution> {
     config.find_distribution(distribution)
 }
 
@@ -432,6 +482,6 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<Select>()?;
     module.add_function(wrap_pyfunction_bound!(read_config, module)?)?;
     module.add_function(wrap_pyfunction_bound!(get_campaign_config, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_distribution_config, module)?)?;
+    module.add_function(wrap_pyfunction_bound!(get_distribution, module)?)?;
     Ok(())
 }
