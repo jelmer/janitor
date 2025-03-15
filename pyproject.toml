@@ -306,6 +306,7 @@ known-first-party = ["janitor"]
 [tool.djlint]
 close_void_tags=true
 format_css=true
-format_js=true
+# format_js doesn't deal well with jinja2 {% %} tags
+format_js=false
 ignore="J018,H030,H031,H021"
 profile="jinja"
