@@ -1,0 +1,368 @@
+# Pull (Pre-Built):
+#   $ podman-compose pull
+# Update & Run:
+#   $ podman-compose pull; \
+#     podman-compose --project-name janitor down; \
+#     podman-compose --project-name janitor up --detach --remove-orphans; \
+#     podman-compose --project-name janitor logs --follow
+# Build:
+#   $ podman-compose build
+# Build & Run:
+#   $ podman-compose --project-name janitor up --build --force-recreate
+# Run:
+#   $ podman-compose --project-name janitor up
+# Debug:
+#   $ podman-compose --project-name janitor logs
+#   $ podman ps --sort names --watch 2
+#   $ podman exec -it janitor-archive bash
+#   $ podman logs -f janitor-site
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+services:
+  archive:
+    build:
+      context: .
+      dockerfile: Dockerfile_archive
+    image: ghcr.io/jelmer/janitor/archive:latest
+    container_name: archive
+    hostname: archive
+    restart: always
+    ports:
+      - 9914:9914
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+      --cache-directory=/home/janitor/cache
+      --dists-directory=/home/janitor/dists
+     #--verbose
+    depends_on:
+      caching:
+        condition: service_started
+      database:
+        condition: service_healthy
+        restart: true
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9914; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  #test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/9914' || exit 1
+    #  #test: curl --fail 'http://127.0.0.1:9914/health'
+    #  start_period: 30s
+
+  auto_upload:
+    build:
+      context: .
+      dockerfile: Dockerfile_auto_upload
+    image: ghcr.io/jelmer/janitor/auto_upload:latest
+    container_name: auto-upload
+    hostname: auto-upload
+    restart: always
+    ports:
+      - 9933:9933
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+     #--verbose
+    depends_on:
+      caching:
+        condition: service_started
+
+  bzr_store:
+    build:
+      context: .
+      dockerfile: Dockerfile_bzr_store
+    image: ghcr.io/jelmer/janitor/bzr_store:latest
+    container_name: bzr-store
+    hostname: bzr-store
+    restart: always
+    ports:
+      - 9929:9929 # Admin API
+      - 9930:9930 # Public website and API
+    volumes:
+      - bzr:/bzr
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+      --vcs-path=/bzr
+     #--debug
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9929; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  differ:
+    build:
+      context: .
+      dockerfile: Dockerfile_differ
+    image: ghcr.io/jelmer/janitor/differ:latest
+    container_name: differ
+    hostname: differ
+    restart: always
+    ports:
+      - 9920:9920
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+      --cache-path=/home/janitor/cache
+     #--debug
+    depends_on:
+      caching:
+        condition: service_started
+      database:
+        condition: service_healthy
+        restart: true
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9920; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  git_store:
+    build:
+      context: .
+      dockerfile: Dockerfile_git_store
+    image: ghcr.io/jelmer/janitor/git_store:latest
+    container_name: git-store
+    hostname: git-store
+    restart: always
+    ports:
+      - 9923:9923 # Admin API
+      - 9924:9924 # Public website and API
+    volumes:
+      - git:/git
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+      --vcs-path=/git
+     #--debug
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9923; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  ognibuild_dep:
+    build:
+      context: .
+      dockerfile: Dockerfile_ognibuild_dep
+    image: ghcr.io/jelmer/janitor/ognibuild_dep:latest
+    container_name: ognibuild-dep
+    hostname: ognibuild-dep
+    restart: always
+    ports:
+      - 9934:9934
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+
+  publish:
+    build:
+      context: .
+      dockerfile: Dockerfile_publish
+    image: ghcr.io/jelmer/janitor/publish:latest
+    container_name: publish
+    hostname: publish
+    restart: always
+    ports:
+      - 9912:9912
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+      - ./examples/proposal-templates:/home/janitor/proposal-templates
+    command: |
+      --config=/home/janitor/janitor.config
+      --differ-url=http://differ:9920/
+      --external-url=http://reverse-proxy/
+      --template-env-path=/home/janitor/proposal-templates
+     #--debug
+    depends_on:
+      caching:
+        condition: service_started
+      database:
+        condition: service_healthy
+        restart: true
+      differ:
+        condition: service_started
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9912; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  runner:
+    build:
+      context: .
+      dockerfile: Dockerfile_runner
+    image: ghcr.io/jelmer/janitor/runner:latest
+    container_name: runner
+    hostname: runner
+    restart: always
+    ports:
+      - 9911:9911 # Admin API
+      - 9919:9919 # Public website and API
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+      - ./runner-backup:/home/janitor/backup
+    command: |
+      --config=/home/janitor/janitor.config
+      --backup-directory=/home/janitor/backup
+      --public-apt-archive-location=http://archive:9935/
+      --public-dep-server-url=http://ognibuild-dep:9934/
+      --public-vcs-location=http://janitor.local/
+     #--debug
+    depends_on:
+      archive:
+        condition: service_started
+      caching:
+        condition: service_started
+      database:
+        condition: service_healthy
+        restart: true
+      ognibuild_dep:
+        condition: service_started
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9911; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  site:
+    build:
+      context: .
+      dockerfile: Dockerfile_site
+    image: ghcr.io/jelmer/janitor/site:latest
+    container_name: site
+    hostname: site
+    restart: always
+    ports:
+      - 8080:8080 # Admin API
+      - 8090:8090 # Public website and API
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/janitor.conf.example:/home/janitor/janitor.config
+    command: |
+      --config=/home/janitor/janitor.config
+      --archiver-url=http://archive:9935/
+      --differ-url=http://differ:9920/
+      --external-url=http://reverse-proxy/
+      --publisher-url=http://publish:9912/
+      --runner-url=http://runner:9911/
+     #--debug
+    depends_on:
+      archive:
+        condition: service_started
+      differ:
+        condition: service_started
+      publish:
+        condition: service_started
+      runner:
+        condition: service_started
+      git_store:
+        condition: service_started
+      bzr_store:
+        condition: service_started
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile_worker
+    image: ghcr.io/jelmer/janitor/worker:latest
+    container_name: worker
+    hostname: worker
+    restart: always
+    ports:
+      - 9821:9821
+    volumes:
+      - artifacts:/home/janitor/artifacts
+      - logs:/home/janitor/logs
+      - ./examples/worker-credentials.json:/home/janitor/credentials.json
+    command: |
+      --credentials=/home/janitor/credentials.json
+      --base-url=http://runner:9911/
+      --tee
+      --loop
+     #--debug
+    #healthcheck:
+    #  test: [ "CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9821; echo -e 'GET /health HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3; grep 'HTTP/1.1 200 OK' <&3" ]
+    #  start_period: 30s
+
+  reverse_proxy:
+    image: docker.io/nginx:latest
+    container_name: reverse-proxy
+    hostname: reverse-proxy
+    restart: always
+    ports:
+      - 80:80
+    volumes:
+      - ./examples/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      site:
+        condition: service_started
+      git_store:
+        condition: service_started
+      bzr_store:
+        condition: service_started
+      runner:
+        condition: service_started
+
+  database:
+    build:
+      context: .
+      dockerfile: Dockerfile_database
+    image: ghcr.io/jelmer/janitor/database:latest
+    container_name: database
+    hostname: database
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - ./py/janitor/state.sql:/docker-entrypoint-initdb.d/10-state.sql:ro
+      - ./py/janitor/debian/debian.sql:/docker-entrypoint-initdb.d/20-debian.sql:ro
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready --username=$$POSTGRES_USER --dbname $$POSTGRES_DB || exit 1   # Alt: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      - PGUSER=janitor
+      - POSTGRES_USER=janitor
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=janitor
+
+  caching:
+    image: docker.io/redis:latest
+    container_name: caching
+    hostname: caching
+    restart: always
+    ports:
+      - 6379:6379
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+volumes:
+  artifacts:
+  logs:
+  database:
+  bzr:
+  git:
