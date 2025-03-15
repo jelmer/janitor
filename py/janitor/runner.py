@@ -438,7 +438,7 @@ RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 
 def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=None):
-    if campaign_config.HasField("debian_build"):
+    if campaign_config.debian_build:
         try:
             distribution = get_distribution(
                 config, campaign_config.debian_build.base_distribution
@@ -453,7 +453,7 @@ def get_builder(config, campaign_config, apt_archive_url=None, dep_server_url=No
             apt_archive_url,
             dep_server_url,
         )
-    elif campaign_config.HasField("generic_build"):
+    elif campaign_config.generic_build:
         return GenericBuilder(dep_server_url)
     else:
         raise NotImplementedError("no supported build type")
@@ -2701,7 +2701,7 @@ async def next_item(
 
     try:
         with span.new_child("cache-branch:check"):
-            if campaign_config.HasField("debian_build"):
+            if campaign_config.debian_build:
                 distribution = get_distribution(
                     config, campaign_config.debian_build.base_distribution
                 )

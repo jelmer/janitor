@@ -81,7 +81,7 @@ async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None)
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4="127.0.0.1", port=80)
     tracer = await aiozipkin.create_custom(endpoint)
     config_text = """\
-campaign {
+distribution {
   name: "unstable"
 }
 """
@@ -92,8 +92,8 @@ campaign {{
   name: "{name}"
   debian_build {{
     base_distribution: "unstable"
-    default_empty: true
   }}
+  default_empty: true
 }}
 """
     config = read_config_string(config_text)
@@ -342,7 +342,7 @@ async def test_submit_candidate(aiohttp_client, db, tmp_path):
                 "build-extra-repositories": [],
                 "build-suffix": "",
                 "dep_server_url": None,
-                "lintian": {"profile": ""},
+                "lintian": {"profile": None},
             },
             "environment": {
                 "DEB_VENDOR": dpkg_vendor(),
@@ -641,7 +641,7 @@ async def test_assignment_with_only_vcs(aiohttp_client, db, tmp_path):
                 "build-extra-repositories": [],
                 "build-suffix": "",
                 "dep_server_url": None,
-                "lintian": {"profile": ""},
+                "lintian": {"profile": None},
             },
             "environment": {
                 "DEB_VENDOR": dpkg_vendor(),

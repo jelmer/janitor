@@ -10,7 +10,6 @@ PUSH_TARGETS := $(patsubst %,push-%,$(DOCKERFILES))
 
 build-inplace:
 	$(PYTHON) setup.py build_ext -i
-	$(PYTHON) setup.py build_protobuf
 
 all: core
 

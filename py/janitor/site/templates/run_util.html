@@ -50,7 +50,7 @@ cd {{ codebase }}
     {% endfor %}
 {% endmacro %}
 {% macro file_bug_button(bugtracker, run_id, result_code, verbatim_id=None, accesskey="b") %}
-    {% if bugtracker.kind == config_pb2.gitlab %}
+    {% if bugtracker.kind == "gitlab" %}
         <form id="bugform"
               action="{{ bugtracker.url }}/-/issues/new"
               method="get"
@@ -82,7 +82,7 @@ cd {{ codebase }}
                 };
             </script>
         {% endif %}
-    {% elif bugtracker.kind == config_pb2.github %}
+    {% elif bugtracker.kind == "github" %}
         <form id="bugform"
               method="get"
               action="{{ bugtracker.url }}/issues/new"
@@ -97,7 +97,7 @@ cd {{ codebase }}
                 File a Bug against {{ bugtracker.name }}
             </button>
         </form>
-    {% elif bugtracker.kind == config_pb2.debian %}
+    {% elif bugtracker.kind == "debian" %}
         <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
         <form id="bugform"
               action="mailto:new@bugs.debian.org"
