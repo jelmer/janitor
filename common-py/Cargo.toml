@@ -21,7 +21,7 @@ pyo3-log = { workspace = true }
 log = "0.4"
 chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true
-silver-platter = { workspace = true, features = ["debian"] }
+silver-platter = { workspace = true, features = ["debian", "pyo3"] }
 url.workspace = true
 pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
 tokio.workspace = true
