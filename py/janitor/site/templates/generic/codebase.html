@@ -20,12 +20,12 @@
             {% endif %}
             {% if vcs_url %}<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>{% endif %}
             {% if queue_position %}
-	    	<li id="queue-position.{{ codebase }}">
+                <li id="queue-position.{{ codebase }}">
                     Queue position: {{ queue_position }}
                     {% if queue_wait_time %}(a {{ format_duration(queue_wait_time) }} wait){% endif %}
                 </li>
             {% else %}
-	    	<li id="queue-position.{{ codebase }}"/>
+                <li id="queue-position.{{ codebase }}" />
             {% endif %}
         </ul>
         {% if branch_url or campaign.default_empty %}{{ reschedule_button(suite, codebase, "Schedule a new run") }}{% endif %}
@@ -79,7 +79,7 @@
             <ul>
                 {% for previous_run in previous_runs %}
                     <li>
-                        <a href="/cupboard/c/{{ previous_run.codebase }}/{{ previous_run.id }}/">{{ display_result_code(previous_run.result_code, previous_run.failure_transient)|safe }}: {{ previous_run.description }}</a>
+                        <a href="/cupboard/c/{{ previous_run.codebase }}/{{ previous_run.id }}/">{{ display_result_code(previous_run.result_code, previous_run.failure_transient) |safe }}: {{ previous_run.description }}</a>
                     </li>
                 {% endfor %}
             </ul>

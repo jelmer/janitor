@@ -1,6 +1,6 @@
 {% macro reprocess_logs_button(run_id, title="Reprocess logs", id="reprocess-logs", accesskey="l") %}
     <button id="{{ id }}"
-            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+            {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
         $(function() {
             $("#{{ id }}").click(function() {

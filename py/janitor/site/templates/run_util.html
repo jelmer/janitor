@@ -1,8 +1,6 @@
 {% macro local_command(command, codebase, vcs, vcs_url) %}
     {% if failure_stage and (failure_stage == 'validate' or (command and failure_stage.startswith('codemod/'))) %}
-        <p>
-            Try this locally:
-        </p>
+        <p>Try this locally:</p>
         <div class="highlight-default notranslate">
             <div class="highlight">
                 <pre>
@@ -56,16 +54,17 @@ cd {{ codebase }}
         <form id="bugform"
               action="{{ bugtracker.url }}/-/issues/new"
               method="get"
-              style="display: contents;">
-            <input type="hidden" name="issue[issue_type]" value="issue"/>
+              style="display: contents">
+            <input type="hidden" name="issue[issue_type]" value="issue" />
             <input type="hidden"
                    name="issue[title]"
-                   value="{{ (result_code + ": " + (description or ''))|escape }}"/>
+                   value="{{ (result_code + ": " + (description or ''))|escape }}" />
             <input type="hidden"
                    id="issue_description"
                    name="issue[description]"
-                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
-            <button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}" {% endif %}>
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}" />
+            <button id="filebug"
+                    {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>
                 File a Bug against {{ bugtracker.name }}
             </button>
         </form>
@@ -84,27 +83,33 @@ cd {{ codebase }}
             </script>
         {% endif %}
     {% elif bugtracker.kind == config_pb2.github %}
-    <form id="bugform" method="get" action="{{ bugtracker.url }}/issues/new" style="display: contents;">
-	    <input type="hidden" name="title" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
-            <input type="hidden" name="body"
-                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
+        <form id="bugform"
+              method="get"
+              action="{{ bugtracker.url }}/issues/new"
+              style="display: contents">
+            <input type="hidden"
+                   name="title"
+                   value="{{ (result_code + ": " + (description or ''))|escape }}" />
+            <input type="hidden"
+                   name="body"
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}" />
             <button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>
                 File a Bug against {{ bugtracker.name }}
             </button>
-    </form>
+        </form>
     {% elif bugtracker.kind == config_pb2.debian %}
         <!-- TODO: nit: Extract domain from URL rather than hardcoding -->
         <form id="bugform"
               action="mailto:new@bugs.debian.org"
               method="get"
-              style="display: contents;">
+              style="display: contents">
             <input type="hidden"
                    name="subject"
-                   value="{{ (result_code + ": " + (description or ''))|escape }}"/>
+                   value="{{ (result_code + ": " + (description or ''))|escape }}" />
             <input type="hidden"
                    name="body"
-                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}"/>
-            <button {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
+                   value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}" />
+            <button {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>File a Bug against {{ bugtracker.name }}</button>
         </form>
     {% else %}
         <!-- unknown bugtracker kind {{ bugtracker.kind }} -->
@@ -112,7 +117,7 @@ cd {{ codebase }}
 {% endmacro %}
 {% macro reschedule_button(suite, codebase, title="Reschedule", id="reschedule", data={}, accesskey="s") %}
     <button id="{{ id }}"
-            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+            {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
         $(function() {
             $("#{{ id }}").click(function() {
@@ -131,7 +136,7 @@ cd {{ codebase }}
 {% endmacro %}
 {% macro schedule_control_button(run_id, title="Schedule control run", id="schedule-control", data={}, accesskey="c") %}
     <button id="{{ id }}"
-            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+            {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
     <script>
         $(function() {
             $("#{{ id }}").click(function() {
@@ -147,12 +152,12 @@ cd {{ codebase }}
     </script>
 {% endmacro %}
 {% macro publish_buttons(campaign, codebase, id_suffix="", accesskey="p") %}
-    {% set propose_id="propose" + id_suffix %}
-    {% set fork_id="push-derived" + id_suffix %}
-    {% set push_id="push" + id_suffix %}
-    {% set publish_id="publish" + id_suffix %}
+    {% set propose_id = "propose" + id_suffix %}
+    {% set fork_id = "push-derived" + id_suffix %}
+    {% set push_id = "push" + id_suffix %}
+    {% set publish_id = "publish" + id_suffix %}
     <button id="{{ publish_id }}"
-            {% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>Publish now</button>
+            {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>Publish now</button>
     {% if is_admin %}
         <button id="{{ fork_id }}">Create fork with changes</button>
         <button id="{{ push_id }}">Push</button>
@@ -298,15 +303,9 @@ cd {{ codebase }}
 {% endmacro %}
 {% macro display_vcs_diffs(show_diff, branches, tags=None) %}
     {% if branches %}
-        <h3>
-            Diff
-        </h3>
+        <h3>Diff</h3>
         {% for role, name, baserev, rev in branches %}
-            {% if branches|length > 1 %}
-                <h4>
-                    Branch: {{ role }}
-                </h4>
-            {% endif %}
+            {% if branches|length > 1 %}<h4>Branch: {{ role }}</h4>{% endif %}
             {% if tags %}
                 {% for tagname, tagrev in tags %}
                     {% if tagrev == rev %}Tag: {{ tagname }}{% endif %}
@@ -314,7 +313,7 @@ cd {{ codebase }}
             {% endif %}
             {% set diff = show_diff(role) %}
             {% if diff.split('\n')|length < 200 %}
-                {{ highlight_diff(diff)|safe }}
+                {{ highlight_diff(diff) |safe }}
             {% else %}
                 <p>
                     Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff?role={{ role }}">raw diff</a>.
@@ -327,7 +326,10 @@ cd {{ codebase }}
     <ul>
         {% for k, v in blockers.items() %}
             <li>
-                {%- if v.result -%}☑ {% else -%}☒ {% endif -%}
+                {%- if v.result -%}☑
+                {% else -%}
+                    ☒
+                {% endif -%}
                 {% set r = v.result -%}
                 {%- set d = v.details -%}
                 {%- if k == 'inactive' -%}
@@ -345,8 +347,8 @@ cd {{ codebase }}
                         run was rejected
                     {%- elif d.status == 'unknown' -%}
                         run not yet processed
-		    {%- else -%}
-		        unknown publish status {{ d.status }}
+                    {%- else -%}
+                        unknown publish status {{ d.status }}
                     {%- endif -%}
                 {%- elif k == 'backoff' -%}
                     {{ d.attempt_count }} publish attempts so far.
@@ -379,16 +381,24 @@ cd {{ codebase }}
                     {%- else -%}
                         change set <a href="/cupboard/cs/{{ d.change_set_id }}/">{{ d.change_set_id }}</a> is {{ d.change_set_state }}
                     {%- endif -%}
-		{%- elif k == 'previous_mp' -%}
-		    {%- if r -%}
-		    	{%- if not d -%}no relevant previous merge proposals
-			{%- else -%}merge proposals for previous run were not rejected:
-		        {% for (url, status) in d %}<a href="{{ url }}">{{ status }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
-			{%- endif -%}
-		    {%- else -%}
-		        merge proposals for previous run were rejected:
-		        {% for (url, status) in d %}<a href="{{ url }}">{{ status }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
-		    {%- endif -%}
+                {%- elif k == 'previous_mp' -%}
+                    {%- if r -%}
+                        {%- if not d -%}no relevant previous merge proposals
+                        {%- else -%}merge proposals for previous run were not rejected:
+                            {% for (url, status) in d %}
+                                <a href="{{ url }}">{{ status }}</a>
+                                {% if not loop.last %},{% endif %}
+                            {% endfor %}
+                            .
+                        {%- endif -%}
+                    {%- else -%}
+                        merge proposals for previous run were rejected:
+                        {% for (url, status) in d %}
+                            <a href="{{ url }}">{{ status }}</a>
+                            {% if not loop.last %},{% endif %}
+                        {% endfor %}
+                        .
+                    {%- endif -%}
                 {%- else -%}
                     {{ k }}
                 {%- endif -%}

@@ -12,23 +12,23 @@
         <h1>{{ code }}</h1>
         {{ result_code_explanation(code) }}
         {% if is_admin %}
-            <form id="mass_reschedule" method="post" action="/cupboard/api/mass-reschedule">
+            <form id="mass_reschedule"
+                  method="post"
+                  action="/cupboard/api/mass-reschedule">
                 Description regex:
-                <input type="text" name="description_re"/>
-                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
-                <input type="hidden" name="include_transient" value="{{ 'on' if include_transient else 'off' }}"/>
+                <input type="text" name="description_re" />
+                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}" />{% endif %}
+                <input type="hidden"
+                       name="include_transient"
+                       value="{{ 'on' if include_transient else 'off' }}" />
                 Min age (days):
                 <select name="min_age">
-                    {% for i in range(90) %}
-                        <option>
-                            {{ i }}
-                        </option>
-                    {% endfor %}
+                    {% for i in range(90) %}<option>{{ i }}</option>{% endfor %}
                 </select>
                 Refresh:
-                <input type="checkbox" name="refresh" value="1"/>
-                <input type="hidden" name="result_code" value="{{ code }}"/>
-                <input type="submit" value="Reschedule Matching"/>
+                <input type="checkbox" name="refresh" value="1" />
+                <input type="hidden" name="result_code" value="{{ code }}" />
+                <input type="submit" value="Reschedule Matching" />
             </form>
             <script>
                 window.mass_reschedule.onsubmit = function(e) {
@@ -43,12 +43,12 @@
         {% endif %}
         <table id="result-codes-t" class="display docutils" border="1">
             <colgroup>
-                <col width="21%"/>
-                <col width="6%"/>
-                <col width="10%"/>
-                <col width="10%"/>
-                <col width="6%"/>
-                <col width="53%"/>
+                <col width="21%" />
+                <col width="6%" />
+                <col width="10%" />
+                <col width="10%" />
+                <col width="6%" />
+                <col width="53%" />
             </colgroup>
             <thead valign="bottom">
                 <tr>

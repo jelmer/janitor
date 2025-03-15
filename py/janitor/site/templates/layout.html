@@ -27,16 +27,16 @@
             {% block sidebar %}
             {% endblock sidebar %}
             {% if layout != 'plain' %}
-            <div class="documentwrapper">
-                <div class="bodywrapper">
-            {% endif %}
-            <main>
-                {% block body %}
-                {% endblock body %}
-            </main>
-            {% if layout != 'plain' %}
+                <div class="documentwrapper">
+                    <div class="bodywrapper">
+                    {% endif %}
+                    <main>
+                        {% block body %}
+                        {% endblock body %}
+                    </main>
+                    {% if layout != 'plain' %}
+                    </div>
                 </div>
-            </div>
             {% endif %}
         </div>
         {% include "footer.html" %}

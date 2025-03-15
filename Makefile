@@ -31,7 +31,9 @@ check-format:: check-ruff-format
 check-ruff-format:
 	ruff format --check py tests
 
-check-format::
+check-format:: check-cargo-format
+
+check-cargo-format:
 	cargo fmt --check --all
 
 ruff:
@@ -71,8 +73,13 @@ yamllint:
 
 style:: djlint
 
+check-format:: check-html-format
+
+check-html-format:
+	djlint --check py/janitor/site/templates/
+
 djlint:
-	djlint -i J018,H030,H031,H021 --profile jinja py/janitor/site/templates
+	djlint py/janitor/site/templates
 
 typing:
 	$(PYTHON) -m mypy py/janitor tests
@@ -102,7 +109,7 @@ push-all: $(PUSH_TARGETS)
 reformat:: reformat-html
 
 reformat-html:
-	djlint --reformat --format-css py/janitor/site/templates/
+	djlint --reformat py/janitor/site/templates/
 
 codespell:
 	codespell
