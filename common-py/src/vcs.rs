@@ -116,16 +116,16 @@ impl LocalGitVcsManager {
 }
 
 #[pyclass(extends=VcsManager)]
-pub struct RemoteGitVcsManager {}
+pub struct RemoteGitVcsManager(Arc<janitor::vcs::RemoteGitVcsManager>);
 
 #[pymethods]
 impl RemoteGitVcsManager {
     #[new]
     fn new(base_url: &str) -> PyResult<(Self, VcsManager)> {
-        let manager = RemoteGitVcsManager {};
         let base_url =
             url::Url::parse(base_url).map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         let vcs_manager = Arc::new(janitor::vcs::RemoteGitVcsManager::new(base_url));
+        let manager = RemoteGitVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
     }
 
@@ -135,7 +135,9 @@ impl RemoteGitVcsManager {
         old_revid: RevisionId,
         new_revid: RevisionId,
     ) -> PyResult<String> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+        Ok(self.0
+            .get_diff_url(codebase, &old_revid, &new_revid)
+            .to_string())
     }
 }
 
@@ -154,16 +156,16 @@ impl LocalBzrVcsManager {
 }
 
 #[pyclass(extends=VcsManager)]
-pub struct RemoteBzrVcsManager {}
+pub struct RemoteBzrVcsManager(Arc<janitor::vcs::RemoteBzrVcsManager>);
 
 #[pymethods]
 impl RemoteBzrVcsManager {
     #[new]
     fn new(base_url: &str) -> PyResult<(Self, VcsManager)> {
-        let manager = RemoteBzrVcsManager {};
         let base_url =
             url::Url::parse(base_url).map_err(|e| PyValueError::new_err(format!("{}", e)))?;
         let vcs_manager = Arc::new(janitor::vcs::RemoteBzrVcsManager::new(base_url));
+        let manager = RemoteBzrVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
     }
 
@@ -173,7 +175,9 @@ impl RemoteBzrVcsManager {
         old_revid: RevisionId,
         new_revid: RevisionId,
     ) -> PyResult<String> {
-        Err(PyNotImplementedError::new_err("Not implemented"))
+        Ok(self.0
+            .get_diff_url(codebase, &old_revid, &new_revid)
+            .to_string())
     }
 }
 
