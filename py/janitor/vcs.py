@@ -20,7 +20,6 @@ __all__ = [
     "is_authenticated_url",
     "BranchOpenFailure",
     "open_branch_ext",
-    "MirrorFailure",
     "UnsupportedVcs",
     "VcsManager",
     "LocalGitVcsManager",
@@ -32,40 +31,16 @@ __all__ = [
     "get_branch_vcs_type",
 ]
 
-import logging
-import ssl
 import sys
 from io import BytesIO
-from typing import Optional
 
 import breezy.bzr  # noqa: F401
 import breezy.git  # noqa: F401
-from aiozipkin.helpers import TraceContext
 from breezy import urlutils
-from breezy.branch import Branch
-from breezy.controldir import BranchReferenceLoop
 from breezy.diff import show_diff_trees
 from breezy.errors import (
-    InvalidHttpResponse,
     NoSuchRevision,
     NotBranchError,
-)
-
-try:
-    from breezy.errors import ConnectionError  # type: ignore
-except ImportError:  # breezy >= 4
-    pass
-from breezy.git.remote import RemoteGitError
-from breezy.transport import Transport, get_transport_from_url
-from silver_platter import (
-    BranchMissing,
-    BranchRateLimited,
-    BranchTemporarilyUnavailable,
-    BranchUnavailable,
-    BranchUnsupported,
-)
-from silver_platter import (
-    _open_branch as open_branch,
 )
 
 from ._common import (
@@ -86,122 +61,9 @@ get_local_vcs_manager = _vcs_rs.get_local_vcs_manager
 get_remote_vcs_manager = _vcs_rs.get_remote_vcs_manager
 get_vcs_manager = _vcs_rs.get_vcs_manager
 get_vcs_managers = _vcs_rs.get_vcs_managers
-
-
-class BranchOpenFailure(Exception):
-    """Failure to open a branch."""
-
-    def __init__(
-        self, code: str, description: str, retry_after: Optional[int] = None
-    ) -> None:
-        self.code = code
-        self.description = description
-        self.retry_after = retry_after
-
-
-def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
-    if isinstance(e, BranchRateLimited):
-        code = "too-many-requests"
-        return BranchOpenFailure(code, str(e), retry_after=e.retry_after)
-    elif isinstance(e, BranchUnavailable):
-        if "http code 429: Too Many Requests" in str(e):
-            code = "too-many-requests"
-        elif is_alioth_url(vcs_url):
-            code = "hosted-on-alioth"
-        elif "Unable to handle http code 401: Unauthorized" in str(
-            e
-        ) or "Unexpected HTTP status 401 for " in str(e):
-            code = "401-unauthorized"
-        elif "Unable to handle http code 502: Bad Gateway" in str(
-            e
-        ) or "Unexpected HTTP status 502 for " in str(e):
-            code = "502-bad-gateway"
-        elif str(e).startswith("Subversion branches are not yet"):
-            code = "unsupported-vcs-svn"
-        elif str(e).startswith("Mercurial branches are not yet"):
-            code = "unsupported-vcs-hg"
-        elif str(e).startswith("Darcs branches are not yet"):
-            code = "unsupported-vcs-darcs"
-        elif str(e).startswith("Fossil branches are not yet"):
-            code = "unsupported-vcs-fossil"
-        elif isinstance(e, BranchTemporarilyUnavailable):
-            code = "branch-temporarily-unavailable"
-        else:
-            code = "branch-unavailable"
-        msg = str(e)
-        if e.url not in msg:
-            msg = f"{msg} ({e.url})"
-        return BranchOpenFailure(code, msg)
-    if isinstance(e, BranchMissing):
-        if str(e).startswith(
-            'Branch does not exist: Not a branch: "https://anonscm.debian.org'
-        ):
-            code = "hosted-on-alioth"
-        else:
-            code = "branch-missing"
-        msg = str(e)
-        if e.url not in msg:
-            msg = f"{msg} ({e.url})"
-        return BranchOpenFailure(code, msg)
-    if isinstance(e, BranchUnsupported):
-        if getattr(e, "vcs", None):
-            code = f"unsupported-vcs-{e.vcs}"
-        elif str(e).startswith("Unsupported protocol for url "):
-            if "anonscm.debian.org" in str(e) or "svn.debian.org" in str(e):
-                code = "hosted-on-alioth"
-            else:
-                if "svn://" in str(e):
-                    code = "unsupported-vcs-svn"
-                elif "cvs+pserver://" in str(e):
-                    code = "unsupported-vcs-cvs"
-                else:
-                    code = "unsupported-vcs-protocol"
-        else:
-            if str(e).startswith("Subversion branches are not yet"):
-                code = "unsupported-vcs-svn"
-            elif str(e).startswith("Mercurial branches are not yet"):
-                code = "unsupported-vcs-hg"
-            elif str(e).startswith("Darcs branches are not yet"):
-                code = "unsupported-vcs-darcs"
-            elif str(e).startswith("Fossil branches are not yet"):
-                code = "unsupported-vcs-fossil"
-            else:
-                code = "unsupported-vcs"
-        msg = str(e)
-        if e.url not in msg:
-            msg = f"{msg} ({e.url})"
-        return BranchOpenFailure(code, msg)
-
-    return e
-
-
-def open_branch_ext(
-    vcs_url: str, possible_transports: Optional[list[Transport]] = None, probers=None
-) -> Branch:
-    try:
-        try:
-            return open_branch(vcs_url, possible_transports, probers=probers)
-        except TypeError:
-            return open_branch(vcs_url)
-    except (
-        BranchUnavailable,
-        BranchMissing,
-        BranchUnsupported,
-        BranchRateLimited,
-    ) as e:
-        raise _convert_branch_exception(vcs_url, e) from e
-
-
-class MirrorFailure(Exception):
-    """Branch failed to mirror."""
-
-    def __init__(self, branch_name: str, reason: str) -> None:
-        self.branch_name = branch_name
-        self.reason = reason
-
-
-class UnsupportedVcs(Exception):
-    """Specified vcs type is not supported."""
+BranchOpenFailure = _vcs_rs.BranchOpenFailure
+open_branch_ext = _vcs_rs.open_branch_ext
+UnsupportedVcs = _vcs_rs.UnsupportedVcs
 
 
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
