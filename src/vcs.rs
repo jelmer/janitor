@@ -608,7 +608,7 @@ impl RemoteGitVcsManager {
         Self { base_url }
     }
 
-    fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
+    pub fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
         if revid.is_null() {
             default
         } else {
@@ -616,7 +616,7 @@ impl RemoteGitVcsManager {
         }
     }
 
-    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
@@ -721,7 +721,7 @@ impl RemoteBzrVcsManager {
         Self { base_url }
     }
 
-    fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
