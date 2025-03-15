@@ -72,7 +72,7 @@ yamllint:
 style:: djlint
 
 djlint:
-	djlint -i J018,H030,H031,H021 --profile jinja py/janitor/site/templates
+	djlint py/janitor/site/templates
 
 typing:
 	$(PYTHON) -m mypy py/janitor tests
