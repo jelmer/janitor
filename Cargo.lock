@@ -927,6 +927,7 @@ dependencies = [
  "chrono",
  "janitor",
  "log",
+ "maplit",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-log",

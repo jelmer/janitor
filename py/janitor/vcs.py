@@ -29,7 +29,6 @@ __all__ = [
     "RemoteGitVcsManager",
     "RemoteBzrVcsManager",
     "get_run_diff",
-    "get_vcs_managers",
     "get_vcs_managers_from_config",
     "get_branch_vcs_type",
 ]
@@ -69,7 +68,6 @@ from silver_platter import (
 from silver_platter import (
     _open_branch as open_branch,
 )
-from yarl import URL
 
 from ._common import (
     get_branch_vcs_type,
@@ -85,6 +83,10 @@ RemoteBzrVcsManager = _vcs_rs.RemoteBzrVcsManager
 RemoteGitVcsManager = _vcs_rs.RemoteGitVcsManager
 LocalBzrVcsManager = _vcs_rs.LocalBzrVcsManager
 LocalGitVcsManager = _vcs_rs.LocalGitVcsManager
+get_local_vcs_manager = _vcs_rs.get_local_vcs_manager
+get_remote_vcs_manager = _vcs_rs.get_remote_vcs_manager
+get_vcs_manager = _vcs_rs.get_vcs_manager
+get_vcs_managers = _vcs_rs.get_vcs_managers
 
 
 class BranchOpenFailure(Exception):
@@ -254,28 +256,6 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
         return b"New revision %s temporarily missing" % (new_revid,)
     show_diff_trees(old_tree, new_tree, to_file=f)
     return f.getvalue()
-
-
-def get_vcs_managers(location: str) -> dict[str, VcsManager]:
-    if "=" not in location:
-        return {
-            "git": RemoteGitVcsManager(
-                str(URL(location) / "git"),
-            ),
-            "bzr": RemoteBzrVcsManager(
-                str(URL(location) / "bzr"),
-            ),
-        }
-    ret: dict[str, VcsManager] = {}
-    for p in location.split(","):
-        (k, v) = p.split("=", 1)
-        if k == "git":
-            ret[k] = RemoteGitVcsManager(str(URL(v)))
-        elif k == "bzr":
-            ret[k] = RemoteBzrVcsManager(str(URL(v)))
-        else:
-            raise ValueError(f"unsupported vcs {k}")
-    return ret
 
 
 def get_vcs_managers_from_config(config) -> dict[str, VcsManager]:
