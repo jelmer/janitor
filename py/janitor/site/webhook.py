@@ -308,7 +308,11 @@ def main(argv=None):
     import breezy.bzr  # noqa: F401
     import breezy.git  # noqa: F401
 
-    from janitor.vcs import BranchMissing, BranchUnavailable, open_branch
+    from janitor.vcs import (  # type: ignore
+        BranchMissing,
+        BranchUnavailable,
+        open_branch,
+    )
 
     parser = argparse.ArgumentParser(
         prog="janitor.site.webhook",
