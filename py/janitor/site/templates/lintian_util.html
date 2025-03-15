@@ -29,6 +29,10 @@
             {% endfor %}
         </ul>
     {% endfor %}
-    {% if 'lintian-version' in lintian_result %}<!-- lintian version {{ lintian_result['lintian-version'] }} -->{% endif %}
-    {% if 'lintian_version' in lintian_result %}<!-- lintian version {{ lintian_result['lintian_version'] }} -->{% endif %}
+    {% if 'lintian-version' in lintian_result %}
+        <!-- lintian version {{ lintian_result['lintian-version'] }} -->
+    {% endif %}
+    {% if 'lintian_version' in lintian_result %}
+        <!-- lintian version {{ lintian_result['lintian_version'] }} -->
+    {% endif %}
 {% endmacro %}

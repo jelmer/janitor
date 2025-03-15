@@ -9,15 +9,11 @@
     <div class="section" id="review">
         <h1>Review</h1>
         <p>
-            <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/"
-               id="full-run-link">Full Run</a>
-            {% if review_instructions_url %}
-            <a href="{{ review_instructions_url }}">Review Instructions</a>
-            {% endif %}
+            <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/" id="full-run-link">Full Run</a>
+            {% if review_instructions_url %}<a href="{{ review_instructions_url }}">Review Instructions</a>{% endif %}
         </p>
         <div id="evaluate">{{ evaluate|safe }}</div>
         <script type="text/javascript">
-
             function disallowReview() {
                 $('.review-button').blur();
                 $('.review-button').disabled = "disabled";
@@ -141,44 +137,41 @@
             }
         </script>
         <form action="/cupboard/review" method="post" id="options">
-            <input type="hidden" name="run_id" id="run-id" value="{{ run_id }}"/>
-            <input type="hidden"
-                   name="codebase"
-                   id="codebase"
-                   value="{{ codebase }}"/>
+            <input type="hidden" name="run_id" id="run-id" value="{{ run_id }}" />
+            <input type="hidden" name="codebase" id="codebase" value="{{ codebase }}" />
             {% if suites %}
-                {% for s in suites %}<input type="hidden" name="suites[]" value="{{ s }}"/>{% endfor %}
+                {% for s in suites %}<input type="hidden" name="suites[]" value="{{ s }}" />{% endfor %}
             {% endif %}
             <input class="review-button"
                    type="submit"
                    name="verdict"
                    value="Approve"
                    accesskey="a"
-                   onclick="submitReview(this, 'approved')"/>
+                   onclick="submitReview(this, 'approved')" />
             <input class="review-button"
                    type="submit"
                    name="verdict"
                    value="Reject"
                    accesskey="r"
-                   onclick="submitReview(this, 'rejected')"/>
+                   onclick="submitReview(this, 'rejected')" />
             <input class="review-button"
                    type="submit"
                    name="verdict"
                    value="Reschedule"
                    accesskey="s"
-                   onclick="submitReview(this, 'reschedule')"/>
+                   onclick="submitReview(this, 'reschedule')" />
             <input class="review-button"
                    type="submit"
                    name="verdict"
                    value="Abstain"
                    accesskey="n"
-                   onclick="submitReview(this, 'abstained')"/>
+                   onclick="submitReview(this, 'abstained')" />
             <input type="checkbox"
                    value="true"
                    name="publishable_only"
                    id="publishable-only"
-                   {% if publishable_only %} checked{% endif %}
-                   onchange="$('#options').submit()"/>
+                   {% if publishable_only %}checked{% endif %}
+                   onchange="$('#options').submit()" />
             <label for="publishable_only">Publishable only</label>
         </form>
     </div>

@@ -12,35 +12,35 @@
         Select campaign to display:
         <form method="get" id="filter">
             <select name="campaign" onchange="$('#filter').submit()">
-                <option name="_all" value="_all">
-                    All
-                </option>
+                <option name="_all" value="_all">All</option>
                 {% for s in all_campaigns %}
                     <option value="{{ s }}"
                             name="{{ s }}"
-                            {% if s == campaign %} selected{% endif %}>
-                        {{ s }}
-                    </option>
+                            {% if s == campaign %}selected{% endif %}>{{ s }}</option>
                 {% endfor %}
             </select>
             <input type="checkbox"
                    name="include_transient"
                    id="transient"
-                   {% if include_transient %} checked{% endif %}
-                   onchange="$('#filter').submit()"/>
+                   {% if include_transient %}checked{% endif %}
+                   onchange="$('#filter').submit()" />
             <label for="transient">Include transient</label>
             <input type="checkbox"
                    name="include_historical"
                    id="historical"
-                   {% if include_historical %} checked{% endif %}
-                   onchange="$('#filter').submit()"/>
+                   {% if include_historical %}checked{% endif %}
+                   onchange="$('#filter').submit()" />
             <label for="historical">Include historical</label>
         </form>
-{%- macro random_colors(n) -%}
-[{% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]
-{%- endmacro -%}
+        {%- macro random_colors(n) -%}
+            [
+            {% for i in range(n) %}
+                'rgb({{ range(0, 255) |random }}, {{ range(0, 255) |random }}, {{ range(0, 255) |random }})',
+            {% endfor %}
+            ]
+        {%- endmacro -%}
         <div style="width: 400px; height: 600px;">
-            <canvas id="stage-chart"/>
+            <canvas id="stage-chart" />
         </div>
         <script>
             var stage_chart = new Chart($("#stage-chart"), {
@@ -67,8 +67,8 @@
         </script>
         <table id="stage-table" class="docutils display" border="1">
             <colgroup>
-                <col width="95%"/>
-                <col width="5%"/>
+                <col width="95%" />
+                <col width="5%" />
             </colgroup>
             <thead valign="bottom">
                 <tr class="row-odd">
@@ -78,10 +78,10 @@
             </thead>
             <tbody valign="top">
                 {% for stage, count in failure_stages %}
-                        <tr class="row-even">
-                            <td>{{ stage }}</td>
-                            <td>{{ count }}</td>
-                        </tr>
+                    <tr class="row-even">
+                        <td>{{ stage }}</td>
+                        <td>{{ count }}</td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
