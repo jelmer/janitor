@@ -930,6 +930,7 @@ dependencies = [
  "maplit",
  "pyo3",
  "pyo3-async-runtimes",
+ "pyo3-filelike",
  "pyo3-log",
  "reqwest",
  "serde_json",

@@ -26,6 +26,7 @@ url.workspace = true
 pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
 tokio.workspace = true
 maplit.workspace = true
+pyo3-filelike.workspace = true
 
 [features]
 extension-module = ["pyo3/extension-module"]
