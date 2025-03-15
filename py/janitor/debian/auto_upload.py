@@ -27,6 +27,7 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Counter, setup_metrics
 from redis.asyncio import Redis
+from silver_platter import DebsignFailure, DputFailure, debsign, dput_changes
 
 from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
@@ -49,53 +50,6 @@ async def run_web_server(listen_addr, port, config):
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
-
-
-class DebsignFailure(Exception):
-    """Debsign failed to run."""
-
-    def __init__(self, returncode, reason) -> None:
-        self.returncode = returncode
-        self.reason = reason
-
-
-async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = None):
-    if debsign_keyid:
-        args = [f"-k{debsign_keyid}"]
-    else:
-        args = []
-    p = await asyncio.create_subprocess_exec(
-        "debsign",
-        *args,
-        changes_filename,
-        cwd=directory,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    (stdout, stderr) = await p.communicate()
-    if p.returncode == 0:
-        return
-    raise DebsignFailure(p.returncode, stderr.decode())
-
-
-class DputFailure(Exception):
-    def __init__(self, returncode, reason) -> None:
-        self.returncode = returncode
-        self.reason = reason
-
-
-async def dput(directory, changes_filename, dput_host):
-    p = await asyncio.create_subprocess_exec(
-        "dput",
-        dput_host,
-        changes_filename,
-        cwd=directory,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    (stdout, stderr) = await p.communicate()
-    if p.returncode == 0:
-        return
-
-    raise DputFailure(p.returncode, stderr.decode())
 
 
 async def upload_build_result(
@@ -158,7 +112,7 @@ async def upload_build_result(
 
             logging.debug("Running dput.", extra={"run_id": log_id})
             try:
-                await dput(td, changes_filename, dput_host)
+                await dput_changes(td, changes_filename, dput_host)
             except DputFailure as e:
                 upload_failed_count.inc()
                 logging.error(
