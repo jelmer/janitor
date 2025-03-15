@@ -1,4 +1,5 @@
 use breezyshim::RevisionId;
+use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
@@ -102,16 +103,28 @@ impl VcsManager {
 }
 
 #[pyclass(extends=VcsManager)]
-pub struct LocalGitVcsManager {}
+pub struct LocalGitVcsManager(Arc<janitor::vcs::LocalGitVcsManager>);
 
 #[pymethods]
 impl LocalGitVcsManager {
     #[new]
     fn new(base_path: &str) -> PyResult<(Self, VcsManager)> {
-        let manager = LocalGitVcsManager {};
         let base_path = PathBuf::from(base_path);
         let vcs_manager = Arc::new(janitor::vcs::LocalGitVcsManager::new(base_path));
+        let manager = LocalGitVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
+    }
+
+    #[getter]
+    pub fn base_path(&self) -> String {
+        self.0.base_path().to_string_lossy().to_string()
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0.base_path() == other.0.base_path(),
+            _ => false,
+        }
     }
 }
 
@@ -135,23 +148,48 @@ impl RemoteGitVcsManager {
         old_revid: RevisionId,
         new_revid: RevisionId,
     ) -> PyResult<String> {
-        Ok(self.0
+        Ok(self
+            .0
             .get_diff_url(codebase, &old_revid, &new_revid)
             .to_string())
+    }
+
+    #[getter]
+    pub fn base_url(&self) -> String {
+        self.0.base_url().to_string()
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0.base_url() == other.0.base_url(),
+            _ => false,
+        }
     }
 }
 
 #[pyclass(extends=VcsManager)]
-pub struct LocalBzrVcsManager {}
+pub struct LocalBzrVcsManager(Arc<janitor::vcs::LocalBzrVcsManager>);
 
 #[pymethods]
 impl LocalBzrVcsManager {
     #[new]
     fn new(base_path: &str) -> PyResult<(Self, VcsManager)> {
-        let manager = LocalBzrVcsManager {};
         let base_path = PathBuf::from(base_path);
         let vcs_manager = Arc::new(janitor::vcs::LocalBzrVcsManager::new(base_path));
+        let manager = LocalBzrVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
+    }
+
+    #[getter]
+    pub fn base_path(&self) -> String {
+        self.0.base_path().to_string_lossy().to_string()
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0.base_path() == other.0.base_path(),
+            _ => false,
+        }
     }
 }
 
@@ -175,9 +213,22 @@ impl RemoteBzrVcsManager {
         old_revid: RevisionId,
         new_revid: RevisionId,
     ) -> PyResult<String> {
-        Ok(self.0
+        Ok(self
+            .0
             .get_diff_url(codebase, &old_revid, &new_revid)
             .to_string())
+    }
+
+    #[getter]
+    pub fn base_url(&self) -> String {
+        self.0.base_url().to_string()
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.0.base_url() == other.0.base_url(),
+            _ => false,
+        }
     }
 }
 

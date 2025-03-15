@@ -328,7 +328,7 @@ pub trait VcsManager: Send + Sync {
     ) -> Vec<RevisionInfo>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalGitVcsManager {
     base_path: PathBuf,
 }
@@ -336,6 +336,10 @@ pub struct LocalGitVcsManager {
 impl LocalGitVcsManager {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
+    }
+
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
     }
 }
 
@@ -385,7 +389,8 @@ impl VcsManager for LocalGitVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        Url::from_directory_path(&self.base_path)
+        let abspath = self.base_path.canonicalize().unwrap();
+        Url::from_directory_path(&abspath)
             .unwrap()
             .join(codebase)
             .unwrap()
@@ -471,7 +476,7 @@ impl VcsManager for LocalGitVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalBzrVcsManager {
     base_path: PathBuf,
 }
@@ -479,6 +484,10 @@ pub struct LocalBzrVcsManager {
 impl LocalBzrVcsManager {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
+    }
+
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
     }
 }
 
@@ -525,7 +534,8 @@ impl VcsManager for LocalBzrVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        Url::from_directory_path(&self.base_path)
+        let abspath = self.base_path.canonicalize().unwrap();
+        Url::from_directory_path(&abspath)
             .unwrap()
             .join(codebase)
             .unwrap()
@@ -598,7 +608,7 @@ impl VcsManager for LocalBzrVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteGitVcsManager {
     base_url: Url,
 }
@@ -606,6 +616,10 @@ pub struct RemoteGitVcsManager {
 impl RemoteGitVcsManager {
     pub fn new(base_url: Url) -> Self {
         Self { base_url }
+    }
+
+    pub fn base_url(&self) -> &Url {
+        &self.base_url
     }
 
     pub fn lookup_revid<'a>(revid: &'a RevisionId, default: &'a [u8]) -> &'a [u8] {
@@ -616,7 +630,12 @@ impl RemoteGitVcsManager {
         }
     }
 
-    pub fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
@@ -711,7 +730,7 @@ impl VcsManager for RemoteGitVcsManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteBzrVcsManager {
     base_url: Url,
 }
@@ -721,7 +740,16 @@ impl RemoteBzrVcsManager {
         Self { base_url }
     }
 
-    pub fn get_diff_url(&self, codebase: &str, old_revid: &RevisionId, new_revid: &RevisionId) -> Url {
+    pub fn base_url(&self) -> &Url {
+        &self.base_url
+    }
+
+    pub fn get_diff_url(
+        &self,
+        codebase: &str,
+        old_revid: &RevisionId,
+        new_revid: &RevisionId,
+    ) -> Url {
         self.base_url
             .join(&format!(
                 "{}/diff?old={}&new={}",
