@@ -25,6 +25,7 @@ silver-platter = { workspace = true, features = ["debian", "pyo3"] }
 url.workspace = true
 pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
 tokio.workspace = true
+maplit.workspace = true
 
 [features]
 extension-module = ["pyo3/extension-module"]

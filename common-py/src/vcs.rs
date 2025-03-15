@@ -3,7 +3,8 @@ use pyo3::basic::CompareOp;
 use pyo3::exceptions::{PyNotImplementedError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path,PathBuf};
 use std::sync::Arc;
 
 #[pyclass]
@@ -108,8 +109,7 @@ pub struct LocalGitVcsManager(Arc<janitor::vcs::LocalGitVcsManager>);
 #[pymethods]
 impl LocalGitVcsManager {
     #[new]
-    fn new(base_path: &str) -> PyResult<(Self, VcsManager)> {
-        let base_path = PathBuf::from(base_path);
+    fn new(base_path: PathBuf) -> PyResult<(Self, VcsManager)> {
         let vcs_manager = Arc::new(janitor::vcs::LocalGitVcsManager::new(base_path));
         let manager = LocalGitVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
@@ -125,6 +125,10 @@ impl LocalGitVcsManager {
             CompareOp::Eq => self.0.base_path() == other.0.base_path(),
             _ => false,
         }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<LocalGitVcsManager({})>", self.0.base_path().to_string_lossy())
     }
 }
 
@@ -165,6 +169,10 @@ impl RemoteGitVcsManager {
             _ => false,
         }
     }
+
+    fn __repr__(&self) -> String {
+        format!("<RemoteGitVcsManager({})>", self.0.base_url().to_string())
+    }
 }
 
 #[pyclass(extends=VcsManager)]
@@ -173,8 +181,7 @@ pub struct LocalBzrVcsManager(Arc<janitor::vcs::LocalBzrVcsManager>);
 #[pymethods]
 impl LocalBzrVcsManager {
     #[new]
-    fn new(base_path: &str) -> PyResult<(Self, VcsManager)> {
-        let base_path = PathBuf::from(base_path);
+    fn new(base_path: PathBuf) -> PyResult<(Self, VcsManager)> {
         let vcs_manager = Arc::new(janitor::vcs::LocalBzrVcsManager::new(base_path));
         let manager = LocalBzrVcsManager(vcs_manager.clone());
         Ok((manager, VcsManager(vcs_manager)))
@@ -190,6 +197,10 @@ impl LocalBzrVcsManager {
             CompareOp::Eq => self.0.base_path() == other.0.base_path(),
             _ => false,
         }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<LocalBzrVcsManager({})>", self.0.base_path().to_string_lossy())
     }
 }
 
@@ -230,6 +241,59 @@ impl RemoteBzrVcsManager {
             _ => false,
         }
     }
+
+    fn __repr__(&self) -> String {
+        format!("<RemoteBzrVcsManager({})>", self.0.base_url().to_string())
+    }
+}
+
+#[pyfunction]
+pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyResult<PyObject> {
+    match name {
+        "bzr" => Ok(Py::new(py, LocalBzrVcsManager::new(location).unwrap())?.to_object(py)),
+        "git" => Ok(Py::new(py, LocalGitVcsManager::new(location).unwrap())?.to_object(py)),
+        _ => {
+            return Err(PyValueError::new_err(format!("Unknown VCS: {}", name)));
+        }
+    }
+}
+
+#[pyfunction]
+pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObject> {
+    match name {
+        "bzr" => Ok(Py::new(py, RemoteBzrVcsManager::new(location).unwrap())?.to_object(py)),
+        "git" => Ok(Py::new(py, RemoteGitVcsManager::new(location).unwrap())?.to_object(py)),
+        _ => {
+            return Err(PyValueError::new_err(format!("Unknown VCS: {}", name)));
+        }
+    }
+}
+
+#[pyfunction]
+pub fn get_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObject> {
+    if !location.contains(':') {
+        get_local_vcs_manager(py, name, PathBuf::from(location))
+    } else {
+        get_remote_vcs_manager(py, name, location)
+    }
+}
+
+#[pyfunction]
+pub fn get_vcs_managers(py: Python, location: &str) -> PyResult<HashMap<String, PyObject>> {
+    if !location.contains('=') {
+        Ok(maplit::hashmap! {
+            "bzr".to_string() => get_vcs_manager(py, "bzr", &(location.trim_end_matches('/').to_owned() + "/bzr")).unwrap(),
+            "git".to_string() => get_vcs_manager(py, "git", &(location.trim_end_matches('/').to_owned() + "/git")).unwrap(),
+        })
+    } else {
+        let mut managers = std::collections::HashMap::new();
+        for part in location.split(',') {
+            let (name, path) = part.split_once('=').unwrap();
+            let vcs = get_vcs_manager(py, name, path)?;
+            managers.insert(name.to_string(), vcs);
+        }
+        Ok(managers)
+    }
 }
 
 pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
@@ -238,5 +302,10 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<RemoteGitVcsManager>()?;
     module.add_class::<LocalBzrVcsManager>()?;
     module.add_class::<RemoteBzrVcsManager>()?;
+    module.add_class::<RevisionInfo>()?;
+    module.add_function(wrap_pyfunction_bound!(get_local_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction_bound!(get_remote_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction_bound!(get_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction_bound!(get_vcs_managers, module)?)?;
     Ok(())
 }
