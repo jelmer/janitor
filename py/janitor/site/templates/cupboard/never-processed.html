@@ -10,10 +10,12 @@
     <div class="section" id="{{ code }}">
         <h1>never-processed</h1>
         {% if is_admin %}
-            <form id="mass_reschedule" method="post" action="/cupboard/api/mass-reschedule">
-                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}"/>{% endif %}
-                <input type="hidden" name="result_code" value="never-processed"/>
-                <input type="submit" value="Reschedule Matching"/>
+            <form id="mass_reschedule"
+                  method="post"
+                  action="/cupboard/api/mass-reschedule">
+                {% if campaign %}<input type="hidden" name="campaign" value="{{ campaign }}" />{% endif %}
+                <input type="hidden" name="result_code" value="never-processed" />
+                <input type="submit" value="Reschedule Matching" />
             </form>
             <script>
                 window.mass_reschedule.onsubmit = function(e) {
@@ -28,8 +30,8 @@
         {% endif %}
         <table id="never-processed-table" class="display docutils" border="1">
             <colgroup>
-                <col width="21%"/>
-                <col width="6%"/>
+                <col width="21%" />
+                <col width="6%" />
             </colgroup>
             <thead valign="bottom">
                 <tr>

@@ -27,7 +27,7 @@
                     Rate limiting hosts:
                     <ul>
                         {% for host, until in rate_limit_hosts.items() %}
-                            <li>{{ host }} until {{ until.isoformat() }} ({{ format_duration(until - utcnow()) }} more)</li>
+                            <li>{{ host }} until {{ until.isoformat() }} ({{ format_duration(until - utcnow() ) }} more)</li>
                         {% endfor %}
                     </ul>
                 {% endif %}
@@ -61,12 +61,12 @@
                         <th class="head">Campaign</th>
                         <th class="head">
                             Estimated
-                            <br/>
+                            <br />
                             Duration
                         </th>
                         <th class="head">
                             Current
-                            <br/>
+                            <br />
                             Duration
                         </th>
                         <th class="head">Worker</th>
@@ -78,7 +78,7 @@
                 <tbody valign="top" id="queue-table">
                     {% for entry in processing %}
                         <tr id="active-{{ entry['id'] }}"
-                            {% if entry['mia'] %} class="old-keepalive"{% endif %}>
+                            {% if entry['mia'] %}class="old-keepalive"{% endif %}>
                             <td>
                                 <a href="/cupboard/c/{{ entry['codebase'] }}/">{{ entry['codebase'] }}</a>
                             </td>
@@ -125,39 +125,23 @@
             <table class="docutils" border="1">
                 <thead valign="bottom">
                     <tr class="row-odd">
-                        <th class="head">
-                            Codebase 
-                        </th>
-                        <th class="head">
-                            Command
-                        </th>
-                        <th class="head">
-                            Estimated duration
-                        </th>
-                        <th class="head">
-                            Requester
-                        </th>
-                        <th class="head">
-                            Last Run
-                        </th>
+                        <th class="head">Codebase</th>
+                        <th class="head">Command</th>
+                        <th class="head">Estimated duration</th>
+                        <th class="head">Requester</th>
+                        <th class="head">Last Run</th>
                     </tr>
                 </thead>
                 <tbody valign="top">
                     {% for queue_item, last_run, description in queue %}
                         <tr id="queue-{{ queue_item.id }}"
-                            {% if queue_item.id in active_queue_ids %} class="active"{% endif %}>
+                            {% if queue_item.id in active_queue_ids %}class="active"{% endif %}>
                             <td>
                                 <a class="reference external" href="c/{{ queue_item.codebase }}">{{ queue_item.codebase }}</a>
                             </td>
-                            <td>
-                                {{ description|safe }}
-                            </td>
-                            <td>
-                                {{ format_duration(queue_item.estimated_duration) if queue_item.estimated_duration else 'unknown' }}
-                            </td>
-                            <td>
-                                {{ queue_item.requester }}
-                            </td>
+                            <td>{{ description|safe }}</td>
+                            <td>{{ format_duration(queue_item.estimated_duration) if queue_item.estimated_duration else 'unknown' }}</td>
+                            <td>{{ queue_item.requester }}</td>
                             <td>
                                 {% if last_run.id %}
                                     <a href="/cupboard/c/{{ last_run.codebase }}/{{ last_run.id }}/">{{ display_result_code(last_run.result_code, last_run.failure_transient) }}</a>
@@ -175,7 +159,7 @@
                         var p = msg['processing'][i];
                         var existing = 'active-' + p['id'];
                         if (!$('#' + existing).length) {
-                            tr = $('<tr id="active-' + p['id'] + '"/>');
+                            tr = $('<tr id="active-' + p['id'] + '" />');
                             tr.append('<td><a href="/cupboard/c/' + p['codebase'] + '/">' + p['codebase'] + '</a></td>');
                             tr.append('<td>' + p['campaign'] + '</td>');
                             tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');

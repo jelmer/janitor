@@ -61,8 +61,8 @@
                 <p>
                     Proposals can be abandoned by the bot for a number of reasons. In some
                     cases, the relevant branch changes (e.g. if it is named after the active release),
-		    or if it's linked to a Debian package, the package could
-		    have been removed from the archive.
+                    or if it's linked to a Debian package, the package could
+                    have been removed from the archive.
                 </p>
                 <ul class="simple">
                     {% for proposal in abandoned_proposals %}<li>{{ display_merge_proposal(proposal) }}</li>{% endfor %}
