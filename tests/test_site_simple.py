@@ -23,6 +23,7 @@ def create_config():
     return read_config_string("""
 campaign {
   name: "lintian-fixes"
+}
 """)
 
 

@@ -150,11 +150,11 @@ impl BugTracker {
     }
 
     #[getter]
-    pub fn kind(&self) -> PyResult<i8> {
+    pub fn kind(&self) -> PyResult<&str> {
         match self.0.kind.unwrap().unwrap() {
-            janitor::config::BugTrackerKind::debian => Ok(0),
-            janitor::config::BugTrackerKind::github => Ok(2),
-            janitor::config::BugTrackerKind::gitlab => Ok(3),
+            janitor::config::BugTrackerKind::debian => Ok("debian"),
+            janitor::config::BugTrackerKind::github => Ok("github"),
+            janitor::config::BugTrackerKind::gitlab => Ok("gitlab"),
         }
     }
 }
@@ -389,10 +389,12 @@ impl Distribution {
         self.0.component.iter().map(|s| s.as_str()).collect()
     }
 
+    #[getter]
     pub fn lintian_profile(&self) -> Option<&str> {
         self.0.lintian_profile.as_deref()
     }
 
+    #[getter]
     pub fn lintian_suppress_tag(&self) -> Vec<&str> {
         self.0
             .lintian_suppress_tag
@@ -401,14 +403,17 @@ impl Distribution {
             .collect()
     }
 
+    #[getter]
     pub fn build_command(&self) -> Option<&str> {
         self.0.build_command.as_deref()
     }
 
+    #[getter]
     pub fn vendor(&self) -> Option<&str> {
         self.0.vendor.as_deref()
     }
 
+    #[getter]
     pub fn extra(&self) -> Vec<&str> {
         self.0.extra.iter().map(|s| s.as_str()).collect()
     }
