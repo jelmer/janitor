@@ -23,7 +23,7 @@ import aiozipkin
 from aiohttp import MultipartWriter
 from fakeredis.aioredis import FakeRedis
 
-from janitor.config import Config
+from janitor.config import read_string as read_config_string
 from janitor.debian import dpkg_vendor
 from janitor.logs import LogFileManager
 from janitor.runner import (
@@ -80,15 +80,23 @@ class MemoryLogFileManager(LogFileManager):
 async def create_client(aiohttp_client, queue_processor=None, *, campaigns=None):
     endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4="127.0.0.1", port=80)
     tracer = await aiozipkin.create_custom(endpoint)
-    config = Config()
-    unstable = config.distribution.add()
-    unstable.name = "unstable"
+    config_text = """\
+campaign {
+  name: "unstable"
+}
+"""
     if campaigns:
         for name in campaigns:
-            campaign = config.campaign.add()
-            campaign.name = name
-            campaign.debian_build.base_distribution = "unstable"
-            campaign.default_empty = True
+            config_text += f"""\
+campaign {{
+  name: "{name}"
+  debian_build {{
+    base_distribution: "unstable"
+    default_empty: true
+  }}
+}}
+"""
+    config = read_config_string(config_text)
     return await aiohttp_client(
         await create_app(
             queue_processor,

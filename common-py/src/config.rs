@@ -452,6 +452,13 @@ impl Select {
 }
 
 #[pyfunction]
+pub fn read_string(s: &str) -> PyResult<Config> {
+    let config =
+        janitor::config::read_string(s).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(Config(config))
+}
+
+#[pyfunction]
 pub fn read_config(f: PyObject) -> PyResult<Config> {
     let f = pyo3_filelike::PyBinaryFile::from(f);
     let config =
@@ -483,5 +490,6 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction_bound!(read_config, module)?)?;
     module.add_function(wrap_pyfunction_bound!(get_campaign_config, module)?)?;
     module.add_function(wrap_pyfunction_bound!(get_distribution, module)?)?;
+    module.add_function(wrap_pyfunction_bound!(read_string, module)?)?;
     Ok(())
 }

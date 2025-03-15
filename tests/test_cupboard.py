@@ -21,7 +21,7 @@ from aiohttp import web
 from jinja2 import Environment
 from yarl import URL
 
-from janitor.config import Campaign, Config
+from janitor.config import read_string as read_config_string
 from janitor.site import (
     classify_result_code,
     format_duration,
@@ -40,7 +40,7 @@ async def dummy_user_middleware(request, handler):
 
 
 async def create_client(aiohttp_client, db):
-    config = Config()
+    config = read_config_string("")
     app = create_app(
         config=config, publisher_url=None, runner_url=None, differ_url=None, db=db
     )
@@ -63,8 +63,12 @@ def test_render_merge_proposal():
 def test_render_run():
     env = Environment(loader=template_loader)
     template = env.get_template("cupboard/run.html")
-    campaign = Campaign()
-    campaign.name = "some-fixes"
+    config = read_config_string("""\
+campaign {
+  name: "some-fixes"
+}
+""")
+    campaign = config.campaign[0]
     template.render(
         worker_link_is_global=worker_link_is_global,
         run={
@@ -75,7 +79,7 @@ def test_render_run():
         classify_result_code=classify_result_code,
         show_debdiff=lambda: "",
         campaign=campaign,
-        config=Config(),
+        config=config,
         publish_blockers=dict,
         format_timestamp=format_timestamp,
         format_duration=format_duration,
