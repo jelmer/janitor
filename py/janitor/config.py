@@ -20,6 +20,7 @@ __all__ = [
     "Campaign",
     "AptRepository",
     "read_config",
+    "read_string",
     "get_campaign_config",
     "get_distribution",
 ]
@@ -31,6 +32,7 @@ Config = _config_rs.Config
 Campaign = _config_rs.Campaign
 AptRepository = _config_rs.AptRepository
 read_config = _config_rs.read_config
+read_string = _config_rs.read_string
 get_distribution = _config_rs.get_distribution
 get_campaign_config = _config_rs.get_campaign_config
 
