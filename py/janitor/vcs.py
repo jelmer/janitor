@@ -33,6 +33,7 @@ __all__ = [
 
 import sys
 from io import BytesIO
+from typing import Optional
 
 import breezy.bzr  # noqa: F401
 import breezy.git  # noqa: F401
@@ -42,13 +43,14 @@ from breezy.errors import (
     NoSuchRevision,
     NotBranchError,
 )
+from breezy.repository import Repository
 
 from ._common import (
     get_branch_vcs_type,
     is_alioth_url,
     is_authenticated_url,
 )
-from ._common import (
+from ._common import (  # type: ignore
     vcs as _vcs_rs,
 )
 
@@ -66,10 +68,11 @@ open_branch_ext = _vcs_rs.open_branch_ext
 UnsupportedVcs = _vcs_rs.UnsupportedVcs
 
 
-def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
+def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:  # type: ignore
     f = BytesIO()
+    repo: Optional[Repository]
     try:
-        repo = vcs_manager.get_repository(run.codebase)  # type: Optional[Repository]
+        repo = vcs_manager.get_repository(run.codebase)  # type: ignore
     except NotBranchError:
         repo = None
     if repo is None:
@@ -96,8 +99,8 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     return f.getvalue()
 
 
-def get_vcs_managers_from_config(config) -> dict[str, VcsManager]:
-    ret: dict[str, VcsManager] = {}
+def get_vcs_managers_from_config(config) -> dict[str, VcsManager]:  # type: ignore
+    ret: dict[str, VcsManager] = {}  # type: ignore
     if config.git_location:
         parsed = urlutils.URL.from_string(config.git_location)
         if parsed.scheme in ("", "file"):
