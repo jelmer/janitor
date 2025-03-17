@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 
-from ._common import config as _config_rs
+from ._common import config as _config_rs  # type: ignore
 
 Config = _config_rs.Config
 Campaign = _config_rs.Campaign
