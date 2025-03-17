@@ -48,7 +48,7 @@ jobs:
           set -x
           pip3 install --break-system-packages --upgrade \
             ruff
-          make ruff check-ruff-format
+          make ruff check-ruff-format || (ruff format py tests && git diff && exit 1)
 
   build:
     name: Build - Ubuntu LTS (Python ${{ matrix.python-version }})
