@@ -23,6 +23,7 @@ from .._common import debdiff
 
 debdiff_is_empty = debdiff.debdiff_is_empty  # type: ignore
 filter_boring = debdiff.filter_boring  # type: ignore
+section_is_wdiff = debdiff.section_is_wdiff  # type: ignore
 
 
 def iter_sections(text: str) -> Iterator[tuple[Optional[str], list[str]]]:
@@ -105,17 +106,6 @@ async def run_debdiff(old_binaries: list[str], new_binaries: list[str]) -> bytes
     if p.returncode not in (0, 1):
         raise DebdiffError(stderr.decode(errors="replace"))
     return stdout
-
-
-def section_is_wdiff(title: str) -> tuple[bool, Optional[str]]:
-    m = re.match(
-        r"Control files of package (.*): lines which differ " r"\(wdiff format\)", title
-    )
-    if m:
-        return (True, m.group(1))
-    if title == "Control files: lines which differ (wdiff format)":
-        return (True, None)
-    return (False, None)
 
 
 def markdownify_debdiff(debdiff: str) -> str:
