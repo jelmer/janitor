@@ -19,7 +19,7 @@ chrono = { workspace = true, features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 janitor = { path = "..", default-features = false, features = ["debian"] }
-async-trait = "0.1.87"
+async-trait = "0.1.88"
 url.workspace = true
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
 debian-control = { version = "0.1.28", optional = true }
