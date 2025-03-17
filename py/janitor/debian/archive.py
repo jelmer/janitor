@@ -1002,9 +1002,13 @@ async def main_async(argv=None):
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
-    gpg_context: Optional[gpg.Context]
+    gpg_context: Optional[
+        # ruff incorrectly thinks quotes can be removed
+        "gpg.Context"  # noqa: UP037
+    ]
     if not args.no_gpg:
         import gpg
+
         gpg_context = gpg.Context(armor=True)
     else:
         gpg_context = None
