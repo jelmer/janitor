@@ -1004,6 +1004,7 @@ async def main_async(argv=None):
 
     gpg_context: Optional[gpg.Context]
     if not args.no_gpg:
+        import gpg
         gpg_context = gpg.Context(armor=True)
     else:
         gpg_context = None
