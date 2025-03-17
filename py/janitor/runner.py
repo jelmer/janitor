@@ -3120,7 +3120,7 @@ async def main_async(argv=None):
             await stack.enter_async_context(backup_artifact_manager)
             backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
             await stack.enter_async_context(backup_logfile_manager)
-            loop.create_task(
+            asyncio.ensure_future(
                 upload_backup_artifacts(
                     backup_artifact_manager, artifact_manager, timeout=60 * 15
                 )
