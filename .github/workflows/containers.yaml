@@ -3,8 +3,6 @@ name: Containers - Build and push images
 
 "on":
   push:
-    branches:
-      - main
   pull_request:
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
@@ -40,18 +38,13 @@ jobs:
       - name: Determine image tags to set
         run: |
           set -x
-          TAGS=""
+          TAGS="latest"
           if [[ '${{ github.event_name }}' == 'push' ]]; then
-            TAGS="${TAGS} ${{ github.sha }}"
-            if [[ '${{ github.ref_name }}' == 'main' ]]; then
-              TAGS="${TAGS} latest"
-            else
-              TAGS="${TAGS} ${{ github.ref_name }}"
-            fi
+            TAGS="${TAGS} ${{ github.sha }} ${{ github.ref_name }}"
           elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
             TAGS="${TAGS} ${{ github.sha }}"
           elif [[ '${{ github.event_name }}' == 'schedule' ]]; then
-            TAGS="${TAGS} latest"
+            TAGS="${TAGS} nightly"
           else
             echo "Skipping tags: ${{ github.event_name }}" 1>&2
             exit 1
