@@ -465,7 +465,7 @@ pub fn read_string(s: &str) -> PyResult<Config> {
 
 #[pyfunction]
 pub fn read_config(f: PyObject) -> PyResult<Config> {
-    let f = pyo3_filelike::PyBinaryFile::from(f);
+    let f = pyo3_filelike::PyTextFile::from(f);
     let config =
         janitor::config::read_readable(f).map_err(|e| PyValueError::new_err(e.to_string()))?;
     Ok(Config(config))

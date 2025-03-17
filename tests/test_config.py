@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import pytest
 
@@ -98,3 +98,14 @@ campaign {
     with pytest.raises(KeyError):
         get_campaign_config(c, "foo")
     assert get_campaign_config(c, "lintian-fixes").name == "lintian-fixes"
+
+
+def test_read_from_text():
+    c = read_config(
+        StringIO(
+            """\
+logs_location: 'https://s3.nl-ams.scw.cloud'
+"""
+        )
+    )
+    assert c.logs_location == "https://s3.nl-ams.scw.cloud"

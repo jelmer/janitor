@@ -82,7 +82,7 @@ shlex = "1"
 buildlog-consultant = "0.1.1"
 deb822-lossless = "0.2.4"
 debian-control = "0.1.40"
-pyo3-filelike = "0.3.0"
+pyo3-filelike = "0.4.0"
 
 [build-dependencies]
 protobuf-codegen = "3"
