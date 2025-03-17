@@ -26,43 +26,17 @@ import sys
 from io import StringIO
 
 from breezy.patches import (
-    ContextLine,
-    InsertLine,
     MalformedHunkHeader,
-    RemoveLine,
-    iter_hunks,
 )
 
-from ._differ import run_diffoscope  # type: ignore
+from ._differ import (  # type: ignore
+    filter_boring_udiff,
+    run_diffoscope,
+)
 
 
 class DiffoscopeError(Exception):
     """An error occurred while running diffoscope."""
-
-
-def filter_boring_udiff(udiff, old_version, new_version, display_version):
-    old_version = old_version.encode("utf-8")
-    new_version = new_version.encode("utf-8")
-    display_version = display_version.encode("utf-8")
-    lines = iter([line.encode("utf-8") for line in udiff.splitlines(True)])
-    hunks = []
-    oldlines = []
-    newlines = []
-    for hunk in iter_hunks(lines, allow_dirty=False):
-        for line in hunk.lines:
-            if isinstance(line, RemoveLine):
-                line.contents = line.contents.replace(old_version, display_version)
-                oldlines.append(line.contents)
-            elif isinstance(line, InsertLine):
-                line.contents = line.contents.replace(new_version, display_version)
-                newlines.append(line.contents)
-            elif isinstance(line, ContextLine):
-                oldlines.append(line.contents)
-                newlines.append(line.contents)
-        hunks.append(hunk)
-    if oldlines == newlines:
-        return None
-    return "".join([hunk.as_bytes().decode("utf-8", "replace")])
 
 
 def filter_boring_detail(detail, old_version, new_version, display_version):
