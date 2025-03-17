@@ -3035,6 +3035,7 @@ async def main_async(argv=None):
         "--public-vcs-location",
         type=str,
         default=None,
+        required=True,
         help="Public vcs location (used for URLs handed to worker)",
     )
     parser.add_argument(
@@ -3091,9 +3092,7 @@ async def main_async(argv=None):
     trace_configs = [aiozipkin.make_trace_config(tracer)]
 
     try:
-        public_vcs_managers = get_vcs_managers(
-            args.public_vcs_location, trace_configs=trace_configs
-        )
+        public_vcs_managers = get_vcs_managers(args.public_vcs_location)
     except UnsupportedProtocol as e:
         parser.error(f"Unsupported protocol in --public-vcs-location: {e.path}")
 
