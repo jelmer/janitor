@@ -46,7 +46,7 @@ debian = ["dep:debversion", "dep:debian-analyzer", "dep:debian-changelog", "jani
 cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 
 [dev-dependencies]
-http-body-util = "0.1.2"
+http-body-util = "0.1.3"
 hyper = "1.6.0"
 serial_test = "3.1.1"
 tempfile = "3.17.1"
