@@ -3264,7 +3264,7 @@ version = "0.0.0"
 dependencies = [
  "askama",
  "askama_axum",
- "axum 0.7.9",
+ "axum 0.8.1",
  "backoff",
  "breezyshim",
  "chrono",
