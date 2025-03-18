@@ -40,7 +40,8 @@ jobs:
           set -x
           TAGS="latest"
           if [[ '${{ github.event_name }}' == 'push' ]]; then
-            TAGS="${TAGS} ${{ github.sha }} ${{ github.ref_name }}"
+            TAGS="${TAGS} ${{ github.sha }}"
+            TAGS="${TAGS} $(echo -n ${{ github.ref_name }} | tr / -)"
           elif [[ '${{ github.event_name }}' == 'pull_request' ]]; then
             TAGS="${TAGS} ${{ github.sha }}"
           elif [[ '${{ github.event_name }}' == 'schedule' ]]; then
@@ -49,9 +50,7 @@ jobs:
             echo "Skipping tags: ${{ github.event_name }}" 1>&2
             exit 1
           fi
-          echo "TAGS=${TAGS}" \
-            | tee -a $GITHUB_ENV
-
+          echo "TAGS=${TAGS}" | tee -a $GITHUB_ENV
       - name: Build ${{ matrix.dockerfile_suffix }} image
         id: build-image
         uses: redhat-actions/buildah-build@v2
