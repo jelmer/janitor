@@ -375,6 +375,9 @@ class GCSLogFileManager(LogFileManager):
 
 
 def get_log_manager(location, trace_configs=None):
+    if location is None:
+        # TODO(jelmer): Use a temporary directory
+        return FileSystemLogFileManager("/tmp")
     if location.startswith("gs://"):
         return GCSLogFileManager(location, trace_configs=trace_configs)
     if location.startswith("http:") or location.startswith("https:"):

@@ -498,7 +498,7 @@ async def handle_publish(request):
     post = await request.post()
     campaign = post.get("campaign")
     for campaign_config in request.app["config"].campaign:
-        if not campaign_config.HasField("debian_build"):
+        if not campaign_config.debian_build:
             continue
         if campaign is not None and campaign != campaign_config.name:
             continue

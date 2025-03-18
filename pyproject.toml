@@ -1,7 +1,6 @@
 [build-system]
 requires = [
     "setuptools",
-    "setuptools-protobuf[mypy]>=0.1.3",
     "setuptools-rust>=1.7.0",
 ]
 build-backend = "setuptools.build_meta"
@@ -30,7 +29,6 @@ module = [
     "asyncpg.*",
     "testing.*",
     "boto3.*",
-    "google.protobuf.*",
     "pytest_asyncio.*",
     "silver_platter.*",
 ]
@@ -83,11 +81,9 @@ dependencies = [
     "jinja2",
     "launchpadlib",
     "paramiko",
-    "protobuf",
     "pygments",
     "python-mimeparse",
     "redis>=4.2.0",
-    "setuptools-protobuf",
     "setuptools-rust",
     "silver-platter",
     "uvloop",
@@ -279,7 +275,6 @@ ignore = [
 [tool.ruff]
 line-length = 88
 target-version = "py39"
-extend-exclude = ["py/janitor/config_pb2.py", "py/janitor/config_pb2.pyi"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -292,12 +287,6 @@ ignore-words = ".codespell-ignore-words"
 "lintian_brush".msg = "belongs in Debian Janitor"
 "debmutate".msg = "not used directly"
 "upstream_ontologist".msg = "not used"
-
-[tool.setuptools-protobuf]
-mypy = true
-protobufs = [
-    "py/janitor/config.proto"
-]
 
 [tool.ruff.lint.isort]
 known-third-party = ["debian"]

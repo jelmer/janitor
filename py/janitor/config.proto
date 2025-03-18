@@ -70,11 +70,6 @@ message Config {
   repeated AptRepository apt_repository = 19;
 }
 
-message Env {
-  optional string key = 1;
-  optional string value = 2;
-};
-
 message MergeProposalConfig {
    optional int32 value_threshold = 1;
 

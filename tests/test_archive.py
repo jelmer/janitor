@@ -22,13 +22,13 @@ from tempfile import TemporaryDirectory
 
 from debian.deb822 import Release
 
-from janitor.config import Config
+from janitor.config import read_string as read_config_string
 from janitor.debian.archive import HashedFileWriter, create_app
 
 
 async def create_client(aiohttp_client, config=None):
     if config is None:
-        config = Config()
+        config = read_config_string("")
     return await aiohttp_client(
         await create_app(None, config, "/tmp", None, gpg_context=None)
     )

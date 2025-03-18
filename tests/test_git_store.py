@@ -18,7 +18,7 @@
 
 from dulwich.repo import Repo
 
-from janitor import config_pb2
+from janitor.config import read_string as read_config_string
 from janitor.git_store import create_web_app
 
 try:
@@ -28,7 +28,7 @@ except ImportError:
 
 
 async def create_client(aiohttp_client, path, dulwich_server=False):
-    config = config_pb2.Config()
+    config = read_config_string("")
     app, public_app = await create_web_app(
         "127.0.0.1",
         80,
