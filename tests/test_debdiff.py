@@ -15,76 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.debian.debdiff import filter_boring, iter_sections
-
-
-def test_nothing():
-    assert [(None, ["foo"])] == list(iter_sections("foo\n"))
-
-
-def test_simple():
-    assert [
-        (
-            None,  # noqa
-            [
-                "[The following lists of changes regard files as different if they have",
-                "different names, permissions or owners.]",
-            ],
-        ),
-        (
-            "Files in second .changes but not in first",  # noqa
-            ["-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug"],
-        ),
-        (
-            "Files in first .changes but not in second",  # noqa
-            ["-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug"],
-        ),
-        (  # noqa
-            "Control files of package xserver-blah: lines which differ (wdiff format)",
-            [
-                "Installed-Size: [-174-] {+170+}",
-                "Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}",
-            ],
-        ),
-        (  # noqa
-            "Control files of package xserver-dbgsym: lines which differ"
-            " (wdiff format)",
-            [
-                "Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}",
-                "Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] "
-                "{+1:1.7.9-3~jan+lint1)+}",
-                "Installed-Size: [-515-] {+204+}",
-                "Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}",
-            ],
-        ),
-    ] == list(
-        iter_sections(
-            """\
-[The following lists of changes regard files as different if they have
-different names, permissions or owners.]
-
-Files in second .changes but not in first
------------------------------------------
--rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug
-
-Files in first .changes but not in second
------------------------------------------
--rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug
-
-Control files of package xserver-blah: lines which differ (wdiff format)
-------------------------------------------------------------------------
-Installed-Size: [-174-] {+170+}
-Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}
-
-Control files of package xserver-dbgsym: lines which differ (wdiff format)
---------------------------------------------------------------------------
-Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}
-Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] {+1:1.7.9-3~jan+lint1)+}
-Installed-Size: [-515-] {+204+}
-Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}
-"""
-        )
-    )
+from janitor.debian.debdiff import filter_boring
 
 
 def test_just_versions():

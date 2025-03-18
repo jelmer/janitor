@@ -6,6 +6,7 @@ use pyo3::prelude::*;
 
 mod artifacts;
 mod config;
+mod debdiff;
 mod io;
 mod logs;
 mod vcs;
@@ -55,6 +56,10 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     let configm = pyo3::types::PyModule::new_bound(py, "config")?;
     crate::config::init(py, &configm)?;
     m.add_submodule(&configm)?;
+
+    let debdiff = PyModule::new_bound(py, "debdiff")?;
+    crate::debdiff::init_module(py, &debdiff)?;
+    m.add_submodule(&debdiff)?;
 
     Ok(())
 }
