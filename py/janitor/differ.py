@@ -182,12 +182,16 @@ async def handle_debdiff(request):
             with open(cache_path, "wb") as f:
                 f.write(debdiff)
 
+    assert debdiff is not None
+
     if "filter_boring" in request.query:
         debdiff = filter_debdiff_boring(
             debdiff.decode(),
             str(old_run["build_version"]),
             str(new_run["build_version"]),
         ).encode()
+
+    assert debdiff is not None
 
     content_type = mimeparse.best_match(
         ["text/x-diff", "text/plain", "text/markdown", "text/html"],
