@@ -134,7 +134,7 @@ for distribution in args.distribution:
 
     suites = []
     for campaign in config.campaign:
-        if not campaign.HasField("debian_build"):
+        if not campaign.debian_build:
             continue
         if campaign.debian_build.base_distribution != distro_config.name:
             continue

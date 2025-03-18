@@ -30,5 +30,3 @@ Cargo.lock
 target
 .testrepository
 py/janitor/_*.cpython-*.so
-py/janitor/config_pb2.py
-py/janitor/config_pb2.pyi

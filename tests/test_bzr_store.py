@@ -22,14 +22,16 @@ from threading import Thread
 
 from breezy.controldir import ControlDir
 
-from janitor import config_pb2
 from janitor.bzr_store import create_web_app
+from janitor.config import read_string as read_config_string
 
 
 async def create_client(aiohttp_client, tmp_path="/tmp", codebases=None):
-    config = config_pb2.Config()
-    campaign = config.campaign.add()
-    campaign.name = "campaign"
+    config = read_config_string("""\
+campaign {
+    name: "campaign"
+}
+""")
 
     if codebases is None:
         codebases = set()
@@ -111,9 +113,11 @@ async def test_push(aiohttp_server, tmp_path):
     def serve():
         nonlocal server, done
         loop = asyncio.new_event_loop()
-        config = config_pb2.Config()
-        campaign = config.campaign.add()
-        campaign.name = "campaign"
+        config = read_config_string("""\
+campaign {
+    name: "campaign"
+}
+""")
 
         codebases = {"foo"}
 

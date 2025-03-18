@@ -20,44 +20,21 @@ __all__ = [
     "Campaign",
     "AptRepository",
     "read_config",
+    "read_string",
     "get_campaign_config",
     "get_distribution",
 ]
 
-import sys
 
-from google.protobuf import text_format  # type: ignore
+from ._common import config as _config_rs  # type: ignore
 
-from . import config_pb2
-
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-
-    Config: TypeAlias = config_pb2.Config
-    Campaign: TypeAlias = config_pb2.Campaign
-    AptRepository: TypeAlias = config_pb2.AptRepository
-else:
-    Config = config_pb2.Config
-    Campaign = config_pb2.Campaign
-    AptRepository = config_pb2.AptRepository
-
-
-def read_config(f):
-    return text_format.Parse(f.read(), config_pb2.Config())
-
-
-def get_distribution(config: Config, name: str) -> config_pb2.Distribution:
-    for d in config.distribution:
-        if d.name == name:
-            return d
-    raise KeyError(name)
-
-
-def get_campaign_config(config: config_pb2.Config, name: str) -> config_pb2.Campaign:
-    for c in config.campaign:
-        if c.name == name:
-            return c
-    raise KeyError(name)
+Config = _config_rs.Config
+Campaign = _config_rs.Campaign
+AptRepository = _config_rs.AptRepository
+read_config = _config_rs.read_config
+read_string = _config_rs.read_string
+get_distribution = _config_rs.get_distribution
+get_campaign_config = _config_rs.get_campaign_config
 
 
 if __name__ == "__main__":

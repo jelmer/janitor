@@ -5,6 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod artifacts;
+mod config;
 mod io;
 mod logs;
 mod vcs;
@@ -50,6 +51,10 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     let logsm = pyo3::types::PyModule::new_bound(py, "logs")?;
     crate::logs::init(py, &logsm)?;
     m.add_submodule(&logsm)?;
+
+    let configm = pyo3::types::PyModule::new_bound(py, "config")?;
+    crate::config::init(py, &configm)?;
+    m.add_submodule(&configm)?;
 
     Ok(())
 }

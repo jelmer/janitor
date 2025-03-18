@@ -4,12 +4,22 @@ use protobuf::text_format;
 use std::fs::File;
 use std::io::Read;
 
-pub use config::{AptRepository, Campaign, Config, Distribution};
+pub use config::{
+    AptRepository, BugTracker, BugTrackerKind, Campaign, Config, DebianBuild, Distribution,
+    GenericBuild, MergeProposalConfig, OAuth2Provider, Select,
+};
 
 pub fn read_file(file_path: &std::path::Path) -> Result<Config, Box<dyn std::error::Error>> {
     let mut file = File::open(file_path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
+
+    read_string(&contents)
+}
+
+pub fn read_readable<R: Read>(mut readable: R) -> Result<Config, Box<dyn std::error::Error>> {
+    let mut contents = String::new();
+    readable.read_to_string(&mut contents)?;
 
     read_string(&contents)
 }

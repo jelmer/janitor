@@ -15,15 +15,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.config import Config
+from janitor.config import read_string as read_config_string
 from janitor.site.simple import create_app
 
 
 def create_config():
-    config = Config()
-    campaign = config.campaign.add()
-    campaign.name = "lintian-fixes"
-    return config
+    return read_config_string("""
+campaign {
+  name: "lintian-fixes"
+}
+""")
 
 
 async def test_create_app():
