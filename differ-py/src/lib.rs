@@ -43,11 +43,29 @@ fn run_diffoscope<'a>(
     })
 }
 
+#[pyfunction]
+fn filter_boring_udiff(
+    udiff: &str,
+    old_version: &str,
+    new_version: &str,
+    display_version: &str,
+) -> PyResult<String> {
+    let o = janitor_differ::diffoscope::filter_boring_udiff(
+        udiff,
+        old_version,
+        new_version,
+        display_version,
+    )
+    .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(o)
+}
+
 #[pymodule]
 pub fn _differ(m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_function(wrap_pyfunction!(run_diffoscope, m)?)?;
+    m.add_function(wrap_pyfunction!(filter_boring_udiff, m)?)?;
 
     Ok(())
 }
