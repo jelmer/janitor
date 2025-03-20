@@ -1645,7 +1645,7 @@ async def handle_full_policy_put(request):
             )
             for (name, v) in policy.items()
         ]
-        await conn.executemany(
+        result1 = await conn.executemany(
             "INSERT INTO named_publish_policy "
             "(name, per_branch_policy, rate_limit_bucket) "
             "VALUES ($1, $2, $3) ON CONFLICT (name) "
@@ -1654,13 +1654,15 @@ async def handle_full_policy_put(request):
             "rate_limit_bucket = EXCLUDED.rate_limit_bucket",
             entries,
         )
-        await conn.execute(
+        result2 = await conn.execute(
             "DELETE FROM named_publish_policy WHERE NOT (name = ANY($1::text[]))",
             policy.keys(),
         )
-    # TODO(jelmer): Call consider_publish_run
-    return web.json_response({})
 
+    logger.info("put-full-policy: result 1: %s, result 2: %s", str(result1), str(result2))
+
+    # TODO(jelmer): Call consider_publish_run
+    return web.json_response({'put-full-policy':'success'})
 
 @routes.delete("/policy/{name}", name="delete-policy")
 async def handle_policy_del(request):
