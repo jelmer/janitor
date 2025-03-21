@@ -82,7 +82,7 @@ from yarl import URL
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
-from ._publish import calculate_next_try_time, get_merged_by_user_url
+from ._publish import calculate_next_try_time, get_merged_by_user_url, branches_match
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config
@@ -352,24 +352,6 @@ async def derived_branch_name(conn, campaign_config, run, role):
         return name + "/" + run.codebase
     else:
         return name
-
-
-def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
-    if url_a == url_b:
-        return True
-    if url_a is None:
-        return url_b is None
-    if url_b is None:
-        return False
-    url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip("/"))
-    url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip("/"))
-    # TODO(jelmer): Support following redirects
-    if url_a.rstrip("/") != url_b.rstrip("/"):  # type: ignore
-        return False
-    try:
-        return open_branch(url_a).name == open_branch(url_b).name  # type: ignore
-    except BranchMissing:
-        return False
 
 
 @dataclass
