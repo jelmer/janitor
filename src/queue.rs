@@ -159,7 +159,7 @@ impl<'a> Queue<'a> {
         }
 
         if let Some(exclude_hosts) = exclude_hosts.as_ref() {
-            query_builder = query_builder.bind(exclude_hosts.into_iter().collect::<Vec<_>>());
+            query_builder = query_builder.bind(exclude_hosts.iter().collect::<Vec<_>>());
         }
 
         let row = query_builder.fetch_optional(self.pool).await?;
