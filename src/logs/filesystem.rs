@@ -139,7 +139,7 @@ impl LogFileManager for FileSystemLogFileManager {
         for path in self.get_paths(codebase, run_id, name) {
             if let Ok(metadata) = fs::metadata(&path) {
                 let ctime = metadata.ctime();
-                return Ok(chrono::DateTime::from_timestamp(ctime as i64, 0).unwrap());
+                return Ok(chrono::DateTime::from_timestamp(ctime, 0).unwrap());
             }
         }
         Err(Error::NotFound)

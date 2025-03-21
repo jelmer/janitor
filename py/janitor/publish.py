@@ -64,7 +64,6 @@ from breezy.forge import (
     MergeProposal,
     UnsupportedForge,
     forges,
-    get_forge_by_hostname,
     get_proposal_by_url,
     iter_forge_instances,
 )
@@ -78,11 +77,10 @@ from silver_platter import (
 from silver_platter import (
     _open_branch as open_branch,
 )
-from yarl import URL
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
-from ._publish import calculate_next_try_time, get_merged_by_user_url, branches_match
+from ._publish import branches_match, calculate_next_try_time, get_merged_by_user_url
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config

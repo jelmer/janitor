@@ -63,8 +63,7 @@ cd {{ codebase }}
                    id="issue_description"
                    name="issue[description]"
                    value="{%- filter escape -%} See run [{{ run_id }}]({{ url }}).  {%- endfilter -%}" />
-            <button id="filebug"
-                    {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>
+            <button id="filebug" {% if accesskey %}accesskey="{{ accesskey }}"{% endif %}>
                 File a Bug against {{ bugtracker.name }}
             </button>
         </form>
