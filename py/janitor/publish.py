@@ -82,7 +82,7 @@ from yarl import URL
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
-from ._publish import calculate_next_try_time
+from ._publish import calculate_next_try_time, get_merged_by_user_url
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config
@@ -203,17 +203,6 @@ logger = logging.getLogger("janitor.publish")
 
 
 routes = web.RouteTableDef()
-
-
-def get_merged_by_user_url(url, user):
-    hostname = URL(url).host
-    if hostname is None:
-        return None
-    try:
-        forge = get_forge_by_hostname(hostname)
-    except UnsupportedForge:
-        return None
-    return forge.get_user_url(user)
 
 
 class RateLimited(Exception):
