@@ -561,7 +561,7 @@ fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
     branch_a.name() == branch_b.name()
 }
 
-fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
+pub fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
     let hostname = if let Some(host) = url.host_str() {
         host
     } else {
