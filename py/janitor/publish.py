@@ -80,7 +80,12 @@ from silver_platter import (
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
-from ._publish import branches_match, calculate_next_try_time, get_merged_by_user_url
+from ._publish import (
+    branches_match,
+    calculate_next_try_time,
+    get_merged_by_user_url,
+    role_branch_url,
+)
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config
@@ -1261,14 +1266,6 @@ async def publish_from_policy(
 
 async def pubsub_publish(redis, topic_entry):
     await redis.publish("publish", json.dumps(topic_entry))
-
-
-def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
-    if remote_branch_name is None:
-        return url
-    base_url, params = urlutils.split_segment_parameters(url.rstrip("/"))
-    params["branch"] = urlutils.escape(remote_branch_name, safe="")
-    return urlutils.join_segment_parameters(base_url, params)
 
 
 def run_sufficient_for_proposal(
