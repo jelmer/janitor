@@ -527,7 +527,7 @@ fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url
     }
 }
 
-fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
     use silver_platter::vcs::{open_branch, BranchOpenError};
     if url_a == url_b {
         return true;
