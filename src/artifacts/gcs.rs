@@ -187,7 +187,7 @@ impl ArtifactManager for GCSArtifactManager {
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url {
         let object_name = format!("{}/{}", run_id, filename);
         let encoded_object_name =
-            percent_encoding::utf8_percent_encode(&object_name, &percent_encoding::CONTROLS);
+            percent_encoding::utf8_percent_encode(&object_name, percent_encoding::CONTROLS);
         format!(
             "https://storage.googleapis.com/{}/{}/{}",
             self.bucket_name, run_id, encoded_object_name

@@ -1,6 +1,5 @@
 use crate::publish::Mode;
-use crate::queue::{Queue, QueueItem};
-use crate::state::Run;
+use crate::queue::Queue;
 use breezyshim::RevisionId;
 use chrono::Duration;
 use debian_control::lossless::relations::{Relation, Relations};
@@ -199,7 +198,7 @@ ORDER BY start_time DESC
             success += 1;
         }
         let mut same_context = context != Some("")
-            && !context.is_none()
+            && context.is_some()
             && [run.instigated_context.as_deref(), run.context.as_deref()].contains(&context);
         if run.result_code == "install-deps-unsatisfied-dependencies"
             && run
@@ -277,7 +276,7 @@ fn calculate_offset(
     );
 
     assert!(
-        estimated_probability_of_success >= 0.0 && estimated_probability_of_success <= 1.0,
+        (0.0..=1.0).contains(&estimated_probability_of_success),
         "Probability of success: {}",
         estimated_probability_of_success
     );
@@ -398,7 +397,7 @@ async fn do_schedule_regular(
                 offset,
                 bucket,
                 context.as_deref(),
-                Some(estimated_duration.into()),
+                Some(estimated_duration),
                 refresh,
                 Some(requester),
             )
@@ -540,10 +539,10 @@ pub async fn do_schedule_control(
 ) -> Result<(f64, chrono::Duration, i32, String), Error> {
     let mut command = vec!["brz".to_owned(), "up".to_owned()];
     if let Some(main_branch_revision) = main_branch_revision {
-        command.push(format!("--revision={}", main_branch_revision.to_string()));
+        command.push(format!("--revision={}", main_branch_revision));
     }
     let bucket = bucket.unwrap_or("control");
-    Ok(do_schedule(
+    do_schedule(
         conn,
         "control",
         codebase,
@@ -555,7 +554,7 @@ pub async fn do_schedule_control(
         estimated_duration,
         Some(&shlex::try_join(command.iter().map(|x| x.as_str()).collect::<Vec<_>>()).unwrap()),
     )
-    .await?)
+    .await
 }
 
 #[derive(Debug)]
