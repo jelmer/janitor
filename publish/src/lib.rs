@@ -510,7 +510,7 @@ fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32
     }
 }
 
-fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
+pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
     if let Some(remote_branch_name) = remote_branch_name {
         let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(
             &url.to_string().trim_end_matches('/').parse().unwrap(),

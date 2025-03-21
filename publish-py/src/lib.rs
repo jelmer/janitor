@@ -38,11 +38,20 @@ fn branches_match(url_a: Option<&str>, url_b: Option<&str>) -> PyResult<bool> {
     ))
 }
 
+#[pyfunction]
+fn role_branch_url(url: &str, remote_branch_name: Option<&str>) -> PyResult<String> {
+    let url = url.parse().map_err(|e: url::ParseError| {
+        PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
+    })?;
+    Ok(janitor_publish::role_branch_url(&url, remote_branch_name).to_string())
+}
+
 #[pymodule]
 pub fn _publish(m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(calculate_next_try_time, m)?)?;
     m.add_function(wrap_pyfunction!(get_merged_by_user_url, m)?)?;
     m.add_function(wrap_pyfunction!(branches_match, m)?)?;
+    m.add_function(wrap_pyfunction!(role_branch_url, m)?)?;
     Ok(())
 }
