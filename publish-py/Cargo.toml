@@ -20,6 +20,7 @@ log = "0.4"
 chrono = { workspace = true, features = ["serde"] }
 breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
+url.workspace = true
 
 [features]
 extension-module = ["pyo3/extension-module"]

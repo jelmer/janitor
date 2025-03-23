@@ -4660,6 +4660,7 @@ dependencies = [
  "pyo3",
  "pyo3-log",
  "silver-platter",
+ "url",
 ]
 
 [[package]]

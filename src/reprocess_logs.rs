@@ -1,7 +1,7 @@
 use crate::analyze_log::AnalyzeLogFn;
 use crate::logs::LogFileManager;
 use sqlx::Executor;
-use tokio::time::{error::Elapsed, timeout};
+use tokio::time::timeout;
 use tracing::{error, info};
 
 /// Reprocess run logs.
@@ -80,7 +80,7 @@ async fn reprocess_run_logs(
                 .bind(&new_analysis.code)
                 .bind(&new_analysis.description)
                 .bind(&new_analysis.failure_details)
-                .bind(&log_id);
+                .bind(log_id);
 
             db.execute(query).await.unwrap();
             if reschedule && new_analysis.code != result_code {
@@ -103,5 +103,5 @@ async fn reprocess_run_logs(
         return Some(new_analysis);
     }
 
-    return None;
+    None
 }
