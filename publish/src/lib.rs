@@ -510,7 +510,7 @@ fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32
     }
 }
 
-fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
+pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
     if let Some(remote_branch_name) = remote_branch_name {
         let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(
             &url.to_string().trim_end_matches('/').parse().unwrap(),
@@ -527,7 +527,7 @@ fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url
     }
 }
 
-fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
     use silver_platter::vcs::{open_branch, BranchOpenError};
     if url_a == url_b {
         return true;
@@ -561,7 +561,7 @@ fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
     branch_a.name() == branch_b.name()
 }
 
-fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
+pub fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
     let hostname = if let Some(host) = url.host_str() {
         host
     } else {

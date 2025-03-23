@@ -40,10 +40,12 @@ ruff:
 
 fix:: ruff-fix
 
-fix:: cargo-fix
+fix:: clippy-fix
 
-cargo-fix:
-	cargo clippy --fix
+fix:: reformat
+
+clippy-fix:
+	cargo clippy --fix --allow-dirty --allow-staged
 
 ruff-fix:
 	ruff check --fix .

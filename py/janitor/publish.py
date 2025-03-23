@@ -64,7 +64,6 @@ from breezy.forge import (
     MergeProposal,
     UnsupportedForge,
     forges,
-    get_forge_by_hostname,
     get_proposal_by_url,
     iter_forge_instances,
 )
@@ -78,11 +77,15 @@ from silver_platter import (
 from silver_platter import (
     _open_branch as open_branch,
 )
-from yarl import URL
 
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
-from ._publish import calculate_next_try_time
+from ._publish import (
+    branches_match,
+    calculate_next_try_time,
+    get_merged_by_user_url,
+    role_branch_url,
+)
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
 from .vcs import VcsManager, get_vcs_managers_from_config
@@ -203,17 +206,6 @@ logger = logging.getLogger("janitor.publish")
 
 
 routes = web.RouteTableDef()
-
-
-def get_merged_by_user_url(url, user):
-    hostname = URL(url).host
-    if hostname is None:
-        return None
-    try:
-        forge = get_forge_by_hostname(hostname)
-    except UnsupportedForge:
-        return None
-    return forge.get_user_url(user)
 
 
 class RateLimited(Exception):
@@ -363,24 +355,6 @@ async def derived_branch_name(conn, campaign_config, run, role):
         return name + "/" + run.codebase
     else:
         return name
-
-
-def branches_match(url_a: Optional[str], url_b: Optional[str]) -> bool:
-    if url_a == url_b:
-        return True
-    if url_a is None:
-        return url_b is None
-    if url_b is None:
-        return False
-    url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip("/"))
-    url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip("/"))
-    # TODO(jelmer): Support following redirects
-    if url_a.rstrip("/") != url_b.rstrip("/"):  # type: ignore
-        return False
-    try:
-        return open_branch(url_a).name == open_branch(url_b).name  # type: ignore
-    except BranchMissing:
-        return False
 
 
 @dataclass
@@ -1294,14 +1268,6 @@ async def pubsub_publish(redis, topic_entry):
     await redis.publish("publish", json.dumps(topic_entry))
 
 
-def role_branch_url(url: str, remote_branch_name: Optional[str]) -> str:
-    if remote_branch_name is None:
-        return url
-    base_url, params = urlutils.split_segment_parameters(url.rstrip("/"))
-    params["branch"] = urlutils.escape(remote_branch_name, safe="")
-    return urlutils.join_segment_parameters(base_url, params)
-
-
 def run_sufficient_for_proposal(
     campaign_config: Campaign, run_value: Optional[int]
 ) -> bool:
@@ -1551,9 +1517,9 @@ FROM absorbed_runs
                     "campaign": row["campaign"],
                     "merged-by": row["merged_by"],
                     "merged-by-url": await asyncio.to_thread(
-                        get_merged_by_user_url(
-                            row["merge_proposal_url"], row["merged_by"]
-                        )
+                        get_merged_by_user_url,
+                        row["merge_proposal_url"],
+                        row["merged_by"],
                     ),
                     "absorbed-at": row["absorbed-at"],
                     "id": row["id"],

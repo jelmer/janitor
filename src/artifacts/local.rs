@@ -14,7 +14,7 @@ pub struct LocalArtifactManager {
 impl LocalArtifactManager {
     pub fn new(path: &Path) -> io::Result<Self> {
         if !path.is_dir() {
-            fs::create_dir_all(&path)?;
+            fs::create_dir_all(path)?;
         }
         Ok(Self {
             path: path.canonicalize()?,
@@ -81,7 +81,7 @@ impl ArtifactManager for LocalArtifactManager {
             let entry = entry?;
             let name = entry.file_name();
             let filter_fn = filter_fn.unwrap_or(&|_| true);
-            if filter_fn(&name.to_str().unwrap()) {
+            if filter_fn(name.to_str().unwrap()) {
                 fs::copy(entry.path(), local_path.join(&name))?;
             }
         }
