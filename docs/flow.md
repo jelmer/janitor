@@ -1,20 +1,3 @@
-Package metadata
-================
-
-Package metadata contains mostly static information about a package, imported
-straight from the archive. This includes the package name, maintainer email,
-uploader emails (if any) as well as the version control information
-(vcs type, URL, subpath) and optionally popularity.
-
-The "schedule" job regularly imports package metadata. On Debian, this information
-comes from UDD. On other Debian-like distributions, it's imported from the
-apt sources file.
-
-The importing has two components:
-
- * A script that can output Package() protobufs (see janitor/package_metadata.proto) to standard out
- * An importer that reads these protobufs on standard in and updates the database (janitor.package_metadata)
-
 Candidates
 ==========
 
