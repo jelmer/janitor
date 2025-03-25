@@ -51,7 +51,7 @@ CREATE INDEX ON merge_proposal (status, rate_limit_bucket);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE DOMAIN campaign_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE verdict AS ENUM('approved', 'rejected', 'abstained');
-CREATE TABLE result_tag (
+CREATE TABLE IF NOT EXISTS result_tag (
  actual_name text,
  revision text not null
 );
@@ -201,7 +201,7 @@ CREATE UNIQUE INDEX candidate_codebase_suite_set ON candidate (codebase, suite, 
 CREATE INDEX ON candidate (suite);
 CREATE INDEX ON candidate(change_set);
 
-CREATE TABLE last_run (
+CREATE TABLE IF NOT EXISTS last_run (
    codebase text not null references codebase(name),
    campaign campaign_name not null,
    last_run_id text references run (id),
@@ -228,7 +228,7 @@ CREATE OR REPLACE VIEW last_effective_runs AS
   FROM last_run
   INNER JOIN run on last_run.last_effective_run_id = run.id;
 
-CREATE TABLE new_result_branch (
+CREATE TABLE IF NOT EXISTS new_result_branch (
  run_id text not null references run (id) on delete cascade,
  role text not null,
  remote_name text,
@@ -514,7 +514,7 @@ CREATE OR REPLACE TRIGGER publish_refresh_change_set_state
   EXECUTE FUNCTION publish_trigger_refresh_change_set_state();
 
 
-CREATE TABLE site_session (
+CREATE TABLE IF NOT EXISTS site_session (
   id text primary key,
   timestamp timestamp not null default now(),
   userinfo json
@@ -546,7 +546,7 @@ FROM
     queue
 ORDER BY bucket ASC, priority ASC, id ASC;
 
-CREATE TABLE result_branch (
+CREATE TABLE IF NOT EXISTS result_branch (
  role text not null,
  remote_name text not null,
  base_revision text not null,
@@ -672,7 +672,7 @@ CREATE OR REPLACE VIEW absorbed_runs AS
     AND publish.result_code = 'success'
     AND run.suite not in ('unchanged', 'control');
 
-CREATE TABLE followup (
+CREATE TABLE IF NOT EXISTS followup (
     origin text not null references run(id),
     candidate int references candidate (id),
     unique (origin, candidate)

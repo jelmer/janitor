@@ -1,5 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS debversion;
-CREATE TABLE debian_build (
+CREATE TABLE IF NOT EXISTS debian_build (
  run_id text not null references run (id),
  -- Debian version text of the built package
  version debversion not null,
@@ -11,6 +11,3 @@ CREATE TABLE debian_build (
 );
 CREATE INDEX ON debian_build (run_id);
 CREATE INDEX ON debian_build (distribution, source, version);
-
-
-
