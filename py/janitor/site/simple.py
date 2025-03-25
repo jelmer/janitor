@@ -652,7 +652,7 @@ async def main_async(argv=None):
     from janitor.config import read_config
 
     parser = argparse.ArgumentParser(
-        prog="janitor.site.simnple",
+        prog="janitor.site.simple",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--port", type=int, help="Listen port", default=8080)
