@@ -714,6 +714,8 @@ async def main_async(argv=None):
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
+    elif args.debug:
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 
