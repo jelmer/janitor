@@ -97,7 +97,9 @@ campaign {
 
     with pytest.raises(KeyError):
         get_campaign_config(c, "foo")
-    assert get_campaign_config(c, "lintian-fixes").name == "lintian-fixes"
+    cc = get_campaign_config(c, "lintian-fixes")
+    assert cc.name == "lintian-fixes"
+    assert cc.command == "lintian-brush"
 
 
 def test_read_from_text():

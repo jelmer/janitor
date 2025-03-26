@@ -272,8 +272,8 @@ impl Campaign {
     }
 
     #[getter]
-    pub fn command(&self) -> Vec<&str> {
-        self.0.command.iter().map(|s| s.as_str()).collect()
+    pub fn command(&self) -> Option<&str> {
+        self.0.command.as_deref()
     }
 }
 
