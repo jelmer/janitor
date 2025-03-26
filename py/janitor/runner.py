@@ -2142,7 +2142,7 @@ async def handle_candidates_upload(request):
                                 unknown_campaigns.append(campaign)
                                 await tr.rollback()
                                 continue
-                            command = campaign_config.command
+                            command = "".join(campaign_config.command)
                             if not command:
                                 logging.warning(
                                     "No command in candidate or campaign config"
