@@ -2,6 +2,7 @@ use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 #[pyclass]
 pub struct Config(pub(crate) janitor::config::Config);
 

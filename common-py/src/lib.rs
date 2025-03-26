@@ -9,6 +9,7 @@ mod config;
 mod debdiff;
 mod io;
 mod logs;
+mod queue;
 mod vcs;
 
 #[pyfunction]
@@ -32,6 +33,10 @@ fn is_alioth_url(url: &str) -> PyResult<bool> {
     Ok(janitor::vcs::is_alioth_url(&url::Url::parse(url).map_err(
         |e| PyValueError::new_err((format!("Invalid URL: {}", e),)),
     )?))
+}
+
+pub(crate) fn convert_sqlx_error(error: sqlx::Error) -> PyErr {
+    PyValueError::new_err(format!("{}", error))
 }
 
 #[pymodule]
@@ -60,6 +65,10 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     let debdiff = PyModule::new_bound(py, "debdiff")?;
     crate::debdiff::init_module(py, &debdiff)?;
     m.add_submodule(&debdiff)?;
+
+    let queuem = pyo3::types::PyModule::new_bound(py, "queue")?;
+    crate::queue::init(py, &queuem)?;
+    m.add_submodule(&queuem)?;
 
     Ok(())
 }

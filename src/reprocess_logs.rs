@@ -85,7 +85,7 @@ async fn reprocess_run_logs(
             db.execute(query).await.unwrap();
             if reschedule && new_analysis.code != result_code {
                 crate::schedule::do_schedule(
-                    db,
+                    db.clone(),
                     campaign,
                     codebase,
                     "reschedule",

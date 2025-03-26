@@ -4,9 +4,11 @@ use sqlx::{Error, FromRow, PgPool, Row};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
+pub type QueueId = i32;
+
 #[derive(Debug, FromRow)]
 pub struct QueueItem {
-    pub id: i32,
+    pub id: QueueId,
     pub context: Option<String>,
     pub command: String,
     pub estimated_duration: PgInterval,
@@ -43,8 +45,8 @@ impl Hash for QueueItem {
     }
 }
 
-pub struct Queue<'a> {
-    pool: &'a PgPool,
+pub struct Queue {
+    pool: PgPool,
 }
 
 #[derive(FromRow)]
@@ -60,8 +62,14 @@ pub struct VcsInfo {
     pub vcs_type: Option<String>,
 }
 
-impl<'a> Queue<'a> {
-    pub fn new(pool: &'a PgPool) -> Self {
+impl Queue {
+    pub async fn from_config(config: &crate::config::Config) -> Self {
+        Queue {
+            pool: config.pg_pool().await.unwrap(),
+        }
+    }
+
+    pub fn new(pool: PgPool) -> Self {
         Queue { pool }
     }
 
@@ -71,20 +79,20 @@ impl<'a> Queue<'a> {
         )
         .bind(codebase)
         .bind(campaign)
-        .fetch_optional(self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(row)
     }
 
-    pub async fn get_item(&self, queue_id: i32) -> Result<Option<QueueItem>, Error> {
+    pub async fn get_item(&self, queue_id: QueueId) -> Result<Option<QueueItem>, Error> {
         let row = sqlx::query_as::<_, QueueItem>(
             "SELECT id, context, command, estimated_duration, suite AS campaign, refresh, requester, change_set, codebase
              FROM queue
              WHERE id = $1"
         )
         .bind(queue_id)
-        .fetch_optional(self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(row)
@@ -105,7 +113,7 @@ impl<'a> Queue<'a> {
         codebase: Option<&str>,
         campaign: Option<&str>,
         exclude_hosts: Option<HashSet<String>>,
-        assigned_queue_items: Option<HashSet<i32>>,
+        assigned_queue_items: Option<HashSet<QueueId>>,
     ) -> Result<(Option<QueueItem>, Option<VcsInfo>), Error> {
         let mut query = String::from(
             "SELECT
@@ -162,7 +170,7 @@ impl<'a> Queue<'a> {
             query_builder = query_builder.bind(exclude_hosts.iter().collect::<Vec<_>>());
         }
 
-        let row = query_builder.fetch_optional(self.pool).await?;
+        let row = query_builder.fetch_optional(&self.pool).await?;
 
         if let Some(row) = row {
             let vcs_info = VcsInfo::from_row(&row)?;
@@ -187,7 +195,7 @@ impl<'a> Queue<'a> {
         estimated_duration: Option<TimeDelta>,
         refresh: bool,
         requester: Option<&str>,
-    ) -> Result<(i32, String), Error> {
+    ) -> Result<(QueueId, String), Error> {
         let row = sqlx::query(
             "INSERT INTO queue (command, priority, bucket, context, estimated_duration, suite, refresh, requester, change_set, codebase)
              VALUES ($1, (SELECT COALESCE(MIN(priority), 0) FROM queue) + $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -214,11 +222,11 @@ impl<'a> Queue<'a> {
         .bind(requester)
         .bind(change_set)
         .bind(codebase)
-        .fetch_optional(self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         if let Some(row) = row {
-            let id: i32 = row.try_get("id")?;
+            let id: QueueId = row.try_get("id")?;
             let bucket: String = row.try_get("bucket")?;
             Ok((id, bucket))
         } else {
@@ -228,9 +236,9 @@ impl<'a> Queue<'a> {
             .bind(codebase)
             .bind(campaign)
             .bind(change_set.unwrap_or(""))
-            .fetch_one(self.pool)
+            .fetch_one(&self.pool)
             .await?;
-            let id: i32 = row.try_get("id")?;
+            let id: QueueId = row.try_get("id")?;
             let bucket: String = row.try_get("bucket")?;
             Ok((id, bucket))
         }
@@ -239,7 +247,7 @@ impl<'a> Queue<'a> {
     pub async fn get_buckets(&self) -> Result<Vec<(String, i64)>, Error> {
         let rows =
             sqlx::query("SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC")
-                .fetch_all(self.pool)
+                .fetch_all(&self.pool)
                 .await?;
 
         Ok(rows

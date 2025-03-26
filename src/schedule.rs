@@ -307,7 +307,7 @@ fn calculate_offset(
 }
 
 async fn do_schedule_regular(
-    conn: &PgPool,
+    conn: PgPool,
     codebase: &str,
     campaign: &str,
     command: Option<&str>,
@@ -327,7 +327,7 @@ async fn do_schedule_regular(
         || command.is_none()
     {
         let candidate = sqlx::query_as::<_, (f64, f64, String, Option<String>)>(
-            "SELECT value, success_chance, command, context FROM candidate WHERE codebase = $1 and suite = $2 and coalesce(change_set, '') = $3").bind(codebase).bind(campaign).bind(change_set.unwrap_or("")).fetch_optional(conn).await?;
+            "SELECT value, success_chance, command, context FROM candidate WHERE codebase = $1 and suite = $2 and coalesce(change_set, '') = $3").bind(codebase).bind(campaign).bind(change_set.unwrap_or("")).fetch_optional(&conn).await?;
         let candidate: (f64, f64, String, Option<String>) = if let Some(candidate) = candidate {
             candidate
         } else {
@@ -356,7 +356,7 @@ async fn do_schedule_regular(
     };
 
     let (estimated_probability_of_success, estimated_duration, total_previous_runs) =
-        estimate_success_probability_and_duration(conn, codebase, campaign, context.as_deref())
+        estimate_success_probability_and_duration(&conn, codebase, campaign, context.as_deref())
             .await?;
 
     assert!(
@@ -368,7 +368,7 @@ async fn do_schedule_regular(
 
     if normalized_codebase_value.is_none() {
         normalized_codebase_value = sqlx::query_scalar::<_, f64>(
-            "select coalesce(least(1.0 * value / (select max(value) from codebase), 1.0), 1.0) from codebase WHERE name = $1").bind(codebase).fetch_optional(conn).await?
+            "select coalesce(least(1.0 * value / (select max(value) from codebase), 1.0), 1.0) from codebase WHERE name = $1").bind(codebase).fetch_optional(&conn).await?
     }
 
     let offset = calculate_offset(
@@ -416,7 +416,7 @@ async fn do_schedule_regular(
 }
 
 pub async fn bulk_add_to_queue(
-    conn: &PgPool,
+    conn: PgPool,
     todo: &[ScheduleRequest],
     dry_run: bool,
     default_offset: f64,
@@ -428,7 +428,7 @@ pub async fn bulk_add_to_queue(
     let mut codebase_values = sqlx::query_as::<_, (String, f64)>(
         "SELECT name, coalesce(value, 0) FROM codebase WHERE name IS NOT NULL",
     )
-    .fetch_all(conn)
+    .fetch_all(&conn)
     .await?
     .into_iter()
     .collect::<HashMap<_, _>>();
@@ -454,7 +454,7 @@ pub async fn bulk_add_to_queue(
             1.0
         };
         do_schedule_regular(
-            conn,
+            conn.clone(),
             &req.codebase,
             &req.campaign,
             Some(&req.command),
@@ -527,7 +527,7 @@ async fn deps_satisfied(
 }
 
 pub async fn do_schedule_control(
-    conn: &PgPool,
+    conn: PgPool,
     codebase: &str,
     change_set: Option<&str>,
     main_branch_revision: Option<&RevisionId>,
@@ -581,7 +581,7 @@ impl From<sqlx::Error> for Error {
 }
 
 pub async fn do_schedule(
-    conn: &PgPool,
+    conn: PgPool,
     campaign: &str,
     codebase: &str,
     bucket: &str,
@@ -600,7 +600,7 @@ pub async fn do_schedule(
             sqlx::query_as("SELECT command FROM candidate WHERE codebase = $1 AND suite = $2")
                 .bind(codebase)
                 .bind(campaign)
-                .fetch_optional(conn)
+                .fetch_optional(&conn)
                 .await?;
         if candidate.is_none() {
             return Err(Error::CandidateUnavailable {
@@ -613,7 +613,7 @@ pub async fn do_schedule(
     let estimated_duration = if let Some(estimated_duration) = estimated_duration {
         estimated_duration
     } else {
-        estimate_duration(conn, codebase, campaign).await?
+        estimate_duration(&conn, codebase, campaign).await?
     };
     let queue = Queue::new(conn);
     let (queue_id, bucket) = queue

@@ -935,6 +935,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "silver-platter",
+ "sqlx",
  "tokio",
  "url",
 ]
