@@ -2063,11 +2063,11 @@ async def handle_candidate_download(request):
 @routes.post("/candidates", name="upload-candidates")
 async def handle_candidates_upload(request):
     span = aiozipkin.request_span(request)
-    unknown_codebases = []
-    unknown_campaigns = []
-    invalid_command = []
-    invalid_value = []
-    unknown_publish_policies = []
+    unknown_codebases = set()
+    unknown_campaigns = set()
+    invalid_command = set()
+    invalid_value = set()
+    unknown_publish_policies = set()
     queue_processor = request.app["queue_processor"]
     async with queue_processor.database.acquire() as conn:
         existing_runs_stmt = await conn.prepare(
@@ -2127,7 +2127,7 @@ async def handle_candidates_upload(request):
 
                         if campaign not in known_campaign_names:
                             logging.warning("unknown campaign %r", campaign)
-                            unknown_campaigns.append(campaign)
+                            unknown_campaigns.add(campaign)
                             await tr.rollback()
                             continue
 
@@ -2139,7 +2139,7 @@ async def handle_candidates_upload(request):
                                 )
                             except KeyError:
                                 logging.warning("unknown campaign %r", campaign)
-                                unknown_campaigns.append(campaign)
+                                unknown_campaigns.add(campaign)
                                 await tr.rollback()
                                 continue
                             command = campaign_config.command
@@ -2147,7 +2147,7 @@ async def handle_candidates_upload(request):
                                 logging.warning(
                                     "No command in candidate or campaign config"
                                 )
-                                invalid_command.append(command)
+                                invalid_command.add(command)
                                 await tr.rollback()
                                 continue
 
@@ -2158,7 +2158,7 @@ async def handle_candidates_upload(request):
                                 "invalid value for candidate: %r",
                                 candidate.get("value"),
                             )
-                            invalid_value.append(candidate.get("value"))
+                            invalid_value.add(candidate.get("value"))
                             await tr.rollback()
                             continue
 
@@ -2181,7 +2181,7 @@ async def handle_candidates_upload(request):
                                         codebase,
                                         candidate["campaign"],
                                     )
-                                    unknown_codebases.append(codebase)
+                                    unknown_codebases.add(codebase)
                                     await tr.rollback()
                                     continue
                                 elif (
@@ -2190,7 +2190,7 @@ async def handle_candidates_upload(request):
                                     logging.warning(
                                         "unknown publish policy %s", publish_policy
                                     )
-                                    unknown_publish_policies.append(publish_policy)
+                                    unknown_publish_policies.add(publish_policy)
                                     await tr.rollback()
                                     continue
                                 else:
@@ -2270,11 +2270,11 @@ async def handle_candidates_upload(request):
     return web.json_response(
         {
             "success": ret,
-            "invalid_command": invalid_command,
-            "invalid_value": invalid_value,
-            "unknown_campaigns": unknown_campaigns,
-            "unknown_codebases": unknown_codebases,
-            "unknown_publish_policies": unknown_publish_policies,
+            "invalid_command": list(invalid_command),
+            "invalid_value": list(invalid_value),
+            "unknown_campaigns": list(unknown_campaigns),
+            "unknown_codebases": list(unknown_codebases),
+            "unknown_publish_policies": list(unknown_publish_policies),
         }
     )
 
