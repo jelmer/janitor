@@ -81,16 +81,16 @@ from silver_platter import (
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
 from ._publish import (
+    BucketRateLimited,
+    FixedRateLimiter,
+    NonRateLimiter,
+    RateLimited,
+    RateLimiter,
+    SlowStartRateLimiter,
     branches_match,
     calculate_next_try_time,
     get_merged_by_user_url,
     role_branch_url,
-    RateLimiter,
-    FixedRateLimiter,
-    NonRateLimiter,
-    SlowStartRateLimiter,
-    BucketRateLimited,
-    RateLimited,
 )
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
