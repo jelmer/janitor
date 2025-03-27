@@ -89,6 +89,8 @@ from ._publish import (
     FixedRateLimiter,
     NonRateLimiter,
     SlowStartRateLimiter,
+    BucketRateLimited,
+    RateLimited,
 )
 from .config import Campaign, Config, get_campaign_config, read_config
 from .schedule import CandidateUnavailable, do_schedule, do_schedule_control
@@ -210,22 +212,6 @@ logger = logging.getLogger("janitor.publish")
 
 
 routes = web.RouteTableDef()
-
-
-class RateLimited(Exception):
-    """A rate limit was reached."""
-
-
-class BucketRateLimited(RateLimited):
-    """Per-bucket rate-limit was reached."""
-
-    def __init__(self, bucket, open_mps, max_open_mps) -> None:
-        super().__init__(
-            f"Bucket {bucket} already has {open_mps} merge proposal open (max: {max_open_mps})"
-        )
-        self.bucket = bucket
-        self.open_mps = open_mps
-        self.max_open_mps = max_open_mps
 
 
 class PublishFailure(Exception):
