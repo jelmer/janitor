@@ -741,7 +741,8 @@ WHERE run.id = $1
                     .bucket_rate_limiter
                     .lock()
                     .unwrap()
-                    .check_allowed(&bucket),
+                    .check_allowed(&bucket)
+                    .is_allowed(),
                 details: BlockerProposeRateLimitDetails { open, max_open },
             }
         } else {

@@ -1,6 +1,44 @@
 use janitor::publish::MergeProposalStatus;
 use std::collections::HashMap;
 
+#[derive(Debug)]
+pub enum RateLimitStatus {
+    Allowed,
+    RateLimited,
+    BucketRateLimited {
+        bucket: String,
+        open_mps: usize,
+        max_open_mps: usize,
+    },
+}
+
+impl RateLimitStatus {
+    pub fn is_allowed(&self) -> bool {
+        match self {
+            RateLimitStatus::Allowed => true,
+            _ => false,
+        }
+    }
+}
+
+impl std::fmt::Display for RateLimitStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RateLimitStatus::Allowed => write!(f, "Allowed"),
+            RateLimitStatus::RateLimited => write!(f, "RateLimited"),
+            RateLimitStatus::BucketRateLimited {
+                bucket,
+                open_mps,
+                max_open_mps,
+            } => write!(
+                f,
+                "BucketRateLimited: bucket={}, open_mps={}, max_open_mps={}",
+                bucket, open_mps, max_open_mps
+            ),
+        }
+    }
+}
+
 pub struct RateLimitStats {
     pub per_bucket: HashMap<String, usize>,
 }
@@ -11,7 +49,7 @@ pub trait RateLimiter: Send + Sync {
         mps_per_bucket: &HashMap<MergeProposalStatus, HashMap<String, usize>>,
     );
 
-    fn check_allowed(&self, bucket: &str) -> bool;
+    fn check_allowed(&self, bucket: &str) -> RateLimitStatus;
 
     fn inc(&mut self, bucket: &str);
 
@@ -24,6 +62,12 @@ pub trait RateLimiter: Send + Sync {
 
 pub struct NonRateLimiter;
 
+impl NonRateLimiter {
+    pub fn new() -> Self {
+        NonRateLimiter
+    }
+}
+
 impl RateLimiter for NonRateLimiter {
     fn set_mps_per_bucket(
         &mut self,
@@ -31,8 +75,8 @@ impl RateLimiter for NonRateLimiter {
     ) {
     }
 
-    fn check_allowed(&self, _bucket: &str) -> bool {
-        true
+    fn check_allowed(&self, _bucket: &str) -> RateLimitStatus {
+        RateLimitStatus::Allowed
     }
 
     fn inc(&mut self, _bucket: &str) {}
@@ -64,18 +108,22 @@ impl RateLimiter for FixedRateLimiter {
         self.open_mps_per_bucket = mps_per_bucket.get(&MergeProposalStatus::Open).cloned();
     }
 
-    fn check_allowed(&self, bucket: &str) -> bool {
+    fn check_allowed(&self, bucket: &str) -> RateLimitStatus {
         if let Some(open_mps_per_bucket) = &self.open_mps_per_bucket {
             if let Some(current) = open_mps_per_bucket.get(bucket) {
                 if *current > self.max_mps_per_bucket {
-                    return false;
+                    return RateLimitStatus::BucketRateLimited {
+                        bucket: bucket.to_string(),
+                        open_mps: *current,
+                        max_open_mps: self.max_mps_per_bucket,
+                    };
                 }
             }
         } else {
             // Be conservative
-            return false;
+            return RateLimitStatus::RateLimited;
         }
-        true
+        RateLimitStatus::Allowed
     }
 
     fn inc(&mut self, bucket: &str) {
@@ -121,23 +169,27 @@ impl SlowStartRateLimiter {
 }
 
 impl RateLimiter for SlowStartRateLimiter {
-    fn check_allowed(&self, bucket: &str) -> bool {
+    fn check_allowed(&self, bucket: &str) -> RateLimitStatus {
         if let Some(max_mps_per_bucket) = self.max_mps_per_bucket {
             if let Some(open_mps_per_bucket) = &self.open_mps_per_bucket {
                 if let Some(current) = open_mps_per_bucket.get(bucket) {
                     if *current > max_mps_per_bucket {
-                        return false;
+                        return RateLimitStatus::BucketRateLimited {
+                            bucket: bucket.to_string(),
+                            open_mps: *current,
+                            max_open_mps: max_mps_per_bucket,
+                        };
                     }
                 }
             } else {
                 // Be conservative
-                return false;
+                return RateLimitStatus::RateLimited;
             }
         } else {
             // Be conservative
-            return false;
+            return RateLimitStatus::RateLimited;
         }
-        true
+        RateLimitStatus::Allowed
     }
 
     fn inc(&mut self, bucket: &str) {
