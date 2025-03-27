@@ -1,10 +1,21 @@
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use pyo3::prelude::*;
-use pyo3::create_exception;
 use pyo3::exceptions::PyException;
+use pyo3::prelude::*;
+use std::collections::HashMap;
 
-create_exception!(janitor.publish, RateLimited, pyo3::exceptions::PyException);
+#[pyclass(extends=PyException,subclass)]
+pub struct RateLimited {
+    #[pyo3(get)]
+    message: String,
+}
+
+#[pymethods]
+impl RateLimited {
+    #[new]
+    fn new(message: String) -> Self {
+        Self { message }
+    }
+}
 
 #[pyclass(extends=RateLimited)]
 pub struct BucketRateLimited {
@@ -21,8 +32,18 @@ pub struct BucketRateLimited {
 #[pymethods]
 impl BucketRateLimited {
     #[new]
-    fn new(bucket: String, open_mps: usize, max_open_mps: usize) -> Self {
-        Self { bucket, open_mps, max_open_mps }
+    fn new(bucket: String, open_mps: usize, max_open_mps: usize) -> (Self, RateLimited) {
+        (
+            Self {
+                bucket,
+                open_mps,
+                max_open_mps,
+            },
+            RateLimited::new(format!(
+                "Bucket rate limited: {} open_mps, {} max_open_mps",
+                open_mps, max_open_mps
+            )),
+        )
     }
 }
 
@@ -83,8 +104,15 @@ impl RateLimiter {
             janitor_publish::rate_limiter::RateLimitStatus::RateLimited => {
                 Err(PyErr::new::<RateLimited, _>("Rate limited"))
             }
-            janitor_publish::rate_limiter::RateLimitStatus::BucketRateLimited { bucket, open_mps, max_open_mps } => {
-                Err(PyErr::new::<BucketRateLimited, _>(BucketRateLimited::new(bucket, open_mps, max_open_mps)))
+            janitor_publish::rate_limiter::RateLimitStatus::BucketRateLimited {
+                bucket,
+                open_mps,
+                max_open_mps,
+            } => {
+                let e = Python::with_gil(|py| {
+                    Py::new(py, BucketRateLimited::new(bucket, open_mps, max_open_mps)).unwrap()
+                });
+                Err(PyErr::new::<BucketRateLimited, _>(e))
             }
         }
     }
@@ -172,6 +200,9 @@ pub fn _publish(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<NonRateLimiter>()?;
 
     m.add("RateLimited", py.get_type_bound::<RateLimited>())?;
-    m.add("BucketRateLimited", py.get_type_bound::<BucketRateLimited>())?;
+    m.add(
+        "BucketRateLimited",
+        py.get_type_bound::<BucketRateLimited>(),
+    )?;
     Ok(())
 }
