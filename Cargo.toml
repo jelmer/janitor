@@ -45,6 +45,7 @@ shlex.workspace = true
 prometheus = { version = "0.13.4", features = ["reqwest"] }
 buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
+tokio-stream = "0.1.17"
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.1" }

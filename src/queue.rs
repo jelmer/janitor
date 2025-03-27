@@ -3,6 +3,8 @@ use sqlx::postgres::types::PgInterval;
 use sqlx::{Error, FromRow, PgPool, Row};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
+use futures::TryStreamExt;
+use futures::StreamExt;
 
 pub type QueueId = i32;
 
@@ -258,5 +260,40 @@ impl Queue {
                 (bucket, count)
             })
             .collect())
+    }
+
+    pub async fn iter_queue<'a>(&'a self, limit: Option<usize>, campaign: Option<String>) -> impl futures::Stream<Item = sqlx::Result<QueueItem>> + 'a {
+        let mut builder = sqlx::QueryBuilder::new(r#"
+SELECT
+    queue.command AS command,
+    queue.context AS context,
+    queue.id AS id,
+    queue.estimated_duration AS estimated_duration,
+    queue.suite AS campaign,
+    queue.refresh AS refresh,
+    queue.requester AS requester,
+    queue.change_set AS change_set,
+    queue.codebase AS codebase
+FROM
+    queue
+"#);
+        if let Some(campaign) = campaign.as_deref() {
+            builder.push("WHERE queue.suite = ");
+            builder.push_bind(campaign);
+        }
+
+        builder.push(r#"
+ORDER BY
+queue.bucket ASC,
+queue.priority ASC,
+queue.id ASC
+"#);
+        if let Some(limit) = limit {
+            builder.push(format!("LIMIT {}", limit));
+        }
+
+        let query = builder.build();
+
+        query.fetch(&self.pool).map_ok(|row| QueueItem::from_row(&row).unwrap())
     }
 }

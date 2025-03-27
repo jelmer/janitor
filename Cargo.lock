@@ -3129,6 +3129,7 @@ dependencies = [
  "stackdriver_logger",
  "tempfile",
  "tokio",
+ "tokio-stream",
  "tracing",
  "url",
 ]
