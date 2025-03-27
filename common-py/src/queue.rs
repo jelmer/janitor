@@ -1,8 +1,8 @@
-use pyo3::prelude::*;
-use std::sync::Arc;
-use pyo3::types::PyType;
-use std::collections::HashSet;
 use janitor::queue::QueueId;
+use pyo3::prelude::*;
+use pyo3::types::PyType;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 #[pyclass]
 pub struct ETA(janitor::queue::ETA);
@@ -50,22 +50,20 @@ impl Queue {
             let r = z
                 .get_position(&campaign, &codebase)
                 .await
-                .map(|eta| eta.map(ETA)).map_err(crate::convert_sqlx_error)?;
+                .map(|eta| eta.map(ETA))
+                .map_err(crate::convert_sqlx_error)?;
             Ok(Python::with_gil(|py| r.map(|r| r.into_py(py))))
         })
     }
 
-    pub fn get_item<'a>(
-        &self,
-        py: Python<'a>,
-        queue_id: QueueId
-    ) -> PyResult<Bound<'a, PyAny>> {
+    pub fn get_item<'a>(&self, py: Python<'a>, queue_id: QueueId) -> PyResult<Bound<'a, PyAny>> {
         let z = self.0.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let r = z
                 .get_item(queue_id)
                 .await
-                .map(|item| item.map(QueueItem)).map_err(crate::convert_sqlx_error)?;
+                .map(|item| item.map(QueueItem))
+                .map_err(crate::convert_sqlx_error)?;
             Ok(Python::with_gil(|py| r.map(|r| r.into_py(py))))
         })
     }
@@ -99,10 +97,54 @@ impl Queue {
                     assigned_queue_items,
                 )
                 .await
-                .map(|(item, vcs_info)| {
-                    (item.map(QueueItem), vcs_info.map(VcsInfo))
-                }).map_err(crate::convert_sqlx_error)?;
-            Ok(Python::with_gil(|py| (item.into_py(py), vcs_info.into_py(py))))
+                .map(|(item, vcs_info)| (item.map(QueueItem), vcs_info.map(VcsInfo)))
+                .map_err(crate::convert_sqlx_error)?;
+            Ok(Python::with_gil(|py| {
+                (item.into_py(py), vcs_info.into_py(py))
+            }))
+        })
+    }
+
+    #[pyo3(signature = (codebase, command, campaign, change_set=None, offset=None, bucket=None, context=None, estimated_duration=None, refresh=None, requester=None))]
+    pub fn add<'a>(
+        &self,
+        py: Python<'a>,
+        codebase: String,
+        command: String,
+        campaign: String,
+        change_set: Option<String>,
+        offset: Option<f64>,
+        bucket: Option<String>,
+        context: Option<String>,
+        estimated_duration: Option<chrono::TimeDelta>,
+        refresh: Option<bool>,
+        requester: Option<String>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let z = self.0.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            z.add(
+                &codebase,
+                &command,
+                &campaign,
+                change_set.as_deref(),
+                offset.unwrap_or(0.0),
+                &bucket.unwrap_or_else(|| "default".to_string()),
+                context.as_deref(),
+                estimated_duration,
+                refresh.unwrap_or(false),
+                requester.as_deref(),
+            )
+            .await
+            .map_err(crate::convert_sqlx_error)
+        })
+    }
+
+    pub fn get_buckets<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
+        let z = self.0.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let r = z.get_buckets().await.map_err(crate::convert_sqlx_error)?;
+            Ok(Python::with_gil(|py| r.into_py(py)))
         })
     }
 }
