@@ -1393,9 +1393,9 @@ FROM absorbed_runs
                     "campaign": row["campaign"],
                     "merged-by": row["merged_by"],
                     "merged-by-url": await asyncio.to_thread(
-                        get_merged_by_user_url(
-                            row["merge_proposal_url"], row["merged_by"]
-                        )
+                        get_merged_by_user_url,
+                        row["merge_proposal_url"],
+                        row["merged_by"],
                     ),
                     "absorbed-at": row["absorbed-at"],
                     "id": row["id"],

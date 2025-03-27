@@ -19,3 +19,13 @@ class NonRateLimiter(RateLimiter):
 
 class FixedRateLimiter(RateLimiter):
     def __init__(self, mps_per_bucket: int) -> None: ...
+
+class RateLimited(Exception):
+    def __init__(self, message: str) -> None: ...
+
+class BucketRateLimited(RateLimited):
+    def __init__(self, bucket: str, open_mps: int, max_open_mps: int) -> None: ...
+
+    bucket: str
+    open_mps: int
+    max_open_mps: int
