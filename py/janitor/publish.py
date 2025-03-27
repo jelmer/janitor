@@ -81,6 +81,12 @@ from silver_platter import (
 from . import set_user_agent, state
 from ._launchpad import override_launchpad_consumer_name
 from ._publish import (
+    BucketRateLimited,
+    FixedRateLimiter,
+    NonRateLimiter,
+    RateLimited,
+    RateLimiter,
+    SlowStartRateLimiter,
     branches_match,
     calculate_next_try_time,
     get_merged_by_user_url,
@@ -206,136 +212,6 @@ logger = logging.getLogger("janitor.publish")
 
 
 routes = web.RouteTableDef()
-
-
-class RateLimited(Exception):
-    """A rate limit was reached."""
-
-
-class BucketRateLimited(RateLimited):
-    """Per-bucket rate-limit was reached."""
-
-    def __init__(self, bucket, open_mps, max_open_mps) -> None:
-        super().__init__(
-            f"Bucket {bucket} already has {open_mps} merge proposal open (max: {max_open_mps})"
-        )
-        self.bucket = bucket
-        self.open_mps = open_mps
-        self.max_open_mps = max_open_mps
-
-
-class RateLimiter:
-    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]) -> None:
-        raise NotImplementedError(self.set_mps_per_bucket)
-
-    def check_allowed(self, bucket: str) -> None:
-        raise NotImplementedError(self.check_allowed)
-
-    def inc(self, bucket: str) -> None:
-        raise NotImplementedError(self.inc)
-
-    def get_stats(self) -> dict[str, tuple[int, Optional[int]]]:
-        raise NotImplementedError(self.get_stats)
-
-
-class FixedRateLimiter(RateLimiter):
-    _open_mps_per_bucket: Optional[dict[str, int]]
-
-    def __init__(self, max_mps_per_bucket: Optional[int] = None) -> None:
-        self._max_mps_per_bucket = max_mps_per_bucket
-        self._open_mps_per_bucket = None
-
-    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]):
-        self._open_mps_per_bucket = mps_per_bucket["open"]
-
-    def check_allowed(self, bucket: str):
-        if not self._max_mps_per_bucket:
-            return
-        if self._open_mps_per_bucket is None:
-            # Be conservative
-            raise RateLimited("Open mps per bucket not yet determined.")
-        current = self._open_mps_per_bucket.get(bucket, 0)
-        if current > self._max_mps_per_bucket:
-            raise BucketRateLimited(bucket, current, self._max_mps_per_bucket)
-
-    def inc(self, bucket: str):
-        if self._open_mps_per_bucket is None:
-            return
-        self._open_mps_per_bucket.setdefault(bucket, 0)
-        self._open_mps_per_bucket[bucket] += 1
-
-    def get_stats(self) -> dict[str, tuple[int, Optional[int]]]:
-        if self._open_mps_per_bucket:
-            return {
-                bucket: (current, self._max_mps_per_bucket)
-                for (bucket, current) in self._open_mps_per_bucket.items()
-            }
-        else:
-            return {}
-
-
-class NonRateLimiter(RateLimiter):
-    def check_allowed(self, bucket):
-        pass
-
-    def inc(self, bucket):
-        pass
-
-    def set_mps_per_bucket(self, mps_per_bucket):
-        pass
-
-    def get_stats(self):
-        return {}
-
-
-class SlowStartRateLimiter(RateLimiter):
-    def __init__(self, max_mps_per_bucket=None) -> None:
-        self._max_mps_per_bucket = max_mps_per_bucket
-        self._open_mps_per_bucket: Optional[dict[str, int]] = None
-        self._absorbed_mps_per_bucket: Optional[dict[str, int]] = None
-
-    def check_allowed(self, bucket: str) -> None:
-        if self._open_mps_per_bucket is None or self._absorbed_mps_per_bucket is None:
-            # Be conservative
-            raise RateLimited("Open mps per bucket not yet determined.")
-        current = self._open_mps_per_bucket.get(bucket, 0)
-        if self._max_mps_per_bucket and current >= self._max_mps_per_bucket:
-            raise BucketRateLimited(bucket, current, self._max_mps_per_bucket)
-        limit = self._get_limit(bucket)
-        if limit is not None and current >= limit:
-            raise BucketRateLimited(bucket, current, limit)
-
-    def _get_limit(self, bucket) -> Optional[int]:
-        if self._absorbed_mps_per_bucket is None:
-            return None
-        return self._absorbed_mps_per_bucket.get(bucket, 0) + 1
-
-    def inc(self, bucket: str):
-        if self._open_mps_per_bucket is None:
-            return
-        self._open_mps_per_bucket.setdefault(bucket, 0)
-        self._open_mps_per_bucket[bucket] += 1
-
-    def set_mps_per_bucket(self, mps_per_bucket: dict[str, dict[str, int]]):
-        self._open_mps_per_bucket = mps_per_bucket.get("open", {})
-        ms: dict[str, int] = {}
-        for status in ["merged", "applied"]:
-            for m, c in mps_per_bucket.get(status, {}).items():
-                ms.setdefault(m, 0)
-                ms[m] += c
-        self._absorbed_mps_per_bucket = ms
-
-    def get_stats(self):
-        if self._open_mps_per_bucket is None:
-            return {}
-        else:
-            return {
-                bucket: (
-                    current,
-                    min(self._max_mps_per_bucket, self._get_limit(bucket)),
-                )
-                for bucket, current in self._open_mps_per_bucket.items()
-            }
 
 
 class PublishFailure(Exception):
