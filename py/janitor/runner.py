@@ -2659,7 +2659,6 @@ async def next_item(
                             vcs_manager.get_branch,
                             item.codebase,
                             f"{campaign_config.name}/main",
-                            trace_context=span.context,
                         )
                     except asyncio.TimeoutError:
                         logging.warning("Timeout opening resume branch")
