@@ -426,11 +426,11 @@ class DebianBuilder(Builder):
         return env
 
     def additional_colocated_branches(self, main_branch):
-        from silver_platter.debian import (  # type: ignore
-            pick_additional_colocated_branches,
+        from silver_platter import (  # type: ignore
+            debian,
         )
 
-        return pick_additional_colocated_branches(main_branch)
+        return debian.pick_additional_colocated_branches(main_branch)
 
 
 BUILDER_CLASSES: list[type[Builder]] = [DebianBuilder, GenericBuilder]
