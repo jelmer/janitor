@@ -8,7 +8,7 @@ async def test_get_buckets(con):
 
 async def test_add(con):
     queue = Queue(con)
-    await con.execute("INSERT INTO codebase (name) VALUES ('foo')")
+    await con.execute("INSERT INTO codebase (name, value) VALUES ('foo', 1)")
     assert await queue.add(codebase="foo", campaign="bar", command="true") == (
         1,
         "default",
@@ -21,7 +21,7 @@ async def test_add(con):
 
 async def test_double_add(con):
     queue = Queue(con)
-    await con.execute("INSERT INTO codebase (name) VALUES ('foo')")
+    await con.execute("INSERT INTO codebase (name, value) VALUES ('foo', 1)")
     assert await queue.add(codebase="foo", campaign="bar", command="true") == (
         1,
         "default",
@@ -35,7 +35,8 @@ async def test_double_add(con):
 async def test_vcs_only(con):
     queue = Queue(con)
     await con.execute(
-        "INSERT INTO codebase (name, vcs_type, branch_url) VALUES ('foo', 'git', NULL)"
+        """INSERT INTO codebase (name, vcs_type, branch_url, value)
+           VALUES ('foo', 'git', NULL, 1)"""
     )
     assert await queue.add(codebase="foo", campaign="bar", command="true") == (
         1,
