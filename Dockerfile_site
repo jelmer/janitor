@@ -25,6 +25,7 @@ RUN apt-get update --yes \
         libjs-jquery-datatables \
         python3-gpg \
         python3-pip \
+        git \
  && apt-get clean
 
 COPY . /code
