@@ -1136,6 +1136,7 @@ def open_resume_branch(
                     main_branch,
                     forge,
                     option,
+                    overwrite_unrelated=False,
                     preferred_schemes=["https", "git", "bzr"],
                 )
                 if resume_branch:
