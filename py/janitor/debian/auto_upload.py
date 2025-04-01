@@ -27,7 +27,7 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Counter, setup_metrics
 from redis.asyncio import Redis
-from silver_platter import DebsignFailure, DputFailure, debsign, dput_changes
+from silver_platter import debian
 
 from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
@@ -90,8 +90,8 @@ async def upload_build_result(
         for changes_filename in changes_filenames:
             logging.info("Running debsign", extra={"run_id": log_id})
             try:
-                await debsign(td, changes_filename, debsign_keyid)
-            except DebsignFailure as e:
+                await debian.debsign(td, changes_filename, debsign_keyid)
+            except debian.DebsignFailure as e:
                 logging.error(
                     "Error (exit code %d) signing %s for %s: %s",
                     e.returncode,
@@ -112,8 +112,8 @@ async def upload_build_result(
 
             logging.debug("Running dput.", extra={"run_id": log_id})
             try:
-                await dput_changes(td, changes_filename, dput_host)
-            except DputFailure as e:
+                await debian.dput_changes(td, changes_filename, dput_host)
+            except debian.DputFailure as e:
                 upload_failed_count.inc()
                 logging.error(
                     "Error (exit code %d) uploading %s for %s: %s",
