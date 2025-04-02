@@ -32,11 +32,11 @@ pub fn init_logging(gcp_logging: bool, debug_mode: bool) {
     #[cfg(not(feature = "gcp"))]
     assert!(!gcp_logging, "GCP logging is not enabled");
 
-    if debug_mode {
-        env_logger::init();
+    use log::LevelFilter;
+    let level = if debug_mode {
+        LevelFilter::Debug
     } else {
-        env_logger::builder()
-            .filter(None, log::LevelFilter::Info)
-            .init();
-    }
+        LevelFilter::Info
+    };
+    env_logger::builder().filter(None, level).init();
 }
