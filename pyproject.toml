@@ -84,7 +84,7 @@ dependencies = [
     "python-mimeparse",
     "redis>=4.2.0",
     "setuptools-rust",
-    "silver-platter",
+    "silver-platter@git+https://github.com/jelmer/silver-platter.git/",
     "uvloop",
     "yarl",
 ]
