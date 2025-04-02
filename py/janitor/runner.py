@@ -114,7 +114,7 @@ override_launchpad_consumer_name()
 
 
 DEFAULT_RETRY_AFTER = 120
-REMOTE_BRANCH_OPEN_TIMEOUT = 10.0
+REMOTE_BRANCH_OPEN_TIMEOUT = 30.0
 VCS_STORE_BRANCH_OPEN_TIMEOUT = 5.0
 # Maybe this should be configurable somewhere?
 DEFAULT_VCS_TYPE = "git"
