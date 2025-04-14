@@ -20,6 +20,7 @@ RUN apt-get update --yes \
         protobuf-compiler \
        ## Extra packages
         python3-pip \
+        git \
  && apt-get clean
 
 COPY . /code

@@ -21,6 +21,7 @@ RUN apt-get update --yes \
        ## Extra packages
         python3-gpg \
         python3-pip \
+        git \
  && apt-get clean
 
 COPY . /code
