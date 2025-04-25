@@ -11,7 +11,7 @@ async fn reprocess_run_logs(
     codebase: &str,
     campaign: &str,
     log_id: &str,
-    command: &str,
+    _command: &str,
     change_set: Option<&str>,
     duration: chrono::Duration,
     result_code: &str,
@@ -53,7 +53,7 @@ async fn reprocess_run_logs(
                     return None;
                 }
             },
-            Err(e) => {
+            Err(_) => {
                 error!("{}/{}: Timeout fetching log {}", codebase, log_id, logname);
                 return None;
             }

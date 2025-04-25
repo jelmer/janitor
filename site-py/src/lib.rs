@@ -16,7 +16,7 @@ fn find_build_log_failure(
 }
 
 #[pymodule]
-fn _site(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn _site(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(find_dist_log_failure, m)?)?;
     m.add_function(wrap_pyfunction!(find_build_log_failure, m)?)?;

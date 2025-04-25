@@ -17,6 +17,7 @@ fn convert_logs_error_to_py(err: janitor::logs::Error) -> PyErr {
             ServiceUnavailable::new_err("Service unavailable")
         }
         janitor::logs::Error::NotFound => pyo3::exceptions::PyKeyError::new_err("Log not found"),
+        janitor::logs::Error::PermissionDenied => PyRuntimeError::new_err("Permission denied"),
         janitor::logs::Error::Io(e) => e.into(),
         janitor::logs::Error::Other(e) => PyRuntimeError::new_err(e),
     }
