@@ -37,6 +37,9 @@ fn is_remote_git_branch(branch: &dyn Branch) -> bool {
     })
 }
 
+/// Publish a single branch based on a request.
+///
+/// This handles opening the source and target branches and calling the publish function.
 pub fn publish_one(
     template_env: Environment,
     request: &crate::PublishOneRequest,
@@ -401,6 +404,10 @@ pub fn publish_one(
     Ok(result)
 }
 
+/// Publish changes from a source branch to a target branch.
+///
+/// This is the core function for publishing changes, handling different modes (propose, push, etc.)
+/// and generating appropriate descriptions and commit messages.
 pub fn publish(
     template_env: Environment,
     campaign: &str,
@@ -644,6 +651,7 @@ pub fn publish(
     }
 }
 
+/// Result of a publish operation.
 pub struct PublishOneResult {
     mode: Mode,
     proposal: Option<MergeProposal>,

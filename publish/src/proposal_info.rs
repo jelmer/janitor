@@ -5,6 +5,7 @@ use redis::AsyncCommands;
 use sqlx::PgPool;
 use url::Url;
 
+/// Information about a merge proposal stored in the database.
 #[derive(Debug, sqlx::FromRow)]
 struct ProposalInfo {
     can_be_merged: Option<bool>,
@@ -15,16 +16,26 @@ struct ProposalInfo {
     codebase: Option<String>,
 }
 
+/// Manager for handling merge proposal information.
 pub struct ProposalInfoManager {
     conn: PgPool,
     redis: Option<redis::aio::ConnectionManager>,
 }
 
 impl ProposalInfoManager {
+    /// Create a new proposal info manager.
+    ///
+    /// # Arguments
+    /// * `conn` - Database connection pool
+    /// * `redis` - Optional Redis connection manager
+    ///
+    /// # Returns
+    /// A new ProposalInfoManager instance
     pub async fn new(conn: PgPool, redis: Option<redis::aio::ConnectionManager>) -> Self {
         Self { conn, redis }
     }
 
+    /// Retrieve a list of proposal info URLs that haven't been scanned in a given duration.
     pub async fn iter_outdated_proposal_info_urls(
         &self,
         duration: chrono::Duration,
@@ -36,6 +47,7 @@ impl ProposalInfoManager {
         Ok(urls.iter().map(|url| url.parse().unwrap()).collect())
     }
 
+    /// Retrieve proposal information for a given URL.
     pub async fn get_proposal_info(
         &self,
         url: &url::Url,
@@ -57,6 +69,7 @@ impl ProposalInfoManager {
         query.bind(url.to_string()).fetch_optional(&self.conn).await
     }
 
+    /// Delete proposal information for a given URL.
     pub async fn delete_proposal_info(&self, url: &url::Url) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM merge_proposal WHERE url = $1")
             .bind(url.to_string())
@@ -65,6 +78,7 @@ impl ProposalInfoManager {
         Ok(())
     }
 
+    /// Update the canonical URL for a proposal.
     pub async fn update_canonical_url(
         &self,
         old_url: &url::Url,

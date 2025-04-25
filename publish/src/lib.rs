@@ -191,7 +191,12 @@ pub struct PublishOneRequest {
 #[derive(Debug)]
 pub enum PublishError {
     /// A failure occurred with a specific code and description.
-    Failure { code: String, description: String },
+    Failure {
+        /// Error code that indicates the type of failure.
+        code: String,
+        /// Detailed description of the failure.
+        description: String,
+    },
     /// Nothing to do, with a reason.
     NothingToDo(String),
     /// The branch is already being used.
