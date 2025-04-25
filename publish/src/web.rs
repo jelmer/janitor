@@ -131,6 +131,7 @@ async fn consider(State(state): State<Arc<AppState>>, Path(id): Path<String>) ->
 }
 
 #[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+/// Details about a publish operation.
 pub struct PublishDetails {
     codebase: String,
     target_branch_url: String,
@@ -795,6 +796,7 @@ WHERE run.id = $1
     )
 }
 
+/// Create the web application router with all routes.
 pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route(

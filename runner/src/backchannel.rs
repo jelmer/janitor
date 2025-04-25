@@ -1,12 +1,15 @@
 use async_trait::async_trait;
 
 #[derive(Debug)]
+/// Error types for backchannel operations.
 pub enum Error {
     /// Timeout while pinging job.
     PingTimeout,
 
+    /// The requested resource was not found.
     NotFound,
 
+    /// Failure in the communication with the intermediary.
     IntermediaryFailure(reqwest::Error),
 
     /// Failure to ping the job that's not retriable.
@@ -29,23 +32,32 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[async_trait]
+/// Interface for communication with the worker processes.
 pub trait Backchannel {
+    /// Kill the worker process.
     async fn kill(&self) -> Result<(), Error>;
+    /// List available log files from the worker.
     async fn list_log_files(&self) -> Result<Vec<String>, Error>;
+    /// Get the contents of a specific log file from the worker.
     async fn get_log_file(&self, name: &str) -> Result<Vec<u8>, Error>;
+    /// Check if the worker is still alive and processing the expected log.
     async fn ping(&self, log_id: &str) -> Result<(), Error>;
 
+    /// Serialize the backchannel to JSON.
     fn to_json(&self) -> serde_json::Value;
 
+    /// Create a backchannel from JSON representation.
     fn from_json(js: serde_json::Value) -> impl Backchannel;
 }
 
+/// Backchannel implementation for Jenkins workers.
 pub struct JenkinsBackchannel {
     my_url: url::Url,
     metadata: serde_json::Value,
 }
 
 impl JenkinsBackchannel {
+    /// Create a new Jenkins backchannel with the specified URL and metadata.
     pub fn new(my_url: url::Url, metadata: serde_json::Value) -> Self {
         Self { my_url, metadata }
     }
@@ -118,11 +130,13 @@ impl Backchannel for JenkinsBackchannel {
     }
 }
 
+/// Backchannel implementation that polls a worker via HTTP.
 pub struct PollingBackchannel {
     my_url: url::Url,
 }
 
 impl PollingBackchannel {
+    /// Create a new polling backchannel with the specified URL.
     pub fn new(my_url: url::Url) -> Self {
         Self { my_url }
     }
