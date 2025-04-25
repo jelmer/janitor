@@ -1,13 +1,29 @@
+//! Runner crate for the Janitor project.
+//!
+//! This crate provides functionality for running code quality checks and tests.
+
+#![deny(missing_docs)]
+
 use breezyshim::RevisionId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
 
+/// Module for handling backchannel communication with the worker.
 pub mod backchannel;
+/// Module for generating configuration files.
 pub mod config_generator;
+/// Module for the web interface.
 pub mod web;
 
+/// Generate environment variables for committing changes.
+///
+/// # Arguments
+/// * `committer` - Optional committer string in the format "Name <email>"
+///
+/// # Returns
+/// A HashMap containing environment variables for committing
 pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
     let mut env = HashMap::new();
     if let Some(committer) = committer {
@@ -30,12 +46,18 @@ pub fn committer_env(committer: Option<&str>) -> HashMap<String, String> {
 }
 
 #[cfg(feature = "debian")]
+/// Errors that can occur when finding changes files.
 #[derive(Debug)]
 pub enum FindChangesError {
+    /// No changes file was found in the specified directory.
     NoChangesFile(PathBuf),
+    /// Inconsistent versions were found in multiple changes files.
     InconsistentVersion(Vec<String>, debversion::Version, debversion::Version),
+    /// Inconsistent source names were found in multiple changes files.
     InconsistentSource(Vec<String>, String, String),
+    /// Inconsistent distributions were found in multiple changes files.
     InconsistentDistribution(Vec<String>, String, String),
+    /// A required field was missing in the changes file.
     MissingChangesFileFields(&'static str),
 }
 
@@ -72,14 +94,27 @@ impl std::fmt::Display for FindChangesError {
 impl std::error::Error for FindChangesError {}
 
 #[cfg(feature = "debian")]
+/// Summary of changes files.
 pub struct ChangesSummary {
+    /// Names of the changes files.
     pub names: Vec<String>,
+    /// Source package name.
     pub source: String,
+    /// Package version.
     pub version: debversion::Version,
+    /// Distribution name.
     pub distribution: String,
+    /// Names of binary packages included in the changes.
     pub binary_packages: Vec<String>,
 }
 
+/// Find and parse Debian changes files in a directory.
+///
+/// # Arguments
+/// * `path` - Directory to search for changes files
+///
+/// # Returns
+/// A summary of the changes files, or an error if not found or inconsistent
 pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     let mut names: Vec<String> = Vec::new();
     let mut source: Option<String> = None;
@@ -165,6 +200,13 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     })
 }
 
+/// Check if a filename is a log file.
+///
+/// # Arguments
+/// * `name` - Filename to check
+///
+/// # Returns
+/// `true` if the filename is a log file, `false` otherwise
 pub fn is_log_filename(name: &str) -> bool {
     let parts = name.split('.').collect::<Vec<_>>();
     if parts.last() == Some(&"log") {
@@ -178,6 +220,10 @@ pub fn is_log_filename(name: &str) -> bool {
 }
 
 #[cfg(feature = "debian")]
+/// Get the current Debian vendor.
+///
+/// # Returns
+/// The vendor name, or None if it could not be determined
 pub fn dpkg_vendor() -> Option<String> {
     std::process::Command::new("dpkg-vendor")
         .arg("--query")
@@ -225,58 +271,91 @@ pub fn gather_logs(output_directory: &std::path::Path) -> impl Iterator<Item = s
         })
 }
 
+/// Result of a Janitor run.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct JanitorResult {
+    /// Unique identifier for the log.
     log_id: String,
+    /// URL of the branch that was processed.
     branch_url: Url,
+    /// Optional subpath within the repository.
     subpath: Option<String>,
+    /// Result code.
     code: String,
+    /// Whether the result is transient.
     transient: Option<bool>,
+    /// Name of the codebase.
     codebase: String,
+    /// Name of the campaign.
     campaign: String,
+    /// Human-readable description of the result.
     description: String,
+    /// Result of the codemod.
     codemod: serde_json::Value,
+    /// Optional value associated with the result.
     value: Option<u64>,
+    /// Names of log files.
     logfilenames: Vec<String>,
 
+    /// Time when the run started.
     start_time: chrono::DateTime<chrono::Utc>,
+    /// Time when the run finished.
     finish_time: chrono::DateTime<chrono::Utc>,
+    /// Duration of the run.
     duration: std::time::Duration,
 
+    /// Revision ID of the branch after processing.
     revision: Option<RevisionId>,
+    /// Revision ID of the main branch.
     main_branch_revision: Option<RevisionId>,
 
+    /// Optional changeset ID.
     change_set: Option<String>,
 
+    /// Optional tags with revision IDs.
     tags: Option<Vec<(String, Option<RevisionId>)>>,
+    /// Optional remote repositories.
     remotes: Option<HashMap<String, ResultRemote>>,
 
+    /// Optional branches information.
     branches: Option<Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>>,
 
+    /// Optional details about the failure.
     failure_details: Option<serde_json::Value>,
+    /// Optional stages where failure occurred.
     failure_stage: Option<Vec<String>>,
 
+    /// Optional information about resuming a previous run.
     resume: Option<ResultResume>,
 
+    /// Optional target information.
     target: Option<ResultTarget>,
 }
 
+/// Information about resuming a previous run.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultResume {
+    /// ID of the run to resume.
     run_id: String,
 }
 
+/// Target information for a result.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultTarget {
+    /// Name of the target.
     name: String,
+    /// Additional details about the target.
     details: serde_json::Value,
 }
 
+/// Remote repository information for a result.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultRemote {
+    /// URL of the remote repository.
     url: Url,
 }
 
+/// Application state for the runner.
 pub struct AppState {}
 
 #[cfg(test)]

@@ -2,25 +2,46 @@ use patchkit::unified::{iter_hunks, HunkLine};
 use std::path::PathBuf;
 use tracing::{debug, warn};
 
+/// Output structure for diffoscope results.
+///
+/// This structure represents the JSON output from diffoscope and is used for
+/// serialization, deserialization, and manipulation of diffoscope results.
 #[derive(Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq, Clone)]
 #[allow(unused)]
 pub struct DiffoscopeOutput {
+    /// The version of the diffoscope JSON format.
     #[serde(
         rename = "diffoscope-json-version",
         skip_serializing_if = "Option::is_none"
     )]
     diffoscope_json_version: Option<u8>,
+    /// The path to the first file being compared.
     pub source1: PathBuf,
+    /// The path to the second file being compared.
     pub source2: PathBuf,
+    /// Comments about the comparison, such as similarity percentage.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub comments: Vec<String>,
+    /// The unified diff output, if available.
     #[serde(default)]
     pub unified_diff: Option<String>,
+    /// Nested details for sub-comparisons of components within the files.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub details: Vec<DiffoscopeOutput>,
 }
 
+/// Implementation of the ToPyObject trait for DiffoscopeOutput.
+///
+/// This allows DiffoscopeOutput to be converted to a Python object,
+/// which is necessary for interacting with Python diffoscope modules.
 impl pyo3::ToPyObject for DiffoscopeOutput {
+    /// Convert DiffoscopeOutput to a Python object.
+    ///
+    /// # Arguments
+    /// * `py` - The Python interpreter
+    ///
+    /// # Returns
+    /// A Python dictionary representing the DiffoscopeOutput
     fn to_object(&self, py: pyo3::Python) -> pyo3::PyObject {
         use pyo3::prelude::*;
         let dict = pyo3::types::PyDict::new_bound(py);
@@ -37,15 +58,24 @@ impl pyo3::ToPyObject for DiffoscopeOutput {
     }
 }
 
+/// Errors that can occur when running diffoscope.
 #[derive(Debug)]
 pub enum DiffoscopeError {
+    /// The diffoscope process timed out.
     Timeout,
+    /// An I/O error occurred.
     Io(std::io::Error),
+    /// An error occurred while parsing the JSON output.
     Serde(serde_json::Error),
+    /// Any other error with a message.
     Other(String),
 }
 
 impl DiffoscopeError {
+    /// Create a new generic error with a message.
+    ///
+    /// # Arguments
+    /// * `msg` - The error message
     pub fn new(msg: &str) -> Self {
         DiffoscopeError::Other(msg.to_string())
     }
@@ -74,6 +104,10 @@ impl std::fmt::Display for DiffoscopeError {
     }
 }
 
+/// Set resource limits for the diffoscope process.
+///
+/// # Arguments
+/// * `limit_mb` - Memory limit in megabytes
 fn _set_limits(limit_mb: Option<u64>) {
     let limit_mb = limit_mb.unwrap_or(1024);
 
@@ -161,7 +195,19 @@ pub fn filter_irrelevant(diff: &mut DiffoscopeOutput) {
     diff.source2 = diff.source2.file_name().unwrap().into();
 }
 
-/// Filter out boring information from the diff
+/// Filter out boring information from the unified diff
+///
+/// This function replaces version-specific strings in the diff with a display version
+/// to make the diff more readable and focused on actual changes.
+///
+/// # Arguments
+/// * `udiff` - The unified diff to filter
+/// * `old_version` - The old version string to replace
+/// * `new_version` - The new version string to replace
+/// * `display_version` - The version string to use in the output
+///
+/// # Returns
+/// The filtered unified diff or an error
 pub fn filter_boring_udiff(
     udiff: &str,
     old_version: &str,
@@ -197,6 +243,19 @@ pub fn filter_boring_udiff(
         .collect())
 }
 
+/// Filter out boring details from a diffoscope output detail section
+///
+/// This function replaces version-specific strings in the detail section and filters
+/// out uninteresting differences.
+///
+/// # Arguments
+/// * `detail` - The detail section to filter
+/// * `old_version` - The old version string to replace
+/// * `new_version` - The new version string to replace
+/// * `display_version` - The version string to use in the output
+///
+/// # Returns
+/// `true` if the detail section still contains interesting differences, `false` otherwise
 pub fn filter_boring_detail(
     detail: &mut DiffoscopeOutput,
     old_version: &str,
@@ -237,6 +296,17 @@ pub fn filter_boring_detail(
     !(detail.unified_diff.is_none() && detail.details.is_empty())
 }
 
+/// Filter out boring information from the entire diffoscope output
+///
+/// This function filters out uninteresting differences from the entire diffoscope output,
+/// such as changes in dates, distribution, and version.
+///
+/// # Arguments
+/// * `diff` - The diffoscope output to filter
+/// * `old_version` - The old version string
+/// * `_old_campaign` - The old campaign string (unused)
+/// * `new_version` - The new version string
+/// * `_new_campaign` - The new campaign string (unused)
 pub fn filter_boring(
     diff: &mut DiffoscopeOutput,
     old_version: &str,
@@ -264,6 +334,18 @@ pub fn filter_boring(
     diff.details = new_details.collect();
 }
 
+/// Format diffoscope output into various formats
+///
+/// This function converts diffoscope output into different formats like HTML, Markdown, plain text, or JSON.
+///
+/// # Arguments
+/// * `diff` - The diffoscope output to format
+/// * `content_type` - The desired output format ("text/html", "text/markdown", "text/plain", or "application/json")
+/// * `title` - The title to use in the formatted output
+/// * `css_url` - Optional URL for CSS styling (only used for HTML output)
+///
+/// # Returns
+/// The formatted output as a string or a Python error
 pub fn format_diffoscope(
     diff: &DiffoscopeOutput,
     content_type: &str,

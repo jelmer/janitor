@@ -1,8 +1,22 @@
+//! Mail Filter crate for the Janitor project.
+//!
+//! This crate provides functionality for parsing and filtering email messages,
+//! particularly to extract merge proposal URLs from notification emails.
+
+#![deny(missing_docs)]
+
 use mailparse::parse_mail;
 use select::document::Document;
 use select::predicate::{And, Attr, Name};
 use serde_json::Value;
 
+/// Parse a plain text email body to extract a merge proposal URL.
+///
+/// # Arguments
+/// * `text` - The plain text email body
+///
+/// # Returns
+/// An Option containing the merge proposal URL if found
 pub fn parse_plain_text_body(text: &str) -> Option<String> {
     let lines: Vec<&str> = text.lines().collect();
 
@@ -24,6 +38,13 @@ pub fn parse_plain_text_body(text: &str) -> Option<String> {
     None
 }
 
+/// Parse JSON-LD data to extract a merge proposal URL.
+///
+/// # Arguments
+/// * `ld` - The JSON-LD data
+///
+/// # Returns
+/// An Option containing the merge proposal URL if found
 fn parse_json_ld(ld: &Value) -> Option<String> {
     match ld {
         Value::Array(ld_array) => ld_array.iter().find_map(parse_json_ld),
@@ -50,6 +71,13 @@ fn parse_json_ld(ld: &Value) -> Option<String> {
     }
 }
 
+/// Parse an HTML email body to extract a merge proposal URL.
+///
+/// # Arguments
+/// * `contents` - The HTML email body
+///
+/// # Returns
+/// An Option containing the merge proposal URL if found
 pub fn parse_html_body(contents: &str) -> Option<String> {
     let document = Document::from(contents);
     let ld = document
@@ -62,6 +90,13 @@ pub fn parse_html_body(contents: &str) -> Option<String> {
     }
 }
 
+/// Parse an email file to extract a merge proposal URL.
+///
+/// # Arguments
+/// * `file` - The email file to parse
+///
+/// # Returns
+/// An Option containing the merge proposal URL if found
 pub fn parse_email<F: std::io::Read>(mut file: F) -> Option<String> {
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
