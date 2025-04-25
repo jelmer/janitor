@@ -101,6 +101,7 @@ async fn public_get_active_run(State(state): State<Arc<AppState>>, Path(id): Pat
     unimplemented!()
 }
 
+/// Create a router for the public API endpoints.
 pub fn public_app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(public_root))
@@ -110,6 +111,7 @@ pub fn public_app(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
+/// Create a router for the private API endpoints.
 pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/queue/position", get(queue_position))
