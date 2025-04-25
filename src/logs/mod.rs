@@ -5,17 +5,16 @@ use std::io::{self, Read};
 mod filesystem;
 pub use filesystem::FileSystemLogFileManager;
 
-/*
 #[cfg(feature = "gcs")]
 mod gcs;
 #[cfg(feature = "gcs")]
 pub use gcs::GCSLogFileManager;
-*/
 
 #[derive(Debug)]
 pub enum Error {
     NotFound,
     ServiceUnavailable,
+    PermissionDenied,
     Io(io::Error),
     Other(String),
 }
@@ -31,6 +30,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::NotFound => write!(f, "Not found"),
             Error::ServiceUnavailable => write!(f, "Service unavailable"),
+            Error::PermissionDenied => write!(f, "Permission denied"),
             Error::Io(err) => write!(f, "I/O error: {}", err),
             Error::Other(msg) => write!(f, "{}", msg),
         }
