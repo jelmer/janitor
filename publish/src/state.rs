@@ -1,8 +1,64 @@
 use crate::Mode;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
+use chrono::{DateTime, Utc};
 use sqlx::{FromRow, PgPool, Row};
 use url::Url;
+
+/// A run in the janitor system
+#[derive(Debug, FromRow)]
+pub struct Run {
+    /// Unique identifier for the run
+    pub id: String,
+    /// Command that was executed
+    pub command: String,
+    /// Description of the run
+    pub description: Option<String>,
+    /// Result code from the run
+    pub result_code: String,
+    /// Revision of the main branch
+    pub main_branch_revision: Option<RevisionId>,
+    /// Revision after the run
+    pub revision: Option<RevisionId>,
+    /// Context for the run
+    pub context: Option<String>,
+    /// Result data from the run
+    pub result: Option<serde_json::Value>,
+    /// Suite (campaign) for the run
+    pub campaign: String,
+    /// Context that instigated the run
+    pub instigated_context: Option<String>,
+    /// VCS type used
+    pub vcs_type: String,
+    /// URL of the branch
+    pub branch_url: Option<String>,
+    /// Log filenames from the run
+    pub logfilenames: Option<Vec<String>>,
+    /// Name of the worker that performed the run
+    pub worker: Option<String>,
+    /// Result branches from the run
+    pub result_branches: Option<Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>>,
+    /// Tags from the run results
+    pub result_tags: Option<Vec<(String, String)>>,
+    /// URL of the target branch
+    pub target_branch_url: Option<String>,
+    /// Change set identifier
+    pub change_set: String,
+    /// Is the failure transient
+    pub failure_transient: Option<bool>,
+    /// Stage where failure occurred
+    pub failure_stage: Option<String>,
+    /// Codebase identifier
+    pub codebase: String,
+    /// Time when the run started
+    pub start_time: DateTime<Utc>,
+    /// Time when the run finished
+    pub finish_time: DateTime<Utc>,
+    /// Value/priority of the run
+    pub value: Option<i64>,
+    /// Status of publishing
+    pub publish_status: Option<String>,
+}
 
 async fn store_publish(
     conn: &PgPool,

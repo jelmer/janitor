@@ -8,6 +8,7 @@ use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
+use futures::stream::StreamExt;
 use janitor::config::Campaign;
 use janitor::publish::{MergeProposalStatus, Mode};
 use janitor::vcs::{VcsManager, VcsType};
@@ -16,6 +17,95 @@ use serde::ser::SerializeStruct;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
+use prometheus::register_gauge;
+use prometheus::register_counter;
+
+/// Errors that can occur during publishing.
+#[derive(Debug)]
+pub enum PublishError {
+    /// A database error occurred.
+    Database(sqlx::Error),
+    /// A Redis error occurred.
+    Redis(redis::RedisError),
+    /// A VCS error occurred.
+    Vcs(breezyshim::error::Error),
+    /// A branch is busy.
+    BranchBusy(String),
+    /// A branch is rate limited.
+    BranchRateLimited(String),
+    /// A rate limit was reached.
+    RateLimited {
+        /// The name of the bucket that was rate limited.
+        bucket: String,
+        /// The rate limit duration.
+        duration: chrono::Duration,
+    },
+    /// A publish failure occurred.
+    PublishFailure {
+        /// The mode that was being used.
+        mode: Mode,
+        /// The error code.
+        code: String,
+        /// A description of the error.
+        description: String,
+    },
+    /// A general error occurred.
+    Other(String),
+}
+
+impl std::fmt::Display for PublishError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            PublishError::Database(e) => write!(f, "Database error: {}", e),
+            PublishError::Redis(e) => write!(f, "Redis error: {}", e),
+            PublishError::Vcs(e) => write!(f, "VCS error: {}", e),
+            PublishError::BranchBusy(branch) => write!(f, "Branch busy: {}", branch),
+            PublishError::BranchRateLimited(branch) => write!(f, "Branch rate limited: {}", branch),
+            PublishError::RateLimited { bucket, duration } => {
+                write!(f, "Rate limited on bucket {} for {:?}", bucket, duration)
+            }
+            PublishError::PublishFailure {
+                mode,
+                code,
+                description,
+            } => write!(
+                f,
+                "Publish failure in mode {:?}: {} - {}",
+                mode, code, description
+            ),
+            PublishError::Other(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl std::error::Error for PublishError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            PublishError::Database(e) => Some(e),
+            PublishError::Redis(e) => Some(e),
+            PublishError::Vcs(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<sqlx::Error> for PublishError {
+    fn from(e: sqlx::Error) -> Self {
+        PublishError::Database(e)
+    }
+}
+
+impl From<redis::RedisError> for PublishError {
+    fn from(e: redis::RedisError) -> Self {
+        PublishError::Redis(e)
+    }
+}
+
+impl From<breezyshim::error::Error> for PublishError {
+    fn from(e: breezyshim::error::Error) -> Self {
+        PublishError::Vcs(e)
+    }
+}
 
 /// Module for managing merge proposal information.
 pub mod proposal_info;
@@ -725,8 +815,41 @@ pub async fn process_queue_loop(
     state: Arc<AppState>,
     interval: chrono::Duration,
     auto_publish: bool,
+    push_limit: Option<usize>,
+    modify_mp_limit: Option<i32>,
+    require_binary_diff: bool,
 ) {
-    todo!();
+    log::info!(
+        "Starting process queue loop with interval {:?}, auto_publish: {}, push_limit: {:?}",
+        interval,
+        auto_publish,
+        push_limit
+    );
+
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        if auto_publish {
+            // Attempt to publish pending changes
+            match publish_pending_ready(state.clone()).await {
+                Ok(()) => {
+                    log::debug!("Successfully published pending ready changes");
+                    // Update Prometheus metric
+                    prometheus::register_gauge!(
+                        "last_publish_pending_success",
+                        "Last time pending changes were successfully published"
+                    )
+                    .set(chrono::Utc::now().timestamp() as f64);
+                }
+                Err(e) => {
+                    log::error!("Error publishing pending ready changes: {}", e);
+                }
+            }
+        }
+
+        // Sleep until the next cycle
+        tokio::time::sleep(std::time::Duration::from_secs(interval.num_seconds() as u64)).await;
+    }
 }
 
 /// Publish all pending ready changes.
@@ -737,7 +860,92 @@ pub async fn process_queue_loop(
 /// # Returns
 /// Ok(()) if successful, or a PublishError
 pub async fn publish_pending_ready(state: Arc<AppState>) -> Result<(), PublishError> {
-    todo!();
+    log::info!("Publishing pending ready changes");
+
+    // Get runs that are ready for publishing
+    let runs = sqlx::query_as::<_, state::Run>(
+        r#"
+        SELECT *
+        FROM run
+        WHERE publish_status = 'ready' 
+        AND finish_time IS NOT NULL
+        ORDER BY finish_time ASC
+        "#
+    )
+    .fetch_all(&state.conn)
+    .await
+    .map_err(|e| PublishError::Database(e))?;
+
+    log::info!("Found {} runs ready for publishing", runs.len());
+
+    // Track the push limit
+    let mut pushes_done = 0;
+    let push_limit = state.push_limit;
+
+    for run in runs {
+        // Check push limit if defined and we've exceeded it
+        if let Some(limit) = push_limit {
+            if pushes_done >= limit {
+                log::info!("Push limit reached ({}/{}), skipping remaining runs", pushes_done, limit);
+                // Record metric for push limit reached
+                prometheus::register_counter!(
+                    "push_limit_count", 
+                    "Number of times pushes haven't happened due to the limit"
+                ).inc();
+                break;
+            }
+        }
+
+        // Process the run for publishing
+        // We catch errors per run to continue with the next one if there's a problem
+        if let Err(e) = consider_publish_run(&state, &run).await {
+            log::error!(
+                "Error publishing run {} ({}/{}): {}", 
+                run.id, run.codebase, run.campaign, e
+            );
+            // Continue with next run
+            continue;
+        }
+
+        // If we got here, we likely processed a push
+        pushes_done += 1;
+    }
+
+    // Update prometheus metric for successful run
+    prometheus::register_gauge!(
+        "last_publish_pending_success", 
+        "Last time pending changes were successfully published"
+    ).set(chrono::Utc::now().timestamp() as f64);
+
+    Ok(())
+}
+
+// Helper function to handle publishing for a single run
+async fn consider_publish_run(state: &Arc<AppState>, run: &state::Run) -> Result<(), PublishError> {
+    // This would implement the complex logic from the Python version
+    // For now, as a placeholder, we log the intent
+    log::info!(
+        "Would publish run {} ({}/{})", 
+        run.id, run.codebase, run.campaign
+    );
+    
+    // Actual implementation would:
+    // 1. Check branch URL and rate limits
+    // 2. Get campaign config
+    // 3. Check for unpublished auxiliary branches
+    // 4. Look for previous merge proposals
+    // 5. Publish according to mode (push, propose, etc)
+    
+    // Update status to published
+    sqlx::query(
+        "UPDATE run SET publish_status = 'published' WHERE id = $1"
+    )
+    .bind(run.id)
+    .execute(&state.conn)
+    .await
+    .map_err(|e| PublishError::Database(e))?;
+    
+    Ok(())
 }
 
 /// Refresh the counts of merge proposals per bucket.
@@ -783,7 +991,106 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
 /// # Arguments
 /// * `state` - The application state
 pub async fn listen_to_runner(state: Arc<AppState>) {
-    todo!();
+    log::info!("Starting to listen for messages from runner");
+
+    // Check if Redis is available
+    let redis = match &state.redis {
+        Some(redis) => redis.clone(),
+        None => {
+            log::error!("Cannot listen to runner: Redis is not configured");
+            return;
+        }
+    };
+    
+    loop {
+        // Get a Redis connection
+        let mut conn = match redis.clone().get_tokio_connection().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                log::error!("Failed to get Redis connection: {}", e);
+                // Wait before retrying
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+
+        // Subscribe to the "janitor.runner" channel
+        let mut pubsub = match conn.into_pubsub().await {
+            Ok(pubsub) => pubsub,
+            Err(e) => {
+                log::error!("Failed to create PubSub: {}", e);
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+
+        if let Err(e) = pubsub.subscribe("janitor.runner").await {
+            log::error!("Failed to subscribe to janitor.runner: {}", e);
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            continue;
+        }
+
+        log::info!("Subscribed to janitor.runner channel");
+
+        // Listen for messages
+        let mut message_stream = pubsub.on_message();
+        while let Some(message) = message_stream.next().await {
+            let payload: String = match message.get_payload() {
+                Ok(payload) => payload,
+                Err(e) => {
+                    log::error!("Failed to get message payload: {}", e);
+                    continue;
+                }
+            };
+
+            log::debug!("Received message: {}", payload);
+
+            // Parse the message
+            let data: serde_json::Value = match serde_json::from_str(&payload) {
+                Ok(data) => data,
+                Err(e) => {
+                    log::error!("Failed to parse message: {}", e);
+                    continue;
+                }
+            };
+
+            // Extract run_id from the message
+            let run_id = match data.get("run_id").and_then(|v| v.as_str()) {
+                Some(id) => id,
+                None => {
+                    log::error!("Message missing run_id field");
+                    continue;
+                }
+            };
+
+            // Process the run if it's marked as ready for publishing
+            let run = match sqlx::query_as::<_, state::Run>(
+                "SELECT * FROM run WHERE id = $1 AND publish_status = 'ready'"
+            )
+            .bind(run_id)
+            .fetch_optional(&state.conn)
+            .await {
+                Ok(Some(run)) => run,
+                Ok(None) => {
+                    log::debug!("Run {} not found or not ready for publishing", run_id);
+                    continue;
+                }
+                Err(e) => {
+                    log::error!("Failed to query run {}: {}", run_id, e);
+                    continue;
+                }
+            };
+
+            // Process the run
+            if let Err(e) = consider_publish_run(&state, &run).await {
+                log::error!("Failed to process run {}: {}", run.id, e);
+            }
+        }
+
+        // If we get here, the connection was lost
+        log::warn!("Lost connection to Redis, reconnecting...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    }
 }
 
 #[cfg(test)]

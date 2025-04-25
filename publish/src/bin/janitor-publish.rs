@@ -160,7 +160,7 @@ async fn main() -> Result<(), i32> {
     });
 
     if args.once {
-        janitor_publish::publish_pending_ready(state)
+        janitor_publish::publish_pending_ready(state.clone())
             .await
             .map_err(|e| {
                 log::error!("Failed to publish pending proposals: {}", e);
@@ -175,22 +175,28 @@ async fn main() -> Result<(), i32> {
                 prometheus::default_registry(),
             )
             .await
-            .unwrap();
+            .map_err(|e| {
+                log::error!("Failed to push metrics to Prometheus gateway: {}", e);
+                1
+            })?;
         }
     } else {
-        tokio::spawn(janitor_publish::process_queue_loop(
+        // Create all the async tasks for the daemon mode
+        let process_queue_task = tokio::spawn(janitor_publish::process_queue_loop(
             state.clone(),
             chrono::Duration::seconds(args.interval),
             !args.no_auto_publish,
+            args.push_limit,
+            args.modify_mp_limit,
+            args.require_binary_diff,
         ));
 
-        tokio::spawn(janitor_publish::refresh_bucket_mp_counts(state.clone()));
+        let refresh_bucket_task = tokio::spawn(janitor_publish::refresh_bucket_mp_counts(state.clone()));
 
-        tokio::spawn(janitor_publish::listen_to_runner(state.clone()));
+        let listen_runner_task = tokio::spawn(janitor_publish::listen_to_runner(state.clone()));
 
+        // Set up the web server
         let app = janitor_publish::web::app(state.clone());
-
-        // run it
         let addr = SocketAddr::new(args.listen_address, args.port);
         log::info!("listening on {}", addr);
 
@@ -198,12 +204,23 @@ async fn main() -> Result<(), i32> {
             log::error!("Failed to bind listener: {}", e);
             1
         })?;
-        axum::serve(listener, app.into_make_service())
-            .await
-            .map_err(|e| {
-                log::error!("Server error: {}", e);
-                1
-            })?;
+
+        // This will run until the server terminates or an error occurs
+        let server_task = axum::serve(listener, app.into_make_service());
+        
+        // Execute the server while allowing the other tasks to run concurrently
+        let server_result = server_task.await.map_err(|e| {
+            log::error!("Server error: {}", e);
+            1
+        });
+
+        // Cancel the background tasks when the server exits
+        process_queue_task.abort();
+        refresh_bucket_task.abort();
+        listen_runner_task.abort();
+
+        // Return any server errors
+        server_result?;
     }
 
     Ok(())

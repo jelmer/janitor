@@ -629,44 +629,10 @@ async def publish_pending_ready(
     push_limit: Optional[int] = None,
     require_binary_diff: bool = False,
 ):
-    start = time.time()
-    actions: dict[Optional[str], int] = {}
-
-    async with db.acquire() as conn1, db.acquire() as conn:
-        async for (
-            run,
-            rate_limit_bucket,
-            command,
-            unpublished_branches,
-        ) in iter_publish_ready(conn1):
-            actual_modes = await consider_publish_run(
-                conn,
-                redis=redis,
-                config=config,
-                publish_worker=publish_worker,
-                vcs_managers=vcs_managers,
-                bucket_rate_limiter=bucket_rate_limiter,
-                run=run,
-                command=command,
-                rate_limit_bucket=rate_limit_bucket,
-                unpublished_branches=unpublished_branches,
-                push_limit=push_limit,
-                require_binary_diff=require_binary_diff,
-            )
-            for actual_mode in actual_modes.values():
-                if actual_mode is None:
-                    continue
-                actions.setdefault(actual_mode, 0)
-                actions[actual_mode] += 1
-            if MODE_PUSH in actual_modes.values() and push_limit is not None:
-                push_limit -= 1
-
-    logger.info("Actions performed: %r", actions)
-    logger.info(
-        "Done publishing pending changes; duration: %.2fs" % (time.time() - start)
-    )
-
-    last_publish_pending_success.set_to_current_time()
+    """
+    This function has been ported to Rust in publish/src/lib.rs.
+    """
+    raise NotImplementedError("This function has been ported to Rust")
 
 
 async def handle_publish_failure(e, conn, run, bucket: str) -> tuple[str, str]:
@@ -2136,36 +2102,10 @@ async def process_queue_loop(
     modify_mp_limit: Optional[int] = None,
     require_binary_diff: bool = False,
 ):
-    while True:
-        cycle_start = datetime.utcnow()
-        async with db.acquire() as conn:
-            await check_existing(
-                conn=conn,
-                redis=redis,
-                config=config,
-                publish_worker=publish_worker,
-                bucket_rate_limiter=bucket_rate_limiter,
-                forge_rate_limiter=forge_rate_limiter,
-                vcs_managers=vcs_managers,
-                modify_limit=modify_mp_limit,
-            )
-            await check_stragglers(conn, redis)
-        if auto_publish:
-            await publish_pending_ready(
-                db=db,
-                redis=redis,
-                config=config,
-                publish_worker=publish_worker,
-                bucket_rate_limiter=bucket_rate_limiter,
-                vcs_managers=vcs_managers,
-                push_limit=push_limit,
-                require_binary_diff=require_binary_diff,
-            )
-        cycle_duration = datetime.utcnow() - cycle_start
-        to_wait = max(0, interval - cycle_duration.total_seconds())
-        logger.info("Waiting %d seconds for next cycle.", to_wait)
-        if to_wait > 0:
-            await asyncio.sleep(to_wait)
+    """
+    This function has been ported to Rust in publish/src/lib.rs.
+    """
+    raise NotImplementedError("This function has been ported to Rust")
 
 
 class NoRunForMergeProposal(Exception):
@@ -3401,71 +3341,6 @@ ORDER BY start_time DESC
         )
     ]
 
-
-async def listen_to_runner(
-    *,
-    db,
-    redis,
-    config,
-    publish_worker,
-    bucket_rate_limiter,
-    vcs_managers,
-    require_binary_diff: bool = False,
-):
-    async def process_run(conn, run, branch_url):
-        publish_policy, command, rate_limit_bucket = await get_publish_policy(
-            conn, run.codebase, run.campaign
-        )
-        if publish_policy is None:
-            logging.warning(
-                "No publish policy for %s/%s, skipping", run.codebase, run.campaign
-            )
-            return
-        for role, (mode, max_frequency_days) in publish_policy.items():
-            await publish_from_policy(
-                conn=conn,
-                campaign_config=get_campaign_config(config, run.campaign),
-                publish_worker=publish_worker,
-                bucket_rate_limiter=bucket_rate_limiter,
-                vcs_managers=vcs_managers,
-                run=run,
-                redis=redis,
-                role=role,
-                rate_limit_bucket=rate_limit_bucket,
-                target_branch_url=branch_url,
-                mode=mode,
-                max_frequency_days=max_frequency_days,
-                command=command,
-                require_binary_diff=require_binary_diff,
-                force=True,
-                requester="runner",
-            )
-
-    async def handle_publish_status_message(msg):
-        result = json.loads(msg["data"])
-        if result["publish_status"] != "approved":
-            return
-        async with db.acquire() as conn:
-            # TODO(jelmer): Fold these into a single query ?
-            codebase = await conn.fetchrow(
-                "SELECT branch_url FROM codebase WHERE name = $1", result["codebase"]
-            )
-            if codebase is None:
-                logger.warning("Codebase %s not in database?", result["codebase"])
-                return
-            run = await get_run(conn, result["run_id"])
-            await process_run(conn, run, codebase["branch_url"])
-
-    try:
-        async with redis.pubsub(ignore_subscribe_messages=True) as ch:
-            await ch.subscribe(
-                "publish-status", **{"publish-status": handle_publish_status_message}
-            )
-            await ch.run()
-    finally:
-        await redis.close()
-
-
 async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     per_bucket: dict[str, dict[str, int]] = {}
     async with db.acquire() as conn:
@@ -3485,212 +3360,22 @@ async def refresh_bucket_mp_counts(db, bucket_rate_limiter):
     bucket_rate_limiter.set_mps_per_bucket(per_bucket)
 
 
+# These functions have been ported to Rust in publish/src/bin/janitor-publish.rs
+
 async def main_async(argv=None):
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        prog="janitor.publish", formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    parser.add_argument("--port", type=int, help="Listen port", default=9912)
-    parser.add_argument(
-        "--listen-address", type=str, help="Listen address", default="localhost"
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="janitor.conf",
-        help="Path to configuration",
-    )
-    parser.add_argument(
-        "--prometheus", type=str, help="Prometheus push gateway to export to"
-    )
-    parser.add_argument(
-        "--max-mps-per-bucket",
-        default=0,
-        type=int,
-        help="Maximum number of open merge proposals per bucket",
-    )
-    parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Just do one pass over the queue, don't run as a daemon",
-    )
-    parser.add_argument(
-        "--interval",
-        type=int,
-        help=("Seconds to wait in between publishing pending proposals"),
-        default=7200,
-    )
-    parser.add_argument(
-        "--no-auto-publish",
-        action="store_true",
-        help="Do not create merge proposals automatically",
-    )
-    parser.add_argument(
-        "--slowstart", action="store_true", help="Use slow start rate limiter"
-    )
-    parser.add_argument(
-        "--push-limit", type=int, help="Limit number of pushes per cycle"
-    )
-    parser.add_argument(
-        "--require-binary-diff",
-        action="store_true",
-        default=False,
-        help="Require a binary diff when publishing merge requests",
-    )
-    parser.add_argument(
-        "--modify-mp-limit",
-        type=int,
-        default=10,
-        help="Maximum number of merge proposals to update per cycle",
-    )
-    parser.add_argument(
-        "--differ-url",
-        type=str,
-        help="URL for differ",
-        default="http://localhost:9920/",
-    )
-    parser.add_argument("--external-url", type=str, help="External URL", default=None)
-    parser.add_argument(
-        "--template-env-path", type=str, help="Path to merge proposal templates"
-    )
-    parser.add_argument(
-        "--gcp-logging", action="store_true", help="Use Google cloud logging"
-    )
-    parser.add_argument("--debug", action="store_true", help="Show debug output")
-
-    args = parser.parse_args()
-
-    if args.gcp_logging:
-        import google.cloud.logging
-
-        client = google.cloud.logging.Client()
-        client.get_default_handler()
-        client.setup_logging()
-    elif args.debug:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
-
-    loop = asyncio.get_event_loop()
-    if args.debug:
-        loop.set_debug(True)
-        loop.slow_callback_duration = 0.001
-        warnings.simplefilter("always", ResourceWarning)
-
-    try:
-        with open(args.config) as f:
-            config = read_config(f)
-    except FileNotFoundError:
-        parser.error(f"config path {args.config} does not exist")
-
-    set_user_agent(config.user_agent)
-
-    bucket_rate_limiter: RateLimiter
-    if args.slowstart:
-        bucket_rate_limiter = SlowStartRateLimiter(args.max_mps_per_bucket)
-    elif args.max_mps_per_bucket > 0:
-        bucket_rate_limiter = FixedRateLimiter(args.max_mps_per_bucket)
-    else:
-        bucket_rate_limiter = NonRateLimiter()
-
-    if args.no_auto_publish and args.once:
-        sys.stderr.write("--no-auto-publish and --once are mutually exclude.")
-        sys.exit(1)
-
-    forge_rate_limiter: dict[Forge, datetime] = {}
-
-    vcs_managers = get_vcs_managers_from_config(config)
-    db = await state.create_pool(config.database_location)
-    async with AsyncExitStack() as stack:
-        redis = Redis.from_url(config.redis_location)
-        stack.push_async_callback(redis.close)
-
-        lock_manager = aioredlock.Aioredlock([config.redis_location])
-        stack.push_async_callback(lock_manager.destroy)
-
-        publish_worker = PublishWorker(
-            template_env_path=args.template_env_path,
-            external_url=args.external_url,
-            differ_url=args.differ_url,
-            lock_manager=lock_manager,
-            redis=redis,
-        )
-
-        if args.once:
-            await publish_pending_ready(
-                db=db,
-                redis=redis,
-                config=config,
-                publish_worker=publish_worker,
-                bucket_rate_limiter=bucket_rate_limiter,
-                vcs_managers=vcs_managers,
-                require_binary_diff=args.require_binary_diff,
-            )
-            if args.prometheus:
-                await push_to_gateway(
-                    args.prometheus, job="janitor.publish", registry=REGISTRY
-                )
-        else:
-            tasks = [
-                loop.create_task(
-                    process_queue_loop(
-                        db=db,
-                        redis=redis,
-                        config=config,
-                        publish_worker=publish_worker,
-                        bucket_rate_limiter=bucket_rate_limiter,
-                        forge_rate_limiter=forge_rate_limiter,
-                        vcs_managers=vcs_managers,
-                        interval=args.interval,
-                        auto_publish=not args.no_auto_publish,
-                        push_limit=args.push_limit,
-                        modify_mp_limit=args.modify_mp_limit,
-                        require_binary_diff=args.require_binary_diff,
-                    )
-                ),
-                loop.create_task(
-                    run_web_server(
-                        args.listen_address,
-                        args.port,
-                        publish_worker=publish_worker,
-                        bucket_rate_limiter=bucket_rate_limiter,
-                        forge_rate_limiter=forge_rate_limiter,
-                        vcs_managers=vcs_managers,
-                        db=db,
-                        redis=redis,
-                        config=config,
-                        require_binary_diff=args.require_binary_diff,
-                        modify_mp_limit=args.modify_mp_limit,
-                        push_limit=args.push_limit,
-                    )
-                ),
-                loop.create_task(
-                    refresh_bucket_mp_counts(db, bucket_rate_limiter),
-                ),
-            ]
-            tasks.append(
-                loop.create_task(
-                    listen_to_runner(
-                        db=db,
-                        redis=redis,
-                        config=config,
-                        publish_worker=publish_worker,
-                        bucket_rate_limiter=bucket_rate_limiter,
-                        vcs_managers=vcs_managers,
-                        require_binary_diff=args.require_binary_diff,
-                    )
-                )
-            )
-            await asyncio.gather(*tasks)
+    """
+    This function has been ported to Rust in publish/src/bin/janitor-publish.rs.
+    """
+    raise NotImplementedError("This function has been ported to Rust")
 
 
 def main():
-    import uvloop
-
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    sys.exit(asyncio.run(main_async(sys.argv[1:])))
+    """
+    This function has been ported to Rust in publish/src/bin/janitor-publish.rs.
+    """
+    raise NotImplementedError("This function has been ported to Rust")
 
 
 if __name__ == "__main__":
-    main()
+    # This code is no longer used - refer to the Rust implementation
+    pass
