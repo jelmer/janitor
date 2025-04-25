@@ -1,3 +1,9 @@
+//! Publish crate for the Janitor project.
+//!
+//! This crate provides functionality for publishing changes and managing merge proposals.
+
+#![deny(missing_docs)]
+
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
@@ -11,14 +17,29 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 
+/// Module for managing merge proposal information.
 pub mod proposal_info;
+/// Module for publishing a single change.
 pub mod publish_one;
+/// Module for rate limiting publish operations.
 pub mod rate_limiter;
+/// Module for managing publish state.
 pub mod state;
+/// Module for web interface to publish functionality.
 pub mod web;
 
 use rate_limiter::RateLimiter;
 
+/// Calculate the next time to try publishing based on previous attempts.
+///
+/// This implements an exponential backoff strategy with a maximum delay.
+///
+/// # Arguments
+/// * `finish_time` - The time of the last attempt
+/// * `attempt_count` - The number of previous attempts
+///
+/// # Returns
+/// The next time to try publishing
 pub fn calculate_next_try_time(finish_time: DateTime<Utc>, attempt_count: usize) -> DateTime<Utc> {
     if attempt_count == 0 {
         finish_time
@@ -29,10 +50,14 @@ pub fn calculate_next_try_time(finish_time: DateTime<Utc>, attempt_count: usize)
     }
 }
 
+/// Errors that can occur when retrieving a debdiff.
 #[derive(Debug)]
 pub enum DebdiffError {
+    /// An HTTP error occurred.
     Http(reqwest::Error),
+    /// The run ID was missing.
     MissingRun(String),
+    /// The debdiff is unavailable.
     Unavailable(String),
 }
 
@@ -61,6 +86,15 @@ impl std::error::Error for DebdiffError {
     }
 }
 
+/// Get a debdiff between two runs.
+///
+/// # Arguments
+/// * `differ_url` - The URL of the differ service
+/// * `unchanged_id` - The ID of the unchanged run
+/// * `log_id` - The ID of the changed run
+///
+/// # Returns
+/// The debdiff as a byte vector, or an error
 pub fn get_debdiff(
     differ_url: &url::Url,
     unchanged_id: &str,
@@ -101,42 +135,79 @@ pub fn get_debdiff(
     }
 }
 
+/// Request to publish a single run.
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct PublishOneRequest {
+    /// The campaign name.
     pub campaign: String,
+    /// The URL of the target branch.
     pub target_branch_url: url::Url,
+    /// The role of the publisher.
     pub role: String,
+    /// The ID of the log.
     pub log_id: String,
+    /// Optional list of reviewers.
     pub reviewers: Option<Vec<String>>,
+    /// The revision ID of the change.
     pub revision_id: RevisionId,
+    /// The ID of the unchanged run.
     pub unchanged_id: String,
+    /// Whether to require a binary diff.
     #[serde(rename = "require-binary-diff")]
     pub require_binary_diff: bool,
+    /// The URL of the differ service.
     pub differ_url: url::Url,
+    /// The name of the derived branch.
     pub derived_branch_name: String,
+    /// Optional map of tags to revision IDs.
     pub tags: Option<HashMap<String, RevisionId>>,
+    /// Whether to allow creating a new proposal.
     pub allow_create_proposal: bool,
+    /// The URL of the source branch.
     pub source_branch_url: url::Url,
+    /// The result of the codemod.
     pub codemod_result: serde_json::Value,
+    /// Optional template for the commit message.
     pub commit_message_template: Option<String>,
+    /// Optional template for the title.
     pub title_template: Option<String>,
+    /// Optional URL of an existing merge proposal.
     pub existing_mp_url: Option<url::Url>,
+    /// Optional extra context for the templates.
     pub extra_context: Option<serde_json::Value>,
+    /// The mode of the publish operation.
     pub mode: Mode,
+    /// The command that was run.
     pub command: String,
+    /// Optional external URL for the publish operation.
     pub external_url: Option<url::Url>,
+    /// Optional owner of the derived branch.
     pub derived_owner: Option<String>,
+    /// Optional flag to automatically merge the proposal.
     pub auto_merge: Option<bool>,
 }
 
+/// Errors that can occur during publishing.
 #[derive(Debug)]
 pub enum PublishError {
-    Failure { code: String, description: String },
+    /// A failure occurred with a specific code and description.
+    Failure {
+        /// Error code that indicates the type of failure.
+        code: String,
+        /// Detailed description of the failure.
+        description: String,
+    },
+    /// Nothing to do, with a reason.
     NothingToDo(String),
+    /// The branch is already being used.
     BranchBusy(url::Url),
 }
 
 impl PublishError {
+    /// Get the error code.
+    ///
+    /// # Returns
+    /// The error code as a string
     pub fn code(&self) -> &str {
         match self {
             PublishError::Failure { code, .. } => code,
@@ -145,6 +216,10 @@ impl PublishError {
         }
     }
 
+    /// Get the error description.
+    ///
+    /// # Returns
+    /// The error description as a string
     pub fn description(&self) -> &str {
         match self {
             PublishError::Failure { description, .. } => description,
@@ -200,35 +275,56 @@ impl std::fmt::Display for PublishError {
 
 impl std::error::Error for PublishError {}
 
+/// Result of a publish operation.
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct PublishOneResult {
+    /// The URL of the created merge proposal, if any.
     proposal_url: Option<url::Url>,
+    /// The web URL of the created merge proposal, if any.
     proposal_web_url: Option<url::Url>,
+    /// Whether the merge proposal is new.
     is_new: Option<bool>,
+    /// The name of the branch.
     branch_name: String,
+    /// The URL of the target branch.
     target_branch_url: url::Url,
+    /// The web URL of the target branch, if any.
     target_branch_web_url: Option<url::Url>,
+    /// The mode of the publish operation.
     mode: Mode,
 }
 
+/// Error returned by the publish_one operation.
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct PublishOneError {
+    /// The error code.
     code: String,
+    /// A description of the error.
     description: String,
 }
 
+/// Worker for publishing changes.
 pub struct PublishWorker {
+    /// Optional path to the template environment.
     pub template_env_path: Option<PathBuf>,
+    /// Optional external URL for the publish operation.
     pub external_url: Option<url::Url>,
+    /// URL of the differ service.
     pub differ_url: url::Url,
+    /// Optional Redis connection manager.
     pub redis: Option<redis::aio::ConnectionManager>,
+    /// Optional lock manager for coordinating publish operations.
     pub lock_manager: Option<rslock::LockManager>,
 }
 
+/// Errors that can occur when interacting with a worker process.
 #[derive(Debug)]
 pub enum WorkerInvalidResponse {
+    /// An I/O error occurred.
     Io(std::io::Error),
+    /// An error occurred during serialization or deserialization.
     Serde(serde_json::Error),
+    /// An error returned by the worker process.
     WorkerError(String),
 }
 
@@ -262,6 +358,14 @@ impl std::fmt::Display for WorkerInvalidResponse {
 
 impl std::error::Error for WorkerInvalidResponse {}
 
+/// Run a worker process with the given arguments and request.
+///
+/// # Arguments
+/// * `args` - The command line arguments for the worker process
+/// * `request` - The publish request to send to the worker
+///
+/// # Returns
+/// A tuple of the exit code and the response value, or an error
 async fn run_worker_process(
     args: Vec<String>,
     request: PublishOneRequest,
@@ -314,6 +418,17 @@ async fn run_worker_process(
 }
 
 impl PublishWorker {
+    /// Create a new publish worker.
+    ///
+    /// # Arguments
+    /// * `template_env_path` - Optional path to the template environment
+    /// * `external_url` - Optional external URL for the publish operation
+    /// * `differ_url` - URL of the differ service
+    /// * `redis` - Optional Redis connection manager
+    /// * `lock_manager` - Optional lock manager for coordinating publish operations
+    ///
+    /// # Returns
+    /// A new PublishWorker instance
     pub async fn new(
         template_env_path: Option<PathBuf>,
         external_url: Option<url::Url>,
@@ -491,15 +606,15 @@ impl PublishWorker {
     }
 }
 
-/// Check if a run is sufficient to create a merge proposal.
+/// Check if a run is sufficient to create a merge proposal based on its value.
 ///
 /// # Arguments
 /// * `campaign_config` - The campaign configuration
 /// * `run_value` - The value associated with the run
 ///
 /// # Returns
-/// * `true` if the run is sufficient to create a merge proposal, `false` otherwise.
-fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32>) -> bool {
+/// `true` if the run is sufficient to create a merge proposal, `false` otherwise
+pub fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32>) -> bool {
     if let (Some(run_value), Some(threshold)) =
         (run_value, &campaign_config.merge_proposal.value_threshold)
     {
@@ -510,6 +625,14 @@ fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32
     }
 }
 
+/// Get the URL for a role branch.
+///
+/// # Arguments
+/// * `url` - The base URL
+/// * `remote_branch_name` - Optional name of the remote branch
+///
+/// # Returns
+/// The URL for the role branch
 pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
     if let Some(remote_branch_name) = remote_branch_name {
         let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(
@@ -527,6 +650,14 @@ pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url:
     }
 }
 
+/// Check if two branch URLs refer to the same branch.
+///
+/// # Arguments
+/// * `url_a` - The first branch URL
+/// * `url_b` - The second branch URL
+///
+/// # Returns
+/// `true` if the branches match, `false` otherwise
 pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
     use silver_platter::vcs::{open_branch, BranchOpenError};
     if url_a == url_b {
@@ -561,6 +692,14 @@ pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> boo
     branch_a.name() == branch_b.name()
 }
 
+/// Get the URL for a user who merged a branch.
+///
+/// # Arguments
+/// * `url` - The branch URL
+/// * `user` - The username
+///
+/// # Returns
+/// The user's URL, or None if not available
 pub fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
     let hostname = if let Some(host) = url.host_str() {
         host
@@ -576,6 +715,12 @@ pub fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::
     Ok(Some(forge.get_user_url(user)?))
 }
 
+/// Process the publish queue in a loop.
+///
+/// # Arguments
+/// * `state` - The application state
+/// * `interval` - The interval at which to process the queue
+/// * `auto_publish` - Whether to automatically publish changes
 pub async fn process_queue_loop(
     state: Arc<AppState>,
     interval: chrono::Duration,
@@ -584,10 +729,24 @@ pub async fn process_queue_loop(
     todo!();
 }
 
+/// Publish all pending ready changes.
+///
+/// # Arguments
+/// * `state` - The application state
+///
+/// # Returns
+/// Ok(()) if successful, or a PublishError
 pub async fn publish_pending_ready(state: Arc<AppState>) -> Result<(), PublishError> {
     todo!();
 }
 
+/// Refresh the counts of merge proposals per bucket.
+///
+/// # Arguments
+/// * `state` - The application state
+///
+/// # Returns
+/// Ok(()) if successful, or a sqlx::Error
 pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::Error> {
     let mut per_bucket: HashMap<janitor::publish::MergeProposalStatus, HashMap<String, usize>> =
         HashMap::new();
@@ -619,6 +778,10 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
     Ok(())
 }
 
+/// Listen to the runner for new changes to publish.
+///
+/// # Arguments
+/// * `state` - The application state
 pub async fn listen_to_runner(state: Arc<AppState>) {
     todo!();
 }
@@ -654,28 +817,47 @@ mod tests {
     }
 }
 
+/// Application state for the publish service.
 pub struct AppState {
+    /// Database connection pool.
     pub conn: sqlx::PgPool,
+    /// Rate limiter for buckets.
     pub bucket_rate_limiter: Mutex<Box<dyn rate_limiter::RateLimiter>>,
+    /// Rate limiter for forges.
     pub forge_rate_limiter: Arc<RwLock<HashMap<String, chrono::DateTime<Utc>>>>,
+    /// Optional limit on the number of pushes.
     pub push_limit: Option<usize>,
+    /// Optional Redis connection manager.
     pub redis: Option<redis::aio::ConnectionManager>,
+    /// Configuration for the service.
     pub config: &'static janitor::config::Config,
+    /// Worker for publishing changes.
     pub publish_worker: PublishWorker,
+    /// Map of VCS managers by type.
     pub vcs_managers: HashMap<VcsType, Box<dyn VcsManager>>,
+    /// Optional limit on the number of merge proposals to modify.
     pub modify_mp_limit: Option<i32>,
+    /// Optional limit on the number of unexpected errors.
     pub unexpected_mp_limit: Option<i32>,
+    /// GPG context for signing commits.
     pub gpg: breezyshim::gpg::GPGContext,
+    /// Whether to require binary diffs.
     pub require_binary_diff: bool,
 }
 
+/// Errors that can occur when checking a merge proposal.
 #[derive(Debug)]
 pub enum CheckMpError {
+    /// No run was found for the merge proposal.
     NoRunForMergeProposal(url::Url),
+    /// The branch is rate limited.
     BranchRateLimited {
+        /// Optional duration after which to retry.
         retry_after: Option<chrono::Duration>,
     },
+    /// An unexpected HTTP status was received.
     UnexpectedHttpStatus,
+    /// Login is required for the forge.
     ForgeLoginRequired,
 }
 
@@ -722,7 +904,13 @@ async fn check_existing_mp(
     todo!()
 }
 
-/// Iterate over all existing merge proposals.
+/// Iterate over all merge proposals.
+///
+/// # Arguments
+/// * `statuses` - Optional list of statuses to filter by
+///
+/// # Returns
+/// An iterator over results containing the forge, merge proposal, and status
 pub fn iter_all_mps(
     statuses: Option<&[breezyshim::forge::MergeProposalStatus]>,
 ) -> impl Iterator<

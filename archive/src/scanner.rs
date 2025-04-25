@@ -1,3 +1,4 @@
+/// Module for scanning Debian package archives.
 use deb822_lossless::FromDeb822Paragraph;
 use debian_control::lossy::apt::{Package, Source};
 use futures::stream::StreamExt;
@@ -9,6 +10,14 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
 
+/// Scan binary packages in a directory.
+///
+/// # Arguments
+/// * `td` - The directory to scan
+/// * `arch` - Optional architecture to filter by
+///
+/// # Returns
+/// A vector of Package objects or an error string
 async fn scan_packages<'a>(td: &str, arch: Option<&str>) -> Result<Vec<Package>, String> {
     let mut args = Vec::new();
     if let Some(arch) = arch {
@@ -60,6 +69,13 @@ async fn scan_packages<'a>(td: &str, arch: Option<&str>) -> Result<Vec<Package>,
         .collect()
 }
 
+/// Scan source packages in a directory.
+///
+/// # Arguments
+/// * `td` - The directory to scan
+///
+/// # Returns
+/// A vector of Source objects or an error string
 async fn scan_sources<'a>(td: &str) -> Result<Vec<Source>, String> {
     let mut proc = Command::new("dpkg-scansources")
         .arg(td)
@@ -106,6 +122,10 @@ async fn scan_sources<'a>(td: &str) -> Result<Vec<Source>, String> {
         .collect()
 }
 
+/// Handle a log line from the scanner process.
+///
+/// # Arguments
+/// * `line` - The log line as bytes
 fn handle_log_line(line: &[u8]) {
     if line.starts_with(b"info: ") {
         debug!("{}", String::from_utf8_lossy(&line[b"info: ".len()..]));

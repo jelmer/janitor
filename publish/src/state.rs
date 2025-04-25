@@ -213,6 +213,7 @@ ORDER BY length(branch_url) DESC
 }
 
 #[derive(sqlx::FromRow)]
+/// Information about a run that resulted in a merge proposal.
 pub struct MergeProposalRun {
     id: String,
     campaign: String,
@@ -285,6 +286,7 @@ LIMIT 1
     .await
 }
 
+/// Count the number of publish attempts for a specific revision, excluding those with transient result codes.
 pub async fn get_publish_attempt_count(
     conn: &PgPool,
     revision: &RevisionId,
@@ -299,6 +301,7 @@ pub async fn get_publish_attempt_count(
     .await? as usize)
 }
 
+/// Get the status of previous merge proposals for a codebase and campaign.
 pub async fn get_previous_mp_status(
     conn: &PgPool,
     codebase: &str,
@@ -329,15 +332,23 @@ WHERE run_id = (
 }
 
 #[derive(Debug, sqlx::Type)]
+/// Information about a branch that hasn't been published yet.
 pub struct UnpublishedBranch {
+    /// Role of the branch.
     pub role: String,
+    /// Name of the remote branch.
     pub remote_name: String,
+    /// Base revision ID.
     pub base_revision: RevisionId,
+    /// Current revision ID.
     pub revision: RevisionId,
+    /// Mode to use for publishing.
     pub publish_mode: Mode,
+    /// Maximum frequency in days between publish attempts.
     pub max_frequency_days: Option<i32>,
 }
 
+/// Iterate through runs that are ready to be published.
 pub async fn iter_publish_ready(
     conn: &PgPool,
     run_id: Option<&str>,

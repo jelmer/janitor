@@ -11,18 +11,26 @@ use std::path::Path;
 use url::Url;
 
 #[async_trait]
+/// Result type for configuration generators.
 pub trait ConfigGeneratorResult: Serialize + Deserialize<'static> {
+    /// Load artifacts from the specified path.
     fn load_artifacts(&mut self, path: &Path) -> Result<(), Error>;
 
+    /// Store the results in the database for the specified run.
     async fn store(&self, conn: &PgPool, run_id: &str) -> Result<(), sqlx::Error>;
 
+    /// Get the list of artifact filenames produced.
     fn artifact_filenames(&self) -> Vec<String>;
 }
 
 #[derive(Debug)]
+/// Errors that can occur during configuration generation.
 pub enum Error {
+    /// Database error.
     Sqlx(sqlx::Error),
+    /// Required artifacts are missing.
     ArtifactsMissing,
+    /// Error in the configuration.
     ConfigError(String),
 }
 
@@ -45,7 +53,9 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 #[async_trait]
+/// Interface for generating configurations for worker runs.
 pub trait ConfigGenerator {
+    /// Generate a configuration for a worker run.
     async fn config(
         &self,
         conn: &PgPool,
@@ -53,6 +63,7 @@ pub trait ConfigGenerator {
         queue_item: &QueueItem,
     ) -> Result<serde_json::Value, Error>;
 
+    /// Generate environment variables for a worker run.
     async fn build_env(
         &self,
         conn: &PgPool,
@@ -60,10 +71,12 @@ pub trait ConfigGenerator {
         queue_item: &QueueItem,
     ) -> Result<HashMap<String, String>, Error>;
 
+    /// Get additional branches that should be colocated with the main branch.
     fn additional_colocated_branches(&self, main_branch: &dyn Branch) -> HashMap<String, String>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Result type for generic build configurations.
 pub struct GenericResult;
 
 #[async_trait]
@@ -81,11 +94,13 @@ impl ConfigGeneratorResult for GenericResult {
     }
 }
 
+/// Configuration generator for generic builds.
 pub struct GenericConfigGenerator {
     dep_server_url: url::Url,
 }
 
 impl GenericConfigGenerator {
+    /// Create a new generic configuration generator.
     pub fn new(dep_server_url: Option<url::Url>) -> Self {
         Self {
             dep_server_url: dep_server_url.unwrap_or_else(|| {
@@ -126,6 +141,7 @@ impl ConfigGenerator for GenericConfigGenerator {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Result type for Debian build configurations.
 pub struct DebianResult {
     source: String,
     build_version: Version,
@@ -195,6 +211,7 @@ impl ConfigGeneratorResult for DebianResult {
     }
 }
 
+/// Configuration generator for Debian builds.
 pub struct DebianConfigGenerator {
     distro_config: Distribution,
     apt_location: Option<String>,
@@ -202,6 +219,7 @@ pub struct DebianConfigGenerator {
 }
 
 impl DebianConfigGenerator {
+    /// Create a new Debian configuration generator.
     pub fn new(
         distro_config: Distribution,
         apt_location: Option<String>,
@@ -368,6 +386,7 @@ impl ConfigGenerator for DebianConfigGenerator {
     }
 }
 
+/// Get the appropriate configuration generator based on the campaign configuration.
 pub fn get_config_generator(
     config: &janitor::config::Config,
     campaign_config: &Campaign,
