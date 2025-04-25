@@ -91,28 +91,351 @@ async fn get_merge_proposals_by_codebase(
     Json(response_obj)
 }
 
-async fn post_merge_proposal() {
-    unimplemented!()
+/// Get a list of all merge proposals
+async fn get_merge_proposals(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let mut response_obj = Vec::new();
+    
+    let query = r#"
+    SELECT
+        DISTINCT ON (merge_proposal.url)
+        merge_proposal.url AS url, merge_proposal.status AS status,
+        run.suite
+    FROM
+        merge_proposal
+    LEFT JOIN run
+    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+    ORDER BY merge_proposal.url, run.finish_time DESC
+    "#;
+    
+    let rows = sqlx::query(query)
+        .fetch_all(&state.conn)
+        .await
+        .unwrap();
+    
+    for row in rows {
+        response_obj.push(MergeProposalInfo {
+            url: row.get("url"),
+            status: row.get("status"),
+        });
+    }
+    
+    Json(response_obj)
 }
 
-async fn absorbed() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SinceQuery {
+    since: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-async fn get_policy() {
-    unimplemented!()
+#[derive(serde::Serialize)]
+struct AbsorbedRunInfo {
+    mode: String,
+    change_set: String,
+    delay: f64,
+    campaign: String,
+    #[serde(rename = "merged-by")]
+    merged_by: Option<String>,
+    #[serde(rename = "merged-by-url")]
+    merged_by_url: Option<String>,
+    #[serde(rename = "absorbed-at")]
+    absorbed_at: chrono::DateTime<chrono::Utc>,
+    id: String,
+    result: serde_json::Value,
 }
 
-async fn get_policies() {
-    unimplemented!()
+async fn absorbed(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<SinceQuery>,
+) -> impl IntoResponse {
+    let mut query = "SELECT
+       change_set,
+       delay,
+       campaign,
+       result,
+       id,
+       absorbed_at,
+       merged_by,
+       merge_proposal_url,
+       mode
+    FROM absorbed_runs".to_string();
+    
+    let mut args = Vec::new();
+    
+    if let Some(since) = params.since {
+        args.push(since);
+        query.push_str(" WHERE absorbed_at >= $1");
+    }
+    
+    let mut response = Vec::new();
+    let rows = match sqlx::query(&query)
+        .bind_all(args)
+        .fetch_all(&state.conn)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            log::error!("Error querying absorbed runs: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(vec![]));
+        }
+    };
+    
+    for row in rows {
+        let merge_proposal_url: String = row.get("merge_proposal_url");
+        let merged_by: Option<String> = row.get("merged_by");
+        let delay: chrono::Duration = row.get("delay");
+        
+        // TODO: Implement get_merged_by_user_url
+        let merged_by_url = merged_by.as_ref().map(|_| String::from(""));
+        
+        response.push(AbsorbedRunInfo {
+            mode: row.get("mode"),
+            change_set: row.get("change_set"),
+            delay: delay.num_seconds() as f64,
+            campaign: row.get("campaign"),
+            merged_by,
+            merged_by_url,
+            absorbed_at: row.get("absorbed_at"),
+            id: row.get("id"),
+            result: row.get("result"),
+        });
+    }
+    
+    Json(response)
 }
 
-async fn put_policy() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BranchPolicyInfo {
+    mode: String,
+    max_frequency_days: Option<i32>,
 }
 
-async fn put_policies() {
-    unimplemented!()
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PolicyInfo {
+    rate_limit_bucket: Option<String>,
+    per_branch: HashMap<String, BranchPolicyInfo>,
+}
+
+async fn get_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let row = match sqlx::query("SELECT * FROM named_publish_policy WHERE name = $1")
+        .bind(&name)
+        .fetch_optional(&state.conn)
+        .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "reason": "Publish policy not found"
+                })),
+            );
+        }
+        Err(e) => {
+            log::error!("Error getting policy {}: {}", name, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "reason": "Error retrieving policy"
+                })),
+            );
+        }
+    };
+    
+    let rate_limit_bucket: Option<String> = row.get("rate_limit_bucket");
+    let per_branch_policy: Vec<serde_json::Value> = row.get("per_branch_policy");
+    
+    let mut per_branch = HashMap::new();
+    for p in per_branch_policy {
+        if let Ok(policy) = serde_json::from_value::<(String, String, Option<i32>)>(p) {
+            let (role, mode, frequency_days) = policy;
+            per_branch.insert(role, BranchPolicyInfo {
+                mode,
+                max_frequency_days: frequency_days,
+            });
+        }
+    }
+    
+    (
+        StatusCode::OK,
+        Json(PolicyInfo {
+            rate_limit_bucket,
+            per_branch,
+        }),
+    )
+}
+
+async fn get_policies(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let rows = match sqlx::query("SELECT * FROM named_publish_policy")
+        .fetch_all(&state.conn)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(e) => {
+            log::error!("Error getting policies: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "reason": "Error retrieving policies"
+                })),
+            );
+        }
+    };
+    
+    let mut policies = HashMap::new();
+    
+    for row in rows {
+        let name: String = row.get("name");
+        let rate_limit_bucket: Option<String> = row.get("rate_limit_bucket");
+        let per_branch_policy: Vec<serde_json::Value> = row.get("per_branch_policy");
+        
+        let mut per_branch = HashMap::new();
+        for p in per_branch_policy {
+            if let Ok(policy) = serde_json::from_value::<(String, String, Option<i32>)>(p) {
+                let (role, mode, frequency_days) = policy;
+                per_branch.insert(role, BranchPolicyInfo {
+                    mode,
+                    max_frequency_days: frequency_days,
+                });
+            }
+        }
+        
+        policies.insert(name, PolicyInfo {
+            rate_limit_bucket,
+            per_branch,
+        });
+    }
+    
+    Json(policies)
+}
+
+async fn put_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(policy): Json<PolicyInfo>,
+) -> impl IntoResponse {
+    // Convert the per_branch map to the format expected by the database
+    let per_branch_policy: Vec<(String, String, Option<i32>)> = policy
+        .per_branch
+        .into_iter()
+        .map(|(role, info)| (role, info.mode, info.max_frequency_days))
+        .collect();
+    
+    let result = sqlx::query(
+        "INSERT INTO named_publish_policy 
+        (name, per_branch_policy, rate_limit_bucket) 
+        VALUES ($1, $2, $3) 
+        ON CONFLICT (name) 
+        DO UPDATE SET 
+        per_branch_policy = EXCLUDED.per_branch_policy, 
+        rate_limit_bucket = EXCLUDED.rate_limit_bucket"
+    )
+    .bind(&name)
+    .bind(&per_branch_policy)
+    .bind(&policy.rate_limit_bucket)
+    .execute(&state.conn)
+    .await;
+    
+    match result {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({}))),
+        Err(e) => {
+            log::error!("Error updating policy {}: {}", name, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "reason": format!("Error updating policy: {}", e)
+            })))
+        }
+    }
+}
+
+async fn put_policies(
+    State(state): State<Arc<AppState>>,
+    Json(policies): Json<HashMap<String, PolicyInfo>>,
+) -> impl IntoResponse {
+    // Start a transaction to update all policies
+    let mut tx = match sqlx::query("BEGIN").execute(&state.conn).await {
+        Ok(_) => true,
+        Err(e) => {
+            log::error!("Error starting transaction: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "reason": format!("Error updating policies: {}", e)
+            })));
+        }
+    };
+    
+    // First, insert or update all the provided policies
+    for (name, policy) in &policies {
+        // Convert the per_branch map to the format expected by the database
+        let per_branch_policy: Vec<(String, String, Option<i32>)> = policy
+            .per_branch
+            .iter()
+            .map(|(role, info)| (role.clone(), info.mode.clone(), info.max_frequency_days))
+            .collect();
+        
+        let result = sqlx::query(
+            "INSERT INTO named_publish_policy 
+            (name, per_branch_policy, rate_limit_bucket) 
+            VALUES ($1, $2, $3) 
+            ON CONFLICT (name) 
+            DO UPDATE SET 
+            per_branch_policy = EXCLUDED.per_branch_policy, 
+            rate_limit_bucket = EXCLUDED.rate_limit_bucket"
+        )
+        .bind(name)
+        .bind(&per_branch_policy)
+        .bind(&policy.rate_limit_bucket)
+        .execute(&state.conn)
+        .await;
+        
+        if let Err(e) = result {
+            log::error!("Error updating policy {}: {}", name, e);
+            tx = false;
+            break;
+        }
+    }
+    
+    // Delete policies that are not in the provided map
+    if tx {
+        let policy_names: Vec<String> = policies.keys().cloned().collect();
+        let result = sqlx::query(
+            "DELETE FROM named_publish_policy WHERE NOT (name = ANY($1::text[]))"
+        )
+        .bind(&policy_names)
+        .execute(&state.conn)
+        .await;
+        
+        if let Err(e) = result {
+            log::error!("Error deleting old policies: {}", e);
+            tx = false;
+        }
+    }
+    
+    // Commit or rollback transaction
+    if tx {
+        if let Err(e) = sqlx::query("COMMIT").execute(&state.conn).await {
+            log::error!("Error committing transaction: {}", e);
+            if let Err(e) = sqlx::query("ROLLBACK").execute(&state.conn).await {
+                log::error!("Error rolling back transaction: {}", e);
+            }
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "reason": format!("Error committing transaction: {}", e)
+            })));
+        }
+    } else {
+        if let Err(e) = sqlx::query("ROLLBACK").execute(&state.conn).await {
+            log::error!("Error rolling back transaction: {}", e);
+        }
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+            "reason": "Error updating policies"
+        })));
+    }
+    
+    (StatusCode::OK, Json(serde_json::json!({})))
 }
 
 async fn update_merge_proposal() {
@@ -877,7 +1200,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/c/:codebase/merge-proposals",
             get(get_merge_proposals_by_codebase),
         )
-        .route("/merge-proposals", get(post_merge_proposal))
+        .route("/merge-proposals", get(get_merge_proposals))
         .route("/absorbed", get(absorbed))
         .route("/policy/:name", get(get_policy))
         .route("/policy", get(get_policies))
