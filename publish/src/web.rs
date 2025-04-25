@@ -13,12 +13,82 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-async fn get_merge_proposals_by_campaign() {
-    unimplemented!()
+#[derive(serde::Serialize)]
+struct MergeProposalInfo {
+    url: String,
+    status: String,
 }
 
-async fn get_merge_proposals_by_codebase() {
-    unimplemented!()
+/// Get a list of merge proposals for a specific campaign
+async fn get_merge_proposals_by_campaign(
+    State(state): State<Arc<AppState>>,
+    Path(campaign): Path<String>,
+) -> impl IntoResponse {
+    let mut response_obj = Vec::new();
+    
+    let query = r#"
+    SELECT
+        DISTINCT ON (merge_proposal.url)
+        merge_proposal.url AS url, merge_proposal.status AS status,
+        run.suite
+    FROM
+        merge_proposal
+    LEFT JOIN run
+    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+    WHERE run.suite = $1
+    ORDER BY merge_proposal.url, run.finish_time DESC
+    "#;
+    
+    let rows = sqlx::query(query)
+        .bind(&campaign)
+        .fetch_all(&state.conn)
+        .await
+        .unwrap();
+    
+    for row in rows {
+        response_obj.push(MergeProposalInfo {
+            url: row.get("url"),
+            status: row.get("status"),
+        });
+    }
+    
+    Json(response_obj)
+}
+
+/// Get a list of merge proposals for a specific codebase
+async fn get_merge_proposals_by_codebase(
+    State(state): State<Arc<AppState>>,
+    Path(codebase): Path<String>,
+) -> impl IntoResponse {
+    let mut response_obj = Vec::new();
+    
+    let query = r#"
+    SELECT
+        DISTINCT ON (merge_proposal.url)
+        merge_proposal.url AS url, merge_proposal.status AS status,
+        run.suite
+    FROM
+        merge_proposal
+    LEFT JOIN run
+    ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+    WHERE run.codebase = $1
+    ORDER BY merge_proposal.url, run.finish_time DESC
+    "#;
+    
+    let rows = sqlx::query(query)
+        .bind(&codebase)
+        .fetch_all(&state.conn)
+        .await
+        .unwrap();
+    
+    for row in rows {
+        response_obj.push(MergeProposalInfo {
+            url: row.get("url"),
+            status: row.get("status"),
+        });
+    }
+    
+    Json(response_obj)
 }
 
 async fn post_merge_proposal() {
