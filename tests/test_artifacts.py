@@ -15,57 +15,49 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
 import os
 import shutil
 import tempfile
-import unittest
-from typing import Callable
 
 import pytest
 
-from janitor.artifacts import ArtifactManager, ArtifactsMissing, LocalArtifactManager
+from janitor.artifacts import ArtifactsMissing, LocalArtifactManager
 
 
-class ArtifactManagerTests:
-    manager: ArtifactManager
-
-    assertEqual: Callable
-    assertRaises: Callable
-
-    @pytest.mark.asyncio
-    async def test_store_twice(self):
-        with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, "somefile"), "w") as f:
-                f.write("lalala")
-            await self.manager.store_artifacts("some-run-id", td)
-            await self.manager.store_artifacts("some-run-id", td)
-
-    @pytest.mark.asyncio
-    async def test_store_and_retrieve(self):
-        with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, "somefile"), "w") as f:
-                f.write("lalala")
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(self.manager.store_artifacts("some-run-id", td))
-        with tempfile.TemporaryDirectory() as td:
-            loop.run_until_complete(self.manager.retrieve_artifacts("some-run-id", td))
-            self.assertEqual(["somefile"], os.listdir(td))
-
-    @pytest.mark.asyncio
-    async def test_retrieve_nonexistent(self):
-        loop = asyncio.get_event_loop()
-        with tempfile.TemporaryDirectory() as td:
-            self.assertRaises(
-                ArtifactsMissing,
-                loop.run_until_complete,
-                self.manager.retrieve_artifacts("some-run-id", td),
-            )
+@pytest.fixture
+def local_artifact_manager():
+    path = tempfile.mkdtemp()
+    try:
+        yield LocalArtifactManager(path)
+    finally:
+        shutil.rmtree(path)
 
 
-class LocalArtifactManagerTests(ArtifactManagerTests, unittest.TestCase):
-    def setUp(self):
-        super().setUp()
-        self.path = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.path)
-        self.manager = LocalArtifactManager(self.path)
+@pytest.mark.asyncio
+async def test_store_twice(local_artifact_manager):
+    manager = local_artifact_manager
+    with tempfile.TemporaryDirectory() as td:
+        with open(os.path.join(td, "somefile"), "w") as f:
+            f.write("lalala")
+        await manager.store_artifacts("some-run-id", td)
+        await manager.store_artifacts("some-run-id", td)
+
+
+@pytest.mark.asyncio
+async def test_store_and_retrieve(local_artifact_manager):
+    manager = local_artifact_manager
+    with tempfile.TemporaryDirectory() as td:
+        with open(os.path.join(td, "somefile"), "w") as f:
+            f.write("lalala")
+        await manager.store_artifacts("some-run-id", td)
+    with tempfile.TemporaryDirectory() as td:
+        await manager.retrieve_artifacts("some-run-id", td)
+        assert ["somefile"] == os.listdir(td)
+
+
+@pytest.mark.asyncio
+async def test_retrieve_nonexistent(local_artifact_manager):
+    manager = local_artifact_manager
+    with tempfile.TemporaryDirectory() as td:
+        with pytest.raises(ArtifactsMissing):
+            await manager.retrieve_artifacts("some-run-id", td)
