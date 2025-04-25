@@ -1,18 +1,33 @@
+//! Rate limiter module for the publish crate.
+//!
+//! This module provides rate limiting functionality for merge proposals.
+
 use janitor::publish::MergeProposalStatus;
 use std::collections::HashMap;
 
+/// Status of a rate limit check.
 #[derive(Debug)]
 pub enum RateLimitStatus {
+    /// The operation is allowed.
     Allowed,
+    /// The operation is rate limited.
     RateLimited,
+    /// The operation is rate limited due to bucket limits.
     BucketRateLimited {
+        /// The bucket that is rate limited.
         bucket: String,
+        /// The current number of open merge proposals.
         open_mps: usize,
+        /// The maximum number of open merge proposals allowed.
         max_open_mps: usize,
     },
 }
 
 impl RateLimitStatus {
+    /// Check if the operation is allowed.
+    ///
+    /// # Returns
+    /// `true` if the operation is allowed, `false` otherwise
     pub fn is_allowed(&self) -> bool {
         match self {
             RateLimitStatus::Allowed => true,
@@ -39,30 +54,64 @@ impl std::fmt::Display for RateLimitStatus {
     }
 }
 
+/// Statistics about rate limiting.
 pub struct RateLimitStats {
+    /// Number of merge proposals per bucket.
     pub per_bucket: HashMap<String, usize>,
 }
 
+/// Trait for rate limiters.
 pub trait RateLimiter: Send + Sync {
+    /// Set the number of merge proposals per bucket.
+    ///
+    /// # Arguments
+    /// * `mps_per_bucket` - Map of merge proposal status to map of bucket to count
     fn set_mps_per_bucket(
         &mut self,
         mps_per_bucket: &HashMap<MergeProposalStatus, HashMap<String, usize>>,
     );
 
+    /// Check if an operation is allowed for a bucket.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket to check
+    ///
+    /// # Returns
+    /// The rate limit status
     fn check_allowed(&self, bucket: &str) -> RateLimitStatus;
 
+    /// Increment the count for a bucket.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket to increment
     fn inc(&mut self, bucket: &str);
 
+    /// Get rate limit statistics.
+    ///
+    /// # Returns
+    /// Rate limit statistics, if available
     fn get_stats(&self) -> Option<RateLimitStats>;
 
+    /// Get the maximum number of open merge proposals for a bucket.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket to check
+    ///
+    /// # Returns
+    /// The maximum number of open merge proposals, if available
     fn get_max_open(&self, bucket: &str) -> Option<usize> {
         None
     }
 }
 
+/// Rate limiter that always allows operations.
 pub struct NonRateLimiter;
 
 impl NonRateLimiter {
+    /// Create a new NonRateLimiter.
+    ///
+    /// # Returns
+    /// A new NonRateLimiter instance
     pub fn new() -> Self {
         NonRateLimiter
     }
@@ -86,12 +135,22 @@ impl RateLimiter for NonRateLimiter {
     }
 }
 
+/// Rate limiter with a fixed maximum number of merge proposals per bucket.
 pub struct FixedRateLimiter {
+    /// Maximum number of merge proposals per bucket.
     max_mps_per_bucket: usize,
+    /// Current number of open merge proposals per bucket.
     open_mps_per_bucket: Option<HashMap<String, usize>>,
 }
 
 impl FixedRateLimiter {
+    /// Create a new FixedRateLimiter.
+    ///
+    /// # Arguments
+    /// * `max_mps_per_bucket` - Maximum number of merge proposals per bucket
+    ///
+    /// # Returns
+    /// A new FixedRateLimiter instance
     pub fn new(max_mps_per_bucket: usize) -> Self {
         FixedRateLimiter {
             max_mps_per_bucket,
@@ -144,13 +203,24 @@ impl RateLimiter for FixedRateLimiter {
     }
 }
 
+/// Rate limiter that gradually increases the limit based on absorbed merge proposals.
 pub struct SlowStartRateLimiter {
+    /// Optional maximum number of merge proposals per bucket.
     max_mps_per_bucket: Option<usize>,
+    /// Current number of open merge proposals per bucket.
     open_mps_per_bucket: Option<HashMap<String, usize>>,
+    /// Number of absorbed (merged or applied) merge proposals per bucket.
     absorbed_mps_per_bucket: Option<HashMap<String, usize>>,
 }
 
 impl SlowStartRateLimiter {
+    /// Create a new SlowStartRateLimiter.
+    ///
+    /// # Arguments
+    /// * `max_mps_per_bucket` - Optional maximum number of merge proposals per bucket
+    ///
+    /// # Returns
+    /// A new SlowStartRateLimiter instance
     pub fn new(max_mps_per_bucket: Option<usize>) -> Self {
         SlowStartRateLimiter {
             max_mps_per_bucket,
@@ -159,6 +229,13 @@ impl SlowStartRateLimiter {
         }
     }
 
+    /// Get the limit for a bucket based on the number of absorbed merge proposals.
+    ///
+    /// # Arguments
+    /// * `bucket` - The bucket to get the limit for
+    ///
+    /// # Returns
+    /// The limit for the bucket, if available
     fn get_limit(&self, bucket: &str) -> Option<usize> {
         if let Some(absorbed_mps_per_bucket) = &self.absorbed_mps_per_bucket {
             absorbed_mps_per_bucket.get(bucket).map(|c| c + 1)
