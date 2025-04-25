@@ -1313,54 +1313,7 @@ async def handle_policy_del(request):
     return web.json_response({})
 
 
-@routes.post("/merge-proposal", name="merge-proposal")
-async def update_merge_proposal_request(request):
-    post = await request.post()
-    async with request.app["db"].acquire() as conn:
-        async with conn.transaction():
-            row = await conn.fetchrow(
-                "SELECT status FROM merge_proposal WHERE url = $1", post["url"]
-            )
-            if row["status"] in CLOSED_STATUSES and post["status"] in CLOSED_STATUSES:
-                pass
-            elif row["status"] == "open" and post["status"] in CLOSED_STATUSES:
-                mp = await asyncio.to_thread(get_proposal_by_url, post["url"])
-                if post.get("comment"):
-                    logger.info(
-                        "%s: %s", mp.url, post["comment"], extra={"mp_url": mp.url}
-                    )
-                    try:
-                        await asyncio.to_thread(mp.post_comment, post["comment"])
-                    except PermissionDenied as e:
-                        logger.warning(
-                            "Permission denied posting comment to %s: %s",
-                            mp.url,
-                            e,
-                            extra={"mp_url": mp.url},
-                        )
-
-                try:
-                    await asyncio.to_thread(mp.close)
-                except PermissionDenied as e:
-                    logger.warning(
-                        "Permission denied closing merge request %s: %s",
-                        mp.url,
-                        e,
-                        extra={"mp_url": mp.url},
-                    )
-                    raise
-            else:
-                raise web.HTTPBadRequest(
-                    text=f"no transition from {row['url']} to {post['url']}"
-                )
-
-            await conn.execute(
-                "UPDATE merge_proposal SET status = $1 WHERE url = $2",
-                post["status"],
-                post["url"],
-            )
-
-    return web.Response(text="updated")
+# Merge proposal update endpoint ported to Rust in publish/src/web.rs
 
 
 @routes.post("/consider/{run_id}", name="consider")
