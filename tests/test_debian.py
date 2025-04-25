@@ -15,6 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import sys
+import unittest
+
 from breezy.tests import TestCaseWithTransport
 from debian.changelog import Version
 
@@ -86,4 +89,6 @@ blah (0.40) UNRELEASED; urgency=medium
 
 
 def test_runs():
+    if sys.platform != "linux":
+        raise unittest.SkipTest("Only runs on Linux")
     assert isinstance(dpkg_vendor(), str)

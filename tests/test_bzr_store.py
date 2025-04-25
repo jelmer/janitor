@@ -66,11 +66,15 @@ async def test_ready(aiohttp_client):
 async def test_home(aiohttp_client):
     client, public_client = await create_client(aiohttp_client)
 
-    with tempfile.TemporaryDirectory() as client.app["local_path"]:
+    temp_dir = tempfile.TemporaryDirectory()
+    client.app["local_path"] = temp_dir.name
+    try:
         resp = await client.get("/")
         assert resp.status == 200
         text = await resp.text()
         assert text == ""
+    finally:
+        temp_dir.cleanup()
 
 
 async def test_fetch_format(aiohttp_client):
