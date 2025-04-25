@@ -438,8 +438,143 @@ async fn put_policies(
     (StatusCode::OK, Json(serde_json::json!({})))
 }
 
-async fn update_merge_proposal() {
-    unimplemented!()
+#[derive(serde::Deserialize)]
+struct UpdateMergeProposalRequest {
+    url: String,
+    status: String,
+    comment: Option<String>,
+}
+
+async fn update_merge_proposal(
+    State(state): State<Arc<AppState>>,
+    Form(request): Form<UpdateMergeProposalRequest>,
+) -> impl IntoResponse {
+    // Define the list of closed statuses
+    const CLOSED_STATUSES: &[&str] = &["closed", "abandoned", "rejected", "applied"];
+    
+    // Start a transaction
+    let mut tx = match sqlx::begin(&state.conn).await {
+        Ok(tx) => tx,
+        Err(e) => {
+            log::error!("Failed to start transaction: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to start transaction: {}", e),
+            );
+        }
+    };
+    
+    // Get the current status of the merge proposal
+    let row = match sqlx::query("SELECT status FROM merge_proposal WHERE url = $1")
+        .bind(&request.url)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                format!("Merge proposal not found: {}", request.url),
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to fetch merge proposal: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to fetch merge proposal: {}", e),
+            );
+        }
+    };
+    
+    let current_status: String = row.get("status");
+    
+    // Check status transitions
+    if !(CLOSED_STATUSES.contains(&current_status.as_str()) && CLOSED_STATUSES.contains(&request.status.as_str())) 
+        && !(current_status == "open" && CLOSED_STATUSES.contains(&request.status.as_str())) {
+        return (
+            StatusCode::BAD_REQUEST,
+            format!("No transition from {} to {}", current_status, request.status),
+        );
+    }
+    
+    // If transitioning from open to closed, interact with the forge
+    if current_status == "open" && CLOSED_STATUSES.contains(&request.status.as_str()) {
+        // Get the merge proposal from the forge
+        let mp = match breezyshim::forge::get_proposal_by_url(&request.url) {
+            Ok(mp) => mp,
+            Err(e) => {
+                log::error!("Failed to get merge proposal: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to get merge proposal: {}", e),
+                );
+            }
+        };
+        
+        // Post a comment if provided
+        if let Some(comment) = &request.comment {
+            log::info!("{}: {}", request.url, comment);
+            match mp.post_comment(comment) {
+                Ok(()) => {}
+                Err(breezyshim::error::Error::PermissionDenied(_)) => {
+                    log::warn!("Permission denied posting comment to {}", request.url);
+                }
+                Err(e) => {
+                    log::error!("Failed to post comment: {}", e);
+                }
+            }
+        }
+        
+        // Close the merge proposal
+        match mp.close() {
+            Ok(()) => {}
+            Err(breezyshim::error::Error::PermissionDenied(e)) => {
+                log::warn!("Permission denied closing merge request {}: {}", request.url, e);
+                return (
+                    StatusCode::FORBIDDEN,
+                    format!("Permission denied closing merge request: {}", e),
+                );
+            }
+            Err(e) => {
+                log::error!("Failed to close merge proposal: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to close merge proposal: {}", e),
+                );
+            }
+        }
+    }
+    
+    // Update the merge proposal status in the database
+    match sqlx::query("UPDATE merge_proposal SET status = $1 WHERE url = $2")
+        .bind(&request.status)
+        .bind(&request.url)
+        .execute(&mut *tx)
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            log::error!("Failed to update merge proposal status: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update merge proposal status: {}", e),
+            );
+        }
+    }
+    
+    // Commit the transaction
+    match tx.commit().await {
+        Ok(_) => {}
+        Err(e) => {
+            log::error!("Failed to commit transaction: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to commit transaction: {}", e),
+            );
+        }
+    }
+    
+    (StatusCode::OK, "updated".to_string())
 }
 
 async fn delete_policy(
