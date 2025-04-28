@@ -1274,9 +1274,9 @@ dependencies = [
 
 [[package]]
 name = "debian-analyzer"
-version = "0.158.25"
+version = "0.158.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "020b3e231f70e3dc28582501d5454eb8074c5c80ee998fecce123bfd44f90253"
+checksum = "d50af4b21da86392fdfc274a4232a946e89653b787dc56d7b538cf2ce418bf89"
 dependencies = [
  "breezyshim",
  "chrono",
@@ -1294,7 +1294,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "makefile-lossless",
+ "makefile-lossless 0.2.1",
  "maplit",
  "merge3",
  "patchkit",
@@ -1682,7 +1682,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3047,7 +3047,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi 0.5.0",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3330,7 +3330,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3654,6 +3654,16 @@ name = "makefile-lossless"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85fd6456fd1895499a2cd26302eff80855631c6c7f6a3af2a29d71eb45c3098e"
+dependencies = [
+ "log",
+ "rowan 0.16.1",
+]
+
+[[package]]
+name = "makefile-lossless"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d336a1f57cdee530a7b9afe7fe297653f8f44d3eaa0e45b05dec8708dfda00ad"
 dependencies = [
  "log",
  "rowan 0.16.1",
@@ -4025,7 +4035,7 @@ dependencies = [
  "log",
  "lz4_flex",
  "lzma-rs",
- "makefile-lossless",
+ "makefile-lossless 0.1.7",
  "maplit",
  "nix",
  "pep508_rs",
@@ -5225,7 +5235,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5238,7 +5248,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6008,7 +6018,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6167,7 +6177,7 @@ dependencies = [
  "getrandom 0.3.1",
  "once_cell",
  "rustix 1.0.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6811,7 +6821,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "makefile-lossless",
+ "makefile-lossless 0.1.7",
  "maplit",
  "opam-file-rs",
  "percent-encoding",
