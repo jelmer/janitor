@@ -1295,7 +1295,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "makefile-lossless 0.2.1",
+ "makefile-lossless",
  "maplit",
  "merge3",
  "patchkit",
@@ -1467,9 +1467,9 @@ dependencies = [
 
 [[package]]
 name = "dirs"
-version = "5.0.1"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
 dependencies = [
  "dirs-sys",
 ]
@@ -1486,14 +1486,14 @@ dependencies = [
 
 [[package]]
 name = "dirs-sys"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
 dependencies = [
  "libc",
  "option-ext",
- "redox_users",
- "windows-sys 0.48.0",
+ "redox_users 0.5.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1503,7 +1503,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
 dependencies = [
  "libc",
- "redox_users",
+ "redox_users 0.4.6",
  "winapi",
 ]
 
@@ -3670,16 +3670,6 @@ dependencies = [
 
 [[package]]
 name = "makefile-lossless"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85fd6456fd1895499a2cd26302eff80855631c6c7f6a3af2a29d71eb45c3098e"
-dependencies = [
- "log",
- "rowan 0.16.1",
-]
-
-[[package]]
-name = "makefile-lossless"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d336a1f57cdee530a7b9afe7fe297653f8f44d3eaa0e45b05dec8708dfda00ad"
@@ -4038,11 +4028,11 @@ dependencies = [
 
 [[package]]
 name = "ognibuild"
-version = "0.0.33"
+version = "0.0.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38646940e3d12165b44ba111555d668e58b1780b6c7552ad1412643828dc6ce3"
+checksum = "39d69d6179df67a6abd9e548c8ecb7ae1623b104882587156d26a645fb572583"
 dependencies = [
- "axum 0.7.9",
+ "axum 0.8.3",
  "breezyshim",
  "buildlog-consultant",
  "chrono",
@@ -4063,7 +4053,7 @@ dependencies = [
  "log",
  "lz4_flex",
  "lzma-rs",
- "makefile-lossless 0.1.7",
+ "makefile-lossless",
  "maplit",
  "nix 0.30.0",
  "pep508_rs",
@@ -4071,7 +4061,7 @@ dependencies = [
  "pyo3",
  "pyproject-toml",
  "r-description",
- "rand 0.8.5",
+ "rand 0.9.1",
  "regex",
  "reqwest",
  "semver",
@@ -4998,6 +4988,17 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
+dependencies = [
+ "getrandom 0.2.16",
+ "libredox",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -6863,7 +6864,7 @@ dependencies = [
  "lazy-regex",
  "lazy_static",
  "log",
- "makefile-lossless 0.2.1",
+ "makefile-lossless",
  "maplit",
  "opam-file-rs",
  "percent-encoding",
