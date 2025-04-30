@@ -77,7 +77,7 @@ axum = "0.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 silver-platter = { version = ">=0.5.47" }
-ognibuild  = "0.0.33"
+ognibuild  = "0.0.34"
 pyo3-async-runtimes = "0.22"
 shlex = "1"
 buildlog-consultant = "0.1.1"
