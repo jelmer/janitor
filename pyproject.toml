@@ -18,6 +18,7 @@ module = [
     "diffoscope.*",
     "ruamel.*",
     "aiohttp_apispec.*",
+    "apispec>=6.8.1",
     "launchpadlib.*",
     "mimeparse.*",
     "google.cloud.logging.*",
