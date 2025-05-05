@@ -34,7 +34,7 @@ maplit = "1.0.2"
 tempfile = "3.19.0"
 prometheus = "0.14.0"
 askama = "0.12.1"
-gethostname = "1.0.0"
+gethostname = "1.0.2"
 ognibuild = { workspace = true }
 debversion = { workspace = true, optional = true }
 debian-changelog = { workspace = true, optional = true }
