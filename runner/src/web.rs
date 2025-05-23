@@ -1,4 +1,4 @@
-use crate::{ActiveRun, AppState, Backchannel, QueueItem};
+use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder};
 use axum::{
     extract::Path, extract::State, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router,
@@ -6,6 +6,7 @@ use axum::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -33,6 +34,8 @@ struct AssignResponse {
     vcs_info: janitor::queue::VcsInfo,
     /// Active run information.
     active_run: serde_json::Value,
+    /// Build configuration for the worker.
+    build_config: HashMap<String, String>,
 }
 
 /// Request for updating run publish status.
@@ -55,6 +58,19 @@ struct FinishResponse {
     artifacts: Vec<String>,
     /// Result information.
     result: serde_json::Value,
+}
+
+/// Create a basic campaign configuration from a queue item.
+/// TODO: In a full implementation, this would load from actual config files
+fn create_campaign_config(queue_item: &QueueItem) -> CampaignConfig {
+    // For now, create a basic configuration
+    // In reality, this would be loaded from campaign configuration files
+    CampaignConfig {
+        generic_build: Some(crate::GenericBuildConfig {
+            chroot: None,
+        }),
+        debian_build: None, // Could be determined by campaign type
+    }
 }
 
 async fn queue_position(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -324,7 +340,46 @@ async fn finish_run_internal(
         Some("Run completed".to_string())
     };
 
-    let janitor_result = active_run.create_result(result_code, description);
+    let mut janitor_result = active_run.create_result(result_code, description);
+
+    // Process builder result if we have worker_result with builder data
+    if let Some(ref wr) = worker_result {
+        if let Some(ref builder_result) = wr.builder_result {
+            janitor_result.builder_result = Some(builder_result.clone());
+        }
+    } else {
+        // For now, create a basic builder result based on the campaign
+        // TODO: This should be done by the actual worker, not here
+        let campaign_config = create_campaign_config(&QueueItem {
+            id: active_run.queue_id,
+            context: active_run.instigated_context.clone(),
+            command: active_run.command.clone(),
+            estimated_duration: active_run.estimated_duration,
+            campaign: active_run.campaign.clone(),
+            refresh: false, // TODO: Get from queue item
+            requester: None, // TODO: Get from queue item
+            change_set: active_run.change_set.clone(),
+            codebase: active_run.codebase.clone(),
+        });
+
+        // Get appropriate builder
+        if let Ok(builder) = get_builder(&campaign_config, None, None) {
+            // For basic completion, just create a simple result
+            // In a real implementation, the worker would provide the output directory
+            if builder.kind() == "debian" {
+                janitor_result.builder_result = Some(crate::BuilderResult::Debian {
+                    source: None,
+                    build_version: None,
+                    build_distribution: None,
+                    changes_filenames: None,
+                    lintian_result: None,
+                    binary_packages: None,
+                });
+            } else {
+                janitor_result.builder_result = Some(crate::BuilderResult::Generic);
+            }
+        }
+    }
 
     // Store the result in the database
     if let Err(e) = state.database.update_run_result(
@@ -340,6 +395,14 @@ async fn finish_run_internal(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "Failed to store result"}))
         );
+    }
+
+    // Store builder result if present
+    if let Some(ref builder_result) = janitor_result.builder_result {
+        if let Err(e) = state.database.store_builder_result(&run_id, builder_result).await {
+            log::error!("Failed to store builder result: {}", e);
+            // Continue anyway, main result was stored
+        }
     }
 
     // Remove from active runs
@@ -446,11 +509,35 @@ async fn assign_work_internal(
         );
     }
 
+    // Generate build configuration for the worker
+    let campaign_config = create_campaign_config(&assignment.queue_item);
+    let build_config = match get_builder(&campaign_config, None, None) {
+        Ok(builder) => {
+            // TODO: Use actual database connection for config generation
+            // For now, create basic config without database
+            let mut config = HashMap::new();
+            config.insert("builder_kind".to_string(), builder.kind().to_string());
+            
+            // Add basic environment setup
+            let env = crate::committer_env(None); // TODO: Get actual committer
+            for (key, value) in env {
+                config.insert(format!("env_{}", key), value);
+            }
+            
+            config
+        }
+        Err(e) => {
+            log::warn!("Failed to create builder for assignment: {}", e);
+            HashMap::new()
+        }
+    };
+
     // Return assignment
     let response = AssignResponse {
         queue_item: assignment.queue_item,
         vcs_info: assignment.vcs_info,
         active_run: active_run.to_json(),
+        build_config,
     };
 
     (StatusCode::OK, Json(serde_json::to_value(response).unwrap()))

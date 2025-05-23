@@ -14,8 +14,16 @@ use std::time::Duration;
 // Re-export VcsInfo from the main crate to avoid duplication
 pub use janitor::queue::VcsInfo;
 
+// Re-export builder types
+pub use builder::{
+    Builder, BuilderError, CampaignConfig, DebianBuildConfig, DebianBuilder, DistroConfig,
+    GenericBuildConfig, GenericBuilder, get_builder,
+};
+
 /// Module for handling backchannel communication with the worker.
 pub mod backchannel;
+/// Module for build system implementations.
+pub mod builder;
 /// Module for generating configuration files.
 pub mod config_generator;
 /// Module for database operations.
