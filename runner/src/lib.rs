@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
+use chrono::{DateTime, Utc};
+use std::time::Duration;
+
+// Re-export VcsInfo from the main crate to avoid duplication
+pub use janitor::queue::VcsInfo;
 
 /// Module for handling backchannel communication with the worker.
 pub mod backchannel;
@@ -275,85 +280,506 @@ pub fn gather_logs(output_directory: &std::path::Path) -> impl Iterator<Item = s
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct JanitorResult {
     /// Unique identifier for the log.
-    log_id: String,
+    pub log_id: String,
     /// URL of the branch that was processed.
-    branch_url: Url,
+    pub branch_url: String,
     /// Optional subpath within the repository.
-    subpath: Option<String>,
+    pub subpath: Option<String>,
     /// Result code.
-    code: String,
+    pub code: String,
     /// Whether the result is transient.
-    transient: Option<bool>,
+    pub transient: Option<bool>,
     /// Name of the codebase.
-    codebase: String,
+    pub codebase: String,
     /// Name of the campaign.
-    campaign: String,
+    pub campaign: String,
     /// Human-readable description of the result.
-    description: String,
+    pub description: Option<String>,
     /// Result of the codemod.
-    codemod: serde_json::Value,
+    pub codemod: Option<serde_json::Value>,
     /// Optional value associated with the result.
-    value: Option<u64>,
+    pub value: Option<u64>,
     /// Names of log files.
-    logfilenames: Vec<String>,
+    pub logfilenames: Vec<String>,
 
     /// Time when the run started.
-    start_time: chrono::DateTime<chrono::Utc>,
+    pub start_time: DateTime<Utc>,
     /// Time when the run finished.
-    finish_time: chrono::DateTime<chrono::Utc>,
-    /// Duration of the run.
-    duration: std::time::Duration,
+    pub finish_time: DateTime<Utc>,
 
     /// Revision ID of the branch after processing.
-    revision: Option<RevisionId>,
+    pub revision: Option<RevisionId>,
     /// Revision ID of the main branch.
-    main_branch_revision: Option<RevisionId>,
+    pub main_branch_revision: Option<RevisionId>,
 
     /// Optional changeset ID.
-    change_set: Option<String>,
+    pub change_set: Option<String>,
 
     /// Optional tags with revision IDs.
-    tags: Option<Vec<(String, Option<RevisionId>)>>,
+    pub tags: Option<Vec<(String, Option<RevisionId>)>>,
     /// Optional remote repositories.
-    remotes: Option<HashMap<String, ResultRemote>>,
+    pub remotes: Option<HashMap<String, ResultRemote>>,
 
     /// Optional branches information.
-    branches: Option<Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>>,
+    pub branches: Option<Vec<(Option<String>, Option<String>, Option<RevisionId>, Option<RevisionId>)>>,
 
     /// Optional details about the failure.
-    failure_details: Option<serde_json::Value>,
+    pub failure_details: Option<serde_json::Value>,
     /// Optional stages where failure occurred.
-    failure_stage: Option<Vec<String>>,
+    pub failure_stage: Option<Vec<String>>,
 
     /// Optional information about resuming a previous run.
-    resume: Option<ResultResume>,
+    pub resume: Option<ResultResume>,
 
     /// Optional target information.
-    target: Option<ResultTarget>,
+    pub target: Option<ResultTarget>,
+
+    /// Optional worker name.
+    pub worker_name: Option<String>,
+    /// Optional VCS type.
+    pub vcs_type: Option<String>,
+    /// Optional target branch URL.
+    pub target_branch_url: Option<String>,
+    /// Optional context information.
+    pub context: Option<serde_json::Value>,
+    /// Optional builder result.
+    pub builder_result: Option<BuilderResult>,
+}
+
+impl JanitorResult {
+    /// Calculate the duration of the run.
+    pub fn duration(&self) -> Duration {
+        let duration = self.finish_time - self.start_time;
+        Duration::from_secs(duration.num_seconds().max(0) as u64)
+    }
+
+    /// Convert to JSON representation.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "codebase": self.codebase,
+            "campaign": self.campaign,
+            "change_set": self.change_set,
+            "log_id": self.log_id,
+            "description": self.description,
+            "code": self.code,
+            "failure_details": self.failure_details,
+            "failure_stage": self.failure_stage,
+            "duration": self.duration().as_secs_f64(),
+            "finish_time": self.finish_time.to_rfc3339(),
+            "start_time": self.start_time.to_rfc3339(),
+            "transient": self.transient,
+            "target": self.target.as_ref().map(|t| serde_json::json!({
+                "name": t.name,
+                "details": t.details
+            })).unwrap_or_else(|| serde_json::json!({})),
+            "logfilenames": self.logfilenames,
+            "codemod": self.codemod,
+            "value": self.value,
+            "remotes": self.remotes,
+            "branch_url": self.branch_url,
+            "resume": self.resume.as_ref().map(|r| serde_json::json!({"run_id": r.run_id})),
+            "branches": self.branches.as_ref().map(|branches| {
+                branches.iter().map(|(fn_name, name, br, r)| {
+                    serde_json::json!([
+                        fn_name,
+                        name,
+                        br.as_ref().map(|b| String::from_utf8_lossy(b).to_string()),
+                        r.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+                    ])
+                }).collect::<Vec<_>>()
+            }),
+            "tags": self.tags.as_ref().map(|tags| {
+                tags.iter().map(|(name, rev)| {
+                    serde_json::json!([
+                        name,
+                        rev.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+                    ])
+                }).collect::<Vec<_>>()
+            }),
+            "revision": self.revision.as_ref().map(|r| String::from_utf8_lossy(r).to_string()),
+            "main_branch_revision": self.main_branch_revision.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+        })
+    }
 }
 
 /// Information about resuming a previous run.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultResume {
     /// ID of the run to resume.
-    run_id: String,
+    pub run_id: String,
 }
 
 /// Target information for a result.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultTarget {
     /// Name of the target.
-    name: String,
+    pub name: String,
     /// Additional details about the target.
-    details: serde_json::Value,
+    pub details: serde_json::Value,
 }
 
 /// Remote repository information for a result.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResultRemote {
     /// URL of the remote repository.
-    url: Url,
+    pub url: String,
 }
+
+/// Result from a worker.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WorkerResult {
+    /// Result code.
+    pub code: String,
+    /// Human-readable description.
+    pub description: Option<String>,
+    /// Context information.
+    pub context: Option<serde_json::Value>,
+    /// Codemod result.
+    pub codemod: Option<serde_json::Value>,
+    /// Main branch revision ID.
+    pub main_branch_revision: Option<RevisionId>,
+    /// Current revision ID.
+    pub revision: Option<RevisionId>,
+    /// Optional value associated with the result.
+    pub value: Option<i64>,
+    /// Branch information.
+    pub branches: Option<Vec<(Option<String>, Option<String>, Option<RevisionId>, Option<RevisionId>)>>,
+    /// Tag information.
+    pub tags: Option<Vec<(String, Option<RevisionId>)>>,
+    /// Remote repository information.
+    pub remotes: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
+    /// Failure details.
+    pub details: Option<serde_json::Value>,
+    /// Failure stage.
+    pub stage: Option<Vec<String>>,
+    /// Builder result.
+    pub builder_result: Option<BuilderResult>,
+    /// Start time.
+    pub start_time: Option<DateTime<Utc>>,
+    /// Finish time.
+    pub finish_time: Option<DateTime<Utc>>,
+    /// Queue ID.
+    pub queue_id: Option<i64>,
+    /// Worker name.
+    pub worker_name: Option<String>,
+    /// Whether the run was refreshed.
+    pub refreshed: bool,
+    /// Target branch URL.
+    pub target_branch_url: Option<String>,
+    /// Branch URL.
+    pub branch_url: Option<String>,
+    /// VCS type.
+    pub vcs_type: Option<String>,
+    /// Subpath within repository.
+    pub subpath: Option<String>,
+    /// Whether the result is transient.
+    pub transient: Option<bool>,
+    /// Codebase name.
+    pub codebase: Option<String>,
+}
+
+
+/// Information about an active run.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ActiveRun {
+    /// Worker name.
+    pub worker_name: String,
+    /// Optional worker link.
+    pub worker_link: Option<String>,
+    /// Queue ID.
+    pub queue_id: i64,
+    /// Unique log ID.
+    pub log_id: String,
+    /// Start time.
+    pub start_time: DateTime<Utc>,
+    /// Optional estimated duration.
+    #[serde(with = "serde_with::As::<Option<serde_with::DurationSeconds<f64>>>")]
+    pub estimated_duration: Option<Duration>,
+    /// Campaign name.
+    pub campaign: String,
+    /// Optional change set.
+    pub change_set: Option<String>,
+    /// Command being executed.
+    pub command: String,
+    /// Backchannel for communication.
+    pub backchannel: Backchannel,
+    /// VCS information.
+    pub vcs_info: VcsInfo,
+    /// Codebase name.
+    pub codebase: String,
+    /// Instigated context.
+    pub instigated_context: Option<serde_json::Value>,
+    /// Optional resume from run ID.
+    pub resume_from: Option<String>,
+}
+
+impl ActiveRun {
+    /// Calculate current duration of the run.
+    pub fn current_duration(&self) -> Duration {
+        let now = Utc::now();
+        let duration = now - self.start_time;
+        Duration::from_secs(duration.num_seconds().max(0) as u64)
+    }
+
+    /// Get VCS type.
+    pub fn vcs_type(&self) -> Option<&str> {
+        self.vcs_info.vcs_type.as_deref()
+    }
+
+    /// Get main branch URL.
+    pub fn main_branch_url(&self) -> Option<&str> {
+        self.vcs_info.branch_url.as_deref()
+    }
+
+    /// Get subpath.
+    pub fn subpath(&self) -> Option<&str> {
+        self.vcs_info.subpath.as_deref()
+    }
+
+    /// Create a JanitorResult from this active run.
+    pub fn create_result(&self, code: String, description: Option<String>) -> JanitorResult {
+        JanitorResult {
+            log_id: self.log_id.clone(),
+            branch_url: self.vcs_info.branch_url.clone().unwrap_or_default(),
+            subpath: self.vcs_info.subpath.clone(),
+            code,
+            transient: None,
+            codebase: self.codebase.clone(),
+            campaign: self.campaign.clone(),
+            description,
+            codemod: None,
+            value: None,
+            logfilenames: vec![],
+            start_time: self.start_time,
+            finish_time: Utc::now(),
+            revision: None,
+            main_branch_revision: None,
+            change_set: self.change_set.clone(),
+            tags: None,
+            remotes: None,
+            branches: None,
+            failure_details: None,
+            failure_stage: None,
+            resume: self.resume_from.as_ref().map(|id| ResultResume { run_id: id.clone() }),
+            target: None,
+            worker_name: Some(self.worker_name.clone()),
+            vcs_type: self.vcs_info.vcs_type.clone(),
+            target_branch_url: None,
+            context: self.instigated_context.clone(),
+            builder_result: None,
+        }
+    }
+
+    /// Convert to JSON representation.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "queue_id": self.queue_id,
+            "id": self.log_id,
+            "codebase": self.codebase,
+            "change_set": self.change_set,
+            "campaign": self.campaign,
+            "command": self.command,
+            "estimated_duration": self.estimated_duration.map(|d| d.as_secs_f64()),
+            "current_duration": self.current_duration().as_secs_f64(),
+            "start_time": self.start_time.to_rfc3339(),
+            "worker": self.worker_name,
+            "worker_link": self.worker_link,
+            "vcs": self.vcs_info,
+            "backchannel": self.backchannel.to_json(),
+            "instigated_context": self.instigated_context,
+            "resume_from": self.resume_from
+        })
+    }
+
+    /// Ping the worker to check if it's still alive.
+    pub async fn ping(&self) -> Result<(), PingError> {
+        self.backchannel.ping(&self.log_id).await
+    }
+}
+
+/// Backchannel communication types.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Backchannel {
+    /// Jenkins backchannel.
+    Jenkins {
+        /// Jenkins URL.
+        my_url: String,
+        /// Jenkins metadata.
+        jenkins: Option<serde_json::Value>,
+    },
+    /// Polling backchannel.
+    Polling {
+        /// Worker URL.
+        my_url: String,
+    },
+    /// No backchannel (default).
+    None {},
+}
+
+impl Default for Backchannel {
+    fn default() -> Self {
+        Backchannel::None {}
+    }
+}
+
+impl Backchannel {
+    /// Ping the worker.
+    pub async fn ping(&self, expected_log_id: &str) -> Result<(), PingError> {
+        match self {
+            Backchannel::None {} => {
+                // No ping available
+                Err(PingError::Retriable("No backchannel available for ping".to_string()))
+            }
+            Backchannel::Jenkins { my_url, .. } => {
+                // TODO: Implement Jenkins ping
+                let _url = my_url;
+                let _log_id = expected_log_id;
+                Err(PingError::Retriable("Jenkins ping not implemented yet".to_string()))
+            }
+            Backchannel::Polling { my_url } => {
+                // TODO: Implement polling ping
+                let _url = my_url;
+                let _log_id = expected_log_id;
+                Err(PingError::Retriable("Polling ping not implemented yet".to_string()))
+            }
+        }
+    }
+
+    /// Kill the worker.
+    pub async fn kill(&self) -> Result<(), PingError> {
+        match self {
+            Backchannel::None {} => Err(PingError::Retriable("No backchannel available for kill".to_string())),
+            Backchannel::Jenkins { .. } => Err(PingError::Retriable("Jenkins kill not implemented yet".to_string())),
+            Backchannel::Polling { my_url } => {
+                let _url = my_url;
+                Err(PingError::Retriable("Polling kill not implemented yet".to_string()))
+            }
+        }
+    }
+
+    /// List available log files.
+    pub async fn list_log_files(&self) -> Result<Vec<String>, PingError> {
+        match self {
+            Backchannel::None {} => Ok(vec![]),
+            Backchannel::Jenkins { .. } => Ok(vec!["worker.log".to_string()]),
+            Backchannel::Polling { .. } => Err(PingError::Retriable("Polling list_log_files not implemented yet".to_string())),
+        }
+    }
+
+    /// Get a specific log file.
+    pub async fn get_log_file(&self, _name: &str) -> Result<Vec<u8>, PingError> {
+        match self {
+            Backchannel::None {} => Err(PingError::Retriable("No backchannel available".to_string())),
+            Backchannel::Jenkins { .. } => Err(PingError::Retriable("Jenkins get_log_file not implemented yet".to_string())),
+            Backchannel::Polling { .. } => Err(PingError::Retriable("Polling get_log_file not implemented yet".to_string())),
+        }
+    }
+
+    /// Convert to JSON representation.
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            Backchannel::None {} => serde_json::json!({}),
+            Backchannel::Jenkins { my_url, jenkins } => serde_json::json!({
+                "my_url": my_url,
+                "jenkins": jenkins
+            }),
+            Backchannel::Polling { my_url } => serde_json::json!({
+                "my_url": my_url
+            })
+        }
+    }
+}
+
+/// Builder result types.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "kind")]
+pub enum BuilderResult {
+    /// Generic build result.
+    #[serde(rename = "generic")]
+    Generic,
+    /// Debian build result.
+    #[serde(rename = "debian")]
+    Debian {
+        /// Source package name.
+        source: Option<String>,
+        /// Build version.
+        build_version: Option<String>,
+        /// Build distribution.
+        build_distribution: Option<String>,
+        /// Changes filenames.
+        changes_filenames: Option<Vec<String>>,
+        /// Lintian result.
+        lintian_result: Option<serde_json::Value>,
+        /// Binary packages.
+        binary_packages: Option<Vec<String>>,
+    },
+}
+
+impl BuilderResult {
+    /// Get the kind of builder result.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            BuilderResult::Generic => "generic",
+            BuilderResult::Debian { .. } => "debian",
+        }
+    }
+
+    /// Convert to JSON.
+    pub fn to_json(&self) -> serde_json::Value {
+        match self {
+            BuilderResult::Generic => serde_json::json!({}),
+            BuilderResult::Debian {
+                source,
+                build_version,
+                build_distribution,
+                changes_filenames,
+                lintian_result,
+                binary_packages,
+            } => serde_json::json!({
+                "source": source,
+                "build_version": build_version,
+                "build_distribution": build_distribution,
+                "changes_filenames": changes_filenames,
+                "lintian": lintian_result,
+                "binary_packages": binary_packages
+            })
+        }
+    }
+
+    /// Get artifact filenames.
+    pub fn artifact_filenames(&self) -> Vec<String> {
+        match self {
+            BuilderResult::Generic => vec![],
+            BuilderResult::Debian { changes_filenames, .. } => {
+                changes_filenames.clone().unwrap_or_default()
+            }
+        }
+    }
+}
+
+/// Ping failure types.
+#[derive(Debug)]
+pub enum PingError {
+    /// Timeout while pinging.
+    Timeout(String),
+    /// Fatal failure that's not retriable.
+    Fatal(String),
+    /// Retriable failure.
+    Retriable(String),
+}
+
+impl std::fmt::Display for PingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PingError::Timeout(msg) => write!(f, "Ping timeout: {}", msg),
+            PingError::Fatal(msg) => write!(f, "Fatal ping failure: {}", msg),
+            PingError::Retriable(msg) => write!(f, "Ping failure: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for PingError {}
 
 /// Application state for the runner.
 pub struct AppState {}
@@ -379,6 +805,60 @@ mod tests {
         };
 
         assert_eq!(committer_env(committer), expected);
+    }
+
+    #[test]
+    fn test_active_run_creation() {
+        let vcs_info = VcsInfo {
+            vcs_type: Some("git".to_string()),
+            branch_url: Some("https://github.com/example/repo.git".to_string()),
+            subpath: None,
+        };
+
+        let active_run = ActiveRun {
+            worker_name: "test-worker".to_string(),
+            worker_link: None,
+            queue_id: 123,
+            log_id: "log-456".to_string(),
+            start_time: Utc::now(),
+            estimated_duration: Some(Duration::from_secs(300)),
+            campaign: "test-campaign".to_string(),
+            change_set: None,
+            command: "test command".to_string(),
+            backchannel: Backchannel::default(),
+            vcs_info,
+            codebase: "test-codebase".to_string(),
+            instigated_context: None,
+            resume_from: None,
+        };
+
+        assert_eq!(active_run.vcs_type(), Some("git"));
+        assert_eq!(active_run.main_branch_url(), Some("https://github.com/example/repo.git"));
+        assert!(active_run.current_duration().as_secs() >= 0);
+
+        let result = active_run.create_result("success".to_string(), Some("Test completed".to_string()));
+        assert_eq!(result.code, "success");
+        assert_eq!(result.description, Some("Test completed".to_string()));
+        assert_eq!(result.codebase, "test-codebase");
+    }
+
+    #[test]
+    fn test_builder_result_serialization() {
+        let generic = BuilderResult::Generic;
+        assert_eq!(generic.kind(), "generic");
+        assert_eq!(generic.artifact_filenames(), Vec::<String>::new());
+
+        let debian = BuilderResult::Debian {
+            source: Some("test-package".to_string()),
+            build_version: Some("1.0.0".to_string()),
+            build_distribution: Some("bullseye".to_string()),
+            changes_filenames: Some(vec!["test.changes".to_string()]),
+            lintian_result: None,
+            binary_packages: Some(vec!["test-bin".to_string()]),
+        };
+        
+        assert_eq!(debian.kind(), "debian");
+        assert_eq!(debian.artifact_filenames(), vec!["test.changes"]);
     }
 
     #[test]
