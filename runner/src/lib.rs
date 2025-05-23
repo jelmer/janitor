@@ -5,11 +5,10 @@
 #![deny(missing_docs)]
 
 use breezyshim::RevisionId;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use url::Url;
-use chrono::{DateTime, Utc};
 use std::time::Duration;
 
 // Re-export VcsInfo from the main crate to avoid duplication
@@ -19,6 +18,8 @@ pub use janitor::queue::VcsInfo;
 pub mod backchannel;
 /// Module for generating configuration files.
 pub mod config_generator;
+/// Module for database operations.
+pub mod database;
 /// Module for the web interface.
 pub mod web;
 
@@ -321,7 +322,14 @@ pub struct JanitorResult {
     pub remotes: Option<HashMap<String, ResultRemote>>,
 
     /// Optional branches information.
-    pub branches: Option<Vec<(Option<String>, Option<String>, Option<RevisionId>, Option<RevisionId>)>>,
+    pub branches: Option<
+        Vec<(
+            Option<String>,
+            Option<String>,
+            Option<RevisionId>,
+            Option<RevisionId>,
+        )>,
+    >,
 
     /// Optional details about the failure.
     pub failure_details: Option<serde_json::Value>,
@@ -383,8 +391,8 @@ impl JanitorResult {
                     serde_json::json!([
                         fn_name,
                         name,
-                        br.as_ref().map(|b| String::from_utf8_lossy(b).to_string()),
-                        r.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+                        br.as_ref().map(|b| b.to_string()),
+                        r.as_ref().map(|r| r.to_string())
                     ])
                 }).collect::<Vec<_>>()
             }),
@@ -392,12 +400,12 @@ impl JanitorResult {
                 tags.iter().map(|(name, rev)| {
                     serde_json::json!([
                         name,
-                        rev.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+                        rev.as_ref().map(|r| r.to_string())
                     ])
                 }).collect::<Vec<_>>()
             }),
-            "revision": self.revision.as_ref().map(|r| String::from_utf8_lossy(r).to_string()),
-            "main_branch_revision": self.main_branch_revision.as_ref().map(|r| String::from_utf8_lossy(r).to_string())
+            "revision": self.revision.as_ref().map(|r| r.to_string()),
+            "main_branch_revision": self.main_branch_revision.as_ref().map(|r| r.to_string())
         })
     }
 }
@@ -443,7 +451,14 @@ pub struct WorkerResult {
     /// Optional value associated with the result.
     pub value: Option<i64>,
     /// Branch information.
-    pub branches: Option<Vec<(Option<String>, Option<String>, Option<RevisionId>, Option<RevisionId>)>>,
+    pub branches: Option<
+        Vec<(
+            Option<String>,
+            Option<String>,
+            Option<RevisionId>,
+            Option<RevisionId>,
+        )>,
+    >,
     /// Tag information.
     pub tags: Option<Vec<(String, Option<RevisionId>)>>,
     /// Remote repository information.
@@ -477,7 +492,6 @@ pub struct WorkerResult {
     /// Codebase name.
     pub codebase: Option<String>,
 }
-
 
 /// Information about an active run.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -560,7 +574,10 @@ impl ActiveRun {
             branches: None,
             failure_details: None,
             failure_stage: None,
-            resume: self.resume_from.as_ref().map(|id| ResultResume { run_id: id.clone() }),
+            resume: self
+                .resume_from
+                .as_ref()
+                .map(|id| ResultResume { run_id: id.clone() }),
             target: None,
             worker_name: Some(self.worker_name.clone()),
             vcs_type: self.vcs_info.vcs_type.clone(),
@@ -629,19 +646,25 @@ impl Backchannel {
         match self {
             Backchannel::None {} => {
                 // No ping available
-                Err(PingError::Retriable("No backchannel available for ping".to_string()))
+                Err(PingError::Retriable(
+                    "No backchannel available for ping".to_string(),
+                ))
             }
             Backchannel::Jenkins { my_url, .. } => {
                 // TODO: Implement Jenkins ping
                 let _url = my_url;
                 let _log_id = expected_log_id;
-                Err(PingError::Retriable("Jenkins ping not implemented yet".to_string()))
+                Err(PingError::Retriable(
+                    "Jenkins ping not implemented yet".to_string(),
+                ))
             }
             Backchannel::Polling { my_url } => {
                 // TODO: Implement polling ping
                 let _url = my_url;
                 let _log_id = expected_log_id;
-                Err(PingError::Retriable("Polling ping not implemented yet".to_string()))
+                Err(PingError::Retriable(
+                    "Polling ping not implemented yet".to_string(),
+                ))
             }
         }
     }
@@ -649,11 +672,17 @@ impl Backchannel {
     /// Kill the worker.
     pub async fn kill(&self) -> Result<(), PingError> {
         match self {
-            Backchannel::None {} => Err(PingError::Retriable("No backchannel available for kill".to_string())),
-            Backchannel::Jenkins { .. } => Err(PingError::Retriable("Jenkins kill not implemented yet".to_string())),
+            Backchannel::None {} => Err(PingError::Retriable(
+                "No backchannel available for kill".to_string(),
+            )),
+            Backchannel::Jenkins { .. } => Err(PingError::Retriable(
+                "Jenkins kill not implemented yet".to_string(),
+            )),
             Backchannel::Polling { my_url } => {
                 let _url = my_url;
-                Err(PingError::Retriable("Polling kill not implemented yet".to_string()))
+                Err(PingError::Retriable(
+                    "Polling kill not implemented yet".to_string(),
+                ))
             }
         }
     }
@@ -663,16 +692,24 @@ impl Backchannel {
         match self {
             Backchannel::None {} => Ok(vec![]),
             Backchannel::Jenkins { .. } => Ok(vec!["worker.log".to_string()]),
-            Backchannel::Polling { .. } => Err(PingError::Retriable("Polling list_log_files not implemented yet".to_string())),
+            Backchannel::Polling { .. } => Err(PingError::Retriable(
+                "Polling list_log_files not implemented yet".to_string(),
+            )),
         }
     }
 
     /// Get a specific log file.
     pub async fn get_log_file(&self, _name: &str) -> Result<Vec<u8>, PingError> {
         match self {
-            Backchannel::None {} => Err(PingError::Retriable("No backchannel available".to_string())),
-            Backchannel::Jenkins { .. } => Err(PingError::Retriable("Jenkins get_log_file not implemented yet".to_string())),
-            Backchannel::Polling { .. } => Err(PingError::Retriable("Polling get_log_file not implemented yet".to_string())),
+            Backchannel::None {} => {
+                Err(PingError::Retriable("No backchannel available".to_string()))
+            }
+            Backchannel::Jenkins { .. } => Err(PingError::Retriable(
+                "Jenkins get_log_file not implemented yet".to_string(),
+            )),
+            Backchannel::Polling { .. } => Err(PingError::Retriable(
+                "Polling get_log_file not implemented yet".to_string(),
+            )),
         }
     }
 
@@ -686,7 +723,7 @@ impl Backchannel {
             }),
             Backchannel::Polling { my_url } => serde_json::json!({
                 "my_url": my_url
-            })
+            }),
         }
     }
 }
@@ -743,7 +780,7 @@ impl BuilderResult {
                 "changes_filenames": changes_filenames,
                 "lintian": lintian_result,
                 "binary_packages": binary_packages
-            })
+            }),
         }
     }
 
@@ -751,9 +788,9 @@ impl BuilderResult {
     pub fn artifact_filenames(&self) -> Vec<String> {
         match self {
             BuilderResult::Generic => vec![],
-            BuilderResult::Debian { changes_filenames, .. } => {
-                changes_filenames.clone().unwrap_or_default()
-            }
+            BuilderResult::Debian {
+                changes_filenames, ..
+            } => changes_filenames.clone().unwrap_or_default(),
         }
     }
 }
@@ -782,7 +819,10 @@ impl std::fmt::Display for PingError {
 impl std::error::Error for PingError {}
 
 /// Application state for the runner.
-pub struct AppState {}
+pub struct AppState {
+    /// Database connection pool.
+    pub database: database::RunnerDatabase,
+}
 
 #[cfg(test)]
 mod tests {
@@ -833,10 +873,14 @@ mod tests {
         };
 
         assert_eq!(active_run.vcs_type(), Some("git"));
-        assert_eq!(active_run.main_branch_url(), Some("https://github.com/example/repo.git"));
+        assert_eq!(
+            active_run.main_branch_url(),
+            Some("https://github.com/example/repo.git")
+        );
         assert!(active_run.current_duration().as_secs() >= 0);
 
-        let result = active_run.create_result("success".to_string(), Some("Test completed".to_string()));
+        let result =
+            active_run.create_result("success".to_string(), Some("Test completed".to_string()));
         assert_eq!(result.code, "success");
         assert_eq!(result.description, Some("Test completed".to_string()));
         assert_eq!(result.codebase, "test-codebase");
@@ -856,7 +900,7 @@ mod tests {
             lintian_result: None,
             binary_packages: Some(vec!["test-bin".to_string()]),
         };
-        
+
         assert_eq!(debian.kind(), "debian");
         assert_eq!(debian.artifact_filenames(), vec!["test.changes"]);
     }

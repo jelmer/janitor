@@ -1,4 +1,5 @@
 use chrono::TimeDelta;
+use serde::{Deserialize, Serialize};
 use sqlx::postgres::types::PgInterval;
 use sqlx::{Error, FromRow, PgPool, Row};
 use std::collections::HashSet;
@@ -53,7 +54,7 @@ pub struct ETA {
     pub wait_time: PgInterval,
 }
 
-#[derive(FromRow)]
+#[derive(FromRow, Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VcsInfo {
     pub branch_url: Option<String>,
     pub subpath: Option<String>,

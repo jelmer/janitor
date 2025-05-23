@@ -1,5 +1,8 @@
 use clap::Parser;
+use janitor_runner::{database, AppState};
+use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Parser)]
 struct Args {
@@ -65,16 +68,49 @@ async fn main() -> Result<(), i32> {
 
     args.logging.init();
 
-    let state = Arc::new(AppState {});
+    // Load configuration
+    let config_path = args.config.unwrap_or_else(|| PathBuf::from("janitor.conf"));
+    let config = match janitor::config::read_file(&config_path) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!(
+                "Failed to read config file {}: {}",
+                config_path.display(),
+                e
+            );
+            return Err(1);
+        }
+    };
+
+    // Create database connection
+    let pool = match janitor::state::create_pool(&config).await {
+        Ok(pool) => pool,
+        Err(e) => {
+            eprintln!("Failed to create database pool: {}", e);
+            return Err(1);
+        }
+    };
+
+    let database = database::RunnerDatabase::new(pool);
+    let state = Arc::new(AppState { database });
 
     let app = janitor_runner::web::app(state.clone());
 
     // Run it
-    let addr = SocketAddr::new(args.listen_address, args.port);
+    let addr = format!("{}:{}", args.listen_address, args.port);
     log::info!("listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service()).await?;
+    let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| {
+        eprintln!("Failed to bind to {}: {}", addr, e);
+        1
+    })?;
+
+    axum::serve(listener, app.into_make_service())
+        .await
+        .map_err(|e| {
+            eprintln!("Server error: {}", e);
+            1
+        })?;
 
     Ok(())
 }
