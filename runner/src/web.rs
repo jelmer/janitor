@@ -45,6 +45,40 @@ struct UpdateRunRequest {
     publish_status: String,
 }
 
+/// Request for manual scheduling.
+#[derive(Debug, Deserialize)]
+struct ScheduleRequest {
+    /// Campaign name.
+    campaign: String,
+    /// Suite to schedule for.
+    suite: String,
+    /// Bucket for scheduling.
+    bucket: Option<String>,
+    /// Whether to refresh existing runs.
+    refresh: bool,
+    /// Estimated duration.
+    estimated_duration: Option<std::time::Duration>,
+    /// Offset for queue position.
+    offset: Option<i64>,
+    /// Limit for number of items.
+    limit: Option<i64>,
+}
+
+/// Request for schedule control.
+#[derive(Debug, Deserialize)]
+struct ScheduleControlRequest {
+    /// Action to perform: reschedule, deschedule, reset.
+    action: String,
+    /// Campaign name.
+    campaign: String,
+    /// Suite to operate on.
+    suite: Option<String>,
+    /// Minimum success chance for rescheduling.
+    min_success_chance: Option<f64>,
+    /// Result code to filter by for descheduling.
+    result_code: Option<String>,
+}
+
 /// Response for finishing a run.
 #[derive(Debug, Serialize)]
 struct FinishResponse {
@@ -74,12 +108,14 @@ fn create_campaign_config(queue_item: &QueueItem) -> CampaignConfig {
 }
 
 async fn queue_position(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    // For now, return a basic response indicating position functionality
-    // TODO: Implement actual queue position calculation
-    match state.database.get_queue_stats().await {
-        Ok(stats) => Json(json!({
+    match state.database.calculate_queue_position(None, None, None).await {
+        Ok(Some(total)) => Json(json!({
             "position": 0,
-            "total": stats.get("total").unwrap_or(&0)
+            "total": total
+        })),
+        Ok(None) => Json(json!({
+            "position": 0,
+            "total": 0
         })),
         Err(e) => {
             log::error!("Failed to get queue position: {}", e);
@@ -88,12 +124,126 @@ async fn queue_position(State(state): State<Arc<AppState>>) -> impl IntoResponse
     }
 }
 
-async fn schedule_control(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn schedule_control(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ScheduleControlRequest>,
+) -> impl IntoResponse {
+    let db = &state.database;
+    
+    let affected_count = match request.action.as_str() {
+        "reschedule" => {
+            match db.reschedule_failed_candidates(
+                &request.campaign,
+                request.suite.as_deref(),
+                request.min_success_chance.unwrap_or(0.1),
+            ).await {
+                Ok(count) => count,
+                Err(e) => {
+                    log::error!("Failed to reschedule candidates: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"}))
+                    );
+                }
+            }
+        }
+        "deschedule" => {
+            match db.deschedule_candidates(
+                &request.campaign,
+                request.suite.as_deref(),
+                request.result_code.as_deref(),
+            ).await {
+                Ok(count) => count,
+                Err(e) => {
+                    log::error!("Failed to deschedule candidates: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"}))
+                    );
+                }
+            }
+        }
+        "reset" => {
+            match db.reset_candidates(
+                &request.campaign,
+                request.suite.as_deref(),
+            ).await {
+                Ok(count) => count,
+                Err(e) => {
+                    log::error!("Failed to reset candidates: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"}))
+                    );
+                }
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": format!("Unknown action: {}", request.action)}))
+            );
+        }
+    };
+    
+    (StatusCode::OK, Json(json!({ "affected_count": affected_count })))
 }
 
-async fn schedule(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn schedule(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ScheduleRequest>,
+) -> impl IntoResponse {
+    let db = &state.database;
+    
+    let suite = if request.suite.is_empty() {
+        None
+    } else {
+        Some(request.suite.as_str())
+    };
+    
+    let queue_position = match request.bucket {
+        Some(bucket) => {
+            match db.reschedule_some(
+                &request.campaign,
+                suite,
+                &bucket,
+                request.refresh,
+                request.estimated_duration.as_ref(),
+                request.offset.unwrap_or(0),
+                request.limit.unwrap_or(100),
+            ).await {
+                Ok(pos) => pos,
+                Err(e) => {
+                    log::error!("Failed to reschedule some candidates: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"}))
+                    );
+                }
+            }
+        }
+        None => {
+            match db.reschedule_all(
+                &request.campaign,
+                suite,
+                request.refresh,
+                request.estimated_duration.as_ref(),
+                request.offset.unwrap_or(0),
+                request.limit.unwrap_or(100),
+            ).await {
+                Ok(pos) => pos,
+                Err(e) => {
+                    log::error!("Failed to reschedule all candidates: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({"error": "Database error"}))
+                    );
+                }
+            }
+        }
+    };
+    
+    (StatusCode::OK, Json(json!({ "queue_position": queue_position })))
 }
 
 async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -266,8 +416,43 @@ async fn get_active_run(
     }
 }
 
-async fn peek_active_run(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn peek_active_run(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Peek at the next queue assignment without actually assigning it
+    match state.database.next_queue_item_with_rate_limiting(
+        None, // No specific codebase filter
+        None, // No specific campaign filter  
+        &[], // TODO: Add avoided hosts from config
+    ).await {
+        Ok(Some(assignment)) => {
+            let campaign_config = create_campaign_config(&assignment.queue_item);
+            let build_config = match get_builder(&campaign_config, None, None) {
+                Ok(builder) => {
+                    let mut config = HashMap::new();
+                    config.insert("builder_kind".to_string(), builder.kind().to_string());
+                    config
+                }
+                Err(_) => HashMap::new(),
+            };
+
+            Json(json!({
+                "queue_item": assignment.queue_item.to_json(),
+                "vcs_info": assignment.vcs_info,
+                "build_config": build_config,
+                "estimated_duration": assignment.queue_item.estimated_duration.map(|d| d.as_secs()),
+            }))
+        }
+        Ok(None) => {
+            Json(json!({
+                "reason": "queue empty"
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to peek queue item: {}", e);
+            Json(json!({
+                "error": "Database error"
+            }))
+        }
+    }
 }
 
 async fn get_queue(State(state): State<Arc<AppState>>) -> impl IntoResponse {

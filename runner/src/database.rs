@@ -2,8 +2,11 @@
 
 use crate::{ActiveRun, BuilderResult, JanitorResult};
 use breezyshim::RevisionId;
+use chrono::{DateTime, Utc};
+use redis::AsyncCommands;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
+use std::time::Duration;
 
 // Re-export from main crate
 pub use janitor::state::{create_pool, Run};
@@ -12,12 +15,21 @@ use crate::{QueueItem, QueueAssignment};
 /// Database manager for runner operations.
 pub struct RunnerDatabase {
     pool: PgPool,
+    redis: Option<redis::Client>,
 }
 
 impl RunnerDatabase {
     /// Create a new database manager.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { pool, redis: None }
+    }
+
+    /// Create a new database manager with Redis support.
+    pub fn new_with_redis(pool: PgPool, redis: redis::Client) -> Self {
+        Self {
+            pool,
+            redis: Some(redis),
+        }
     }
 
     /// Get a reference to the database pool.
@@ -556,6 +568,508 @@ impl RunnerDatabase {
         } else {
             Ok(None)
         }
+    }
+
+    /// Add a host to the rate limit list.
+    pub async fn rate_limit_host(
+        &self,
+        host: &str,
+        retry_after: DateTime<Utc>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            conn.hset("rate-limit-hosts", host, retry_after.to_rfc3339())
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Get all rate limited hosts that are still active.
+    pub async fn get_rate_limited_hosts(
+        &self,
+    ) -> Result<HashMap<String, DateTime<Utc>>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut result = HashMap::new();
+        
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await?;
+            
+            let now = Utc::now();
+            for (host, time_str) in hosts {
+                if let Ok(retry_time) = DateTime::parse_from_rfc3339(&time_str) {
+                    let retry_time = retry_time.with_timezone(&Utc);
+                    if retry_time > now {
+                        result.insert(host, retry_time);
+                    }
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Get assigned queue items from Redis.
+    pub async fn get_assigned_queue_items(
+        &self,
+    ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut result = Vec::new();
+        
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let items: Vec<String> = conn.hkeys("assigned-queue-items").await?;
+            
+            for item in items {
+                if let Ok(id) = item.parse::<i64>() {
+                    result.push(id);
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Enhanced queue assignment with rate limiting support.
+    pub async fn next_queue_item_with_rate_limiting(
+        &self,
+        codebase: Option<&str>,
+        campaign: Option<&str>,
+        avoid_hosts: &[String],
+    ) -> Result<Option<QueueAssignment>, sqlx::Error> {
+        // Get rate limited hosts
+        let rate_limited_hosts = self.get_rate_limited_hosts().await.unwrap_or_default();
+        let mut exclude_hosts = avoid_hosts.to_vec();
+        exclude_hosts.extend(rate_limited_hosts.keys().cloned());
+
+        // Get assigned queue items
+        let assigned_items = self.get_assigned_queue_items().await.unwrap_or_default();
+
+        // Use advanced queue assignment logic with scoring
+        self.next_queue_item_with_scoring(codebase, campaign, &exclude_hosts, &assigned_items)
+            .await
+    }
+
+    /// Advanced queue assignment with priority scoring and success rates.
+    pub async fn next_queue_item_with_scoring(
+        &self,
+        codebase: Option<&str>,
+        campaign: Option<&str>,
+        exclude_hosts: &[String],
+        assigned_queue_items: &[i64],
+    ) -> Result<Option<QueueAssignment>, sqlx::Error> {
+        let mut query = r#"
+            SELECT
+                queue.command,
+                queue.context,
+                queue.id,
+                queue.estimated_duration,
+                queue.suite AS campaign,
+                queue.refresh,
+                queue.requester,
+                queue.change_set,
+                codebase.vcs_type,
+                codebase.branch_url,
+                codebase.subpath,
+                queue.codebase,
+                queue.success_chance,
+                queue.priority,
+                queue.bucket,
+                CASE 
+                    WHEN queue.success_chance IS NOT NULL THEN 
+                        (queue.success_chance * 100) + (100 - queue.priority)
+                    ELSE 
+                        (100 - queue.priority)
+                END as computed_score
+            FROM
+                queue
+            LEFT JOIN codebase ON codebase.name = queue.codebase
+        "#.to_string();
+
+        let mut conditions = Vec::new();
+        let mut bind_count = 0;
+
+        // Only select items that should be scheduled
+        conditions.push("queue.schedule_time IS NOT NULL".to_string());
+        conditions.push("queue.schedule_time <= NOW()".to_string());
+
+        // Exclude already assigned queue items
+        if !assigned_queue_items.is_empty() {
+            bind_count += 1;
+            conditions.push(format!("NOT (queue.id = ANY(${}::int[]))", bind_count));
+        }
+
+        // Filter by codebase if specified
+        if codebase.is_some() {
+            bind_count += 1;
+            conditions.push(format!("queue.codebase = ${}", bind_count));
+        }
+
+        // Filter by campaign if specified
+        if campaign.is_some() {
+            bind_count += 1;
+            conditions.push(format!("queue.suite = ${}", bind_count));
+        }
+
+        // Exclude hosts
+        if !exclude_hosts.is_empty() {
+            bind_count += 1;
+            conditions.push(format!(
+                "NOT (codebase.branch_url IS NOT NULL AND SUBSTRING(codebase.branch_url from '.*://(?:[^/@]*@)?([^/]*)') = ANY(${}::text[]))",
+                bind_count
+            ));
+        }
+
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        // Advanced ordering by computed score (higher is better), then bucket, then priority
+        query.push_str(r#"
+            ORDER BY
+                queue.bucket ASC,
+                computed_score DESC,
+                queue.priority ASC,
+                queue.id ASC
+            LIMIT 1
+        "#);
+
+        let mut sqlx_query = sqlx::query(&query);
+
+        // Bind parameters in order
+        let mut _bind_idx = 1;
+        
+        if !assigned_queue_items.is_empty() {
+            sqlx_query = sqlx_query.bind(assigned_queue_items);
+            _bind_idx += 1;
+        }
+        
+        if let Some(cb) = codebase {
+            sqlx_query = sqlx_query.bind(cb);
+            _bind_idx += 1;
+        }
+        
+        if let Some(camp) = campaign {
+            sqlx_query = sqlx_query.bind(camp);
+            _bind_idx += 1;
+        }
+        
+        if !exclude_hosts.is_empty() {
+            sqlx_query = sqlx_query.bind(exclude_hosts);
+        }
+
+        let row = sqlx_query.fetch_optional(&self.pool).await?;
+
+        if let Some(row) = row {
+            let queue_item = QueueItem {
+                id: row.get("id"),
+                context: row.get("context"),
+                command: row.get("command"),
+                estimated_duration: row
+                    .get::<Option<i64>, _>("estimated_duration")
+                    .map(|d| std::time::Duration::from_secs(d as u64)),
+                campaign: row.get("campaign"),
+                refresh: row.get("refresh"),
+                requester: row.get("requester"),
+                change_set: row.get("change_set"),
+                codebase: row.get("codebase"),
+            };
+
+            let mut vcs_info = janitor::queue::VcsInfo {
+                vcs_type: None,
+                branch_url: None,
+                subpath: None,
+            };
+
+            if let Some(branch_url) = row.get::<Option<String>, _>("branch_url") {
+                vcs_info.branch_url = Some(branch_url);
+            }
+            if let Some(subpath) = row.get::<Option<String>, _>("subpath") {
+                vcs_info.subpath = Some(subpath);
+            }
+            if let Some(vcs_type) = row.get::<Option<String>, _>("vcs_type") {
+                vcs_info.vcs_type = Some(vcs_type);
+            }
+
+            Ok(Some(QueueAssignment {
+                queue_item,
+                vcs_info,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Reschedule failed candidates with minimum success chance.
+    pub async fn reschedule_failed_candidates(
+        &self,
+        campaign: &str,
+        suite: Option<&str>,
+        min_success_chance: f64,
+    ) -> Result<i64, sqlx::Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "UPDATE queue SET schedule_time = NOW() WHERE campaign = "
+        );
+        query.push_bind(campaign);
+        query.push(" AND failure_stage IS NOT NULL AND success_chance >= ");
+        query.push_bind(min_success_chance);
+        
+        if let Some(suite) = suite {
+            query.push(" AND suite = ");
+            query.push_bind(suite);
+        }
+        
+        let result = query.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Deschedule candidates matching criteria.
+    pub async fn deschedule_candidates(
+        &self,
+        campaign: &str,
+        suite: Option<&str>,
+        result_code: Option<&str>,
+    ) -> Result<i64, sqlx::Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "UPDATE queue SET schedule_time = NULL WHERE campaign = "
+        );
+        query.push_bind(campaign);
+        
+        if let Some(suite) = suite {
+            query.push(" AND suite = ");
+            query.push_bind(suite);
+        }
+        
+        if let Some(result_code) = result_code {
+            query.push(" AND result_code = ");
+            query.push_bind(result_code);
+        }
+        
+        let result = query.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Reset candidates to unprocessed state.
+    pub async fn reset_candidates(
+        &self,
+        campaign: &str,
+        suite: Option<&str>,
+    ) -> Result<i64, sqlx::Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "UPDATE queue SET schedule_time = NOW(), failure_stage = NULL, result_code = NULL, finish_time = NULL WHERE campaign = "
+        );
+        query.push_bind(campaign);
+        
+        if let Some(suite) = suite {
+            query.push(" AND suite = ");
+            query.push_bind(suite);
+        }
+        
+        let result = query.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Reschedule some candidates in a bucket.
+    pub async fn reschedule_some(
+        &self,
+        campaign: &str,
+        suite: Option<&str>,
+        bucket: &str,
+        refresh: bool,
+        estimated_duration: Option<&Duration>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<i64, sqlx::Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "UPDATE queue SET schedule_time = NOW()"
+        );
+        
+        if let Some(duration) = estimated_duration {
+            query.push(", estimated_duration = ");
+            query.push_bind(duration.as_secs() as i64);
+        }
+        
+        if refresh {
+            query.push(", failure_stage = NULL, result_code = NULL, finish_time = NULL");
+        }
+        
+        query.push(" WHERE campaign = ");
+        query.push_bind(campaign);
+        query.push(" AND bucket = ");
+        query.push_bind(bucket);
+        
+        if let Some(suite) = suite {
+            query.push(" AND suite = ");
+            query.push_bind(suite);
+        }
+        
+        query.push(" OFFSET ");
+        query.push_bind(offset);
+        query.push(" LIMIT ");
+        query.push_bind(limit);
+        
+        let result = query.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Reschedule all candidates.
+    pub async fn reschedule_all(
+        &self,
+        campaign: &str,
+        suite: Option<&str>,
+        refresh: bool,
+        estimated_duration: Option<&Duration>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<i64, sqlx::Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "UPDATE queue SET schedule_time = NOW()"
+        );
+        
+        if let Some(duration) = estimated_duration {
+            query.push(", estimated_duration = ");
+            query.push_bind(duration.as_secs() as i64);
+        }
+        
+        if refresh {
+            query.push(", failure_stage = NULL, result_code = NULL, finish_time = NULL");
+        }
+        
+        query.push(" WHERE campaign = ");
+        query.push_bind(campaign);
+        
+        if let Some(suite) = suite {
+            query.push(" AND suite = ");
+            query.push_bind(suite);
+        }
+        
+        query.push(" OFFSET ");
+        query.push_bind(offset);
+        query.push(" LIMIT ");
+        query.push_bind(limit);
+        
+        let result = query.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Calculate queue position for a specific queue item or codebase/campaign combination.
+    pub async fn calculate_queue_position(
+        &self,
+        codebase: Option<&str>,
+        campaign: Option<&str>,
+        queue_id: Option<i64>,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        if let Some(id) = queue_id {
+            // Calculate position for a specific queue item
+            let position: Option<i64> = sqlx::query_scalar(
+                r#"
+                WITH ranked_queue AS (
+                    SELECT 
+                        queue.id,
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                queue.bucket ASC,
+                                CASE 
+                                    WHEN queue.success_chance IS NOT NULL THEN 
+                                        (queue.success_chance * 100) + (100 - queue.priority)
+                                    ELSE 
+                                        (100 - queue.priority)
+                                END DESC,
+                                queue.priority ASC,
+                                queue.id ASC
+                        ) as position
+                    FROM queue
+                    WHERE queue.schedule_time IS NOT NULL 
+                      AND queue.schedule_time <= NOW()
+                )
+                SELECT position FROM ranked_queue WHERE id = $1
+                "#
+            )
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+            
+            Ok(position)
+        } else if let (Some(cb), Some(camp)) = (codebase, campaign) {
+            // Calculate position for next item matching codebase/campaign
+            let position: Option<i64> = sqlx::query_scalar(
+                r#"
+                WITH ranked_queue AS (
+                    SELECT 
+                        queue.id,
+                        queue.codebase,
+                        queue.suite,
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                queue.bucket ASC,
+                                CASE 
+                                    WHEN queue.success_chance IS NOT NULL THEN 
+                                        (queue.success_chance * 100) + (100 - queue.priority)
+                                    ELSE 
+                                        (100 - queue.priority)
+                                END DESC,
+                                queue.priority ASC,
+                                queue.id ASC
+                        ) as position
+                    FROM queue
+                    WHERE queue.schedule_time IS NOT NULL 
+                      AND queue.schedule_time <= NOW()
+                )
+                SELECT MIN(position) FROM ranked_queue 
+                WHERE codebase = $1 AND suite = $2
+                "#
+            )
+            .bind(cb)
+            .bind(camp)
+            .fetch_optional(&self.pool)
+            .await?;
+            
+            Ok(position)
+        } else {
+            // Return total queue length if no specific filters
+            let count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM queue WHERE schedule_time IS NOT NULL AND schedule_time <= NOW()"
+            )
+            .fetch_one(&self.pool)
+            .await?;
+            
+            Ok(Some(count))
+        }
+    }
+
+    /// Get queue positions for multiple items.
+    pub async fn get_queue_positions(&self) -> Result<HashMap<i64, i64>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                queue.id,
+                ROW_NUMBER() OVER (
+                    ORDER BY 
+                        queue.bucket ASC,
+                        CASE 
+                            WHEN queue.success_chance IS NOT NULL THEN 
+                                (queue.success_chance * 100) + (100 - queue.priority)
+                            ELSE 
+                                (100 - queue.priority)
+                        END DESC,
+                        queue.priority ASC,
+                        queue.id ASC
+                ) as position
+            FROM queue
+            WHERE queue.schedule_time IS NOT NULL 
+              AND queue.schedule_time <= NOW()
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut positions = HashMap::new();
+        for row in rows {
+            let id: i64 = row.get("id");
+            let position: i64 = row.get("position");
+            positions.insert(id, position);
+        }
+
+        Ok(positions)
     }
 }
 
