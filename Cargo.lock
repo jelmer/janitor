@@ -3349,7 +3349,7 @@ dependencies = [
 name = "janitor-worker"
 version = "0.0.0"
 dependencies = [
- "askama 0.12.1",
+ "askama 0.14.0",
  "askama_axum",
  "axum 0.7.9",
  "backoff",
