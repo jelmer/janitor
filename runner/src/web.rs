@@ -1,10 +1,61 @@
-use crate::AppState;
+use crate::{ActiveRun, AppState, Backchannel, QueueItem};
 use axum::{
     extract::Path, extract::State, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router,
 };
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use uuid::Uuid;
+
+/// Request for work assignment.
+#[derive(Debug, Deserialize)]
+struct AssignRequest {
+    /// Worker name.
+    worker: Option<String>,
+    /// Worker link.
+    worker_link: Option<String>,
+    /// Backchannel configuration.
+    backchannel: Option<serde_json::Value>,
+    /// Specific codebase to work on.
+    codebase: Option<String>,
+    /// Specific campaign to work on.
+    campaign: Option<String>,
+}
+
+/// Response for work assignment.
+#[derive(Debug, Serialize)]
+struct AssignResponse {
+    /// Assigned queue item.
+    queue_item: QueueItem,
+    /// VCS information.
+    vcs_info: janitor::queue::VcsInfo,
+    /// Active run information.
+    active_run: serde_json::Value,
+}
+
+/// Request for updating run publish status.
+#[derive(Debug, Deserialize)]
+struct UpdateRunRequest {
+    /// New publish status.
+    publish_status: String,
+}
+
+/// Response for finishing a run.
+#[derive(Debug, Serialize)]
+struct FinishResponse {
+    /// Run ID.
+    id: String,
+    /// Uploaded filenames.
+    filenames: Vec<String>,
+    /// Log filenames.
+    logs: Vec<String>,
+    /// Artifact names.
+    artifacts: Vec<String>,
+    /// Result information.
+    result: serde_json::Value,
+}
 
 async fn queue_position(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     // For now, return a basic response indicating position functionality
@@ -138,8 +189,35 @@ async fn get_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> 
     }
 }
 
-async fn update_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
-    unimplemented!()
+async fn update_run(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(request): Json<UpdateRunRequest>,
+) -> impl IntoResponse {
+    // For now, implement basic publish status update
+    // This is primarily used by the publisher to update run status
+    
+    match state.database.update_run_publish_status(&id, &request.publish_status).await {
+        Ok(Some((run_id, codebase, suite))) => {
+            Json(json!({
+                "run_id": run_id,
+                "codebase": codebase,
+                "suite": suite,
+                "publish_status": request.publish_status
+            }))
+        }
+        Ok(None) => {
+            Json(json!({
+                "error": format!("no such run: {}", id)
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to update run {}: {}", id, e);
+            Json(json!({
+                "error": "Database error"
+            }))
+        }
+    }
 }
 
 async fn get_active_runs(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -201,20 +279,190 @@ async fn ready() -> impl IntoResponse {
     "OK"
 }
 
-async fn finish_active_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
-    unimplemented!()
+async fn finish_active_run(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    finish_run_internal(state, id, None).await
+}
+
+async fn finish_run_internal(
+    state: Arc<AppState>,
+    run_id: String,
+    worker_result: Option<crate::WorkerResult>,
+) -> impl IntoResponse {
+    // Get the active run
+    let active_run = match state.database.get_active_run(&run_id).await {
+        Ok(Some(run)) => run,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"reason": format!("no such run {}", run_id)}))
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to get active run {}: {}", run_id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"}))
+            );
+        }
+    };
+
+    // Create a result from the active run
+    // For now, create a simple success result
+    // TODO: Process worker_result when provided via multipart upload
+    let result_code = if let Some(ref wr) = worker_result {
+        wr.code.clone()
+    } else {
+        "success".to_string()
+    };
+
+    let description = if let Some(ref wr) = worker_result {
+        wr.description.clone()
+    } else {
+        Some("Run completed".to_string())
+    };
+
+    let janitor_result = active_run.create_result(result_code, description);
+
+    // Store the result in the database
+    if let Err(e) = state.database.update_run_result(
+        &run_id,
+        &janitor_result.code,
+        janitor_result.description.as_deref(),
+        janitor_result.failure_details.as_ref(),
+        janitor_result.transient,
+        janitor_result.finish_time,
+    ).await {
+        log::error!("Failed to store run result: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to store result"}))
+        );
+    }
+
+    // Remove from active runs
+    if let Err(e) = state.database.remove_active_run(&run_id).await {
+        log::error!("Failed to remove active run: {}", e);
+        // Continue anyway, result was stored
+    }
+
+    // For now, return basic response
+    // TODO: Handle file uploads, log processing, artifact management
+    let response = FinishResponse {
+        id: run_id,
+        filenames: vec![], // TODO: Process uploaded files
+        logs: vec![], // TODO: Process log files
+        artifacts: vec![], // TODO: Process artifacts
+        result: janitor_result.to_json(),
+    };
+
+    (StatusCode::CREATED, Json(serde_json::to_value(response).unwrap()))
 }
 
 async fn public_root() -> impl IntoResponse {
     ""
 }
 
-async fn public_assign(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn public_assign(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AssignRequest>,
+) -> impl IntoResponse {
+    assign_work_internal(state, request).await
 }
 
-async fn public_finish(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
-    unimplemented!()
+async fn assign_work_internal(
+    state: Arc<AppState>,
+    request: AssignRequest,
+) -> impl IntoResponse {
+    // For now, implement a simplified version without Redis or rate limiting
+    // TODO: Add Redis integration for tracking assigned items and rate limiting
+    
+    // Get next available queue item
+    let assignment = match state.database.next_queue_item(
+        request.codebase.as_deref(),
+        request.campaign.as_deref(),
+        &[], // TODO: Add excluded hosts from rate limiting
+        &[], // TODO: Get assigned queue items from Redis
+    ).await {
+        Ok(Some(assignment)) => assignment,
+        Ok(None) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"reason": "queue empty"}))
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to get next queue item: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"}))
+            );
+        }
+    };
+
+    // Create backchannel
+    let backchannel = if let Some(bc_json) = &request.backchannel {
+        match serde_json::from_value(bc_json.clone()) {
+            Ok(bc) => bc,
+            Err(e) => {
+                log::warn!("Invalid backchannel configuration: {}", e);
+                Backchannel::default()
+            }
+        }
+    } else {
+        Backchannel::default()
+    };
+
+    // Generate unique log ID
+    let log_id = Uuid::new_v4().to_string();
+    let start_time = Utc::now();
+
+    // Create active run
+    let active_run = ActiveRun {
+        worker_name: request.worker.unwrap_or_else(|| "unknown".to_string()),
+        worker_link: request.worker_link,
+        queue_id: assignment.queue_item.id,
+        log_id: log_id.clone(),
+        start_time,
+        estimated_duration: assignment.queue_item.estimated_duration,
+        campaign: assignment.queue_item.campaign.clone(),
+        change_set: assignment.queue_item.change_set.clone(),
+        command: assignment.queue_item.command.clone(),
+        backchannel,
+        vcs_info: assignment.vcs_info.clone(),
+        codebase: assignment.queue_item.codebase.clone(),
+        instigated_context: assignment.queue_item.context.clone(),
+        resume_from: None,
+    };
+
+    // Store active run in database
+    if let Err(e) = state.database.store_active_run(&active_run).await {
+        log::error!("Failed to store active run: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to store active run"}))
+        );
+    }
+
+    // Return assignment
+    let response = AssignResponse {
+        queue_item: assignment.queue_item,
+        vcs_info: assignment.vcs_info,
+        active_run: active_run.to_json(),
+    };
+
+    (StatusCode::OK, Json(serde_json::to_value(response).unwrap()))
+}
+
+async fn public_finish(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    // TODO: Add worker credentials check
+    // TODO: Handle multipart uploads for files and worker result
+    finish_run_internal(state, id, None).await
 }
 
 async fn public_get_active_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) {

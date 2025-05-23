@@ -818,6 +818,56 @@ impl std::fmt::Display for PingError {
 
 impl std::error::Error for PingError {}
 
+/// A queue item representing work to be done.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct QueueItem {
+    /// Unique identifier for the queue item.
+    pub id: i64,
+    /// Context information for the run.
+    pub context: Option<serde_json::Value>,
+    /// Command to execute.
+    pub command: String,
+    /// Estimated duration of the run.
+    #[serde(with = "serde_with::As::<Option<serde_with::DurationSeconds<f64>>>")]
+    pub estimated_duration: Option<Duration>,
+    /// Campaign name.
+    pub campaign: String,
+    /// Whether to refresh the run.
+    pub refresh: bool,
+    /// Who requested this run.
+    pub requester: Option<String>,
+    /// Optional change set identifier.
+    pub change_set: Option<String>,
+    /// Name of the codebase.
+    pub codebase: String,
+}
+
+impl QueueItem {
+    /// Convert to JSON representation.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "context": self.context,
+            "command": self.command,
+            "estimated_duration": self.estimated_duration.map(|d| d.as_secs_f64()),
+            "campaign": self.campaign,
+            "refresh": self.refresh,
+            "requester": self.requester,
+            "change_set": self.change_set,
+            "codebase": self.codebase
+        })
+    }
+}
+
+/// Queue assignment result.
+#[derive(Debug)]
+pub struct QueueAssignment {
+    /// The assigned queue item.
+    pub queue_item: QueueItem,
+    /// VCS information for the codebase.
+    pub vcs_info: VcsInfo,
+}
+
 /// Application state for the runner.
 pub struct AppState {
     /// Database connection pool.
