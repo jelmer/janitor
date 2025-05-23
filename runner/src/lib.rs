@@ -20,6 +20,12 @@ pub use builder::{
     GenericBuildConfig, GenericBuilder, get_builder,
 };
 
+// Re-export backchannel types
+pub use backchannel::{
+    Backchannel as BackchannelTrait, Error as BackchannelError, HealthStatus,
+    JenkinsBackchannel, PollingBackchannel,
+};
+
 /// Module for handling backchannel communication with the worker.
 pub mod backchannel;
 /// Module for build system implementations.

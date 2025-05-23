@@ -1,35 +1,47 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 /// Error types for backchannel operations.
 pub enum Error {
     /// Timeout while pinging job.
+    #[error("Timeout while pinging job")]
     PingTimeout,
 
     /// The requested resource was not found.
+    #[error("Job not found")]
     NotFound,
 
     /// Failure in the communication with the intermediary.
-    IntermediaryFailure(reqwest::Error),
+    #[error("Intermediary failure: {0}")]
+    IntermediaryFailure(#[from] reqwest::Error),
 
     /// Failure to ping the job that's not retriable.
+    #[error("Fatal failure: {0}")]
     FatalFailure(String),
+
+    /// Worker is unreachable.
+    #[error("Worker unreachable: {0}")]
+    WorkerUnreachable(String),
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Error::PingTimeout => write!(f, "Timeout while pinging job"),
-            Error::NotFound => write!(f, "Job not found"),
-            Error::IntermediaryFailure(e) => write!(f, "Intermediary failure: {}", e),
-            Error::FatalFailure(e) => {
-                write!(f, "Failure to ping the job that's not retriable: {}", e)
-            }
-        }
-    }
+/// Health status information from a worker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthStatus {
+    /// Whether the worker is alive and responding.
+    pub alive: bool,
+    /// Current run ID being processed.
+    pub current_run_id: Option<String>,
+    /// Worker status message.
+    pub status: Option<String>,
+    /// Last successful ping timestamp.
+    pub last_ping: Option<DateTime<Utc>>,
+    /// Worker's reported uptime.
+    pub uptime: Option<Duration>,
 }
 
-impl std::error::Error for Error {}
 
 #[async_trait]
 /// Interface for communication with the worker processes.
@@ -42,6 +54,30 @@ pub trait Backchannel {
     async fn get_log_file(&self, name: &str) -> Result<Vec<u8>, Error>;
     /// Check if the worker is still alive and processing the expected log.
     async fn ping(&self, log_id: &str) -> Result<(), Error>;
+
+    /// Get detailed health status from the worker.
+    async fn get_health_status(&self, expected_log_id: &str) -> Result<HealthStatus, Error> {
+        // Default implementation using ping
+        match self.ping(expected_log_id).await {
+            Ok(()) => Ok(HealthStatus {
+                alive: true,
+                current_run_id: Some(expected_log_id.to_string()),
+                status: Some("running".to_string()),
+                last_ping: Some(Utc::now()),
+                uptime: None,
+            }),
+            Err(e) => match e {
+                Error::FatalFailure(_) => Ok(HealthStatus {
+                    alive: false,
+                    current_run_id: None,
+                    status: Some("failed".to_string()),
+                    last_ping: Some(Utc::now()),
+                    uptime: None,
+                }),
+                _ => Err(e),
+            },
+        }
+    }
 
     /// Serialize the backchannel to JSON.
     fn to_json(&self) -> serde_json::Value;
@@ -87,7 +123,25 @@ impl Backchannel for JenkinsBackchannel {
     }
 
     async fn kill(&self) -> Result<(), Error> {
-        unimplemented!()
+        let session = reqwest::Client::new();
+        let url = self.my_url.join("stop").map_err(|_| Error::FatalFailure("Invalid Jenkins URL".to_string()))?;
+        
+        log::info!("Stopping Jenkins job at URL {}", url);
+        
+        let response = session
+            .post(url)
+            .send()
+            .await
+            .map_err(Error::IntermediaryFailure)?;
+            
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(Error::WorkerUnreachable(format!(
+                "Jenkins stop request failed with status: {}",
+                response.status()
+            )))
+        }
     }
 
     async fn list_log_files(&self) -> Result<Vec<String>, Error> {
@@ -128,6 +182,59 @@ impl Backchannel for JenkinsBackchannel {
         }
         Ok(())
     }
+
+    async fn get_health_status(&self, expected_log_id: &str) -> Result<HealthStatus, Error> {
+        let session = reqwest::Client::new();
+        let job = match self.get_job(session).await {
+            Ok(job) => job,
+            Err(e) if e.status() == Some(reqwest::StatusCode::NOT_FOUND) => {
+                return Ok(HealthStatus {
+                    alive: false,
+                    current_run_id: None,
+                    status: Some("not-found".to_string()),
+                    last_ping: Some(Utc::now()),
+                    uptime: None,
+                })
+            }
+            Err(_) => return Err(Error::PingTimeout),
+        };
+
+        let building = job
+            .get("lastBuild")
+            .and_then(|b| b.get("building"))
+            .and_then(|b| b.as_bool())
+            .unwrap_or(false);
+
+        let current_run_id = if building {
+            job.get("lastBuild")
+                .and_then(|b| b.get("number"))
+                .and_then(|n| n.as_u64())
+                .map(|n| n.to_string())
+        } else {
+            None
+        };
+
+        let status = if let Some(result) = job.get("result").and_then(|r| r.as_str()) {
+            match result {
+                "SUCCESS" => "completed".to_string(),
+                "FAILURE" => "failed".to_string(),
+                "ABORTED" => "aborted".to_string(),
+                _ => "unknown".to_string(),
+            }
+        } else if building {
+            "building".to_string()
+        } else {
+            "idle".to_string()
+        };
+
+        Ok(HealthStatus {
+            alive: true,
+            current_run_id,
+            status: Some(status),
+            last_ping: Some(Utc::now()),
+            uptime: None, // Jenkins doesn't easily provide uptime
+        })
+    }
 }
 
 /// Backchannel implementation that polls a worker via HTTP.
@@ -146,6 +253,13 @@ impl PollingBackchannel {
         log::info!("Fetching log ID from URL {}", url);
         let resp = session.get(url).send().await?;
         Ok(resp.text().await?)
+    }
+
+    async fn get_status_info(&self, session: reqwest::Client) -> Result<serde_json::Value, reqwest::Error> {
+        let url = self.my_url.join("status").unwrap();
+        log::info!("Fetching status from URL {}", url);
+        let resp = session.get(url).send().await?;
+        Ok(resp.json().await?)
     }
 }
 
@@ -225,5 +339,61 @@ impl Backchannel for PollingBackchannel {
         }
 
         Ok(())
+    }
+
+    async fn get_health_status(&self, expected_log_id: &str) -> Result<HealthStatus, Error> {
+        let session = reqwest::Client::new();
+
+        // Try to get detailed status first
+        if let Ok(status_info) = self.get_status_info(session.clone()).await {
+            let current_log_id = status_info
+                .get("current_run_id")
+                .and_then(|id| id.as_str())
+                .map(|s| s.to_string());
+
+            let alive = status_info
+                .get("alive")
+                .and_then(|a| a.as_bool())
+                .unwrap_or(false);
+
+            let status = status_info
+                .get("status")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+
+            let uptime = status_info
+                .get("uptime_seconds")
+                .and_then(|u| u.as_u64())
+                .map(Duration::from_secs);
+
+            return Ok(HealthStatus {
+                alive,
+                current_run_id: current_log_id,
+                status,
+                last_ping: Some(Utc::now()),
+                uptime,
+            });
+        }
+
+        // Fall back to basic ping-based health check
+        match self.get_log_id(session).await {
+            Ok(log_id) => {
+                let alive = log_id == expected_log_id;
+                Ok(HealthStatus {
+                    alive,
+                    current_run_id: Some(log_id),
+                    status: Some(if alive { "running" } else { "different-run" }.to_string()),
+                    last_ping: Some(Utc::now()),
+                    uptime: None,
+                })
+            }
+            Err(_) => Ok(HealthStatus {
+                alive: false,
+                current_run_id: None,
+                status: Some("unreachable".to_string()),
+                last_ping: Some(Utc::now()),
+                uptime: None,
+            }),
+        }
     }
 }
