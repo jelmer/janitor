@@ -398,10 +398,31 @@ impl Backchannel for PollingBackchannel {
                 .and_then(|u| u.as_u64())
                 .map(Duration::from_secs);
 
+            // Handle different status scenarios more robustly
+            let final_status = match status.as_deref() {
+                Some("processing") | Some("building") | Some("running") => {
+                    if current_log_id.as_ref() == Some(&expected_log_id.to_string()) {
+                        "running".to_string()
+                    } else {
+                        "different-run".to_string()
+                    }
+                }
+                Some(s) => s.to_string(),
+                None => {
+                    if alive && current_log_id.as_ref() == Some(&expected_log_id.to_string()) {
+                        "running".to_string()
+                    } else if alive {
+                        "different-run".to_string()
+                    } else {
+                        "unknown".to_string()
+                    }
+                }
+            };
+
             return Ok(HealthStatus {
                 alive,
                 current_run_id: current_log_id,
-                status: status.unwrap_or_else(|| "unknown".to_string()),
+                status: final_status,
                 last_ping: Some(Utc::now()),
                 uptime,
             });
