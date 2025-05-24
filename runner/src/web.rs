@@ -1,4 +1,4 @@
-use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog};
+use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog, metrics::MetricsCollector};
 use axum::{
     extract::Path, extract::State, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router,
@@ -606,6 +606,27 @@ async fn ready() -> impl IntoResponse {
     "OK"
 }
 
+async fn metrics() -> impl IntoResponse {
+    match MetricsCollector::collect_metrics() {
+        Ok(metrics) => {
+            // Return metrics in Prometheus format
+            (
+                StatusCode::OK,
+                [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+                metrics,
+            )
+        }
+        Err(e) => {
+            log::error!("Failed to collect metrics: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [("content-type", "text/plain")],
+                "Failed to collect metrics".to_string(),
+            )
+        }
+    }
+}
+
 async fn finish_active_run(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -901,5 +922,6 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/queue", get(get_queue))
         .route("/health", get(health))
         .route("/ready", get(ready))
+        .route("/metrics", get(metrics))
         .with_state(state)
 }

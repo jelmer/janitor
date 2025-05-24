@@ -3197,7 +3197,7 @@ dependencies = [
  "lazy-regex",
  "log",
  "percent-encoding",
- "prometheus",
+ "prometheus 0.14.0",
  "protobuf 3.7.2",
  "protobuf-codegen 3.7.2",
  "protoc-rust",
@@ -3297,7 +3297,7 @@ dependencies = [
  "log",
  "maplit",
  "minijinja",
- "prometheus",
+ "prometheus 0.14.0",
  "pyo3",
  "redis",
  "reqwest",
@@ -3323,8 +3323,10 @@ dependencies = [
  "debian-control",
  "debversion",
  "janitor",
+ "lazy_static",
  "log",
  "maplit",
+ "prometheus 0.13.4",
  "redis",
  "reqwest",
  "serde",
@@ -3370,7 +3372,7 @@ dependencies = [
  "nix 0.29.0",
  "ognibuild",
  "percent-encoding",
- "prometheus",
+ "prometheus 0.14.0",
  "pyo3",
  "pyo3-log",
  "reqwest",
@@ -4613,6 +4615,21 @@ checksum = "f04bb108f648884c23b98a0e940ebc2c93c0c3b89f04dbaf7eb8256ce617d1bc"
 dependencies = [
  "log",
  "parking_lot",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "protobuf 2.28.0",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

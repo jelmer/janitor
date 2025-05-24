@@ -628,6 +628,170 @@ impl RunnerDatabase {
         Ok(result)
     }
 
+    /// Assign a queue item to a worker in Redis.
+    pub async fn assign_queue_item(
+        &self,
+        queue_id: i64,
+        worker_name: &str,
+        log_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            // Store assignment with worker info and timestamp
+            let assignment_info = serde_json::json!({
+                "worker_name": worker_name,
+                "log_id": log_id,
+                "assigned_at": Utc::now().to_rfc3339(),
+            });
+            
+            conn.hset("assigned-queue-items", queue_id.to_string(), assignment_info.to_string()).await?;
+            
+            // Set expiration for assignments (cleanup stale assignments)
+            conn.expire("assigned-queue-items", 3600).await?; // 1 hour
+        }
+        
+        Ok(())
+    }
+
+    /// Remove queue item assignment from Redis.
+    pub async fn unassign_queue_item(
+        &self,
+        queue_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            conn.hdel("assigned-queue-items", queue_id.to_string()).await?;
+        }
+        
+        Ok(())
+    }
+
+    /// Coordinate worker health status via Redis.
+    pub async fn update_worker_health(
+        &self,
+        worker_name: &str,
+        status: &str,
+        current_run: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            let health_info = serde_json::json!({
+                "status": status,
+                "current_run": current_run,
+                "last_heartbeat": Utc::now().to_rfc3339(),
+            });
+            
+            conn.hset("worker-health", worker_name, health_info.to_string()).await?;
+            
+            // Set expiration for worker health (cleanup stale workers)
+            conn.expire("worker-health", 1800).await?; // 30 minutes
+        }
+        
+        Ok(())
+    }
+
+    /// Get worker health status from Redis.
+    pub async fn get_worker_health(
+        &self,
+        worker_name: &str,
+    ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            match conn.hget::<&str, &str, String>("worker-health", worker_name).await {
+                Ok(health_str) => {
+                    let health_info: serde_json::Value = serde_json::from_str(&health_str)?;
+                    return Ok(Some(health_info));
+                }
+                Err(_) => {
+                    // Worker health not found
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+
+    /// Get all worker health statuses.
+    pub async fn get_all_worker_health(
+        &self,
+    ) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut result = HashMap::new();
+        
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let workers: HashMap<String, String> = conn.hgetall("worker-health").await?;
+            
+            for (worker_name, health_str) in workers {
+                if let Ok(health_info) = serde_json::from_str::<serde_json::Value>(&health_str) {
+                    result.insert(worker_name, health_info);
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Store coordination lock in Redis.
+    pub async fn acquire_lock(
+        &self,
+        lock_name: &str,
+        holder: &str,
+        ttl_seconds: u64,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            // Use SET with NX (only if not exists) and EX (expiration)
+            let result: Option<String> = conn.set_options(
+                format!("lock:{}", lock_name),
+                holder,
+                redis::SetOptions::default()
+                    .conditional_set(redis::ExistenceCheck::NX)
+                    .get(true)
+                    .with_expiration(redis::SetExpiry::EX(ttl_seconds as usize))
+            ).await?;
+            
+            Ok(result.is_some())
+        } else {
+            // No Redis, assume lock acquired
+            Ok(true)
+        }
+    }
+
+    /// Release coordination lock in Redis.
+    pub async fn release_lock(
+        &self,
+        lock_name: &str,
+        holder: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            // Lua script to atomically check holder and delete
+            let script = r#"
+                if redis.call("GET", KEYS[1]) == ARGV[1] then
+                    return redis.call("DEL", KEYS[1])
+                else
+                    return 0
+                end
+            "#;
+            
+            let result: i32 = redis::Script::new(script)
+                .key(format!("lock:{}", lock_name))
+                .arg(holder)
+                .invoke_async(&mut conn)
+                .await?;
+            
+            Ok(result == 1)
+        } else {
+            // No Redis, assume lock released
+            Ok(true)
+        }
+    }
+
     /// Enhanced queue assignment with rate limiting support.
     pub async fn next_queue_item_with_rate_limiting(
         &self,

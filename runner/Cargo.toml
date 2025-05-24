@@ -31,6 +31,9 @@ axum.workspace = true
 serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 thiserror = "1.0"
+prometheus = "0.13"
+lazy_static = "1.4"
+num_cpus = "1.16"
 
 [dev-dependencies]
 maplit = { workspace = true }
