@@ -390,6 +390,21 @@ impl LogFileManager {
     pub fn storage_type(&self) -> &'static str {
         self.storage.storage_type()
     }
+
+    /// Store a log file from a file path.
+    pub async fn store_from_path(
+        &self,
+        file_path: &std::path::Path,
+        run_id: &str,
+        filename: &str,
+    ) -> Result<(), LogError> {
+        // Read the file content
+        let content = tokio::fs::read(file_path).await
+            .map_err(|e| LogError::StorageError(format!("Failed to read file {}: {}", file_path.display(), e)))?;
+
+        // Store the log
+        self.store_log(run_id, filename, &content).await
+    }
 }
 
 /// Check if a filename is a valid log filename.

@@ -62,6 +62,8 @@ pub mod application;
 pub mod config;
 /// Module for production-ready logging and tracing integration.
 pub mod tracing;
+/// Module for handling file uploads and multipart forms.
+pub mod upload;
 
 /// Generate environment variables for committing changes.
 ///
@@ -964,6 +966,8 @@ pub struct AppState {
     pub metrics: Arc<metrics::MetricsCollector>,
     /// Configuration.
     pub config: Arc<janitor::config::Config>,
+    /// Upload processor for multipart forms.
+    pub upload_processor: Arc<upload::UploadProcessor>,
 }
 
 #[cfg(test)]
