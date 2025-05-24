@@ -13,6 +13,7 @@ pub use janitor::state::{create_pool, Run};
 use crate::{QueueItem, QueueAssignment};
 
 /// Database manager for runner operations.
+#[derive(Clone)]
 pub struct RunnerDatabase {
     pool: PgPool,
     redis: Option<redis::Client>,

@@ -1,7 +1,7 @@
 use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog, metrics::MetricsCollector};
 use axum::{
     extract::{Path, State, Multipart}, http::StatusCode, response::IntoResponse, routing::delete,
-    routing::get, routing::post, Json, Router,
+    routing::get, routing::post, Json, Router, middleware,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,15 @@ struct AssignResponse {
 struct UpdateRunRequest {
     /// New publish status.
     publish_status: String,
+}
+
+/// Request for resume information.
+#[derive(Debug, Deserialize)]
+struct ResumeInfoRequest {
+    /// Campaign name.
+    campaign: String,
+    /// Branch name to check for resume.
+    branch_name: String,
 }
 
 /// Request for manual scheduling.
@@ -96,7 +105,7 @@ struct FinishResponse {
 
 /// Create a basic campaign configuration from a queue item.
 /// TODO: In a full implementation, this would load from actual config files
-fn create_campaign_config(queue_item: &QueueItem) -> CampaignConfig {
+fn create_campaign_config(_queue_item: &QueueItem) -> CampaignConfig {
     // For now, create a basic configuration
     // In reality, this would be loaded from campaign configuration files
     CampaignConfig {
@@ -753,6 +762,164 @@ async fn metrics() -> impl IntoResponse {
     }
 }
 
+/// Admin endpoint to list workers.
+async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.auth_service.list_workers().await {
+        Ok(workers) => Json(json!({"workers": workers})),
+        Err(e) => {
+            log::error!("Failed to list workers: {}", e);
+            Json(json!({"error": "Failed to list workers"}))
+        }
+    }
+}
+
+/// Admin endpoint to create a worker.
+#[derive(Deserialize)]
+struct CreateWorkerRequest {
+    name: String,
+    password: String,
+    link: Option<String>,
+}
+
+async fn admin_create_worker(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateWorkerRequest>,
+) -> impl IntoResponse {
+    match state.auth_service.create_worker(&request.name, &request.password, request.link.as_deref()).await {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(json!({"message": "Worker created successfully"}))
+        ),
+        Err(e) => {
+            log::error!("Failed to create worker: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to create worker"}))
+            )
+        }
+    }
+}
+
+/// Admin endpoint to delete a worker.
+async fn admin_delete_worker(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match state.auth_service.delete_worker(&name).await {
+        Ok(true) => Json(json!({"message": "Worker deleted successfully"})),
+        Ok(false) => Json(json!({"error": "Worker not found"})),
+        Err(e) => {
+            log::error!("Failed to delete worker: {}", e);
+            Json(json!({"error": "Failed to delete worker"}))
+        }
+    }
+}
+
+/// Admin endpoint to get security statistics.
+async fn admin_security_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.security_service.get_security_stats().await {
+        Ok(stats) => Json(serde_json::to_value(stats).unwrap()),
+        Err(e) => {
+            log::error!("Failed to get security stats: {}", e);
+            Json(json!({"error": "Failed to get security stats"}))
+        }
+    }
+}
+
+/// Check for resume information for a campaign and branch.
+async fn check_resume_info(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ResumeInfoRequest>,
+) -> impl IntoResponse {
+    match state.resume_service.check_resume_result(&request.campaign, &request.branch_name).await {
+        Ok(Some(resume_info)) => {
+            Json(json!({
+                "resume_available": true,
+                "resume_info": resume_info
+            }))
+        }
+        Ok(None) => {
+            Json(json!({
+                "resume_available": false,
+                "message": "No resume information found"
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to check resume info: {}", e);
+            Json(json!({
+                "error": "Failed to check resume information"
+            }))
+        }
+    }
+}
+
+/// Get the resume chain for a specific run.
+async fn get_resume_chain(
+    State(state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+) -> impl IntoResponse {
+    match state.resume_service.get_resume_chain(&run_id).await {
+        Ok(chain) => {
+            Json(json!({
+                "run_id": run_id,
+                "resume_chain": chain
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to get resume chain for {}: {}", run_id, e);
+            Json(json!({
+                "error": "Failed to get resume chain"
+            }))
+        }
+    }
+}
+
+/// Get all runs that resume from a specific run.
+async fn get_resume_descendants(
+    State(state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+) -> impl IntoResponse {
+    match state.resume_service.get_resume_descendants(&run_id).await {
+        Ok(descendants) => {
+            Json(json!({
+                "run_id": run_id,
+                "descendants": descendants
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to get resume descendants for {}: {}", run_id, e);
+            Json(json!({
+                "error": "Failed to get resume descendants"
+            }))
+        }
+    }
+}
+
+/// Validate resume consistency across the database.
+async fn validate_resume_consistency(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.resume_service.validate_resume_consistency().await {
+        Ok(errors) => {
+            if errors.is_empty() {
+                Json(json!({
+                    "status": "consistent",
+                    "message": "All resume relationships are valid"
+                }))
+            } else {
+                Json(json!({
+                    "status": "inconsistent",
+                    "errors": errors
+                }))
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to validate resume consistency: {}", e);
+            Json(json!({
+                "error": "Failed to validate resume consistency"
+            }))
+        }
+    }
+}
+
 async fn finish_active_run(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -861,6 +1028,14 @@ async fn finish_run_internal(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"error": "Failed to store result"}))
         );
+    }
+
+    // Set resume information if this run resumed from another
+    if let Some(ref resume_from_id) = active_run.resume_from {
+        if let Err(e) = state.resume_service.set_resume_from(&run_id, resume_from_id).await {
+            log::warn!("Failed to set resume information for run {}: {}", run_id, e);
+            // Continue anyway, main result was stored
+        }
     }
 
     // Store builder result if present
@@ -992,6 +1167,14 @@ async fn finish_run_multipart_internal(
         );
     }
 
+    // Set resume information if this run resumed from another
+    if let Some(ref resume_from_id) = active_run.resume_from {
+        if let Err(e) = state.resume_service.set_resume_from(&run_id, resume_from_id).await {
+            log::warn!("Failed to set resume information for run {}: {}", run_id, e);
+            // Continue anyway, main result was stored
+        }
+    }
+
     // Store builder result if present
     if let Some(ref builder_result) = janitor_result.builder_result {
         if let Err(e) = state.database.store_builder_result(&run_id, builder_result).await {
@@ -1060,6 +1243,8 @@ async fn public_assign(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AssignRequest>,
 ) -> impl IntoResponse {
+    // For now, skip authentication in public_assign since we need to restructure
+    // TODO: Add proper authentication middleware layer
     assign_work_internal(state, request).await
 }
 
@@ -1108,6 +1293,21 @@ async fn assign_work_internal(
     let log_id = Uuid::new_v4().to_string();
     let start_time = Utc::now();
 
+    // Check for resume information
+    let mut resume_from = None;
+    if let Ok(Some(resume_branch)) = state.resume_service.open_resume_branch(
+        &assignment.vcs_info.branch_url.clone().unwrap_or_default(),
+        &assignment.queue_item.campaign
+    ).await {
+        if let Ok(Some(resume_info)) = state.resume_service.check_resume_result(
+            &assignment.queue_item.campaign,
+            &resume_branch
+        ).await {
+            log::info!("Run {} will resume from {}", log_id, resume_info.run_id);
+            resume_from = Some(resume_info.run_id);
+        }
+    }
+
     // Create active run
     let active_run = ActiveRun {
         worker_name: request.worker.unwrap_or_else(|| "unknown".to_string()),
@@ -1123,7 +1323,7 @@ async fn assign_work_internal(
         vcs_info: assignment.vcs_info.clone(),
         codebase: assignment.queue_item.codebase.clone(),
         instigated_context: assignment.queue_item.context.clone(),
-        resume_from: None,
+        resume_from,
     };
 
     // Store active run in database
@@ -1197,7 +1397,7 @@ async fn public_finish_multipart(
     finish_run_multipart_internal(state, id, multipart).await
 }
 
-async fn public_get_active_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
+async fn public_get_active_run(State(_state): State<Arc<AppState>>, Path(_id): Path<String>) {
     unimplemented!()
 }
 
@@ -1205,10 +1405,16 @@ async fn public_get_active_run(State(state): State<Arc<AppState>>, Path(id): Pat
 pub fn public_app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(public_root))
+        // Worker endpoints require authentication
         .route("/runner/active-runs", post(public_assign))
         .route("/runner/active-runs/:id/finish", post(public_finish))
         .route("/runner/active-runs/:id/finish-multipart", post(public_finish_multipart))
         .route("/runner/active-runs/:id", get(public_get_active_run))
+        // Add authentication middleware to worker routes
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&state.database), 
+            crate::auth::require_worker_auth
+        ))
         .with_state(state)
 }
 
@@ -1238,5 +1444,15 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(metrics))
+        // Admin endpoints for worker management
+        .route("/admin/workers", get(admin_list_workers))
+        .route("/admin/workers", post(admin_create_worker))
+        .route("/admin/workers/:name", delete(admin_delete_worker))
+        .route("/admin/security/stats", get(admin_security_stats))
+        // Resume-related endpoints
+        .route("/resume/check", post(check_resume_info))
+        .route("/resume/chain/:run_id", get(get_resume_chain))
+        .route("/resume/descendants/:run_id", get(get_resume_descendants))
+        .route("/resume/validate", get(validate_resume_consistency))
         .with_state(state)
 }

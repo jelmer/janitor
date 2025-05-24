@@ -64,6 +64,10 @@ pub mod config;
 pub mod tracing;
 /// Module for handling file uploads and multipart forms.
 pub mod upload;
+/// Module for worker authentication and security.
+pub mod auth;
+/// Module for database resume logic for interrupted runs.
+pub mod resume;
 
 /// Generate environment variables for committing changes.
 ///
@@ -968,6 +972,12 @@ pub struct AppState {
     pub config: Arc<janitor::config::Config>,
     /// Upload processor for multipart forms.
     pub upload_processor: Arc<upload::UploadProcessor>,
+    /// Worker authentication service.
+    pub auth_service: Arc<auth::WorkerAuthService>,
+    /// Security service for rate limiting and access control.
+    pub security_service: Arc<auth::SecurityService>,
+    /// Resume service for handling interrupted runs.
+    pub resume_service: Arc<resume::ResumeService>,
 }
 
 #[cfg(test)]

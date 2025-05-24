@@ -195,6 +195,19 @@ impl ApplicationBuilder {
             500 * 1024 * 1024, // 500MB max total size
         ));
 
+        // Initialize authentication and security services
+        log::info!("Initializing authentication and security services...");
+        let auth_service = Arc::new(crate::auth::WorkerAuthService::new(Arc::clone(&database)));
+        
+        let security_config = crate::auth::SecurityConfig::default(); // TODO: Make configurable
+        let security_service = Arc::new(crate::auth::SecurityService::new(security_config, Arc::clone(&database)));
+
+        // Initialize resume service
+        log::info!("Initializing resume service...");
+        let resume_service = Arc::new(crate::resume::ResumeService::new(
+            (*database).clone()
+        ));
+
         // Create application state
         let app_state = Arc::new(AppState {
             database,
@@ -206,6 +219,9 @@ impl ApplicationBuilder {
             metrics,
             config: Arc::new(janitor_config),
             upload_processor,
+            auth_service,
+            security_service,
+            resume_service,
         });
 
         log::info!("Janitor Runner application initialized successfully");
