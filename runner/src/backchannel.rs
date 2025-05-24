@@ -34,8 +34,8 @@ pub struct HealthStatus {
     pub alive: bool,
     /// Current run ID being processed.
     pub current_run_id: Option<String>,
-    /// Worker status message.
-    pub status: Option<String>,
+    /// Worker status string (e.g., "healthy", "unhealthy", "failed").
+    pub status: String,
     /// Last successful ping timestamp.
     pub last_ping: Option<DateTime<Utc>>,
     /// Worker's reported uptime.
@@ -48,6 +48,12 @@ pub struct HealthStatus {
 pub trait Backchannel {
     /// Kill the worker process.
     async fn kill(&self) -> Result<(), Error>;
+    
+    /// Signal the worker to terminate gracefully.
+    async fn terminate(&self, _log_id: &str) -> Result<(), Error> {
+        // Default implementation falls back to kill
+        self.kill().await
+    }
     /// List available log files from the worker.
     async fn list_log_files(&self) -> Result<Vec<String>, Error>;
     /// Get the contents of a specific log file from the worker.
@@ -62,7 +68,7 @@ pub trait Backchannel {
             Ok(()) => Ok(HealthStatus {
                 alive: true,
                 current_run_id: Some(expected_log_id.to_string()),
-                status: Some("running".to_string()),
+                status: "healthy".to_string(),
                 last_ping: Some(Utc::now()),
                 uptime: None,
             }),
@@ -70,7 +76,7 @@ pub trait Backchannel {
                 Error::FatalFailure(_) => Ok(HealthStatus {
                     alive: false,
                     current_run_id: None,
-                    status: Some("failed".to_string()),
+                    status: "failed".to_string(),
                     last_ping: Some(Utc::now()),
                     uptime: None,
                 }),
@@ -144,6 +150,11 @@ impl Backchannel for JenkinsBackchannel {
         }
     }
 
+    async fn terminate(&self, _log_id: &str) -> Result<(), Error> {
+        // For Jenkins, terminate is the same as kill (stop)
+        self.kill().await
+    }
+
     async fn list_log_files(&self) -> Result<Vec<String>, Error> {
         Ok(vec!["worker.log".to_string()])
     }
@@ -191,7 +202,7 @@ impl Backchannel for JenkinsBackchannel {
                 return Ok(HealthStatus {
                     alive: false,
                     current_run_id: None,
-                    status: Some("not-found".to_string()),
+                    status: "not-found".to_string(),
                     last_ping: Some(Utc::now()),
                     uptime: None,
                 })
@@ -230,7 +241,7 @@ impl Backchannel for JenkinsBackchannel {
         Ok(HealthStatus {
             alive: true,
             current_run_id,
-            status: Some(status),
+            status,
             last_ping: Some(Utc::now()),
             uptime: None, // Jenkins doesn't easily provide uptime
         })
@@ -289,6 +300,27 @@ impl Backchannel for PollingBackchannel {
             .await
             .map_err(Error::IntermediaryFailure)?;
         Ok(())
+    }
+
+    async fn terminate(&self, log_id: &str) -> Result<(), Error> {
+        let session = reqwest::Client::new();
+        let url = self.my_url.join("terminate").unwrap();
+
+        log::info!("Terminating worker at URL {} for log {}", url, log_id);
+
+        let response = session
+            .post(url)
+            .json(&serde_json::json!({ "log_id": log_id }))
+            .send()
+            .await
+            .map_err(Error::IntermediaryFailure)?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            // Fall back to kill if terminate is not supported
+            self.kill().await
+        }
     }
 
     async fn list_log_files(&self) -> Result<Vec<String>, Error> {
@@ -369,7 +401,7 @@ impl Backchannel for PollingBackchannel {
             return Ok(HealthStatus {
                 alive,
                 current_run_id: current_log_id,
-                status,
+                status: status.unwrap_or_else(|| "unknown".to_string()),
                 last_ping: Some(Utc::now()),
                 uptime,
             });
@@ -382,7 +414,7 @@ impl Backchannel for PollingBackchannel {
                 Ok(HealthStatus {
                     alive,
                     current_run_id: Some(log_id),
-                    status: Some(if alive { "running" } else { "different-run" }.to_string()),
+                    status: if alive { "running" } else { "different-run" }.to_string(),
                     last_ping: Some(Utc::now()),
                     uptime: None,
                 })
@@ -390,7 +422,7 @@ impl Backchannel for PollingBackchannel {
             Err(_) => Ok(HealthStatus {
                 alive: false,
                 current_run_id: None,
-                status: Some("unreachable".to_string()),
+                status: "unreachable".to_string(),
                 last_ping: Some(Utc::now()),
                 uptime: None,
             }),

@@ -91,7 +91,7 @@ async fn main() -> Result<(), i32> {
         }
     };
 
-    let database = database::RunnerDatabase::new(pool);
+    let database = Arc::new(database::RunnerDatabase::new(pool));
     let state = Arc::new(AppState { database });
 
     let app = janitor_runner::web::app(state.clone());

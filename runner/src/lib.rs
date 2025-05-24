@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 // Re-export VcsInfo from the main crate to avoid duplication
@@ -26,6 +27,11 @@ pub use backchannel::{
     JenkinsBackchannel, PollingBackchannel,
 };
 
+// Re-export watchdog types
+pub use watchdog::{
+    TerminationReason, Watchdog, WatchdogConfig, WatchdogStats,
+};
+
 /// Module for handling backchannel communication with the worker.
 pub mod backchannel;
 /// Module for build system implementations.
@@ -34,6 +40,8 @@ pub mod builder;
 pub mod config_generator;
 /// Module for database operations.
 pub mod database;
+/// Module for monitoring active runs.
+pub mod watchdog;
 /// Module for the web interface.
 pub mod web;
 
@@ -683,6 +691,44 @@ impl Backchannel {
         }
     }
 
+    /// Get health status from the worker.
+    pub async fn get_health_status(&self, expected_log_id: &str) -> Result<crate::HealthStatus, crate::BackchannelError> {
+        match self {
+            Backchannel::None {} => Err(crate::BackchannelError::WorkerUnreachable(
+                "No backchannel available for health check".to_string(),
+            )),
+            Backchannel::Jenkins { my_url, jenkins } => {
+                let url = url::Url::parse(my_url).map_err(|_| crate::BackchannelError::FatalFailure("Invalid URL".to_string()))?;
+                let jenkins_bc = crate::JenkinsBackchannel::new(url, jenkins.clone().unwrap_or_default());
+                jenkins_bc.get_health_status(expected_log_id).await
+            }
+            Backchannel::Polling { my_url } => {
+                let url = url::Url::parse(my_url).map_err(|_| crate::BackchannelError::FatalFailure("Invalid URL".to_string()))?;
+                let polling_bc = crate::PollingBackchannel::new(url);
+                polling_bc.get_health_status(expected_log_id).await
+            }
+        }
+    }
+
+    /// Terminate the worker gracefully.
+    pub async fn terminate(&self, log_id: &str) -> Result<(), crate::BackchannelError> {
+        match self {
+            Backchannel::None {} => Err(crate::BackchannelError::WorkerUnreachable(
+                "No backchannel available for termination".to_string(),
+            )),
+            Backchannel::Jenkins { my_url, jenkins } => {
+                let url = url::Url::parse(my_url).map_err(|_| crate::BackchannelError::FatalFailure("Invalid URL".to_string()))?;
+                let jenkins_bc = crate::JenkinsBackchannel::new(url, jenkins.clone().unwrap_or_default());
+                jenkins_bc.terminate(log_id).await
+            }
+            Backchannel::Polling { my_url } => {
+                let url = url::Url::parse(my_url).map_err(|_| crate::BackchannelError::FatalFailure("Invalid URL".to_string()))?;
+                let polling_bc = crate::PollingBackchannel::new(url);
+                polling_bc.terminate(log_id).await
+            }
+        }
+    }
+
     /// Kill the worker.
     pub async fn kill(&self) -> Result<(), PingError> {
         match self {
@@ -885,7 +931,7 @@ pub struct QueueAssignment {
 /// Application state for the runner.
 pub struct AppState {
     /// Database connection pool.
-    pub database: database::RunnerDatabase,
+    pub database: Arc<database::RunnerDatabase>,
 }
 
 #[cfg(test)]
