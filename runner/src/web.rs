@@ -357,16 +357,117 @@ async fn kill(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> imp
     }
 }
 
-async fn get_codebases(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn get_codebases(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.database.get_codebases().await {
+        Ok(codebases) => {
+            log::info!("Retrieved {} codebases", codebases.len());
+            Json(codebases)
+        }
+        Err(e) => {
+            log::error!("Failed to get codebases: {}", e);
+            Json(Vec::<serde_json::Value>::new())
+        }
+    }
 }
 
-async fn update_codebases(State(state): State<Arc<AppState>>) {
-    unimplemented!()
+async fn update_codebases(
+    State(state): State<Arc<AppState>>,
+    Json(codebases): Json<Vec<serde_json::Value>>,
+) -> impl IntoResponse {
+    match state.database.upload_codebases(&codebases).await {
+        Ok(()) => {
+            log::info!("Successfully uploaded {} codebases", codebases.len());
+            Json(serde_json::json!({"status": "success", "uploaded": codebases.len()}))
+        }
+        Err(e) => {
+            log::error!("Failed to upload codebases: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            ).into_response()
+        }
+    }
 }
 
-async fn delete_candidate(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
-    unimplemented!()
+async fn delete_candidate(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    let candidate_id = match id.parse::<i64>() {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Invalid candidate ID"}))
+            ).into_response();
+        }
+    };
+
+    match state.database.delete_candidate(candidate_id).await {
+        Ok(true) => {
+            log::info!("Successfully deleted candidate {}", candidate_id);
+            Json(serde_json::json!({"status": "success"}))
+        }
+        Ok(false) => {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Candidate not found"}))
+            ).into_response()
+        }
+        Err(e) => {
+            log::error!("Failed to delete candidate {}: {}", candidate_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            ).into_response()
+        }
+    }
+}
+
+async fn get_candidates(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.database.get_candidates().await {
+        Ok(candidates) => {
+            log::info!("Retrieved {} candidates", candidates.len());
+            Json(candidates)
+        }
+        Err(e) => {
+            log::error!("Failed to get candidates: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            ).into_response()
+        }
+    }
+}
+
+async fn upload_candidates(
+    State(state): State<Arc<AppState>>,
+    Json(candidates): Json<Vec<serde_json::Value>>,
+) -> impl IntoResponse {
+    match state.database.upload_candidates(&candidates).await {
+        Ok(errors) => {
+            if errors.is_empty() {
+                log::info!("Successfully uploaded {} candidates", candidates.len());
+                Json(serde_json::json!({
+                    "status": "success", 
+                    "uploaded": candidates.len()
+                }))
+            } else {
+                log::warn!("Failed to upload some candidates: {:?}", errors);
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "status": "partial_failure",
+                        "errors": errors
+                    }))
+                ).into_response()
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to upload candidates: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            ).into_response()
+        }
+    }
 }
 
 async fn get_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
@@ -788,6 +889,8 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/log/:id/:filename", get(log))
         .route("/codebases", get(get_codebases))
         .route("/codebases", post(update_codebases))
+        .route("/candidates", get(get_candidates))
+        .route("/candidates", post(upload_candidates))
         .route("/candidates/:id", delete(delete_candidate))
         .route("/runs/:id", get(get_run))
         .route("/runs/:id", post(update_run))
