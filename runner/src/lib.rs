@@ -56,6 +56,12 @@ pub mod vcs;
 pub mod performance;
 /// Module for comprehensive error tracking and logging.
 pub mod error_tracking;
+/// Module for application initialization and orchestration.
+pub mod application;
+/// Module for comprehensive configuration management.
+pub mod config;
+/// Module for production-ready logging and tracing integration.
+pub mod tracing;
 
 /// Generate environment variables for committing changes.
 ///
@@ -944,6 +950,20 @@ pub struct QueueAssignment {
 pub struct AppState {
     /// Database connection pool.
     pub database: Arc<database::RunnerDatabase>,
+    /// VCS management system.
+    pub vcs_manager: Arc<vcs::RunnerVcsManager>,
+    /// Log file management system.
+    pub log_manager: Arc<logs::LogFileManager>,
+    /// Artifact storage management system.
+    pub artifact_manager: Arc<artifacts::ArtifactManager>,
+    /// Performance monitoring system.
+    pub performance_monitor: Arc<performance::PerformanceMonitor>,
+    /// Error tracking system.
+    pub error_tracker: Arc<error_tracking::ErrorTracker>,
+    /// Metrics collector.
+    pub metrics: Arc<metrics::MetricsCollector>,
+    /// Configuration.
+    pub config: Arc<janitor::config::Config>,
 }
 
 #[cfg(test)]

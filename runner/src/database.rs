@@ -32,6 +32,26 @@ impl RunnerDatabase {
         }
     }
 
+    /// Create a new database instance with optional Redis connection from URL.
+    pub async fn new_with_redis_url(
+        pool: PgPool,
+        redis_url: Option<String>,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        let redis = if let Some(url) = redis_url {
+            Some(redis::Client::open(url)?)
+        } else {
+            None
+        };
+
+        Ok(Self { pool, redis })
+    }
+
+    /// Perform a health check on the database connection.
+    pub async fn health_check(&self) -> Result<(), sqlx::Error> {
+        sqlx::query("SELECT 1").execute(&self.pool).await?;
+        Ok(())
+    }
+
     /// Get a reference to the database pool.
     pub fn pool(&self) -> &PgPool {
         &self.pool
@@ -751,7 +771,7 @@ impl RunnerDatabase {
                 redis::SetOptions::default()
                     .conditional_set(redis::ExistenceCheck::NX)
                     .get(true)
-                    .with_expiration(redis::SetExpiry::EX(ttl_seconds as usize))
+                    .with_expiration(redis::SetExpiry::EX(ttl_seconds as u64))
             ).await?;
             
             Ok(result.is_some())

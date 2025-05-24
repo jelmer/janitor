@@ -34,6 +34,11 @@ thiserror = "1.0"
 prometheus = "0.13"
 lazy_static = "1.4"
 num_cpus = "1.16"
+toml = "0.8"
+serde_yaml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+hostname = "0.4"
 
 [dev-dependencies]
 maplit = { workspace = true }
