@@ -1,8 +1,6 @@
 use clap::Parser;
-use janitor_runner::{database, AppState};
-use std::net::SocketAddr;
+use janitor_runner::application::Application;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 #[derive(Parser)]
 struct Args {
@@ -68,49 +66,50 @@ async fn main() -> Result<(), i32> {
 
     args.logging.init();
 
-    // Load configuration
+    // Build application from config file or use defaults
     let config_path = args.config.unwrap_or_else(|| PathBuf::from("janitor.conf"));
-    let config = match janitor::config::read_file(&config_path) {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!(
-                "Failed to read config file {}: {}",
-                config_path.display(),
-                e
-            );
-            return Err(1);
-        }
+    
+    let mut app_builder = if config_path.exists() {
+        Application::builder_from_file(&config_path)
+            .map_err(|e| {
+                eprintln!("Failed to load config from {}: {}", config_path.display(), e);
+                1
+            })?
+    } else {
+        log::info!("Config file {} not found, using defaults", config_path.display());
+        Application::builder()
     };
 
-    // Create database connection
-    let pool = match janitor::state::create_pool(&config).await {
-        Ok(pool) => pool,
-        Err(e) => {
-            eprintln!("Failed to create database pool: {}", e);
-            return Err(1);
-        }
-    };
+    // Override config with command line arguments
+    app_builder = app_builder
+        .with_listen_address(args.listen_address)
+        .with_port(args.port)
+        .with_debug(args.debug);
 
-    let database = Arc::new(database::RunnerDatabase::new(pool));
-    let state = Arc::new(AppState { database });
-
-    let app = janitor_runner::web::app(state.clone());
-
-    // Run it
-    let addr = format!("{}:{}", args.listen_address, args.port);
-    log::info!("listening on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(&addr).await.map_err(|e| {
-        eprintln!("Failed to bind to {}: {}", addr, e);
+    // Build and initialize the application
+    let app = app_builder.build().await.map_err(|e| {
+        eprintln!("Failed to initialize application: {}", e);
         1
     })?;
 
-    axum::serve(listener, app.into_make_service())
-        .await
-        .map_err(|e| {
-            eprintln!("Server error: {}", e);
-            1
-        })?;
+    // Run the application with graceful shutdown
+    app.run_with_graceful_shutdown(|state| async move {
+        let router = janitor_runner::web::app(state.clone())
+            .layer(axum::middleware::from_fn(janitor_runner::tracing::http_tracing_middleware));
+
+        let addr = format!("{}:{}", args.listen_address, args.port);
+        log::info!("Listening on {}", addr);
+
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        axum::serve(listener, router.into_make_service()).await?;
+        
+        Ok(())
+    })
+    .await
+    .map_err(|e| {
+        eprintln!("Application error: {}", e);
+        1
+    })?;
 
     Ok(())
 }

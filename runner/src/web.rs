@@ -377,7 +377,10 @@ async fn update_codebases(
     match state.database.upload_codebases(&codebases).await {
         Ok(()) => {
             log::info!("Successfully uploaded {} codebases", codebases.len());
-            Json(serde_json::json!({"status": "success", "uploaded": codebases.len()}))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "success", "uploaded": codebases.len()}))
+            ).into_response()
         }
         Err(e) => {
             log::error!("Failed to upload codebases: {}", e);
@@ -403,7 +406,10 @@ async fn delete_candidate(State(state): State<Arc<AppState>>, Path(id): Path<Str
     match state.database.delete_candidate(candidate_id).await {
         Ok(true) => {
             log::info!("Successfully deleted candidate {}", candidate_id);
-            Json(serde_json::json!({"status": "success"}))
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "success"}))
+            ).into_response()
         }
         Ok(false) => {
             (
@@ -425,7 +431,10 @@ async fn get_candidates(State(state): State<Arc<AppState>>) -> impl IntoResponse
     match state.database.get_candidates().await {
         Ok(candidates) => {
             log::info!("Retrieved {} candidates", candidates.len());
-            Json(candidates)
+            (
+                StatusCode::OK,
+                Json(candidates)
+            ).into_response()
         }
         Err(e) => {
             log::error!("Failed to get candidates: {}", e);
@@ -445,10 +454,13 @@ async fn upload_candidates(
         Ok(errors) => {
             if errors.is_empty() {
                 log::info!("Successfully uploaded {} candidates", candidates.len());
-                Json(serde_json::json!({
-                    "status": "success", 
-                    "uploaded": candidates.len()
-                }))
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "status": "success", 
+                        "uploaded": candidates.len()
+                    }))
+                ).into_response()
             } else {
                 log::warn!("Failed to upload some candidates: {:?}", errors);
                 (
@@ -598,12 +610,126 @@ async fn get_queue(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     }
 }
 
-async fn health() -> impl IntoResponse {
-    "OK"
+async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Perform basic health checks
+    let mut health_status = serde_json::json!({
+        "status": "healthy",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "version": env!("CARGO_PKG_VERSION"),
+        "checks": {}
+    });
+
+    let mut overall_healthy = true;
+
+    // Database health check
+    match state.database.health_check().await {
+        Ok(()) => {
+            health_status["checks"]["database"] = json!({
+                "status": "healthy",
+                "message": "Database connection successful"
+            });
+        }
+        Err(e) => {
+            overall_healthy = false;
+            health_status["checks"]["database"] = json!({
+                "status": "unhealthy",
+                "message": format!("Database error: {}", e)
+            });
+        }
+    }
+
+    // VCS health check
+    let vcs_health = state.vcs_manager.health_check().await;
+    if vcs_health.overall_healthy {
+        health_status["checks"]["vcs"] = json!({
+            "status": "healthy",
+            "message": "All VCS systems healthy"
+        });
+    } else {
+        overall_healthy = false;
+        health_status["checks"]["vcs"] = json!({
+            "status": "unhealthy",
+            "message": "Some VCS systems unhealthy",
+            "details": vcs_health.vcs_statuses
+        });
+    }
+
+    // Log storage health check
+    match state.log_manager.health_check().await {
+        Ok(()) => {
+            health_status["checks"]["logs"] = json!({
+                "status": "healthy",
+                "message": "Log storage accessible"
+            });
+        }
+        Err(e) => {
+            overall_healthy = false;
+            health_status["checks"]["logs"] = json!({
+                "status": "unhealthy",
+                "message": format!("Log storage error: {}", e)
+            });
+        }
+    }
+
+    // Artifact storage health check
+    match state.artifact_manager.health_check().await {
+        Ok(()) => {
+            health_status["checks"]["artifacts"] = json!({
+                "status": "healthy",
+                "message": "Artifact storage accessible"
+            });
+        }
+        Err(e) => {
+            overall_healthy = false;
+            health_status["checks"]["artifacts"] = json!({
+                "status": "unhealthy",
+                "message": format!("Artifact storage error: {}", e)
+            });
+        }
+    }
+
+    // Update overall status
+    health_status["status"] = if overall_healthy { 
+        json!("healthy") 
+    } else { 
+        json!("unhealthy") 
+    };
+
+    // Return appropriate HTTP status code
+    if overall_healthy {
+        (StatusCode::OK, Json(health_status))
+    } else {
+        (StatusCode::SERVICE_UNAVAILABLE, Json(health_status))
+    }
 }
 
-async fn ready() -> impl IntoResponse {
-    "OK"
+async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Check if the application is ready to accept traffic
+    // This is a lighter check than health - just verify core systems are responding
+    
+    // Quick database connectivity check
+    match state.database.health_check().await {
+        Ok(()) => {
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "status": "ready",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "message": "Application ready to accept requests"
+                }))
+            ).into_response()
+        }
+        Err(_) => {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "status": "not_ready",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "message": "Application not ready - database unavailable"
+                }))
+            ).into_response()
+        }
+    }
 }
 
 async fn metrics() -> impl IntoResponse {
