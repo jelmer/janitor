@@ -536,6 +536,35 @@ impl ArtifactManager {
     pub fn storage_type(&self) -> &'static str {
         self.storage.storage_type()
     }
+
+    /// Store an artifact from a file path.
+    pub async fn store_from_path(
+        &self,
+        file_path: &std::path::Path,
+        run_id: &str,
+        name: &str,
+    ) -> Result<(), ArtifactError> {
+        // Read the file content
+        let content = tokio::fs::read(file_path).await
+            .map_err(|e| ArtifactError::StorageError(format!("Failed to read file {}: {}", file_path.display(), e)))?;
+
+        // Determine content type from extension
+        let content_type = match file_path.extension().and_then(|ext| ext.to_str()) {
+            Some("log") => "text/plain",
+            Some("txt") => "text/plain",
+            Some("json") => "application/json",
+            Some("xml") => "application/xml",
+            Some("tar") => "application/x-tar",
+            Some("gz") => "application/gzip",
+            Some("deb") => "application/vnd.debian.binary-package",
+            Some("changes") => "text/plain",
+            Some("buildinfo") => "text/plain",
+            _ => "application/octet-stream",
+        };
+
+        // Store the artifact
+        self.store_artifact(run_id, name, &content, content_type, None).await
+    }
 }
 
 /// Check if an artifact name is valid.

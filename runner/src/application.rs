@@ -186,6 +186,15 @@ impl ApplicationBuilder {
         // Start performance monitoring
         performance_monitor.start_monitoring(self.config.performance.thresholds.clone()).await;
 
+        // Initialize upload processor
+        log::info!("Initializing upload processor...");
+        let upload_storage_dir = std::path::PathBuf::from("/tmp/janitor-uploads"); // TODO: Make configurable
+        let upload_processor = Arc::new(crate::upload::UploadProcessor::new(
+            upload_storage_dir,
+            100 * 1024 * 1024, // 100MB max file size
+            500 * 1024 * 1024, // 500MB max total size
+        ));
+
         // Create application state
         let app_state = Arc::new(AppState {
             database,
@@ -196,6 +205,7 @@ impl ApplicationBuilder {
             error_tracker,
             metrics,
             config: Arc::new(janitor_config),
+            upload_processor,
         });
 
         log::info!("Janitor Runner application initialized successfully");

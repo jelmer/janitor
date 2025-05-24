@@ -27,7 +27,8 @@ log.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 reqwest.workspace = true
 clap = { workspace = true, features = ["derive"], optional = true }
-axum.workspace = true
+axum = { workspace = true, features = ["multipart"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
 serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 thiserror = "1.0"

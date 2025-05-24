@@ -598,7 +598,7 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            conn.hset("rate-limit-hosts", host, retry_after.to_rfc3339())
+            let _: () = conn.hset("rate-limit-hosts", host, retry_after.to_rfc3339())
                 .await?;
         }
         Ok(())
@@ -658,6 +658,12 @@ impl RunnerDatabase {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             
+            // Check if already assigned to prevent double assignment
+            let existing: Option<String> = conn.hget("assigned-queue-items", queue_id.to_string()).await?;
+            if existing.is_some() {
+                return Err(format!("Queue item {} already assigned", queue_id).into());
+            }
+            
             // Store assignment with worker info and timestamp
             let assignment_info = serde_json::json!({
                 "worker_name": worker_name,
@@ -665,13 +671,101 @@ impl RunnerDatabase {
                 "assigned_at": Utc::now().to_rfc3339(),
             });
             
-            conn.hset("assigned-queue-items", queue_id.to_string(), assignment_info.to_string()).await?;
+            let _: () = conn.hset("assigned-queue-items", queue_id.to_string(), assignment_info.to_string()).await?;
+            let _: () = conn.sadd(format!("worker-queue-items:{}", worker_name), queue_id).await?;
             
             // Set expiration for assignments (cleanup stale assignments)
-            conn.expire("assigned-queue-items", 3600).await?; // 1 hour
+            let _: () = conn.expire("assigned-queue-items", 3600).await?; // 1 hour
         }
         
         Ok(())
+    }
+
+    /// Get detailed assigned queue items from Redis with worker info.
+    pub async fn get_assigned_queue_items_detailed(
+        &self,
+    ) -> Result<Vec<(i64, String, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut result = Vec::new();
+        
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let assignments: HashMap<String, String> = conn.hgetall("assigned-queue-items").await?;
+            
+            for (queue_id_str, assignment_info_str) in assignments {
+                if let (Ok(queue_id), Ok(assignment_info)) = (
+                    queue_id_str.parse::<i64>(),
+                    serde_json::from_str::<serde_json::Value>(&assignment_info_str)
+                ) {
+                    if let (Some(worker_name), Some(log_id), Some(assigned_at)) = (
+                        assignment_info.get("worker_name").and_then(|v| v.as_str()),
+                        assignment_info.get("log_id").and_then(|v| v.as_str()),
+                        assignment_info.get("assigned_at").and_then(|v| v.as_str())
+                    ) {
+                        result.push((queue_id, worker_name.to_string(), log_id.to_string(), assigned_at.to_string()));
+                    }
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Get queue items assigned to a specific worker.
+    pub async fn get_worker_queue_items(
+        &self,
+        worker_name: &str,
+    ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut result = Vec::new();
+        
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let queue_ids: Vec<String> = conn.smembers(format!("worker-queue-items:{}", worker_name)).await?;
+            
+            for queue_id_str in queue_ids {
+                if let Ok(queue_id) = queue_id_str.parse::<i64>() {
+                    result.push(queue_id);
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+
+    /// Check if a queue item is currently assigned.
+    pub async fn is_queue_item_assigned(
+        &self,
+        queue_id: i64,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            let exists: bool = conn.hexists("assigned-queue-items", queue_id.to_string()).await?;
+            Ok(exists)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Get the worker assigned to a queue item.
+    pub async fn get_queue_item_assignment(
+        &self,
+        queue_id: i64,
+    ) -> Result<Option<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis_client) = &self.redis {
+            let mut conn = redis_client.get_async_connection().await?;
+            
+            if let Ok(assignment_info_str) = conn.hget::<&str, String, String>("assigned-queue-items", queue_id.to_string()).await {
+                if let Ok(assignment_info) = serde_json::from_str::<serde_json::Value>(&assignment_info_str) {
+                    if let (Some(worker_name), Some(log_id)) = (
+                        assignment_info.get("worker_name").and_then(|v| v.as_str()),
+                        assignment_info.get("log_id").and_then(|v| v.as_str())
+                    ) {
+                        return Ok(Some((worker_name.to_string(), log_id.to_string())));
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
     }
 
     /// Remove queue item assignment from Redis.
@@ -681,7 +775,19 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            conn.hdel("assigned-queue-items", queue_id.to_string()).await?;
+            
+            // Get worker name before removing assignment
+            if let Ok(assignment_info_str) = conn.hget::<&str, String, String>("assigned-queue-items", queue_id.to_string()).await {
+                if let Ok(assignment_info) = serde_json::from_str::<serde_json::Value>(&assignment_info_str) {
+                    if let Some(worker_name) = assignment_info.get("worker_name").and_then(|v| v.as_str()) {
+                        // Remove from worker's set
+                        let _: () = conn.srem(format!("worker-queue-items:{}", worker_name), queue_id).await?;
+                    }
+                }
+            }
+            
+            // Remove from assignments hash
+            let _: () = conn.hdel("assigned-queue-items", queue_id.to_string()).await?;
         }
         
         Ok(())
@@ -703,10 +809,10 @@ impl RunnerDatabase {
                 "last_heartbeat": Utc::now().to_rfc3339(),
             });
             
-            conn.hset("worker-health", worker_name, health_info.to_string()).await?;
+            let _: () = conn.hset("worker-health", worker_name, health_info.to_string()).await?;
             
             // Set expiration for worker health (cleanup stale workers)
-            conn.expire("worker-health", 1800).await?; // 30 minutes
+            let _: () = conn.expire("worker-health", 1800).await?; // 30 minutes
         }
         
         Ok(())

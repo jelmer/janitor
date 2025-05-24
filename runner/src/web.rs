@@ -1,6 +1,6 @@
 use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog, metrics::MetricsCollector};
 use axum::{
-    extract::Path, extract::State, http::StatusCode, response::IntoResponse, routing::delete,
+    extract::{Path, State, Multipart}, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router,
 };
 use chrono::Utc;
@@ -760,6 +760,14 @@ async fn finish_active_run(
     finish_run_internal(state, id, None).await
 }
 
+async fn finish_active_run_multipart(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    multipart: Multipart,
+) -> impl IntoResponse {
+    finish_run_multipart_internal(state, id, multipart).await
+}
+
 async fn finish_run_internal(
     state: Arc<AppState>,
     run_id: String,
@@ -869,6 +877,12 @@ async fn finish_run_internal(
         // Continue anyway, result was stored
     }
 
+    // Unassign queue item from Redis
+    if let Err(e) = state.database.unassign_queue_item(active_run.queue_id).await {
+        log::warn!("Failed to unassign queue item from Redis: {}", e);
+        // Continue anyway, main cleanup was done
+    }
+
     // For now, return basic response
     // TODO: Handle file uploads, log processing, artifact management
     let response = FinishResponse {
@@ -879,6 +893,162 @@ async fn finish_run_internal(
         result: janitor_result.to_json(),
     };
 
+    (StatusCode::CREATED, Json(serde_json::to_value(response).unwrap()))
+}
+
+async fn finish_run_multipart_internal(
+    state: Arc<AppState>,
+    run_id: String,
+    multipart: Multipart,
+) -> impl IntoResponse {
+    // Get the active run
+    let active_run = match state.database.get_active_run(&run_id).await {
+        Ok(Some(run)) => run,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"reason": format!("no such run {}", run_id)}))
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to get active run {}: {}", run_id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"}))
+            );
+        }
+    };
+
+    // Process multipart upload
+    let uploaded_result = match state.upload_processor.process_upload(multipart, &run_id).await {
+        Ok(result) => result,
+        Err(e) => {
+            log::error!("Failed to process upload for run {}: {}", run_id, e);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"error": format!("Upload processing failed: {}", e)}))
+            );
+        }
+    };
+
+    // Extract worker result and builder result
+    let worker_result = uploaded_result.worker_result.clone();
+    let builder_result = match state.upload_processor.extract_builder_result(&uploaded_result) {
+        Ok(result) => result,
+        Err(e) => {
+            log::warn!("Failed to extract builder result: {}", e);
+            worker_result.builder_result.clone()
+        }
+    };
+
+    // Create a JanitorResult from the uploaded data
+    let mut janitor_result = active_run.create_result(
+        worker_result.code.clone(),
+        worker_result.description.clone(),
+    );
+
+    // Update with worker result data
+    janitor_result.codemod = worker_result.codemod;
+    janitor_result.main_branch_revision = worker_result.main_branch_revision;
+    janitor_result.revision = worker_result.revision;
+    janitor_result.value = worker_result.value.map(|v| v as u64);
+    janitor_result.branches = worker_result.branches;
+    janitor_result.tags = worker_result.tags;
+    janitor_result.remotes = worker_result.remotes.map(|remotes| {
+        remotes.into_iter().map(|(name, data)| {
+            let url = data.get("url").and_then(|u| u.as_str()).unwrap_or_default();
+            (name, crate::ResultRemote { url: url.to_string() })
+        }).collect()
+    });
+    janitor_result.failure_details = worker_result.details;
+    janitor_result.failure_stage = worker_result.stage;
+    janitor_result.builder_result = builder_result;
+    janitor_result.transient = worker_result.transient;
+    janitor_result.target_branch_url = worker_result.target_branch_url;
+    janitor_result.branch_url = worker_result.branch_url.unwrap_or(janitor_result.branch_url);
+    janitor_result.vcs_type = worker_result.vcs_type;
+    janitor_result.subpath = worker_result.subpath;
+
+    // Collect uploaded filenames
+    let mut log_filenames = Vec::new();
+    for log_file in &uploaded_result.log_files {
+        log_filenames.push(log_file.filename.clone());
+    }
+    janitor_result.logfilenames = log_filenames.clone();
+
+    // Store the result in the database
+    if let Err(e) = state.database.update_run_result(
+        &run_id,
+        &janitor_result.code,
+        janitor_result.description.as_deref(),
+        janitor_result.failure_details.as_ref(),
+        janitor_result.transient,
+        janitor_result.finish_time,
+    ).await {
+        log::error!("Failed to store run result: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Failed to store result"}))
+        );
+    }
+
+    // Store builder result if present
+    if let Some(ref builder_result) = janitor_result.builder_result {
+        if let Err(e) = state.database.store_builder_result(&run_id, builder_result).await {
+            log::error!("Failed to store builder result: {}", e);
+            // Continue anyway, main result was stored
+        }
+    }
+
+    // Store uploaded files in artifact and log management systems
+    for artifact_file in &uploaded_result.artifact_files {
+        if let Err(e) = state.artifact_manager.store_from_path(&artifact_file.stored_path, &run_id, &artifact_file.filename).await {
+            log::warn!("Failed to store artifact {} from run {}: {}", artifact_file.filename, run_id, e);
+        }
+    }
+
+    for build_file in &uploaded_result.build_files {
+        if let Err(e) = state.artifact_manager.store_from_path(&build_file.stored_path, &run_id, &build_file.filename).await {
+            log::warn!("Failed to store build file {} from run {}: {}", build_file.filename, run_id, e);
+        }
+    }
+
+    for log_file in &uploaded_result.log_files {
+        if let Err(e) = state.log_manager.store_from_path(&log_file.stored_path, &run_id, &log_file.filename).await {
+            log::warn!("Failed to store log file {} from run {}: {}", log_file.filename, run_id, e);
+        }
+    }
+
+    // Remove from active runs
+    if let Err(e) = state.database.remove_active_run(&run_id).await {
+        log::error!("Failed to remove active run: {}", e);
+        // Continue anyway, result was stored
+    }
+
+    // Unassign queue item from Redis
+    if let Err(e) = state.database.unassign_queue_item(active_run.queue_id).await {
+        log::warn!("Failed to unassign queue item from Redis: {}", e);
+        // Continue anyway, main cleanup was done
+    }
+
+    // Prepare response
+    let mut artifact_filenames = Vec::new();
+    for file in &uploaded_result.artifact_files {
+        artifact_filenames.push(file.filename.clone());
+    }
+    for file in &uploaded_result.build_files {
+        artifact_filenames.push(file.filename.clone());
+    }
+
+    let response = FinishResponse {
+        id: run_id,
+        filenames: log_filenames,
+        logs: uploaded_result.log_files.iter().map(|f| f.filename.clone()).collect(),
+        artifacts: artifact_filenames,
+        result: janitor_result.to_json(),
+    };
+
+    log::info!("Successfully processed multipart upload for run {}", response.id);
     (StatusCode::CREATED, Json(serde_json::to_value(response).unwrap()))
 }
 
@@ -897,15 +1067,13 @@ async fn assign_work_internal(
     state: Arc<AppState>,
     request: AssignRequest,
 ) -> impl IntoResponse {
-    // For now, implement a simplified version without Redis or rate limiting
-    // TODO: Add Redis integration for tracking assigned items and rate limiting
+    // Use enhanced Redis integration for queue management
     
-    // Get next available queue item
-    let assignment = match state.database.next_queue_item(
+    // Get next available queue item with rate limiting and Redis integration
+    let assignment = match state.database.next_queue_item_with_rate_limiting(
         request.codebase.as_deref(),
         request.campaign.as_deref(),
-        &[], // TODO: Add excluded hosts from rate limiting
-        &[], // TODO: Get assigned queue items from Redis
+        &[], // TODO: Add excluded hosts from config
     ).await {
         Ok(Some(assignment)) => assignment,
         Ok(None) => {
@@ -967,6 +1135,16 @@ async fn assign_work_internal(
         );
     }
 
+    // Assign queue item in Redis for coordination
+    if let Err(e) = state.database.assign_queue_item(
+        assignment.queue_item.id,
+        &active_run.worker_name,
+        &log_id,
+    ).await {
+        log::warn!("Failed to assign queue item in Redis: {}", e);
+        // Continue anyway, assignment is tracked in database
+    }
+
     // Generate build configuration for the worker
     let campaign_config = create_campaign_config(&assignment.queue_item);
     let build_config = match get_builder(&campaign_config, None, None) {
@@ -1010,6 +1188,15 @@ async fn public_finish(
     finish_run_internal(state, id, None).await
 }
 
+async fn public_finish_multipart(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    multipart: Multipart,
+) -> impl IntoResponse {
+    // TODO: Add worker credentials check
+    finish_run_multipart_internal(state, id, multipart).await
+}
+
 async fn public_get_active_run(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
     unimplemented!()
 }
@@ -1020,6 +1207,7 @@ pub fn public_app(state: Arc<AppState>) -> Router {
         .route("/", get(public_root))
         .route("/runner/active-runs", post(public_assign))
         .route("/runner/active-runs/:id/finish", post(public_finish))
+        .route("/runner/active-runs/:id/finish-multipart", post(public_finish_multipart))
         .route("/runner/active-runs/:id", get(public_get_active_run))
         .with_state(state)
 }
@@ -1044,6 +1232,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/active-runs", get(get_active_runs))
         .route("/active-runs/:id", get(get_active_run))
         .route("/active-runs/:id/finish", post(finish_active_run))
+        .route("/active-runs/:id/finish-multipart", post(finish_active_run_multipart))
         .route("/active-runs/+peek", get(peek_active_run))
         .route("/queue", get(get_queue))
         .route("/health", get(health))
