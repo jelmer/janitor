@@ -186,52 +186,116 @@ impl Watchdog {
         run: &ActiveRun,
         now: DateTime<Utc>,
     ) -> Result<Option<TerminationReason>, Box<dyn std::error::Error + Send + Sync>> {
-        // Check if worker has sent any heartbeat recently
-        let heartbeat_timeout = Duration::seconds(self.config.worker_heartbeat_timeout as i64);
-        let last_heartbeat_cutoff = now - heartbeat_timeout;
-        
-        if run.start_time < last_heartbeat_cutoff {
-            // TODO: Check for actual heartbeat timestamps when backchannel supports it
-            // For now, just use start time as proxy
-        }
-
         // Try to get health status via backchannel
         match run.backchannel.get_health_status(&run.log_id).await {
             Ok(health) => {
+                // Check heartbeat timestamp if available
+                if let Some(last_ping) = health.last_ping {
+                    let heartbeat_timeout = Duration::seconds(self.config.worker_heartbeat_timeout as i64);
+                    let last_heartbeat_cutoff = now - heartbeat_timeout;
+                    
+                    if last_ping < last_heartbeat_cutoff {
+                        log::warn!("Worker heartbeat timeout for run {}: last ping was {} seconds ago", 
+                                 run.log_id, (now - last_ping).num_seconds());
+                        
+                        let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
+                        *failures += 1;
+                        
+                        if *failures >= self.config.max_health_failures {
+                            return Ok(Some(TerminationReason::WorkerDisappeared));
+                        } else {
+                            log::warn!("Heartbeat timeout {}/{} for run {}", 
+                                     failures, self.config.max_health_failures, run.log_id);
+                            return Ok(None);
+                        }
+                    }
+                }
+
+                // Check worker status
                 match health.status.as_str() {
-                    "healthy" => {
-                        // Reset failure count on successful health check
+                    "healthy" | "running" | "building" | "completed" => {
+                        // Worker is alive and responding properly
                         self.health_failures.remove(&run.log_id);
+                        
+                        // Additional check: if run is completed but still in active list, 
+                        // this might indicate a cleanup issue
+                        if health.status == "completed" && health.current_run_id.as_ref() != Some(&run.log_id) {
+                            log::warn!("Worker reports completion of different run ({:?}) than expected ({})", 
+                                     health.current_run_id, run.log_id);
+                            return Ok(Some(TerminationReason::WorkerDisappeared));
+                        }
+                        
                         Ok(None)
                     }
-                    "unhealthy" | "failed" => {
+                    "unhealthy" | "failed" | "aborted" => {
                         let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                         *failures += 1;
                         
                         if *failures >= self.config.max_health_failures {
                             Ok(Some(TerminationReason::HealthCheckFailed))
                         } else {
-                            log::warn!("Health check failure {}/{} for run {}", 
-                                     failures, self.config.max_health_failures, run.log_id);
+                            log::warn!("Health check failure {}/{} for run {} (status: {})", 
+                                     failures, self.config.max_health_failures, run.log_id, health.status);
                             Ok(None)
                         }
                     }
+                    "not-found" | "unreachable" => {
+                        // Worker or job no longer exists
+                        Ok(Some(TerminationReason::WorkerDisappeared))
+                    }
+                    "different-run" => {
+                        // Worker started processing a different run
+                        log::warn!("Worker started processing different run: expected {}, got {:?}", 
+                                 run.log_id, health.current_run_id);
+                        Ok(Some(TerminationReason::WorkerDisappeared))
+                    }
                     _ => {
                         log::warn!("Unknown health status '{}' for run {}", health.status, run.log_id);
-                        Ok(None)
+                        
+                        // Treat unknown status as potential issue but not immediate failure
+                        let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
+                        *failures += 1;
+                        
+                        if *failures >= self.config.max_health_failures {
+                            Ok(Some(TerminationReason::HealthCheckFailed))
+                        } else {
+                            Ok(None)
+                        }
                     }
                 }
             }
             Err(e) => {
                 log::debug!("Failed to get health status for run {}: {}", run.log_id, e);
                 
-                // Increment failure count
+                // Check for specific error types in the chain
+                let error_string = e.to_string();
+                let is_fatal_error = error_string.contains("Job not found") 
+                    || error_string.contains("Fatal failure")
+                    || error_string.contains("not-found");
+                let is_unreachable = error_string.contains("Worker unreachable") 
+                    || error_string.contains("timeout")
+                    || error_string.contains("connection");
+                
+                if is_fatal_error {
+                    log::info!("Fatal error for run {}: {}", run.log_id, e);
+                    return Ok(Some(TerminationReason::WorkerDisappeared));
+                }
+                
+                let failure_reason = if is_unreachable {
+                    TerminationReason::WorkerDisappeared
+                } else {
+                    TerminationReason::HealthCheckFailed
+                };
+                
+                // Increment failure count for non-fatal errors
                 let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                 *failures += 1;
                 
                 if *failures >= self.config.max_health_failures {
-                    Ok(Some(TerminationReason::WorkerDisappeared))
+                    Ok(Some(failure_reason))
                 } else {
+                    log::warn!("Health check error {}/{} for run {}: {}", 
+                             failures, self.config.max_health_failures, run.log_id, e);
                     Ok(None)
                 }
             }
@@ -327,6 +391,72 @@ impl Watchdog {
         }
     }
 
+    /// Get detailed health status for all active runs.
+    pub async fn get_detailed_health_status(&self) -> Result<Vec<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
+        let active_runs = self.database.get_active_runs().await?;
+        let mut health_statuses = Vec::new();
+        
+        for run in active_runs {
+            let health_status = match run.backchannel.get_health_status(&run.log_id).await {
+                Ok(health) => Some(health),
+                Err(e) => {
+                    log::debug!("Failed to get health for run {}: {}", run.log_id, e);
+                    None
+                }
+            };
+            
+            let failure_count = self.health_failures.get(&run.log_id).copied().unwrap_or(0);
+            
+            health_statuses.push(RunHealthStatus {
+                log_id: run.log_id,
+                worker_name: run.worker_name,
+                start_time: run.start_time,
+                estimated_duration: run.estimated_duration,
+                health: health_status,
+                failure_count,
+                max_failures: self.config.max_health_failures,
+            });
+        }
+        
+        Ok(health_statuses)
+    }
+
+    /// Force a health check on a specific run.
+    pub async fn check_run_health(&mut self, run_id: &str) -> Result<Option<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(run) = self.database.get_active_run(run_id).await? {
+            let now = Utc::now();
+            
+            // Run the health check
+            let termination_reason = self.check_worker_health(&run, now).await?;
+            
+            // Get current health status
+            let health_status = match run.backchannel.get_health_status(&run.log_id).await {
+                Ok(health) => Some(health),
+                Err(_) => None,
+            };
+            
+            let failure_count = self.health_failures.get(&run.log_id).copied().unwrap_or(0);
+            
+            // If termination was triggered, handle it
+            if let Some(reason) = termination_reason {
+                log::info!("Health check triggered termination for run {}: {:?}", run_id, reason);
+                self.terminate_run(&run, reason).await?;
+            }
+            
+            Ok(Some(RunHealthStatus {
+                log_id: run.log_id,
+                worker_name: run.worker_name,
+                start_time: run.start_time,
+                estimated_duration: run.estimated_duration,
+                health: health_status,
+                failure_count,
+                max_failures: self.config.max_health_failures,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Get comprehensive failure and retry statistics.
     pub async fn get_comprehensive_stats(&self) -> Result<HashMap<String, i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut stats = self.database.get_failure_stats().await?;
@@ -346,4 +476,23 @@ pub struct WatchdogStats {
     pub runs_with_health_failures: usize,
     /// Total number of health check failures across all monitored runs.
     pub total_health_failures: u32,
+}
+
+/// Detailed health status for a specific run.
+#[derive(Debug, Clone)]
+pub struct RunHealthStatus {
+    /// The log ID of the run.
+    pub log_id: String,
+    /// Name of the worker processing this run.
+    pub worker_name: String,
+    /// When the run started.
+    pub start_time: DateTime<Utc>,
+    /// Estimated duration for the run.
+    pub estimated_duration: Option<std::time::Duration>,
+    /// Current health status from the backchannel.
+    pub health: Option<crate::HealthStatus>,
+    /// Number of consecutive health check failures.
+    pub failure_count: u32,
+    /// Maximum allowed failures before termination.
+    pub max_failures: u32,
 }

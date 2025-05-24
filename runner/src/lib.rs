@@ -29,7 +29,7 @@ pub use backchannel::{
 
 // Re-export watchdog types
 pub use watchdog::{
-    TerminationReason, Watchdog, WatchdogConfig, WatchdogStats,
+    RunHealthStatus, TerminationReason, Watchdog, WatchdogConfig, WatchdogStats,
 };
 
 /// Module for handling backchannel communication with the worker.
