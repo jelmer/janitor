@@ -4,9 +4,42 @@
 
 use crate::{BuilderResult, QueueItem};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// Lintian input file structure.
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct LintianInputFile {
+    /// Lintian hints for this file.
+    pub hints: Vec<String>,
+    /// Path to the file.
+    pub path: PathBuf,
+}
+
+/// Lintian group structure.
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct LintianGroup {
+    /// Group identifier.
+    pub group_id: String,
+    /// Input files in this group.
+    pub input_files: Vec<LintianInputFile>,
+    /// Source package name.
+    pub source_name: String,
+    /// Source version.
+    pub source_version: String,
+}
+
+/// Lintian result structure.
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+struct LintianResult {
+    /// Lintian groups.
+    pub groups: Vec<LintianGroup>,
+    /// Lintian version used.
+    pub lintian_version: Option<String>,
+}
 
 /// Campaign configuration for builds.
 /// This is a simplified version - in a full implementation this would be loaded from config
@@ -78,6 +111,81 @@ pub enum BuilderError {
     /// Build processing error.
     #[error("Build processing error: {0}")]
     Processing(String),
+    /// Lintian processing error.
+    #[error("Lintian error: {0}")]
+    Lintian(String),
+}
+
+/// Parse lintian output from JSON.
+fn parse_lintian_output(text: &str) -> Result<LintianResult, BuilderError> {
+    let lines: Vec<&str> = text.trim().split('\n').collect();
+    let mut joined_lines: Vec<&str> = Vec::new();
+    for line in lines {
+        joined_lines.push(line);
+        if line == "}" {
+            break;
+        }
+    }
+
+    let joined_str = joined_lines.join("\n");
+    let mut result: LintianResult = serde_json::from_str(&joined_str)
+        .map_err(|e| BuilderError::Lintian(format!("Failed to parse lintian JSON: {}", e)))?;
+
+    // Strip irrelevant directory information
+    for group in &mut result.groups {
+        for input_file in &mut group.input_files {
+            if let Some(file_name) = input_file.path.file_name() {
+                input_file.path = PathBuf::from(file_name);
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// Run lintian on changes files and return the result.
+fn run_lintian(
+    output_directory: &Path,
+    changes_names: &[String],
+    profile: Option<&str>,
+    suppress_tags: Option<&[String]>,
+) -> Result<LintianResult, BuilderError> {
+    let mut args: Vec<String> = vec![
+        "--exp-output=format=json".to_owned(),
+        "--allow-root".to_owned(),
+    ];
+    
+    if let Some(tags) = suppress_tags {
+        if !tags.is_empty() {
+            args.push(format!("--suppress-tags={}", tags.join(",")));
+        }
+    }
+    
+    if let Some(profile_str) = profile {
+        args.push(format!("--profile={}", profile_str));
+    }
+    
+    // Add changes file paths
+    for changes_name in changes_names {
+        args.push(changes_name.clone());
+    }
+    
+    let mut cmd = Command::new("lintian");
+    cmd.args(args);
+    cmd.current_dir(output_directory);
+    
+    let lintian_output = cmd.output()
+        .map_err(|e| BuilderError::Lintian(format!("Failed to run lintian: {}", e)))?;
+    
+    let output_str = std::str::from_utf8(&lintian_output.stdout)
+        .map_err(|e| BuilderError::Lintian(format!("Invalid lintian output: {}", e)))?;
+    
+    if output_str.trim().is_empty() {
+        // Empty output means no issues found
+        return Ok(LintianResult::default());
+    }
+    
+    parse_lintian_output(output_str)
 }
 
 /// Generic builder implementation.
@@ -251,10 +359,25 @@ impl Builder for DebianBuilder {
         Ok(env)
     }
 
-    fn additional_colocated_branches(&self, _main_branch: &str) -> HashMap<String, String> {
-        // TODO: Implement silver-platter Debian branch picking logic
-        // For now, return empty
-        HashMap::new()
+    fn additional_colocated_branches(&self, main_branch: &str) -> HashMap<String, String> {
+        // Implement common Debian branch patterns
+        let mut branches = HashMap::new();
+        
+        // Add upstream branch if this is a packaging branch
+        if main_branch.contains("debian") || main_branch == "master" || main_branch == "main" {
+            branches.insert("upstream".to_string(), "upstream".to_string());
+        }
+        
+        // Add pristine-tar branch for Debian packaging
+        branches.insert("pristine-tar".to_string(), "pristine-tar".to_string());
+        
+        // Add vendor branches if they exist
+        branches.insert("vendor".to_string(), "vendor".to_string());
+        
+        // Add experimental branches
+        branches.insert("experimental".to_string(), "experimental".to_string());
+        
+        branches
     }
 
     fn process_result(&self, output_dir: &Path) -> Result<BuilderResult, BuilderError> {
@@ -274,12 +397,43 @@ impl Builder for DebianBuilder {
             }
         };
 
+        // Run lintian on the changes files
+        let lintian_result = if !changes_summary.names.is_empty() {
+            match run_lintian(
+                output_dir,
+                &changes_summary.names,
+                Some(&self.distro_config.lintian_profile),
+                if self.distro_config.lintian_suppress_tag.is_empty() {
+                    None
+                } else {
+                    Some(&self.distro_config.lintian_suppress_tag)
+                },
+            ) {
+                Ok(result) => {
+                    // Convert to JSON value for storage
+                    match serde_json::to_value(&result) {
+                        Ok(json_value) => Some(json_value),
+                        Err(e) => {
+                            log::warn!("Failed to serialize lintian result: {}", e);
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Lintian failed: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(BuilderResult::Debian {
             source: Some(changes_summary.source),
             build_version: Some(changes_summary.version.to_string()),
             build_distribution: Some(changes_summary.distribution),
             changes_filenames: Some(changes_summary.names),
-            lintian_result: None, // TODO: Process lintian results
+            lintian_result,
             binary_packages: Some(changes_summary.binary_packages),
         })
     }
@@ -357,5 +511,67 @@ mod tests {
         
         let builder = get_builder(&config, None, None).unwrap();
         assert_eq!(builder.kind(), "debian");
+    }
+
+    #[test]
+    fn test_debian_builder_additional_branches() {
+        let distro_config = DistroConfig {
+            lintian_profile: "debian".to_string(),
+            lintian_suppress_tag: vec![],
+        };
+        
+        let builder = DebianBuilder::new(distro_config, None, None);
+        
+        // Test with debian branch
+        let branches = builder.additional_colocated_branches("debian/master");
+        assert!(branches.contains_key("upstream"));
+        assert!(branches.contains_key("pristine-tar"));
+        assert!(branches.contains_key("vendor"));
+        assert!(branches.contains_key("experimental"));
+        
+        // Test with main branch
+        let branches = builder.additional_colocated_branches("main");
+        assert!(branches.contains_key("upstream"));
+        assert!(branches.contains_key("pristine-tar"));
+        
+        // Test with feature branch
+        let branches = builder.additional_colocated_branches("feature/some-feature");
+        assert!(!branches.contains_key("upstream"));
+        assert!(branches.contains_key("pristine-tar"));
+    }
+
+    #[test]
+    fn test_parse_lintian_output() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "test-package_1.0",
+         "input_files" : [
+            {
+               "hints" : [],
+               "path" : "/tmp/test-package_1.0.dsc"
+            },
+            {
+               "hints" : [],
+               "path" : "/tmp/test-package_1.0_source.changes"
+            }
+         ],
+         "source_name" : "test-package",
+         "source_version" : "1.0"
+      }
+   ],
+   "lintian_version" : "2.116.3"
+}
+OTHER BOGUS DATA
+"#;
+        let result = parse_lintian_output(output_str).unwrap();
+        assert_eq!(result.groups.len(), 1);
+        assert_eq!(result.groups[0].source_name, "test-package");
+        assert_eq!(result.groups[0].source_version, "1.0");
+        assert_eq!(result.lintian_version, Some("2.116.3".to_string()));
+        
+        // Paths should be stripped to just filenames
+        assert_eq!(result.groups[0].input_files[0].path, PathBuf::from("test-package_1.0.dsc"));
+        assert_eq!(result.groups[0].input_files[1].path, PathBuf::from("test-package_1.0_source.changes"));
     }
 }
