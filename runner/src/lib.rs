@@ -44,6 +44,18 @@ pub mod database;
 pub mod watchdog;
 /// Module for the web interface.
 pub mod web;
+/// Module for Prometheus metrics collection.
+pub mod metrics;
+/// Module for log file management.
+pub mod logs;
+/// Module for artifact storage management.
+pub mod artifacts;
+/// Module for VCS integration and coordination.
+pub mod vcs;
+/// Module for performance monitoring and system health tracking.
+pub mod performance;
+/// Module for comprehensive error tracking and logging.
+pub mod error_tracking;
 
 /// Generate environment variables for committing changes.
 ///
