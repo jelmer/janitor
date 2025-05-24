@@ -284,15 +284,27 @@ async fn log_index(
     // First check if the run exists
     match state.database.run_exists(&id).await {
         Ok(true) => {
-            // For now, return a basic log file listing
-            // TODO: Integrate with actual log storage system
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "log_id": id,
-                    "files": ["worker.log", "build.log"]
-                })),
-            )
+            // Get actual log files from log storage system
+            match state.log_manager.list_logs(&id).await {
+                Ok(files) => (
+                    StatusCode::OK,
+                    Json(json!({
+                        "log_id": id,
+                        "files": files
+                    })),
+                ),
+                Err(e) => {
+                    log::warn!("Failed to list log files for run {}: {}", id, e);
+                    // Fallback to basic listing
+                    (
+                        StatusCode::OK,
+                        Json(json!({
+                            "log_id": id,
+                            "files": ["worker.log", "build.log"]
+                        })),
+                    )
+                }
+            }
         }
         Ok(false) => (
             StatusCode::NOT_FOUND,
@@ -315,15 +327,27 @@ async fn log(
     // Check if the run exists
     match state.database.run_exists(&id).await {
         Ok(true) => {
-            // For now, return placeholder content
-            // TODO: Integrate with actual log storage system
-            if crate::is_log_filename(&filename) {
-                (
-                    StatusCode::OK,
-                    format!("Log content for run {} file {}", id, filename),
-                )
-            } else {
-                (StatusCode::BAD_REQUEST, "Invalid log filename".to_string())
+            // Validate filename
+            if !crate::is_log_filename(&filename) {
+                return (StatusCode::BAD_REQUEST, "Invalid log filename".to_string());
+            }
+
+            // Get log content from storage system
+            match state.log_manager.get_log(&id, &filename).await {
+                Ok(content) => {
+                    // Return the actual log content as string
+                    match String::from_utf8(content) {
+                        Ok(content_str) => (StatusCode::OK, content_str),
+                        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Log content is not valid UTF-8".to_string()),
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to get log content for run {} file {}: {}", id, filename, e);
+                    (
+                        StatusCode::NOT_FOUND, 
+                        format!("Log file {} not found for run {}", filename, id)
+                    )
+                }
             }
         }
         Ok(false) => (StatusCode::NOT_FOUND, "Run not found".to_string()),
@@ -1397,20 +1421,135 @@ async fn public_finish_multipart(
     finish_run_multipart_internal(state, id, multipart).await
 }
 
-async fn public_get_active_run(State(_state): State<Arc<AppState>>, Path(_id): Path<String>) {
-    unimplemented!()
+async fn public_get_active_run(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    // Get active run information (this is essentially a proxy to the private endpoint)
+    match state.database.get_active_run(&id).await {
+        Ok(Some(active_run)) => {
+            // Return public view of active run (omit sensitive information)
+            Json(json!({
+                "id": active_run.log_id,
+                "worker_name": active_run.worker_name,
+                "start_time": active_run.start_time,
+                "estimated_duration": active_run.estimated_duration.map(|d| d.as_secs()),
+                "campaign": active_run.campaign,
+                "codebase": active_run.codebase,
+                "status": "running"
+            }))
+        }
+        Ok(None) => Json(json!({"error": "Active run not found"})),
+        Err(e) => {
+            log::error!("Failed to get active run {}: {}", id, e);
+            Json(json!({"error": "Database error"}))
+        }
+    }
+}
+
+/// Get watchdog health information for all active runs.
+async fn public_watchdog_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let watchdog_config = crate::WatchdogConfig::default();
+    let watchdog = crate::Watchdog::new(Arc::clone(&state.database), watchdog_config);
+    
+    match watchdog.get_detailed_health_status().await {
+        Ok(health_statuses) => {
+            // Filter to public information only
+            let public_statuses: Vec<_> = health_statuses.into_iter().map(|status| {
+                json!({
+                    "log_id": status.log_id,
+                    "worker_name": status.worker_name,
+                    "start_time": status.start_time,
+                    "estimated_duration": status.estimated_duration.map(|d| d.as_secs()),
+                    "failure_count": status.failure_count,
+                    "max_failures": status.max_failures,
+                    "alive": status.health.as_ref().map(|h| h.alive).unwrap_or(false),
+                    "status": status.health.as_ref().map(|h| h.status.clone()).unwrap_or_else(|| "unknown".to_string()),
+                    "last_ping": status.health.as_ref().and_then(|h| h.last_ping),
+                })
+            }).collect();
+
+            Json(json!({
+                "status": "ok",
+                "active_runs": public_statuses.len(),
+                "health_statuses": public_statuses
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to get watchdog health status: {}", e);
+            Json(json!({
+                "status": "error",
+                "error": "Failed to get health status"
+            }))
+        }
+    }
+}
+
+/// Get public queue statistics.
+async fn public_queue_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.database.get_queue_stats().await {
+        Ok(stats) => {
+            Json(json!({
+                "queue_length": stats.get("total").unwrap_or(&0),
+                "active_runs": stats.get("active").unwrap_or(&0),
+                "succeeded": stats.get("succeeded").unwrap_or(&0),
+                "failed": stats.get("failed").unwrap_or(&0),
+                "status": "operational"
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to get queue stats: {}", e);
+            Json(json!({
+                "status": "error",
+                "error": "Database error"
+            }))
+        }
+    }
+}
+
+/// Public health check endpoint.
+async fn public_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Lightweight health check for public consumption
+    match state.database.health_check().await {
+        Ok(()) => {
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "status": "healthy",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "service": "janitor-runner",
+                    "version": env!("CARGO_PKG_VERSION")
+                }))
+            )
+        }
+        Err(_) => {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "status": "unhealthy",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "service": "janitor-runner",
+                    "version": env!("CARGO_PKG_VERSION")
+                }))
+            )
+        }
+    }
 }
 
 /// Create a router for the public API endpoints.
 pub fn public_app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/", get(public_root))
+        // Public read-only endpoints (no authentication required)
+        .route("/health", get(public_health))
+        .route("/queue/stats", get(public_queue_stats))
+        .route("/watchdog/health", get(public_watchdog_health))
         // Worker endpoints require authentication
         .route("/runner/active-runs", post(public_assign))
         .route("/runner/active-runs/:id/finish", post(public_finish))
         .route("/runner/active-runs/:id/finish-multipart", post(public_finish_multipart))
         .route("/runner/active-runs/:id", get(public_get_active_run))
-        // Add authentication middleware to worker routes
+        // Add authentication middleware to worker routes only
         .layer(middleware::from_fn_with_state(
             Arc::clone(&state.database), 
             crate::auth::require_worker_auth
