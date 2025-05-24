@@ -1,4 +1,4 @@
-use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder};
+use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog};
 use axum::{
     extract::Path, extract::State, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router,
@@ -328,8 +328,33 @@ async fn log(
     }
 }
 
-async fn kill(State(state): State<Arc<AppState>>, Path(id): Path<String>) {
-    unimplemented!()
+async fn kill(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    // Create a temporary watchdog instance for manual termination
+    let watchdog_config = crate::WatchdogConfig::default();
+    let mut watchdog = Watchdog::new(Arc::clone(&state.database), watchdog_config);
+    
+    match watchdog.kill_run(&id).await {
+        Ok(true) => {
+            log::info!("Successfully killed run {}", id);
+            Json(serde_json::json!({
+                "success": true,
+                "message": format!("Run {} terminated successfully", id)
+            }))
+        }
+        Ok(false) => {
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("Run {} not found or not active", id)
+            }))
+        }
+        Err(e) => {
+            log::error!("Failed to kill run {}: {}", id, e);
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Failed to terminate run"
+            }))
+        }
+    }
 }
 
 async fn get_codebases(State(state): State<Arc<AppState>>) {
@@ -759,7 +784,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/schedule", post(schedule))
         .route("/status", get(status))
         .route("/log/:id", get(log_index))
-        .route("/kill:id", post(kill))
+        .route("/kill/:id", post(kill))
         .route("/log/:id/:filename", get(log))
         .route("/codebases", get(get_codebases))
         .route("/codebases", post(update_codebases))

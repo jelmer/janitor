@@ -1071,6 +1071,150 @@ impl RunnerDatabase {
 
         Ok(positions)
     }
+
+    /// Clean up stale active runs that have been running too long.
+    pub async fn cleanup_stale_runs(
+        &self,
+        max_age_hours: i64,
+    ) -> Result<i64, sqlx::Error> {
+        let cutoff_time = Utc::now() - chrono::Duration::hours(max_age_hours);
+        
+        let stale_runs = sqlx::query(
+            "SELECT log_id FROM active_run WHERE start_time < $1"
+        )
+        .bind(cutoff_time)
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut cleaned_count = 0;
+        
+        for row in stale_runs {
+            let log_id: String = row.get("log_id");
+            
+            // Create failure result for stale run
+            if let Err(e) = self.update_run_result(
+                &log_id,
+                "worker-timeout",
+                Some("Run exceeded maximum allowed time and was cleaned up"),
+                None,
+                Some(true), // Transient failure
+                Utc::now(),
+            ).await {
+                log::error!("Failed to update result for stale run {}: {}", log_id, e);
+                continue;
+            }
+            
+            // Remove from active runs
+            if let Err(e) = self.remove_active_run(&log_id).await {
+                log::error!("Failed to remove stale active run {}: {}", log_id, e);
+                continue;
+            }
+            
+            cleaned_count += 1;
+        }
+        
+        Ok(cleaned_count)
+    }
+
+    /// Mark failed runs as ready for retry if they meet retry criteria.
+    pub async fn mark_runs_for_retry(
+        &self,
+        max_retries: i32,
+        min_retry_delay_hours: i64,
+    ) -> Result<i64, sqlx::Error> {
+        let retry_cutoff = Utc::now() - chrono::Duration::hours(min_retry_delay_hours);
+        
+        let result = sqlx::query(
+            r#"
+            UPDATE queue SET 
+                schedule_time = NOW(),
+                retry_count = COALESCE(retry_count, 0) + 1
+            WHERE id IN (
+                SELECT DISTINCT queue.id 
+                FROM queue 
+                JOIN run ON run.suite = queue.suite 
+                    AND run.codebase = queue.codebase
+                    AND run.command = queue.command
+                WHERE run.result_code IN ('worker-timeout', 'worker-failure', 'worker-disappeared')
+                    AND run.failure_transient = true
+                    AND run.finish_time < $1
+                    AND COALESCE(queue.retry_count, 0) < $2
+                    AND queue.schedule_time IS NULL
+            )
+            "#
+        )
+        .bind(retry_cutoff)
+        .bind(max_retries)
+        .execute(&self.pool)
+        .await?;
+        
+        Ok(result.rows_affected() as i64)
+    }
+
+    /// Clean up orphaned data and maintain database consistency.
+    pub async fn maintenance_cleanup(&self) -> Result<(), sqlx::Error> {
+        // Remove active runs that don't have corresponding run records
+        sqlx::query(
+            "DELETE FROM active_run WHERE log_id NOT IN (SELECT id FROM run)"
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        // Clean up old rate limit entries from Redis
+        if let Some(redis_client) = &self.redis {
+            if let Ok(mut conn) = redis_client.get_async_connection().await {
+                let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await.unwrap_or_default();
+                let now = Utc::now();
+                
+                for (host, time_str) in hosts {
+                    if let Ok(retry_time) = DateTime::parse_from_rfc3339(&time_str) {
+                        let retry_time = retry_time.with_timezone(&Utc);
+                        if retry_time <= now {
+                            let _: () = conn.hdel("rate-limit-hosts", &host).await.unwrap_or(());
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Get statistics about failed runs and retries.
+    pub async fn get_failure_stats(&self) -> Result<HashMap<String, i64>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                'total_failed' as stat_name, 
+                COUNT(*) as count
+            FROM run 
+            WHERE result_code != 'success' AND finish_time > NOW() - INTERVAL '24 hours'
+            UNION ALL
+            SELECT 
+                'transient_failures' as stat_name, 
+                COUNT(*) as count
+            FROM run 
+            WHERE failure_transient = true AND finish_time > NOW() - INTERVAL '24 hours'
+            UNION ALL
+            SELECT 
+                'retry_eligible' as stat_name, 
+                COUNT(*) as count
+            FROM queue 
+            WHERE COALESCE(retry_count, 0) > 0
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut stats = HashMap::new();
+        for row in rows {
+            let stat_name: String = row.get("stat_name");
+            let count: i64 = row.get("count");
+            stats.insert(stat_name, count);
+        }
+
+        Ok(stats)
+    }
 }
 
 #[cfg(test)]
