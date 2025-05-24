@@ -1215,6 +1215,218 @@ impl RunnerDatabase {
 
         Ok(stats)
     }
+
+    /// Get all codebases from the database.
+    pub async fn get_codebases(&self) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT name, branch_url, url, branch, subpath, vcs_type, web_url, vcs_last_revision, value FROM codebase"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut codebases = Vec::new();
+        for row in rows {
+            let codebase = serde_json::json!({
+                "name": row.get::<Option<String>, _>("name"),
+                "branch_url": row.get::<Option<String>, _>("branch_url"),
+                "url": row.get::<Option<String>, _>("url"),
+                "branch": row.get::<Option<String>, _>("branch"),
+                "subpath": row.get::<Option<String>, _>("subpath"),
+                "vcs_type": row.get::<Option<String>, _>("vcs_type"),
+                "web_url": row.get::<Option<String>, _>("web_url"),
+                "vcs_last_revision": row.get::<Option<String>, _>("vcs_last_revision"),
+                "value": row.get::<Option<i64>, _>("value")
+            });
+            codebases.push(codebase);
+        }
+
+        Ok(codebases)
+    }
+
+    /// Upload/update codebases in the database.
+    pub async fn upload_codebases(&self, codebases: &[serde_json::Value]) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        for codebase in codebases {
+            // Parse URL parameters if branch_url is provided
+            let (url, branch_url, branch) = if let Some(branch_url_str) = codebase.get("branch_url").and_then(|v| v.as_str()) {
+                // For now, simple handling - in the real implementation this would parse URL parameters
+                (Some(branch_url_str.to_string()), Some(branch_url_str.to_string()), codebase.get("branch").and_then(|v| v.as_str()).map(String::from))
+            } else if let Some(url_str) = codebase.get("url").and_then(|v| v.as_str()) {
+                let branch = codebase.get("branch").and_then(|v| v.as_str()).map(String::from);
+                (Some(url_str.to_string()), Some(url_str.to_string()), branch)
+            } else {
+                (None, None, None)
+            };
+
+            sqlx::query(
+                r#"
+                INSERT INTO codebase 
+                (name, branch_url, url, branch, subpath, vcs_type, vcs_last_revision, value, web_url) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (name) DO UPDATE SET 
+                    branch_url = EXCLUDED.branch_url, 
+                    subpath = EXCLUDED.subpath, 
+                    vcs_type = EXCLUDED.vcs_type, 
+                    vcs_last_revision = EXCLUDED.vcs_last_revision, 
+                    value = EXCLUDED.value, 
+                    url = EXCLUDED.url, 
+                    branch = EXCLUDED.branch, 
+                    web_url = EXCLUDED.web_url
+                "#
+            )
+            .bind(codebase.get("name").and_then(|v| v.as_str()))
+            .bind(branch_url)
+            .bind(url)
+            .bind(branch)
+            .bind(codebase.get("subpath").and_then(|v| v.as_str()))
+            .bind(codebase.get("vcs_type").and_then(|v| v.as_str()))
+            .bind(codebase.get("vcs_last_revision").and_then(|v| v.as_str()))
+            .bind(codebase.get("value").and_then(|v| v.as_i64()))
+            .bind(codebase.get("web_url").and_then(|v| v.as_str()))
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Get all candidates from the database.
+    pub async fn get_candidates(&self) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, codebase, suite, command, publish_policy, change_set, context, value, success_chance FROM candidate"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut candidates = Vec::new();
+        for row in rows {
+            let candidate = serde_json::json!({
+                "id": row.get::<i64, _>("id"),
+                "codebase": row.get::<String, _>("codebase"),
+                "campaign": row.get::<String, _>("suite"), // Note: "suite" maps to "campaign" in API
+                "command": row.get::<Option<String>, _>("command"),
+                "publish-policy": row.get::<Option<String>, _>("publish_policy"),
+                "change_set": row.get::<Option<String>, _>("change_set"),
+                "context": row.get::<Option<serde_json::Value>, _>("context"),
+                "value": row.get::<Option<i64>, _>("value"),
+                "success_chance": row.get::<Option<f64>, _>("success_chance")
+            });
+            candidates.push(candidate);
+        }
+
+        Ok(candidates)
+    }
+
+    /// Upload/update candidates in the database.
+    pub async fn upload_candidates(&self, candidates: &[serde_json::Value]) -> Result<Vec<String>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let mut errors = Vec::new();
+
+        for candidate in candidates {
+            // Validate required fields
+            let codebase = match candidate.get("codebase").and_then(|v| v.as_str()) {
+                Some(cb) => cb,
+                None => {
+                    errors.push("Missing or invalid codebase field".to_string());
+                    continue;
+                }
+            };
+
+            let campaign = match candidate.get("campaign").and_then(|v| v.as_str()) {
+                Some(c) => c,
+                None => {
+                    errors.push("Missing or invalid campaign field".to_string());
+                    continue;
+                }
+            };
+
+            let command = candidate.get("command").and_then(|v| v.as_str());
+            let publish_policy = candidate.get("publish-policy").and_then(|v| v.as_str());
+            let change_set = candidate.get("change_set").and_then(|v| v.as_str());
+            let context = candidate.get("context");
+            let value = candidate.get("value").and_then(|v| v.as_i64());
+            let success_chance = candidate.get("success_chance").and_then(|v| v.as_f64());
+
+            // Insert/update candidate
+            let result = sqlx::query(
+                r#"
+                INSERT INTO candidate 
+                (suite, command, change_set, context, value, success_chance, publish_policy, codebase) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                ON CONFLICT (codebase, suite, coalesce(change_set, ''::text)) 
+                DO UPDATE SET 
+                    context = EXCLUDED.context, 
+                    value = EXCLUDED.value, 
+                    success_chance = EXCLUDED.success_chance, 
+                    command = EXCLUDED.command, 
+                    publish_policy = EXCLUDED.publish_policy, 
+                    codebase = EXCLUDED.codebase
+                RETURNING id
+                "#
+            )
+            .bind(campaign)
+            .bind(command)
+            .bind(change_set)
+            .bind(context)
+            .bind(value)
+            .bind(success_chance)
+            .bind(publish_policy)
+            .bind(codebase)
+            .fetch_one(&mut *tx)
+            .await;
+
+            if let Err(e) = result {
+                errors.push(format!("Failed to insert candidate for {}/{}: {}", codebase, campaign, e));
+            }
+        }
+
+        if errors.is_empty() {
+            tx.commit().await?;
+        } else {
+            tx.rollback().await?;
+        }
+
+        Ok(errors)
+    }
+
+    /// Delete a candidate by ID.
+    pub async fn delete_candidate(&self, candidate_id: i64) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+
+        // Delete followups first
+        sqlx::query("DELETE FROM followup WHERE candidate = $1")
+            .bind(candidate_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Get candidate info before deletion
+        let candidate_info = sqlx::query(
+            "DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase"
+        )
+        .bind(candidate_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(row) = candidate_info {
+            let suite: String = row.get("suite");
+            let codebase: String = row.get("codebase");
+
+            // Delete associated queue items
+            sqlx::query("DELETE FROM queue WHERE suite = $1 AND codebase = $2")
+                .bind(&suite)
+                .bind(&codebase)
+                .execute(&mut *tx)
+                .await?;
+
+            tx.commit().await?;
+            Ok(true)
+        } else {
+            tx.rollback().await?;
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(test)]
