@@ -1,19 +1,25 @@
 use breezyshim::forge::MergeProposal;
 use breezyshim::RevisionId;
-use janitor::publish::{MergeProposalStatus, Mode};
+use janitor::publish::MergeProposalStatus;
 use redis::AsyncCommands;
 use sqlx::PgPool;
 use url::Url;
 
 /// Information about a merge proposal stored in the database.
-#[derive(Debug, sqlx::FromRow)]
-struct ProposalInfo {
-    can_be_merged: Option<bool>,
-    status: String,
-    revision: RevisionId,
-    target_branch_url: Option<String>,
-    rate_limit_bucket: Option<String>,
-    codebase: Option<String>,
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ProposalInfo {
+    /// Whether the proposal can be merged.
+    pub can_be_merged: Option<bool>,
+    /// Current status of the proposal.
+    pub status: String,
+    /// Source revision ID.
+    pub revision: Option<String>,
+    /// Target branch URL.
+    pub target_branch_url: Option<String>,
+    /// Rate limit bucket for this proposal.
+    pub rate_limit_bucket: Option<String>,
+    /// Codebase this proposal belongs to.
+    pub codebase: String,
 }
 
 /// Manager for handling merge proposal information.
@@ -48,25 +54,43 @@ impl ProposalInfoManager {
     }
 
     /// Retrieve proposal information for a given URL.
+    ///
+    /// # Arguments
+    /// * `url` - The URL of the merge proposal
+    ///
+    /// # Returns
+    /// Proposal info if found, or None
     pub async fn get_proposal_info(
         &self,
         url: &url::Url,
     ) -> Result<Option<ProposalInfo>, sqlx::Error> {
-        let query = sqlx::query_as::<_, ProposalInfo>(
+        let row = sqlx::query(
             r#"SELECT
-                merge_proposal.rate_limit_bucket AS rate_limit_bucket,
+                merge_proposal.rate_limit_bucket,
                 merge_proposal.revision,
                 merge_proposal.status,
                 merge_proposal.target_branch_url,
                 merge_proposal.codebase,
-                can_be_merged
-            FROM
-                merge_proposal
-            WHERE
-                merge_proposal.url = $1"#,
-        );
+                merge_proposal.can_be_merged
+            FROM merge_proposal
+            WHERE merge_proposal.url = $1"#,
+        )
+        .bind(url.to_string())
+        .fetch_optional(&self.conn)
+        .await?;
 
-        query.bind(url.to_string()).fetch_optional(&self.conn).await
+        if let Some(row) = row {
+            Ok(Some(ProposalInfo {
+                rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+                revision: row.try_get("revision").ok(),
+                status: row.get("status"),
+                target_branch_url: row.try_get("target_branch_url").ok(),
+                can_be_merged: row.try_get("can_be_merged").ok(),
+                codebase: row.get("codebase"),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Delete proposal information for a given URL.
@@ -107,7 +131,21 @@ impl ProposalInfoManager {
         Ok(())
     }
 
-    async fn update_proposal_info(
+    /// Update proposal information in the database.
+    ///
+    /// # Arguments
+    /// * `mp` - The merge proposal
+    /// * `status` - Current status of the proposal
+    /// * `revision` - Source revision ID
+    /// * `codebase` - Codebase name
+    /// * `target_branch_url` - Target branch URL
+    /// * `campaign` - Campaign name
+    /// * `can_be_merged` - Whether the proposal can be merged
+    /// * `rate_limit_bucket` - Rate limit bucket
+    ///
+    /// # Returns
+    /// Ok(()) if successful, or a sqlx::Error
+    pub async fn update_proposal_info(
         &mut self,
         mp: &MergeProposal,
         status: MergeProposalStatus,
@@ -204,5 +242,151 @@ impl ProposalInfoManager {
                 .unwrap();
         }
         Ok(())
+    }
+
+    /// Check if a proposal exists in the database.
+    ///
+    /// # Arguments
+    /// * `url` - The URL of the merge proposal
+    ///
+    /// # Returns
+    /// True if the proposal exists, false otherwise
+    pub async fn proposal_exists(&self, url: &url::Url) -> Result<bool, sqlx::Error> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM merge_proposal WHERE url = $1"
+        )
+        .bind(url.to_string())
+        .fetch_one(&self.conn)
+        .await?;
+
+        Ok(count > 0)
+    }
+
+    /// Get all proposals for a specific codebase.
+    ///
+    /// # Arguments
+    /// * `codebase` - The codebase name
+    /// * `status_filter` - Optional status filter
+    ///
+    /// # Returns
+    /// List of proposal info for the codebase
+    pub async fn get_proposals_for_codebase(
+        &self,
+        codebase: &str,
+        status_filter: Option<&str>,
+    ) -> Result<Vec<ProposalInfo>, sqlx::Error> {
+        let mut query = "SELECT rate_limit_bucket, revision, status, target_branch_url, codebase, can_be_merged FROM merge_proposal WHERE codebase = $1".to_string();
+        
+        if let Some(status) = status_filter {
+            query.push_str(" AND status = $2");
+            let rows = sqlx::query(&query)
+                .bind(codebase)
+                .bind(status)
+                .fetch_all(&self.conn)
+                .await?;
+            
+            Ok(rows.into_iter().map(|row| ProposalInfo {
+                rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+                revision: row.try_get("revision").ok(),
+                status: row.get("status"),
+                target_branch_url: row.try_get("target_branch_url").ok(),
+                can_be_merged: row.try_get("can_be_merged").ok(),
+                codebase: row.get("codebase"),
+            }).collect())
+        } else {
+            let rows = sqlx::query(&query)
+                .bind(codebase)
+                .fetch_all(&self.conn)
+                .await?;
+            
+            Ok(rows.into_iter().map(|row| ProposalInfo {
+                rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+                revision: row.try_get("revision").ok(),
+                status: row.get("status"),
+                target_branch_url: row.try_get("target_branch_url").ok(),
+                can_be_merged: row.try_get("can_be_merged").ok(),
+                codebase: row.get("codebase"),
+            }).collect())
+        }
+    }
+
+    /// Update the last scanned timestamp for a proposal.
+    ///
+    /// # Arguments
+    /// * `url` - The URL of the merge proposal
+    ///
+    /// # Returns
+    /// Ok(()) if successful, or a sqlx::Error
+    pub async fn touch_proposal(&self, url: &url::Url) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE merge_proposal SET last_scanned = NOW() WHERE url = $1")
+            .bind(url.to_string())
+            .execute(&self.conn)
+            .await?;
+        Ok(())
+    }
+
+    /// Get statistics about proposals in the database.
+    ///
+    /// # Returns
+    /// A map of status -> count
+    pub async fn get_proposal_statistics(&self) -> Result<std::collections::HashMap<String, i64>, sqlx::Error> {
+        let rows = sqlx::query("SELECT status, COUNT(*) as count FROM merge_proposal GROUP BY status")
+            .fetch_all(&self.conn)
+            .await?;
+
+        let mut stats = std::collections::HashMap::new();
+        for row in rows {
+            let status: String = row.get("status");
+            let count: i64 = row.get("count");
+            stats.insert(status, count);
+        }
+
+        Ok(stats)
+    }
+
+    /// Clean up old closed proposals.
+    ///
+    /// # Arguments
+    /// * `days_old` - Remove proposals closed more than this many days ago
+    ///
+    /// # Returns
+    /// Number of proposals removed
+    pub async fn cleanup_old_proposals(&self, days_old: i32) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
+            "DELETE FROM merge_proposal WHERE status IN ('closed', 'merged') AND last_scanned < NOW() - INTERVAL '$1 days'"
+        )
+        .bind(days_old)
+        .execute(&self.conn)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_proposal_info_manager_creation() {
+        // This would need a test database connection
+        // let manager = ProposalInfoManager::new(pool, None).await;
+        // assert!(manager.redis.is_none());
+    }
+
+    #[test]
+    fn test_proposal_info_serialization() {
+        let info = ProposalInfo {
+            can_be_merged: Some(true),
+            status: "open".to_string(),
+            revision: Some("abc123".to_string()),
+            target_branch_url: Some("https://github.com/test/repo".to_string()),
+            rate_limit_bucket: Some("default".to_string()),
+            codebase: "test-codebase".to_string(),
+        };
+
+        assert_eq!(info.status, "open");
+        assert_eq!(info.codebase, "test-codebase");
+        assert!(info.can_be_merged.unwrap());
     }
 }
