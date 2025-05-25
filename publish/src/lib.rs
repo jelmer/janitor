@@ -34,8 +34,8 @@ pub mod web;
 
 use rate_limiter::RateLimiter;
 
-// Import redis types explicitly
-pub use redis::aio::ConnectionManager as RedisConnectionManager;
+// Re-export from redis module to avoid import issues
+pub use crate::redis::RedisConnectionManager;
 // Import sqlx Row trait
 use sqlx::Row;
 // Import pyo3 for PyErr
@@ -867,7 +867,7 @@ pub async fn get_mp_status(mp: &breezyshim::forge::MergeProposal) -> Result<Stri
 /// # Returns
 /// Ok(()) if successful, or a BrzError
 pub async fn abandon_mp(
-    proposal_info_manager: &proposal_info::ProposalInfoManager,
+    proposal_info_manager: &mut proposal_info::ProposalInfoManager,
     mp: &breezyshim::forge::MergeProposal,
     revision: &RevisionId,
     codebase: Option<&str>,
@@ -887,7 +887,7 @@ pub async fn abandon_mp(
     proposal_info_manager.update_proposal_info(
         mp,
         janitor::publish::MergeProposalStatus::Abandoned,
-        revision.as_ref(),
+        Some(revision),
         codebase.unwrap_or(""),
         &url::Url::parse(target_branch_url).map_err(|e| BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!("URL parse error: {}", e))))?,
         campaign.unwrap_or(""),
@@ -942,7 +942,7 @@ pub async fn abandon_mp(
 /// # Returns
 /// Ok(()) if successful, or a BrzError
 pub async fn close_applied_mp(
-    proposal_info_manager: &proposal_info::ProposalInfoManager,
+    proposal_info_manager: &mut proposal_info::ProposalInfoManager,
     mp: &breezyshim::forge::MergeProposal,
     revision: &RevisionId,
     codebase: Option<&str>,
@@ -1232,6 +1232,7 @@ async fn check_existing_mp(
         breezyshim::forge::MergeProposalStatus::Open => "open",
         breezyshim::forge::MergeProposalStatus::Merged => "merged", 
         breezyshim::forge::MergeProposalStatus::Closed => "closed",
+        breezyshim::forge::MergeProposalStatus::All => "all",
     };
 
     // Store/update merge proposal info
@@ -1249,7 +1250,7 @@ async fn check_existing_mp(
     )
     .bind(&mp_url.to_string())
     .bind(db_status)
-    .bind(revision.map(|r| r.to_string()).unwrap_or_default())
+    .bind(revision.to_string())
     .bind(&source_branch_url.as_ref().map(|u| u.to_string()).unwrap_or_default())
     .bind(&run_codebase)
     .execute(conn)
@@ -1257,12 +1258,13 @@ async fn check_existing_mp(
     .map_err(|_| CheckMpError::UnexpectedHttpStatus)?;
 
     // Update bucket counters if provided
-    if let Some(ref mut mps_per_bucket) = mps_per_bucket {
+    if let Some(mps_per_bucket) = mps_per_bucket {
         let bucket = rate_limit_bucket.as_deref().unwrap_or("default");
         let status_key = match status {
             breezyshim::forge::MergeProposalStatus::Open => janitor::publish::MergeProposalStatus::Open,
             breezyshim::forge::MergeProposalStatus::Merged => janitor::publish::MergeProposalStatus::Merged,
             breezyshim::forge::MergeProposalStatus::Closed => janitor::publish::MergeProposalStatus::Closed,
+            breezyshim::forge::MergeProposalStatus::All => janitor::publish::MergeProposalStatus::Open, // Default to open for All
         };
         
         *mps_per_bucket
@@ -1327,7 +1329,8 @@ pub fn iter_all_mps(
             statuses.iter().filter_map(move |&status| {
                 match forge.iter_my_proposals(Some(status), None) {
                     Ok(proposals) => {
-                        Some(proposals.map(move |proposal| Ok((forge.clone(), proposal, status))))
+                        let forge_clone = forge.clone();
+                        Some(proposals.map(move |proposal| Ok((forge_clone.clone(), proposal, status))))
                     }
                     Err(BrzError::ForgeLoginRequired) => {
                         log::info!("Skipping forge {}, no credentials known", forge.forge_name());
@@ -1531,7 +1534,7 @@ async fn consider_publish_run(
     };
 
     // Check exponential backoff - get previous attempt count
-    let attempt_count = get_publish_attempt_count(conn, &run.revision.as_ref().unwrap(), &["differ-unreachable"]).await?;
+    let attempt_count = get_publish_attempt_count(conn, &run.revision, &["differ-unreachable"]).await?;
     let next_try_time = calculate_next_try_time(run.finish_time.unwrap_or(chrono::Utc::now()), attempt_count);
     
     if chrono::Utc::now() < next_try_time {
