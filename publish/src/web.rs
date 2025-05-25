@@ -13,40 +13,343 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-async fn get_merge_proposals_by_campaign() {
-    unimplemented!()
+/// Merge proposal data structure for API responses.
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+struct MergeProposal {
+    codebase: Option<String>,
+    url: String,
+    target_branch_url: Option<String>,
+    status: Option<String>,
+    revision: Option<String>,
+    merged_by: Option<String>,
+    merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    last_scanned: Option<chrono::DateTime<chrono::Utc>>,
+    can_be_merged: Option<bool>,
+    rate_limit_bucket: Option<String>,
 }
 
-async fn get_merge_proposals_by_codebase() {
-    unimplemented!()
+async fn get_merge_proposals_by_campaign(
+    State(state): State<Arc<AppState>>,
+    Path(campaign): Path<String>,
+) -> impl IntoResponse {
+    // Get merge proposals for a specific campaign/suite by joining with runs
+    let merge_proposals = sqlx::query_as::<_, MergeProposal>(
+        r#"
+        SELECT DISTINCT 
+            mp.codebase,
+            mp.url,
+            mp.target_branch_url,
+            mp.status::text,
+            mp.revision,
+            mp.merged_by,
+            mp.merged_at,
+            mp.last_scanned,
+            mp.can_be_merged,
+            mp.rate_limit_bucket
+        FROM merge_proposal mp
+        INNER JOIN publish p ON p.merge_proposal_url = mp.url
+        INNER JOIN run r ON r.id = p.id
+        WHERE r.suite = $1
+        ORDER BY mp.last_scanned DESC NULLS LAST
+        "#
+    )
+    .bind(&campaign)
+    .fetch_all(&state.conn)
+    .await;
+
+    match merge_proposals {
+        Ok(merge_proposals) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(merge_proposals).unwrap())
+        ),
+        Err(e) => {
+            log::error!("Error fetching merge proposals for campaign {}: {}", campaign, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
 }
 
-async fn post_merge_proposal() {
-    unimplemented!()
+async fn get_merge_proposals_by_codebase(
+    State(state): State<Arc<AppState>>,
+    Path(codebase): Path<String>,
+) -> impl IntoResponse {
+    let merge_proposals = sqlx::query_as::<_, MergeProposal>(
+        r#"
+        SELECT 
+            codebase,
+            url,
+            target_branch_url,
+            status::text,
+            revision,
+            merged_by,
+            merged_at,
+            last_scanned,
+            can_be_merged,
+            rate_limit_bucket
+        FROM merge_proposal 
+        WHERE codebase = $1
+        ORDER BY last_scanned DESC NULLS LAST
+        "#
+    )
+    .bind(&codebase)
+    .fetch_all(&state.conn)
+    .await;
+
+    match merge_proposals {
+        Ok(merge_proposals) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(merge_proposals).unwrap())
+        ),
+        Err(e) => {
+            log::error!("Error fetching merge proposals for codebase {}: {}", codebase, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
+}
+
+/// Request body for creating a merge proposal.
+#[derive(serde::Deserialize)]
+struct CreateMergeProposalRequest {
+    codebase: Option<String>,
+    url: String,
+    target_branch_url: Option<String>,
+    status: Option<String>,
+    revision: Option<String>,
+    rate_limit_bucket: Option<String>,
+}
+
+async fn post_merge_proposal(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateMergeProposalRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO merge_proposal (
+            codebase, url, target_branch_url, status, revision, rate_limit_bucket, last_scanned
+        ) VALUES ($1, $2, $3, $4::merge_proposal_status, $5, $6, NOW())
+        ON CONFLICT (url) DO UPDATE SET
+            codebase = EXCLUDED.codebase,
+            target_branch_url = EXCLUDED.target_branch_url,
+            status = EXCLUDED.status,
+            revision = EXCLUDED.revision,
+            rate_limit_bucket = EXCLUDED.rate_limit_bucket,
+            last_scanned = NOW()
+        "#
+    )
+    .bind(&request.codebase)
+    .bind(&request.url)
+    .bind(&request.target_branch_url)
+    .bind(&request.status)
+    .bind(&request.revision)
+    .bind(&request.rate_limit_bucket)
+    .execute(&state.conn)
+    .await;
+
+    match result {
+        Ok(_) => {
+            log::info!("Successfully created/updated merge proposal: {}", request.url);
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "status": "success",
+                    "url": request.url
+                }))
+            )
+        }
+        Err(e) => {
+            log::error!("Error creating/updating merge proposal {}: {}", request.url, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
 }
 
 async fn absorbed() {
     unimplemented!()
 }
 
-async fn get_policy() {
-    unimplemented!()
+/// Policy data structure for API responses.
+#[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+struct Policy {
+    name: String,
+    per_branch_policy: Option<serde_json::Value>, // Array of branch policies
+    rate_limit_bucket: Option<String>,
 }
 
-async fn get_policies() {
-    unimplemented!()
+async fn get_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let policy = sqlx::query_as::<_, Policy>(
+        "SELECT name, per_branch_policy, rate_limit_bucket FROM named_publish_policy WHERE name = $1"
+    )
+    .bind(&name)
+    .fetch_optional(&state.conn)
+    .await;
+
+    match policy {
+        Ok(Some(policy)) => (StatusCode::OK, Json(serde_json::to_value(policy).unwrap())),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "reason": "No such policy",
+                "name": name,
+            }))
+        ),
+        Err(e) => {
+            log::error!("Error fetching policy {}: {}", name, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
 }
 
-async fn put_policy() {
-    unimplemented!()
+async fn get_policies(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let policies = sqlx::query_as::<_, Policy>(
+        "SELECT name, per_branch_policy, rate_limit_bucket FROM named_publish_policy ORDER BY name"
+    )
+    .fetch_all(&state.conn)
+    .await;
+
+    match policies {
+        Ok(policies) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(policies).unwrap())
+        ),
+        Err(e) => {
+            log::error!("Error fetching policies: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
+}
+
+/// Request body for creating/updating a policy.
+#[derive(serde::Deserialize)]
+struct PolicyRequest {
+    per_branch_policy: Option<serde_json::Value>,
+    rate_limit_bucket: Option<String>,
+}
+
+async fn put_policy(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(request): Json<PolicyRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO named_publish_policy (name, per_branch_policy, rate_limit_bucket)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (name) DO UPDATE SET
+            per_branch_policy = EXCLUDED.per_branch_policy,
+            rate_limit_bucket = EXCLUDED.rate_limit_bucket
+        "#
+    )
+    .bind(&name)
+    .bind(&request.per_branch_policy)
+    .bind(&request.rate_limit_bucket)
+    .execute(&state.conn)
+    .await;
+
+    match result {
+        Ok(_) => {
+            log::info!("Successfully created/updated policy: {}", name);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "status": "success",
+                    "name": name
+                }))
+            )
+        }
+        Err(e) => {
+            log::error!("Error creating/updating policy {}: {}", name, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
 }
 
 async fn put_policies() {
     unimplemented!()
 }
 
-async fn update_merge_proposal() {
-    unimplemented!()
+/// Request body for updating a merge proposal.
+#[derive(serde::Deserialize)]
+struct UpdateMergeProposalRequest {
+    url: String,
+    status: Option<String>,
+    merged_by: Option<String>,
+    merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    can_be_merged: Option<bool>,
+}
+
+async fn update_merge_proposal(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<UpdateMergeProposalRequest>,
+) -> impl IntoResponse {
+    let result = sqlx::query(
+        r#"
+        UPDATE merge_proposal SET
+            status = COALESCE($2::merge_proposal_status, status),
+            merged_by = COALESCE($3, merged_by),
+            merged_at = COALESCE($4, merged_at),
+            can_be_merged = COALESCE($5, can_be_merged),
+            last_scanned = NOW()
+        WHERE url = $1
+        "#
+    )
+    .bind(&request.url)
+    .bind(&request.status)
+    .bind(&request.merged_by)
+    .bind(&request.merged_at)
+    .bind(&request.can_be_merged)
+    .execute(&state.conn)
+    .await;
+
+    match result {
+        Ok(result) => {
+            if result.rows_affected() == 0 {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "reason": "No such merge proposal",
+                        "url": request.url,
+                    }))
+                )
+            } else {
+                log::info!("Successfully updated merge proposal: {}", request.url);
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "status": "success",
+                        "url": request.url
+                    }))
+                )
+            }
+        }
+        Err(e) => {
+            log::error!("Error updating merge proposal {}: {}", request.url, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            )
+        }
+    }
 }
 
 async fn delete_policy(
