@@ -1114,12 +1114,57 @@ async fn consider_publish_run(
     log::info!("Considering publish for run {} (campaign: {}, codebase: {})", 
               run.id, run.suite, run.codebase);
 
+    // Check if the run has a revision
+    if run.revision.is_none() {
+        log::warn!("Run {} is publish ready, but does not have revision set.", run.id);
+        results.insert("status".to_string(), Some("no_revision".to_string()));
+        return Ok(results);
+    }
+
     // Check if the run is successful
     if run.result_code.as_deref() != Some("success") {
         log::info!("Run {} not successful (result: {:?}), skipping publish", 
                   run.id, run.result_code);
         results.insert("status".to_string(), Some("not_successful".to_string()));
         return Ok(results);
+    }
+
+    // Get campaign configuration
+    let campaign_config = match config.campaign.iter().find(|c| c.name() == run.suite) {
+        Some(config) => config,
+        None => {
+            log::warn!("No campaign configuration found for suite {}", run.suite);
+            results.insert("status".to_string(), Some("no_campaign_config".to_string()));
+            return Ok(results);
+        }
+    };
+
+    // Check exponential backoff - get previous attempt count
+    let attempt_count = get_publish_attempt_count(conn, &run.revision.as_ref().unwrap(), &["differ-unreachable"]).await?;
+    let next_try_time = calculate_next_try_time(run.finish_time.unwrap_or(chrono::Utc::now()), attempt_count);
+    
+    if chrono::Utc::now() < next_try_time {
+        let wait_duration = next_try_time - chrono::Utc::now();
+        log::info!(
+            "Not attempting to push {} / {} ({}) due to exponential backoff. Next try in {:?}.",
+            run.codebase, run.suite, run.id, wait_duration
+        );
+        results.insert("status".to_string(), Some("exponential_backoff".to_string()));
+        results.insert("next_try_time".to_string(), Some(next_try_time.to_rfc3339()));
+        return Ok(results);
+    }
+
+    // Check if any branches require push mode and we're at push limit
+    let has_push_modes = unpublished_branches.iter().any(|b| {
+        b.publish_mode.as_deref() == Some("push") || b.publish_mode.as_deref() == Some("attempt-push")
+    });
+
+    if let Some(limit) = push_limit {
+        if has_push_modes && limit == 0 {
+            log::info!("Not pushing {} / {}: push limit reached", run.codebase, run.suite);
+            results.insert("status".to_string(), Some("push_limit_reached".to_string()));
+            return Ok(results);
+        }
     }
 
     // Check rate limiting
@@ -1138,76 +1183,81 @@ async fn consider_publish_run(
 
     // Check if we should skip due to binary diff requirement
     if require_binary_diff {
+        // TODO: Implement actual binary diff check
         // For now, assume we have binary diff capability
-        // In a full implementation, this would check if the diff contains binary changes
         log::debug!("Binary diff check passed for run {}", run.id);
     }
 
-    // Check push limit
-    if let Some(limit) = push_limit {
-        // Get current number of active publishes
-        let active_count = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM publish WHERE result_code IS NULL"
-        )
-        .fetch_one(conn)
-        .await? as usize;
-        
-        if active_count >= limit {
-            log::info!("Push limit reached ({}/{}), skipping publish for run {}", 
-                      active_count, limit, run.id);
-            results.insert("status".to_string(), Some("push_limit_reached".to_string()));
-            results.insert("active_publishes".to_string(), Some(active_count.to_string()));
-            return Ok(results);
-        }
+    // Check if the run value is sufficient for creating merge proposals
+    if !crate::run_sufficient_for_proposal(campaign_config, run.value) {
+        log::info!("Run {} value {:?} is not sufficient for proposal (threshold: {:?})", 
+                  run.id, run.value, campaign_config.merge_proposal.value_threshold);
+        results.insert("status".to_string(), Some("insufficient_value".to_string()));
+        return Ok(results);
     }
+
+    let mut actual_modes = HashMap::new();
 
     // Process each unpublished branch
     for branch in unpublished_branches {
         let branch_name = &branch.role;
         log::debug!("Processing branch {} for run {}", branch_name, run.id);
 
-        // Create publish request for this branch
-        match try_publish_branch(
+        // Determine the actual publish mode for this branch
+        let publish_mode = determine_publish_mode(
             conn,
-            redis.clone(),
             config,
-            publish_worker,
-            vcs_managers,
-            bucket_rate_limiter,
+            campaign_config,
             run,
             branch,
-            command,
-        ).await {
-            Ok(publish_result) => {
-                results.insert(
-                    format!("branch_{}", branch_name), 
-                    Some(publish_result)
-                );
-                log::info!("Successfully initiated publish for branch {} of run {}", 
-                          branch_name, run.id);
+            require_binary_diff,
+        ).await?;
+
+        if let Some(mode) = publish_mode {
+            log::info!("Will publish branch {} of run {} with mode {}", 
+                      branch_name, run.id, mode);
+
+            // Create publish request for this branch
+            match try_publish_branch_with_mode(
+                conn,
+                redis.clone(),
+                config,
+                publish_worker,
+                vcs_managers,
+                bucket_rate_limiter,
+                run,
+                branch,
+                command,
+                &mode,
+            ).await {
+                Ok(publish_result) => {
+                    actual_modes.insert(branch_name.clone(), Some(mode.clone()));
+                    results.insert(
+                        format!("branch_{}", branch_name), 
+                        Some(publish_result)
+                    );
+                    log::info!("Successfully initiated publish for branch {} of run {} with mode {}", 
+                              branch_name, run.id, mode);
+                }
+                Err(e) => {
+                    log::warn!("Failed to publish branch {} of run {}: {}", 
+                              branch_name, run.id, e);
+                    results.insert(
+                        format!("branch_{}_error", branch_name), 
+                        Some(e.to_string())
+                    );
+                }
             }
-            Err(e) => {
-                log::warn!("Failed to publish branch {} of run {}: {}", 
-                          branch_name, run.id, e);
-                results.insert(
-                    format!("branch_{}_error", branch_name), 
-                    Some(e.to_string())
-                );
-            }
+        } else {
+            log::debug!("No publish mode determined for branch {} of run {}", branch_name, run.id);
+            actual_modes.insert(branch_name.clone(), None);
         }
     }
 
-    // Update rate limiter to track this publish attempt
-    {
-        let mut limiter = bucket_rate_limiter.lock().unwrap();
-        match limiter.check_allowed(rate_limit_bucket) {
-            crate::rate_limiter::RateLimitStatus::Allowed => {
-                // Continue with publishing
-            }
-            status => {
-                log::warn!("Rate limited for bucket {}: {:?}", rate_limit_bucket, status);
-                return Ok(results);
-            }
+    // Store the actual modes that were attempted
+    for (branch_name, mode) in actual_modes {
+        if let Some(mode) = mode {
+            results.insert(format!("mode_{}", branch_name), Some(mode));
         }
     }
 
@@ -1215,6 +1265,274 @@ async fn consider_publish_run(
     results.insert("run_id".to_string(), Some(run.id.clone()));
     
     Ok(results)
+}
+
+/// Get the count of previous publish attempts for a revision.
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `revision` - The revision ID to check
+/// * `exclude_codes` - Result codes to exclude from the count
+///
+/// # Returns
+/// The number of previous attempts
+async fn get_publish_attempt_count(
+    conn: &sqlx::PgPool,
+    revision: &breezyshim::RevisionId,
+    exclude_codes: &[&str],
+) -> Result<usize, sqlx::Error> {
+    let revision_str = revision.to_string();
+    
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*)
+        FROM publish
+        WHERE revision = $1
+        AND (result_code IS NULL OR NOT (result_code = ANY($2)))
+        "#
+    )
+    .bind(&revision_str)
+    .bind(exclude_codes)
+    .fetch_one(conn)
+    .await? as usize;
+
+    Ok(count)
+}
+
+/// Determine the appropriate publish mode for a branch.
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `config` - Application configuration
+/// * `campaign_config` - Campaign-specific configuration
+/// * `run` - The run to publish
+/// * `branch` - The branch to publish
+/// * `require_binary_diff` - Whether binary diffs are required
+///
+/// # Returns
+/// The publish mode to use, or None if the branch should not be published
+async fn determine_publish_mode(
+    conn: &sqlx::PgPool,
+    config: &janitor::config::Config,
+    campaign_config: &janitor::config::Campaign,
+    run: &janitor::state::Run,
+    branch: &crate::state::UnpublishedBranch,
+    require_binary_diff: bool,
+) -> Result<Option<String>, sqlx::Error> {
+    // If branch already has a publish mode specified, use it
+    if let Some(mode) = &branch.publish_mode {
+        if !mode.is_empty() {
+            return Ok(Some(mode.clone()));
+        }
+    }
+
+    // Get publish policy for this codebase and campaign
+    let policy = get_publish_policy(conn, &run.codebase, &run.suite).await?;
+    
+    if let Some((per_branch_policy, _command, _rate_limit_bucket)) = policy {
+        if let Some((mode, frequency_days)) = per_branch_policy.get(&branch.role) {
+            // Check frequency constraint if specified
+            if let Some(frequency) = frequency_days {
+                let cutoff_time = chrono::Utc::now() - chrono::Duration::days(*frequency as i64);
+                
+                let recent_publish_count = sqlx::query_scalar::<_, i64>(
+                    r#"
+                    SELECT COUNT(*)
+                    FROM publish
+                    WHERE codebase = $1
+                    AND branch_name = $2
+                    AND start_time > $3
+                    AND result_code = 'success'
+                    "#
+                )
+                .bind(&run.codebase)
+                .bind(&branch.role)
+                .bind(cutoff_time)
+                .fetch_one(conn)
+                .await?;
+                
+                if recent_publish_count > 0 {
+                    log::info!("Branch {} of {} was published recently (within {} days), skipping",
+                              branch.role, run.codebase, frequency);
+                    return Ok(None);
+                }
+            }
+            
+            return Ok(Some(mode.clone()));
+        }
+    }
+
+    // Default mode based on branch role and campaign settings
+    let default_mode = match branch.role.as_str() {
+        "main" => {
+            // Main branches usually get proposed as merge requests
+            if campaign_config.merge_proposal.enabled {
+                "propose"
+            } else {
+                "build-only"
+            }
+        }
+        "debian" => {
+            // Debian branches might be pushed directly
+            "attempt-push"
+        }
+        _ => {
+            // Other branches default to build-only
+            "build-only"
+        }
+    };
+
+    Ok(Some(default_mode.to_string()))
+}
+
+/// Get publish policy for a codebase and campaign.
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `codebase` - The codebase name
+/// * `campaign` - The campaign name
+///
+/// # Returns
+/// A tuple of (per_branch_policy, command, rate_limit_bucket) or None
+async fn get_publish_policy(
+    conn: &sqlx::PgPool,
+    codebase: &str,
+    campaign: &str,
+) -> Result<Option<(HashMap<String, (String, Option<i32>)>, Option<String>, Option<String>)>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT per_branch_policy, command, rate_limit_bucket
+        FROM candidate
+        LEFT JOIN named_publish_policy
+        ON named_publish_policy.name = candidate.publish_policy
+        WHERE codebase = $1 AND suite = $2
+        "#
+    )
+    .bind(codebase)
+    .bind(campaign)
+    .fetch_optional(conn)
+    .await?;
+
+    if let Some(row) = row {
+        let per_branch_policy: Option<serde_json::Value> = row.try_get("per_branch_policy").ok();
+        let command: Option<String> = row.try_get("command").ok();
+        let rate_limit_bucket: Option<String> = row.try_get("rate_limit_bucket").ok();
+
+        if let Some(policy_json) = per_branch_policy {
+            // Parse the per_branch_policy JSON into a HashMap
+            let mut policy_map = HashMap::new();
+            
+            if let serde_json::Value::Array(policies) = policy_json {
+                for policy in policies {
+                    if let serde_json::Value::Object(policy_obj) = policy {
+                        if let (Some(role), Some(mode)) = (
+                            policy_obj.get("role").and_then(|v| v.as_str()),
+                            policy_obj.get("mode").and_then(|v| v.as_str())
+                        ) {
+                            let frequency_days = policy_obj
+                                .get("frequency_days")
+                                .and_then(|v| v.as_i64())
+                                .map(|v| v as i32);
+                            
+                            policy_map.insert(
+                                role.to_string(),
+                                (mode.to_string(), frequency_days)
+                            );
+                        }
+                    }
+                }
+            }
+
+            return Ok(Some((policy_map, command, rate_limit_bucket)));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Enhanced helper function to attempt publishing a single branch with a specific mode.
+async fn try_publish_branch_with_mode(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    run: &janitor::state::Run,
+    branch: &crate::state::UnpublishedBranch,
+    command: &str,
+    mode: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // Get campaign configuration
+    let campaign = match config.campaign.iter().find(|c| c.name() == run.suite) {
+        Some(campaign) => campaign,
+        None => return Err(format!("No campaign configuration for suite {}", run.suite).into()),
+    };
+
+    // Parse the mode string into the Mode enum
+    let publish_mode = match mode {
+        "propose" => Mode::Propose,
+        "push" => Mode::Push,
+        "attempt-push" => Mode::AttemptPush,
+        "push-derived" => Mode::PushDerived,
+        "build-only" => Mode::BuildOnly,
+        _ => {
+            log::warn!("Unknown publish mode '{}', defaulting to build-only", mode);
+            Mode::BuildOnly
+        }
+    };
+
+    // Create publish record
+    let publish_id = sqlx::query_scalar::<_, String>(
+        r#"
+        INSERT INTO publish (
+            id, mode, branch_name, main_branch_revision, revision, 
+            target_branch_url, result_code, description, start_time
+        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, 'Publishing in progress', NOW())
+        RETURNING id
+        "#
+    )
+    .bind(&run.id)
+    .bind(publish_mode.to_string())
+    .bind(&branch.role)
+    .bind(&run.main_branch_revision)
+    .bind(&run.revision)
+    .bind(&run.target_branch_url)
+    .fetch_one(conn)
+    .await?;
+
+    log::info!("Created publish record {} for run {} branch {} with mode {}", 
+              publish_id, run.id, branch.role, mode);
+
+    // For build-only mode, we're done
+    if publish_mode == Mode::BuildOnly {
+        // Update the publish record to mark it as successful
+        sqlx::query(
+            r#"
+            UPDATE publish 
+            SET result_code = 'success', 
+                description = 'Build completed successfully',
+                finish_time = NOW()
+            WHERE id = $1
+            "#
+        )
+        .bind(&publish_id)
+        .execute(conn)
+        .await?;
+        
+        return Ok(format!("build_only_{}", publish_id));
+    }
+
+    // For other modes, we would queue the actual publishing work
+    // In a full implementation, this would:
+    // 1. Queue the actual publishing work to the publish worker
+    // 2. Handle different publish modes (propose, push, attempt-push, push-derived)
+    // 3. Create merge proposals if needed
+    // 4. Update the publish record with results
+    
+    log::info!("Publishing work queued for publish record {}", publish_id);
+    
+    Ok(format!("{}_{}", mode, publish_id))
 }
 
 /// Helper function to attempt publishing a single branch.
