@@ -1179,8 +1179,14 @@ async fn consider_publish_run(
     // Update rate limiter to track this publish attempt
     {
         let mut limiter = bucket_rate_limiter.lock().unwrap();
-        if let Err(e) = limiter.acquire(rate_limit_bucket) {
-            log::warn!("Failed to acquire rate limit for bucket {}: {}", rate_limit_bucket, e);
+        match limiter.check_allowed(rate_limit_bucket) {
+            crate::rate_limiter::RateLimitStatus::Allowed => {
+                // Continue with publishing
+            }
+            status => {
+                log::warn!("Rate limited for bucket {}: {:?}", rate_limit_bucket, status);
+                return Ok(results);
+            }
         }
     }
 
@@ -1203,7 +1209,7 @@ async fn try_publish_branch(
     command: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // Get campaign configuration
-    let campaign = match config.campaign.get(&run.suite) {
+    let campaign = match config.campaign.iter().find(|c| c.name() == run.suite) {
         Some(campaign) => campaign,
         None => return Err(format!("No campaign configuration for suite {}", run.suite).into()),
     };
