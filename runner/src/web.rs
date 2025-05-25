@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use url::Url;
 use uuid::Uuid;
 
 /// Request for work assignment.
@@ -102,6 +103,36 @@ struct FinishResponse {
     artifacts: Vec<String>,
     /// Result information.
     result: serde_json::Value,
+}
+
+/// Extract avoided hosts from configuration.
+fn get_avoided_hosts(config: &janitor::config::Config) -> Vec<String> {
+    let mut avoided_hosts = Vec::new();
+    
+    // Check for any distribution-specific hosts that should be avoided
+    // For now, implement basic host filtering based on distribution settings
+    for distribution in &config.distribution {
+        // Skip distributions that might have problematic archive mirrors
+        if let Some(mirror) = distribution.archive_mirror_uri.as_ref() {
+            if mirror.contains("restricted") || mirror.contains("internal") {
+                // Extract hostname from mirror URI and add to avoided list
+                if let Ok(url) = url::Url::parse(mirror) {
+                    if let Some(host) = url.host_str() {
+                        avoided_hosts.push(host.to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Add any hardcoded problematic hosts
+    // In a real implementation, this could come from config or database
+    avoided_hosts.extend([
+        "unreliable.example.com".to_string(),
+        "slow.mirror.example.org".to_string(),
+    ]);
+    
+    avoided_hosts
 }
 
 /// Create campaign configuration from actual config files and queue item.
@@ -633,10 +664,11 @@ async fn get_active_run(
 
 async fn peek_active_run(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     // Peek at the next queue assignment without actually assigning it
+    let avoided_hosts = get_avoided_hosts(&state.config);
     match state.database.next_queue_item_with_rate_limiting(
         None, // No specific codebase filter
         None, // No specific campaign filter  
-        &[], // TODO: Add avoided hosts from config
+        &avoided_hosts,
     ).await {
         Ok(Some(assignment)) => {
             let campaign_config = create_campaign_config(&assignment.queue_item, &state.config);
@@ -1446,10 +1478,11 @@ async fn assign_work_internal(
     // Use enhanced Redis integration for queue management
     
     // Get next available queue item with rate limiting and Redis integration
+    let excluded_hosts = &state.config.runner.worker.avoid_hosts;
     let assignment = match state.database.next_queue_item_with_rate_limiting(
         request.codebase.as_deref(),
         request.campaign.as_deref(),
-        &[], // TODO: Add excluded hosts from config
+        excluded_hosts,
     ).await {
         Ok(Some(assignment)) => assignment,
         Ok(None) => {

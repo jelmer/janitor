@@ -44,6 +44,69 @@ impl TerminationReason {
             TerminationReason::SystemFailure(msg) => format!("System failure: {}", msg),
         }
     }
+    
+    /// Check if this failure is transient (retriable).
+    pub fn is_transient(&self) -> bool {
+        match self {
+            TerminationReason::Timeout => true,
+            TerminationReason::HealthCheckFailed => true,
+            TerminationReason::ManualKill => false,
+            TerminationReason::WorkerDisappeared => true,
+            TerminationReason::SystemFailure(_) => true,
+        }
+    }
+    
+    /// Create structured failure details for database storage.
+    pub fn create_failure_details(&self, run: &crate::ActiveRun) -> serde_json::Value {
+        use serde_json::json;
+        use chrono::Utc;
+        
+        let mut details = json!({
+            "termination_reason": self.result_code(),
+            "description": self.description(),
+            "is_transient": self.is_transient(),
+            "worker_name": run.worker_name,
+            "codebase": run.codebase,
+            "campaign": run.campaign,
+            "log_id": run.log_id,
+            "terminated_at": Utc::now().to_rfc3339(),
+        });
+        
+        // Add run duration if available
+        if let Some(start_time) = run.start_time {
+            let duration = Utc::now().signed_duration_since(start_time);
+            details["run_duration_seconds"] = json!(duration.num_seconds());
+        }
+        
+        // Add estimated vs actual duration comparison if available
+        if let Some(estimated) = run.estimated_duration {
+            details["estimated_duration_seconds"] = json!(estimated.as_secs());
+        }
+        
+        // Add backchannel information
+        details["backchannel"] = run.backchannel.to_json();
+        
+        // Add specific details based on termination reason
+        match self {
+            TerminationReason::Timeout => {
+                details["timeout_type"] = json!("watchdog_timeout");
+            },
+            TerminationReason::HealthCheckFailed => {
+                details["health_check_failed"] = json!(true);
+            },
+            TerminationReason::ManualKill => {
+                details["manual_termination"] = json!(true);
+            },
+            TerminationReason::WorkerDisappeared => {
+                details["worker_unreachable"] = json!(true);
+            },
+            TerminationReason::SystemFailure(msg) => {
+                details["system_failure_message"] = json!(msg);
+            },
+        }
+        
+        details
+    }
 }
 
 /// Configuration for the watchdog system.
@@ -324,13 +387,16 @@ impl Watchdog {
         let description = reason.description();
         let now = Utc::now();
 
+        // Create structured failure details
+        let failure_details = reason.create_failure_details(run);
+        
         // Update run result in database
         self.database.update_run_result(
             &run.log_id,
             result_code,
             Some(&description),
-            None, // TODO: Add structured failure details
-            Some(true), // Mark as transient failure for most cases
+            Some(&failure_details),
+            Some(reason.is_transient()),
             now,
         ).await.map_err(|e| format!("Failed to update run result: {}", e))?;
 
