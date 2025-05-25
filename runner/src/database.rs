@@ -1752,6 +1752,76 @@ impl RunnerDatabase {
             Ok(None)
         }
     }
+
+    /// Get codebase configuration from database.
+    pub async fn get_codebase_config(&self, codebase_name: &str) -> Result<Option<CodebaseConfig>, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT name, branch_url, vcs_type, subpath
+            FROM codebase 
+            WHERE name = $1
+            "#,
+        )
+        .bind(codebase_name)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(Some(CodebaseConfig {
+                name: row.get("name"),
+                branch_url: row.get("branch_url"),
+                vcs_type: row.get("vcs_type"),
+                subpath: row.get("subpath"),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get distribution configuration from database.
+    pub async fn get_distribution_config(&self, distribution_name: &str) -> Result<Option<DistributionConfig>, sqlx::Error> {
+        // For now, fall back to the config file distributions
+        // In a full implementation, this might query a distributions table
+        Ok(None)
+    }
+
+    /// Get committer configuration for a specific campaign.
+    pub async fn get_committer_for_campaign(&self, campaign_name: &str) -> Result<Option<String>, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT committer 
+            FROM campaign_config 
+            WHERE name = $1 AND committer IS NOT NULL
+            "#,
+        )
+        .bind(campaign_name)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(row.get("committer"))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+/// Configuration for a codebase from database.
+#[derive(Debug, Clone)]
+pub struct CodebaseConfig {
+    pub name: String,
+    pub branch_url: Option<String>,
+    pub vcs_type: Option<String>,
+    pub subpath: Option<String>,
+}
+
+/// Configuration for a distribution from database.
+#[derive(Debug, Clone)]
+pub struct DistributionConfig {
+    pub name: String,
+    pub archive_mirror_uri: Option<String>,
+    pub chroot: Option<String>,
+    pub vendor: Option<String>,
 }
 
 #[cfg(test)]

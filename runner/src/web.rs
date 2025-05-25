@@ -1,6 +1,6 @@
 use crate::{ActiveRun, AppState, Backchannel, QueueItem, CampaignConfig, get_builder, Watchdog, metrics::MetricsCollector};
 use axum::{
-    extract::{Path, State, Multipart}, http::StatusCode, response::IntoResponse, routing::delete,
+    extract::{Path, State, Multipart}, Extension, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router, middleware,
 };
 use base64;
@@ -1074,37 +1074,16 @@ async fn finish_run_internal(
             janitor_result.builder_result = Some(builder_result.clone());
         }
     } else {
-        // For now, create a basic builder result based on the campaign
-        // TODO: This should be done by the actual worker, not here
-        let campaign_config = create_campaign_config(&QueueItem {
-            id: active_run.queue_id,
-            context: active_run.instigated_context.clone(),
-            command: active_run.command.clone(),
-            estimated_duration: active_run.estimated_duration,
-            campaign: active_run.campaign.clone(),
-            refresh: false, // TODO: Get from queue item
-            requester: None, // TODO: Get from queue item
-            change_set: active_run.change_set.clone(),
-            codebase: active_run.codebase.clone(),
-        }, &state.config);
-
-        // Get appropriate builder
-        if let Ok(builder) = get_builder(&campaign_config, None, None) {
-            // For basic completion, just create a simple result
-            // In a real implementation, the worker would provide the output directory
-            if builder.kind() == "debian" {
-                janitor_result.builder_result = Some(crate::BuilderResult::Debian {
-                    source: None,
-                    build_version: None,
-                    build_distribution: None,
-                    changes_filenames: None,
-                    lintian_result: None,
-                    binary_packages: None,
-                });
-            } else {
-                janitor_result.builder_result = Some(crate::BuilderResult::Generic);
-            }
-        }
+        // Worker should provide all result data - no fallback creation here
+        // If no worker_result is provided, log a warning but continue
+        log::warn!(
+            "No worker result provided for run {}. Worker should submit complete results including builder information.",
+            run_id
+        );
+        
+        // The janitor_result will remain with basic success/failure status
+        // All detailed build information should come from the worker
+        // No builder_result is set - this encourages proper worker implementation
     }
 
     // Store the result in the database
@@ -1561,15 +1540,85 @@ async fn assign_work_internal(
     let campaign_config = create_campaign_config(&assignment.queue_item, &state.config);
     let build_config = match get_builder(&campaign_config, None, None) {
         Ok(builder) => {
-            // TODO: Use actual database connection for config generation
-            // For now, create basic config without database
+            // Use actual database connection for enhanced config generation
             let mut config = HashMap::new();
             config.insert("builder_kind".to_string(), builder.kind().to_string());
             
-            // Add basic environment setup
-            let env = crate::committer_env(None); // TODO: Get actual committer
+            // Get codebase-specific configuration from database
+            match state.database.get_codebase_config(&assignment.queue_item.codebase).await {
+                Ok(Some(codebase_config)) => {
+                    // Add codebase-specific settings
+                    if let Some(ref branch_url) = codebase_config.branch_url {
+                        config.insert("branch_url".to_string(), branch_url.clone());
+                    }
+                    if let Some(ref vcs_type) = codebase_config.vcs_type {
+                        config.insert("vcs_type".to_string(), vcs_type.clone());
+                    }
+                    if let Some(ref subpath) = codebase_config.subpath {
+                        config.insert("subpath".to_string(), subpath.clone());
+                    }
+                }
+                Ok(None) => {
+                    log::warn!("No codebase config found for: {}", assignment.queue_item.codebase);
+                }
+                Err(e) => {
+                    log::warn!("Failed to get codebase config from database: {}", e);
+                }
+            }
+            
+            // Get distribution-specific configuration
+            if let Some(debian_config) = &campaign_config.debian_build {
+                match state.database.get_distribution_config(&debian_config.distribution).await {
+                    Ok(Some(dist_config)) => {
+                        config.insert("distribution".to_string(), dist_config.name);
+                        if let Some(ref archive_mirror) = dist_config.archive_mirror_uri {
+                            config.insert("archive_mirror".to_string(), archive_mirror.clone());
+                        }
+                        if let Some(ref chroot) = dist_config.chroot {
+                            config.insert("chroot".to_string(), chroot.clone());
+                        }
+                        if let Some(ref vendor) = dist_config.vendor {
+                            config.insert("vendor".to_string(), vendor.clone());
+                        }
+                    }
+                    Ok(None) => {
+                        log::warn!("No distribution config found for: {}", debian_config.distribution);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to get distribution config from database: {}", e);
+                    }
+                }
+            }
+            
+            // Get actual committer from config and database
+            let committer = match state.database.get_committer_for_campaign(&assignment.queue_item.campaign).await {
+                Ok(Some(committer)) => Some(committer),
+                Ok(None) => {
+                    // Fall back to global config committer
+                    if !state.config.committer().is_empty() {
+                        Some(state.config.committer().to_string())
+                    } else {
+                        None
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to get committer from database: {}", e);
+                    None
+                }
+            };
+            
+            // Add environment setup with proper committer
+            let env = crate::committer_env(committer.as_deref());
             for (key, value) in env {
                 config.insert(format!("env_{}", key), value);
+            }
+            
+            // Add campaign-specific metadata
+            config.insert("campaign".to_string(), assignment.queue_item.campaign.clone());
+            config.insert("codebase".to_string(), assignment.queue_item.codebase.clone());
+            
+            if let Some(ref change_set) = assignment.queue_item.change_set {
+                config.insert("change_set".to_string(), change_set.clone());
             }
             
             config
@@ -1593,19 +1642,84 @@ async fn assign_work_internal(
 
 async fn public_finish(
     State(state): State<Arc<AppState>>,
+    Extension(worker_name): Extension<String>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    // TODO: Add worker credentials check
-    // TODO: Handle multipart uploads for files and worker result
+    // Worker credentials are verified by authentication middleware
+    // Verify that this worker is authorized to finish this specific run
+    match state.database.get_active_run(&id).await {
+        Ok(Some(active_run)) => {
+            if let Some(ref run_worker) = active_run.worker_name {
+                if run_worker != &worker_name {
+                    log::warn!(
+                        "Worker {} attempted to finish run {} assigned to worker {}",
+                        worker_name, id, run_worker
+                    );
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(json!({"error": "Not authorized to finish this run"}))
+                    );
+                }
+            }
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Run not found"}))
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to verify run ownership: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"}))
+            );
+        }
+    }
+    
+    log::info!("Worker {} finishing run {}", worker_name, id);
     finish_run_internal(state, id, None).await
 }
 
 async fn public_finish_multipart(
     State(state): State<Arc<AppState>>,
+    Extension(worker_name): Extension<String>,
     Path(id): Path<String>,
     multipart: Multipart,
 ) -> impl IntoResponse {
-    // TODO: Add worker credentials check
+    // Worker credentials are verified by authentication middleware
+    // Verify that this worker is authorized to finish this specific run
+    match state.database.get_active_run(&id).await {
+        Ok(Some(active_run)) => {
+            if let Some(ref run_worker) = active_run.worker_name {
+                if run_worker != &worker_name {
+                    log::warn!(
+                        "Worker {} attempted to finish run {} assigned to worker {}",
+                        worker_name, id, run_worker
+                    );
+                    return (
+                        StatusCode::FORBIDDEN,
+                        Json(json!({"error": "Not authorized to finish this run"}))
+                    );
+                }
+            }
+        }
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Run not found"}))
+            );
+        }
+        Err(e) => {
+            log::error!("Failed to verify run ownership: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"}))
+            );
+        }
+    }
+    
+    log::info!("Worker {} finishing run {} with multipart upload", worker_name, id);
     finish_run_multipart_internal(state, id, multipart).await
 }
 
