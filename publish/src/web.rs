@@ -1,4 +1,3 @@
-use crate::rate_limiter::RateLimiter;
 use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
@@ -8,7 +7,9 @@ use axum::Router;
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
+use janitor::state::Run;
 use janitor::vcs::{VcsManager, VcsType};
+use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -172,8 +173,99 @@ async fn post_merge_proposal(
     }
 }
 
-async fn absorbed() {
-    unimplemented!()
+/// Response structure for absorbed runs.
+#[derive(serde::Serialize, sqlx::FromRow)]
+struct AbsorbedRun {
+    mode: String,
+    change_set: Option<String>,
+    codebase: String,
+    delay: Option<i64>, // seconds
+    campaign: String,
+    result: Option<serde_json::Value>,
+    id: String,
+    absorbed_at: Option<chrono::DateTime<chrono::Utc>>,
+    merged_by: Option<String>,
+    #[serde(rename = "merged-by-url")]
+    merged_by_url: Option<String>,
+    merge_proposal_url: Option<String>,
+}
+
+async fn absorbed(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let mut query = String::from(
+        r#"
+        SELECT
+            mode,
+            change_set,
+            codebase,
+            EXTRACT(epoch FROM delay) as delay,
+            campaign,
+            result,
+            id,
+            absorbed_at,
+            merged_by,
+            merge_proposal_url
+        FROM absorbed_runs
+        "#
+    );
+    
+    let mut query_params = Vec::new();
+    
+    if let Some(since_str) = params.get("since") {
+        match chrono::DateTime::parse_from_rfc3339(since_str) {
+            Ok(since) => {
+                query_params.push(since.with_timezone(&chrono::Utc));
+                query.push_str(&format!(" WHERE absorbed_at >= ${}", query_params.len()));
+            }
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({"error": "Invalid date format for 'since' parameter"}))
+                );
+            }
+        }
+    }
+    
+    query.push_str(" ORDER BY absorbed_at DESC");
+
+    let mut absorbed_runs = Vec::new();
+    
+    let query_result = if query_params.is_empty() {
+        sqlx::query_as::<_, AbsorbedRun>(&query)
+            .fetch_all(&state.conn)
+            .await
+    } else {
+        sqlx::query_as::<_, AbsorbedRun>(&query)
+            .bind(query_params[0])
+            .fetch_all(&state.conn)
+            .await
+    };
+    
+    match query_result 
+    {
+        Ok(rows) => {
+            for mut row in rows {
+                // Generate merged-by-url if we have the information
+                if let (Some(mp_url), Some(merged_by)) = (&row.merge_proposal_url, &row.merged_by) {
+                    // For now, we'll leave this as None since getting the URL requires external API calls
+                    // In a real implementation, this would call get_merged_by_user_url
+                    row.merged_by_url = None;
+                }
+                absorbed_runs.push(row);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to fetch absorbed runs: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch absorbed runs"}))
+            );
+        }
+    }
+
+    (StatusCode::OK, Json(serde_json::to_value(absorbed_runs).unwrap()))
 }
 
 /// Policy data structure for API responses.
@@ -284,8 +376,72 @@ async fn put_policy(
     }
 }
 
-async fn put_policies() {
-    unimplemented!()
+/// Request body for bulk policy updates.
+#[derive(serde::Deserialize)]
+struct PutPoliciesRequest {
+    policies: Vec<NamedPolicyRequest>,
+}
+
+/// Named policy request for bulk operations.
+#[derive(serde::Deserialize)]
+struct NamedPolicyRequest {
+    name: String,
+    per_branch_policy: Option<serde_json::Value>,
+    rate_limit_bucket: Option<String>,
+}
+
+async fn put_policies(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<PutPoliciesRequest>,
+) -> impl IntoResponse {
+    let mut tx = match state.conn.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            log::error!("Failed to begin transaction: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+        }
+    };
+
+    let mut updated_policies = Vec::new();
+
+    for policy_req in request.policies {
+        let result = sqlx::query_as!(
+            Policy,
+            r#"
+            INSERT INTO named_publish_policy (name, per_branch_policy, rate_limit_bucket)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (name)
+            DO UPDATE SET
+                per_branch_policy = EXCLUDED.per_branch_policy,
+                rate_limit_bucket = EXCLUDED.rate_limit_bucket
+            RETURNING name, per_branch_policy, rate_limit_bucket
+            "#,
+            policy_req.name,
+            policy_req.per_branch_policy,
+            policy_req.rate_limit_bucket,
+        )
+        .fetch_one(&mut *tx)
+        .await;
+
+        match result {
+            Ok(policy) => updated_policies.push(policy),
+            Err(e) => {
+                log::error!("Failed to update policy {}: {}", policy_req.name, e);
+                let _ = tx.rollback().await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to update policy {}", policy_req.name)}))
+                );
+            }
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        log::error!("Failed to commit transaction: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+    }
+
+    (StatusCode::OK, Json(serde_json::to_value(updated_policies).unwrap()))
 }
 
 /// Request body for updating a merge proposal.
@@ -503,7 +659,7 @@ async fn publish(
     log::info!("Publish request for campaign: {}, codebase: {}", campaign, codebase);
 
     // Find the most recent successful run for this campaign/codebase combination
-    let run = sqlx::query_as::<_, crate::state::Run>(
+    let run = sqlx::query_as::<_, Run>(
         r#"
         SELECT 
             id, codebase, suite, main_branch_revision, revision, 
@@ -586,7 +742,15 @@ async fn publish(
     }
 
     // Get unpublished branches for this run
-    let unpublished_branches = match crate::state::get_unpublished_branches(&state.conn, &run.id).await {
+    // For now, get unpublished branches from the run record - in a real implementation,
+    // this would query the database for specific unpublished branches for this run
+    let unpublished_branches = match sqlx::query_as::<_, crate::state::UnpublishedBranch>(
+        "SELECT role, remote_name, base_revision, revision, publish_mode, max_frequency_days 
+         FROM new_result_branch WHERE run_id = $1 AND NOT coalesce(absorbed, false)"
+    )
+    .bind(&run.id)
+    .fetch_all(&state.conn)
+    .await {
         Ok(branches) => branches,
         Err(e) => {
             log::error!("Error getting unpublished branches for run {}: {}", run.id, e);
@@ -621,15 +785,18 @@ async fn publish(
         &run,
         &rate_limit_bucket,
         &unpublished_branches,
-        &run.command.unwrap_or_default(),
+        &run.command,
         state.push_limit,
         state.require_binary_diff,
     ).await;
 
     match consider_result {
         Ok(results) => {
-            let status = results.get("status").and_then(|s| s.as_ref()).unwrap_or("unknown");
-            let http_status = match status.as_str() {
+            let status = results.get("status")
+                .and_then(|s| s.as_ref())
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            let http_status = match status {
                 "processing" => StatusCode::ACCEPTED,
                 "rate_limited" | "push_limit_reached" => StatusCode::TOO_MANY_REQUESTS,
                 "not_successful" => StatusCode::BAD_REQUEST,
@@ -880,8 +1047,79 @@ async fn refresh_status(
     (StatusCode::ACCEPTED, "Refresh of proposal status started")
 }
 
-async fn autopublish() {
-    unimplemented!()
+/// Response for autopublish endpoint.
+#[derive(serde::Serialize)]
+struct AutopublishResponse {
+    published_runs: u32,
+    processed_runs: u32,
+    actions: std::collections::HashMap<String, u32>,
+}
+
+async fn autopublish(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let start = std::time::Instant::now();
+    let mut actions: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut published_runs = 0;
+    let mut processed_runs = 0;
+
+    // Get all runs ready to be published
+    let ready_runs = match crate::state::iter_publish_ready(&state.conn, None).await {
+        Ok(runs) => runs,
+        Err(e) => {
+            log::error!("Failed to get publish-ready runs: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to get publish-ready runs"}))
+            );
+        }
+    };
+
+    log::info!("Found {} runs ready for autopublish", ready_runs.len());
+
+    for (run, rate_limit_bucket, command, unpublished_branches) in ready_runs {
+        processed_runs += 1;
+        
+        match crate::consider_publish_run(
+            &state.conn,
+            state.redis.clone(),
+            state.config,
+            &state.publish_worker,
+            &state.vcs_managers,
+            &state.bucket_rate_limiter,
+            &run,
+            &rate_limit_bucket,
+            &unpublished_branches,
+            &command,
+            state.push_limit,
+            state.require_binary_diff,
+        ).await {
+            Ok(actual_modes) => {
+                for (_branch, mode) in actual_modes {
+                    if let Some(mode) = mode {
+                        *actions.entry(mode.clone()).or_insert(0) += 1;
+                        if mode != "nothing" {
+                            published_runs += 1;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to consider publishing run {}: {}", run.id, e);
+                *actions.entry("error".to_string()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let duration = start.elapsed();
+    log::info!(
+        "Autopublish completed: {} published, {} processed in {:?}",
+        published_runs, processed_runs, duration
+    );
+
+    (StatusCode::OK, Json(serde_json::to_value(AutopublishResponse {
+        published_runs,
+        processed_runs,
+        actions,
+    }).unwrap()))
 }
 
 async fn get_rate_limit(

@@ -331,7 +331,7 @@ WHERE run_id = (
     .await
 }
 
-#[derive(Debug, sqlx::Type)]
+#[derive(Debug, sqlx::FromRow)]
 /// Information about a branch that hasn't been published yet.
 pub struct UnpublishedBranch {
     /// Role of the branch.
