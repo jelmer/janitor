@@ -3,6 +3,7 @@ use axum::{
     extract::{Path, State, Multipart}, http::StatusCode, response::IntoResponse, routing::delete,
     routing::get, routing::post, Json, Router, middleware,
 };
+use base64;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -103,16 +104,59 @@ struct FinishResponse {
     result: serde_json::Value,
 }
 
-/// Create a basic campaign configuration from a queue item.
-/// TODO: In a full implementation, this would load from actual config files
-fn create_campaign_config(_queue_item: &QueueItem) -> CampaignConfig {
-    // For now, create a basic configuration
-    // In reality, this would be loaded from campaign configuration files
-    CampaignConfig {
-        generic_build: Some(crate::GenericBuildConfig {
-            chroot: None,
-        }),
-        debian_build: None, // Could be determined by campaign type
+/// Create campaign configuration from actual config files and queue item.
+fn create_campaign_config(queue_item: &QueueItem, app_config: &janitor::config::Config) -> CampaignConfig {
+    // Find the campaign configuration in the loaded config
+    let campaign_config = app_config.campaign.iter()
+        .find(|c| c.name() == queue_item.campaign);
+    
+    if let Some(config) = campaign_config {
+        // Extract build configuration from the campaign
+        let debian_build = if config.has_debian_build() {
+            let db_config = config.debian_build();
+            Some(crate::DebianBuildConfig {
+                distribution: db_config.distribution().to_string(),
+                build_suffix: if db_config.build_suffix().is_empty() {
+                    None
+                } else {
+                    Some(db_config.build_suffix().to_string())
+                },
+                build_distribution: if db_config.build_distribution().is_empty() {
+                    None
+                } else {
+                    Some(db_config.build_distribution().to_string())
+                },
+            })
+        } else {
+            None
+        };
+        
+        let generic_build = if config.has_generic_build() {
+            let gb_config = config.generic_build();
+            Some(crate::GenericBuildConfig {
+                chroot: if gb_config.chroot().is_empty() {
+                    None
+                } else {
+                    Some(gb_config.chroot().to_string())
+                },
+            })
+        } else {
+            None
+        };
+        
+        CampaignConfig {
+            generic_build,
+            debian_build,
+        }
+    } else {
+        // Fallback to default configuration if campaign not found
+        log::warn!("Campaign '{}' not found in config, using default", queue_item.campaign);
+        CampaignConfig {
+            generic_build: Some(crate::GenericBuildConfig {
+                chroot: None,
+            }),
+            debian_build: None,
+        }
     }
 }
 
@@ -595,7 +639,7 @@ async fn peek_active_run(State(state): State<Arc<AppState>>) -> impl IntoRespons
         &[], // TODO: Add avoided hosts from config
     ).await {
         Ok(Some(assignment)) => {
-            let campaign_config = create_campaign_config(&assignment.queue_item);
+            let campaign_config = create_campaign_config(&assignment.queue_item, &state.config);
             let build_config = match get_builder(&campaign_config, None, None) {
                 Ok(builder) => {
                     let mut config = HashMap::new();
@@ -982,9 +1026,7 @@ async fn finish_run_internal(
         }
     };
 
-    // Create a result from the active run
-    // For now, create a simple success result
-    // TODO: Process worker_result when provided via multipart upload
+    // Create a result from the active run with comprehensive worker_result processing
     let result_code = if let Some(ref wr) = worker_result {
         wr.code.clone()
     } else {
@@ -999,8 +1041,35 @@ async fn finish_run_internal(
 
     let mut janitor_result = active_run.create_result(result_code, description);
 
-    // Process builder result if we have worker_result with builder data
+    // Process comprehensive worker result data if provided
     if let Some(ref wr) = worker_result {
+        // Update all fields from worker result
+        janitor_result.codemod = wr.codemod.clone();
+        janitor_result.main_branch_revision = wr.main_branch_revision;
+        janitor_result.revision = wr.revision;
+        janitor_result.value = wr.value.map(|v| v as u64);
+        janitor_result.branches = wr.branches.clone();
+        janitor_result.tags = wr.tags.clone();
+        janitor_result.remotes = wr.remotes.as_ref().map(|remotes| {
+            remotes.iter().map(|(name, data)| {
+                let url = data.get("url").and_then(|u| u.as_str()).unwrap_or_default();
+                (name.clone(), crate::ResultRemote { url: url.to_string() })
+            }).collect()
+        });
+        janitor_result.failure_details = wr.details.clone();
+        janitor_result.failure_stage = wr.stage.clone();
+        janitor_result.transient = wr.transient;
+        janitor_result.target_branch_url = wr.target_branch_url.clone();
+        janitor_result.branch_url = wr.branch_url.clone().unwrap_or(janitor_result.branch_url);
+        janitor_result.vcs_type = wr.vcs_type.clone();
+        janitor_result.subpath = wr.subpath.clone();
+        
+        // Set log filenames from worker result
+        if let Some(ref logs) = wr.logfilenames {
+            janitor_result.logfilenames = logs.clone();
+        }
+        
+        // Store builder result if present
         if let Some(ref builder_result) = wr.builder_result {
             janitor_result.builder_result = Some(builder_result.clone());
         }
@@ -1017,7 +1086,7 @@ async fn finish_run_internal(
             requester: None, // TODO: Get from queue item
             change_set: active_run.change_set.clone(),
             codebase: active_run.codebase.clone(),
-        });
+        }, &state.config);
 
         // Get appropriate builder
         if let Ok(builder) = get_builder(&campaign_config, None, None) {
@@ -1082,13 +1151,75 @@ async fn finish_run_internal(
         // Continue anyway, main cleanup was done
     }
 
-    // For now, return basic response
-    // TODO: Handle file uploads, log processing, artifact management
+    // Process any existing files for this run (stored outside of multipart upload)
+    let mut uploaded_filenames = Vec::new();
+    let mut log_filenames = Vec::new();
+    let mut artifact_filenames = Vec::new();
+    
+    // If worker_result is provided, extract file information from it
+    if let Some(ref wr) = worker_result {
+        // Update janitor_result with worker data
+        janitor_result.codemod = wr.codemod.clone();
+        janitor_result.main_branch_revision = wr.main_branch_revision;
+        janitor_result.revision = wr.revision;
+        janitor_result.value = wr.value.map(|v| v as u64);
+        janitor_result.branches = wr.branches.clone();
+        janitor_result.tags = wr.tags.clone();
+        janitor_result.remotes = wr.remotes.as_ref().map(|remotes| {
+            remotes.iter().map(|(name, data)| {
+                let url = data.get("url").and_then(|u| u.as_str()).unwrap_or_default();
+                (name.clone(), crate::ResultRemote { url: url.to_string() })
+            }).collect()
+        });
+        janitor_result.failure_details = wr.details.clone();
+        janitor_result.failure_stage = wr.stage.clone();
+        janitor_result.transient = wr.transient;
+        janitor_result.target_branch_url = wr.target_branch_url.clone();
+        janitor_result.branch_url = wr.branch_url.clone().unwrap_or(janitor_result.branch_url);
+        janitor_result.vcs_type = wr.vcs_type.clone();
+        janitor_result.subpath = wr.subpath.clone();
+        
+        // Extract log filenames if provided in worker result
+        if let Some(ref logs) = wr.logfilenames {
+            log_filenames.extend(logs.iter().cloned());
+            janitor_result.logfilenames = log_filenames.clone();
+        }
+        
+        // Store builder result if present
+        if let Some(ref builder_result) = wr.builder_result {
+            janitor_result.builder_result = Some(builder_result.clone());
+        }
+    }
+    
+    // For regular (non-multipart) requests, check if there are any previously stored files
+    // This handles cases where files were uploaded separately or through other means
+    match state.log_manager.list_logs(&run_id).await {
+        Ok(existing_logs) => {
+            for log_file in existing_logs {
+                if !log_filenames.contains(&log_file) {
+                    log_filenames.push(log_file);
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to list existing logs for run {}: {}", run_id, e);
+        }
+    }
+    
+    match state.artifact_manager.list_artifacts(&run_id).await {
+        Ok(existing_artifacts) => {
+            artifact_filenames.extend(existing_artifacts);
+        }
+        Err(e) => {
+            log::warn!("Failed to list existing artifacts for run {}: {}", run_id, e);
+        }
+    }
+
     let response = FinishResponse {
-        id: run_id,
-        filenames: vec![], // TODO: Process uploaded files
-        logs: vec![], // TODO: Process log files
-        artifacts: vec![], // TODO: Process artifacts
+        id: run_id.clone(),
+        filenames: uploaded_filenames,
+        logs: log_filenames,
+        artifacts: artifact_filenames,
         result: janitor_result.to_json(),
     };
 
@@ -1263,12 +1394,69 @@ async fn public_root() -> impl IntoResponse {
     ""
 }
 
+/// Authentication middleware for worker endpoints.
+async fn authenticate_worker(
+    State(state): State<Arc<AppState>>,
+    mut req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, StatusCode> {
+    // Extract authorization header
+    let auth_header = req.headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok());
+    
+    if let Some(auth_value) = auth_header {
+        if let Some(credentials) = auth_value.strip_prefix("Bearer ") {
+            // Validate worker credentials
+            match state.auth_service.validate_worker_token(credentials).await {
+                Ok(worker_name) => {
+                    // Add worker information to request extensions
+                    req.extensions_mut().insert(worker_name);
+                    Ok(next.run(req).await)
+                }
+                Err(_) => {
+                    log::warn!("Invalid worker credentials provided");
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+            }
+        } else if auth_value.starts_with("Basic ") {
+            // Handle basic auth for backward compatibility
+            let credentials = auth_value.strip_prefix("Basic ")
+                .and_then(|encoded| base64::decode(encoded).ok())
+                .and_then(|decoded| String::from_utf8(decoded).ok());
+            
+            if let Some(creds) = credentials {
+                if let Some((username, password)) = creds.split_once(':') {
+                    match state.auth_service.validate_worker_credentials(username, password).await {
+                        Ok(_) => {
+                            req.extensions_mut().insert(username.to_string());
+                            Ok(next.run(req).await)
+                        }
+                        Err(_) => {
+                            log::warn!("Invalid basic auth credentials for worker: {}", username);
+                            Err(StatusCode::UNAUTHORIZED)
+                        }
+                    }
+                } else {
+                    Err(StatusCode::BAD_REQUEST)
+                }
+            } else {
+                Err(StatusCode::BAD_REQUEST)
+            }
+        } else {
+            Err(StatusCode::BAD_REQUEST)
+        }
+    } else {
+        log::warn!("No authorization header provided for worker endpoint");
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
 async fn public_assign(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AssignRequest>,
 ) -> impl IntoResponse {
-    // For now, skip authentication in public_assign since we need to restructure
-    // TODO: Add proper authentication middleware layer
+    // Authentication is now handled by middleware
     assign_work_internal(state, request).await
 }
 
@@ -1370,7 +1558,7 @@ async fn assign_work_internal(
     }
 
     // Generate build configuration for the worker
-    let campaign_config = create_campaign_config(&assignment.queue_item);
+    let campaign_config = create_campaign_config(&assignment.queue_item, &state.config);
     let build_config = match get_builder(&campaign_config, None, None) {
         Ok(builder) => {
             // TODO: Use actual database connection for config generation
@@ -1538,22 +1726,26 @@ async fn public_health(State(state): State<Arc<AppState>>) -> impl IntoResponse 
 
 /// Create a router for the public API endpoints.
 pub fn public_app(state: Arc<AppState>) -> Router {
-    Router::new()
+    // Create separate routers for authenticated and public endpoints
+    let public_routes = Router::new()
         .route("/", get(public_root))
-        // Public read-only endpoints (no authentication required)
         .route("/health", get(public_health))
         .route("/queue/stats", get(public_queue_stats))
-        .route("/watchdog/health", get(public_watchdog_health))
-        // Worker endpoints require authentication
+        .route("/watchdog/health", get(public_watchdog_health));
+
+    let worker_routes = Router::new()
         .route("/runner/active-runs", post(public_assign))
         .route("/runner/active-runs/:id/finish", post(public_finish))
         .route("/runner/active-runs/:id/finish-multipart", post(public_finish_multipart))
         .route("/runner/active-runs/:id", get(public_get_active_run))
-        // Add authentication middleware to worker routes only
         .layer(middleware::from_fn_with_state(
-            Arc::clone(&state.database), 
-            crate::auth::require_worker_auth
-        ))
+            Arc::clone(&state),
+            authenticate_worker
+        ));
+
+    // Combine both routers
+    public_routes
+        .merge(worker_routes)
         .with_state(state)
 }
 
