@@ -319,16 +319,34 @@ impl ArtifactStorage for LocalArtifactStorage {
 pub struct GcsArtifactStorage {
     bucket: String,
     max_size: u64,
-    client: Option<()>, // TODO: Add actual GCS client when available
+    #[cfg(feature = "gcs")]
+    client: google_cloud_storage::client::Client,
+    #[cfg(not(feature = "gcs"))]
+    client: (),
 }
 
 impl GcsArtifactStorage {
     /// Create a new GCS artifact storage.
+    #[cfg(feature = "gcs")]
+    pub async fn new(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
+        let client = google_cloud_storage::client::Client::default()
+            .await
+            .map_err(|e| ArtifactError::StorageError(format!("Failed to create GCS client: {}", e)))?;
+        
+        Ok(Self {
+            bucket,
+            max_size,
+            client,
+        })
+    }
+
+    /// Create a new GCS artifact storage (placeholder when GCS feature is disabled).
+    #[cfg(not(feature = "gcs"))]
     pub fn new(bucket: String, max_size: u64) -> Self {
         Self {
             bucket,
             max_size,
-            client: None, // TODO: Initialize GCS client
+            client: (),
         }
     }
     
@@ -340,6 +358,7 @@ impl GcsArtifactStorage {
 
 #[async_trait::async_trait]
 impl ArtifactStorage for GcsArtifactStorage {
+    #[cfg(feature = "gcs")]
     async fn store_artifact(
         &self, 
         run_id: &str, 
@@ -356,70 +375,233 @@ impl ArtifactStorage for GcsArtifactStorage {
             return Err(ArtifactError::TooLarge(content.len() as u64, self.max_size));
         }
         
-        // TODO: Implement actual GCS upload
-        let _object_path = self.artifact_object_path(run_id, name);
-        let _content_len = content.len();
-        let _content_type = content_type;
-        let _metadata = metadata;
+        let object_path = self.artifact_object_path(run_id, name);
         
-        log::info!("Would upload artifact to GCS: {}/{} ({} bytes)", run_id, name, content.len());
+        // Prepare GCS metadata
+        let mut gcs_metadata = google_cloud_storage::client::Metadata::default();
+        gcs_metadata.content_type = Some(content_type.to_string());
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        // Add custom metadata with artifact information
+        let artifact_metadata = ArtifactMetadata {
+            name: name.to_string(),
+            size: content.len() as u64,
+            content_type: content_type.to_string(),
+            uploaded_at: chrono::Utc::now(),
+            metadata: metadata.unwrap_or_default(),
+        };
+        
+        let metadata_json = serde_json::to_string(&artifact_metadata)
+            .map_err(|e| ArtifactError::StorageError(format!("Failed to serialize metadata: {}", e)))?;
+        
+        gcs_metadata.metadata.insert("janitor_metadata".to_string(), metadata_json);
+        
+        // Upload to GCS
+        self.client.upload_object(
+            &self.bucket,
+            content,
+            &object_path,
+            Some(gcs_metadata)
+        ).await
+        .map_err(|e| ArtifactError::StorageError(format!("GCS upload failed: {}", e)))?;
+        
+        MetricsCollector::record_artifact_upload(self.storage_type(), true, content.len() as f64);
+        log::info!("Successfully uploaded artifact to GCS: {}/{} ({} bytes)", run_id, name, content.len());
+        
+        Ok(())
     }
     
+    #[cfg(not(feature = "gcs"))]
+    async fn store_artifact(
+        &self, 
+        run_id: &str, 
+        name: &str, 
+        content: &[u8], 
+        content_type: &str,
+        metadata: Option<HashMap<String, String>>
+    ) -> Result<(), ArtifactError> {
+        let _ = (run_id, name, content, content_type, metadata);
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+    }
+    
+    #[cfg(feature = "gcs")]
     async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
         
-        // TODO: Implement actual GCS download
-        let _object_path = self.artifact_object_path(run_id, name);
+        let object_path = self.artifact_object_path(run_id, name);
         
-        log::info!("Would download artifact from GCS: {}/{}", run_id, name);
+        let content = self.client.download_object(
+            &self.bucket,
+            &object_path
+        ).await
+        .map_err(|e| match e {
+            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
+            _ => ArtifactError::StorageError(format!("GCS download failed: {}", e)),
+        })?;
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        log::info!("Successfully downloaded artifact from GCS: {}/{} ({} bytes)", run_id, name, content.len());
+        Ok(content)
     }
     
+    #[cfg(not(feature = "gcs"))]
+    async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
+        let _ = (run_id, name);
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+    }
+    
+    #[cfg(feature = "gcs")]
     async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
         
-        // TODO: Implement actual GCS metadata retrieval
-        log::info!("Would get artifact metadata from GCS: {}/{}", run_id, name);
+        let object_path = self.artifact_object_path(run_id, name);
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        let gcs_metadata = self.client.get_object_metadata(
+            &self.bucket,
+            &object_path
+        ).await
+        .map_err(|e| match e {
+            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
+            _ => ArtifactError::StorageError(format!("GCS metadata retrieval failed: {}", e)),
+        })?;
+        
+        // Try to extract our custom metadata
+        if let Some(metadata_json) = gcs_metadata.metadata.get("janitor_metadata") {
+            let metadata: ArtifactMetadata = serde_json::from_str(metadata_json)
+                .map_err(|e| ArtifactError::StorageError(format!("Failed to parse artifact metadata: {}", e)))?;
+            Ok(metadata)
+        } else {
+            // Fallback: create metadata from GCS object metadata
+            Ok(ArtifactMetadata {
+                name: name.to_string(),
+                size: gcs_metadata.size.unwrap_or(0),
+                content_type: gcs_metadata.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+                uploaded_at: gcs_metadata.time_created.unwrap_or_else(chrono::Utc::now),
+                metadata: HashMap::new(),
+            })
+        }
     }
     
+    #[cfg(not(feature = "gcs"))]
+    async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
+        let _ = (run_id, name);
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+    }
+    
+    #[cfg(feature = "gcs")]
     async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
-        // TODO: Implement actual GCS listing
-        log::info!("Would list artifacts from GCS for run: {}", run_id);
+        let prefix = format!("artifacts/{}/", run_id);
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        let objects = self.client.list_objects(
+            &self.bucket,
+            Some(&prefix),
+            None, // No delimiter
+            None, // No max_results limit
+        ).await
+        .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
+        
+        let mut artifacts = Vec::new();
+        
+        for object in objects {
+            let object_name = object.name.strip_prefix(&prefix)
+                .unwrap_or(&object.name);
+            
+            // Try to get metadata from custom metadata first
+            let artifact_metadata = if let Some(metadata_json) = object.metadata.get("janitor_metadata") {
+                serde_json::from_str(metadata_json)
+                    .unwrap_or_else(|_| {
+                        // Fallback metadata from GCS object
+                        ArtifactMetadata {
+                            name: object_name.to_string(),
+                            size: object.size.unwrap_or(0),
+                            content_type: object.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+                            uploaded_at: object.time_created.unwrap_or_else(chrono::Utc::now),
+                            metadata: HashMap::new(),
+                        }
+                    })
+            } else {
+                // Fallback metadata from GCS object
+                ArtifactMetadata {
+                    name: object_name.to_string(),
+                    size: object.size.unwrap_or(0),
+                    content_type: object.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+                    uploaded_at: object.time_created.unwrap_or_else(chrono::Utc::now),
+                    metadata: HashMap::new(),
+                }
+            };
+            
+            artifacts.push(artifact_metadata);
+        }
+        
+        log::info!("Listed {} artifacts from GCS for run: {}", artifacts.len(), run_id);
+        Ok(artifacts)
     }
     
+    #[cfg(not(feature = "gcs"))]
+    async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
+        let _ = run_id;
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+    }
+    
+    #[cfg(feature = "gcs")]
     async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
         
-        // TODO: Implement actual GCS deletion
-        log::info!("Would delete artifact from GCS: {}/{}", run_id, name);
+        let object_path = self.artifact_object_path(run_id, name);
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        self.client.delete_object(
+            &self.bucket,
+            &object_path
+        ).await
+        .map_err(|e| match e {
+            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
+            _ => ArtifactError::StorageError(format!("GCS deletion failed: {}", e)),
+        })?;
+        
+        log::info!("Successfully deleted artifact from GCS: {}/{}", run_id, name);
+        Ok(())
     }
     
+    #[cfg(not(feature = "gcs"))]
+    async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
+        let _ = (run_id, name);
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+    }
+    
+    #[cfg(feature = "gcs")]
     async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
-        // TODO: Implement actual GCS deletion
-        log::info!("Would delete all artifacts from GCS for run: {}", run_id);
+        let prefix = format!("artifacts/{}/", run_id);
         
-        // For now, return an error indicating GCS is not yet implemented
-        Err(ArtifactError::StorageError("GCS storage not yet implemented".to_string()))
+        // First, list all objects with the prefix
+        let objects = self.client.list_objects(
+            &self.bucket,
+            Some(&prefix),
+            None,
+            None,
+        ).await
+        .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
+        
+        // Delete each object
+        for object in objects {
+            self.client.delete_object(
+                &self.bucket,
+                &object.name
+            ).await
+            .map_err(|e| ArtifactError::StorageError(format!("GCS deletion failed for {}: {}", object.name, e)))?;
+        }
+        
+        log::info!("Successfully deleted all artifacts from GCS for run: {}", run_id);
+        Ok(())
+    }
+    
+    #[cfg(not(feature = "gcs"))]
+    async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
+        let _ = run_id;
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
     }
     
     fn storage_type(&self) -> &'static str {
@@ -441,17 +623,37 @@ impl ArtifactManager {
     }
     
     /// Create a new artifact manager with GCS storage.
-    pub fn new_gcs(bucket: String, max_size: u64) -> Self {
-        Self {
-            storage: Box::new(GcsArtifactStorage::new(bucket, max_size)),
-        }
+    #[cfg(feature = "gcs")]
+    pub async fn new_gcs(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
+        let gcs_storage = GcsArtifactStorage::new(bucket, max_size).await?;
+        Ok(Self {
+            storage: Box::new(gcs_storage),
+        })
+    }
+
+    /// Create a new artifact manager with GCS storage (placeholder when GCS feature is disabled).
+    #[cfg(not(feature = "gcs"))]
+    pub fn new_gcs(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
+        let _ = (bucket, max_size);
+        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
     }
 
     /// Create a new artifact manager from configuration.
     pub async fn new(config: ArtifactConfig) -> Result<Self, ArtifactError> {
         match config.storage_backend {
             ArtifactStorageBackend::Local => Ok(Self::new_local(config.local_artifact_path, config.max_artifact_size as u64)),
-            ArtifactStorageBackend::Gcs => Ok(Self::new_gcs(config.gcs_bucket.unwrap_or_default(), config.max_artifact_size as u64)),
+            ArtifactStorageBackend::Gcs => {
+                let bucket = config.gcs_bucket.ok_or_else(|| 
+                    ArtifactError::Validation("GCS bucket not specified in configuration".to_string()))?;
+                #[cfg(feature = "gcs")]
+                {
+                    Self::new_gcs(bucket, config.max_artifact_size as u64).await
+                }
+                #[cfg(not(feature = "gcs"))]
+                {
+                    Self::new_gcs(bucket, config.max_artifact_size as u64)
+                }
+            }
         }
     }
 

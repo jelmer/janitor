@@ -8,8 +8,10 @@ use crate::{
     tracing::TracingConfig,
 };
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 
 /// Complete runner configuration combining all subsystem configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +169,119 @@ pub struct RateLimitingConfig {
     pub window_seconds: u64,
 }
 
+/// Configuration source types for priority-based loading.
+#[derive(Debug, Clone)]
+pub enum ConfigSource {
+    /// Load from a configuration file.
+    File(PathBuf),
+    /// Load from environment variables.
+    Environment,
+    /// Use default values.
+    Defaults,
+}
+
+/// Configuration manager with hot-reloading support.
+pub struct ConfigManager {
+    config: Arc<RwLock<RunnerConfig>>,
+    file_path: Option<PathBuf>,
+    reload_enabled: bool,
+}
+
+impl ConfigManager {
+    /// Create a new configuration manager.
+    pub fn new(config: RunnerConfig) -> Self {
+        Self {
+            config: Arc::new(RwLock::new(config)),
+            file_path: None,
+            reload_enabled: false,
+        }
+    }
+
+    /// Create a configuration manager from a file with hot-reloading.
+    pub async fn from_file<P: AsRef<Path>>(path: P, enable_reload: bool) -> Result<Self, ConfigError> {
+        let path = path.as_ref().to_path_buf();
+        let config = RunnerConfig::from_file_with_env(&path)?;
+        
+        let mut manager = Self {
+            config: Arc::new(RwLock::new(config)),
+            file_path: Some(path),
+            reload_enabled: enable_reload,
+        };
+
+        if enable_reload {
+            manager.start_file_watcher().await?;
+        }
+
+        Ok(manager)
+    }
+
+    /// Get the current configuration.
+    pub async fn get(&self) -> RunnerConfig {
+        self.config.read().await.clone()
+    }
+
+    /// Update the configuration.
+    pub async fn update(&self, new_config: RunnerConfig) -> Result<(), ConfigError> {
+        new_config.validate()?;
+        *self.config.write().await = new_config;
+        Ok(())
+    }
+
+    /// Reload configuration from file.
+    pub async fn reload(&self) -> Result<(), ConfigError> {
+        if let Some(ref path) = self.file_path {
+            let new_config = RunnerConfig::from_file_with_env(path)?;
+            self.update(new_config).await?;
+            log::info!("Configuration reloaded from {}", path.display());
+        }
+        Ok(())
+    }
+
+    /// Start file watcher for hot-reloading (simplified version).
+    async fn start_file_watcher(&mut self) -> Result<(), ConfigError> {
+        if let Some(ref path) = self.file_path {
+            let config_manager = self.config.clone();
+            let watch_path = path.clone();
+            
+            tokio::spawn(async move {
+                // This is a simplified implementation
+                // In a full implementation, you would use a file watcher like `notify`
+                let mut interval = tokio::time::interval(Duration::from_secs(10));
+                let mut last_modified = std::fs::metadata(&watch_path)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+
+                loop {
+                    interval.tick().await;
+                    
+                    if let Ok(metadata) = std::fs::metadata(&watch_path) {
+                        if let Ok(modified) = metadata.modified() {
+                            if modified > last_modified {
+                                last_modified = modified;
+                                
+                                match RunnerConfig::from_file_with_env(&watch_path) {
+                                    Ok(new_config) => {
+                                        if new_config.validate().is_ok() {
+                                            *config_manager.write().await = new_config;
+                                            log::info!("Configuration hot-reloaded from {}", watch_path.display());
+                                        } else {
+                                            log::error!("Invalid configuration in {}, keeping current config", watch_path.display());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to reload configuration from {}: {}", watch_path.display(), e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        Ok(())
+    }
+}
+
 /// General application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
@@ -313,103 +428,344 @@ impl Default for ApplicationConfig {
 
 /// Configuration loading and validation.
 impl RunnerConfig {
-    /// Load configuration from a file.
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ConfigError> {
+    /// Load configuration from a file with enhanced error reporting.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let path = path.as_ref();
         let content = std::fs::read_to_string(path)
             .map_err(|e| ConfigError::Io(e))?;
         
-        // Try different formats
-        if let Ok(config) = toml::from_str(&content) {
-            return Ok(config);
-        }
+        Self::from_content(&content, path)
+    }
+
+    /// Load configuration from file content with format detection.
+    pub fn from_content(content: &str, path: &Path) -> Result<Self, ConfigError> {
+        let extension = path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
+
+        // Try format based on file extension first
+        let config = match extension {
+            "toml" => {
+                toml::from_str(content)
+                    .map_err(|e| ConfigError::Parse(format!("TOML parse error: {}", e)))?
+            }
+            "json" => {
+                serde_json::from_str(content)
+                    .map_err(|e| ConfigError::Parse(format!("JSON parse error: {}", e)))?
+            }
+            "yaml" | "yml" => {
+                serde_yaml::from_str(content)
+                    .map_err(|e| ConfigError::Parse(format!("YAML parse error: {}", e)))?
+            }
+            _ => {
+                // Try different formats when extension is unknown
+                if let Ok(config) = toml::from_str(content) {
+                    config
+                } else if let Ok(config) = serde_json::from_str(content) {
+                    config
+                } else if let Ok(config) = serde_yaml::from_str(content) {
+                    config
+                } else {
+                    return Err(ConfigError::Parse(
+                        "Unable to parse config file as TOML, JSON, or YAML".to_string()
+                    ));
+                }
+            }
+        };
+
+        Ok(config)
+    }
+
+    /// Load configuration with environment variable overrides.
+    pub fn from_file_with_env<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let mut config = Self::from_file(path)?;
+        config.apply_env_overrides()?;
+        Ok(config)
+    }
+
+    /// Load configuration from multiple sources with priority.
+    pub fn from_sources(sources: &[ConfigSource]) -> Result<Self, ConfigError> {
+        let mut config = Self::default();
         
-        if let Ok(config) = serde_json::from_str(&content) {
-            return Ok(config);
+        for source in sources {
+            let source_config = match source {
+                ConfigSource::File(path) => Self::from_file(path)?,
+                ConfigSource::Environment => Self::from_env()?,
+                ConfigSource::Defaults => Self::default(),
+            };
+            config = config.merge_with(source_config);
         }
-        
-        if let Ok(config) = serde_yaml::from_str(&content) {
-            return Ok(config);
-        }
-        
-        Err(ConfigError::Parse("Unable to parse config file as TOML, JSON, or YAML".to_string()))
+
+        config.validate()?;
+        Ok(config)
     }
 
     /// Load configuration from environment variables.
     pub fn from_env() -> Result<Self, ConfigError> {
         let mut config = Self::default();
-        
+        config.apply_env_overrides()?;
+        Ok(config)
+    }
+
+    /// Apply environment variable overrides to existing configuration.
+    pub fn apply_env_overrides(&mut self) -> Result<(), ConfigError> {
         // Database configuration
         if let Ok(url) = std::env::var("DATABASE_URL") {
-            config.database.url = url;
+            self.database.url = url;
         }
         if let Ok(max_conn) = std::env::var("DATABASE_MAX_CONNECTIONS") {
-            config.database.max_connections = max_conn.parse()
-                .map_err(|e| ConfigError::Parse(format!("Invalid DATABASE_MAX_CONNECTIONS: {}", e)))?;
+            self.database.max_connections = max_conn.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid DATABASE_MAX_CONNECTIONS: {}", e)))?;
+        }
+        if let Ok(timeout) = std::env::var("DATABASE_CONNECTION_TIMEOUT") {
+            self.database.connection_timeout_seconds = timeout.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid DATABASE_CONNECTION_TIMEOUT: {}", e)))?;
+        }
+        if let Ok(sql_logging) = std::env::var("DATABASE_ENABLE_SQL_LOGGING") {
+            self.database.enable_sql_logging = sql_logging.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid DATABASE_ENABLE_SQL_LOGGING: {}", e)))?;
         }
         
         // Redis configuration
         if let Ok(redis_url) = std::env::var("REDIS_URL") {
-            config.redis = Some(RedisConfig {
+            self.redis = Some(RedisConfig {
                 url: redis_url,
-                ..Default::default()
+                ..self.redis.clone().unwrap_or_default()
             });
+        }
+        if let Ok(redis_timeout) = std::env::var("REDIS_CONNECTION_TIMEOUT") {
+            if let Some(ref mut redis) = self.redis {
+                redis.connection_timeout_seconds = redis_timeout.parse()
+                    .map_err(|e| ConfigError::Environment(format!("Invalid REDIS_CONNECTION_TIMEOUT: {}", e)))?;
+            }
+        }
+        
+        // VCS configuration
+        if let Ok(git_location) = std::env::var("GIT_LOCATION") {
+            self.vcs.git_location = Some(git_location);
+        }
+        if let Ok(bzr_location) = std::env::var("BZR_LOCATION") {
+            self.vcs.bzr_location = Some(bzr_location);
+        }
+        if let Ok(public_vcs) = std::env::var("PUBLIC_VCS_LOCATION") {
+            self.vcs.public_vcs_location = Some(public_vcs);
+        }
+        if let Ok(avoid_hosts) = std::env::var("VCS_AVOID_HOSTS") {
+            self.vcs.avoid_hosts = avoid_hosts.split(',').map(|s| s.trim().to_string()).collect();
         }
         
         // Web configuration
         if let Ok(port) = std::env::var("PORT") {
-            config.web.port = port.parse()
-                .map_err(|e| ConfigError::Parse(format!("Invalid PORT: {}", e)))?;
+            self.web.port = port.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid PORT: {}", e)))?;
+        }
+        if let Ok(public_port) = std::env::var("PUBLIC_PORT") {
+            self.web.public_port = public_port.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid PUBLIC_PORT: {}", e)))?;
         }
         if let Ok(addr) = std::env::var("LISTEN_ADDRESS") {
-            config.web.listen_address = addr;
+            self.web.listen_address = addr;
+        }
+        if let Ok(cors) = std::env::var("ENABLE_CORS") {
+            self.web.enable_cors = cors.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid ENABLE_CORS: {}", e)))?;
+        }
+        
+        // Worker configuration
+        if let Ok(timeout) = std::env::var("RUN_TIMEOUT_MINUTES") {
+            self.worker.run_timeout_minutes = timeout.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid RUN_TIMEOUT_MINUTES: {}", e)))?;
+        }
+        if let Ok(interval) = std::env::var("HEALTH_CHECK_INTERVAL") {
+            self.worker.health_check_interval_seconds = interval.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid HEALTH_CHECK_INTERVAL: {}", e)))?;
+        }
+        if let Ok(retries) = std::env::var("MAX_RETRIES") {
+            self.worker.max_retries = retries.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid MAX_RETRIES: {}", e)))?;
+        }
+        if let Ok(avoid_hosts) = std::env::var("WORKER_AVOID_HOSTS") {
+            self.worker.avoid_hosts = avoid_hosts.split(',').map(|s| s.trim().to_string()).collect();
+        }
+        
+        // Rate limiting configuration
+        if let Ok(enabled) = std::env::var("RATE_LIMITING_ENABLED") {
+            self.worker.rate_limiting.enabled = enabled.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid RATE_LIMITING_ENABLED: {}", e)))?;
+        }
+        if let Ok(limit) = std::env::var("RATE_LIMITING_DEFAULT_LIMIT") {
+            self.worker.rate_limiting.default_limit = limit.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid RATE_LIMITING_DEFAULT_LIMIT: {}", e)))?;
         }
         
         // Application configuration
         if let Ok(env) = std::env::var("ENVIRONMENT") {
-            config.application.environment = env;
+            self.application.environment = env;
         }
         if let Ok(debug) = std::env::var("DEBUG") {
-            config.application.debug = debug.parse()
-                .map_err(|e| ConfigError::Parse(format!("Invalid DEBUG: {}", e)))?;
+            self.application.debug = debug.parse()
+                .map_err(|e| ConfigError::Environment(format!("Invalid DEBUG: {}", e)))?;
+        }
+        if let Ok(app_name) = std::env::var("APP_NAME") {
+            self.application.name = app_name;
+        }
+        if let Ok(backup_dir) = std::env::var("BACKUP_DIRECTORY") {
+            self.application.backup_directory = Some(PathBuf::from(backup_dir));
         }
         
-        Ok(config)
+        Ok(())
     }
 
-    /// Validate the configuration.
+    /// Validate the configuration with comprehensive checks.
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate database URL
+        let mut errors = Vec::new();
+
+        // Validate database configuration
         if self.database.url.is_empty() {
-            return Err(ConfigError::Validation("Database URL cannot be empty".to_string()));
+            errors.push("Database URL cannot be empty".to_string());
+        }
+        if !self.database.url.starts_with("postgresql://") && !self.database.url.starts_with("postgres://") {
+            errors.push("Database URL must be a PostgreSQL connection string".to_string());
+        }
+        if self.database.max_connections == 0 {
+            errors.push("Database max connections must be greater than 0".to_string());
+        }
+        if self.database.connection_timeout_seconds == 0 {
+            errors.push("Database connection timeout must be greater than 0".to_string());
+        }
+        if self.database.query_timeout_seconds == 0 {
+            errors.push("Database query timeout must be greater than 0".to_string());
         }
         
-        // Validate ports
+        // Validate Redis configuration if present
+        if let Some(ref redis) = self.redis {
+            if redis.url.is_empty() {
+                errors.push("Redis URL cannot be empty when Redis is configured".to_string());
+            }
+            if !redis.url.starts_with("redis://") && !redis.url.starts_with("rediss://") {
+                errors.push("Redis URL must be a valid Redis connection string".to_string());
+            }
+            if redis.connection_timeout_seconds == 0 {
+                errors.push("Redis connection timeout must be greater than 0".to_string());
+            }
+            if redis.max_connections == 0 {
+                errors.push("Redis max connections must be greater than 0".to_string());
+            }
+        }
+        
+        // Validate web configuration
         if self.web.port == 0 {
-            return Err(ConfigError::Validation("Web port cannot be 0".to_string()));
+            errors.push("Web port cannot be 0".to_string());
         }
         if self.web.public_port == 0 {
-            return Err(ConfigError::Validation("Public port cannot be 0".to_string()));
+            errors.push("Public port cannot be 0".to_string());
         }
         if self.web.port == self.web.public_port {
-            return Err(ConfigError::Validation("Web port and public port cannot be the same".to_string()));
+            errors.push("Web port and public port cannot be the same".to_string());
+        }
+        if self.web.port > 65535 || self.web.public_port > 65535 {
+            errors.push("Ports must be in the range 1-65535".to_string());
+        }
+        if self.web.request_timeout_seconds == 0 {
+            errors.push("Web request timeout must be greater than 0".to_string());
+        }
+        if self.web.max_request_size_bytes == 0 {
+            errors.push("Web max request size must be greater than 0".to_string());
         }
         
-        // Validate timeouts
-        if self.database.connection_timeout_seconds == 0 {
-            return Err(ConfigError::Validation("Database connection timeout must be greater than 0".to_string()));
-        }
+        // Validate worker configuration
         if self.worker.run_timeout_minutes == 0 {
-            return Err(ConfigError::Validation("Run timeout must be greater than 0".to_string()));
+            errors.push("Run timeout must be greater than 0".to_string());
+        }
+        if self.worker.health_check_interval_seconds == 0 {
+            errors.push("Health check interval must be greater than 0".to_string());
+        }
+        if self.worker.rate_limiting.window_seconds == 0 {
+            errors.push("Rate limiting window must be greater than 0".to_string());
+        }
+        
+        // Validate VCS configuration
+        if self.vcs.operation_timeout_seconds == 0 {
+            errors.push("VCS operation timeout must be greater than 0".to_string());
+        }
+        
+        // Validate application configuration
+        if self.application.name.is_empty() {
+            errors.push("Application name cannot be empty".to_string());
+        }
+        if self.application.shutdown_timeout_seconds == 0 {
+            errors.push("Shutdown timeout must be greater than 0".to_string());
         }
         
         // Validate directories exist if specified
         if let Some(ref backup_dir) = self.application.backup_directory {
             if !backup_dir.exists() {
-                return Err(ConfigError::Validation(format!("Backup directory does not exist: {}", backup_dir.display())));
+                errors.push(format!("Backup directory does not exist: {}", backup_dir.display()));
+            } else if !backup_dir.is_dir() {
+                errors.push(format!("Backup directory path is not a directory: {}", backup_dir.display()));
             }
         }
         
+        // Check for reasonable timeout values
+        if self.worker.run_timeout_minutes > 1440 { // 24 hours
+            errors.push("Run timeout seems unreasonably high (>24 hours)".to_string());
+        }
+        if self.database.connection_timeout_seconds > 300 { // 5 minutes
+            errors.push("Database connection timeout seems unreasonably high (>5 minutes)".to_string());
+        }
+        
+        if !errors.is_empty() {
+            return Err(ConfigError::Validation(format!("Configuration validation failed:\n- {}", errors.join("\n- "))));
+        }
+        
         Ok(())
+    }
+
+    /// Load configuration for a specific profile (development, staging, production).
+    pub fn for_profile(profile: &str) -> Result<Self, ConfigError> {
+        let mut config = Self::default();
+        
+        // Apply profile-specific defaults
+        match profile {
+            "development" => {
+                config.application.environment = "development".to_string();
+                config.application.debug = true;
+                config.database.enable_sql_logging = true;
+                config.tracing.log_level = "debug".to_string();
+                config.web.enable_request_logging = true;
+            }
+            "staging" => {
+                config.application.environment = "staging".to_string();
+                config.application.debug = false;
+                config.database.enable_sql_logging = false;
+                config.tracing.log_level = "info".to_string();
+                config.web.enable_request_logging = true;
+            }
+            "production" => {
+                config.application.environment = "production".to_string();
+                config.application.debug = false;
+                config.database.enable_sql_logging = false;
+                config.tracing.log_level = "warn".to_string();
+                config.web.enable_request_logging = false;
+                config.worker.rate_limiting.enabled = true;
+            }
+            _ => {
+                return Err(ConfigError::Validation(format!("Unknown profile: {}", profile)));
+            }
+        }
+        
+        // Try to load profile-specific config file
+        let profile_config_path = format!("janitor.{}.conf", profile);
+        if std::path::Path::new(&profile_config_path).exists() {
+            let profile_config = Self::from_file(&profile_config_path)?;
+            config = config.merge_with(profile_config);
+        }
+        
+        // Apply environment overrides
+        config.apply_env_overrides()?;
+        
+        config.validate()?;
+        Ok(config)
     }
 
     /// Convert to the legacy janitor config format for compatibility.
@@ -435,14 +791,17 @@ impl RunnerConfig {
         Duration::from_secs(self.worker.run_timeout_minutes * 60)
     }
 
+    /// Get health check interval as a Duration.
     pub fn health_check_interval(&self) -> Duration {
         Duration::from_secs(self.worker.health_check_interval_seconds)
     }
 
+    /// Get shutdown timeout as a Duration.
     pub fn shutdown_timeout(&self) -> Duration {
         Duration::from_secs(self.application.shutdown_timeout_seconds)
     }
 
+    /// Get request timeout as a Duration.
     pub fn request_timeout(&self) -> Duration {
         Duration::from_secs(self.web.request_timeout_seconds)
     }
@@ -451,15 +810,19 @@ impl RunnerConfig {
 /// Configuration error types.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// IO error reading configuration files.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     
+    /// Error parsing configuration content.
     #[error("Parse error: {0}")]
     Parse(String),
     
+    /// Configuration validation error.
     #[error("Validation error: {0}")]
     Validation(String),
     
+    /// Environment variable parsing error.
     #[error("Environment error: {0}")]
     Environment(String),
 }
@@ -556,5 +919,108 @@ mod tests {
         let config = RunnerConfig::default();
         assert_eq!(config.run_timeout(), Duration::from_secs(60 * 60)); // 60 minutes
         assert_eq!(config.health_check_interval(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_enhanced_validation() {
+        let mut config = RunnerConfig::default();
+        assert!(config.validate().is_ok());
+
+        // Test invalid database URL
+        config.database.url = "invalid-url".to_string();
+        assert!(config.validate().is_err());
+
+        // Reset and test invalid ports
+        config = RunnerConfig::default();
+        config.web.port = 0;
+        assert!(config.validate().is_err());
+
+        // Test port conflict
+        config = RunnerConfig::default();
+        config.web.port = 8080;
+        config.web.public_port = 8080;
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_env_overrides() {
+        std::env::set_var("DATABASE_URL", "postgresql://test:5432/test");
+        std::env::set_var("PORT", "8080");
+        std::env::set_var("DEBUG", "true");
+
+        let mut config = RunnerConfig::default();
+        config.apply_env_overrides().unwrap();
+
+        assert_eq!(config.database.url, "postgresql://test:5432/test");
+        assert_eq!(config.web.port, 8080);
+        assert_eq!(config.application.debug, true);
+
+        // Cleanup
+        std::env::remove_var("DATABASE_URL");
+        std::env::remove_var("PORT");
+        std::env::remove_var("DEBUG");
+    }
+
+    #[test]
+    fn test_profile_loading() {
+        let dev_config = RunnerConfig::for_profile("development").unwrap();
+        assert_eq!(dev_config.application.environment, "development");
+        assert_eq!(dev_config.application.debug, true);
+
+        let prod_config = RunnerConfig::for_profile("production").unwrap();
+        assert_eq!(prod_config.application.environment, "production");
+        assert_eq!(prod_config.application.debug, false);
+        assert_eq!(prod_config.worker.rate_limiting.enabled, true);
+
+        // Test invalid profile
+        assert!(RunnerConfig::for_profile("invalid").is_err());
+    }
+
+    #[test]
+    fn test_config_sources() {
+        let sources = vec![
+            ConfigSource::Defaults,
+            ConfigSource::Environment,
+        ];
+
+        // This should not fail even though we don't have actual files
+        std::env::set_var("DATABASE_URL", "postgresql://localhost/test");
+        let config = RunnerConfig::from_sources(&sources).unwrap();
+        assert_eq!(config.database.url, "postgresql://localhost/test");
+        std::env::remove_var("DATABASE_URL");
+    }
+
+    #[test]
+    fn test_config_content_parsing() {
+        let toml_content = r#"
+[database]
+url = "postgresql://localhost/janitor_test"
+max_connections = 5
+
+[web]
+port = 8080
+"#;
+        
+        let config = RunnerConfig::from_content(toml_content, std::path::Path::new("test.toml")).unwrap();
+        assert_eq!(config.database.url, "postgresql://localhost/janitor_test");
+        assert_eq!(config.database.max_connections, 5);
+        assert_eq!(config.web.port, 8080);
+    }
+
+    #[tokio::test]
+    async fn test_config_manager() {
+        let config = RunnerConfig::default();
+        let manager = ConfigManager::new(config.clone());
+        
+        let retrieved_config = manager.get().await;
+        assert_eq!(retrieved_config.database.url, config.database.url);
+
+        // Test update
+        let mut new_config = config.clone();
+        new_config.web.port = 9000;
+        manager.update(new_config).await.unwrap();
+
+        let updated_config = manager.get().await;
+        assert_eq!(updated_config.web.port, 9000);
     }
 }
