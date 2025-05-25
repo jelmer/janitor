@@ -25,6 +25,8 @@ pub mod publish_one;
 pub mod queue;
 /// Module for rate limiting publish operations.
 pub mod rate_limiter;
+/// Module for Redis pub/sub integration.
+pub mod redis;
 /// Module for managing publish state.
 pub mod state;
 /// Module for web interface to publish functionality.
@@ -574,24 +576,22 @@ impl PublishWorker {
                 })?;
 
             if result.proposal_url.is_some() && result.is_new.unwrap() {
-                use redis::AsyncCommands;
+                // Publish merge proposal event to Redis
                 if let Some(redis) = self.redis.as_mut() {
-                    let _: () = redis
-                        .publish(
-                            "merge-proposal".to_string(),
-                            serde_json::to_string(&serde_json::json!({
-                                "url": result.proposal_url,
-                                "web_url": result.proposal_web_url,
-                                "status": "open",
-                                "codebase": codebase,
-                                "campaign": campaign,
-                                "target_branch_url": result.target_branch_url,
-                                "target_branch_web_url": result.target_branch_web_url,
-                            }))
-                            .unwrap(),
-                        )
-                        .await
-                        .unwrap();
+                    let event = crate::redis::MergeProposalEvent {
+                        url: result.proposal_url.as_ref().unwrap().to_string(),
+                        web_url: result.proposal_web_url.as_ref().map(|u| u.to_string()),
+                        status: "open".to_string(),
+                        codebase: codebase.to_string(),
+                        campaign: campaign.to_string(),
+                        target_branch_url: result.target_branch_url.to_string(),
+                        target_branch_web_url: result.target_branch_web_url.as_ref().map(|u| u.to_string()),
+                        timestamp: chrono::Utc::now(),
+                    };
+                    
+                    if let Err(e) = crate::redis::pubsub_publish_merge_proposal(Some(redis), &event).await {
+                        log::warn!("Failed to publish merge proposal event to Redis: {}", e);
+                    }
                 }
 
                 if let Some(bucket) = rate_limit_bucket {
@@ -803,8 +803,12 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
 ///
 /// # Arguments
 /// * `state` - The application state
-pub async fn listen_to_runner(state: Arc<AppState>) {
-    todo!();
+/// * `shutdown_rx` - Channel for receiving shutdown signals
+pub async fn listen_to_runner(
+    state: Arc<AppState>, 
+    shutdown_rx: tokio::sync::mpsc::Receiver<()>
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    redis::listen_to_runner(state, shutdown_rx).await
 }
 
 #[cfg(test)]
