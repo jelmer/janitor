@@ -487,8 +487,178 @@ WHERE id = $1
     }
 }
 
-async fn publish() {
-    unimplemented!()
+/// Request body for triggering a publish operation.
+#[derive(serde::Deserialize)]
+struct PublishRequest {
+    mode: Option<String>,        // publish mode: "propose", "push", "build-only"
+    force: Option<bool>,         // force publish even if checks fail
+    dry_run: Option<bool>,       // simulate publish without actual changes
+}
+
+async fn publish(
+    State(state): State<Arc<AppState>>,
+    Path((campaign, codebase)): Path<(String, String)>,
+    Json(request): Json<PublishRequest>,
+) -> impl IntoResponse {
+    log::info!("Publish request for campaign: {}, codebase: {}", campaign, codebase);
+
+    // Find the most recent successful run for this campaign/codebase combination
+    let run = sqlx::query_as::<_, crate::state::Run>(
+        r#"
+        SELECT 
+            id, codebase, suite, main_branch_revision, revision, 
+            result_code, target_branch_url, worker, branch_url,
+            instigated_context, command, description, start_time, finish_time
+        FROM run 
+        WHERE suite = $1 AND codebase = $2 AND result_code = 'success'
+        ORDER BY finish_time DESC 
+        LIMIT 1
+        "#
+    )
+    .bind(&campaign)
+    .bind(&codebase)
+    .fetch_optional(&state.conn)
+    .await;
+
+    let run = match run {
+        Ok(Some(run)) => run,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "reason": "No successful run found",
+                    "campaign": campaign,
+                    "codebase": codebase
+                }))
+            );
+        }
+        Err(e) => {
+            log::error!("Error finding run for {}/{}: {}", campaign, codebase, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            );
+        }
+    };
+
+    // Check if this run is already being published or has been published
+    let existing_publish = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM publish WHERE id = $1"
+    )
+    .bind(&run.id)
+    .fetch_one(&state.conn)
+    .await;
+
+    match existing_publish {
+        Ok(count) if count > 0 && !request.force.unwrap_or(false) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "reason": "Run already published or in progress",
+                    "run_id": run.id,
+                    "force_required": true
+                }))
+            );
+        }
+        Err(e) => {
+            log::error!("Error checking existing publish for run {}: {}", run.id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Database error"}))
+            );
+        }
+        _ => {} // Continue with publish
+    }
+
+    if request.dry_run.unwrap_or(false) {
+        // Dry run mode - just validate and return what would be done
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "dry_run",
+                "run_id": run.id,
+                "campaign": campaign,
+                "codebase": codebase,
+                "would_publish": true,
+                "mode": request.mode.unwrap_or_else(|| "build-only".to_string())
+            }))
+        );
+    }
+
+    // Get unpublished branches for this run
+    let unpublished_branches = match crate::state::get_unpublished_branches(&state.conn, &run.id).await {
+        Ok(branches) => branches,
+        Err(e) => {
+            log::error!("Error getting unpublished branches for run {}: {}", run.id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to get unpublished branches"}))
+            );
+        }
+    };
+
+    if unpublished_branches.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "reason": "No unpublished branches found",
+                "run_id": run.id
+            }))
+        );
+    }
+
+    // Get rate limit bucket for this codebase/campaign
+    let rate_limit_bucket = format!("{}:{}", campaign, codebase); // Simple bucket naming
+
+    // Trigger the publish process
+    let consider_result = crate::consider_publish_run(
+        &state.conn,
+        state.redis.clone(),
+        state.config,
+        &state.publish_worker,
+        &state.vcs_managers,
+        &state.bucket_rate_limiter,
+        &run,
+        &rate_limit_bucket,
+        &unpublished_branches,
+        &run.command.unwrap_or_default(),
+        state.push_limit,
+        state.require_binary_diff,
+    ).await;
+
+    match consider_result {
+        Ok(results) => {
+            let status = results.get("status").and_then(|s| s.as_ref()).unwrap_or("unknown");
+            let http_status = match status.as_str() {
+                "processing" => StatusCode::ACCEPTED,
+                "rate_limited" | "push_limit_reached" => StatusCode::TOO_MANY_REQUESTS,
+                "not_successful" => StatusCode::BAD_REQUEST,
+                _ => StatusCode::OK,
+            };
+
+            (
+                http_status,
+                Json(serde_json::json!({
+                    "status": status,
+                    "run_id": run.id,
+                    "campaign": campaign,
+                    "codebase": codebase,
+                    "results": results,
+                    "unpublished_branches_count": unpublished_branches.len()
+                }))
+            )
+        }
+        Err(e) => {
+            log::error!("Error considering publish for run {}: {}", run.id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Failed to initiate publish",
+                    "run_id": run.id
+                }))
+            )
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

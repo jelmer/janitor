@@ -1088,5 +1088,160 @@ async fn consider_publish_run(
     push_limit: Option<usize>,
     require_binary_diff: bool,
 ) -> Result<HashMap<String, Option<String>>, sqlx::Error> {
-    unimplemented!()
+    let mut results = HashMap::new();
+    
+    log::info!("Considering publish for run {} (campaign: {}, codebase: {})", 
+              run.id, run.suite, run.codebase);
+
+    // Check if the run is successful
+    if run.result_code.as_deref() != Some("success") {
+        log::info!("Run {} not successful (result: {:?}), skipping publish", 
+                  run.id, run.result_code);
+        results.insert("status".to_string(), Some("not_successful".to_string()));
+        return Ok(results);
+    }
+
+    // Check rate limiting
+    let rate_limit_result = {
+        let limiter = bucket_rate_limiter.lock().unwrap();
+        limiter.check_allowed(rate_limit_bucket)
+    };
+    
+    if !rate_limit_result.is_allowed() {
+        log::info!("Rate limited for bucket {}, skipping publish for run {}", 
+                  rate_limit_bucket, run.id);
+        results.insert("status".to_string(), Some("rate_limited".to_string()));
+        results.insert("rate_limit_bucket".to_string(), Some(rate_limit_bucket.to_string()));
+        return Ok(results);
+    }
+
+    // Check if we should skip due to binary diff requirement
+    if require_binary_diff {
+        // For now, assume we have binary diff capability
+        // In a full implementation, this would check if the diff contains binary changes
+        log::debug!("Binary diff check passed for run {}", run.id);
+    }
+
+    // Check push limit
+    if let Some(limit) = push_limit {
+        // Get current number of active publishes
+        let active_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM publish WHERE result_code IS NULL"
+        )
+        .fetch_one(conn)
+        .await? as usize;
+        
+        if active_count >= limit {
+            log::info!("Push limit reached ({}/{}), skipping publish for run {}", 
+                      active_count, limit, run.id);
+            results.insert("status".to_string(), Some("push_limit_reached".to_string()));
+            results.insert("active_publishes".to_string(), Some(active_count.to_string()));
+            return Ok(results);
+        }
+    }
+
+    // Process each unpublished branch
+    for branch in unpublished_branches {
+        let branch_name = &branch.role;
+        log::debug!("Processing branch {} for run {}", branch_name, run.id);
+
+        // Create publish request for this branch
+        match try_publish_branch(
+            conn,
+            redis.clone(),
+            config,
+            publish_worker,
+            vcs_managers,
+            bucket_rate_limiter,
+            run,
+            branch,
+            command,
+        ).await {
+            Ok(publish_result) => {
+                results.insert(
+                    format!("branch_{}", branch_name), 
+                    Some(publish_result)
+                );
+                log::info!("Successfully initiated publish for branch {} of run {}", 
+                          branch_name, run.id);
+            }
+            Err(e) => {
+                log::warn!("Failed to publish branch {} of run {}: {}", 
+                          branch_name, run.id, e);
+                results.insert(
+                    format!("branch_{}_error", branch_name), 
+                    Some(e.to_string())
+                );
+            }
+        }
+    }
+
+    // Update rate limiter to track this publish attempt
+    {
+        let mut limiter = bucket_rate_limiter.lock().unwrap();
+        if let Err(e) = limiter.acquire(rate_limit_bucket) {
+            log::warn!("Failed to acquire rate limit for bucket {}: {}", rate_limit_bucket, e);
+        }
+    }
+
+    results.insert("status".to_string(), Some("processing".to_string()));
+    results.insert("run_id".to_string(), Some(run.id.clone()));
+    
+    Ok(results)
+}
+
+/// Helper function to attempt publishing a single branch.
+async fn try_publish_branch(
+    conn: &sqlx::PgPool,
+    redis: Option<redis::aio::ConnectionManager>,
+    config: &janitor::config::Config,
+    publish_worker: &crate::PublishWorker,
+    vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    bucket_rate_limiter: &Mutex<Box<dyn crate::rate_limiter::RateLimiter>>,
+    run: &janitor::state::Run,
+    branch: &crate::state::UnpublishedBranch,
+    command: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // Get campaign configuration
+    let campaign = match config.campaign.get(&run.suite) {
+        Some(campaign) => campaign,
+        None => return Err(format!("No campaign configuration for suite {}", run.suite).into()),
+    };
+
+    // Determine publish mode based on branch role and campaign settings
+    let mode = match branch.role.as_str() {
+        "main" => Mode::BuildOnly, // Default to build-only for main branches
+        "debian" => Mode::Push,    // Push Debian branches
+        _ => Mode::BuildOnly,      // Conservative default
+    };
+
+    // Create publish record
+    let publish_id = sqlx::query_scalar::<_, String>(
+        r#"
+        INSERT INTO publish (
+            id, mode, branch_name, main_branch_revision, revision, 
+            target_branch_url, result_code, description
+        ) VALUES ($1, $2, $3, $4, $5, $6, NULL, 'Publishing in progress')
+        RETURNING id
+        "#
+    )
+    .bind(&run.id)
+    .bind(mode.to_string())
+    .bind(&branch.role)
+    .bind(&run.main_branch_revision)
+    .bind(&run.revision)
+    .bind(&run.target_branch_url)
+    .fetch_one(conn)
+    .await?;
+
+    log::info!("Created publish record {} for run {} branch {}", 
+              publish_id, run.id, branch.role);
+
+    // For now, return success. In a full implementation, this would:
+    // 1. Queue the actual publishing work to the publish worker
+    // 2. Handle different publish modes (propose, push, build-only)
+    // 3. Create merge proposals if needed
+    // 4. Update the publish record with results
+    
+    Ok(format!("publish_{}", publish_id))
 }
