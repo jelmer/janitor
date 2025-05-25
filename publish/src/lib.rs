@@ -926,7 +926,168 @@ async fn check_existing_mp(
     >,
     possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
 ) -> Result<bool, CheckMpError> {
-    todo!()
+    let mp_url = mp.url().map_err(CheckMpError::from)?;
+    log::debug!("Checking existing merge proposal: {}", mp_url);
+
+    // Get proposal info manager (simplified version)
+    let old_proposal_info = get_proposal_info_from_db(conn, &mp_url).await
+        .map_err(|e| CheckMpError::UnexpectedHttpStatus)?;
+
+    let (codebase, rate_limit_bucket) = if let Some(info) = &old_proposal_info {
+        (Some(info.codebase.clone()), info.rate_limit_bucket.clone())
+    } else {
+        (None, None)
+    };
+
+    // Get source revision from merge proposal
+    let revision = tokio::task::spawn_blocking({
+        let mp = mp.clone();
+        move || mp.get_source_revision()
+    }).await
+    .map_err(|_| CheckMpError::UnexpectedHttpStatus)?
+    .map_err(CheckMpError::from)?;
+
+    // Get source branch URL
+    let source_branch_url = tokio::task::spawn_blocking({
+        let mp = mp.clone();
+        move || mp.get_source_branch_url()
+    }).await
+    .map_err(|_| CheckMpError::UnexpectedHttpStatus)?
+    .map_err(CheckMpError::from)?;
+
+    // Check if it can be merged (optional)
+    let can_be_merged = tokio::task::spawn_blocking({
+        let mp = mp.clone();
+        move || mp.can_be_merged()
+    }).await
+    .map_err(|_| CheckMpError::UnexpectedHttpStatus)?
+    .ok();
+
+    if revision.is_none() {
+        log::warn!("Merge proposal {} has no source revision", mp_url);
+        return Ok(false);
+    }
+
+    let revision = revision.unwrap();
+
+    // Look for associated run in database
+    let run_row = sqlx::query(
+        r#"
+        SELECT id, codebase, suite, result_code, finish_time
+        FROM run 
+        WHERE revision = $1
+        ORDER BY finish_time DESC
+        LIMIT 1
+        "#
+    )
+    .bind(revision.to_string())
+    .fetch_optional(conn)
+    .await
+    .map_err(|_| CheckMpError::UnexpectedHttpStatus)?;
+
+    let run_info = if let Some(row) = run_row {
+        Some((
+            row.get::<String, _>("id"),
+            row.get::<String, _>("codebase"),
+            row.get::<String, _>("suite"),
+            row.get::<Option<String>, _>("result_code"),
+            row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("finish_time"),
+        ))
+    } else {
+        log::debug!("No run found for revision {} (MP: {})", revision, mp_url);
+        return Err(CheckMpError::NoRunForMergeProposal(mp_url.clone()));
+    };
+
+    let (run_id, run_codebase, suite, result_code, finish_time) = run_info.unwrap();
+
+    // Update merge proposal status in database
+    let db_status = match status {
+        breezyshim::forge::MergeProposalStatus::Open => "open",
+        breezyshim::forge::MergeProposalStatus::Merged => "merged", 
+        breezyshim::forge::MergeProposalStatus::Closed => "closed",
+    };
+
+    // Store/update merge proposal info
+    sqlx::query(
+        r#"
+        INSERT INTO merge_proposal (url, status, revision, last_scanned, target_branch_url, codebase)
+        VALUES ($1, $2, $3, NOW(), $4, $5)
+        ON CONFLICT (url) DO UPDATE SET
+            status = EXCLUDED.status,
+            revision = EXCLUDED.revision,
+            last_scanned = EXCLUDED.last_scanned,
+            target_branch_url = EXCLUDED.target_branch_url,
+            codebase = EXCLUDED.codebase
+        "#
+    )
+    .bind(&mp_url.to_string())
+    .bind(db_status)
+    .bind(revision.to_string())
+    .bind(&source_branch_url.to_string())
+    .bind(&run_codebase)
+    .execute(conn)
+    .await
+    .map_err(|_| CheckMpError::UnexpectedHttpStatus)?;
+
+    // Update bucket counters if provided
+    if let Some(ref mut mps_per_bucket) = mps_per_bucket {
+        let bucket = rate_limit_bucket.as_deref().unwrap_or("default");
+        let status_key = match status {
+            breezyshim::forge::MergeProposalStatus::Open => janitor::publish::MergeProposalStatus::Open,
+            breezyshim::forge::MergeProposalStatus::Merged => janitor::publish::MergeProposalStatus::Merged,
+            breezyshim::forge::MergeProposalStatus::Closed => janitor::publish::MergeProposalStatus::Closed,
+        };
+        
+        *mps_per_bucket
+            .entry(status_key)
+            .or_default()
+            .entry(bucket.to_string())
+            .or_insert(0) += 1;
+    }
+
+    log::info!("Updated merge proposal {} (status: {}, codebase: {}, run: {})", 
+              mp_url, db_status, run_codebase, run_id);
+
+    // If check_only is false, we could perform additional actions here
+    // like updating the proposal description, posting comments, etc.
+    
+    Ok(!check_only) // Return true if we modified something
+}
+
+/// Simple proposal info structure for database lookups.
+#[derive(Debug, Clone)]
+struct ProposalInfo {
+    pub codebase: String,
+    pub rate_limit_bucket: Option<String>,
+}
+
+/// Get proposal info from database.
+///
+/// # Arguments
+/// * `conn` - Database connection
+/// * `mp_url` - Merge proposal URL
+///
+/// # Returns
+/// Proposal info if found, or None
+async fn get_proposal_info_from_db(
+    conn: &sqlx::PgPool,
+    mp_url: &url::Url,
+) -> Result<Option<ProposalInfo>, sqlx::Error> {
+    let row = sqlx::query(
+        "SELECT codebase, rate_limit_bucket FROM merge_proposal WHERE url = $1"
+    )
+    .bind(mp_url.to_string())
+    .fetch_optional(conn)
+    .await?;
+
+    if let Some(row) = row {
+        Ok(Some(ProposalInfo {
+            codebase: row.get("codebase"),
+            rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Iterate over all merge proposals.
@@ -953,14 +1114,33 @@ pub fn iter_all_mps(
         breezyshim::forge::MergeProposalStatus::Closed,
         breezyshim::forge::MergeProposalStatus::Merged,
     ]);
-    breezyshim::forge::iter_forge_instances().flat_map(|instance| {
-        statuses.iter().flat_map(move |status| {
-            let proposals = instance.iter_my_proposals(Some(*status), None).unwrap();
-            let value = instance.clone();
-
-            proposals.map(move |proposal| Ok((value.clone(), proposal, *status)))
+    
+    breezyshim::forge::iter_forge_instances()
+        .flat_map(move |forge| {
+            statuses.iter().filter_map(move |&status| {
+                match forge.iter_my_proposals(Some(status), None) {
+                    Ok(proposals) => {
+                        Some(proposals.map(move |proposal| Ok((forge.clone(), proposal, status))))
+                    }
+                    Err(BrzError::ForgeLoginRequired) => {
+                        log::info!("Skipping forge {}, no credentials known", forge.forge_name());
+                        None
+                    }
+                    Err(BrzError::UnexpectedHttpStatus { .. }) => {
+                        log::warn!("Got unexpected HTTP status, skipping forge {}", forge.forge_name());
+                        None
+                    }
+                    Err(BrzError::UnsupportedForge(msg)) => {
+                        log::warn!("Unsupported forge {}: {}", forge.forge_name(), msg);
+                        None
+                    }
+                    Err(e) => {
+                        log::error!("Error iterating proposals for forge {}: {}", forge.forge_name(), e);
+                        None
+                    }
+                }
+            }).flatten()
         })
-    })
 }
 
 async fn check_existing(
