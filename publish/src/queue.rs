@@ -7,7 +7,7 @@ use crate::{AppState, PublishError, consider_publish_run};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 /// Represents a publish-ready run with its associated metadata.
 #[derive(Debug, Clone)]
@@ -104,7 +104,7 @@ impl PublishReadyIterator {
         }
 
         // Group by run ID to handle multiple branches per run
-        let mut runs_map: HashMap<String, (janitor::state::Run, Vec<crate::state::UnpublishedBranch>)> = HashMap::new();
+        let mut runs_map: HashMap<String, (janitor::state::Run, Vec<crate::state::UnpublishedBranch>, String)> = HashMap::new();
 
         for row in rows {
             let run_id: String = row.get("id");
@@ -119,38 +119,43 @@ impl PublishReadyIterator {
                 revision: row.get("revision"),
                 result_code: row.get("result_code"),
                 target_branch_url: row.get("target_branch_url"),
-                rate_limit_bucket: Some(rate_limit_bucket.clone()),
                 command: command.clone(),
                 start_time: row.get("start_time"),
                 finish_time: row.get("finish_time"),
                 description: row.get("description"),
                 value: row.get("value"),
                 worker_name: row.get("worker_name"),
-                worker_link: row.get("worker_link"),
-                log_id: row.get("log_id"),
-                worker_result: row.get("worker_result"),
+                // TODO: Add missing fields based on actual Run struct definition
+                vcs_type: janitor::vcs::VcsType::Git, // Default value
+                branch_url: url::Url::parse("https://example.com").unwrap(), // Placeholder
+                result: row.get("worker_result"),
+                context: None, // TODO: Get from query if needed
+                instigated_context: None, // TODO: Get from query if needed
             };
 
             let branch = crate::state::UnpublishedBranch {
                 role: row.get("role"),
                 revision: row.get("branch_revision"),
-                name: row.get("branch_name"),
+                remote_name: row.get("branch_name"),
+                base_revision: None, // TODO: Get from query if available
+                publish_mode: Some("propose".to_string()), // Default mode
+                max_frequency_days: None, // TODO: Get from config if needed
             };
 
             match runs_map.get_mut(&run_id) {
-                Some((_, branches)) => {
+                Some((_, branches, _)) => {
                     branches.push(branch);
                 }
                 None => {
-                    runs_map.insert(run_id, (run, vec![branch]));
+                    runs_map.insert(run_id, (run, vec![branch], rate_limit_bucket));
                 }
             }
         }
 
         // Return the first run (if any)
-        if let Some((_, (run, branches))) = runs_map.into_iter().next() {
+        if let Some((_, (run, branches, rate_limit_bucket))) = runs_map.into_iter().next() {
             Ok(Some(PublishReadyRun {
-                rate_limit_bucket: run.rate_limit_bucket.clone().unwrap_or_else(|| "default".to_string()),
+                rate_limit_bucket,
                 command: run.command.clone(),
                 unpublished_branches: branches,
                 run,

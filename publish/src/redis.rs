@@ -5,6 +5,10 @@
 
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
+use sqlx::Row;
+
+// Type alias for connection manager
+pub type RedisConnectionManager = ConnectionManager;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -243,6 +247,16 @@ impl RedisSubscriber {
         .bind(run_id)
         .fetch_optional(&state.conn)
         .await?;
+        
+        // Get the rate limit bucket separately
+        let rate_limit_bucket = sqlx::query(
+            "SELECT COALESCE(rate_limit_bucket, 'default') as rate_limit_bucket FROM run WHERE id = $1"
+        )
+        .bind(run_id)
+        .fetch_optional(&state.conn)
+        .await?
+        .map(|row| row.get::<String, _>("rate_limit_bucket"))
+        .unwrap_or_else(|| "default".to_string());
 
         let run = match run {
             Some(run) => run,
@@ -287,7 +301,7 @@ impl RedisSubscriber {
             return Ok(());
         }
 
-        let rate_limit_bucket = run.rate_limit_bucket.as_deref().unwrap_or("default");
+        // rate_limit_bucket is already defined above
         let command = run.command.clone();
 
         log::info!("Processing run {} with {} unpublished branches", 
