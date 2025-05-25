@@ -21,6 +21,8 @@ use std::sync::{Arc, Mutex, RwLock};
 pub mod proposal_info;
 /// Module for publishing a single change.
 pub mod publish_one;
+/// Module for queue processing functionality.
+pub mod queue;
 /// Module for rate limiting publish operations.
 pub mod rate_limiter;
 /// Module for managing publish state.
@@ -721,23 +723,42 @@ pub fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::
 /// * `state` - The application state
 /// * `interval` - The interval at which to process the queue
 /// * `auto_publish` - Whether to automatically publish changes
+/// * `push_limit` - Optional limit on the number of pushes
+/// * `modify_mp_limit` - Optional limit on the number of merge proposals to modify
+/// * `require_binary_diff` - Whether to require binary diffs
 pub async fn process_queue_loop(
     state: Arc<AppState>,
     interval: chrono::Duration,
     auto_publish: bool,
+    push_limit: Option<usize>,
+    modify_mp_limit: Option<i32>,
+    require_binary_diff: bool,
 ) {
-    todo!();
+    queue::process_queue_loop(
+        state,
+        interval,
+        auto_publish,
+        push_limit,
+        modify_mp_limit,
+        require_binary_diff,
+    ).await;
 }
 
 /// Publish all pending ready changes.
 ///
 /// # Arguments
 /// * `state` - The application state
+/// * `push_limit` - Optional limit on the number of pushes
+/// * `require_binary_diff` - Whether to require binary diffs
 ///
 /// # Returns
 /// Ok(()) if successful, or a PublishError
-pub async fn publish_pending_ready(state: Arc<AppState>) -> Result<(), PublishError> {
-    todo!();
+pub async fn publish_pending_ready(
+    state: Arc<AppState>,
+    push_limit: Option<usize>,
+    require_binary_diff: bool,
+) -> Result<(), PublishError> {
+    queue::publish_pending_ready(state, push_limit, require_binary_diff).await
 }
 
 /// Refresh the counts of merge proposals per bucket.
