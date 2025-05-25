@@ -91,7 +91,7 @@ impl RunnerDatabase {
             }),
             failure_details: run.failure_details,
             failure_stage: run.failure_stage.map(|s| vec![s]),
-            resume: None, // TODO: Implement resume logic
+            resume: self.get_resume_info(&run.id, &run.codebase, &run.suite).await.ok().flatten(),
             target: None, // TODO: Get from builder result
             worker_name: run.worker_name,
             vcs_type: Some(run.vcs_type),
@@ -1716,6 +1716,40 @@ impl RunnerDatabase {
         } else {
             tx.rollback().await?;
             Ok(false)
+        }
+    }
+
+    /// Get resume information for a run, looking for related runs that can be resumed.
+    pub async fn get_resume_info(
+        &self,
+        run_id: &str,
+        codebase: &str,
+        campaign: &str,
+    ) -> Result<Option<crate::ResultResume>, sqlx::Error> {
+        // Look for a previous run on the same codebase and campaign that might be resumable
+        let resume_run = sqlx::query(
+            r#"
+            SELECT id FROM run 
+            WHERE codebase = $1 AND suite = $2 AND id != $3
+            AND result_code IN ('interrupted', 'worker-failure', 'timeout')
+            AND finish_time > NOW() - INTERVAL '7 days'
+            ORDER BY finish_time DESC 
+            LIMIT 1
+            "#,
+        )
+        .bind(codebase)
+        .bind(campaign)
+        .bind(run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = resume_run {
+            let resume_run_id: String = row.get("id");
+            Ok(Some(crate::ResultResume {
+                run_id: resume_run_id,
+            }))
+        } else {
+            Ok(None)
         }
     }
 }
