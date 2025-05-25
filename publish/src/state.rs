@@ -4,6 +4,7 @@ use breezyshim::RevisionId;
 use sqlx::{FromRow, PgPool, Row};
 use url::Url;
 
+
 async fn store_publish(
     conn: &PgPool,
     change_set: &str,
@@ -331,21 +332,23 @@ WHERE run_id = (
     .await
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 /// Information about a branch that hasn't been published yet.
 pub struct UnpublishedBranch {
     /// Role of the branch.
     pub role: String,
     /// Name of the remote branch.
-    pub remote_name: String,
+    pub remote_name: Option<String>,
     /// Base revision ID.
-    pub base_revision: RevisionId,
+    pub base_revision: Option<RevisionId>,
     /// Current revision ID.
-    pub revision: RevisionId,
+    pub revision: Option<RevisionId>,
     /// Mode to use for publishing.
-    pub publish_mode: Mode,
+    pub publish_mode: Option<String>,
     /// Maximum frequency in days between publish attempts.
     pub max_frequency_days: Option<i32>,
+    /// The name of the branch.
+    pub name: Option<String>,
 }
 
 /// Iterate through runs that are ready to be published.
