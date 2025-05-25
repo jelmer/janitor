@@ -82,7 +82,7 @@ impl RunnerDatabase {
                     .map(|(name, rev)| (name, Some(RevisionId::from(rev.as_bytes()))))
                     .collect()
             }),
-            remotes: None, // TODO: Get from separate table if needed
+            remotes: self.get_run_remotes(&run.id).await.ok(),
             branches: run.result_branches.map(|branches| {
                 branches
                     .into_iter()
@@ -92,12 +92,12 @@ impl RunnerDatabase {
             failure_details: run.failure_details,
             failure_stage: run.failure_stage.map(|s| vec![s]),
             resume: self.get_resume_info(&run.id, &run.codebase, &run.suite).await.ok().flatten(),
-            target: None, // TODO: Get from builder result
+            target: self.get_run_target(&run.id).await.ok().flatten(),
             worker_name: run.worker_name,
             vcs_type: Some(run.vcs_type),
             target_branch_url: run.target_branch_url,
             context: run.context.and_then(|s| serde_json::from_str(&s).ok()),
-            builder_result: None, // TODO: Load from debian_build table if needed
+            builder_result: self.get_run_builder_result(&run.id).await.ok().flatten()
         }
     }
 
@@ -1800,6 +1800,106 @@ impl RunnerDatabase {
 
         if let Some(row) = row {
             Ok(row.get("committer"))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get remotes information for a run from the new_result_branch table.
+    pub async fn get_run_remotes(&self, run_id: &str) -> Result<Option<std::collections::HashMap<String, std::collections::HashMap<String, serde_json::Value>>>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT DISTINCT remote_name, base_revision, revision
+            FROM new_result_branch
+            WHERE run_id = $1 AND remote_name IS NOT NULL
+            "#,
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        if rows.is_empty() {
+            return Ok(None);
+        }
+
+        let mut remotes = std::collections::HashMap::new();
+        for row in rows {
+            let remote_name: String = row.get("remote_name");
+            let base_revision: Option<String> = row.get("base_revision");
+            let revision: Option<String> = row.get("revision");
+            
+            let mut remote_data = std::collections::HashMap::new();
+            if let Some(base_rev) = base_revision {
+                remote_data.insert("base_revision".to_string(), serde_json::Value::String(base_rev));
+            }
+            if let Some(rev) = revision {
+                remote_data.insert("revision".to_string(), serde_json::Value::String(rev));
+            }
+            
+            remotes.insert(remote_name, remote_data);
+        }
+
+        Ok(Some(remotes))
+    }
+
+    /// Get target information for a run from the debian_build table.
+    pub async fn get_run_target(&self, run_id: &str) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT source, version, distribution, binary_packages, lintian_result
+            FROM debian_build
+            WHERE run_id = $1
+            "#,
+        )
+        .bind(run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let target_details = serde_json::json!({
+                "source": row.get::<String, _>("source"),
+                "version": row.get::<String, _>("version"),
+                "distribution": row.get::<String, _>("distribution"),
+                "binary_packages": row.get::<Option<Vec<String>>, _>("binary_packages"),
+                "lintian_result": row.get::<Option<serde_json::Value>, _>("lintian_result")
+            });
+
+            let target = serde_json::json!({
+                "name": "apt",
+                "details": target_details
+            });
+
+            Ok(Some(target))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Get builder result information for a run from the debian_build table.
+    pub async fn get_run_builder_result(&self, run_id: &str) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT source, version, distribution, binary_packages, lintian_result
+            FROM debian_build
+            WHERE run_id = $1
+            "#,
+        )
+        .bind(run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let builder_result = serde_json::json!({
+                "kind": "apt",
+                "source": row.get::<String, _>("source"),
+                "build_version": row.get::<String, _>("version"),
+                "build_distribution": row.get::<String, _>("distribution"),
+                "binary_packages": row.get::<Option<Vec<String>>, _>("binary_packages"),
+                "lintian": row.get::<Option<serde_json::Value>, _>("lintian_result"),
+                "changes_filenames": null // Not stored in current schema
+            });
+
+            Ok(Some(builder_result))
         } else {
             Ok(None)
         }

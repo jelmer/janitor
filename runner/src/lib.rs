@@ -552,6 +552,8 @@ pub struct ActiveRun {
     pub log_id: String,
     /// Start time.
     pub start_time: DateTime<Utc>,
+    /// Optional finish time.
+    pub finish_time: Option<DateTime<Utc>>,
     /// Optional estimated duration.
     #[serde(with = "serde_with::As::<Option<serde_with::DurationSeconds<f64>>>")]
     pub estimated_duration: Option<Duration>,
@@ -697,20 +699,112 @@ impl Backchannel {
                 ))
             }
             Backchannel::Jenkins { my_url, .. } => {
-                // TODO: Implement Jenkins ping
-                let _url = my_url;
-                let _log_id = expected_log_id;
-                Err(PingError::Retriable(
-                    "Jenkins ping not implemented yet".to_string(),
-                ))
+                // Implement Jenkins ping by checking job status
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(60))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let api_url = format!("{}/api/json", my_url);
+                
+                match client.get(&api_url).send().await {
+                    Ok(response) => {
+                        if response.status() == 404 {
+                            Err(PingError::Fatal(format!("Jenkins job {} has disappeared", my_url)))
+                        } else if !response.status().is_success() {
+                            Err(PingError::Retriable(format!(
+                                "Failed to ping Jenkins {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        } else {
+                            match response.json::<serde_json::Value>().await {
+                                Ok(job) => {
+                                    // Check if job failed
+                                    if let Some(result) = job.get("result") {
+                                        if result == "FAILURE" {
+                                            if let Some(job_id) = job.get("id") {
+                                                return Err(PingError::Fatal(format!(
+                                                    "Jenkins lists job {} for run {} as failed", 
+                                                    job_id, 
+                                                    expected_log_id
+                                                )));
+                                            }
+                                        }
+                                    }
+                                    Ok(())
+                                },
+                                Err(e) => Err(PingError::Retriable(format!(
+                                    "Failed to parse Jenkins response from {}: {}", 
+                                    my_url, 
+                                    e
+                                )))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Failed to ping Jenkins {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to ping Jenkins {}: {}", my_url, e)))
+                        }
+                    }
+                }
             }
             Backchannel::Polling { my_url } => {
-                // TODO: Implement polling ping
-                let _url = my_url;
-                let _log_id = expected_log_id;
-                Err(PingError::Retriable(
-                    "Polling ping not implemented yet".to_string(),
-                ))
+                // Implement polling ping by checking worker health
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(60))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let health_url = format!("{}/log-id", my_url);
+                log::info!("Pinging URL {} for run {}", health_url, expected_log_id);
+                
+                match client.get(&health_url).send().await {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            Err(PingError::Retriable(format!(
+                                "Failed to ping worker {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        } else {
+                            match response.text().await {
+                                Ok(log_id) => {
+                                    let log_id = log_id.trim();
+                                    if log_id != expected_log_id {
+                                        Err(PingError::Fatal(format!(
+                                            "Worker started processing new run {} rather than {}", 
+                                            log_id, 
+                                            expected_log_id
+                                        )))
+                                    } else {
+                                        Ok(())
+                                    }
+                                },
+                                Err(e) => Err(PingError::Retriable(format!(
+                                    "Failed to read response from {}: {}", 
+                                    my_url, 
+                                    e
+                                )))
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Failed to ping worker {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to ping worker {}: {}", my_url, e)))
+                        }
+                    }
+                }
             }
         }
     }
@@ -759,14 +853,45 @@ impl Backchannel {
             Backchannel::None {} => Err(PingError::Retriable(
                 "No backchannel available for kill".to_string(),
             )),
-            Backchannel::Jenkins { .. } => Err(PingError::Retriable(
-                "Jenkins kill not implemented yet".to_string(),
+            Backchannel::Jenkins { .. } => Err(PingError::Fatal(
+                "Jenkins kill not supported - Jenkins jobs cannot be killed via API".to_string(),
             )),
             Backchannel::Polling { my_url } => {
-                let _url = my_url;
-                Err(PingError::Retriable(
-                    "Polling kill not implemented yet".to_string(),
-                ))
+                // Implement polling kill by sending POST request to /kill endpoint
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(30))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let kill_url = format!("{}/kill", my_url);
+                
+                match client.post(&kill_url)
+                    .header("Accept", "application/json")
+                    .send()
+                    .await 
+                {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            Ok(())
+                        } else {
+                            Err(PingError::Retriable(format!(
+                                "Failed to kill worker at {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Timeout killing worker at {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to kill worker at {}: {}", my_url, e)))
+                        }
+                    }
+                }
             }
         }
     }
@@ -776,24 +901,143 @@ impl Backchannel {
         match self {
             Backchannel::None {} => Ok(vec![]),
             Backchannel::Jenkins { .. } => Ok(vec!["worker.log".to_string()]),
-            Backchannel::Polling { .. } => Err(PingError::Retriable(
-                "Polling list_log_files not implemented yet".to_string(),
-            )),
+            Backchannel::Polling { my_url } => {
+                // Implement polling list_log_files by querying /logs endpoint
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(30))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let logs_url = format!("{}/logs", my_url);
+                
+                match client.get(&logs_url).send().await {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            match response.json::<Vec<String>>().await {
+                                Ok(log_files) => Ok(log_files),
+                                Err(e) => Err(PingError::Retriable(format!(
+                                    "Failed to parse log files response from {}: {}", 
+                                    my_url, 
+                                    e
+                                )))
+                            }
+                        } else {
+                            Err(PingError::Retriable(format!(
+                                "Failed to list log files from {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Timeout listing log files from {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to list log files from {}: {}", my_url, e)))
+                        }
+                    }
+                }
+            }
         }
     }
 
     /// Get a specific log file.
-    pub async fn get_log_file(&self, _name: &str) -> Result<Vec<u8>, PingError> {
+    pub async fn get_log_file(&self, name: &str) -> Result<Vec<u8>, PingError> {
         match self {
             Backchannel::None {} => {
                 Err(PingError::Retriable("No backchannel available".to_string()))
             }
-            Backchannel::Jenkins { .. } => Err(PingError::Retriable(
-                "Jenkins get_log_file not implemented yet".to_string(),
-            )),
-            Backchannel::Polling { .. } => Err(PingError::Retriable(
-                "Polling get_log_file not implemented yet".to_string(),
-            )),
+            Backchannel::Jenkins { my_url, .. } => {
+                // Jenkins only supports getting "worker.log" via progressiveText endpoint
+                if name != "worker.log" {
+                    return Err(PingError::Fatal(format!("Jenkins log file not found: {}", name)));
+                }
+                
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(60))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let log_url = format!("{}/logText/progressiveText", my_url);
+                
+                match client.get(&log_url).send().await {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            match response.bytes().await {
+                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Err(e) => Err(PingError::Retriable(format!(
+                                    "Failed to read log file content from {}: {}", 
+                                    my_url, 
+                                    e
+                                )))
+                            }
+                        } else if response.status() == 404 {
+                            Err(PingError::Fatal(format!("Log file not found: {}", name)))
+                        } else {
+                            Err(PingError::Retriable(format!(
+                                "Failed to get log file from {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Timeout getting log file from {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to get log file from {}: {}", my_url, e)))
+                        }
+                    }
+                }
+            }
+            Backchannel::Polling { my_url } => {
+                // Polling gets log files via /logs/{name} endpoint
+                use reqwest::Client;
+                use std::time::Duration;
+                
+                let client = Client::builder()
+                    .timeout(Duration::from_secs(60))
+                    .build()
+                    .map_err(|e| PingError::Retriable(format!("Failed to create HTTP client: {}", e)))?;
+                
+                let log_url = format!("{}/logs/{}", my_url, name);
+                
+                match client.get(&log_url).send().await {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            match response.bytes().await {
+                                Ok(bytes) => Ok(bytes.to_vec()),
+                                Err(e) => Err(PingError::Retriable(format!(
+                                    "Failed to read log file content from {}: {}", 
+                                    my_url, 
+                                    e
+                                )))
+                            }
+                        } else if response.status() == 404 {
+                            Err(PingError::Fatal(format!("Log file not found: {}", name)))
+                        } else {
+                            Err(PingError::Retriable(format!(
+                                "Failed to get log file from {}: HTTP {}", 
+                                my_url, 
+                                response.status()
+                            )))
+                        }
+                    },
+                    Err(e) => {
+                        if e.is_timeout() {
+                            Err(PingError::Timeout(format!("Timeout getting log file from {}: {}", my_url, e)))
+                        } else {
+                            Err(PingError::Retriable(format!("Failed to get log file from {}: {}", my_url, e)))
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -959,7 +1203,7 @@ pub struct AppState {
     /// VCS management system.
     pub vcs_manager: Arc<vcs::RunnerVcsManager>,
     /// Log file management system.
-    pub log_manager: Arc<logs::LogFileManager>,
+    pub log_manager: Arc<dyn logs::LogFileManager>,
     /// Artifact storage management system.
     pub artifact_manager: Arc<artifacts::ArtifactManager>,
     /// Performance monitoring system.
@@ -1017,6 +1261,7 @@ mod tests {
             queue_id: 123,
             log_id: "log-456".to_string(),
             start_time: Utc::now(),
+            finish_time: None,
             estimated_duration: Some(Duration::from_secs(300)),
             campaign: "test-campaign".to_string(),
             change_set: None,

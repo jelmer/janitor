@@ -188,7 +188,7 @@ impl ApplicationBuilder {
 
         // Initialize upload processor
         log::info!("Initializing upload processor...");
-        let upload_storage_dir = std::path::PathBuf::from("/tmp/janitor-uploads"); // TODO: Make configurable
+        let upload_storage_dir = self.config.runner.application.upload_storage_dir.clone();
         let upload_processor = Arc::new(crate::upload::UploadProcessor::new(
             upload_storage_dir,
             100 * 1024 * 1024, // 100MB max file size
@@ -199,7 +199,7 @@ impl ApplicationBuilder {
         log::info!("Initializing authentication and security services...");
         let auth_service = Arc::new(crate::auth::WorkerAuthService::new(Arc::clone(&database)));
         
-        let security_config = crate::auth::SecurityConfig::default(); // TODO: Make configurable
+        let security_config = self.config.runner.worker.security.clone();
         let security_service = Arc::new(crate::auth::SecurityService::new(security_config, Arc::clone(&database)));
 
         // Initialize resume service

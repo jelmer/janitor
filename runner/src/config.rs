@@ -150,6 +150,9 @@ pub struct WorkerConfig {
     /// Hosts to avoid for scheduling.
     #[serde(default)]
     pub avoid_hosts: Vec<String>,
+    /// Security configuration.
+    #[serde(default)]
+    pub security: crate::auth::SecurityConfig,
 }
 
 /// Rate limiting configuration.
@@ -305,6 +308,9 @@ pub struct ApplicationConfig {
     pub shutdown_timeout_seconds: u64,
     /// Backup directory for when storage systems are unavailable.
     pub backup_directory: Option<PathBuf>,
+    /// Upload storage directory for temporary file uploads.
+    #[serde(default = "default_upload_storage_dir")]
+    pub upload_storage_dir: PathBuf,
 }
 
 // Default value functions
@@ -331,6 +337,7 @@ fn default_app_name() -> String { "janitor-runner".to_string() }
 fn default_app_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
 fn default_environment() -> String { "development".to_string() }
 fn default_shutdown_timeout() -> u64 { 30 }
+fn default_upload_storage_dir() -> PathBuf { PathBuf::from("/tmp/janitor-uploads") }
 
 impl Default for RunnerConfig {
     fn default() -> Self {
@@ -397,6 +404,7 @@ impl Default for WorkerConfig {
             max_retries: default_max_retries(),
             rate_limiting: RateLimitingConfig::default(),
             avoid_hosts: Vec::new(),
+            security: crate::auth::SecurityConfig::default(),
         }
     }
 }
@@ -422,6 +430,7 @@ impl Default for ApplicationConfig {
             enable_graceful_shutdown: default_true(),
             shutdown_timeout_seconds: default_shutdown_timeout(),
             backup_directory: None,
+            upload_storage_dir: default_upload_storage_dir(),
         }
     }
 }

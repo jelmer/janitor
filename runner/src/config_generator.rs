@@ -261,18 +261,26 @@ impl ConfigGenerator for DebianConfigGenerator {
             extra_janitor_distributions.push(format!("cs/{}", change_set));
         }
 
-        // TODO(jelmer): Ship build-extra-repositories-keys, and specify [signed-by] here
+        // Use signed repositories instead of trusted=yes
         let build_extra_repositories = extra_janitor_distributions
             .iter()
             .map(|suite| {
+                // Use the Debian Janitor signing key for extra repositories
                 format!(
-                    "deb [trusted=yes] {} {} main",
+                    "deb [arch=amd64 signed-by=/etc/apt/keyrings/debian-janitor.gpg] {} {} main",
                     self.apt_location.as_ref().unwrap(),
                     suite
                 )
             })
             .collect::<Vec<_>>();
         config.extra_repositories = Some(build_extra_repositories);
+        
+        // Add the Debian Janitor repository key for extra repositories
+        if !extra_janitor_distributions.is_empty() {
+            config.extra_repositories_keys = Some(vec![
+                "/etc/apt/keyrings/debian-janitor.gpg".to_string()
+            ]);
+        }
 
         let build_distribution = campaign_config
             .debian_build()
@@ -376,7 +384,10 @@ impl ConfigGenerator for DebianConfigGenerator {
             );
         }
 
-        // TODO(jelmer): Set env["APT_REPOSITORY_KEY"]
+        // Set APT_REPOSITORY_KEY environment variable if available
+        if let Some(signed_by) = &self.distro_config.signed_by {
+            env.insert("APT_REPOSITORY_KEY".to_owned(), signed_by.clone());
+        }
 
         Ok(env)
     }
