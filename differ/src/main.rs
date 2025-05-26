@@ -1,7 +1,9 @@
+use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use tokio_util::io::ReaderStream;
 use axum_extra::TypedHeader;
 use breezyshim::RevisionId;
 use clap::Parser;
@@ -9,10 +11,11 @@ use janitor::artifacts::ArtifactManager;
 use janitor_differ::{DifferError, DifferResult};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 const PRECACHE_RETRIEVE_TIMEOUT: u64 = 300;
 const TMP_PREFIX: &str = "janitor-differ";
+const MEMORY_MONITOR_INTERVAL: u64 = 30; // seconds
 
 #[derive(Parser)]
 struct Args {
@@ -365,6 +368,108 @@ struct DiffoscopeQuery {
 
     #[serde(default)]
     css_url: Option<String>,
+}
+
+/// Get current process memory usage in MB
+fn get_process_memory_mb() -> Option<f64> {
+    let pid = std::process::id();
+    let stat_path = format!("/proc/{}/stat", pid);
+    
+    match std::fs::read_to_string(&stat_path) {
+        Ok(contents) => {
+            let fields: Vec<&str> = contents.split_whitespace().collect();
+            if fields.len() > 23 {
+                // Field 23 (0-indexed) is vsize (virtual memory size in bytes)
+                if let Ok(vsize) = fields[22].parse::<u64>() {
+                    return Some(vsize as f64 / (1024.0 * 1024.0)); // Convert to MB
+                }
+            }
+        }
+        Err(_) => {
+            // Fall back to rusage on non-Linux systems
+            use nix::sys::resource::{getrusage, UsageWho};
+            if let Ok(usage) = getrusage(UsageWho::RUSAGE_SELF) {
+                // ru_maxrss is in kilobytes on Linux, convert to MB
+                return Some(usage.ru_maxrss as f64 / 1024.0);
+            }
+        }
+    }
+    None
+}
+
+/// Cleanup orphaned temporary files
+async fn cleanup_temp_files() {
+    let temp_dir = std::env::temp_dir();
+    info!("Starting periodic cleanup of temporary files in {:?}", temp_dir);
+    
+    loop {
+        // Run cleanup every hour
+        tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+        
+        match std::fs::read_dir(&temp_dir) {
+            Ok(entries) => {
+                let mut cleaned_count = 0;
+                let cutoff_time = std::time::SystemTime::now() - std::time::Duration::from_secs(7200); // 2 hours old
+                
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        
+                        // Only clean our temporary files
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if name.starts_with(TMP_PREFIX) {
+                                if let Ok(metadata) = entry.metadata() {
+                                    if let Ok(modified) = metadata.modified() {
+                                        if modified < cutoff_time {
+                                            if let Err(e) = std::fs::remove_dir_all(&path) {
+                                                warn!("Failed to remove old temp file {:?}: {}", path, e);
+                                            } else {
+                                                debug!("Cleaned up old temp file: {:?}", path);
+                                                cleaned_count += 1;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if cleaned_count > 0 {
+                    info!("Cleaned up {} old temporary files", cleaned_count);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to read temp directory for cleanup: {}", e);
+            }
+        }
+    }
+}
+
+/// Monitor memory usage and log warnings if it gets too high
+async fn memory_monitor(memory_limit_mb: Option<usize>) {
+    let limit = memory_limit_mb.unwrap_or(2048) as f64; // Default 2GB limit
+    let warning_threshold = limit * 0.8; // Warn at 80% of limit
+    let critical_threshold = limit * 0.95; // Critical at 95% of limit
+    
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(MEMORY_MONITOR_INTERVAL)).await;
+        
+        if let Some(memory_mb) = get_process_memory_mb() {
+            let usage_percent = (memory_mb / limit) * 100.0;
+            
+            debug!("Memory usage: {:.1}MB ({:.1}% of {}MB limit)", 
+                   memory_mb, usage_percent, limit);
+            
+            if memory_mb > critical_threshold {
+                error!("CRITICAL: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)", 
+                       memory_mb, (critical_threshold / limit) * 100.0, limit);
+            } else if memory_mb > warning_threshold {
+                warn!("WARNING: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)", 
+                      memory_mb, (warning_threshold / limit) * 100.0, limit);
+            }
+        }
+    }
 }
 
 /// Create a properly typed HTTP response with correct Content-Type header
@@ -798,6 +903,75 @@ async fn handle_debdiff_inner(
     Ok(create_typed_response(response_content, &best))
 }
 
+async fn handle_debdiff_stream(
+    Path((old_id, new_id)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<DebdiffQuery>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    // Delegate to inner function for proper error handling
+    match handle_debdiff_stream_inner(old_id, new_id, query, state, headers).await {
+        Ok(response) => response,
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn handle_debdiff_stream_inner(
+    old_id: String,
+    new_id: String,
+    query: DebdiffQuery,
+    state: Arc<AppState>,
+    headers: axum::http::HeaderMap,
+) -> DifferResult<Response> {
+    // Content negotiation
+    let best = negotiate_content_type(&headers)?;
+    
+    // For streaming, we only support plain text output
+    if best.essence_str() != "text/plain" {
+        return Err(DifferError::ContentNegotiationFailed {
+            available: vec!["text/plain".to_string()],
+            requested: best.to_string(),
+        });
+    }
+    
+    let (old_run, new_run) = get_run_pair(&state.pool, &old_id, &new_id).await?;
+    
+    // Check cache first
+    let cache_path = match state.debdiff_cache_path.as_ref() {
+        Some(p) => Some(determine_debdiff_cache_path(p, &old_run.id, &new_run.id)?),
+        None => None,
+    };
+    
+    if let Some(cache_path) = cache_path.as_ref() {
+        if cache_path.exists() {
+            // Stream from cache file
+            let file = match tokio::fs::File::open(cache_path).await {
+                Ok(file) => file,
+                Err(e) => return Err(DifferError::IoError {
+                    operation: "open_cache_file".to_string(),
+                    path: cache_path.clone(),
+                    source: e,
+                }),
+            };
+            
+            let stream = ReaderStream::new(file);
+            let body = Body::from_stream(stream);
+            
+            return Ok((
+                StatusCode::OK,
+                [("Content-Type", "text/plain"), ("Transfer-Encoding", "chunked")],
+                body
+            ).into_response());
+        }
+    }
+    
+    // Generate and stream debdiff in real-time
+    // For now, fall back to regular generation and then stream
+    // A full implementation would stream the debdiff command output directly
+    let response = handle_debdiff_inner(old_id, new_id, query, state, headers).await?;
+    Ok(response)
+}
+
 fn determine_diffoscope_cache_path(
     cache_path: &std::path::Path,
     old_id: &str,
@@ -1098,6 +1272,7 @@ pub async fn main() -> Result<(), i8> {
         .route("/precache-all", post(handle_precache_all))
         .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
         .route("/debdiff/:old_id/:new_id", get(handle_debdiff))
+        .route("/debdiff/:old_id/:new_id/stream", get(handle_debdiff_stream))
         .with_state(state);
 
     // run it
@@ -1124,6 +1299,12 @@ pub async fn main() -> Result<(), i8> {
 
         tokio::spawn(listen_to_runner(connman, db));
     }
+
+    // Start background services
+    tokio::spawn(memory_monitor(args.task_memory_limit));
+    tokio::spawn(cleanup_temp_files());
+    
+    info!("Starting differ service with memory monitoring and cleanup enabled");
 
     axum::serve(listener, app).await.unwrap();
 

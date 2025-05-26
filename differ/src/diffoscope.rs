@@ -104,19 +104,51 @@ impl std::fmt::Display for DiffoscopeError {
     }
 }
 
-/// Set resource limits for the diffoscope process.
+/// Set comprehensive resource limits for the diffoscope process.
 ///
 /// # Arguments
 /// * `limit_mb` - Memory limit in megabytes
 fn _set_limits(limit_mb: Option<u64>) {
     let limit_mb = limit_mb.unwrap_or(1024);
+    let memory_bytes = limit_mb * 1024 * 1024;
 
-    nix::sys::resource::setrlimit(
+    // Set virtual memory limit (RLIMIT_AS)
+    if let Err(e) = nix::sys::resource::setrlimit(
         nix::sys::resource::Resource::RLIMIT_AS,
-        limit_mb * 1024 * 1024,
-        limit_mb * 1024 * 1024,
-    )
-    .unwrap();
+        memory_bytes,
+        memory_bytes,
+    ) {
+        warn!("Failed to set RLIMIT_AS: {}", e);
+    }
+
+    // Set resident memory limit (RLIMIT_RSS) - physical memory
+    if let Err(e) = nix::sys::resource::setrlimit(
+        nix::sys::resource::Resource::RLIMIT_RSS,
+        memory_bytes,
+        memory_bytes,
+    ) {
+        warn!("Failed to set RLIMIT_RSS: {}", e);
+    }
+
+    // Set CPU time limit to prevent runaway processes (10 minutes)
+    if let Err(e) = nix::sys::resource::setrlimit(
+        nix::sys::resource::Resource::RLIMIT_CPU,
+        600, // 10 minutes
+        600,
+    ) {
+        warn!("Failed to set RLIMIT_CPU: {}", e);
+    }
+
+    // Set file descriptor limit
+    if let Err(e) = nix::sys::resource::setrlimit(
+        nix::sys::resource::Resource::RLIMIT_NOFILE,
+        1024, // Max 1024 file descriptors
+        1024,
+    ) {
+        warn!("Failed to set RLIMIT_NOFILE: {}", e);
+    }
+
+    debug!("Set resource limits: memory={}MB, cpu=600s, fds=1024", limit_mb);
 }
 
 /// Run diffoscope on two binaries
@@ -147,40 +179,103 @@ async fn _run_diffoscope(
         old_binary.to_string(),
         new_binary.to_string(),
     ]);
-    debug!("running {:?}", args);
+    
+    let timeout_duration = std::time::Duration::from_secs_f64(timeout.unwrap_or(300.0)); // Default 5 minutes
+    debug!("Running diffoscope with timeout={:?}, memory_limit={:?}: {:?}", 
+           timeout_duration, memory_limit, args);
 
     let mut cmd = tokio::process::Command::new(&args[0]);
     cmd.args(&args[1..]);
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
+    
+    // Set up process group for better cleanup
+    cmd.process_group(0);
 
     if let Some(memory_limit) = memory_limit {
+        let memory_limit_mb = memory_limit as u64;
         unsafe {
             cmd.pre_exec(move || {
-                _set_limits(Some(memory_limit as u64));
+                _set_limits(Some(memory_limit_mb));
                 Ok(())
             })
         };
     }
 
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs_f64(timeout.unwrap_or(5.0)),
-        cmd.output(),
-    )
-    .await
-    .map_err(|_| DiffoscopeError::Timeout)?
-    .map_err(DiffoscopeError::Io)?;
+    // Spawn the child process
+    let mut child = cmd.spawn().map_err(DiffoscopeError::Io)?;
+    let child_id = child.id();
+    
+    debug!("Started diffoscope process with PID: {:?}", child_id);
 
+    // Wait for completion with timeout and cleanup
+    let result = tokio::time::timeout(timeout_duration, child.wait_with_output()).await;
+    
+    let output = match result {
+        Ok(Ok(output)) => {
+            debug!("Diffoscope process completed normally");
+            output
+        },
+        Ok(Err(e)) => {
+            debug!("Diffoscope process failed: {}", e);
+            return Err(DiffoscopeError::Io(e));
+        },
+        Err(_) => {
+            // Timeout occurred, need to kill the process
+            warn!("Diffoscope process timed out (PID: {:?}), attempting cleanup", child_id);
+            
+            // Try to kill the child process gracefully, then forcefully
+            if let Err(e) = child.kill().await {
+                warn!("Failed to kill diffoscope process: {}", e);
+            }
+            
+            // Try to kill the entire process group to catch any spawned subprocesses
+            if let Some(pid) = child_id {
+                use nix::sys::signal::{self, Signal};
+                use nix::unistd::Pid;
+                
+                if let Err(e) = signal::killpg(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+                    warn!("Failed to send SIGTERM to process group: {}", e);
+                }
+                
+                // Wait a bit, then send SIGKILL if necessary
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                
+                if let Err(e) = signal::killpg(Pid::from_raw(pid as i32), Signal::SIGKILL) {
+                    warn!("Failed to send SIGKILL to process group: {}", e);
+                }
+            }
+            
+            return Err(DiffoscopeError::Timeout);
+        }
+    };
+
+    // Check process completion status
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        debug!("Diffoscope stderr: {}", stderr);
+        
         if output.status.code() == Some(1) {
-            return Ok(Some(serde_json::from_str(&String::from_utf8_lossy(
-                &output.stdout,
-            ))?));
+            // Exit code 1 means differences found - this is expected
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            match serde_json::from_str(&stdout_str) {
+                Ok(result) => return Ok(Some(result)),
+                Err(e) => {
+                    warn!("Failed to parse diffoscope JSON output: {}", e);
+                    return Err(DiffoscopeError::Serde(e));
+                }
+            }
         }
-        Err(DiffoscopeError::new(&stderr))
+        
+        // Other exit codes indicate errors
+        if let Some(code) = output.status.code() {
+            return Err(DiffoscopeError::new(&format!("Diffoscope failed with exit code {}: {}", code, stderr)));
+        } else {
+            return Err(DiffoscopeError::new(&format!("Diffoscope terminated by signal: {}", stderr)));
+        }
     } else {
+        // Exit code 0 means no differences found
         Ok(None)
     }
 }
