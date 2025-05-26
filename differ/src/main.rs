@@ -4,7 +4,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use tokio_util::io::ReaderStream;
-use axum_extra::TypedHeader;
 use breezyshim::RevisionId;
 use clap::Parser;
 use janitor::artifacts::ArtifactManager;
@@ -276,10 +275,11 @@ async fn precache(
             reason: e.to_string(),
         })?;
 
-        let f = std::fs::File::create(p.unwrap())
+        let cache_file_path = p.as_ref().unwrap();
+        let f = std::fs::File::create(cache_file_path)
             .map_err(|e| DifferError::IoError {
                 operation: "create_cache_file".to_string(),
-                path: p.unwrap().to_path_buf(),
+                path: cache_file_path.to_path_buf(),
                 source: e,
             })?;
 
@@ -390,7 +390,7 @@ fn get_process_memory_mb() -> Option<f64> {
             use nix::sys::resource::{getrusage, UsageWho};
             if let Ok(usage) = getrusage(UsageWho::RUSAGE_SELF) {
                 // ru_maxrss is in kilobytes on Linux, convert to MB
-                return Some(usage.ru_maxrss as f64 / 1024.0);
+                return Some(usage.max_rss() as f64 / 1024.0);
             }
         }
     }
@@ -473,7 +473,13 @@ async fn memory_monitor(memory_limit_mb: Option<usize>) {
 }
 
 /// Create a properly typed HTTP response with correct Content-Type header
-fn create_typed_response(content: String, mime_type: &mime::Mime) -> Response {\n    use axum::http::header;\n    \n    (StatusCode::OK, [(header::CONTENT_TYPE, mime_type.as_ref())], content).into_response()\n}\n\n/// Parse and negotiate content type from Accept header
+fn create_typed_response(content: String, mime_type: &mime::Mime) -> Response {
+    use axum::http::header;
+    
+    (StatusCode::OK, [(header::CONTENT_TYPE, mime_type.as_ref())], content).into_response()
+}
+
+/// Parse and negotiate content type from Accept header
 fn negotiate_content_type(headers: &axum::http::HeaderMap) -> DifferResult<mime::Mime> {
     use std::str::FromStr;
     
@@ -1017,7 +1023,7 @@ async fn handle_precache_all(
 
 async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Response> {
     // Query for successful runs that have changes compared to their base version
-    let rows = sqlx::query!(
+    let rows = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT run.id as run_id, unchanged_run.id as unchanged_run_id 
         FROM run
@@ -1046,8 +1052,8 @@ async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Respons
     
     // Start precaching tasks for all rows
     for row in rows {
-        let unchanged_run_id = row.unchanged_run_id;
-        let run_id = row.run_id;
+        let unchanged_run_id = row.1;
+        let run_id = row.0;
         
         // Spawn precaching task without blocking
         tokio::spawn(precache(
@@ -1072,7 +1078,7 @@ async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Respons
 async fn find_precaching_candidates(db: &sqlx::PgPool, new_run_id: &str) -> DifferResult<Vec<(String, String)>> {
     // Find runs that share the same main branch revision but have different revisions
     // This identifies cases where we can compare the new run against unchanged baseline runs
-    let rows = sqlx::query!(
+    let rows = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT DISTINCT unchanged_run.id as old_run_id, $1 as new_run_id
         FROM run as unchanged_run
@@ -1085,14 +1091,39 @@ async fn find_precaching_candidates(db: &sqlx::PgPool, new_run_id: &str) -> Diff
             unchanged_run.suite NOT IN ('control', 'unchanged') AND
             new_run.suite NOT IN ('control', 'unchanged')
         LIMIT 10
-        "#,
-        new_run_id
+        "#
     )
+    .bind(new_run_id)
     .fetch_all(db)
     .await
     .map_err(DifferError::Database)?;
     
-    Ok(rows.into_iter().map(|row| (row.old_run_id, row.new_run_id)).collect())
+    Ok(rows.into_iter().map(|row| (row.0, row.1)).collect())
+}
+
+/// Run precaching for a specific run pair
+async fn run_precache(
+    old_run_id: String,
+    new_run_id: String,
+    db: &sqlx::PgPool,
+    artifact_manager: Arc<Box<dyn ArtifactManager>>,
+    memory_limit: Option<usize>,
+    diffoscope_cache_path: Option<PathBuf>,
+    debdiff_cache_path: Option<PathBuf>,
+    _filter_boring: bool, // Future use for filtering
+) -> DifferResult<()> {
+    let (old_run, new_run) = get_run_pair(db, &old_run_id, &new_run_id).await?;
+    
+    precache(
+        artifact_manager,
+        old_run.id,
+        new_run.id,
+        memory_limit,
+        None, // No timeout for background tasks
+        diffoscope_cache_path,
+        debdiff_cache_path,
+        Some("diffoscope".to_string()),
+    ).await
 }
 
 /// Precache diffs for a specific run pair
@@ -1118,7 +1149,7 @@ async fn precache_run_pair(db: &sqlx::PgPool, old_run_id: &str, new_run_id: &str
         old_run_id.to_string(),
         new_run_id.to_string(),
         db,
-        &artifact_manager,
+        Arc::new(artifact_manager),
         None, // No memory limit for background tasks
         diffoscope_cache_path,
         debdiff_cache_path,
@@ -1133,13 +1164,14 @@ async fn precache_run_pair(db: &sqlx::PgPool, old_run_id: &str, new_run_id: &str
 }
 
 async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
-    use redis::{AsyncCommands, AsyncConnection};
+    use redis::AsyncCommands;
     
     info!("Starting Redis event listener for automatic precaching");
     
     loop {
         // Subscribe to run completion events
-        let mut pubsub = match redis.as_connection().await {
+        let client = redis::Client::open("redis://localhost:6379").unwrap();
+        let mut pubsub = match client.get_async_connection().await {
             Ok(conn) => conn.into_pubsub(),
             Err(e) => {
                 error!("Failed to create Redis pubsub connection: {}", e);
@@ -1157,7 +1189,8 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
         info!("Subscribed to run-finished events for automatic precaching");
         
         // Listen for messages
-        while let Ok(msg) = pubsub.on_message().next_message().await {
+        let mut stream = pubsub.on_message();
+        while let Some(msg) = futures_util::stream::StreamExt::next(&mut stream).await {
             let payload: String = match msg.get_payload() {
                 Ok(payload) => payload,
                 Err(e) => {
