@@ -132,7 +132,7 @@ async fn precache(
             operation: "create_temp_dir".to_string(),
             path: std::env::temp_dir(),
             source: e,
-        })?
+        })?;
 
     let (old_result, new_result) = tokio::join!(
         artifact_manager.retrieve_artifacts(
@@ -231,7 +231,7 @@ async fn precache(
                 operation: "write_cache_file".to_string(),
                 path: p.as_ref().unwrap().to_path_buf(),
                 source: e,
-            })?
+            })?;
         info!(
             old_run_id = old_id,
             new_run_id = new_id,
@@ -281,7 +281,7 @@ async fn precache(
             })?;
 
         serde_json::to_writer(f, &diffoscope_diff)
-            .map_err(|e| DifferError::JsonError(e))?
+            .map_err(|e| DifferError::JsonError(e))?;
         info!(
             old_run_id = old_id,
             new_run_id = new_id,
@@ -367,7 +367,8 @@ struct DiffoscopeQuery {
     css_url: Option<String>,
 }
 
-/// Parse and negotiate content type from Accept header
+/// Create a properly typed HTTP response with correct Content-Type header
+fn create_typed_response(content: String, mime_type: &mime::Mime) -> Response {\n    use axum::http::header;\n    \n    (StatusCode::OK, [(header::CONTENT_TYPE, mime_type.as_ref())], content).into_response()\n}\n\n/// Parse and negotiate content type from Accept header
 fn negotiate_content_type(headers: &axum::http::HeaderMap) -> DifferResult<mime::Mime> {
     use std::str::FromStr;
     
@@ -379,11 +380,11 @@ fn negotiate_content_type(headers: &axum::http::HeaderMap) -> DifferResult<mime:
     let accept = accept_header::Accept::from_str(accept_str)
         .map_err(|_| DifferError::AcceptHeaderError(accept_str.to_string()))?;
 
+    // Only advertise content types that are actually supported
     let available = vec![
         mime::Mime::from_str("application/json").unwrap(),
         mime::Mime::from_str("text/html").unwrap(),
         mime::Mime::from_str("text/plain").unwrap(),
-        mime::Mime::from_str("text/x-diff").unwrap(),
         mime::Mime::from_str("text/markdown").unwrap(),
     ];
 
@@ -605,7 +606,7 @@ async fn handle_diffoscope_inner(
         reason: e.to_string(),
     })?;
 
-    Ok((StatusCode::OK, formatted).into_response())
+    Ok(create_typed_response(formatted, &best))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -774,16 +775,27 @@ async fn handle_debdiff_inner(
     let best = negotiate_content_type(&headers)?;
 
     let response_content = match best.essence_str() {
-        "text/x-diff" | "text/plain" => debdiff,
+        "text/plain" => debdiff,
         "text/markdown" => janitor::debdiff::markdownify_debdiff(&debdiff),
         "text/html" => janitor::debdiff::htmlize_debdiff(&debdiff),
+        "application/json" => {
+            // Return structured JSON data for debdiff results
+            let json_response = serde_json::json!({
+                "old_run_id": old_id,
+                "new_run_id": new_id,
+                "debdiff": debdiff,
+                "old_version": old_run.build_version,
+                "new_version": new_run.build_version
+            });
+            serde_json::to_string(&json_response).unwrap()
+        },
         _ => return Err(DifferError::ContentNegotiationFailed {
-            available: vec!["text/plain".to_string(), "text/html".to_string(), "text/markdown".to_string()],
+            available: vec!["text/plain".to_string(), "text/html".to_string(), "text/markdown".to_string(), "application/json".to_string()],
             requested: best.to_string(),
         }),
     };
 
-    Ok((StatusCode::OK, response_content).into_response())
+    Ok(create_typed_response(response_content, &best))
 }
 
 fn determine_diffoscope_cache_path(
@@ -820,8 +832,218 @@ fn determine_debdiff_cache_path(
     Ok(base_path.join(format!("{}_{}", old_id, new_id)))
 }
 
-async fn listen_to_runner(redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
-    todo!();
+async fn handle_precache_all(
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    match handle_precache_all_inner(state).await {
+        Ok(response) => response,
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Response> {
+    // Query for successful runs that have changes compared to their base version
+    let rows = sqlx::query!(
+        r#"
+        SELECT run.id as run_id, unchanged_run.id as unchanged_run_id 
+        FROM run
+        INNER JOIN run as unchanged_run
+            ON run.main_branch_revision = unchanged_run.revision
+        WHERE
+            run.result_code = 'success' AND
+            unchanged_run.result_code = 'success' AND
+            run.main_branch_revision != run.revision AND
+            run.suite NOT IN ('control', 'unchanged')
+        ORDER BY run.finish_time DESC, unchanged_run.finish_time DESC
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(DifferError::Database)?;
+
+    if rows.is_empty() {
+        return Ok((
+            StatusCode::OK,
+            axum::Json(serde_json::json!({"count": 0}))
+        ).into_response());
+    }
+
+    let count = rows.len();
+    
+    // Start precaching tasks for all rows
+    for row in rows {
+        let unchanged_run_id = row.unchanged_run_id;
+        let run_id = row.run_id;
+        
+        // Spawn precaching task without blocking
+        tokio::spawn(precache(
+            state.artifact_manager.clone(),
+            unchanged_run_id,
+            run_id,
+            state.task_memory_limit,
+            state.task_timeout,
+            state.diffoscope_cache_path.clone(),
+            state.debdiff_cache_path.clone(),
+            Some(state.diffoscope_command.clone()),
+        ));
+    }
+
+    Ok((
+        StatusCode::ACCEPTED,
+        axum::Json(serde_json::json!({"count": count, "message": "Precaching started"}))
+    ).into_response())
+}
+
+/// Find candidate run pairs for precaching when a new successful run completes
+async fn find_precaching_candidates(db: &sqlx::PgPool, new_run_id: &str) -> DifferResult<Vec<(String, String)>> {
+    // Find runs that share the same main branch revision but have different revisions
+    // This identifies cases where we can compare the new run against unchanged baseline runs
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT unchanged_run.id as old_run_id, $1 as new_run_id
+        FROM run as unchanged_run
+        INNER JOIN run as new_run ON new_run.id = $1
+        WHERE
+            unchanged_run.result_code = 'success' AND
+            new_run.result_code = 'success' AND
+            unchanged_run.main_branch_revision = new_run.main_branch_revision AND
+            unchanged_run.revision != new_run.revision AND
+            unchanged_run.suite NOT IN ('control', 'unchanged') AND
+            new_run.suite NOT IN ('control', 'unchanged')
+        LIMIT 10
+        "#,
+        new_run_id
+    )
+    .fetch_all(db)
+    .await
+    .map_err(DifferError::Database)?;
+    
+    Ok(rows.into_iter().map(|row| (row.old_run_id, row.new_run_id)).collect())
+}
+
+/// Precache diffs for a specific run pair
+async fn precache_run_pair(db: &sqlx::PgPool, old_run_id: &str, new_run_id: &str) -> DifferResult<()> {
+    info!(old_run_id = old_run_id, new_run_id = new_run_id, "Starting background precaching");
+    
+    // Create a minimal artifact manager for precaching operations
+    let artifact_manager = janitor::artifacts::get_artifact_manager(
+        &std::env::var("ARTIFACT_LOCATION").unwrap_or_else(|_| "/tmp/artifacts".to_string())
+    ).await.map_err(|e| DifferError::IoError {
+        operation: "create_artifact_manager".to_string(),
+        path: std::path::PathBuf::from("/tmp"),
+        source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+    })?;
+    
+    // Get cache paths from environment variables, if set
+    let cache_base = std::env::var("DIFFER_CACHE_PATH").ok().map(PathBuf::from);
+    let diffoscope_cache_path = cache_base.as_ref().map(|p| p.join("diffoscope"));
+    let debdiff_cache_path = cache_base.as_ref().map(|p| p.join("debdiff"));
+    
+    // Use the existing run_precache function for background precaching
+    if let Err(e) = run_precache(
+        old_run_id.to_string(),
+        new_run_id.to_string(),
+        db,
+        &artifact_manager,
+        None, // No memory limit for background tasks
+        diffoscope_cache_path,
+        debdiff_cache_path,
+        false, // Don't filter boring for background caching
+    ).await {
+        error!(old_run_id = old_run_id, new_run_id = new_run_id, error = %e, "Failed to precache run pair");
+        return Err(e);
+    }
+    
+    info!(old_run_id = old_run_id, new_run_id = new_run_id, "Completed background precaching");
+    Ok(())
+}
+
+async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
+    use redis::{AsyncCommands, AsyncConnection};
+    
+    info!("Starting Redis event listener for automatic precaching");
+    
+    loop {
+        // Subscribe to run completion events
+        let mut pubsub = match redis.as_connection().await {
+            Ok(conn) => conn.into_pubsub(),
+            Err(e) => {
+                error!("Failed to create Redis pubsub connection: {}", e);
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+        
+        if let Err(e) = pubsub.subscribe("run-finished").await {
+            error!("Failed to subscribe to run-finished channel: {}", e);
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            continue;
+        }
+        
+        info!("Subscribed to run-finished events for automatic precaching");
+        
+        // Listen for messages
+        while let Ok(msg) = pubsub.on_message().next_message().await {
+            let payload: String = match msg.get_payload() {
+                Ok(payload) => payload,
+                Err(e) => {
+                    error!("Failed to get message payload: {}", e);
+                    continue;
+                }
+            };
+            
+            // Parse the run completion event
+            let run_event: Result<serde_json::Value, _> = serde_json::from_str(&payload);
+            let run_event = match run_event {
+                Ok(event) => event,
+                Err(e) => {
+                    error!("Failed to parse run event JSON: {}", e);
+                    continue;
+                }
+            };
+            
+            // Extract run information
+            let run_id = match run_event.get("run_id").and_then(|v| v.as_str()) {
+                Some(id) => id,
+                None => {
+                    error!("Missing run_id in event: {}", payload);
+                    continue;
+                }
+            };
+            
+            let result_code = run_event.get("result_code").and_then(|v| v.as_str()).unwrap_or("unknown");
+            
+            // Only trigger precaching for successful runs
+            if result_code != "success" {
+                continue;
+            }
+            
+            info!(run_id = run_id, "Received successful run completion, checking for precaching opportunities");
+            
+            // Find runs that could be compared with this new successful run
+            match find_precaching_candidates(&db, run_id).await {
+                Ok(candidates) => {
+                    for (old_run_id, new_run_id) in candidates {
+                        info!(old_run_id = old_run_id, new_run_id = new_run_id, "Triggering automatic precaching");
+                        
+                        // Spawn precaching task in background
+                        let db_clone = db.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = precache_run_pair(&db_clone, &old_run_id, &new_run_id).await {
+                                error!(old_run_id = old_run_id, new_run_id = new_run_id, error = %e, "Failed to precache run pair");
+                            }
+                        });
+                    }
+                },
+                Err(e) => {
+                    error!(run_id = run_id, error = %e, "Failed to find precaching candidates");
+                }
+            }
+        }
+        
+        error!("Redis pubsub connection lost, reconnecting...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    }
 }
 
 #[tokio::main]
@@ -873,6 +1095,7 @@ pub async fn main() -> Result<(), i8> {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/precache/:old_id/:new_id", post(handle_precache))
+        .route("/precache-all", post(handle_precache_all))
         .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
         .route("/debdiff/:old_id/:new_id", get(handle_debdiff))
         .with_state(state);
