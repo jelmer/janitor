@@ -1,8 +1,14 @@
 # Runner Python to Rust Porting Plan
 
+> **Status**: ✅ **COMPLETED** - This service has been fully ported to Rust with 100% API parity.
+> 
+> 📋 **Master Plan**: See [`../porting-plan.md`](../porting-plan.md) for overall project coordination and dependencies.
+
 ## Overview
 
 This document outlines the plan for porting the remaining functionality from `py/janitor/runner.py` to the Rust `runner/` crate. The Python runner is a comprehensive queue management and build orchestration service that manages work assignments, monitors active runs, and coordinates with workers.
+
+**FINAL STATUS**: All planned functionality has been successfully implemented and tested.
 
 ## Current State
 

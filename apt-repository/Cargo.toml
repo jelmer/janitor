@@ -1,0 +1,36 @@
+[package]
+name = "apt-repository"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust library for creating and parsing APT repositories"
+license = "GPL-3.0+"
+repository = "https://github.com/jelmer/janitor.git"
+homepage = "https://github.com/jelmer/janitor"
+keywords = ["apt", "debian", "package", "repository"]
+categories = ["development-tools"]
+
+[lib]
+name = "apt_repository"
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+flate2 = "1.0"
+bzip2 = "0.4"
+sha2 = "0.10"
+sha1 = "0.10"
+md5 = "0.7"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["fs", "io-util"], optional = true }
+async-trait = { version = "0.1", optional = true }
+tempfile = { version = "3.8", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tempfile = "3.8"
+async-trait = "0.1"
+
+[features]
+default = ["async"]
+async = ["tokio", "async-trait", "tempfile"]

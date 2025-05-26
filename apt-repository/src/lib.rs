@@ -1,0 +1,73 @@
+//! # APT Repository Library
+//! 
+//! A Rust library for creating and parsing APT repositories. This library provides
+//! functionality to generate repository metadata files (Release, Packages, Sources)
+//! with proper cryptographic hashing and compression support.
+//!
+//! ## Features
+//!
+//! - Generate APT repository metadata files
+//! - Support for multiple compression formats (gzip, bzip2, uncompressed)
+//! - Cryptographic hashing (MD5, SHA1, SHA256, SHA512)
+//! - By-hash repository structure support
+//! - Release file generation with GPG signing preparation
+//! - Async support for file operations
+//!
+//! ## Example
+//!
+//! ```rust
+//! use apt_repository::{Repository, RepositoryBuilder, Compression};
+//! use std::path::Path;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let repo = RepositoryBuilder::new()
+//!     .origin("Example Origin")
+//!     .label("Example Repository")
+//!     .suite("stable")
+//!     .codename("stable")
+//!     .architectures(vec!["amd64".to_string(), "i386".to_string()])
+//!     .components(vec!["main".to_string()])
+//!     .build()?;
+//!
+//! // Generate repository files
+//! // repo.generate_repository("/path/to/repo")?;
+//! # Ok(())
+//! # }
+//! ```
+
+pub mod error;
+pub mod hash;
+pub mod compression;
+pub mod packages;
+pub mod sources;
+pub mod release;
+pub mod repository;
+
+#[cfg(feature = "async")]
+pub mod async_repository;
+
+pub use error::{AptRepositoryError, Result};
+pub use hash::{HashAlgorithm, HashSet, HashedFile};
+pub use compression::Compression;
+pub use packages::{Package, PackageFile};
+pub use sources::{Source, SourceFile};
+pub use release::{Release, ReleaseBuilder};
+pub use repository::{Repository, RepositoryBuilder};
+
+#[cfg(feature = "async")]
+pub use async_repository::AsyncRepository;
+
+/// Default compression formats used for repository files
+pub const DEFAULT_COMPRESSIONS: &[Compression] = &[
+    Compression::None,
+    Compression::Gzip,
+    Compression::Bzip2,
+];
+
+/// Default hash algorithms used for by-hash repositories
+pub const DEFAULT_HASH_ALGORITHMS: &[HashAlgorithm] = &[
+    HashAlgorithm::Md5,
+    HashAlgorithm::Sha1,
+    HashAlgorithm::Sha256,
+    HashAlgorithm::Sha512,
+];
