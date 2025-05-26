@@ -204,13 +204,15 @@ async fn _run_diffoscope(
     }
 
     // Spawn the child process
-    let mut child = cmd.spawn().map_err(DiffoscopeError::Io)?;
+    let child = cmd.spawn().map_err(DiffoscopeError::Io)?;
     let child_id = child.id();
     
     debug!("Started diffoscope process with PID: {:?}", child_id);
 
     // Wait for completion with timeout and cleanup
-    let result = tokio::time::timeout(timeout_duration, child.wait_with_output()).await;
+    let result = tokio::time::timeout(timeout_duration, async {
+        child.wait_with_output().await
+    }).await;
     
     let output = match result {
         Ok(Ok(output)) => {
@@ -224,11 +226,6 @@ async fn _run_diffoscope(
         Err(_) => {
             // Timeout occurred, need to kill the process
             warn!("Diffoscope process timed out (PID: {:?}), attempting cleanup", child_id);
-            
-            // Try to kill the child process gracefully, then forcefully
-            if let Err(e) = child.kill().await {
-                warn!("Failed to kill diffoscope process: {}", e);
-            }
             
             // Try to kill the entire process group to catch any spawned subprocesses
             if let Some(pid) = child_id {
