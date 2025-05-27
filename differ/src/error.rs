@@ -21,70 +21,70 @@ pub enum DifferError {
 
     /// Artifacts are missing for a run
     #[error("Artifacts missing for run: {run_id}")]
-    ArtifactsMissing { 
+    ArtifactsMissing {
         /// The run ID for which artifacts are missing
-        run_id: String 
+        run_id: String,
     },
 
     /// Timeout while retrieving artifacts
     #[error("Timeout retrieving artifacts for run {run_id}: exceeded {timeout}s")]
-    ArtifactRetrievalTimeout { 
+    ArtifactRetrievalTimeout {
         /// The run ID for which artifact retrieval timed out
-        run_id: String, 
+        run_id: String,
         /// The timeout value in seconds
-        timeout: u64 
+        timeout: u64,
     },
 
     /// Generic artifact retrieval failure
     #[error("Failed to retrieve artifacts for run {run_id}: {reason}")]
-    ArtifactRetrievalFailed { 
+    ArtifactRetrievalFailed {
         /// The run ID for which artifact retrieval failed
-        run_id: String, 
+        run_id: String,
         /// The reason for the failure
-        reason: String 
+        reason: String,
     },
 
     /// Timeout while running diff command
     #[error("Diff command '{command}' timed out after {timeout}s")]
-    DiffCommandTimeout { 
+    DiffCommandTimeout {
         /// The command that timed out
-        command: String, 
+        command: String,
         /// The timeout value in seconds
-        timeout: u64 
+        timeout: u64,
     },
 
     /// Memory error while running diff command
     #[error("Diff command '{command}' exceeded memory limit: {limit_mb}MB")]
-    DiffCommandMemoryError { 
+    DiffCommandMemoryError {
         /// The command that exceeded memory limit
-        command: String, 
+        command: String,
         /// The memory limit in megabytes
-        limit_mb: usize 
+        limit_mb: usize,
     },
 
     /// Generic diff command error
     #[error("Diff command '{command}' failed: {reason}")]
-    DiffCommandError { 
+    DiffCommandError {
         /// The command that failed
-        command: String, 
+        command: String,
         /// The reason for the failure
-        reason: String 
+        reason: String,
     },
 
     /// Run not found in database
     #[error("Run not found: {run_id}")]
-    RunNotFound { 
+    RunNotFound {
         /// The run ID that was not found
-        run_id: String 
+        run_id: String,
     },
 
     /// Run exists but is not successful
     #[error("Run {run_id} is not successful (status: {status})")]
-    RunNotSuccessful { 
+    RunNotSuccessful {
         /// The run ID that is not successful
-        run_id: String, 
+        run_id: String,
         /// The actual status of the run
-        status: String 
+        status: String,
     },
 
     /// IO operation failed
@@ -114,11 +114,11 @@ pub enum DifferError {
 
     /// Cache operation failed
     #[error("Cache operation failed for {operation}: {reason}")]
-    CacheError { 
+    CacheError {
         /// The cache operation that failed
-        operation: String, 
+        operation: String,
         /// The reason for the failure
-        reason: String 
+        reason: String,
     },
 
     /// Configuration error
@@ -210,19 +210,28 @@ impl DifferError {
             },
             DifferError::RunNotSuccessful { run_id, status } => ErrorResponse {
                 error: "Run not successful".to_string(),
-                details: Some(format!("Run {} has status '{}', not 'success'", run_id, status)),
+                details: Some(format!(
+                    "Run {} has status '{}', not 'success'",
+                    run_id, status
+                )),
                 run_id: Some(run_id.clone()),
                 command: None,
             },
             DifferError::DiffCommandTimeout { command, timeout } => ErrorResponse {
                 error: "Command timeout".to_string(),
-                details: Some(format!("Command '{}' timed out after {}s", command, timeout)),
+                details: Some(format!(
+                    "Command '{}' timed out after {}s",
+                    command, timeout
+                )),
                 run_id: None,
                 command: Some(command.clone()),
             },
             DifferError::DiffCommandMemoryError { command, limit_mb } => ErrorResponse {
                 error: "Memory limit exceeded".to_string(),
-                details: Some(format!("Command '{}' exceeded memory limit of {}MB", command, limit_mb)),
+                details: Some(format!(
+                    "Command '{}' exceeded memory limit of {}MB",
+                    command, limit_mb
+                )),
                 run_id: None,
                 command: Some(command.clone()),
             },
@@ -234,13 +243,22 @@ impl DifferError {
             },
             DifferError::ArtifactRetrievalTimeout { run_id, timeout } => ErrorResponse {
                 error: "Artifact retrieval timeout".to_string(),
-                details: Some(format!("Timed out retrieving artifacts for run {} after {}s", run_id, timeout)),
+                details: Some(format!(
+                    "Timed out retrieving artifacts for run {} after {}s",
+                    run_id, timeout
+                )),
                 run_id: Some(run_id.clone()),
                 command: None,
             },
-            DifferError::ContentNegotiationFailed { available, requested } => ErrorResponse {
+            DifferError::ContentNegotiationFailed {
+                available,
+                requested,
+            } => ErrorResponse {
                 error: "Content negotiation failed".to_string(),
-                details: Some(format!("Requested '{}' not available. Available: {:?}", requested, available)),
+                details: Some(format!(
+                    "Requested '{}' not available. Available: {:?}",
+                    requested, available
+                )),
                 run_id: None,
                 command: None,
             },
@@ -256,11 +274,11 @@ impl DifferError {
     /// Get additional headers for the response
     pub fn additional_headers(&self) -> Vec<(&'static str, String)> {
         match self {
-            DifferError::ArtifactsMissing { run_id } | 
-            DifferError::RunNotFound { run_id } |
-            DifferError::RunNotSuccessful { run_id, .. } => {
+            DifferError::ArtifactsMissing { run_id }
+            | DifferError::RunNotFound { run_id }
+            | DifferError::RunNotSuccessful { run_id, .. } => {
                 vec![("unavailable_run_id", run_id.clone())]
-            },
+            }
             _ => vec![],
         }
     }
@@ -273,7 +291,7 @@ impl IntoResponse for DifferError {
         let error_response = self.to_response();
 
         let mut response = (status, Json(error_response)).into_response();
-        
+
         // Add any additional headers
         for (key, value) in headers {
             if let Ok(header_value) = value.parse() {
@@ -291,10 +309,10 @@ impl DifferError {
         match error {
             janitor::artifacts::Error::ArtifactsMissing => {
                 // Note: We lose the run_id context here, caller should provide it
-                DifferError::ArtifactsMissing { 
-                    run_id: "unknown".to_string() 
+                DifferError::ArtifactsMissing {
+                    run_id: "unknown".to_string(),
                 }
-            },
+            }
             _ => DifferError::JanitorArtifacts(error),
         }
     }
@@ -317,45 +335,56 @@ mod tests {
     #[test]
     fn test_error_status_codes() {
         assert_eq!(
-            DifferError::RunNotFound { run_id: "test".to_string() }.status_code(),
-            StatusCode::NOT_FOUND
-        );
-        
-        assert_eq!(
-            DifferError::ArtifactsMissing { run_id: "test".to_string() }.status_code(),
+            DifferError::RunNotFound {
+                run_id: "test".to_string()
+            }
+            .status_code(),
             StatusCode::NOT_FOUND
         );
 
         assert_eq!(
-            DifferError::ContentNegotiationFailed { 
-                available: vec!["text/html".to_string()], 
-                requested: "application/json".to_string() 
-            }.status_code(),
+            DifferError::ArtifactsMissing {
+                run_id: "test".to_string()
+            }
+            .status_code(),
+            StatusCode::NOT_FOUND
+        );
+
+        assert_eq!(
+            DifferError::ContentNegotiationFailed {
+                available: vec!["text/html".to_string()],
+                requested: "application/json".to_string()
+            }
+            .status_code(),
             StatusCode::NOT_ACCEPTABLE
         );
 
         assert_eq!(
-            DifferError::DiffCommandTimeout { 
-                command: "diffoscope".to_string(), 
-                timeout: 60 
-            }.status_code(),
+            DifferError::DiffCommandTimeout {
+                command: "diffoscope".to_string(),
+                timeout: 60
+            }
+            .status_code(),
             StatusCode::GATEWAY_TIMEOUT
         );
 
         assert_eq!(
-            DifferError::DiffCommandMemoryError { 
-                command: "diffoscope".to_string(), 
-                limit_mb: 1500 
-            }.status_code(),
+            DifferError::DiffCommandMemoryError {
+                command: "diffoscope".to_string(),
+                limit_mb: 1500
+            }
+            .status_code(),
             StatusCode::INSUFFICIENT_STORAGE
         );
     }
 
     #[test]
     fn test_error_responses() {
-        let error = DifferError::ArtifactsMissing { run_id: "test123".to_string() };
+        let error = DifferError::ArtifactsMissing {
+            run_id: "test123".to_string(),
+        };
         let response = error.to_response();
-        
+
         assert_eq!(response.error, "Artifacts missing");
         assert_eq!(response.run_id, Some("test123".to_string()));
         assert!(response.details.is_some());
@@ -363,9 +392,11 @@ mod tests {
 
     #[test]
     fn test_additional_headers() {
-        let error = DifferError::ArtifactsMissing { run_id: "test123".to_string() };
+        let error = DifferError::ArtifactsMissing {
+            run_id: "test123".to_string(),
+        };
         let headers = error.additional_headers();
-        
+
         assert_eq!(headers.len(), 1);
         assert_eq!(headers[0].0, "unavailable_run_id");
         assert_eq!(headers[0].1, "test123");

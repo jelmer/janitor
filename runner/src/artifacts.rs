@@ -63,23 +63,23 @@ pub enum ArtifactError {
     /// IO error during artifact operations.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     /// Artifact not found.
     #[error("Artifact not found: {0}")]
     NotFound(String),
-    
+
     /// Invalid artifact name.
     #[error("Invalid artifact name: {0}")]
     InvalidName(String),
-    
+
     /// Storage backend error.
     #[error("Storage backend error: {0}")]
     StorageError(String),
-    
+
     /// Artifact too large.
     #[error("Artifact too large: {0} bytes (max: {1} bytes)")]
     TooLarge(u64, u64),
-    
+
     /// Validation error.
     #[error("Validation error: {0}")]
     Validation(String),
@@ -105,29 +105,33 @@ pub struct ArtifactMetadata {
 pub trait ArtifactStorage: Send + Sync {
     /// Store an artifact.
     async fn store_artifact(
-        &self, 
-        run_id: &str, 
-        name: &str, 
-        content: &[u8], 
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &[u8],
         content_type: &str,
-        metadata: Option<HashMap<String, String>>
+        metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ArtifactError>;
-    
+
     /// Retrieve an artifact.
     async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError>;
-    
+
     /// Get artifact metadata.
-    async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError>;
-    
+    async fn get_artifact_metadata(
+        &self,
+        run_id: &str,
+        name: &str,
+    ) -> Result<ArtifactMetadata, ArtifactError>;
+
     /// List artifacts for a run.
     async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError>;
-    
+
     /// Delete an artifact.
     async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError>;
-    
+
     /// Delete all artifacts for a run.
     async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError>;
-    
+
     /// Get storage type name for metrics.
     fn storage_type(&self) -> &'static str;
 }
@@ -141,52 +145,56 @@ pub struct LocalArtifactStorage {
 impl LocalArtifactStorage {
     /// Create a new local artifact storage.
     pub fn new(base_path: PathBuf, max_size: u64) -> Self {
-        Self { base_path, max_size }
+        Self {
+            base_path,
+            max_size,
+        }
     }
-    
+
     /// Get the path for a run's artifact directory.
     fn run_artifact_path(&self, run_id: &str) -> PathBuf {
         self.base_path.join(run_id)
     }
-    
+
     /// Get the path for a specific artifact file.
     fn artifact_file_path(&self, run_id: &str, name: &str) -> PathBuf {
         self.run_artifact_path(run_id).join(name)
     }
-    
+
     /// Get the path for artifact metadata file.
     fn metadata_file_path(&self, run_id: &str, name: &str) -> PathBuf {
-        self.run_artifact_path(run_id).join(format!("{}.meta", name))
+        self.run_artifact_path(run_id)
+            .join(format!("{}.meta", name))
     }
 }
 
 #[async_trait::async_trait]
 impl ArtifactStorage for LocalArtifactStorage {
     async fn store_artifact(
-        &self, 
-        run_id: &str, 
-        name: &str, 
-        content: &[u8], 
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &[u8],
         content_type: &str,
-        metadata: Option<HashMap<String, String>>
+        metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         if content.len() as u64 > self.max_size {
             return Err(ArtifactError::TooLarge(content.len() as u64, self.max_size));
         }
-        
+
         let run_dir = self.run_artifact_path(run_id);
         fs::create_dir_all(&run_dir).await?;
-        
+
         // Store the artifact content
         let file_path = self.artifact_file_path(run_id, name);
         let mut file = fs::File::create(file_path).await?;
         file.write_all(content).await?;
         file.flush().await?;
-        
+
         // Store metadata
         let artifact_metadata = ArtifactMetadata {
             name: name.to_string(),
@@ -195,72 +203,78 @@ impl ArtifactStorage for LocalArtifactStorage {
             uploaded_at: chrono::Utc::now(),
             metadata: metadata.unwrap_or_default(),
         };
-        
+
         let metadata_path = self.metadata_file_path(run_id, name);
-        let metadata_json = serde_json::to_string_pretty(&artifact_metadata)
-            .map_err(|e| ArtifactError::StorageError(format!("Failed to serialize metadata: {}", e)))?;
-        
+        let metadata_json = serde_json::to_string_pretty(&artifact_metadata).map_err(|e| {
+            ArtifactError::StorageError(format!("Failed to serialize metadata: {}", e))
+        })?;
+
         let mut metadata_file = fs::File::create(metadata_path).await?;
         metadata_file.write_all(metadata_json.as_bytes()).await?;
         metadata_file.flush().await?;
-        
+
         MetricsCollector::record_artifact_upload(self.storage_type(), true, content.len() as f64);
         Ok(())
     }
-    
+
     async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let file_path = self.artifact_file_path(run_id, name);
         if !file_path.exists() {
             return Err(ArtifactError::NotFound(format!("{}/{}", run_id, name)));
         }
-        
+
         let mut file = fs::File::open(file_path).await?;
         let mut content = Vec::new();
         file.read_to_end(&mut content).await?;
-        
+
         Ok(content)
     }
-    
-    async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
+
+    async fn get_artifact_metadata(
+        &self,
+        run_id: &str,
+        name: &str,
+    ) -> Result<ArtifactMetadata, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let metadata_path = self.metadata_file_path(run_id, name);
         if !metadata_path.exists() {
             return Err(ArtifactError::NotFound(format!("{}/{}.meta", run_id, name)));
         }
-        
+
         let mut metadata_file = fs::File::open(metadata_path).await?;
         let mut metadata_json = String::new();
         metadata_file.read_to_string(&mut metadata_json).await?;
-        
-        let metadata: ArtifactMetadata = serde_json::from_str(&metadata_json)
-            .map_err(|e| ArtifactError::StorageError(format!("Failed to deserialize metadata: {}", e)))?;
-        
+
+        let metadata: ArtifactMetadata = serde_json::from_str(&metadata_json).map_err(|e| {
+            ArtifactError::StorageError(format!("Failed to deserialize metadata: {}", e))
+        })?;
+
         Ok(metadata)
     }
-    
+
     async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
         let run_dir = self.run_artifact_path(run_id);
         if !run_dir.exists() {
             return Ok(Vec::new());
         }
-        
+
         let mut entries = fs::read_dir(run_dir).await?;
         let mut artifacts = Vec::new();
-        
+
         while let Some(entry) = entries.next_entry().await? {
             if let Some(filename) = entry.file_name().to_str() {
                 // Skip metadata files
                 if filename.ends_with(".meta") {
                     continue;
                 }
-                
+
                 if is_valid_artifact_name(filename) {
                     match self.get_artifact_metadata(run_id, filename).await {
                         Ok(metadata) => artifacts.push(metadata),
@@ -279,29 +293,29 @@ impl ArtifactStorage for LocalArtifactStorage {
                 }
             }
         }
-        
+
         artifacts.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(artifacts)
     }
-    
+
     async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let file_path = self.artifact_file_path(run_id, name);
         let metadata_path = self.metadata_file_path(run_id, name);
-        
+
         if file_path.exists() {
             fs::remove_file(file_path).await?;
         }
         if metadata_path.exists() {
             fs::remove_file(metadata_path).await?;
         }
-        
+
         Ok(())
     }
-    
+
     async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
         let run_dir = self.run_artifact_path(run_id);
         if run_dir.exists() {
@@ -309,7 +323,7 @@ impl ArtifactStorage for LocalArtifactStorage {
         }
         Ok(())
     }
-    
+
     fn storage_type(&self) -> &'static str {
         "local"
     }
@@ -331,8 +345,10 @@ impl GcsArtifactStorage {
     pub async fn new(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
         let client = google_cloud_storage::client::Client::default()
             .await
-            .map_err(|e| ArtifactError::StorageError(format!("Failed to create GCS client: {}", e)))?;
-        
+            .map_err(|e| {
+                ArtifactError::StorageError(format!("Failed to create GCS client: {}", e))
+            })?;
+
         Ok(Self {
             bucket,
             max_size,
@@ -349,7 +365,7 @@ impl GcsArtifactStorage {
             client: (),
         }
     }
-    
+
     /// Get the GCS object path for an artifact.
     fn artifact_object_path(&self, run_id: &str, name: &str) -> String {
         format!("artifacts/{}/{}", run_id, name)
@@ -360,27 +376,27 @@ impl GcsArtifactStorage {
 impl ArtifactStorage for GcsArtifactStorage {
     #[cfg(feature = "gcs")]
     async fn store_artifact(
-        &self, 
-        run_id: &str, 
-        name: &str, 
-        content: &[u8], 
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &[u8],
         content_type: &str,
-        metadata: Option<HashMap<String, String>>
+        metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         if content.len() as u64 > self.max_size {
             return Err(ArtifactError::TooLarge(content.len() as u64, self.max_size));
         }
-        
+
         let object_path = self.artifact_object_path(run_id, name);
-        
+
         // Prepare GCS metadata
         let mut gcs_metadata = google_cloud_storage::client::Metadata::default();
         gcs_metadata.content_type = Some(content_type.to_string());
-        
+
         // Add custom metadata with artifact information
         let artifact_metadata = ArtifactMetadata {
             name: name.to_string(),
@@ -389,221 +405,278 @@ impl ArtifactStorage for GcsArtifactStorage {
             uploaded_at: chrono::Utc::now(),
             metadata: metadata.unwrap_or_default(),
         };
-        
-        let metadata_json = serde_json::to_string(&artifact_metadata)
-            .map_err(|e| ArtifactError::StorageError(format!("Failed to serialize metadata: {}", e)))?;
-        
-        gcs_metadata.metadata.insert("janitor_metadata".to_string(), metadata_json);
-        
+
+        let metadata_json = serde_json::to_string(&artifact_metadata).map_err(|e| {
+            ArtifactError::StorageError(format!("Failed to serialize metadata: {}", e))
+        })?;
+
+        gcs_metadata
+            .metadata
+            .insert("janitor_metadata".to_string(), metadata_json);
+
         // Upload to GCS
-        self.client.upload_object(
-            &self.bucket,
-            content,
-            &object_path,
-            Some(gcs_metadata)
-        ).await
-        .map_err(|e| ArtifactError::StorageError(format!("GCS upload failed: {}", e)))?;
-        
+        self.client
+            .upload_object(&self.bucket, content, &object_path, Some(gcs_metadata))
+            .await
+            .map_err(|e| ArtifactError::StorageError(format!("GCS upload failed: {}", e)))?;
+
         MetricsCollector::record_artifact_upload(self.storage_type(), true, content.len() as f64);
-        log::info!("Successfully uploaded artifact to GCS: {}/{} ({} bytes)", run_id, name, content.len());
-        
+        log::info!(
+            "Successfully uploaded artifact to GCS: {}/{} ({} bytes)",
+            run_id,
+            name,
+            content.len()
+        );
+
         Ok(())
     }
-    
+
     #[cfg(not(feature = "gcs"))]
     async fn store_artifact(
-        &self, 
-        run_id: &str, 
-        name: &str, 
-        content: &[u8], 
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &[u8],
         content_type: &str,
-        metadata: Option<HashMap<String, String>>
+        metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ArtifactError> {
         let _ = (run_id, name, content, content_type, metadata);
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     #[cfg(feature = "gcs")]
     async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let object_path = self.artifact_object_path(run_id, name);
-        
-        let content = self.client.download_object(
-            &self.bucket,
-            &object_path
-        ).await
-        .map_err(|e| match e {
-            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
-            _ => ArtifactError::StorageError(format!("GCS download failed: {}", e)),
-        })?;
-        
-        log::info!("Successfully downloaded artifact from GCS: {}/{} ({} bytes)", run_id, name, content.len());
+
+        let content = self
+            .client
+            .download_object(&self.bucket, &object_path)
+            .await
+            .map_err(|e| match e {
+                google_cloud_storage::client::Error::NotFound => {
+                    ArtifactError::NotFound(format!("{}/{}", run_id, name))
+                }
+                _ => ArtifactError::StorageError(format!("GCS download failed: {}", e)),
+            })?;
+
+        log::info!(
+            "Successfully downloaded artifact from GCS: {}/{} ({} bytes)",
+            run_id,
+            name,
+            content.len()
+        );
         Ok(content)
     }
-    
+
     #[cfg(not(feature = "gcs"))]
     async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
         let _ = (run_id, name);
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     #[cfg(feature = "gcs")]
-    async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
+    async fn get_artifact_metadata(
+        &self,
+        run_id: &str,
+        name: &str,
+    ) -> Result<ArtifactMetadata, ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let object_path = self.artifact_object_path(run_id, name);
-        
-        let gcs_metadata = self.client.get_object_metadata(
-            &self.bucket,
-            &object_path
-        ).await
-        .map_err(|e| match e {
-            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
-            _ => ArtifactError::StorageError(format!("GCS metadata retrieval failed: {}", e)),
-        })?;
-        
+
+        let gcs_metadata = self
+            .client
+            .get_object_metadata(&self.bucket, &object_path)
+            .await
+            .map_err(|e| match e {
+                google_cloud_storage::client::Error::NotFound => {
+                    ArtifactError::NotFound(format!("{}/{}", run_id, name))
+                }
+                _ => ArtifactError::StorageError(format!("GCS metadata retrieval failed: {}", e)),
+            })?;
+
         // Try to extract our custom metadata
         if let Some(metadata_json) = gcs_metadata.metadata.get("janitor_metadata") {
-            let metadata: ArtifactMetadata = serde_json::from_str(metadata_json)
-                .map_err(|e| ArtifactError::StorageError(format!("Failed to parse artifact metadata: {}", e)))?;
+            let metadata: ArtifactMetadata = serde_json::from_str(metadata_json).map_err(|e| {
+                ArtifactError::StorageError(format!("Failed to parse artifact metadata: {}", e))
+            })?;
             Ok(metadata)
         } else {
             // Fallback: create metadata from GCS object metadata
             Ok(ArtifactMetadata {
                 name: name.to_string(),
                 size: gcs_metadata.size.unwrap_or(0),
-                content_type: gcs_metadata.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+                content_type: gcs_metadata
+                    .content_type
+                    .unwrap_or_else(|| "application/octet-stream".to_string()),
                 uploaded_at: gcs_metadata.time_created.unwrap_or_else(chrono::Utc::now),
                 metadata: HashMap::new(),
             })
         }
     }
-    
+
     #[cfg(not(feature = "gcs"))]
-    async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
+    async fn get_artifact_metadata(
+        &self,
+        run_id: &str,
+        name: &str,
+    ) -> Result<ArtifactMetadata, ArtifactError> {
         let _ = (run_id, name);
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     #[cfg(feature = "gcs")]
     async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
         let prefix = format!("artifacts/{}/", run_id);
-        
-        let objects = self.client.list_objects(
-            &self.bucket,
-            Some(&prefix),
-            None, // No delimiter
-            None, // No max_results limit
-        ).await
-        .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
-        
+
+        let objects = self
+            .client
+            .list_objects(
+                &self.bucket,
+                Some(&prefix),
+                None, // No delimiter
+                None, // No max_results limit
+            )
+            .await
+            .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
+
         let mut artifacts = Vec::new();
-        
+
         for object in objects {
-            let object_name = object.name.strip_prefix(&prefix)
-                .unwrap_or(&object.name);
-            
+            let object_name = object.name.strip_prefix(&prefix).unwrap_or(&object.name);
+
             // Try to get metadata from custom metadata first
-            let artifact_metadata = if let Some(metadata_json) = object.metadata.get("janitor_metadata") {
-                serde_json::from_str(metadata_json)
-                    .unwrap_or_else(|_| {
+            let artifact_metadata =
+                if let Some(metadata_json) = object.metadata.get("janitor_metadata") {
+                    serde_json::from_str(metadata_json).unwrap_or_else(|_| {
                         // Fallback metadata from GCS object
                         ArtifactMetadata {
                             name: object_name.to_string(),
                             size: object.size.unwrap_or(0),
-                            content_type: object.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+                            content_type: object
+                                .content_type
+                                .unwrap_or_else(|| "application/octet-stream".to_string()),
                             uploaded_at: object.time_created.unwrap_or_else(chrono::Utc::now),
                             metadata: HashMap::new(),
                         }
                     })
-            } else {
-                // Fallback metadata from GCS object
-                ArtifactMetadata {
-                    name: object_name.to_string(),
-                    size: object.size.unwrap_or(0),
-                    content_type: object.content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
-                    uploaded_at: object.time_created.unwrap_or_else(chrono::Utc::now),
-                    metadata: HashMap::new(),
-                }
-            };
-            
+                } else {
+                    // Fallback metadata from GCS object
+                    ArtifactMetadata {
+                        name: object_name.to_string(),
+                        size: object.size.unwrap_or(0),
+                        content_type: object
+                            .content_type
+                            .unwrap_or_else(|| "application/octet-stream".to_string()),
+                        uploaded_at: object.time_created.unwrap_or_else(chrono::Utc::now),
+                        metadata: HashMap::new(),
+                    }
+                };
+
             artifacts.push(artifact_metadata);
         }
-        
-        log::info!("Listed {} artifacts from GCS for run: {}", artifacts.len(), run_id);
+
+        log::info!(
+            "Listed {} artifacts from GCS for run: {}",
+            artifacts.len(),
+            run_id
+        );
         Ok(artifacts)
     }
-    
+
     #[cfg(not(feature = "gcs"))]
     async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
         let _ = run_id;
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     #[cfg(feature = "gcs")]
     async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
         if !is_valid_artifact_name(name) {
             return Err(ArtifactError::InvalidName(name.to_string()));
         }
-        
+
         let object_path = self.artifact_object_path(run_id, name);
-        
-        self.client.delete_object(
-            &self.bucket,
-            &object_path
-        ).await
-        .map_err(|e| match e {
-            google_cloud_storage::client::Error::NotFound => ArtifactError::NotFound(format!("{}/{}", run_id, name)),
-            _ => ArtifactError::StorageError(format!("GCS deletion failed: {}", e)),
-        })?;
-        
-        log::info!("Successfully deleted artifact from GCS: {}/{}", run_id, name);
+
+        self.client
+            .delete_object(&self.bucket, &object_path)
+            .await
+            .map_err(|e| match e {
+                google_cloud_storage::client::Error::NotFound => {
+                    ArtifactError::NotFound(format!("{}/{}", run_id, name))
+                }
+                _ => ArtifactError::StorageError(format!("GCS deletion failed: {}", e)),
+            })?;
+
+        log::info!(
+            "Successfully deleted artifact from GCS: {}/{}",
+            run_id,
+            name
+        );
         Ok(())
     }
-    
+
     #[cfg(not(feature = "gcs"))]
     async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
         let _ = (run_id, name);
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     #[cfg(feature = "gcs")]
     async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
         let prefix = format!("artifacts/{}/", run_id);
-        
+
         // First, list all objects with the prefix
-        let objects = self.client.list_objects(
-            &self.bucket,
-            Some(&prefix),
-            None,
-            None,
-        ).await
-        .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
-        
+        let objects = self
+            .client
+            .list_objects(&self.bucket, Some(&prefix), None, None)
+            .await
+            .map_err(|e| ArtifactError::StorageError(format!("GCS listing failed: {}", e)))?;
+
         // Delete each object
         for object in objects {
-            self.client.delete_object(
-                &self.bucket,
-                &object.name
-            ).await
-            .map_err(|e| ArtifactError::StorageError(format!("GCS deletion failed for {}: {}", object.name, e)))?;
+            self.client
+                .delete_object(&self.bucket, &object.name)
+                .await
+                .map_err(|e| {
+                    ArtifactError::StorageError(format!(
+                        "GCS deletion failed for {}: {}",
+                        object.name, e
+                    ))
+                })?;
         }
-        
-        log::info!("Successfully deleted all artifacts from GCS for run: {}", run_id);
+
+        log::info!(
+            "Successfully deleted all artifacts from GCS for run: {}",
+            run_id
+        );
         Ok(())
     }
-    
+
     #[cfg(not(feature = "gcs"))]
     async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
         let _ = run_id;
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
-    
+
     fn storage_type(&self) -> &'static str {
         "gcs"
     }
@@ -621,7 +694,7 @@ impl ArtifactManager {
             storage: Box::new(LocalArtifactStorage::new(base_path, max_size)),
         }
     }
-    
+
     /// Create a new artifact manager with GCS storage.
     #[cfg(feature = "gcs")]
     pub async fn new_gcs(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
@@ -635,16 +708,24 @@ impl ArtifactManager {
     #[cfg(not(feature = "gcs"))]
     pub fn new_gcs(bucket: String, max_size: u64) -> Result<Self, ArtifactError> {
         let _ = (bucket, max_size);
-        Err(ArtifactError::StorageError("GCS storage not available (feature not enabled)".to_string()))
+        Err(ArtifactError::StorageError(
+            "GCS storage not available (feature not enabled)".to_string(),
+        ))
     }
 
     /// Create a new artifact manager from configuration.
     pub async fn new(config: ArtifactConfig) -> Result<Self, ArtifactError> {
         match config.storage_backend {
-            ArtifactStorageBackend::Local => Ok(Self::new_local(config.local_artifact_path, config.max_artifact_size as u64)),
+            ArtifactStorageBackend::Local => Ok(Self::new_local(
+                config.local_artifact_path,
+                config.max_artifact_size as u64,
+            )),
             ArtifactStorageBackend::Gcs => {
-                let bucket = config.gcs_bucket.ok_or_else(|| 
-                    ArtifactError::Validation("GCS bucket not specified in configuration".to_string()))?;
+                let bucket = config.gcs_bucket.ok_or_else(|| {
+                    ArtifactError::Validation(
+                        "GCS bucket not specified in configuration".to_string(),
+                    )
+                })?;
                 #[cfg(feature = "gcs")]
                 {
                     Self::new_gcs(bucket, config.max_artifact_size as u64).await
@@ -663,17 +744,21 @@ impl ArtifactManager {
         let test_content = b"health_check";
         let test_run_id = "health_test";
         let test_name = format!("health_check_{}.txt", chrono::Utc::now().timestamp());
-        
-        self.storage.store_artifact(test_run_id, &test_name, test_content, "text/plain", None).await?;
+
+        self.storage
+            .store_artifact(test_run_id, &test_name, test_content, "text/plain", None)
+            .await?;
         let retrieved = self.storage.get_artifact(test_run_id, &test_name).await?;
-        
+
         if retrieved != test_content {
-            return Err(ArtifactError::Validation("Health check data mismatch".to_string()));
+            return Err(ArtifactError::Validation(
+                "Health check data mismatch".to_string(),
+            ));
         }
-        
+
         // Clean up test artifact (ignore errors)
         let _ = self.storage.delete_artifact(test_run_id, &test_name).await;
-        
+
         Ok(())
     }
 
@@ -683,57 +768,76 @@ impl ArtifactManager {
         // In a real implementation, this would flush any buffered writes
         Ok(())
     }
-    
+
     /// Store an artifact.
     pub async fn store_artifact(
-        &self, 
-        run_id: &str, 
-        name: &str, 
-        content: &[u8], 
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &[u8],
         content_type: &str,
-        metadata: Option<HashMap<String, String>>
+        metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ArtifactError> {
         let start = std::time::Instant::now();
-        let result = self.storage.store_artifact(run_id, name, content, content_type, metadata).await;
+        let result = self
+            .storage
+            .store_artifact(run_id, name, content, content_type, metadata)
+            .await;
         let duration = start.elapsed().as_secs_f64();
-        
+
         let success = result.is_ok();
-        MetricsCollector::record_artifact_upload(self.storage.storage_type(), success, content.len() as f64);
-        
+        MetricsCollector::record_artifact_upload(
+            self.storage.storage_type(),
+            success,
+            content.len() as f64,
+        );
+
         if success {
-            log::info!("Stored artifact {}/{} ({} bytes)", run_id, name, content.len());
+            log::info!(
+                "Stored artifact {}/{} ({} bytes)",
+                run_id,
+                name,
+                content.len()
+            );
         } else {
             log::error!("Failed to store artifact {}/{}: {:?}", run_id, name, result);
         }
-        
+
         result
     }
-    
+
     /// Retrieve an artifact.
     pub async fn get_artifact(&self, run_id: &str, name: &str) -> Result<Vec<u8>, ArtifactError> {
         self.storage.get_artifact(run_id, name).await
     }
-    
+
     /// Get artifact metadata.
-    pub async fn get_artifact_metadata(&self, run_id: &str, name: &str) -> Result<ArtifactMetadata, ArtifactError> {
+    pub async fn get_artifact_metadata(
+        &self,
+        run_id: &str,
+        name: &str,
+    ) -> Result<ArtifactMetadata, ArtifactError> {
         self.storage.get_artifact_metadata(run_id, name).await
     }
-    
+
     /// List artifacts for a run.
-    pub async fn list_artifacts(&self, run_id: &str) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
+    pub async fn list_artifacts(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<ArtifactMetadata>, ArtifactError> {
         self.storage.list_artifacts(run_id).await
     }
-    
+
     /// Delete an artifact.
     pub async fn delete_artifact(&self, run_id: &str, name: &str) -> Result<(), ArtifactError> {
         self.storage.delete_artifact(run_id, name).await
     }
-    
+
     /// Delete all artifacts for a run.
     pub async fn delete_run_artifacts(&self, run_id: &str) -> Result<(), ArtifactError> {
         self.storage.delete_run_artifacts(run_id).await
     }
-    
+
     /// Get storage type for metrics.
     pub fn storage_type(&self) -> &'static str {
         self.storage.storage_type()
@@ -747,8 +851,13 @@ impl ArtifactManager {
         name: &str,
     ) -> Result<(), ArtifactError> {
         // Read the file content
-        let content = tokio::fs::read(file_path).await
-            .map_err(|e| ArtifactError::StorageError(format!("Failed to read file {}: {}", file_path.display(), e)))?;
+        let content = tokio::fs::read(file_path).await.map_err(|e| {
+            ArtifactError::StorageError(format!(
+                "Failed to read file {}: {}",
+                file_path.display(),
+                e
+            ))
+        })?;
 
         // Determine content type from extension
         let content_type = match file_path.extension().and_then(|ext| ext.to_str()) {
@@ -765,7 +874,8 @@ impl ArtifactManager {
         };
 
         // Store the artifact
-        self.store_artifact(run_id, name, &content, content_type, None).await
+        self.store_artifact(run_id, name, &content, content_type, None)
+            .await
     }
 }
 
@@ -776,16 +886,16 @@ pub fn is_valid_artifact_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 255 {
         return false;
     }
-    
+
     if name.contains("..") || name.contains('/') || name.contains('\\') {
         return false;
     }
-    
+
     // Don't allow names starting with dots (hidden files)
     if name.starts_with('.') {
         return false;
     }
-    
+
     true
 }
 
@@ -793,48 +903,51 @@ pub fn is_valid_artifact_name(name: &str) -> bool {
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_is_valid_artifact_name() {
         assert!(is_valid_artifact_name("artifact.tar.gz"));
         assert!(is_valid_artifact_name("package.deb"));
         assert!(is_valid_artifact_name("results.json"));
-        
+
         assert!(!is_valid_artifact_name(""));
         assert!(!is_valid_artifact_name("../etc/passwd"));
         assert!(!is_valid_artifact_name("path/to/file"));
         assert!(!is_valid_artifact_name("file\\with\\backslash"));
         assert!(!is_valid_artifact_name(".hidden"));
     }
-    
+
     #[tokio::test]
     async fn test_local_artifact_storage() {
         let temp_dir = TempDir::new().unwrap();
         let storage = LocalArtifactStorage::new(temp_dir.path().to_path_buf(), 1024 * 1024); // 1MB max
-        
+
         let run_id = "test-run-123";
         let name = "artifact.txt";
         let content = b"Test artifact content\nLine 2\n";
         let content_type = "text/plain";
-        
+
         // Test store
-        storage.store_artifact(run_id, name, content, content_type, None).await.unwrap();
-        
+        storage
+            .store_artifact(run_id, name, content, content_type, None)
+            .await
+            .unwrap();
+
         // Test get
         let retrieved = storage.get_artifact(run_id, name).await.unwrap();
         assert_eq!(retrieved, content);
-        
+
         // Test metadata
         let metadata = storage.get_artifact_metadata(run_id, name).await.unwrap();
         assert_eq!(metadata.name, name);
         assert_eq!(metadata.size, content.len() as u64);
         assert_eq!(metadata.content_type, content_type);
-        
+
         // Test list
         let artifacts = storage.list_artifacts(run_id).await.unwrap();
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].name, name);
-        
+
         // Test delete
         storage.delete_artifact(run_id, name).await.unwrap();
         let artifacts_after_delete = storage.list_artifacts(run_id).await.unwrap();

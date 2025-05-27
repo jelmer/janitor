@@ -157,8 +157,11 @@ impl PerformanceMonitor {
         tokio::spawn(async move {
             loop {
                 interval.tick().await;
-                
-                if let Err(e) = Self::collect_performance_metrics(&performance_data, &metrics, &thresholds).await {
+
+                if let Err(e) =
+                    Self::collect_performance_metrics(&performance_data, &metrics, &thresholds)
+                        .await
+                {
                     log::error!("Failed to collect performance metrics: {}", e);
                 }
             }
@@ -172,7 +175,7 @@ impl PerformanceMonitor {
         thresholds: &PerformanceThresholds,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let now = Instant::now();
-        
+
         // Collect system metrics
         let cpu_stats = Self::collect_cpu_stats().await?;
         let memory_stats = Self::collect_memory_stats().await?;
@@ -183,7 +186,7 @@ impl PerformanceMonitor {
         crate::metrics::MEMORY_USAGE_BYTES
             .with_label_values(&["used"])
             .set(memory_stats.used_bytes as i64);
-        
+
         crate::metrics::MEMORY_USAGE_BYTES
             .with_label_values(&["available"])
             .set(memory_stats.available_bytes as i64);
@@ -251,13 +254,15 @@ impl PerformanceMonitor {
     }
 
     /// Collect memory statistics.
-    async fn collect_memory_stats() -> Result<MemoryStats, Box<dyn std::error::Error + Send + Sync>> {
+    async fn collect_memory_stats() -> Result<MemoryStats, Box<dyn std::error::Error + Send + Sync>>
+    {
         let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
         let mut values = HashMap::new();
 
         for line in meminfo.lines() {
             if let Some((key, value)) = line.split_once(':') {
-                let value = value.trim()
+                let value = value
+                    .trim()
                     .split_whitespace()
                     .next()
                     .unwrap_or("0")
@@ -269,8 +274,8 @@ impl PerformanceMonitor {
 
         let total_bytes = values.get("MemTotal").copied().unwrap_or(0);
         let available_bytes = values.get("MemAvailable").copied().unwrap_or(0);
-        let buffer_cache_bytes = values.get("Buffers").copied().unwrap_or(0) + 
-                                values.get("Cached").copied().unwrap_or(0);
+        let buffer_cache_bytes = values.get("Buffers").copied().unwrap_or(0)
+            + values.get("Cached").copied().unwrap_or(0);
         let swap_total_bytes = values.get("SwapTotal").copied().unwrap_or(0);
         let swap_used_bytes = swap_total_bytes - values.get("SwapFree").copied().unwrap_or(0);
 
@@ -285,7 +290,8 @@ impl PerformanceMonitor {
     }
 
     /// Collect disk I/O statistics.
-    async fn collect_disk_io_stats() -> Result<DiskIoStats, Box<dyn std::error::Error + Send + Sync>> {
+    async fn collect_disk_io_stats() -> Result<DiskIoStats, Box<dyn std::error::Error + Send + Sync>>
+    {
         // Simplified implementation
         Ok(DiskIoStats {
             timestamp: Instant::now(),
@@ -298,7 +304,8 @@ impl PerformanceMonitor {
     }
 
     /// Collect network I/O statistics.
-    async fn collect_network_io_stats() -> Result<NetworkIoStats, Box<dyn std::error::Error + Send + Sync>> {
+    async fn collect_network_io_stats(
+    ) -> Result<NetworkIoStats, Box<dyn std::error::Error + Send + Sync>> {
         // Simplified implementation
         Ok(NetworkIoStats {
             timestamp: Instant::now(),
@@ -325,7 +332,8 @@ impl PerformanceMonitor {
         }
 
         // Memory threshold checking
-        let memory_usage_percent = (memory_stats.used_bytes as f64 / memory_stats.total_bytes as f64) * 100.0;
+        let memory_usage_percent =
+            (memory_stats.used_bytes as f64 / memory_stats.total_bytes as f64) * 100.0;
         if memory_usage_percent >= thresholds.memory_usage_critical {
             log::error!("Critical memory usage: {:.1}%", memory_usage_percent);
         } else if memory_usage_percent >= thresholds.memory_usage_warning {
@@ -334,7 +342,10 @@ impl PerformanceMonitor {
 
         // Disk threshold checking
         if disk_io_stats.disk_usage_percent >= thresholds.disk_usage_critical {
-            log::error!("Critical disk usage: {:.1}%", disk_io_stats.disk_usage_percent);
+            log::error!(
+                "Critical disk usage: {:.1}%",
+                disk_io_stats.disk_usage_percent
+            );
         } else if disk_io_stats.disk_usage_percent >= thresholds.disk_usage_warning {
             log::warn!("High disk usage: {:.1}%", disk_io_stats.disk_usage_percent);
         }
@@ -343,14 +354,35 @@ impl PerformanceMonitor {
     /// Get current performance summary.
     pub async fn get_performance_summary(&self) -> PerformanceSummary {
         let data = self.performance_data.read().await;
-        
+
         PerformanceSummary {
             cpu_usage_current: data.cpu_usage_history.last().copied().unwrap_or(0.0),
             cpu_usage_avg_1h: data.cpu_usage_history.iter().rev().take(60).sum::<f64>() / 60.0,
             memory_usage_current: data.memory_usage_history.last().copied().unwrap_or(0),
-            memory_usage_peak_1h: data.memory_usage_history.iter().rev().take(60).max().copied().unwrap_or(0),
-            disk_io_avg_1h: data.disk_io_history.iter().rev().take(60).map(|s| s.read_bytes_per_sec + s.write_bytes_per_sec).sum::<u64>() / 60,
-            network_io_avg_1h: data.network_io_history.iter().rev().take(60).map(|s| s.rx_bytes_per_sec + s.tx_bytes_per_sec).sum::<u64>() / 60,
+            memory_usage_peak_1h: data
+                .memory_usage_history
+                .iter()
+                .rev()
+                .take(60)
+                .max()
+                .copied()
+                .unwrap_or(0),
+            disk_io_avg_1h: data
+                .disk_io_history
+                .iter()
+                .rev()
+                .take(60)
+                .map(|s| s.read_bytes_per_sec + s.write_bytes_per_sec)
+                .sum::<u64>()
+                / 60,
+            network_io_avg_1h: data
+                .network_io_history
+                .iter()
+                .rev()
+                .take(60)
+                .map(|s| s.rx_bytes_per_sec + s.tx_bytes_per_sec)
+                .sum::<u64>()
+                / 60,
             data_points_collected: data.cpu_usage_history.len(),
             last_collection: data.last_collection,
         }
@@ -443,7 +475,7 @@ mod tests {
     #[tokio::test]
     async fn test_database_performance_recording() {
         let monitor = PerformanceMonitor::new(Duration::from_secs(60));
-        
+
         let stats = DatabasePerfStats {
             timestamp: Instant::now(),
             connection_pool_active: 5,
@@ -454,7 +486,7 @@ mod tests {
         };
 
         monitor.record_database_performance(stats).await;
-        
+
         // Verify that the stats were recorded
         let data = monitor.performance_data.read().await;
         assert_eq!(data.database_performance.len(), 1);

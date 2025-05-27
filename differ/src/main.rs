@@ -3,13 +3,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use tokio_util::io::ReaderStream;
 use breezyshim::RevisionId;
 use clap::Parser;
 use janitor::artifacts::ArtifactManager;
 use janitor_differ::{DifferError, DifferResult};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio_util::io::ReaderStream;
 use tracing::{debug, error, info, warn};
 
 const PRECACHE_RETRIEVE_TIMEOUT: u64 = 300;
@@ -87,7 +87,10 @@ async fn get_run(conn: &sqlx::PgPool, run_id: &str) -> DifferResult<Option<Run>>
         r#"SELECT result_code, source AS build_source, suite AS campaign, id, debian_build.version AS build_version, main_branch_revision FROM run LEFT JOIN debian_build ON debian_build.run_id = run.id WHERE id = $1"#)
         .bind(run_id);
 
-    query.fetch_optional(conn).await.map_err(DifferError::Database)
+    query
+        .fetch_optional(conn)
+        .await
+        .map_err(DifferError::Database)
 }
 
 async fn get_unchanged_run(
@@ -109,7 +112,10 @@ WHERE
 ORDER BY finish_time DESC
 "#).bind(main_branch_revision).bind(codebase);
 
-    query.fetch_optional(conn).await.map_err(DifferError::Database)
+    query
+        .fetch_optional(conn)
+        .await
+        .map_err(DifferError::Database)
 }
 
 /// Precache the diff between two runs.
@@ -123,18 +129,16 @@ async fn precache(
     debdiff_cache_path: Option<PathBuf>,
     diffoscope_command: Option<String>,
 ) -> DifferResult<()> {
-    let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-        .map_err(|e| DifferError::IoError {
-            operation: "create_temp_dir".to_string(),
-            path: std::env::temp_dir(),
-            source: e,
-        })?;
-    let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-        .map_err(|e| DifferError::IoError {
-            operation: "create_temp_dir".to_string(),
-            path: std::env::temp_dir(),
-            source: e,
-        })?;
+    let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
+        operation: "create_temp_dir".to_string(),
+        path: std::env::temp_dir(),
+        source: e,
+    })?;
+    let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
+        operation: "create_temp_dir".to_string(),
+        path: std::env::temp_dir(),
+        source: e,
+    })?;
 
     let (old_result, new_result) = tokio::join!(
         artifact_manager.retrieve_artifacts(
@@ -205,8 +209,8 @@ async fn precache(
 
     if p.as_ref().and_then(|p| Some(!p.exists())).unwrap_or(false) {
         use std::io::Write;
-        let mut f = std::fs::File::create(p.as_ref().unwrap())
-            .map_err(|e| DifferError::IoError {
+        let mut f =
+            std::fs::File::create(p.as_ref().unwrap()).map_err(|e| DifferError::IoError {
                 operation: "create_cache_file".to_string(),
                 path: p.as_ref().unwrap().to_path_buf(),
                 source: e,
@@ -276,15 +280,13 @@ async fn precache(
         })?;
 
         let cache_file_path = p.as_ref().unwrap();
-        let f = std::fs::File::create(cache_file_path)
-            .map_err(|e| DifferError::IoError {
-                operation: "create_cache_file".to_string(),
-                path: cache_file_path.to_path_buf(),
-                source: e,
-            })?;
+        let f = std::fs::File::create(cache_file_path).map_err(|e| DifferError::IoError {
+            operation: "create_cache_file".to_string(),
+            path: cache_file_path.to_path_buf(),
+            source: e,
+        })?;
 
-        serde_json::to_writer(f, &diffoscope_diff)
-            .map_err(|e| DifferError::JsonError(e))?;
+        serde_json::to_writer(f, &diffoscope_diff).map_err(|e| DifferError::JsonError(e))?;
         info!(
             old_run_id = old_id,
             new_run_id = new_id,
@@ -320,11 +322,7 @@ async fn handle_precache(
     (StatusCode::ACCEPTED, "Pre-caching started").into_response()
 }
 
-async fn get_run_pair(
-    pool: &sqlx::PgPool,
-    old_id: &str,
-    new_id: &str,
-) -> DifferResult<(Run, Run)> {
+async fn get_run_pair(pool: &sqlx::PgPool, old_id: &str, new_id: &str) -> DifferResult<(Run, Run)> {
     let new_run = get_run(pool, new_id).await?;
     let old_run = get_run(pool, old_id).await?;
 
@@ -371,10 +369,10 @@ struct DiffoscopeQuery {
 }
 
 /// Get current process memory usage in MB
-fn get_process_memory_mb() -> Option<f64> {
+pub fn get_process_memory_mb() -> Option<f64> {
     let pid = std::process::id();
     let stat_path = format!("/proc/{}/stat", pid);
-    
+
     match std::fs::read_to_string(&stat_path) {
         Ok(contents) => {
             let fields: Vec<&str> = contents.split_whitespace().collect();
@@ -400,21 +398,25 @@ fn get_process_memory_mb() -> Option<f64> {
 /// Cleanup orphaned temporary files
 async fn cleanup_temp_files() {
     let temp_dir = std::env::temp_dir();
-    info!("Starting periodic cleanup of temporary files in {:?}", temp_dir);
-    
+    info!(
+        "Starting periodic cleanup of temporary files in {:?}",
+        temp_dir
+    );
+
     loop {
         // Run cleanup every hour
         tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-        
+
         match std::fs::read_dir(&temp_dir) {
             Ok(entries) => {
                 let mut cleaned_count = 0;
-                let cutoff_time = std::time::SystemTime::now() - std::time::Duration::from_secs(7200); // 2 hours old
-                
+                let cutoff_time =
+                    std::time::SystemTime::now() - std::time::Duration::from_secs(7200); // 2 hours old
+
                 for entry in entries {
                     if let Ok(entry) = entry {
                         let path = entry.path();
-                        
+
                         // Only clean our temporary files
                         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                             if name.starts_with(TMP_PREFIX) {
@@ -422,7 +424,10 @@ async fn cleanup_temp_files() {
                                     if let Ok(modified) = metadata.modified() {
                                         if modified < cutoff_time {
                                             if let Err(e) = std::fs::remove_dir_all(&path) {
-                                                warn!("Failed to remove old temp file {:?}: {}", path, e);
+                                                warn!(
+                                                    "Failed to remove old temp file {:?}: {}",
+                                                    path, e
+                                                );
                                             } else {
                                                 debug!("Cleaned up old temp file: {:?}", path);
                                                 cleaned_count += 1;
@@ -434,7 +439,7 @@ async fn cleanup_temp_files() {
                         }
                     }
                 }
-                
+
                 if cleaned_count > 0 {
                     info!("Cleaned up {} old temporary files", cleaned_count);
                 }
@@ -451,22 +456,32 @@ async fn memory_monitor(memory_limit_mb: Option<usize>) {
     let limit = memory_limit_mb.unwrap_or(2048) as f64; // Default 2GB limit
     let warning_threshold = limit * 0.8; // Warn at 80% of limit
     let critical_threshold = limit * 0.95; // Critical at 95% of limit
-    
+
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(MEMORY_MONITOR_INTERVAL)).await;
-        
+
         if let Some(memory_mb) = get_process_memory_mb() {
             let usage_percent = (memory_mb / limit) * 100.0;
-            
-            debug!("Memory usage: {:.1}MB ({:.1}% of {}MB limit)", 
-                   memory_mb, usage_percent, limit);
-            
+
+            debug!(
+                "Memory usage: {:.1}MB ({:.1}% of {}MB limit)",
+                memory_mb, usage_percent, limit
+            );
+
             if memory_mb > critical_threshold {
-                error!("CRITICAL: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)", 
-                       memory_mb, (critical_threshold / limit) * 100.0, limit);
+                error!(
+                    "CRITICAL: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)",
+                    memory_mb,
+                    (critical_threshold / limit) * 100.0,
+                    limit
+                );
             } else if memory_mb > warning_threshold {
-                warn!("WARNING: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)", 
-                      memory_mb, (warning_threshold / limit) * 100.0, limit);
+                warn!(
+                    "WARNING: Memory usage {:.1}MB exceeds {:.1}% of limit ({}MB)",
+                    memory_mb,
+                    (warning_threshold / limit) * 100.0,
+                    limit
+                );
             }
         }
     }
@@ -475,19 +490,24 @@ async fn memory_monitor(memory_limit_mb: Option<usize>) {
 /// Create a properly typed HTTP response with correct Content-Type header
 fn create_typed_response(content: String, mime_type: &mime::Mime) -> Response {
     use axum::http::header;
-    
-    (StatusCode::OK, [(header::CONTENT_TYPE, mime_type.as_ref())], content).into_response()
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, mime_type.as_ref())],
+        content,
+    )
+        .into_response()
 }
 
 /// Parse and negotiate content type from Accept header
 fn negotiate_content_type(headers: &axum::http::HeaderMap) -> DifferResult<mime::Mime> {
     use std::str::FromStr;
-    
+
     let accept_str = headers
         .get("Accept")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/json");
-    
+
     let accept = accept_header::Accept::from_str(accept_str)
         .map_err(|_| DifferError::AcceptHeaderError(accept_str.to_string()))?;
 
@@ -499,7 +519,8 @@ fn negotiate_content_type(headers: &axum::http::HeaderMap) -> DifferResult<mime:
         mime::Mime::from_str("text/markdown").unwrap(),
     ];
 
-    accept.negotiate(&available)
+    accept
+        .negotiate(&available)
         .map_err(|_| DifferError::ContentNegotiationFailed {
             available: available.iter().map(|m| m.to_string()).collect(),
             requested: accept_str.to_string(),
@@ -530,21 +551,23 @@ async fn handle_diffoscope_inner(
     let (old_run, new_run) = get_run_pair(&state.pool, &old_id, &new_id).await?;
 
     let cache_path = match state.diffoscope_cache_path.as_ref() {
-        Some(p) => Some(determine_diffoscope_cache_path(p, &old_run.id, &new_run.id)?),
+        Some(p) => Some(determine_diffoscope_cache_path(
+            p,
+            &old_run.id,
+            &new_run.id,
+        )?),
         None => None,
     };
 
     let diffoscope_diff = if let Some(ref cache_path) = cache_path {
         if cache_path.exists() {
-            let f = std::fs::File::open(cache_path)
-                .map_err(|e| DifferError::IoError {
-                    operation: "open_cache_file".to_string(),
-                    path: cache_path.clone(),
-                    source: e,
-                })?;
+            let f = std::fs::File::open(cache_path).map_err(|e| DifferError::IoError {
+                operation: "open_cache_file".to_string(),
+                path: cache_path.clone(),
+                source: e,
+            })?;
             let diff: janitor_differ::diffoscope::DiffoscopeOutput =
-                serde_json::from_reader(f)
-                    .map_err(|e| DifferError::JsonError(e))?;
+                serde_json::from_reader(f).map_err(|e| DifferError::JsonError(e))?;
             Some(diff)
         } else {
             None
@@ -570,14 +593,14 @@ async fn handle_diffoscope_inner(
             new_run.campaign,
         );
 
-        let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-            .map_err(|e| DifferError::IoError {
+        let old_dir =
+            tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
                 operation: "create_temp_dir".to_string(),
                 path: std::env::temp_dir(),
                 source: e,
             })?;
-        let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-            .map_err(|e| DifferError::IoError {
+        let new_dir =
+            tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
                 operation: "create_temp_dir".to_string(),
                 path: std::env::temp_dir(),
                 source: e,
@@ -664,14 +687,12 @@ async fn handle_diffoscope_inner(
         })?;
 
         if let Some(cache_path) = cache_path.as_ref() {
-            let f = std::fs::File::create(cache_path)
-                .map_err(|e| DifferError::IoError {
-                    operation: "create_cache_file".to_string(),
-                    path: cache_path.clone(),
-                    source: e,
-                })?;
-            serde_json::to_writer(f, &diffoscope_diff)
-                .map_err(|e| DifferError::JsonError(e))?;
+            let f = std::fs::File::create(cache_path).map_err(|e| DifferError::IoError {
+                operation: "create_cache_file".to_string(),
+                path: cache_path.clone(),
+                source: e,
+            })?;
+            serde_json::to_writer(f, &diffoscope_diff).map_err(|e| DifferError::JsonError(e))?;
         }
 
         diffoscope_diff
@@ -774,14 +795,14 @@ async fn handle_debdiff_inner(
             new_run.campaign,
         );
 
-        let old_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-            .map_err(|e| DifferError::IoError {
+        let old_dir =
+            tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
                 operation: "create_temp_dir".to_string(),
                 path: std::env::temp_dir(),
                 source: e,
             })?;
-        let new_dir = tempfile::TempDir::with_prefix(TMP_PREFIX)
-            .map_err(|e| DifferError::IoError {
+        let new_dir =
+            tempfile::TempDir::with_prefix(TMP_PREFIX).map_err(|e| DifferError::IoError {
                 operation: "create_temp_dir".to_string(),
                 path: std::env::temp_dir(),
                 source: e,
@@ -861,18 +882,16 @@ async fn handle_debdiff_inner(
         })?;
 
         if let Some(cache_path) = cache_path.as_ref() {
-            std::fs::write(cache_path, &debdiff)
-                .map_err(|e| DifferError::IoError {
-                    operation: "write_cache_file".to_string(),
-                    path: cache_path.clone(),
-                    source: e,
-                })?;
+            std::fs::write(cache_path, &debdiff).map_err(|e| DifferError::IoError {
+                operation: "write_cache_file".to_string(),
+                path: cache_path.clone(),
+                source: e,
+            })?;
         }
-        String::from_utf8(debdiff)
-            .map_err(|e| DifferError::DiffCommandError {
-                command: "debdiff".to_string(),
-                reason: format!("Invalid UTF-8 output: {}", e),
-            })?
+        String::from_utf8(debdiff).map_err(|e| DifferError::DiffCommandError {
+            command: "debdiff".to_string(),
+            reason: format!("Invalid UTF-8 output: {}", e),
+        })?
     };
 
     if query.filter_boring {
@@ -899,11 +918,18 @@ async fn handle_debdiff_inner(
                 "new_version": new_run.build_version
             });
             serde_json::to_string(&json_response).unwrap()
-        },
-        _ => return Err(DifferError::ContentNegotiationFailed {
-            available: vec!["text/plain".to_string(), "text/html".to_string(), "text/markdown".to_string(), "application/json".to_string()],
-            requested: best.to_string(),
-        }),
+        }
+        _ => {
+            return Err(DifferError::ContentNegotiationFailed {
+                available: vec![
+                    "text/plain".to_string(),
+                    "text/html".to_string(),
+                    "text/markdown".to_string(),
+                    "application/json".to_string(),
+                ],
+                requested: best.to_string(),
+            })
+        }
     };
 
     Ok(create_typed_response(response_content, &best))
@@ -931,7 +957,7 @@ async fn handle_debdiff_stream_inner(
 ) -> DifferResult<Response> {
     // Content negotiation
     let best = negotiate_content_type(&headers)?;
-    
+
     // For streaming, we only support plain text output
     if best.essence_str() != "text/plain" {
         return Err(DifferError::ContentNegotiationFailed {
@@ -939,38 +965,44 @@ async fn handle_debdiff_stream_inner(
             requested: best.to_string(),
         });
     }
-    
+
     let (old_run, new_run) = get_run_pair(&state.pool, &old_id, &new_id).await?;
-    
+
     // Check cache first
     let cache_path = match state.debdiff_cache_path.as_ref() {
         Some(p) => Some(determine_debdiff_cache_path(p, &old_run.id, &new_run.id)?),
         None => None,
     };
-    
+
     if let Some(cache_path) = cache_path.as_ref() {
         if cache_path.exists() {
             // Stream from cache file
             let file = match tokio::fs::File::open(cache_path).await {
                 Ok(file) => file,
-                Err(e) => return Err(DifferError::IoError {
-                    operation: "open_cache_file".to_string(),
-                    path: cache_path.clone(),
-                    source: e,
-                }),
+                Err(e) => {
+                    return Err(DifferError::IoError {
+                        operation: "open_cache_file".to_string(),
+                        path: cache_path.clone(),
+                        source: e,
+                    })
+                }
             };
-            
+
             let stream = ReaderStream::new(file);
             let body = Body::from_stream(stream);
-            
+
             return Ok((
                 StatusCode::OK,
-                [("Content-Type", "text/plain"), ("Transfer-Encoding", "chunked")],
-                body
-            ).into_response());
+                [
+                    ("Content-Type", "text/plain"),
+                    ("Transfer-Encoding", "chunked"),
+                ],
+                body,
+            )
+                .into_response());
         }
     }
-    
+
     // Generate and stream debdiff in real-time
     // For now, fall back to regular generation and then stream
     // A full implementation would stream the debdiff command output directly
@@ -985,12 +1017,11 @@ fn determine_diffoscope_cache_path(
 ) -> DifferResult<PathBuf> {
     let base_path = cache_path.join("diffoscope");
     if !base_path.exists() {
-        std::fs::create_dir_all(&base_path)
-            .map_err(|e| DifferError::IoError {
-                operation: "create_cache_dir".to_string(),
-                path: base_path.clone(),
-                source: e,
-            })?
+        std::fs::create_dir_all(&base_path).map_err(|e| DifferError::IoError {
+            operation: "create_cache_dir".to_string(),
+            path: base_path.clone(),
+            source: e,
+        })?
     }
     Ok(base_path.join(format!("{}_{}.json", old_id, new_id)))
 }
@@ -1002,19 +1033,16 @@ fn determine_debdiff_cache_path(
 ) -> DifferResult<PathBuf> {
     let base_path = cache_path.join("debdiff");
     if !base_path.exists() {
-        std::fs::create_dir_all(&base_path)
-            .map_err(|e| DifferError::IoError {
-                operation: "create_cache_dir".to_string(),
-                path: base_path.clone(),
-                source: e,
-            })?
+        std::fs::create_dir_all(&base_path).map_err(|e| DifferError::IoError {
+            operation: "create_cache_dir".to_string(),
+            path: base_path.clone(),
+            source: e,
+        })?
     }
     Ok(base_path.join(format!("{}_{}", old_id, new_id)))
 }
 
-async fn handle_precache_all(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn handle_precache_all(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match handle_precache_all_inner(state).await {
         Ok(response) => response,
         Err(e) => e.into_response(),
@@ -1035,26 +1063,23 @@ async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Respons
             run.main_branch_revision != run.revision AND
             run.suite NOT IN ('control', 'unchanged')
         ORDER BY run.finish_time DESC, unchanged_run.finish_time DESC
-        "#
+        "#,
     )
     .fetch_all(&state.pool)
     .await
     .map_err(DifferError::Database)?;
 
     if rows.is_empty() {
-        return Ok((
-            StatusCode::OK,
-            axum::Json(serde_json::json!({"count": 0}))
-        ).into_response());
+        return Ok((StatusCode::OK, axum::Json(serde_json::json!({"count": 0}))).into_response());
     }
 
     let count = rows.len();
-    
+
     // Start precaching tasks for all rows
     for row in rows {
         let unchanged_run_id = row.1;
         let run_id = row.0;
-        
+
         // Spawn precaching task without blocking
         tokio::spawn(precache(
             state.artifact_manager.clone(),
@@ -1070,12 +1095,16 @@ async fn handle_precache_all_inner(state: Arc<AppState>) -> DifferResult<Respons
 
     Ok((
         StatusCode::ACCEPTED,
-        axum::Json(serde_json::json!({"count": count, "message": "Precaching started"}))
-    ).into_response())
+        axum::Json(serde_json::json!({"count": count, "message": "Precaching started"})),
+    )
+        .into_response())
 }
 
 /// Find candidate run pairs for precaching when a new successful run completes
-async fn find_precaching_candidates(db: &sqlx::PgPool, new_run_id: &str) -> DifferResult<Vec<(String, String)>> {
+async fn find_precaching_candidates(
+    db: &sqlx::PgPool,
+    new_run_id: &str,
+) -> DifferResult<Vec<(String, String)>> {
     // Find runs that share the same main branch revision but have different revisions
     // This identifies cases where we can compare the new run against unchanged baseline runs
     let rows = sqlx::query_as::<_, (String, String)>(
@@ -1091,13 +1120,13 @@ async fn find_precaching_candidates(db: &sqlx::PgPool, new_run_id: &str) -> Diff
             unchanged_run.suite NOT IN ('control', 'unchanged') AND
             new_run.suite NOT IN ('control', 'unchanged')
         LIMIT 10
-        "#
+        "#,
     )
     .bind(new_run_id)
     .fetch_all(db)
     .await
     .map_err(DifferError::Database)?;
-    
+
     Ok(rows.into_iter().map(|row| (row.0, row.1)).collect())
 }
 
@@ -1113,7 +1142,7 @@ async fn run_precache(
     _filter_boring: bool, // Future use for filtering
 ) -> DifferResult<()> {
     let (old_run, new_run) = get_run_pair(db, &old_run_id, &new_run_id).await?;
-    
+
     precache(
         artifact_manager,
         old_run.id,
@@ -1123,27 +1152,38 @@ async fn run_precache(
         diffoscope_cache_path,
         debdiff_cache_path,
         Some("diffoscope".to_string()),
-    ).await
+    )
+    .await
 }
 
 /// Precache diffs for a specific run pair
-async fn precache_run_pair(db: &sqlx::PgPool, old_run_id: &str, new_run_id: &str) -> DifferResult<()> {
-    info!(old_run_id = old_run_id, new_run_id = new_run_id, "Starting background precaching");
-    
+async fn precache_run_pair(
+    db: &sqlx::PgPool,
+    old_run_id: &str,
+    new_run_id: &str,
+) -> DifferResult<()> {
+    info!(
+        old_run_id = old_run_id,
+        new_run_id = new_run_id,
+        "Starting background precaching"
+    );
+
     // Create a minimal artifact manager for precaching operations
     let artifact_manager = janitor::artifacts::get_artifact_manager(
-        &std::env::var("ARTIFACT_LOCATION").unwrap_or_else(|_| "/tmp/artifacts".to_string())
-    ).await.map_err(|e| DifferError::IoError {
+        &std::env::var("ARTIFACT_LOCATION").unwrap_or_else(|_| "/tmp/artifacts".to_string()),
+    )
+    .await
+    .map_err(|e| DifferError::IoError {
         operation: "create_artifact_manager".to_string(),
         path: std::path::PathBuf::from("/tmp"),
         source: std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
     })?;
-    
+
     // Get cache paths from environment variables, if set
     let cache_base = std::env::var("DIFFER_CACHE_PATH").ok().map(PathBuf::from);
     let diffoscope_cache_path = cache_base.as_ref().map(|p| p.join("diffoscope"));
     let debdiff_cache_path = cache_base.as_ref().map(|p| p.join("debdiff"));
-    
+
     // Use the existing run_precache function for background precaching
     if let Err(e) = run_precache(
         old_run_id.to_string(),
@@ -1154,20 +1194,26 @@ async fn precache_run_pair(db: &sqlx::PgPool, old_run_id: &str, new_run_id: &str
         diffoscope_cache_path,
         debdiff_cache_path,
         false, // Don't filter boring for background caching
-    ).await {
+    )
+    .await
+    {
         error!(old_run_id = old_run_id, new_run_id = new_run_id, error = %e, "Failed to precache run pair");
         return Err(e);
     }
-    
-    info!(old_run_id = old_run_id, new_run_id = new_run_id, "Completed background precaching");
+
+    info!(
+        old_run_id = old_run_id,
+        new_run_id = new_run_id,
+        "Completed background precaching"
+    );
     Ok(())
 }
 
 async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::PgPool) {
     use redis::AsyncCommands;
-    
+
     info!("Starting Redis event listener for automatic precaching");
-    
+
     loop {
         // Subscribe to run completion events
         let client = redis::Client::open("redis://localhost:6379").unwrap();
@@ -1179,15 +1225,15 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
                 continue;
             }
         };
-        
+
         if let Err(e) = pubsub.subscribe("run-finished").await {
             error!("Failed to subscribe to run-finished channel: {}", e);
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             continue;
         }
-        
+
         info!("Subscribed to run-finished events for automatic precaching");
-        
+
         // Listen for messages
         let mut stream = pubsub.on_message();
         while let Some(msg) = futures_util::stream::StreamExt::next(&mut stream).await {
@@ -1198,7 +1244,7 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
                     continue;
                 }
             };
-            
+
             // Parse the run completion event
             let run_event: Result<serde_json::Value, _> = serde_json::from_str(&payload);
             let run_event = match run_event {
@@ -1208,7 +1254,7 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
                     continue;
                 }
             };
-            
+
             // Extract run information
             let run_id = match run_event.get("run_id").and_then(|v| v.as_str()) {
                 Some(id) => id,
@@ -1217,37 +1263,49 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
                     continue;
                 }
             };
-            
-            let result_code = run_event.get("result_code").and_then(|v| v.as_str()).unwrap_or("unknown");
-            
+
+            let result_code = run_event
+                .get("result_code")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+
             // Only trigger precaching for successful runs
             if result_code != "success" {
                 continue;
             }
-            
-            info!(run_id = run_id, "Received successful run completion, checking for precaching opportunities");
-            
+
+            info!(
+                run_id = run_id,
+                "Received successful run completion, checking for precaching opportunities"
+            );
+
             // Find runs that could be compared with this new successful run
             match find_precaching_candidates(&db, run_id).await {
                 Ok(candidates) => {
                     for (old_run_id, new_run_id) in candidates {
-                        info!(old_run_id = old_run_id, new_run_id = new_run_id, "Triggering automatic precaching");
-                        
+                        info!(
+                            old_run_id = old_run_id,
+                            new_run_id = new_run_id,
+                            "Triggering automatic precaching"
+                        );
+
                         // Spawn precaching task in background
                         let db_clone = db.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = precache_run_pair(&db_clone, &old_run_id, &new_run_id).await {
+                            if let Err(e) =
+                                precache_run_pair(&db_clone, &old_run_id, &new_run_id).await
+                            {
                                 error!(old_run_id = old_run_id, new_run_id = new_run_id, error = %e, "Failed to precache run pair");
                             }
                         });
                     }
-                },
+                }
                 Err(e) => {
                     error!(run_id = run_id, error = %e, "Failed to find precaching candidates");
                 }
             }
         }
-        
+
         error!("Redis pubsub connection lost, reconnecting...");
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }
@@ -1305,7 +1363,10 @@ pub async fn main() -> Result<(), i8> {
         .route("/precache-all", post(handle_precache_all))
         .route("/diffoscope/:old_id/:new_id", get(handle_diffoscope))
         .route("/debdiff/:old_id/:new_id", get(handle_debdiff))
-        .route("/debdiff/:old_id/:new_id/stream", get(handle_debdiff_stream))
+        .route(
+            "/debdiff/:old_id/:new_id/stream",
+            get(handle_debdiff_stream),
+        )
         .with_state(state);
 
     // run it
@@ -1336,7 +1397,7 @@ pub async fn main() -> Result<(), i8> {
     // Start background services
     tokio::spawn(memory_monitor(args.task_memory_limit));
     tokio::spawn(cleanup_temp_files());
-    
+
     info!("Starting differ service with memory monitoring and cleanup enabled");
 
     axum::serve(listener, app).await.unwrap();

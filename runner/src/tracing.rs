@@ -106,13 +106,27 @@ pub struct PerformanceLoggingConfig {
 }
 
 // Default value functions
-fn default_log_level() -> String { "info".to_string() }
-fn default_true() -> bool { true }
-fn default_max_file_size() -> u64 { 100 } // 100MB
-fn default_max_files() -> u32 { 10 }
-fn default_sample_rate() -> f64 { 1.0 }
-fn default_slow_operation_threshold() -> u64 { 1000 } // 1 second
-fn default_metrics_interval() -> u64 { 60 } // 60 seconds
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_true() -> bool {
+    true
+}
+fn default_max_file_size() -> u64 {
+    100
+} // 100MB
+fn default_max_files() -> u32 {
+    10
+}
+fn default_sample_rate() -> f64 {
+    1.0
+}
+fn default_slow_operation_threshold() -> u64 {
+    1000
+} // 1 second
+fn default_metrics_interval() -> u64 {
+    60
+} // 60 seconds
 
 impl Default for TracingConfig {
     fn default() -> Self {
@@ -186,20 +200,26 @@ pub fn init_tracing(config: &TracingConfig) -> Result<(), TracingError> {
                 .with_current_span(true)
                 .with_span_list(true);
             let registry = registry.with(json_layer);
-            registry.try_init()
-                .map_err(|e| TracingError::Initialization(format!("Failed to initialize JSON console logging: {}", e)))?;
+            registry.try_init().map_err(|e| {
+                TracingError::Initialization(format!(
+                    "Failed to initialize JSON console logging: {}",
+                    e
+                ))
+            })?;
         } else {
             let fmt_layer = tracing_subscriber::fmt::layer()
                 .with_target(config.structured_logging.include_source_location)
                 .with_thread_ids(config.structured_logging.include_thread_info)
                 .with_thread_names(config.structured_logging.include_thread_info);
             let registry = registry.with(fmt_layer);
-            registry.try_init()
-                .map_err(|e| TracingError::Initialization(format!("Failed to initialize console logging: {}", e)))?;
+            registry.try_init().map_err(|e| {
+                TracingError::Initialization(format!("Failed to initialize console logging: {}", e))
+            })?;
         }
     } else {
-        registry.try_init()
-            .map_err(|e| TracingError::Initialization(format!("Failed to initialize logging: {}", e)))?;
+        registry.try_init().map_err(|e| {
+            TracingError::Initialization(format!("Failed to initialize logging: {}", e))
+        })?;
     }
 
     // Initialize structured logging fields
@@ -213,7 +233,10 @@ pub fn init_tracing(config: &TracingConfig) -> Result<(), TracingError> {
     log::info!("Tracing and logging system initialized successfully");
     log::info!("Log level: {}", config.log_level);
     log::info!("JSON format: {}", config.json_format);
-    log::info!("Distributed tracing: {}", config.tracing.enable_distributed_tracing);
+    log::info!(
+        "Distributed tracing: {}",
+        config.tracing.enable_distributed_tracing
+    );
 
     Ok(())
 }
@@ -243,7 +266,10 @@ fn init_structured_logging(config: &StructuredLoggingConfig) -> Result<(), Traci
 /// Initialize performance logging.
 fn init_performance_logging(config: &PerformanceLoggingConfig) -> Result<(), TracingError> {
     log::info!("Performance logging enabled");
-    log::info!("Slow operation threshold: {}ms", config.slow_operation_threshold_ms);
+    log::info!(
+        "Slow operation threshold: {}ms",
+        config.slow_operation_threshold_ms
+    );
     log::info!("Metrics interval: {}s", config.metrics_interval_seconds);
 
     // Start performance metrics logging task
@@ -258,7 +284,7 @@ fn init_performance_logging(config: &PerformanceLoggingConfig) -> Result<(), Tra
 fn start_performance_metrics_task(interval_seconds: u64) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_seconds));
-        
+
         loop {
             interval.tick().await;
             log_performance_metrics().await;
@@ -279,10 +305,7 @@ async fn log_performance_metrics() {
 
     // Get CPU usage (simplified)
     if let Ok(cpu_usage) = get_cpu_usage() {
-        tracing::info!(
-            cpu_usage_percent = cpu_usage,
-            "CPU usage metrics"
-        );
+        tracing::info!(cpu_usage_percent = cpu_usage, "CPU usage metrics");
     }
 
     // Log custom metrics from the metrics collector
@@ -301,7 +324,7 @@ fn get_memory_usage() -> Result<MemoryInfo, Box<dyn std::error::Error>> {
     // Simplified memory usage calculation
     // In production, you might want to use a more sophisticated approach
     Ok(MemoryInfo {
-        used_mb: 100, // Placeholder
+        used_mb: 100,       // Placeholder
         available_mb: 1024, // Placeholder
     })
 }
@@ -329,7 +352,7 @@ pub fn http_tracing_middleware(
             .to_string();
 
         let start = std::time::Instant::now();
-        
+
         // Create a span for this request
         let span = tracing::info_span!(
             "http_request",
@@ -339,7 +362,7 @@ pub fn http_tracing_middleware(
         );
 
         let response = tracing::instrument::Instrument::instrument(next.run(request), span).await;
-        
+
         let duration = start.elapsed();
         let status = response.status();
 
@@ -368,18 +391,15 @@ pub fn http_tracing_middleware(
 }
 
 /// Database operation tracing.
-pub async fn trace_database_operation<F, T>(
-    operation: &str,
-    future: F,
-) -> T
+pub async fn trace_database_operation<F, T>(operation: &str, future: F) -> T
 where
     F: std::future::Future<Output = T>,
 {
     let span = tracing::info_span!("database_operation", operation = operation);
     let start = std::time::Instant::now();
-    
+
     let result = tracing::instrument::Instrument::instrument(future, span).await;
-    
+
     let duration = start.elapsed();
     tracing::debug!(
         operation = operation,
@@ -415,9 +435,9 @@ where
         codebase = codebase,
     );
     let start = std::time::Instant::now();
-    
+
     let result = tracing::instrument::Instrument::instrument(future, span).await;
-    
+
     let duration = start.elapsed();
     tracing::debug!(
         operation = operation,
@@ -457,9 +477,9 @@ where
         worker = worker,
     );
     let start = std::time::Instant::now();
-    
+
     let result = tracing::instrument::Instrument::instrument(future, span).await;
-    
+
     let duration = start.elapsed();
     tracing::debug!(
         operation = operation,
@@ -477,10 +497,10 @@ where
 pub enum TracingError {
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     #[error("Initialization error: {0}")]
     Initialization(String),
-    
+
     #[error("Runtime error: {0}")]
     Runtime(String),
 }

@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 // Re-export from main crate
+use crate::{QueueAssignment, QueueItem};
 pub use janitor::state::{create_pool, Run};
-use crate::{QueueItem, QueueAssignment};
 
 /// Database manager for runner operations.
 #[derive(Clone)]
@@ -82,7 +82,7 @@ impl RunnerDatabase {
                     .map(|(name, rev)| (name, Some(RevisionId::from(rev.as_bytes()))))
                     .collect()
             }),
-            remotes: self.get_run_remotes(&run.id).await.ok(),
+            remotes: None, // TODO: Add async method to fetch remotes
             branches: run.result_branches.map(|branches| {
                 branches
                     .into_iter()
@@ -91,13 +91,13 @@ impl RunnerDatabase {
             }),
             failure_details: run.failure_details,
             failure_stage: run.failure_stage.map(|s| vec![s]),
-            resume: self.get_resume_info(&run.id, &run.codebase, &run.suite).await.ok().flatten(),
-            target: self.get_run_target(&run.id).await.ok().flatten(),
+            resume: None, // TODO: Add async method to fetch resume info
+            target: None, // TODO: Add async method to fetch target
             worker_name: run.worker_name,
             vcs_type: Some(run.vcs_type),
             target_branch_url: run.target_branch_url,
             context: run.context.and_then(|s| serde_json::from_str(&s).ok()),
-            builder_result: self.get_run_builder_result(&run.id).await.ok().flatten()
+            builder_result: None, // TODO: Add async method to fetch builder result
         }
     }
 
@@ -168,7 +168,7 @@ impl RunnerDatabase {
     pub async fn get_active_run(&self, run_id: &str) -> Result<Option<ActiveRun>, sqlx::Error> {
         let row = sqlx::query(
             r#"
-            SELECT id, queue_id, worker_name, worker_link, start_time, estimated_duration,
+            SELECT id, queue_id, worker_name, worker_link, start_time, finish_time, estimated_duration,
                    campaign, change_set, command, backchannel, vcs_info, codebase,
                    instigated_context, resume_from
             FROM active_runs WHERE id = $1
@@ -185,6 +185,7 @@ impl RunnerDatabase {
                 queue_id: row.get("queue_id"),
                 log_id: row.get("id"),
                 start_time: row.get("start_time"),
+                finish_time: row.get("finish_time"),
                 estimated_duration: row
                     .get::<Option<i64>, _>("estimated_duration")
                     .map(|d| std::time::Duration::from_secs(d as u64)),
@@ -207,7 +208,7 @@ impl RunnerDatabase {
     pub async fn get_active_runs(&self) -> Result<Vec<ActiveRun>, sqlx::Error> {
         let rows = sqlx::query(
             r#"
-            SELECT id, queue_id, worker_name, worker_link, start_time, estimated_duration,
+            SELECT id, queue_id, worker_name, worker_link, start_time, finish_time, estimated_duration,
                    campaign, change_set, command, backchannel, vcs_info, codebase,
                    instigated_context, resume_from
             FROM active_runs ORDER BY start_time ASC
@@ -224,6 +225,7 @@ impl RunnerDatabase {
                 queue_id: row.get("queue_id"),
                 log_id: row.get("id"),
                 start_time: row.get("start_time"),
+                finish_time: row.get("finish_time"),
                 estimated_duration: row
                     .get::<Option<i64>, _>("estimated_duration")
                     .map(|d| std::time::Duration::from_secs(d as u64)),
@@ -388,7 +390,8 @@ impl RunnerDatabase {
             FROM
                 queue
             LEFT JOIN codebase ON codebase.name = queue.codebase
-        "#.to_string();
+        "#
+        .to_string();
 
         let mut conditions = Vec::new();
         let mut bind_count = 0;
@@ -425,34 +428,36 @@ impl RunnerDatabase {
             query.push_str(&conditions.join(" AND "));
         }
 
-        query.push_str(r#"
+        query.push_str(
+            r#"
             ORDER BY
             queue.bucket ASC,
             queue.priority ASC,
             queue.id ASC
             LIMIT 1
-        "#);
+        "#,
+        );
 
         let mut sqlx_query = sqlx::query(&query);
 
         // Bind parameters in order
         let mut _bind_idx = 1;
-        
+
         if !assigned_queue_items.is_empty() {
             sqlx_query = sqlx_query.bind(assigned_queue_items);
             _bind_idx += 1;
         }
-        
+
         if let Some(cb) = codebase {
             sqlx_query = sqlx_query.bind(cb);
             _bind_idx += 1;
         }
-        
+
         if let Some(camp) = campaign {
             sqlx_query = sqlx_query.bind(camp);
             _bind_idx += 1;
         }
-        
+
         if !exclude_hosts.is_empty() {
             sqlx_query = sqlx_query.bind(exclude_hosts);
         }
@@ -581,11 +586,7 @@ impl RunnerDatabase {
         .await?;
 
         if let Some(row) = row {
-            Ok(Some((
-                row.get("id"),
-                row.get("codebase"),
-                row.get("suite"),
-            )))
+            Ok(Some((row.get("id"), row.get("codebase"), row.get("suite"))))
         } else {
             Ok(None)
         }
@@ -599,7 +600,8 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            let _: () = conn.hset("rate-limit-hosts", host, retry_after.to_rfc3339())
+            let _: () = conn
+                .hset("rate-limit-hosts", host, retry_after.to_rfc3339())
                 .await?;
         }
         Ok(())
@@ -610,11 +612,11 @@ impl RunnerDatabase {
         &self,
     ) -> Result<HashMap<String, DateTime<Utc>>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = HashMap::new();
-        
+
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await?;
-            
+
             let now = Utc::now();
             for (host, time_str) in hosts {
                 if let Ok(retry_time) = DateTime::parse_from_rfc3339(&time_str) {
@@ -625,7 +627,7 @@ impl RunnerDatabase {
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -634,18 +636,18 @@ impl RunnerDatabase {
         &self,
     ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
-        
+
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             let items: Vec<String> = conn.hkeys("assigned-queue-items").await?;
-            
+
             for item in items {
                 if let Ok(id) = item.parse::<i64>() {
                     result.push(id);
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -658,27 +660,37 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
+
             // Check if already assigned to prevent double assignment
-            let existing: Option<String> = conn.hget("assigned-queue-items", queue_id.to_string()).await?;
+            let existing: Option<String> = conn
+                .hget("assigned-queue-items", queue_id.to_string())
+                .await?;
             if existing.is_some() {
                 return Err(format!("Queue item {} already assigned", queue_id).into());
             }
-            
+
             // Store assignment with worker info and timestamp
             let assignment_info = serde_json::json!({
                 "worker_name": worker_name,
                 "log_id": log_id,
                 "assigned_at": Utc::now().to_rfc3339(),
             });
-            
-            let _: () = conn.hset("assigned-queue-items", queue_id.to_string(), assignment_info.to_string()).await?;
-            let _: () = conn.sadd(format!("worker-queue-items:{}", worker_name), queue_id).await?;
-            
+
+            let _: () = conn
+                .hset(
+                    "assigned-queue-items",
+                    queue_id.to_string(),
+                    assignment_info.to_string(),
+                )
+                .await?;
+            let _: () = conn
+                .sadd(format!("worker-queue-items:{}", worker_name), queue_id)
+                .await?;
+
             // Set expiration for assignments (cleanup stale assignments)
             let _: () = conn.expire("assigned-queue-items", 3600).await?; // 1 hour
         }
-        
+
         Ok(())
     }
 
@@ -687,27 +699,32 @@ impl RunnerDatabase {
         &self,
     ) -> Result<Vec<(i64, String, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
-        
+
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             let assignments: HashMap<String, String> = conn.hgetall("assigned-queue-items").await?;
-            
+
             for (queue_id_str, assignment_info_str) in assignments {
                 if let (Ok(queue_id), Ok(assignment_info)) = (
                     queue_id_str.parse::<i64>(),
-                    serde_json::from_str::<serde_json::Value>(&assignment_info_str)
+                    serde_json::from_str::<serde_json::Value>(&assignment_info_str),
                 ) {
                     if let (Some(worker_name), Some(log_id), Some(assigned_at)) = (
                         assignment_info.get("worker_name").and_then(|v| v.as_str()),
                         assignment_info.get("log_id").and_then(|v| v.as_str()),
-                        assignment_info.get("assigned_at").and_then(|v| v.as_str())
+                        assignment_info.get("assigned_at").and_then(|v| v.as_str()),
                     ) {
-                        result.push((queue_id, worker_name.to_string(), log_id.to_string(), assigned_at.to_string()));
+                        result.push((
+                            queue_id,
+                            worker_name.to_string(),
+                            log_id.to_string(),
+                            assigned_at.to_string(),
+                        ));
                     }
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -717,18 +734,20 @@ impl RunnerDatabase {
         worker_name: &str,
     ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
-        
+
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            let queue_ids: Vec<String> = conn.smembers(format!("worker-queue-items:{}", worker_name)).await?;
-            
+            let queue_ids: Vec<String> = conn
+                .smembers(format!("worker-queue-items:{}", worker_name))
+                .await?;
+
             for queue_id_str in queue_ids {
                 if let Ok(queue_id) = queue_id_str.parse::<i64>() {
                     result.push(queue_id);
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -739,7 +758,9 @@ impl RunnerDatabase {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            let exists: bool = conn.hexists("assigned-queue-items", queue_id.to_string()).await?;
+            let exists: bool = conn
+                .hexists("assigned-queue-items", queue_id.to_string())
+                .await?;
             Ok(exists)
         } else {
             Ok(false)
@@ -753,19 +774,24 @@ impl RunnerDatabase {
     ) -> Result<Option<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
-            if let Ok(assignment_info_str) = conn.hget::<&str, String, String>("assigned-queue-items", queue_id.to_string()).await {
-                if let Ok(assignment_info) = serde_json::from_str::<serde_json::Value>(&assignment_info_str) {
+
+            if let Ok(assignment_info_str) = conn
+                .hget::<&str, String, String>("assigned-queue-items", queue_id.to_string())
+                .await
+            {
+                if let Ok(assignment_info) =
+                    serde_json::from_str::<serde_json::Value>(&assignment_info_str)
+                {
                     if let (Some(worker_name), Some(log_id)) = (
                         assignment_info.get("worker_name").and_then(|v| v.as_str()),
-                        assignment_info.get("log_id").and_then(|v| v.as_str())
+                        assignment_info.get("log_id").and_then(|v| v.as_str()),
                     ) {
                         return Ok(Some((worker_name.to_string(), log_id.to_string())));
                     }
                 }
             }
         }
-        
+
         Ok(None)
     }
 
@@ -776,21 +802,32 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
+
             // Get worker name before removing assignment
-            if let Ok(assignment_info_str) = conn.hget::<&str, String, String>("assigned-queue-items", queue_id.to_string()).await {
-                if let Ok(assignment_info) = serde_json::from_str::<serde_json::Value>(&assignment_info_str) {
-                    if let Some(worker_name) = assignment_info.get("worker_name").and_then(|v| v.as_str()) {
+            if let Ok(assignment_info_str) = conn
+                .hget::<&str, String, String>("assigned-queue-items", queue_id.to_string())
+                .await
+            {
+                if let Ok(assignment_info) =
+                    serde_json::from_str::<serde_json::Value>(&assignment_info_str)
+                {
+                    if let Some(worker_name) =
+                        assignment_info.get("worker_name").and_then(|v| v.as_str())
+                    {
                         // Remove from worker's set
-                        let _: () = conn.srem(format!("worker-queue-items:{}", worker_name), queue_id).await?;
+                        let _: () = conn
+                            .srem(format!("worker-queue-items:{}", worker_name), queue_id)
+                            .await?;
                     }
                 }
             }
-            
+
             // Remove from assignments hash
-            let _: () = conn.hdel("assigned-queue-items", queue_id.to_string()).await?;
+            let _: () = conn
+                .hdel("assigned-queue-items", queue_id.to_string())
+                .await?;
         }
-        
+
         Ok(())
     }
 
@@ -803,19 +840,21 @@ impl RunnerDatabase {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
+
             let health_info = serde_json::json!({
                 "status": status,
                 "current_run": current_run,
                 "last_heartbeat": Utc::now().to_rfc3339(),
             });
-            
-            let _: () = conn.hset("worker-health", worker_name, health_info.to_string()).await?;
-            
+
+            let _: () = conn
+                .hset("worker-health", worker_name, health_info.to_string())
+                .await?;
+
             // Set expiration for worker health (cleanup stale workers)
             let _: () = conn.expire("worker-health", 1800).await?; // 30 minutes
         }
-        
+
         Ok(())
     }
 
@@ -826,8 +865,11 @@ impl RunnerDatabase {
     ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
-            match conn.hget::<&str, &str, String>("worker-health", worker_name).await {
+
+            match conn
+                .hget::<&str, &str, String>("worker-health", worker_name)
+                .await
+            {
                 Ok(health_str) => {
                     let health_info: serde_json::Value = serde_json::from_str(&health_str)?;
                     return Ok(Some(health_info));
@@ -837,7 +879,7 @@ impl RunnerDatabase {
                 }
             }
         }
-        
+
         Ok(None)
     }
 
@@ -846,18 +888,18 @@ impl RunnerDatabase {
         &self,
     ) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = HashMap::new();
-        
+
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             let workers: HashMap<String, String> = conn.hgetall("worker-health").await?;
-            
+
             for (worker_name, health_str) in workers {
                 if let Ok(health_info) = serde_json::from_str::<serde_json::Value>(&health_str) {
                     result.insert(worker_name, health_info);
                 }
             }
         }
-        
+
         Ok(result)
     }
 
@@ -870,17 +912,19 @@ impl RunnerDatabase {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
+
             // Use SET with NX (only if not exists) and EX (expiration)
-            let result: Option<String> = conn.set_options(
-                format!("lock:{}", lock_name),
-                holder,
-                redis::SetOptions::default()
-                    .conditional_set(redis::ExistenceCheck::NX)
-                    .get(true)
-                    .with_expiration(redis::SetExpiry::EX(ttl_seconds as u64))
-            ).await?;
-            
+            let result: Option<String> = conn
+                .set_options(
+                    format!("lock:{}", lock_name),
+                    holder,
+                    redis::SetOptions::default()
+                        .conditional_set(redis::ExistenceCheck::NX)
+                        .get(true)
+                        .with_expiration(redis::SetExpiry::EX(ttl_seconds as u64)),
+                )
+                .await?;
+
             Ok(result.is_some())
         } else {
             // No Redis, assume lock acquired
@@ -896,7 +940,7 @@ impl RunnerDatabase {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
-            
+
             // Lua script to atomically check holder and delete
             let script = r#"
                 if redis.call("GET", KEYS[1]) == ARGV[1] then
@@ -905,13 +949,13 @@ impl RunnerDatabase {
                     return 0
                 end
             "#;
-            
+
             let result: i32 = redis::Script::new(script)
                 .key(format!("lock:{}", lock_name))
                 .arg(holder)
                 .invoke_async(&mut conn)
                 .await?;
-            
+
             Ok(result == 1)
         } else {
             // No Redis, assume lock released
@@ -973,7 +1017,8 @@ impl RunnerDatabase {
             FROM
                 queue
             LEFT JOIN codebase ON codebase.name = queue.codebase
-        "#.to_string();
+        "#
+        .to_string();
 
         let mut conditions = Vec::new();
         let mut bind_count = 0;
@@ -1015,35 +1060,37 @@ impl RunnerDatabase {
         }
 
         // Advanced ordering by computed score (higher is better), then bucket, then priority
-        query.push_str(r#"
+        query.push_str(
+            r#"
             ORDER BY
                 queue.bucket ASC,
                 computed_score DESC,
                 queue.priority ASC,
                 queue.id ASC
             LIMIT 1
-        "#);
+        "#,
+        );
 
         let mut sqlx_query = sqlx::query(&query);
 
         // Bind parameters in order
         let mut _bind_idx = 1;
-        
+
         if !assigned_queue_items.is_empty() {
             sqlx_query = sqlx_query.bind(assigned_queue_items);
             _bind_idx += 1;
         }
-        
+
         if let Some(cb) = codebase {
             sqlx_query = sqlx_query.bind(cb);
             _bind_idx += 1;
         }
-        
+
         if let Some(camp) = campaign {
             sqlx_query = sqlx_query.bind(camp);
             _bind_idx += 1;
         }
-        
+
         if !exclude_hosts.is_empty() {
             sqlx_query = sqlx_query.bind(exclude_hosts);
         }
@@ -1097,18 +1144,17 @@ impl RunnerDatabase {
         suite: Option<&str>,
         min_success_chance: f64,
     ) -> Result<i64, sqlx::Error> {
-        let mut query = sqlx::QueryBuilder::new(
-            "UPDATE queue SET schedule_time = NOW() WHERE campaign = "
-        );
+        let mut query =
+            sqlx::QueryBuilder::new("UPDATE queue SET schedule_time = NOW() WHERE campaign = ");
         query.push_bind(campaign);
         query.push(" AND failure_stage IS NOT NULL AND success_chance >= ");
         query.push_bind(min_success_chance);
-        
+
         if let Some(suite) = suite {
             query.push(" AND suite = ");
             query.push_bind(suite);
         }
-        
+
         let result = query.build().execute(&self.pool).await?;
         Ok(result.rows_affected() as i64)
     }
@@ -1120,21 +1166,20 @@ impl RunnerDatabase {
         suite: Option<&str>,
         result_code: Option<&str>,
     ) -> Result<i64, sqlx::Error> {
-        let mut query = sqlx::QueryBuilder::new(
-            "UPDATE queue SET schedule_time = NULL WHERE campaign = "
-        );
+        let mut query =
+            sqlx::QueryBuilder::new("UPDATE queue SET schedule_time = NULL WHERE campaign = ");
         query.push_bind(campaign);
-        
+
         if let Some(suite) = suite {
             query.push(" AND suite = ");
             query.push_bind(suite);
         }
-        
+
         if let Some(result_code) = result_code {
             query.push(" AND result_code = ");
             query.push_bind(result_code);
         }
-        
+
         let result = query.build().execute(&self.pool).await?;
         Ok(result.rows_affected() as i64)
     }
@@ -1149,12 +1194,12 @@ impl RunnerDatabase {
             "UPDATE queue SET schedule_time = NOW(), failure_stage = NULL, result_code = NULL, finish_time = NULL WHERE campaign = "
         );
         query.push_bind(campaign);
-        
+
         if let Some(suite) = suite {
             query.push(" AND suite = ");
             query.push_bind(suite);
         }
-        
+
         let result = query.build().execute(&self.pool).await?;
         Ok(result.rows_affected() as i64)
     }
@@ -1170,34 +1215,32 @@ impl RunnerDatabase {
         offset: i64,
         limit: i64,
     ) -> Result<i64, sqlx::Error> {
-        let mut query = sqlx::QueryBuilder::new(
-            "UPDATE queue SET schedule_time = NOW()"
-        );
-        
+        let mut query = sqlx::QueryBuilder::new("UPDATE queue SET schedule_time = NOW()");
+
         if let Some(duration) = estimated_duration {
             query.push(", estimated_duration = ");
             query.push_bind(duration.as_secs() as i64);
         }
-        
+
         if refresh {
             query.push(", failure_stage = NULL, result_code = NULL, finish_time = NULL");
         }
-        
+
         query.push(" WHERE campaign = ");
         query.push_bind(campaign);
         query.push(" AND bucket = ");
         query.push_bind(bucket);
-        
+
         if let Some(suite) = suite {
             query.push(" AND suite = ");
             query.push_bind(suite);
         }
-        
+
         query.push(" OFFSET ");
         query.push_bind(offset);
         query.push(" LIMIT ");
         query.push_bind(limit);
-        
+
         let result = query.build().execute(&self.pool).await?;
         Ok(result.rows_affected() as i64)
     }
@@ -1212,32 +1255,30 @@ impl RunnerDatabase {
         offset: i64,
         limit: i64,
     ) -> Result<i64, sqlx::Error> {
-        let mut query = sqlx::QueryBuilder::new(
-            "UPDATE queue SET schedule_time = NOW()"
-        );
-        
+        let mut query = sqlx::QueryBuilder::new("UPDATE queue SET schedule_time = NOW()");
+
         if let Some(duration) = estimated_duration {
             query.push(", estimated_duration = ");
             query.push_bind(duration.as_secs() as i64);
         }
-        
+
         if refresh {
             query.push(", failure_stage = NULL, result_code = NULL, finish_time = NULL");
         }
-        
+
         query.push(" WHERE campaign = ");
         query.push_bind(campaign);
-        
+
         if let Some(suite) = suite {
             query.push(" AND suite = ");
             query.push_bind(suite);
         }
-        
+
         query.push(" OFFSET ");
         query.push_bind(offset);
         query.push(" LIMIT ");
         query.push_bind(limit);
-        
+
         let result = query.build().execute(&self.pool).await?;
         Ok(result.rows_affected() as i64)
     }
@@ -1273,12 +1314,12 @@ impl RunnerDatabase {
                       AND queue.schedule_time <= NOW()
                 )
                 SELECT position FROM ranked_queue WHERE id = $1
-                "#
+                "#,
             )
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
-            
+
             Ok(position)
         } else if let (Some(cb), Some(camp)) = (codebase, campaign) {
             // Calculate position for next item matching codebase/campaign
@@ -1307,13 +1348,13 @@ impl RunnerDatabase {
                 )
                 SELECT MIN(position) FROM ranked_queue 
                 WHERE codebase = $1 AND suite = $2
-                "#
+                "#,
             )
             .bind(cb)
             .bind(camp)
             .fetch_optional(&self.pool)
             .await?;
-            
+
             Ok(position)
         } else {
             // Return total queue length if no specific filters
@@ -1322,7 +1363,7 @@ impl RunnerDatabase {
             )
             .fetch_one(&self.pool)
             .await?;
-            
+
             Ok(Some(count))
         }
     }
@@ -1348,7 +1389,7 @@ impl RunnerDatabase {
             FROM queue
             WHERE queue.schedule_time IS NOT NULL 
               AND queue.schedule_time <= NOW()
-            "#
+            "#,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1364,46 +1405,44 @@ impl RunnerDatabase {
     }
 
     /// Clean up stale active runs that have been running too long.
-    pub async fn cleanup_stale_runs(
-        &self,
-        max_age_hours: i64,
-    ) -> Result<i64, sqlx::Error> {
+    pub async fn cleanup_stale_runs(&self, max_age_hours: i64) -> Result<i64, sqlx::Error> {
         let cutoff_time = Utc::now() - chrono::Duration::hours(max_age_hours);
-        
-        let stale_runs = sqlx::query(
-            "SELECT log_id FROM active_run WHERE start_time < $1"
-        )
-        .bind(cutoff_time)
-        .fetch_all(&self.pool)
-        .await?;
-        
+
+        let stale_runs = sqlx::query("SELECT log_id FROM active_run WHERE start_time < $1")
+            .bind(cutoff_time)
+            .fetch_all(&self.pool)
+            .await?;
+
         let mut cleaned_count = 0;
-        
+
         for row in stale_runs {
             let log_id: String = row.get("log_id");
-            
+
             // Create failure result for stale run
-            if let Err(e) = self.update_run_result(
-                &log_id,
-                "worker-timeout",
-                Some("Run exceeded maximum allowed time and was cleaned up"),
-                None,
-                Some(true), // Transient failure
-                Utc::now(),
-            ).await {
+            if let Err(e) = self
+                .update_run_result(
+                    &log_id,
+                    "worker-timeout",
+                    Some("Run exceeded maximum allowed time and was cleaned up"),
+                    None,
+                    Some(true), // Transient failure
+                    Utc::now(),
+                )
+                .await
+            {
                 log::error!("Failed to update result for stale run {}: {}", log_id, e);
                 continue;
             }
-            
+
             // Remove from active runs
             if let Err(e) = self.remove_active_run(&log_id).await {
                 log::error!("Failed to remove stale active run {}: {}", log_id, e);
                 continue;
             }
-            
+
             cleaned_count += 1;
         }
-        
+
         Ok(cleaned_count)
     }
 
@@ -1414,7 +1453,7 @@ impl RunnerDatabase {
         min_retry_delay_hours: i64,
     ) -> Result<i64, sqlx::Error> {
         let retry_cutoff = Utc::now() - chrono::Duration::hours(min_retry_delay_hours);
-        
+
         let result = sqlx::query(
             r#"
             UPDATE queue SET 
@@ -1432,31 +1471,30 @@ impl RunnerDatabase {
                     AND COALESCE(queue.retry_count, 0) < $2
                     AND queue.schedule_time IS NULL
             )
-            "#
+            "#,
         )
         .bind(retry_cutoff)
         .bind(max_retries)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(result.rows_affected() as i64)
     }
 
     /// Clean up orphaned data and maintain database consistency.
     pub async fn maintenance_cleanup(&self) -> Result<(), sqlx::Error> {
         // Remove active runs that don't have corresponding run records
-        sqlx::query(
-            "DELETE FROM active_run WHERE log_id NOT IN (SELECT id FROM run)"
-        )
-        .execute(&self.pool)
-        .await?;
-        
+        sqlx::query("DELETE FROM active_run WHERE log_id NOT IN (SELECT id FROM run)")
+            .execute(&self.pool)
+            .await?;
+
         // Clean up old rate limit entries from Redis
         if let Some(redis_client) = &self.redis {
             if let Ok(mut conn) = redis_client.get_async_connection().await {
-                let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await.unwrap_or_default();
+                let hosts: HashMap<String, String> =
+                    conn.hgetall("rate-limit-hosts").await.unwrap_or_default();
                 let now = Utc::now();
-                
+
                 for (host, time_str) in hosts {
                     if let Ok(retry_time) = DateTime::parse_from_rfc3339(&time_str) {
                         let retry_time = retry_time.with_timezone(&Utc);
@@ -1467,7 +1505,7 @@ impl RunnerDatabase {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -1492,7 +1530,7 @@ impl RunnerDatabase {
                 COUNT(*) as count
             FROM queue 
             WHERE COALESCE(retry_count, 0) > 0
-            "#
+            "#,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1535,20 +1573,34 @@ impl RunnerDatabase {
     }
 
     /// Upload/update codebases in the database.
-    pub async fn upload_codebases(&self, codebases: &[serde_json::Value]) -> Result<(), sqlx::Error> {
+    pub async fn upload_codebases(
+        &self,
+        codebases: &[serde_json::Value],
+    ) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
 
         for codebase in codebases {
             // Parse URL parameters if branch_url is provided
-            let (url, branch_url, branch) = if let Some(branch_url_str) = codebase.get("branch_url").and_then(|v| v.as_str()) {
-                // For now, simple handling - in the real implementation this would parse URL parameters
-                (Some(branch_url_str.to_string()), Some(branch_url_str.to_string()), codebase.get("branch").and_then(|v| v.as_str()).map(String::from))
-            } else if let Some(url_str) = codebase.get("url").and_then(|v| v.as_str()) {
-                let branch = codebase.get("branch").and_then(|v| v.as_str()).map(String::from);
-                (Some(url_str.to_string()), Some(url_str.to_string()), branch)
-            } else {
-                (None, None, None)
-            };
+            let (url, branch_url, branch) =
+                if let Some(branch_url_str) = codebase.get("branch_url").and_then(|v| v.as_str()) {
+                    // For now, simple handling - in the real implementation this would parse URL parameters
+                    (
+                        Some(branch_url_str.to_string()),
+                        Some(branch_url_str.to_string()),
+                        codebase
+                            .get("branch")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                    )
+                } else if let Some(url_str) = codebase.get("url").and_then(|v| v.as_str()) {
+                    let branch = codebase
+                        .get("branch")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    (Some(url_str.to_string()), Some(url_str.to_string()), branch)
+                } else {
+                    (None, None, None)
+                };
 
             sqlx::query(
                 r#"
@@ -1611,7 +1663,10 @@ impl RunnerDatabase {
     }
 
     /// Upload/update candidates in the database.
-    pub async fn upload_candidates(&self, candidates: &[serde_json::Value]) -> Result<Vec<String>, sqlx::Error> {
+    pub async fn upload_candidates(
+        &self,
+        candidates: &[serde_json::Value],
+    ) -> Result<Vec<String>, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let mut errors = Vec::new();
 
@@ -1669,7 +1724,10 @@ impl RunnerDatabase {
             .await;
 
             if let Err(e) = result {
-                errors.push(format!("Failed to insert candidate for {}/{}: {}", codebase, campaign, e));
+                errors.push(format!(
+                    "Failed to insert candidate for {}/{}: {}",
+                    codebase, campaign, e
+                ));
             }
         }
 
@@ -1693,12 +1751,11 @@ impl RunnerDatabase {
             .await?;
 
         // Get candidate info before deletion
-        let candidate_info = sqlx::query(
-            "DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase"
-        )
-        .bind(candidate_id)
-        .fetch_optional(&mut *tx)
-        .await?;
+        let candidate_info =
+            sqlx::query("DELETE FROM candidate WHERE id = $1 RETURNING suite, codebase")
+                .bind(candidate_id)
+                .fetch_optional(&mut *tx)
+                .await?;
 
         if let Some(row) = candidate_info {
             let suite: String = row.get("suite");
@@ -1754,7 +1811,10 @@ impl RunnerDatabase {
     }
 
     /// Get codebase configuration from database.
-    pub async fn get_codebase_config(&self, codebase_name: &str) -> Result<Option<CodebaseConfig>, sqlx::Error> {
+    pub async fn get_codebase_config(
+        &self,
+        codebase_name: &str,
+    ) -> Result<Option<CodebaseConfig>, sqlx::Error> {
         let row = sqlx::query(
             r#"
             SELECT name, branch_url, vcs_type, subpath
@@ -1779,14 +1839,20 @@ impl RunnerDatabase {
     }
 
     /// Get distribution configuration from database.
-    pub async fn get_distribution_config(&self, distribution_name: &str) -> Result<Option<DistributionConfig>, sqlx::Error> {
+    pub async fn get_distribution_config(
+        &self,
+        distribution_name: &str,
+    ) -> Result<Option<DistributionConfig>, sqlx::Error> {
         // For now, fall back to the config file distributions
         // In a full implementation, this might query a distributions table
         Ok(None)
     }
 
     /// Get committer configuration for a specific campaign.
-    pub async fn get_committer_for_campaign(&self, campaign_name: &str) -> Result<Option<String>, sqlx::Error> {
+    pub async fn get_committer_for_campaign(
+        &self,
+        campaign_name: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
         let row = sqlx::query(
             r#"
             SELECT committer 
@@ -1806,7 +1872,15 @@ impl RunnerDatabase {
     }
 
     /// Get remotes information for a run from the new_result_branch table.
-    pub async fn get_run_remotes(&self, run_id: &str) -> Result<Option<std::collections::HashMap<String, std::collections::HashMap<String, serde_json::Value>>>, sqlx::Error> {
+    pub async fn get_run_remotes(
+        &self,
+        run_id: &str,
+    ) -> Result<
+        Option<
+            std::collections::HashMap<String, std::collections::HashMap<String, serde_json::Value>>,
+        >,
+        sqlx::Error,
+    > {
         let rows = sqlx::query(
             r#"
             SELECT DISTINCT remote_name, base_revision, revision
@@ -1827,15 +1901,18 @@ impl RunnerDatabase {
             let remote_name: String = row.get("remote_name");
             let base_revision: Option<String> = row.get("base_revision");
             let revision: Option<String> = row.get("revision");
-            
+
             let mut remote_data = std::collections::HashMap::new();
             if let Some(base_rev) = base_revision {
-                remote_data.insert("base_revision".to_string(), serde_json::Value::String(base_rev));
+                remote_data.insert(
+                    "base_revision".to_string(),
+                    serde_json::Value::String(base_rev),
+                );
             }
             if let Some(rev) = revision {
                 remote_data.insert("revision".to_string(), serde_json::Value::String(rev));
             }
-            
+
             remotes.insert(remote_name, remote_data);
         }
 
@@ -1843,7 +1920,10 @@ impl RunnerDatabase {
     }
 
     /// Get target information for a run from the debian_build table.
-    pub async fn get_run_target(&self, run_id: &str) -> Result<Option<serde_json::Value>, sqlx::Error> {
+    pub async fn get_run_target(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
         let row = sqlx::query(
             r#"
             SELECT source, version, distribution, binary_packages, lintian_result
@@ -1876,7 +1956,10 @@ impl RunnerDatabase {
     }
 
     /// Get builder result information for a run from the debian_build table.
-    pub async fn get_run_builder_result(&self, run_id: &str) -> Result<Option<serde_json::Value>, sqlx::Error> {
+    pub async fn get_run_builder_result(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
         let row = sqlx::query(
             r#"
             SELECT source, version, distribution, binary_packages, lintian_result

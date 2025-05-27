@@ -1,8 +1,8 @@
 //! Watchdog system for monitoring active runs.
 
-use crate::ActiveRun;
 use crate::database::RunnerDatabase;
-use chrono::{DateTime, Utc, Duration};
+use crate::ActiveRun;
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{interval, sleep};
@@ -27,13 +27,13 @@ impl TerminationReason {
     pub fn result_code(&self) -> &'static str {
         match self {
             TerminationReason::Timeout => "worker-timeout",
-            TerminationReason::HealthCheckFailed => "worker-failure", 
+            TerminationReason::HealthCheckFailed => "worker-failure",
             TerminationReason::ManualKill => "killed",
             TerminationReason::WorkerDisappeared => "worker-disappeared",
             TerminationReason::SystemFailure(_) => "system-failure",
         }
     }
-    
+
     /// Get a human-readable description.
     pub fn description(&self) -> String {
         match self {
@@ -44,7 +44,7 @@ impl TerminationReason {
             TerminationReason::SystemFailure(msg) => format!("System failure: {}", msg),
         }
     }
-    
+
     /// Check if this failure is transient (retriable).
     pub fn is_transient(&self) -> bool {
         match self {
@@ -55,12 +55,12 @@ impl TerminationReason {
             TerminationReason::SystemFailure(_) => true,
         }
     }
-    
+
     /// Create structured failure details for database storage.
     pub fn create_failure_details(&self, run: &crate::ActiveRun) -> serde_json::Value {
-        use serde_json::json;
         use chrono::Utc;
-        
+        use serde_json::json;
+
         let mut details = json!({
             "termination_reason": self.result_code(),
             "description": self.description(),
@@ -71,40 +71,40 @@ impl TerminationReason {
             "log_id": run.log_id,
             "terminated_at": Utc::now().to_rfc3339(),
         });
-        
+
         // Add run duration if available
         if let Some(start_time) = run.start_time {
             let duration = Utc::now().signed_duration_since(start_time);
             details["run_duration_seconds"] = json!(duration.num_seconds());
         }
-        
+
         // Add estimated vs actual duration comparison if available
         if let Some(estimated) = run.estimated_duration {
             details["estimated_duration_seconds"] = json!(estimated.as_secs());
         }
-        
+
         // Add backchannel information
         details["backchannel"] = run.backchannel.to_json();
-        
+
         // Add specific details based on termination reason
         match self {
             TerminationReason::Timeout => {
                 details["timeout_type"] = json!("watchdog_timeout");
-            },
+            }
             TerminationReason::HealthCheckFailed => {
                 details["health_check_failed"] = json!(true);
-            },
+            }
             TerminationReason::ManualKill => {
                 details["manual_termination"] = json!(true);
-            },
+            }
             TerminationReason::WorkerDisappeared => {
                 details["worker_unreachable"] = json!(true);
-            },
+            }
             TerminationReason::SystemFailure(msg) => {
                 details["system_failure_message"] = json!(msg);
-            },
+            }
         }
-        
+
         details
     }
 }
@@ -135,15 +135,15 @@ pub struct WatchdogConfig {
 impl Default for WatchdogConfig {
     fn default() -> Self {
         Self {
-            check_interval: 30,           // 30 seconds
-            default_timeout: 3600,        // 1 hour 
-            max_timeout: 14400,           // 4 hours
+            check_interval: 30,            // 30 seconds
+            default_timeout: 3600,         // 1 hour
+            max_timeout: 14400,            // 4 hours
             worker_heartbeat_timeout: 300, // 5 minutes
             max_health_failures: 3,
-            maintenance_interval: 300,    // 5 minutes
-            max_run_age_hours: 6,         // 6 hours
+            maintenance_interval: 300, // 5 minutes
+            max_run_age_hours: 6,      // 6 hours
             max_retries: 3,
-            min_retry_delay_hours: 1,     // 1 hour
+            min_retry_delay_hours: 1, // 1 hour
         }
     }
 }
@@ -167,12 +167,17 @@ impl Watchdog {
 
     /// Start the watchdog monitoring loop.
     pub async fn start(&mut self) {
-        log::info!("Starting watchdog with check interval {} seconds, maintenance interval {} seconds", 
-                  self.config.check_interval, self.config.maintenance_interval);
-        
+        log::info!(
+            "Starting watchdog with check interval {} seconds, maintenance interval {} seconds",
+            self.config.check_interval,
+            self.config.maintenance_interval
+        );
+
         let mut check_timer = interval(std::time::Duration::from_secs(self.config.check_interval));
-        let mut maintenance_timer = interval(std::time::Duration::from_secs(self.config.maintenance_interval));
-        
+        let mut maintenance_timer = interval(std::time::Duration::from_secs(
+            self.config.maintenance_interval,
+        ));
+
         loop {
             tokio::select! {
                 _ = check_timer.tick() => {
@@ -193,15 +198,15 @@ impl Watchdog {
     async fn check_active_runs(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let active_runs = self.database.get_active_runs().await?;
         let now = Utc::now();
-        
+
         log::debug!("Checking {} active runs", active_runs.len());
-        
+
         for run in active_runs {
             if let Err(e) = self.check_single_run(&run, now).await {
                 log::error!("Failed to check run {}: {}", run.log_id, e);
             }
         }
-        
+
         Ok(())
     }
 
@@ -220,7 +225,11 @@ impl Watchdog {
 
         // Check worker health
         if let Some(reason) = self.check_worker_health(run, now).await? {
-            log::warn!("Terminating run {} due to health check: {:?}", run.log_id, reason);
+            log::warn!(
+                "Terminating run {} due to health check: {:?}",
+                run.log_id,
+                reason
+            );
             self.terminate_run(run, reason).await?;
             return Ok(());
         }
@@ -230,12 +239,13 @@ impl Watchdog {
 
     /// Check if a run has exceeded its timeout.
     fn check_timeout(&self, run: &ActiveRun, now: DateTime<Utc>) -> Option<TerminationReason> {
-        let timeout_duration = run.estimated_duration
+        let timeout_duration = run
+            .estimated_duration
             .map(|d| d.as_secs().min(self.config.max_timeout))
             .unwrap_or(self.config.default_timeout);
-            
+
         let timeout_time = run.start_time + Duration::seconds(timeout_duration as i64);
-        
+
         if now > timeout_time {
             Some(TerminationReason::Timeout)
         } else {
@@ -254,21 +264,29 @@ impl Watchdog {
             Ok(health) => {
                 // Check heartbeat timestamp if available
                 if let Some(last_ping) = health.last_ping {
-                    let heartbeat_timeout = Duration::seconds(self.config.worker_heartbeat_timeout as i64);
+                    let heartbeat_timeout =
+                        Duration::seconds(self.config.worker_heartbeat_timeout as i64);
                     let last_heartbeat_cutoff = now - heartbeat_timeout;
-                    
+
                     if last_ping < last_heartbeat_cutoff {
-                        log::warn!("Worker heartbeat timeout for run {}: last ping was {} seconds ago", 
-                                 run.log_id, (now - last_ping).num_seconds());
-                        
+                        log::warn!(
+                            "Worker heartbeat timeout for run {}: last ping was {} seconds ago",
+                            run.log_id,
+                            (now - last_ping).num_seconds()
+                        );
+
                         let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                         *failures += 1;
-                        
+
                         if *failures >= self.config.max_health_failures {
                             return Ok(Some(TerminationReason::WorkerDisappeared));
                         } else {
-                            log::warn!("Heartbeat timeout {}/{} for run {}", 
-                                     failures, self.config.max_health_failures, run.log_id);
+                            log::warn!(
+                                "Heartbeat timeout {}/{} for run {}",
+                                failures,
+                                self.config.max_health_failures,
+                                run.log_id
+                            );
                             return Ok(None);
                         }
                     }
@@ -279,26 +297,33 @@ impl Watchdog {
                     "healthy" | "running" | "building" | "completed" => {
                         // Worker is alive and responding properly
                         self.health_failures.remove(&run.log_id);
-                        
-                        // Additional check: if run is completed but still in active list, 
+
+                        // Additional check: if run is completed but still in active list,
                         // this might indicate a cleanup issue
-                        if health.status == "completed" && health.current_run_id.as_ref() != Some(&run.log_id) {
+                        if health.status == "completed"
+                            && health.current_run_id.as_ref() != Some(&run.log_id)
+                        {
                             log::warn!("Worker reports completion of different run ({:?}) than expected ({})", 
                                      health.current_run_id, run.log_id);
                             return Ok(Some(TerminationReason::WorkerDisappeared));
                         }
-                        
+
                         Ok(None)
                     }
                     "unhealthy" | "failed" | "aborted" => {
                         let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                         *failures += 1;
-                        
+
                         if *failures >= self.config.max_health_failures {
                             Ok(Some(TerminationReason::HealthCheckFailed))
                         } else {
-                            log::warn!("Health check failure {}/{} for run {} (status: {})", 
-                                     failures, self.config.max_health_failures, run.log_id, health.status);
+                            log::warn!(
+                                "Health check failure {}/{} for run {} (status: {})",
+                                failures,
+                                self.config.max_health_failures,
+                                run.log_id,
+                                health.status
+                            );
                             Ok(None)
                         }
                     }
@@ -308,17 +333,24 @@ impl Watchdog {
                     }
                     "different-run" => {
                         // Worker started processing a different run
-                        log::warn!("Worker started processing different run: expected {}, got {:?}", 
-                                 run.log_id, health.current_run_id);
+                        log::warn!(
+                            "Worker started processing different run: expected {}, got {:?}",
+                            run.log_id,
+                            health.current_run_id
+                        );
                         Ok(Some(TerminationReason::WorkerDisappeared))
                     }
                     _ => {
-                        log::warn!("Unknown health status '{}' for run {}", health.status, run.log_id);
-                        
+                        log::warn!(
+                            "Unknown health status '{}' for run {}",
+                            health.status,
+                            run.log_id
+                        );
+
                         // Treat unknown status as potential issue but not immediate failure
                         let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                         *failures += 1;
-                        
+
                         if *failures >= self.config.max_health_failures {
                             Ok(Some(TerminationReason::HealthCheckFailed))
                         } else {
@@ -329,36 +361,41 @@ impl Watchdog {
             }
             Err(e) => {
                 log::debug!("Failed to get health status for run {}: {}", run.log_id, e);
-                
+
                 // Check for specific error types in the chain
                 let error_string = e.to_string();
-                let is_fatal_error = error_string.contains("Job not found") 
+                let is_fatal_error = error_string.contains("Job not found")
                     || error_string.contains("Fatal failure")
                     || error_string.contains("not-found");
-                let is_unreachable = error_string.contains("Worker unreachable") 
+                let is_unreachable = error_string.contains("Worker unreachable")
                     || error_string.contains("timeout")
                     || error_string.contains("connection");
-                
+
                 if is_fatal_error {
                     log::info!("Fatal error for run {}: {}", run.log_id, e);
                     return Ok(Some(TerminationReason::WorkerDisappeared));
                 }
-                
+
                 let failure_reason = if is_unreachable {
                     TerminationReason::WorkerDisappeared
                 } else {
                     TerminationReason::HealthCheckFailed
                 };
-                
+
                 // Increment failure count for non-fatal errors
                 let failures = self.health_failures.entry(run.log_id.clone()).or_insert(0);
                 *failures += 1;
-                
+
                 if *failures >= self.config.max_health_failures {
                     Ok(Some(failure_reason))
                 } else {
-                    log::warn!("Health check error {}/{} for run {}: {}", 
-                             failures, self.config.max_health_failures, run.log_id, e);
+                    log::warn!(
+                        "Health check error {}/{} for run {}: {}",
+                        failures,
+                        self.config.max_health_failures,
+                        run.log_id,
+                        e
+                    );
                     Ok(None)
                 }
             }
@@ -371,12 +408,20 @@ impl Watchdog {
         run: &ActiveRun,
         reason: TerminationReason,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        log::info!("Terminating run {} (worker: {}): {}", 
-                  run.log_id, run.worker_name, reason.description());
+        log::info!(
+            "Terminating run {} (worker: {}): {}",
+            run.log_id,
+            run.worker_name,
+            reason.description()
+        );
 
         // Try to signal the worker to stop via backchannel
         if let Err(e) = run.backchannel.terminate(&run.log_id).await {
-            log::warn!("Failed to signal worker termination for run {}: {}", run.log_id, e);
+            log::warn!(
+                "Failed to signal worker termination for run {}: {}",
+                run.log_id,
+                e
+            );
         }
 
         // Wait a bit for graceful shutdown
@@ -389,19 +434,24 @@ impl Watchdog {
 
         // Create structured failure details
         let failure_details = reason.create_failure_details(run);
-        
+
         // Update run result in database
-        self.database.update_run_result(
-            &run.log_id,
-            result_code,
-            Some(&description),
-            Some(&failure_details),
-            Some(reason.is_transient()),
-            now,
-        ).await.map_err(|e| format!("Failed to update run result: {}", e))?;
+        self.database
+            .update_run_result(
+                &run.log_id,
+                result_code,
+                Some(&description),
+                Some(&failure_details),
+                Some(reason.is_transient()),
+                now,
+            )
+            .await
+            .map_err(|e| format!("Failed to update run result: {}", e))?;
 
         // Remove from active runs
-        self.database.remove_active_run(&run.log_id).await
+        self.database
+            .remove_active_run(&run.log_id)
+            .await
             .map_err(|e| format!("Failed to remove active run: {}", e))?;
 
         // Clean up health failure tracking
@@ -414,25 +464,28 @@ impl Watchdog {
     /// Run periodic maintenance tasks.
     async fn run_maintenance(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         log::debug!("Running watchdog maintenance tasks");
-        
+
         // Clean up stale active runs
-        let cleaned = self.database.cleanup_stale_runs(self.config.max_run_age_hours).await?;
+        let cleaned = self
+            .database
+            .cleanup_stale_runs(self.config.max_run_age_hours)
+            .await?;
         if cleaned > 0 {
             log::info!("Cleaned up {} stale active runs", cleaned);
         }
-        
+
         // Mark eligible runs for retry
-        let retried = self.database.mark_runs_for_retry(
-            self.config.max_retries,
-            self.config.min_retry_delay_hours,
-        ).await?;
+        let retried = self
+            .database
+            .mark_runs_for_retry(self.config.max_retries, self.config.min_retry_delay_hours)
+            .await?;
         if retried > 0 {
             log::info!("Marked {} runs for retry", retried);
         }
-        
+
         // General database maintenance
         self.database.maintenance_cleanup().await?;
-        
+
         Ok(())
     }
 
@@ -442,7 +495,8 @@ impl Watchdog {
         run_id: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(run) = self.database.get_active_run(run_id).await? {
-            self.terminate_run(&run, TerminationReason::ManualKill).await?;
+            self.terminate_run(&run, TerminationReason::ManualKill)
+                .await?;
             Ok(true)
         } else {
             Ok(false)
@@ -458,10 +512,12 @@ impl Watchdog {
     }
 
     /// Get detailed health status for all active runs.
-    pub async fn get_detailed_health_status(&self) -> Result<Vec<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_detailed_health_status(
+        &self,
+    ) -> Result<Vec<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
         let active_runs = self.database.get_active_runs().await?;
         let mut health_statuses = Vec::new();
-        
+
         for run in active_runs {
             let health_status = match run.backchannel.get_health_status(&run.log_id).await {
                 Ok(health) => Some(health),
@@ -470,9 +526,9 @@ impl Watchdog {
                     None
                 }
             };
-            
+
             let failure_count = self.health_failures.get(&run.log_id).copied().unwrap_or(0);
-            
+
             health_statuses.push(RunHealthStatus {
                 log_id: run.log_id,
                 worker_name: run.worker_name,
@@ -483,32 +539,39 @@ impl Watchdog {
                 max_failures: self.config.max_health_failures,
             });
         }
-        
+
         Ok(health_statuses)
     }
 
     /// Force a health check on a specific run.
-    pub async fn check_run_health(&mut self, run_id: &str) -> Result<Option<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn check_run_health(
+        &mut self,
+        run_id: &str,
+    ) -> Result<Option<RunHealthStatus>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(run) = self.database.get_active_run(run_id).await? {
             let now = Utc::now();
-            
+
             // Run the health check
             let termination_reason = self.check_worker_health(&run, now).await?;
-            
+
             // Get current health status
             let health_status = match run.backchannel.get_health_status(&run.log_id).await {
                 Ok(health) => Some(health),
                 Err(_) => None,
             };
-            
+
             let failure_count = self.health_failures.get(&run.log_id).copied().unwrap_or(0);
-            
+
             // If termination was triggered, handle it
             if let Some(reason) = termination_reason {
-                log::info!("Health check triggered termination for run {}: {:?}", run_id, reason);
+                log::info!(
+                    "Health check triggered termination for run {}: {:?}",
+                    run_id,
+                    reason
+                );
                 self.terminate_run(&run, reason).await?;
             }
-            
+
             Ok(Some(RunHealthStatus {
                 log_id: run.log_id,
                 worker_name: run.worker_name,
@@ -524,13 +587,21 @@ impl Watchdog {
     }
 
     /// Get comprehensive failure and retry statistics.
-    pub async fn get_comprehensive_stats(&self) -> Result<HashMap<String, i64>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_comprehensive_stats(
+        &self,
+    ) -> Result<HashMap<String, i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut stats = self.database.get_failure_stats().await?;
-        
+
         // Add watchdog-specific stats
-        stats.insert("runs_with_health_failures".to_string(), self.health_failures.len() as i64);
-        stats.insert("total_health_failures".to_string(), self.health_failures.values().sum::<u32>() as i64);
-        
+        stats.insert(
+            "runs_with_health_failures".to_string(),
+            self.health_failures.len() as i64,
+        );
+        stats.insert(
+            "total_health_failures".to_string(),
+            self.health_failures.values().sum::<u32>() as i64,
+        );
+
         Ok(stats)
     }
 }

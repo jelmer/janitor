@@ -69,14 +69,16 @@ impl Compression {
             Compression::None => Ok(data.to_vec()),
             Compression::Gzip => {
                 let mut compressed = Vec::new();
-                let mut encoder = flate2::write::GzEncoder::new(&mut compressed, flate2::Compression::default());
+                let mut encoder =
+                    flate2::write::GzEncoder::new(&mut compressed, flate2::Compression::default());
                 encoder.write_all(data)?;
                 encoder.finish()?;
                 Ok(compressed)
             }
             Compression::Bzip2 => {
                 let mut compressed = Vec::new();
-                let mut encoder = bzip2::write::BzEncoder::new(&mut compressed, bzip2::Compression::default());
+                let mut encoder =
+                    bzip2::write::BzEncoder::new(&mut compressed, bzip2::Compression::default());
                 encoder.write_all(data)?;
                 encoder.finish()?;
                 Ok(compressed)
@@ -129,7 +131,7 @@ impl<W: Write + Clone + 'static> MultiCompressionWriter<W> {
     /// Create a new multi-compression writer.
     pub fn new(base_writer: W, compressions: &[Compression]) -> Result<Self> {
         let mut writers = Vec::new();
-        
+
         for &compression in compressions {
             let writer = base_writer.clone();
             let compressed_writer = compression.writer(writer)?;
@@ -161,7 +163,7 @@ impl<W: Write + Clone + 'static> MultiCompressionWriter<W> {
     /// Finish all compression writers.
     pub fn finish(mut self) -> Result<()> {
         self.flush()?;
-        
+
         // Finish compression for encoders that need it
         for (compression, mut writer) in self.writers {
             match compression {
@@ -175,7 +177,7 @@ impl<W: Write + Clone + 'static> MultiCompressionWriter<W> {
             }
             writer.flush()?;
         }
-        
+
         Ok(())
     }
 }
@@ -207,10 +209,10 @@ mod tests {
         let data = b"hello world";
         let compressed = Compression::None.compress(data)?;
         assert_eq!(compressed, data);
-        
+
         let decompressed = Compression::None.decompress(&compressed)?;
         assert_eq!(decompressed, data);
-        
+
         Ok(())
     }
 
@@ -220,10 +222,10 @@ mod tests {
         let compressed = Compression::Gzip.compress(data)?;
         assert_ne!(compressed, data);
         assert!(compressed.len() > 0);
-        
+
         let decompressed = Compression::Gzip.decompress(&compressed)?;
         assert_eq!(decompressed, data);
-        
+
         Ok(())
     }
 
@@ -233,10 +235,10 @@ mod tests {
         let compressed = Compression::Bzip2.compress(data)?;
         assert_ne!(compressed, data);
         assert!(compressed.len() > 0);
-        
+
         let decompressed = Compression::Bzip2.decompress(&compressed)?;
         assert_eq!(decompressed, data);
-        
+
         Ok(())
     }
 

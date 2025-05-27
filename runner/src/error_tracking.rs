@@ -36,7 +36,9 @@ impl Default for ErrorTrackingConfig {
         Self {
             max_errors_in_memory: 10000,
             log_to_file: true,
-            error_log_path: Some(std::path::PathBuf::from("/var/log/janitor/runner-errors.log")),
+            error_log_path: Some(std::path::PathBuf::from(
+                "/var/log/janitor/runner-errors.log",
+            )),
             enable_stack_traces: true,
             min_severity: ErrorSeverity::Warning,
             enable_correlation: true,
@@ -45,7 +47,9 @@ impl Default for ErrorTrackingConfig {
 }
 
 /// Error severity levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum ErrorSeverity {
     Debug = 0,
     Info = 1,
@@ -146,7 +150,7 @@ struct ErrorStorage {
     errors_by_category: HashMap<ErrorCategory, Vec<String>>, // error IDs
     errors_by_component: HashMap<String, Vec<String>>,
     patterns: HashMap<String, ErrorPattern>, // pattern key -> pattern
-    error_counts: HashMap<String, u64>, // category:component:operation -> count
+    error_counts: HashMap<String, u64>,      // category:component:operation -> count
 }
 
 impl ErrorTracker {
@@ -185,7 +189,7 @@ impl ErrorTracker {
 
         // Store the error
         let mut storage = self.error_storage.write().await;
-        
+
         // Add to main storage
         storage.errors.push(error.clone());
 
@@ -196,39 +200,44 @@ impl ErrorTracker {
         }
 
         // Index by category
-        storage.errors_by_category
+        storage
+            .errors_by_category
             .entry(error.category.clone())
             .or_default()
             .push(error.id.clone());
 
         // Index by component
-        storage.errors_by_component
+        storage
+            .errors_by_component
             .entry(error.component.clone())
             .or_default()
             .push(error.id.clone());
 
         // Update patterns
         let pattern_key = format!("{}:{}:{}", error.category, error.component, error.operation);
-        
+
         // First, ensure the pattern exists and get necessary data
         let (first_seen, _count) = {
-            let pattern = storage.patterns.entry(pattern_key.clone()).or_insert_with(|| ErrorPattern {
-                category: error.category.clone(),
-                component: error.component.clone(),
-                operation: error.operation.clone(),
-                count: 0,
-                first_seen: error.timestamp,
-                last_seen: error.timestamp,
-                rate_per_hour: 0.0,
-                examples: Vec::new(),
-            });
+            let pattern = storage
+                .patterns
+                .entry(pattern_key.clone())
+                .or_insert_with(|| ErrorPattern {
+                    category: error.category.clone(),
+                    component: error.component.clone(),
+                    operation: error.operation.clone(),
+                    count: 0,
+                    first_seen: error.timestamp,
+                    last_seen: error.timestamp,
+                    rate_per_hour: 0.0,
+                    examples: Vec::new(),
+                });
 
             pattern.count += 1;
             pattern.last_seen = error.timestamp;
             if pattern.examples.len() < 5 {
                 pattern.examples.push(error.id.clone());
             }
-            
+
             (pattern.first_seen, pattern.count)
         };
 
@@ -248,18 +257,48 @@ impl ErrorTracker {
     async fn log_error(&self, error: &TrackedError) {
         // Always log to standard logging
         match error.severity {
-            ErrorSeverity::Debug => log::debug!("[{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
-            ErrorSeverity::Info => log::info!("[{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
-            ErrorSeverity::Warning => log::warn!("[{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
-            ErrorSeverity::Error => log::error!("[{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
-            ErrorSeverity::Critical => log::error!("CRITICAL [{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
-            ErrorSeverity::Fatal => log::error!("FATAL [{}:{}] {} - {}", 
-                error.category, error.component, error.operation, error.message),
+            ErrorSeverity::Debug => log::debug!(
+                "[{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
+            ErrorSeverity::Info => log::info!(
+                "[{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
+            ErrorSeverity::Warning => log::warn!(
+                "[{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
+            ErrorSeverity::Error => log::error!(
+                "[{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
+            ErrorSeverity::Critical => log::error!(
+                "CRITICAL [{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
+            ErrorSeverity::Fatal => log::error!(
+                "FATAL [{}:{}] {} - {}",
+                error.category,
+                error.component,
+                error.operation,
+                error.message
+            ),
         }
 
         // Log to file if configured
@@ -314,16 +353,20 @@ impl ErrorTracker {
     /// Get error statistics.
     pub async fn get_error_statistics(&self) -> ErrorStatistics {
         let storage = self.error_storage.read().await;
-        
+
         let now = Utc::now();
         let one_hour_ago = now - chrono::Duration::hours(1);
         let one_day_ago = now - chrono::Duration::days(1);
 
         let total_errors = storage.errors.len();
-        let errors_last_hour = storage.errors.iter()
+        let errors_last_hour = storage
+            .errors
+            .iter()
             .filter(|e| e.timestamp >= one_hour_ago)
             .count();
-        let errors_last_day = storage.errors.iter()
+        let errors_last_day = storage
+            .errors
+            .iter()
             .filter(|e| e.timestamp >= one_day_ago)
             .count();
 
@@ -344,7 +387,9 @@ impl ErrorTracker {
             by_category,
             by_severity,
             by_component,
-            top_patterns: storage.patterns.values()
+            top_patterns: storage
+                .patterns
+                .values()
                 .cloned()
                 .collect::<Vec<_>>()
                 .into_iter()
@@ -356,9 +401,11 @@ impl ErrorTracker {
     /// Get errors by category.
     pub async fn get_errors_by_category(&self, category: ErrorCategory) -> Vec<TrackedError> {
         let storage = self.error_storage.read().await;
-        
+
         if let Some(error_ids) = storage.errors_by_category.get(&category) {
-            storage.errors.iter()
+            storage
+                .errors
+                .iter()
                 .filter(|e| error_ids.contains(&e.id))
                 .cloned()
                 .collect()
@@ -370,12 +417,8 @@ impl ErrorTracker {
     /// Get recent errors.
     pub async fn get_recent_errors(&self, limit: usize) -> Vec<TrackedError> {
         let storage = self.error_storage.read().await;
-        
-        storage.errors.iter()
-            .rev()
-            .take(limit)
-            .cloned()
-            .collect()
+
+        storage.errors.iter().rev().take(limit).cloned().collect()
     }
 
     /// Clear old errors.
@@ -384,23 +427,27 @@ impl ErrorTracker {
         let cutoff = Utc::now() - max_age;
 
         storage.errors.retain(|e| e.timestamp >= cutoff);
-        
+
         // Rebuild indices
         storage.errors_by_category.clear();
         storage.errors_by_component.clear();
-        
+
         // Collect data first to avoid borrow conflicts
-        let error_data: Vec<(String, ErrorCategory, String)> = storage.errors.iter()
+        let error_data: Vec<(String, ErrorCategory, String)> = storage
+            .errors
+            .iter()
             .map(|e| (e.id.clone(), e.category.clone(), e.component.clone()))
             .collect();
-        
+
         for (id, category, component) in error_data {
-            storage.errors_by_category
+            storage
+                .errors_by_category
                 .entry(category)
                 .or_default()
                 .push(id.clone());
 
-            storage.errors_by_component
+            storage
+                .errors_by_component
                 .entry(component)
                 .or_default()
                 .push(id);
@@ -454,50 +501,46 @@ pub struct ErrorStatistics {
 /// Helper macro for easy error tracking.
 #[macro_export]
 macro_rules! track_error {
-    ($tracker:expr, $category:expr, $component:expr, $operation:expr, $message:expr) => {
-        {
-            let error = $crate::error_tracking::TrackedError {
-                id: uuid::Uuid::new_v4().to_string(),
-                timestamp: chrono::Utc::now(),
-                severity: $crate::error_tracking::ErrorSeverity::Error,
-                category: $category,
-                component: $component.to_string(),
-                operation: $operation.to_string(),
-                message: $message.to_string(),
-                details: None,
-                stack_trace: None,
-                context: std::collections::HashMap::new(),
-                correlation_id: None,
-                user_id: None,
-                request_id: None,
-                retry_count: 0,
-                is_transient: false,
-            };
-            $tracker.track_error(error).await;
-        }
-    };
-    ($tracker:expr, $category:expr, $component:expr, $operation:expr, $message:expr, $severity:expr) => {
-        {
-            let error = $crate::error_tracking::TrackedError {
-                id: uuid::Uuid::new_v4().to_string(),
-                timestamp: chrono::Utc::now(),
-                severity: $severity,
-                category: $category,
-                component: $component.to_string(),
-                operation: $operation.to_string(),
-                message: $message.to_string(),
-                details: None,
-                stack_trace: None,
-                context: std::collections::HashMap::new(),
-                correlation_id: None,
-                user_id: None,
-                request_id: None,
-                retry_count: 0,
-                is_transient: false,
-            };
-            $tracker.track_error(error).await;
-        }
-    };
+    ($tracker:expr, $category:expr, $component:expr, $operation:expr, $message:expr) => {{
+        let error = $crate::error_tracking::TrackedError {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now(),
+            severity: $crate::error_tracking::ErrorSeverity::Error,
+            category: $category,
+            component: $component.to_string(),
+            operation: $operation.to_string(),
+            message: $message.to_string(),
+            details: None,
+            stack_trace: None,
+            context: std::collections::HashMap::new(),
+            correlation_id: None,
+            user_id: None,
+            request_id: None,
+            retry_count: 0,
+            is_transient: false,
+        };
+        $tracker.track_error(error).await;
+    }};
+    ($tracker:expr, $category:expr, $component:expr, $operation:expr, $message:expr, $severity:expr) => {{
+        let error = $crate::error_tracking::TrackedError {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now(),
+            severity: $severity,
+            category: $category,
+            component: $component.to_string(),
+            operation: $operation.to_string(),
+            message: $message.to_string(),
+            details: None,
+            stack_trace: None,
+            context: std::collections::HashMap::new(),
+            correlation_id: None,
+            user_id: None,
+            request_id: None,
+            retry_count: 0,
+            is_transient: false,
+        };
+        $tracker.track_error(error).await;
+    }};
 }
 
 #[cfg(test)]
@@ -626,7 +669,7 @@ mod tests {
         let stats = tracker.get_error_statistics().await;
         assert_eq!(stats.total_errors, 3);
         assert!(!stats.top_patterns.is_empty());
-        
+
         let pattern = &stats.top_patterns[0];
         assert_eq!(pattern.count, 3);
         assert_eq!(pattern.component, "connection-pool");

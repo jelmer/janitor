@@ -52,7 +52,7 @@ async fn get_merge_proposals_by_campaign(
         INNER JOIN run r ON r.id = p.id
         WHERE r.suite = $1
         ORDER BY mp.last_scanned DESC NULLS LAST
-        "#
+        "#,
     )
     .bind(&campaign)
     .fetch_all(&state.conn)
@@ -61,13 +61,17 @@ async fn get_merge_proposals_by_campaign(
     match merge_proposals {
         Ok(merge_proposals) => (
             StatusCode::OK,
-            Json(serde_json::to_value(merge_proposals).unwrap())
+            Json(serde_json::to_value(merge_proposals).unwrap()),
         ),
         Err(e) => {
-            log::error!("Error fetching merge proposals for campaign {}: {}", campaign, e);
+            log::error!(
+                "Error fetching merge proposals for campaign {}: {}",
+                campaign,
+                e
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -93,7 +97,7 @@ async fn get_merge_proposals_by_codebase(
         FROM merge_proposal 
         WHERE codebase = $1
         ORDER BY last_scanned DESC NULLS LAST
-        "#
+        "#,
     )
     .bind(&codebase)
     .fetch_all(&state.conn)
@@ -102,13 +106,17 @@ async fn get_merge_proposals_by_codebase(
     match merge_proposals {
         Ok(merge_proposals) => (
             StatusCode::OK,
-            Json(serde_json::to_value(merge_proposals).unwrap())
+            Json(serde_json::to_value(merge_proposals).unwrap()),
         ),
         Err(e) => {
-            log::error!("Error fetching merge proposals for codebase {}: {}", codebase, e);
+            log::error!(
+                "Error fetching merge proposals for codebase {}: {}",
+                codebase,
+                e
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -141,7 +149,7 @@ async fn post_merge_proposal(
             revision = EXCLUDED.revision,
             rate_limit_bucket = EXCLUDED.rate_limit_bucket,
             last_scanned = NOW()
-        "#
+        "#,
     )
     .bind(&request.codebase)
     .bind(&request.url)
@@ -154,20 +162,27 @@ async fn post_merge_proposal(
 
     match result {
         Ok(_) => {
-            log::info!("Successfully created/updated merge proposal: {}", request.url);
+            log::info!(
+                "Successfully created/updated merge proposal: {}",
+                request.url
+            );
             (
                 StatusCode::CREATED,
                 Json(serde_json::json!({
                     "status": "success",
                     "url": request.url
-                }))
+                })),
             )
         }
         Err(e) => {
-            log::error!("Error creating/updating merge proposal {}: {}", request.url, e);
+            log::error!(
+                "Error creating/updating merge proposal {}: {}",
+                request.url,
+                e
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -208,11 +223,11 @@ async fn absorbed(
             merged_by,
             merge_proposal_url
         FROM absorbed_runs
-        "#
+        "#,
     );
-    
+
     let mut query_params = Vec::new();
-    
+
     if let Some(since_str) = params.get("since") {
         match chrono::DateTime::parse_from_rfc3339(since_str) {
             Ok(since) => {
@@ -222,16 +237,16 @@ async fn absorbed(
             Err(_) => {
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(json!({"error": "Invalid date format for 'since' parameter"}))
+                    Json(json!({"error": "Invalid date format for 'since' parameter"})),
                 );
             }
         }
     }
-    
+
     query.push_str(" ORDER BY absorbed_at DESC");
 
     let mut absorbed_runs = Vec::new();
-    
+
     let query_result = if query_params.is_empty() {
         sqlx::query_as::<_, AbsorbedRun>(&query)
             .fetch_all(&state.conn)
@@ -242,9 +257,8 @@ async fn absorbed(
             .fetch_all(&state.conn)
             .await
     };
-    
-    match query_result 
-    {
+
+    match query_result {
         Ok(rows) => {
             for mut row in rows {
                 // Generate merged-by-url if we have the information
@@ -260,12 +274,15 @@ async fn absorbed(
             log::error!("Failed to fetch absorbed runs: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch absorbed runs"}))
+                Json(json!({"error": "Failed to fetch absorbed runs"})),
             );
         }
     }
 
-    (StatusCode::OK, Json(serde_json::to_value(absorbed_runs).unwrap()))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(absorbed_runs).unwrap()),
+    )
 }
 
 /// Policy data structure for API responses.
@@ -294,13 +311,13 @@ async fn get_policy(
             Json(serde_json::json!({
                 "reason": "No such policy",
                 "name": name,
-            }))
+            })),
         ),
         Err(e) => {
             log::error!("Error fetching policy {}: {}", name, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -308,7 +325,7 @@ async fn get_policy(
 
 async fn get_policies(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let policies = sqlx::query_as::<_, Policy>(
-        "SELECT name, per_branch_policy, rate_limit_bucket FROM named_publish_policy ORDER BY name"
+        "SELECT name, per_branch_policy, rate_limit_bucket FROM named_publish_policy ORDER BY name",
     )
     .fetch_all(&state.conn)
     .await;
@@ -316,13 +333,13 @@ async fn get_policies(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match policies {
         Ok(policies) => (
             StatusCode::OK,
-            Json(serde_json::to_value(policies).unwrap())
+            Json(serde_json::to_value(policies).unwrap()),
         ),
         Err(e) => {
             log::error!("Error fetching policies: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -347,7 +364,7 @@ async fn put_policy(
         ON CONFLICT (name) DO UPDATE SET
             per_branch_policy = EXCLUDED.per_branch_policy,
             rate_limit_bucket = EXCLUDED.rate_limit_bucket
-        "#
+        "#,
     )
     .bind(&name)
     .bind(&request.per_branch_policy)
@@ -363,14 +380,14 @@ async fn put_policy(
                 Json(serde_json::json!({
                     "status": "success",
                     "name": name
-                }))
+                })),
             )
         }
         Err(e) => {
             log::error!("Error creating/updating policy {}: {}", name, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -398,15 +415,17 @@ async fn put_policies(
         Ok(tx) => tx,
         Err(e) => {
             log::error!("Failed to begin transaction: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Database error"})),
+            );
         }
     };
 
     let mut updated_policies = Vec::new();
 
     for policy_req in request.policies {
-        let result = sqlx::query_as!(
-            Policy,
+        let result = sqlx::query_as::<_, Policy>(
             r#"
             INSERT INTO named_publish_policy (name, per_branch_policy, rate_limit_bucket)
             VALUES ($1, $2, $3)
@@ -416,10 +435,10 @@ async fn put_policies(
                 rate_limit_bucket = EXCLUDED.rate_limit_bucket
             RETURNING name, per_branch_policy, rate_limit_bucket
             "#,
-            policy_req.name,
-            policy_req.per_branch_policy,
-            policy_req.rate_limit_bucket,
         )
+        .bind(&policy_req.name)
+        .bind(&policy_req.per_branch_policy)
+        .bind(&policy_req.rate_limit_bucket)
         .fetch_one(&mut *tx)
         .await;
 
@@ -430,7 +449,7 @@ async fn put_policies(
                 let _ = tx.rollback().await;
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": format!("Failed to update policy {}", policy_req.name)}))
+                    Json(json!({"error": format!("Failed to update policy {}", policy_req.name)})),
                 );
             }
         }
@@ -438,10 +457,16 @@ async fn put_policies(
 
     if let Err(e) = tx.commit().await {
         log::error!("Failed to commit transaction: {}", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})));
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "Database error"})),
+        );
     }
 
-    (StatusCode::OK, Json(serde_json::to_value(updated_policies).unwrap()))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(updated_policies).unwrap()),
+    )
 }
 
 /// Request body for updating a merge proposal.
@@ -467,7 +492,7 @@ async fn update_merge_proposal(
             can_be_merged = COALESCE($5, can_be_merged),
             last_scanned = NOW()
         WHERE url = $1
-        "#
+        "#,
     )
     .bind(&request.url)
     .bind(&request.status)
@@ -485,7 +510,7 @@ async fn update_merge_proposal(
                     Json(serde_json::json!({
                         "reason": "No such merge proposal",
                         "url": request.url,
-                    }))
+                    })),
                 )
             } else {
                 log::info!("Successfully updated merge proposal: {}", request.url);
@@ -494,7 +519,7 @@ async fn update_merge_proposal(
                     Json(serde_json::json!({
                         "status": "success",
                         "url": request.url
-                    }))
+                    })),
                 )
             }
         }
@@ -502,7 +527,7 @@ async fn update_merge_proposal(
             log::error!("Error updating merge proposal {}: {}", request.url, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             )
         }
     }
@@ -646,9 +671,9 @@ WHERE id = $1
 /// Request body for triggering a publish operation.
 #[derive(serde::Deserialize)]
 struct PublishRequest {
-    mode: Option<String>,        // publish mode: "propose", "push", "build-only"
-    force: Option<bool>,         // force publish even if checks fail
-    dry_run: Option<bool>,       // simulate publish without actual changes
+    mode: Option<String>,  // publish mode: "propose", "push", "build-only"
+    force: Option<bool>,   // force publish even if checks fail
+    dry_run: Option<bool>, // simulate publish without actual changes
 }
 
 async fn publish(
@@ -656,7 +681,11 @@ async fn publish(
     Path((campaign, codebase)): Path<(String, String)>,
     Json(request): Json<PublishRequest>,
 ) -> impl IntoResponse {
-    log::info!("Publish request for campaign: {}, codebase: {}", campaign, codebase);
+    log::info!(
+        "Publish request for campaign: {}, codebase: {}",
+        campaign,
+        codebase
+    );
 
     // Find the most recent successful run for this campaign/codebase combination
     let run = sqlx::query_as::<_, Run>(
@@ -669,7 +698,7 @@ async fn publish(
         WHERE suite = $1 AND codebase = $2 AND result_code = 'success'
         ORDER BY finish_time DESC 
         LIMIT 1
-        "#
+        "#,
     )
     .bind(&campaign)
     .bind(&codebase)
@@ -685,25 +714,24 @@ async fn publish(
                     "reason": "No successful run found",
                     "campaign": campaign,
                     "codebase": codebase
-                }))
+                })),
             );
         }
         Err(e) => {
             log::error!("Error finding run for {}/{}: {}", campaign, codebase, e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             );
         }
     };
 
     // Check if this run is already being published or has been published
-    let existing_publish = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM publish WHERE id = $1"
-    )
-    .bind(&run.id)
-    .fetch_one(&state.conn)
-    .await;
+    let existing_publish =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM publish WHERE id = $1")
+            .bind(&run.id)
+            .fetch_one(&state.conn)
+            .await;
 
     match existing_publish {
         Ok(count) if count > 0 && !request.force.unwrap_or(false) => {
@@ -713,14 +741,14 @@ async fn publish(
                     "reason": "Run already published or in progress",
                     "run_id": run.id,
                     "force_required": true
-                }))
+                })),
             );
         }
         Err(e) => {
             log::error!("Error checking existing publish for run {}: {}", run.id, e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Database error"}))
+                Json(serde_json::json!({"error": "Database error"})),
             );
         }
         _ => {} // Continue with publish
@@ -737,7 +765,7 @@ async fn publish(
                 "codebase": codebase,
                 "would_publish": true,
                 "mode": request.mode.unwrap_or_else(|| "build-only".to_string())
-            }))
+            })),
         );
     }
 
@@ -746,17 +774,22 @@ async fn publish(
     // this would query the database for specific unpublished branches for this run
     let unpublished_branches = match sqlx::query_as::<_, crate::state::UnpublishedBranch>(
         "SELECT role, remote_name, base_revision, revision, publish_mode, max_frequency_days 
-         FROM new_result_branch WHERE run_id = $1 AND NOT coalesce(absorbed, false)"
+         FROM new_result_branch WHERE run_id = $1 AND NOT coalesce(absorbed, false)",
     )
     .bind(&run.id)
     .fetch_all(&state.conn)
-    .await {
+    .await
+    {
         Ok(branches) => branches,
         Err(e) => {
-            log::error!("Error getting unpublished branches for run {}: {}", run.id, e);
+            log::error!(
+                "Error getting unpublished branches for run {}: {}",
+                run.id,
+                e
+            );
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to get unpublished branches"}))
+                Json(serde_json::json!({"error": "Failed to get unpublished branches"})),
             );
         }
     };
@@ -767,7 +800,7 @@ async fn publish(
             Json(serde_json::json!({
                 "reason": "No unpublished branches found",
                 "run_id": run.id
-            }))
+            })),
         );
     }
 
@@ -788,11 +821,13 @@ async fn publish(
         &run.command,
         state.push_limit,
         state.require_binary_diff,
-    ).await;
+    )
+    .await;
 
     match consider_result {
         Ok(results) => {
-            let status = results.get("status")
+            let status = results
+                .get("status")
                 .and_then(|s| s.as_ref())
                 .map(|s| s.as_str())
                 .unwrap_or("unknown");
@@ -812,7 +847,7 @@ async fn publish(
                     "codebase": codebase,
                     "results": results,
                     "unpublished_branches_count": unpublished_branches.len()
-                }))
+                })),
             )
         }
         Err(e) => {
@@ -822,7 +857,7 @@ async fn publish(
                 Json(serde_json::json!({
                     "error": "Failed to initiate publish",
                     "run_id": run.id
-                }))
+                })),
             )
         }
     }
@@ -1068,7 +1103,7 @@ async fn autopublish(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             log::error!("Failed to get publish-ready runs: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to get publish-ready runs"}))
+                Json(json!({"error": "Failed to get publish-ready runs"})),
             );
         }
     };
@@ -1077,7 +1112,7 @@ async fn autopublish(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 
     for (run, rate_limit_bucket, command, unpublished_branches) in ready_runs {
         processed_runs += 1;
-        
+
         match crate::consider_publish_run(
             &state.conn,
             state.redis.clone(),
@@ -1091,7 +1126,9 @@ async fn autopublish(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             &command,
             state.push_limit,
             state.require_binary_diff,
-        ).await {
+        )
+        .await
+        {
             Ok(actual_modes) => {
                 for (_branch, mode) in actual_modes {
                     if let Some(mode) = mode {
@@ -1112,14 +1149,22 @@ async fn autopublish(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let duration = start.elapsed();
     log::info!(
         "Autopublish completed: {} published, {} processed in {:?}",
-        published_runs, processed_runs, duration
-    );
-
-    (StatusCode::OK, Json(serde_json::to_value(AutopublishResponse {
         published_runs,
         processed_runs,
-        actions,
-    }).unwrap()))
+        duration
+    );
+
+    (
+        StatusCode::OK,
+        Json(
+            serde_json::to_value(AutopublishResponse {
+                published_runs,
+                processed_runs,
+                actions,
+            })
+            .unwrap(),
+        ),
+    )
 }
 
 async fn get_rate_limit(

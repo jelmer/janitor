@@ -72,9 +72,7 @@ impl Release {
     pub fn get_files_by_hash(&self, algorithm: &HashAlgorithm) -> Vec<(&HashedFile, &str)> {
         self.files
             .iter()
-            .filter_map(|file| {
-                file.get_hash(algorithm).map(|hash| (file, hash))
-            })
+            .filter_map(|file| file.get_hash(algorithm).map(|hash| (file, hash)))
             .collect()
     }
 
@@ -106,9 +104,10 @@ impl Release {
                     current_field = Some(field.trim().to_lowercase());
                     current_value = value.trim().to_string();
                 } else {
-                    return Err(AptRepositoryError::invalid_config(
-                        format!("Invalid line format: {}", line)
-                    ));
+                    return Err(AptRepositoryError::invalid_config(format!(
+                        "Invalid line format: {}",
+                        line
+                    )));
                 }
             }
         }
@@ -119,32 +118,39 @@ impl Release {
         }
 
         // Parse date (required field)
-        let date_str = fields.remove("date")
+        let date_str = fields
+            .remove("date")
             .ok_or_else(|| AptRepositoryError::missing_field("Date"))?;
         let date = DateTime::parse_from_rfc2822(&date_str)
             .map_err(|_| AptRepositoryError::invalid_field("Date", &date_str))?
             .with_timezone(&Utc);
 
         // Parse optional date fields
-        let valid_until = fields.remove("valid-until")
+        let valid_until = fields
+            .remove("valid-until")
             .and_then(|s| DateTime::parse_from_rfc2822(&s).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
         // Parse list fields
-        let architectures = fields.remove("architectures")
+        let architectures = fields
+            .remove("architectures")
             .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
             .unwrap_or_default();
 
-        let components = fields.remove("components")
+        let components = fields
+            .remove("components")
             .map(|s| s.split_whitespace().map(|s| s.to_string()).collect())
             .unwrap_or_default();
 
         // Parse boolean fields
-        let not_automatic = fields.remove("notautomatic")
+        let not_automatic = fields
+            .remove("notautomatic")
             .map(|s| s.to_lowercase() == "yes");
-        let but_automatic_upgrades = fields.remove("butautomaticupgrades")
+        let but_automatic_upgrades = fields
+            .remove("butautomaticupgrades")
             .map(|s| s.to_lowercase() == "yes");
-        let acquire_by_hash = fields.remove("acquire-by-hash")
+        let acquire_by_hash = fields
+            .remove("acquire-by-hash")
             .map(|s| s.to_lowercase() == "yes");
 
         // Parse file lists
@@ -178,7 +184,7 @@ impl Release {
     /// Parse a file list from a hash field.
     fn parse_file_list(content: &str, algorithm: HashAlgorithm) -> Result<Vec<HashedFile>> {
         let mut files = Vec::new();
-        
+
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -187,13 +193,15 @@ impl Release {
 
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() != 3 {
-                return Err(AptRepositoryError::invalid_config(
-                    format!("Invalid file list line: {}", line)
-                ));
+                return Err(AptRepositoryError::invalid_config(format!(
+                    "Invalid file list line: {}",
+                    line
+                )));
             }
 
             let hash = parts[0].to_string();
-            let size = parts[1].parse::<u64>()
+            let size = parts[1]
+                .parse::<u64>()
                 .map_err(|_| AptRepositoryError::invalid_field("size", parts[1]))?;
             let path = parts[2].to_string();
 
@@ -240,14 +248,23 @@ impl Release {
             content.push_str(&format!("Version: {}\n", version));
         }
 
-        content.push_str(&format!("Date: {}\n", self.date.format("%a, %d %b %Y %H:%M:%S %z")));
+        content.push_str(&format!(
+            "Date: {}\n",
+            self.date.format("%a, %d %b %Y %H:%M:%S %z")
+        ));
 
         if let Some(valid_until) = self.valid_until {
-            content.push_str(&format!("Valid-Until: {}\n", valid_until.format("%a, %d %b %Y %H:%M:%S %z")));
+            content.push_str(&format!(
+                "Valid-Until: {}\n",
+                valid_until.format("%a, %d %b %Y %H:%M:%S %z")
+            ));
         }
 
         if !self.architectures.is_empty() {
-            content.push_str(&format!("Architectures: {}\n", self.architectures.join(" ")));
+            content.push_str(&format!(
+                "Architectures: {}\n",
+                self.architectures.join(" ")
+            ));
         }
 
         if !self.components.is_empty() {
@@ -259,15 +276,24 @@ impl Release {
         }
 
         if let Some(not_automatic) = self.not_automatic {
-            content.push_str(&format!("NotAutomatic: {}\n", if not_automatic { "yes" } else { "no" }));
+            content.push_str(&format!(
+                "NotAutomatic: {}\n",
+                if not_automatic { "yes" } else { "no" }
+            ));
         }
 
         if let Some(but_automatic_upgrades) = self.but_automatic_upgrades {
-            content.push_str(&format!("ButAutomaticUpgrades: {}\n", if but_automatic_upgrades { "yes" } else { "no" }));
+            content.push_str(&format!(
+                "ButAutomaticUpgrades: {}\n",
+                if but_automatic_upgrades { "yes" } else { "no" }
+            ));
         }
 
         if let Some(acquire_by_hash) = self.acquire_by_hash {
-            content.push_str(&format!("Acquire-By-Hash: {}\n", if acquire_by_hash { "yes" } else { "no" }));
+            content.push_str(&format!(
+                "Acquire-By-Hash: {}\n",
+                if acquire_by_hash { "yes" } else { "no" }
+            ));
         }
 
         // Additional fields
@@ -402,7 +428,9 @@ impl ReleaseBuilder {
 
     /// Add an additional field.
     pub fn additional_field<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
-        self.release.additional_fields.insert(key.into(), value.into());
+        self.release
+            .additional_fields
+            .insert(key.into(), value.into());
         self
     }
 
@@ -421,7 +449,7 @@ impl Default for ReleaseBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{HashSet, HashAlgorithm};
+    use crate::{HashAlgorithm, HashSet};
 
     #[test]
     fn test_release_builder() {
@@ -476,14 +504,17 @@ mod tests {
             let parsed_file = &parsed.files[0];
             assert_eq!(orig_file.path, parsed_file.path);
             assert_eq!(orig_file.size, parsed_file.size);
-            assert_eq!(orig_file.get_hash(&HashAlgorithm::Md5), parsed_file.get_hash(&HashAlgorithm::Md5));
+            assert_eq!(
+                orig_file.get_hash(&HashAlgorithm::Md5),
+                parsed_file.get_hash(&HashAlgorithm::Md5)
+            );
         }
     }
 
     #[test]
     fn test_file_merging() {
         let mut files = Vec::new();
-        
+
         let mut file1 = HashedFile::new("test.txt", 1024);
         file1.add_hash(HashAlgorithm::Md5, "abc123".to_string());
         files.push(file1);

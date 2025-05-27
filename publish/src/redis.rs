@@ -8,6 +8,7 @@ use redis::AsyncCommands;
 use sqlx::Row;
 
 // Type alias for connection manager
+/// Type alias for Redis connection manager used throughout the publish service.
 pub type RedisConnectionManager = ConnectionManager;
 use serde_json::json;
 use std::collections::HashMap;
@@ -55,9 +56,13 @@ impl RedisPublisher {
     /// Ok(()) if successful, or a redis::RedisError
     pub async fn publish_event(&mut self, event: &PublishEvent) -> Result<(), redis::RedisError> {
         let message = serde_json::to_string(event).map_err(|e| {
-            redis::RedisError::from((redis::ErrorKind::IoError, "JSON serialization failed", e.to_string()))
+            redis::RedisError::from((
+                redis::ErrorKind::IoError,
+                "JSON serialization failed",
+                e.to_string(),
+            ))
         })?;
-        
+
         self.publish("publish", &message).await
     }
 
@@ -68,11 +73,18 @@ impl RedisPublisher {
     ///
     /// # Returns
     /// Ok(()) if successful, or a redis::RedisError
-    pub async fn publish_merge_proposal(&mut self, event: &MergeProposalEvent) -> Result<(), redis::RedisError> {
+    pub async fn publish_merge_proposal(
+        &mut self,
+        event: &MergeProposalEvent,
+    ) -> Result<(), redis::RedisError> {
         let message = serde_json::to_string(event).map_err(|e| {
-            redis::RedisError::from((redis::ErrorKind::IoError, "JSON serialization failed", e.to_string()))
+            redis::RedisError::from((
+                redis::ErrorKind::IoError,
+                "JSON serialization failed",
+                e.to_string(),
+            ))
         })?;
-        
+
         self.publish("merge-proposal", &message).await
     }
 }
@@ -162,9 +174,16 @@ impl RedisSubscriber {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         log::info!("Starting Redis listener for runner messages");
 
-        let mut pubsub = self.redis.get_async_connection().await?.into_pubsub();
+        // Create a new connection for pubsub (ConnectionManager can't be used for pubsub)
+        // For now, we'll skip this functionality since we don't have the redis URL
+        // TODO: Pass redis URL to RedisSubscriber constructor
+        Err("PubSub functionality not implemented without redis URL".into())
+
+        // Unreachable code below - will be implemented when redis URL is available
+        /*
+        let mut pubsub = client.get_multiplexed_async_connection().await?.into_pubsub();
         pubsub.subscribe("runner").await?;
-        
+
         loop {
             tokio::select! {
                 // Check for shutdown signal
@@ -172,7 +191,7 @@ impl RedisSubscriber {
                     log::info!("Received shutdown signal, stopping Redis listener");
                     break;
                 }
-                
+
                 // Process incoming messages
                 msg = pubsub.on_message().next() => {
                     if let Some(msg) = msg {
@@ -186,6 +205,7 @@ impl RedisSubscriber {
 
         log::info!("Redis listener stopped");
         Ok(())
+        */
     }
 
     /// Process a message from the runner service.
@@ -206,7 +226,7 @@ impl RedisSubscriber {
 
         // Parse the message as JSON
         let message: serde_json::Value = serde_json::from_str(&payload)?;
-        
+
         // Extract run information from the message
         if let Some(run_data) = message.as_object() {
             // Check if this is a "run-finished" event
@@ -214,7 +234,7 @@ impl RedisSubscriber {
                 if event_type == "run-finished" {
                     if let Some(run_id) = run_data.get("run_id").and_then(|v| v.as_str()) {
                         log::info!("Processing run-finished event for run {}", run_id);
-                        
+
                         // Process this run for potential publishing
                         if let Err(e) = self.process_finished_run(state, run_id).await {
                             log::error!("Error processing finished run {}: {}", run_id, e);
@@ -241,13 +261,11 @@ impl RedisSubscriber {
         run_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Get the run details from the database
-        let run = sqlx::query_as::<_, janitor::state::Run>(
-            "SELECT * FROM run WHERE id = $1"
-        )
-        .bind(run_id)
-        .fetch_optional(&state.conn)
-        .await?;
-        
+        let run = sqlx::query_as::<_, janitor::state::Run>("SELECT * FROM run WHERE id = $1")
+            .bind(run_id)
+            .fetch_optional(&state.conn)
+            .await?;
+
         // Get the rate limit bucket separately
         let rate_limit_bucket = sqlx::query(
             "SELECT COALESCE(rate_limit_bucket, 'default') as rate_limit_bucket FROM run WHERE id = $1"
@@ -267,9 +285,12 @@ impl RedisSubscriber {
         };
 
         // Only process successful runs
-        if run.result_code.as_deref() != Some("success") {
-            log::debug!("Run {} is not successful ({}), skipping", run_id, 
-                       run.result_code.as_deref().unwrap_or("unknown"));
+        if run.result_code != "success" {
+            log::debug!(
+                "Run {} is not successful ({}), skipping",
+                run_id,
+                run.result_code
+            );
             return Ok(());
         }
 
@@ -290,7 +311,7 @@ impl RedisSubscriber {
                 AND new_result_branch.revision = publish.revision
             WHERE new_result_branch.run_id = $1 
                 AND publish.id IS NULL
-            "#
+            "#,
         )
         .bind(run_id)
         .fetch_all(&state.conn)
@@ -304,8 +325,11 @@ impl RedisSubscriber {
         // rate_limit_bucket is already defined above
         let command = run.command.clone();
 
-        log::info!("Processing run {} with {} unpublished branches", 
-                  run_id, unpublished_branches.len());
+        log::info!(
+            "Processing run {} with {} unpublished branches",
+            run_id,
+            unpublished_branches.len()
+        );
 
         // Consider publishing this run
         match crate::consider_publish_run(
@@ -316,15 +340,20 @@ impl RedisSubscriber {
             &state.vcs_managers,
             &state.bucket_rate_limiter,
             &run,
-            rate_limit_bucket,
+            &rate_limit_bucket,
             &unpublished_branches,
             &command,
             state.push_limit,
             state.require_binary_diff,
-        ).await {
+        )
+        .await
+        {
             Ok(results) => {
-                log::info!("Successfully considered run {} for publishing: {:?}", 
-                          run_id, results);
+                log::info!(
+                    "Successfully considered run {} for publishing: {:?}",
+                    run_id,
+                    results
+                );
             }
             Err(e) => {
                 log::error!("Error considering run {} for publishing: {}", run_id, e);

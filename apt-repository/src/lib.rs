@@ -1,5 +1,5 @@
 //! # APT Repository Library
-//! 
+//!
 //! A Rust library for creating and parsing APT repositories. This library provides
 //! functionality to generate repository metadata files (Release, Packages, Sources)
 //! with proper cryptographic hashing and compression support.
@@ -35,34 +35,31 @@
 //! # }
 //! ```
 
+pub mod compression;
 pub mod error;
 pub mod hash;
-pub mod compression;
 pub mod packages;
-pub mod sources;
 pub mod release;
 pub mod repository;
+pub mod sources;
 
 #[cfg(feature = "async")]
 pub mod async_repository;
 
+pub use compression::Compression;
 pub use error::{AptRepositoryError, Result};
 pub use hash::{HashAlgorithm, HashSet, HashedFile};
-pub use compression::Compression;
 pub use packages::{Package, PackageFile};
-pub use sources::{Source, SourceFile};
 pub use release::{Release, ReleaseBuilder};
 pub use repository::{Repository, RepositoryBuilder};
+pub use sources::{Source, SourceFile};
 
 #[cfg(feature = "async")]
 pub use async_repository::AsyncRepository;
 
 /// Default compression formats used for repository files
-pub const DEFAULT_COMPRESSIONS: &[Compression] = &[
-    Compression::None,
-    Compression::Gzip,
-    Compression::Bzip2,
-];
+pub const DEFAULT_COMPRESSIONS: &[Compression] =
+    &[Compression::None, Compression::Gzip, Compression::Bzip2];
 
 /// Default hash algorithms used for by-hash repositories
 pub const DEFAULT_HASH_ALGORITHMS: &[HashAlgorithm] = &[

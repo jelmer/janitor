@@ -252,12 +252,10 @@ impl ProposalInfoManager {
     /// # Returns
     /// True if the proposal exists, false otherwise
     pub async fn proposal_exists(&self, url: &url::Url) -> Result<bool, sqlx::Error> {
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM merge_proposal WHERE url = $1"
-        )
-        .bind(url.to_string())
-        .fetch_one(&self.conn)
-        .await?;
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM merge_proposal WHERE url = $1")
+            .bind(url.to_string())
+            .fetch_one(&self.conn)
+            .await?;
 
         Ok(count > 0)
     }
@@ -276,7 +274,7 @@ impl ProposalInfoManager {
         status_filter: Option<&str>,
     ) -> Result<Vec<ProposalInfo>, sqlx::Error> {
         let mut query = "SELECT rate_limit_bucket, revision, status, target_branch_url, codebase, can_be_merged FROM merge_proposal WHERE codebase = $1".to_string();
-        
+
         if let Some(status) = status_filter {
             query.push_str(" AND status = $2");
             let rows = sqlx::query(&query)
@@ -284,29 +282,35 @@ impl ProposalInfoManager {
                 .bind(status)
                 .fetch_all(&self.conn)
                 .await?;
-            
-            Ok(rows.into_iter().map(|row| ProposalInfo {
-                rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
-                revision: row.try_get("revision").ok(),
-                status: row.get("status"),
-                target_branch_url: row.try_get("target_branch_url").ok(),
-                can_be_merged: row.try_get("can_be_merged").ok(),
-                codebase: row.get("codebase"),
-            }).collect())
+
+            Ok(rows
+                .into_iter()
+                .map(|row| ProposalInfo {
+                    rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+                    revision: row.try_get("revision").ok(),
+                    status: row.get("status"),
+                    target_branch_url: row.try_get("target_branch_url").ok(),
+                    can_be_merged: row.try_get("can_be_merged").ok(),
+                    codebase: row.get("codebase"),
+                })
+                .collect())
         } else {
             let rows = sqlx::query(&query)
                 .bind(codebase)
                 .fetch_all(&self.conn)
                 .await?;
-            
-            Ok(rows.into_iter().map(|row| ProposalInfo {
-                rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
-                revision: row.try_get("revision").ok(),
-                status: row.get("status"),
-                target_branch_url: row.try_get("target_branch_url").ok(),
-                can_be_merged: row.try_get("can_be_merged").ok(),
-                codebase: row.get("codebase"),
-            }).collect())
+
+            Ok(rows
+                .into_iter()
+                .map(|row| ProposalInfo {
+                    rate_limit_bucket: row.try_get("rate_limit_bucket").ok(),
+                    revision: row.try_get("revision").ok(),
+                    status: row.get("status"),
+                    target_branch_url: row.try_get("target_branch_url").ok(),
+                    can_be_merged: row.try_get("can_be_merged").ok(),
+                    codebase: row.get("codebase"),
+                })
+                .collect())
         }
     }
 
@@ -329,10 +333,13 @@ impl ProposalInfoManager {
     ///
     /// # Returns
     /// A map of status -> count
-    pub async fn get_proposal_statistics(&self) -> Result<std::collections::HashMap<String, i64>, sqlx::Error> {
-        let rows = sqlx::query("SELECT status, COUNT(*) as count FROM merge_proposal GROUP BY status")
-            .fetch_all(&self.conn)
-            .await?;
+    pub async fn get_proposal_statistics(
+        &self,
+    ) -> Result<std::collections::HashMap<String, i64>, sqlx::Error> {
+        let rows =
+            sqlx::query("SELECT status, COUNT(*) as count FROM merge_proposal GROUP BY status")
+                .fetch_all(&self.conn)
+                .await?;
 
         let mut stats = std::collections::HashMap::new();
         for row in rows {

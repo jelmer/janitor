@@ -1,11 +1,11 @@
 //! File upload processing for worker results.
 
+use crate::{BuilderResult, WorkerResult};
 use axum::extract::Multipart;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use crate::{BuilderResult, WorkerResult};
 
 /// File uploaded by a worker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,43 +72,57 @@ impl UploadProcessor {
 
         // Create run-specific directory
         let run_dir = self.storage_dir.join(run_id);
-        tokio::fs::create_dir_all(&run_dir).await
+        tokio::fs::create_dir_all(&run_dir)
+            .await
             .map_err(|e| UploadError::Storage(format!("Failed to create directory: {}", e)))?;
 
-        while let Some(field) = multipart.next_field().await
-            .map_err(|e| UploadError::Multipart(format!("Failed to read field: {}", e)))? {
-            
-            let field_name = field.name()
+        while let Some(field) = multipart
+            .next_field()
+            .await
+            .map_err(|e| UploadError::Multipart(format!("Failed to read field: {}", e)))?
+        {
+            let field_name = field
+                .name()
                 .ok_or_else(|| UploadError::Multipart("Field missing name".to_string()))?
                 .to_string();
 
             match field_name.as_str() {
                 "worker_result" => {
                     // Process JSON worker result
-                    let data = field.bytes().await
-                        .map_err(|e| UploadError::Multipart(format!("Failed to read worker_result: {}", e)))?;
-                    
-                    worker_result = Some(serde_json::from_slice(&data)
-                        .map_err(|e| UploadError::Parse(format!("Invalid worker_result JSON: {}", e)))?);
+                    let data = field.bytes().await.map_err(|e| {
+                        UploadError::Multipart(format!("Failed to read worker_result: {}", e))
+                    })?;
+
+                    worker_result = Some(serde_json::from_slice(&data).map_err(|e| {
+                        UploadError::Parse(format!("Invalid worker_result JSON: {}", e))
+                    })?);
                 }
                 field_name if field_name.starts_with("log_") => {
                     // Process log file
-                    let file = self.save_field_to_file(field, &run_dir, "logs", &mut total_size).await?;
+                    let file = self
+                        .save_field_to_file(field, &run_dir, "logs", &mut total_size)
+                        .await?;
                     log_files.push(file);
                 }
                 field_name if field_name.starts_with("artifact_") => {
                     // Process artifact file
-                    let file = self.save_field_to_file(field, &run_dir, "artifacts", &mut total_size).await?;
+                    let file = self
+                        .save_field_to_file(field, &run_dir, "artifacts", &mut total_size)
+                        .await?;
                     artifact_files.push(file);
                 }
                 field_name if field_name.starts_with("build_") => {
                     // Process build output file
-                    let file = self.save_field_to_file(field, &run_dir, "build", &mut total_size).await?;
+                    let file = self
+                        .save_field_to_file(field, &run_dir, "build", &mut total_size)
+                        .await?;
                     build_files.push(file);
                 }
                 field_name if field_name.starts_with("metadata_") => {
                     // Process metadata file
-                    let file = self.save_field_to_file(field, &run_dir, "metadata", &mut total_size).await?;
+                    let file = self
+                        .save_field_to_file(field, &run_dir, "metadata", &mut total_size)
+                        .await?;
                     metadata_files.push(file);
                 }
                 _ => {
@@ -120,9 +134,8 @@ impl UploadProcessor {
             // Check total size limit
             if total_size > self.max_total_size {
                 return Err(UploadError::SizeLimit(format!(
-                    "Total upload size {} exceeds limit {}", 
-                    total_size, 
-                    self.max_total_size
+                    "Total upload size {} exceeds limit {}",
+                    total_size, self.max_total_size
                 )));
             }
         }
@@ -147,24 +160,26 @@ impl UploadProcessor {
         category: &str,
         total_size: &mut u64,
     ) -> Result<UploadedFile, UploadError> {
-        let filename = field.file_name()
-            .unwrap_or("unknown")
-            .to_string();
-        
-        let content_type = field.content_type()
-            .map(|ct| ct.to_string());
+        let filename = field.file_name().unwrap_or("unknown").to_string();
+
+        let content_type = field.content_type().map(|ct| ct.to_string());
 
         // Create category directory
         let category_dir = run_dir.join(category);
-        tokio::fs::create_dir_all(&category_dir).await
-            .map_err(|e| UploadError::Storage(format!("Failed to create {} directory: {}", category, e)))?;
+        tokio::fs::create_dir_all(&category_dir)
+            .await
+            .map_err(|e| {
+                UploadError::Storage(format!("Failed to create {} directory: {}", category, e))
+            })?;
 
         // Create safe filename
         let safe_filename = sanitize_filename(&filename);
         let file_path = category_dir.join(&safe_filename);
 
         // Stream file to disk
-        let data = field.bytes().await
+        let data = field
+            .bytes()
+            .await
             .map_err(|e| UploadError::Multipart(format!("Failed to read file data: {}", e)))?;
 
         let file_size = data.len() as u64;
@@ -172,20 +187,24 @@ impl UploadProcessor {
         // Check individual file size limit
         if file_size > self.max_file_size {
             return Err(UploadError::SizeLimit(format!(
-                "File {} size {} exceeds limit {}", 
-                filename, 
-                file_size, 
-                self.max_file_size
+                "File {} size {} exceeds limit {}",
+                filename, file_size, self.max_file_size
             )));
         }
 
         *total_size += file_size;
 
         // Write file
-        tokio::fs::write(&file_path, &data).await
-            .map_err(|e| UploadError::Storage(format!("Failed to write file {}: {}", filename, e)))?;
+        tokio::fs::write(&file_path, &data).await.map_err(|e| {
+            UploadError::Storage(format!("Failed to write file {}: {}", filename, e))
+        })?;
 
-        log::info!("Uploaded file: {} ({} bytes) -> {:?}", filename, file_size, file_path);
+        log::info!(
+            "Uploaded file: {} ({} bytes) -> {:?}",
+            filename,
+            file_size,
+            file_path
+        );
 
         Ok(UploadedFile {
             filename,
@@ -241,22 +260,34 @@ impl UploadProcessor {
         }
 
         // Extract source and version from worker result if available
-        let (source, build_version, build_distribution) = if let Some(ref result) = uploaded.worker_result.builder_result {
-            match result {
-                BuilderResult::Debian { source, build_version, build_distribution, .. } => {
-                    (source.clone(), build_version.clone(), build_distribution.clone())
+        let (source, build_version, build_distribution) =
+            if let Some(ref result) = uploaded.worker_result.builder_result {
+                match result {
+                    BuilderResult::Debian {
+                        source,
+                        build_version,
+                        build_distribution,
+                        ..
+                    } => (
+                        source.clone(),
+                        build_version.clone(),
+                        build_distribution.clone(),
+                    ),
+                    _ => (None, None, None),
                 }
-                _ => (None, None, None)
-            }
-        } else {
-            (None, None, None)
-        };
+            } else {
+                (None, None, None)
+            };
 
         Ok(Some(BuilderResult::Debian {
             source,
             build_version,
             build_distribution,
-            changes_filenames: if changes_filenames.is_empty() { None } else { Some(changes_filenames) },
+            changes_filenames: if changes_filenames.is_empty() {
+                None
+            } else {
+                Some(changes_filenames)
+            },
             lintian_result,
             binary_packages,
         }))
@@ -269,18 +300,24 @@ impl UploadProcessor {
         let mut categories = HashMap::new();
 
         if self.storage_dir.exists() {
-            let mut entries = tokio::fs::read_dir(&self.storage_dir).await
-                .map_err(|e| UploadError::Storage(format!("Failed to read storage directory: {}", e)))?;
+            let mut entries = tokio::fs::read_dir(&self.storage_dir).await.map_err(|e| {
+                UploadError::Storage(format!("Failed to read storage directory: {}", e))
+            })?;
 
-            while let Some(entry) = entries.next_entry().await
-                .map_err(|e| UploadError::Storage(format!("Failed to read directory entry: {}", e)))? {
-                
-                if entry.file_type().await.map_err(|e| UploadError::Storage(e.to_string()))?.is_dir() {
+            while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                UploadError::Storage(format!("Failed to read directory entry: {}", e))
+            })? {
+                if entry
+                    .file_type()
+                    .await
+                    .map_err(|e| UploadError::Storage(e.to_string()))?
+                    .is_dir()
+                {
                     // This is a run directory
                     let run_stats = self.get_run_storage_stats(&entry.path()).await?;
                     total_files += run_stats.total_files;
                     total_size += run_stats.total_size;
-                    
+
                     for (category, count) in run_stats.files_by_category {
                         *categories.entry(category).or_insert(0) += count;
                     }
@@ -296,21 +333,32 @@ impl UploadProcessor {
     }
 
     /// Get storage statistics for a specific run.
-    async fn get_run_storage_stats(&self, run_dir: &PathBuf) -> Result<RunStorageStats, UploadError> {
+    async fn get_run_storage_stats(
+        &self,
+        run_dir: &PathBuf,
+    ) -> Result<RunStorageStats, UploadError> {
         let mut total_files = 0;
         let mut total_size = 0;
         let mut files_by_category = HashMap::new();
 
-        let mut entries = tokio::fs::read_dir(run_dir).await
+        let mut entries = tokio::fs::read_dir(run_dir)
+            .await
             .map_err(|e| UploadError::Storage(format!("Failed to read run directory: {}", e)))?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| UploadError::Storage(format!("Failed to read directory entry: {}", e)))? {
-            
-            if entry.file_type().await.map_err(|e| UploadError::Storage(e.to_string()))?.is_dir() {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| UploadError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
+            if entry
+                .file_type()
+                .await
+                .map_err(|e| UploadError::Storage(e.to_string()))?
+                .is_dir()
+            {
                 let category = entry.file_name().to_string_lossy().to_string();
                 let category_stats = self.get_category_storage_stats(&entry.path()).await?;
-                
+
                 total_files += category_stats.0;
                 total_size += category_stats.1;
                 files_by_category.insert(category, category_stats.0);
@@ -325,20 +373,32 @@ impl UploadProcessor {
     }
 
     /// Get storage statistics for a category directory.
-    async fn get_category_storage_stats(&self, category_dir: &PathBuf) -> Result<(u64, u64), UploadError> {
+    async fn get_category_storage_stats(
+        &self,
+        category_dir: &PathBuf,
+    ) -> Result<(u64, u64), UploadError> {
         let mut file_count = 0;
         let mut total_size = 0;
 
-        let mut entries = tokio::fs::read_dir(category_dir).await
-            .map_err(|e| UploadError::Storage(format!("Failed to read category directory: {}", e)))?;
+        let mut entries = tokio::fs::read_dir(category_dir).await.map_err(|e| {
+            UploadError::Storage(format!("Failed to read category directory: {}", e))
+        })?;
 
-        while let Some(entry) = entries.next_entry().await
-            .map_err(|e| UploadError::Storage(format!("Failed to read directory entry: {}", e)))? {
-            
-            if entry.file_type().await.map_err(|e| UploadError::Storage(e.to_string()))?.is_file() {
-                let metadata = entry.metadata().await
-                    .map_err(|e| UploadError::Storage(format!("Failed to read file metadata: {}", e)))?;
-                
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| UploadError::Storage(format!("Failed to read directory entry: {}", e)))?
+        {
+            if entry
+                .file_type()
+                .await
+                .map_err(|e| UploadError::Storage(e.to_string()))?
+                .is_file()
+            {
+                let metadata = entry.metadata().await.map_err(|e| {
+                    UploadError::Storage(format!("Failed to read file metadata: {}", e))
+                })?;
+
                 file_count += 1;
                 total_size += metadata.len();
             }
@@ -373,19 +433,19 @@ pub enum UploadError {
     /// Multipart parsing error.
     #[error("Multipart error: {0}")]
     Multipart(String),
-    
+
     /// JSON parsing error.
     #[error("Parse error: {0}")]
     Parse(String),
-    
+
     /// File storage error.
     #[error("Storage error: {0}")]
     Storage(String),
-    
+
     /// Size limit exceeded.
     #[error("Size limit exceeded: {0}")]
     SizeLimit(String),
-    
+
     /// Validation error.
     #[error("Validation error: {0}")]
     Validation(String),

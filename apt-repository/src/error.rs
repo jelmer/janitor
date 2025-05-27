@@ -1,6 +1,5 @@
 //! Error types for the APT repository library.
 
-
 /// Result type for APT repository operations.
 pub type Result<T> = std::result::Result<T, AptRepositoryError>;
 

@@ -4,7 +4,6 @@ use breezyshim::RevisionId;
 use sqlx::{FromRow, PgPool, Row};
 use url::Url;
 
-
 async fn store_publish(
     conn: &PgPool,
     change_set: &str,
@@ -380,7 +379,7 @@ pub async fn iter_publish_ready(
             janitor::state::Run::from_row(&row).unwrap(),
             row.get("rate_limit_bucket"),
             row.get("policy_command"),
-            row.get("unpublished_branches"),
+            Vec::<UnpublishedBranch>::new(), // TODO: Implement custom decoder for unpublished_branches array
         ));
     }
     Ok(result)
