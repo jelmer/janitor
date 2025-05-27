@@ -39,7 +39,7 @@ pub use crate::redis::RedisConnectionManager;
 // Import sqlx Row trait
 use sqlx::Row;
 // Import pyo3 for PyErr
-use pyo3::{PyErr, exceptions::PyRuntimeError};
+use pyo3::{exceptions::PyRuntimeError, PyErr};
 
 /// Calculate the next time to try publishing based on previous attempts.
 ///
@@ -592,11 +592,16 @@ impl PublishWorker {
                         codebase: codebase.to_string(),
                         campaign: campaign.to_string(),
                         target_branch_url: result.target_branch_url.to_string(),
-                        target_branch_web_url: result.target_branch_web_url.as_ref().map(|u| u.to_string()),
+                        target_branch_web_url: result
+                            .target_branch_web_url
+                            .as_ref()
+                            .map(|u| u.to_string()),
                         timestamp: chrono::Utc::now(),
                     };
-                    
-                    if let Err(e) = crate::redis::pubsub_publish_merge_proposal(Some(redis), &event).await {
+
+                    if let Err(e) =
+                        crate::redis::pubsub_publish_merge_proposal(Some(redis), &event).await
+                    {
                         log::warn!("Failed to publish merge proposal event to Redis: {}", e);
                     }
                 }
@@ -748,7 +753,8 @@ pub async fn process_queue_loop(
         push_limit,
         modify_mp_limit,
         require_binary_diff,
-    ).await;
+    )
+    .await;
 }
 
 /// Publish all pending ready changes.
@@ -812,8 +818,8 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
 /// * `state` - The application state
 /// * `shutdown_rx` - Channel for receiving shutdown signals
 pub async fn listen_to_runner(
-    state: Arc<AppState>, 
-    shutdown_rx: tokio::sync::mpsc::Receiver<()>
+    state: Arc<AppState>,
+    shutdown_rx: tokio::sync::mpsc::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     redis::listen_to_runner(state, shutdown_rx).await
 }
@@ -829,7 +835,8 @@ pub async fn get_mp_status(mp: &breezyshim::forge::MergeProposal) -> Result<Stri
     let is_merged = tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.is_merged()
-    }).await
+    })
+    .await
     .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))?
     .map_err(|e| e)?;
 
@@ -840,7 +847,8 @@ pub async fn get_mp_status(mp: &breezyshim::forge::MergeProposal) -> Result<Stri
     let is_closed = tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.is_closed()
-    }).await
+    })
+    .await
     .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))?
     .map_err(|e| e)?;
 
@@ -878,36 +886,58 @@ pub async fn abandon_mp(
     comment: Option<&str>,
 ) -> Result<(), BrzError> {
     let mp_url = mp.url()?;
-    
+
     if let Some(comment_text) = comment {
         log::info!("{}: {}", mp_url, comment_text);
     }
 
     // Update proposal info in database
-    proposal_info_manager.update_proposal_info(
-        mp,
-        janitor::publish::MergeProposalStatus::Abandoned,
-        Some(revision),
-        codebase.unwrap_or(""),
-        &url::Url::parse(target_branch_url).map_err(|e| BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!("URL parse error: {}", e))))?,
-        campaign.unwrap_or(""),
-        can_be_merged,
-        rate_limit_bucket,
-    ).await.map_err(|e| BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!("Database error: {}", e))))?;
+    proposal_info_manager
+        .update_proposal_info(
+            mp,
+            janitor::publish::MergeProposalStatus::Abandoned,
+            Some(revision),
+            codebase.unwrap_or(""),
+            &url::Url::parse(target_branch_url).map_err(|e| {
+                BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!(
+                    "URL parse error: {}",
+                    e
+                )))
+            })?,
+            campaign.unwrap_or(""),
+            can_be_merged,
+            rate_limit_bucket,
+        )
+        .await
+        .map_err(|e| {
+            BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!(
+                "Database error: {}",
+                e
+            )))
+        })?;
 
     // Post comment if provided
     if let Some(comment_text) = comment {
         match tokio::task::spawn_blocking({
             let mp = mp.clone();
             let comment = comment_text.to_string();
-            move || { log::info!("Would post comment: {}", comment); Ok(()) }
-        }).await {
-            Ok(Ok(())) => {},
+            move || {
+                log::info!("Would post comment: {}", comment);
+                Ok(())
+            }
+        })
+        .await
+        {
+            Ok(Ok(())) => {}
             Ok(Err(BrzError::PermissionDenied(_, Some(msg)))) => {
                 log::warn!("Permission denied posting comment to {}: {}", mp_url, msg);
-            },
+            }
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error"))),
+            Err(_) => {
+                return Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>(
+                    "Task join error",
+                )))
+            }
         }
     }
 
@@ -915,14 +945,25 @@ pub async fn abandon_mp(
     match tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.close()
-    }).await {
+    })
+    .await
+    {
         Ok(Ok(())) => Ok(()),
         Ok(Err(BrzError::PermissionDenied(_, Some(msg)))) => {
-            log::warn!("Permission denied closing merge request {}: {}", mp_url, msg);
-            Err(BrzError::PermissionDenied(std::path::PathBuf::new(), Some(msg)))
-        },
+            log::warn!(
+                "Permission denied closing merge request {}: {}",
+                mp_url,
+                msg
+            );
+            Err(BrzError::PermissionDenied(
+                std::path::PathBuf::new(),
+                Some(msg),
+            ))
+        }
         Ok(Err(e)) => Err(e),
-        Err(_) => Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error"))),
+        Err(_) => Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>(
+            "Task join error",
+        ))),
     }
 }
 
@@ -955,30 +996,52 @@ pub async fn close_applied_mp(
     let mp_url = mp.url()?;
 
     // Update proposal info in database with "applied" status
-    proposal_info_manager.update_proposal_info(
-        mp,
-        janitor::publish::MergeProposalStatus::Applied,
-        Some(revision),
-        codebase.unwrap_or(""),
-        &url::Url::parse(target_branch_url).map_err(|e| BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!("URL parse error: {}", e))))?,
-        campaign.unwrap_or(""),
-        can_be_merged,
-        rate_limit_bucket,
-    ).await.map_err(|e| BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!("Database error: {}", e))))?;
+    proposal_info_manager
+        .update_proposal_info(
+            mp,
+            janitor::publish::MergeProposalStatus::Applied,
+            Some(revision),
+            codebase.unwrap_or(""),
+            &url::Url::parse(target_branch_url).map_err(|e| {
+                BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!(
+                    "URL parse error: {}",
+                    e
+                )))
+            })?,
+            campaign.unwrap_or(""),
+            can_be_merged,
+            rate_limit_bucket,
+        )
+        .await
+        .map_err(|e| {
+            BrzError::Other(PyErr::new::<PyRuntimeError, _>(format!(
+                "Database error: {}",
+                e
+            )))
+        })?;
 
     // Post comment if provided
     if let Some(comment_text) = comment {
         match tokio::task::spawn_blocking({
             let mp = mp.clone();
             let comment = comment_text.to_string();
-            move || { log::info!("Would post comment: {}", comment); Ok(()) }
-        }).await {
-            Ok(Ok(())) => {},
+            move || {
+                log::info!("Would post comment: {}", comment);
+                Ok(())
+            }
+        })
+        .await
+        {
+            Ok(Ok(())) => {}
             Ok(Err(BrzError::PermissionDenied(_, Some(msg)))) => {
                 log::warn!("Permission denied posting comment to {}: {}", mp_url, msg);
-            },
+            }
             Ok(Err(e)) => return Err(e),
-            Err(_) => return Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error"))),
+            Err(_) => {
+                return Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>(
+                    "Task join error",
+                )))
+            }
         }
     }
 
@@ -986,14 +1049,25 @@ pub async fn close_applied_mp(
     match tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.close()
-    }).await {
+    })
+    .await
+    {
         Ok(Ok(())) => Ok(()),
         Ok(Err(BrzError::PermissionDenied(_, Some(msg)))) => {
-            log::warn!("Permission denied closing merge request {}: {}", mp_url, msg);
-            Err(BrzError::PermissionDenied(std::path::PathBuf::new(), Some(msg)))
-        },
+            log::warn!(
+                "Permission denied closing merge request {}: {}",
+                mp_url,
+                msg
+            );
+            Err(BrzError::PermissionDenied(
+                std::path::PathBuf::new(),
+                Some(msg),
+            ))
+        }
         Ok(Err(e)) => Err(e),
-        Err(_) => Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error"))),
+        Err(_) => Err(BrzError::Other(PyErr::new::<PyRuntimeError, _>(
+            "Task join error",
+        ))),
     }
 }
 
@@ -1031,40 +1105,19 @@ mod tests {
     // actual MergeProposal instances from breezyshim, which cannot be easily mocked
     // in unit tests. These functions should be tested with integration tests that
     // have access to real forge connections and database instances.
-    
-    #[test]
-    fn test_merge_proposal_status_functions_exist() {
-        // This test simply verifies the functions can be referenced and have the correct signatures
-        // Actual testing requires integration tests with forge connections
-        
-        // Verify function signatures by creating function pointers
-        let _get_status_fn: fn(&breezyshim::forge::MergeProposal) -> _ = get_mp_status;
-        let _abandon_fn: fn(
-            &proposal_info::ProposalInfoManager,
-            &breezyshim::forge::MergeProposal,
-            &RevisionId,
-            Option<&str>,
-            &str,
-            Option<&str>,
-            Option<bool>,
-            Option<&str>,
-            Option<&str>,
-        ) -> _ = abandon_mp;
-        let _close_applied_fn: fn(
-            &proposal_info::ProposalInfoManager,
-            &breezyshim::forge::MergeProposal,
-            &RevisionId,
-            Option<&str>,
-            &str,
-            Option<&str>,
-            Option<bool>,
-            Option<&str>,
-            Option<&str>,
-        ) -> _ = close_applied_mp;
-        
-        // If we get here, the functions exist with the expected signatures
-        assert!(true);
-    }
+
+    // #[test]
+    // fn test_merge_proposal_status_functions_exist() {
+    //     // This test simply verifies the functions can be referenced and have the correct signatures
+    //     // Actual testing requires integration tests with forge connections
+    //
+    //     // Verify function signatures by creating function pointers
+    //     // NOTE: These are async functions, so we can't create simple function pointers
+    //     // This test is disabled as it's not meaningful for async functions
+    //
+    //     // If we get here, the functions exist with the expected signatures
+    //     assert!(true);
+    // }
 }
 
 /// Application state for the publish service.
@@ -1127,7 +1180,9 @@ impl std::fmt::Display for CheckMpError {
             CheckMpError::NoRunForMergeProposal(url) => {
                 write!(f, "No run for merge proposal: {}", url)
             }
-            CheckMpError::BranchRateLimited { retry_after } => write!(f, "Branch is rate limited"),
+            CheckMpError::BranchRateLimited { retry_after: _ } => {
+                write!(f, "Branch is rate limited")
+            }
             CheckMpError::UnexpectedHttpStatus => write!(f, "Unexpected HTTP status"),
             CheckMpError::ForgeLoginRequired => write!(f, "Forge login required"),
         }
@@ -1155,7 +1210,8 @@ async fn check_existing_mp(
     log::debug!("Checking existing merge proposal: {}", mp_url);
 
     // Get proposal info manager (simplified version)
-    let old_proposal_info = get_proposal_info_from_db(conn, &mp_url).await
+    let old_proposal_info = get_proposal_info_from_db(conn, &mp_url)
+        .await
         .map_err(|e| CheckMpError::UnexpectedHttpStatus)?;
 
     let (codebase, rate_limit_bucket) = if let Some(info) = &old_proposal_info {
@@ -1178,7 +1234,8 @@ async fn check_existing_mp(
     let source_branch_url = tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.get_source_branch_url()
-    }).await
+    })
+    .await
     .map_err(|_| CheckMpError::UnexpectedHttpStatus)?
     .map_err(CheckMpError::from)?;
 
@@ -1186,7 +1243,8 @@ async fn check_existing_mp(
     let can_be_merged = tokio::task::spawn_blocking({
         let mp = mp.clone();
         move || mp.can_be_merged()
-    }).await
+    })
+    .await
     .map_err(|_| CheckMpError::UnexpectedHttpStatus)?
     .ok();
 
@@ -1205,7 +1263,7 @@ async fn check_existing_mp(
         WHERE revision = $1
         ORDER BY finish_time DESC
         LIMIT 1
-        "#
+        "#,
     )
     .bind(revision.to_string())
     .fetch_optional(conn)
@@ -1230,7 +1288,7 @@ async fn check_existing_mp(
     // Update merge proposal status in database
     let db_status = match status {
         breezyshim::forge::MergeProposalStatus::Open => "open",
-        breezyshim::forge::MergeProposalStatus::Merged => "merged", 
+        breezyshim::forge::MergeProposalStatus::Merged => "merged",
         breezyshim::forge::MergeProposalStatus::Closed => "closed",
         breezyshim::forge::MergeProposalStatus::All => "all",
     };
@@ -1261,12 +1319,20 @@ async fn check_existing_mp(
     if let Some(mps_per_bucket) = mps_per_bucket {
         let bucket = rate_limit_bucket.as_deref().unwrap_or("default");
         let status_key = match status {
-            breezyshim::forge::MergeProposalStatus::Open => janitor::publish::MergeProposalStatus::Open,
-            breezyshim::forge::MergeProposalStatus::Merged => janitor::publish::MergeProposalStatus::Merged,
-            breezyshim::forge::MergeProposalStatus::Closed => janitor::publish::MergeProposalStatus::Closed,
-            breezyshim::forge::MergeProposalStatus::All => janitor::publish::MergeProposalStatus::Open, // Default to open for All
+            breezyshim::forge::MergeProposalStatus::Open => {
+                janitor::publish::MergeProposalStatus::Open
+            }
+            breezyshim::forge::MergeProposalStatus::Merged => {
+                janitor::publish::MergeProposalStatus::Merged
+            }
+            breezyshim::forge::MergeProposalStatus::Closed => {
+                janitor::publish::MergeProposalStatus::Closed
+            }
+            breezyshim::forge::MergeProposalStatus::All => {
+                janitor::publish::MergeProposalStatus::Open
+            } // Default to open for All
         };
-        
+
         *mps_per_bucket
             .entry(status_key)
             .or_default()
@@ -1274,12 +1340,17 @@ async fn check_existing_mp(
             .or_insert(0) += 1;
     }
 
-    log::info!("Updated merge proposal {} (status: {}, codebase: {}, run: {})", 
-              mp_url, db_status, run_codebase, run_id);
+    log::info!(
+        "Updated merge proposal {} (status: {}, codebase: {}, run: {})",
+        mp_url,
+        db_status,
+        run_codebase,
+        run_id
+    );
 
     // If check_only is false, we could perform additional actions here
     // like updating the proposal description, posting comments, etc.
-    
+
     Ok(!check_only) // Return true if we modified something
 }
 
@@ -1323,21 +1394,31 @@ pub fn iter_all_mps(
         breezyshim::forge::MergeProposalStatus::Closed,
         breezyshim::forge::MergeProposalStatus::Merged,
     ]);
-    
-    breezyshim::forge::iter_forge_instances()
-        .flat_map(move |forge| {
-            statuses.iter().filter_map(move |&status| {
-                match forge.iter_my_proposals(Some(status), None) {
+
+    breezyshim::forge::iter_forge_instances().flat_map(move |forge| {
+        statuses
+            .iter()
+            .filter_map(
+                move |&status| match forge.iter_my_proposals(Some(status), None) {
                     Ok(proposals) => {
                         let forge_clone = forge.clone();
-                        Some(proposals.map(move |proposal| Ok((forge_clone.clone(), proposal, status))))
+                        Some(
+                            proposals
+                                .map(move |proposal| Ok((forge_clone.clone(), proposal, status))),
+                        )
                     }
                     Err(BrzError::ForgeLoginRequired) => {
-                        log::info!("Skipping forge {}, no credentials known", forge.forge_name());
+                        log::info!(
+                            "Skipping forge {}, no credentials known",
+                            forge.forge_name()
+                        );
                         None
                     }
                     Err(BrzError::UnexpectedHttpStatus { .. }) => {
-                        log::warn!("Got unexpected HTTP status, skipping forge {}", forge.forge_name());
+                        log::warn!(
+                            "Got unexpected HTTP status, skipping forge {}",
+                            forge.forge_name()
+                        );
                         None
                     }
                     Err(BrzError::UnsupportedForge(msg)) => {
@@ -1345,12 +1426,17 @@ pub fn iter_all_mps(
                         None
                     }
                     Err(e) => {
-                        log::error!("Error iterating proposals for forge {}: {}", forge.forge_name(), e);
+                        log::error!(
+                            "Error iterating proposals for forge {}: {}",
+                            forge.forge_name(),
+                            e
+                        );
                         None
                     }
-                }
-            }).flatten()
-        })
+                },
+            )
+            .flatten()
+    })
 }
 
 async fn check_existing(
@@ -1504,21 +1590,31 @@ async fn consider_publish_run(
     require_binary_diff: bool,
 ) -> Result<HashMap<String, Option<String>>, sqlx::Error> {
     let mut results = HashMap::new();
-    
-    log::info!("Considering publish for run {} (campaign: {}, codebase: {})", 
-              run.id, run.suite, run.codebase);
+
+    log::info!(
+        "Considering publish for run {} (campaign: {}, codebase: {})",
+        run.id,
+        run.suite,
+        run.codebase
+    );
 
     // Check if the run has a revision
     if run.revision.is_none() {
-        log::warn!("Run {} is publish ready, but does not have revision set.", run.id);
+        log::warn!(
+            "Run {} is publish ready, but does not have revision set.",
+            run.id
+        );
         results.insert("status".to_string(), Some("no_revision".to_string()));
         return Ok(results);
     }
 
     // Check if the run is successful
-    if run.result_code.as_deref() != Some("success") {
-        log::info!("Run {} not successful (result: {:?}), skipping publish", 
-                  run.id, run.result_code);
+    if run.result_code != "success" {
+        log::info!(
+            "Run {} not successful (result: {:?}), skipping publish",
+            run.id,
+            run.result_code
+        );
         results.insert("status".to_string(), Some("not_successful".to_string()));
         return Ok(results);
     }
@@ -1534,28 +1630,46 @@ async fn consider_publish_run(
     };
 
     // Check exponential backoff - get previous attempt count
-    let attempt_count = get_publish_attempt_count(conn, &run.revision, &["differ-unreachable"]).await?;
-    let next_try_time = calculate_next_try_time(run.finish_time.unwrap_or(chrono::Utc::now()), attempt_count);
-    
+    let attempt_count = if let Some(ref revision) = run.revision {
+        get_publish_attempt_count(conn, revision, &["differ-unreachable"]).await?
+    } else {
+        0
+    };
+    let next_try_time = calculate_next_try_time(run.finish_time, attempt_count);
+
     if chrono::Utc::now() < next_try_time {
         let wait_duration = next_try_time - chrono::Utc::now();
         log::info!(
             "Not attempting to push {} / {} ({}) due to exponential backoff. Next try in {:?}.",
-            run.codebase, run.suite, run.id, wait_duration
+            run.codebase,
+            run.suite,
+            run.id,
+            wait_duration
         );
-        results.insert("status".to_string(), Some("exponential_backoff".to_string()));
-        results.insert("next_try_time".to_string(), Some(next_try_time.to_rfc3339()));
+        results.insert(
+            "status".to_string(),
+            Some("exponential_backoff".to_string()),
+        );
+        results.insert(
+            "next_try_time".to_string(),
+            Some(next_try_time.to_rfc3339()),
+        );
         return Ok(results);
     }
 
     // Check if any branches require push mode and we're at push limit
     let has_push_modes = unpublished_branches.iter().any(|b| {
-        b.publish_mode.as_deref() == Some("push") || b.publish_mode.as_deref() == Some("attempt-push")
+        b.publish_mode.as_deref() == Some("push")
+            || b.publish_mode.as_deref() == Some("attempt-push")
     });
 
     if let Some(limit) = push_limit {
         if has_push_modes && limit == 0 {
-            log::info!("Not pushing {} / {}: push limit reached", run.codebase, run.suite);
+            log::info!(
+                "Not pushing {} / {}: push limit reached",
+                run.codebase,
+                run.suite
+            );
             results.insert("status".to_string(), Some("push_limit_reached".to_string()));
             return Ok(results);
         }
@@ -1566,12 +1680,18 @@ async fn consider_publish_run(
         let limiter = bucket_rate_limiter.lock().unwrap();
         limiter.check_allowed(rate_limit_bucket)
     };
-    
+
     if !rate_limit_result.is_allowed() {
-        log::info!("Rate limited for bucket {}, skipping publish for run {}", 
-                  rate_limit_bucket, run.id);
+        log::info!(
+            "Rate limited for bucket {}, skipping publish for run {}",
+            rate_limit_bucket,
+            run.id
+        );
         results.insert("status".to_string(), Some("rate_limited".to_string()));
-        results.insert("rate_limit_bucket".to_string(), Some(rate_limit_bucket.to_string()));
+        results.insert(
+            "rate_limit_bucket".to_string(),
+            Some(rate_limit_bucket.to_string()),
+        );
         return Ok(results);
     }
 
@@ -1584,8 +1704,12 @@ async fn consider_publish_run(
 
     // Check if the run value is sufficient for creating merge proposals
     if !crate::run_sufficient_for_proposal(campaign_config, run.value) {
-        log::info!("Run {} value {:?} is not sufficient for proposal (threshold: {:?})", 
-                  run.id, run.value, campaign_config.merge_proposal.value_threshold);
+        log::info!(
+            "Run {} value {:?} is not sufficient for proposal (threshold: {:?})",
+            run.id,
+            run.value,
+            campaign_config.merge_proposal.value_threshold
+        );
         results.insert("status".to_string(), Some("insufficient_value".to_string()));
         return Ok(results);
     }
@@ -1605,11 +1729,16 @@ async fn consider_publish_run(
             run,
             branch,
             require_binary_diff,
-        ).await?;
+        )
+        .await?;
 
         if let Some(mode) = publish_mode {
-            log::info!("Will publish branch {} of run {} with mode {}", 
-                      branch_name, run.id, mode);
+            log::info!(
+                "Will publish branch {} of run {} with mode {}",
+                branch_name,
+                run.id,
+                mode
+            );
 
             // Create publish request for this branch
             match try_publish_branch_with_mode(
@@ -1623,27 +1752,35 @@ async fn consider_publish_run(
                 branch,
                 command,
                 &mode,
-            ).await {
+            )
+            .await
+            {
                 Ok(publish_result) => {
                     actual_modes.insert(branch_name.clone(), Some(mode.clone()));
-                    results.insert(
-                        format!("branch_{}", branch_name), 
-                        Some(publish_result)
+                    results.insert(format!("branch_{}", branch_name), Some(publish_result));
+                    log::info!(
+                        "Successfully initiated publish for branch {} of run {} with mode {}",
+                        branch_name,
+                        run.id,
+                        mode
                     );
-                    log::info!("Successfully initiated publish for branch {} of run {} with mode {}", 
-                              branch_name, run.id, mode);
                 }
                 Err(e) => {
-                    log::warn!("Failed to publish branch {} of run {}: {}", 
-                              branch_name, run.id, e);
-                    results.insert(
-                        format!("branch_{}_error", branch_name), 
-                        Some(e.to_string())
+                    log::warn!(
+                        "Failed to publish branch {} of run {}: {}",
+                        branch_name,
+                        run.id,
+                        e
                     );
+                    results.insert(format!("branch_{}_error", branch_name), Some(e.to_string()));
                 }
             }
         } else {
-            log::debug!("No publish mode determined for branch {} of run {}", branch_name, run.id);
+            log::debug!(
+                "No publish mode determined for branch {} of run {}",
+                branch_name,
+                run.id
+            );
             actual_modes.insert(branch_name.clone(), None);
         }
     }
@@ -1657,7 +1794,7 @@ async fn consider_publish_run(
 
     results.insert("status".to_string(), Some("processing".to_string()));
     results.insert("run_id".to_string(), Some(run.id.clone()));
-    
+
     Ok(results)
 }
 
@@ -1676,14 +1813,14 @@ async fn get_publish_attempt_count(
     exclude_codes: &[&str],
 ) -> Result<usize, sqlx::Error> {
     let revision_str = revision.to_string();
-    
+
     let count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)
         FROM publish
         WHERE revision = $1
         AND (result_code IS NULL OR NOT (result_code = ANY($2)))
-        "#
+        "#,
     )
     .bind(&revision_str)
     .bind(exclude_codes)
@@ -1722,13 +1859,13 @@ async fn determine_publish_mode(
 
     // Get publish policy for this codebase and campaign
     let policy = get_publish_policy(conn, &run.codebase, &run.suite).await?;
-    
+
     if let Some((per_branch_policy, _command, _rate_limit_bucket)) = policy {
         if let Some((mode, frequency_days)) = per_branch_policy.get(&branch.role) {
             // Check frequency constraint if specified
             if let Some(frequency) = frequency_days {
                 let cutoff_time = chrono::Utc::now() - chrono::Duration::days(*frequency as i64);
-                
+
                 let recent_publish_count = sqlx::query_scalar::<_, i64>(
                     r#"
                     SELECT COUNT(*)
@@ -1737,21 +1874,25 @@ async fn determine_publish_mode(
                     AND branch_name = $2
                     AND start_time > $3
                     AND result_code = 'success'
-                    "#
+                    "#,
                 )
                 .bind(&run.codebase)
                 .bind(&branch.role)
                 .bind(cutoff_time)
                 .fetch_one(conn)
                 .await?;
-                
+
                 if recent_publish_count > 0 {
-                    log::info!("Branch {} of {} was published recently (within {} days), skipping",
-                              branch.role, run.codebase, frequency);
+                    log::info!(
+                        "Branch {} of {} was published recently (within {} days), skipping",
+                        branch.role,
+                        run.codebase,
+                        frequency
+                    );
                     return Ok(None);
                 }
             }
-            
+
             return Ok(Some(mode.clone()));
         }
     }
@@ -1760,7 +1901,7 @@ async fn determine_publish_mode(
     let default_mode = match branch.role.as_str() {
         "main" => {
             // Main branches usually get proposed as merge requests
-            if campaign_config.merge_proposal.enabled {
+            if campaign_config.merge_proposal.is_some() {
                 "propose"
             } else {
                 "build-only"
@@ -1792,7 +1933,14 @@ async fn get_publish_policy(
     conn: &sqlx::PgPool,
     codebase: &str,
     campaign: &str,
-) -> Result<Option<(HashMap<String, (String, Option<i32>)>, Option<String>, Option<String>)>, sqlx::Error> {
+) -> Result<
+    Option<(
+        HashMap<String, (String, Option<i32>)>,
+        Option<String>,
+        Option<String>,
+    )>,
+    sqlx::Error,
+> {
     let row = sqlx::query(
         r#"
         SELECT per_branch_policy, command, rate_limit_bucket
@@ -1800,7 +1948,7 @@ async fn get_publish_policy(
         LEFT JOIN named_publish_policy
         ON named_publish_policy.name = candidate.publish_policy
         WHERE codebase = $1 AND suite = $2
-        "#
+        "#,
     )
     .bind(codebase)
     .bind(campaign)
@@ -1815,23 +1963,20 @@ async fn get_publish_policy(
         if let Some(policy_json) = per_branch_policy {
             // Parse the per_branch_policy JSON into a HashMap
             let mut policy_map = HashMap::new();
-            
+
             if let serde_json::Value::Array(policies) = policy_json {
                 for policy in policies {
                     if let serde_json::Value::Object(policy_obj) = policy {
                         if let (Some(role), Some(mode)) = (
                             policy_obj.get("role").and_then(|v| v.as_str()),
-                            policy_obj.get("mode").and_then(|v| v.as_str())
+                            policy_obj.get("mode").and_then(|v| v.as_str()),
                         ) {
                             let frequency_days = policy_obj
                                 .get("frequency_days")
                                 .and_then(|v| v.as_i64())
                                 .map(|v| v as i32);
-                            
-                            policy_map.insert(
-                                role.to_string(),
-                                (mode.to_string(), frequency_days)
-                            );
+
+                            policy_map.insert(role.to_string(), (mode.to_string(), frequency_days));
                         }
                     }
                 }
@@ -1884,7 +2029,7 @@ async fn try_publish_branch_with_mode(
             target_branch_url, result_code, description, start_time
         ) VALUES ($1, $2, $3, $4, $5, $6, NULL, 'Publishing in progress', NOW())
         RETURNING id
-        "#
+        "#,
     )
     .bind(&run.id)
     .bind(publish_mode.to_string())
@@ -1895,8 +2040,13 @@ async fn try_publish_branch_with_mode(
     .fetch_one(conn)
     .await?;
 
-    log::info!("Created publish record {} for run {} branch {} with mode {}", 
-              publish_id, run.id, branch.role, mode);
+    log::info!(
+        "Created publish record {} for run {} branch {} with mode {}",
+        publish_id,
+        run.id,
+        branch.role,
+        mode
+    );
 
     // For build-only mode, we're done
     if publish_mode == Mode::BuildOnly {
@@ -1908,12 +2058,12 @@ async fn try_publish_branch_with_mode(
                 description = 'Build completed successfully',
                 finish_time = NOW()
             WHERE id = $1
-            "#
+            "#,
         )
         .bind(&publish_id)
         .execute(conn)
         .await?;
-        
+
         return Ok(format!("build_only_{}", publish_id));
     }
 
@@ -1923,9 +2073,9 @@ async fn try_publish_branch_with_mode(
     // 2. Handle different publish modes (propose, push, attempt-push, push-derived)
     // 3. Create merge proposals if needed
     // 4. Update the publish record with results
-    
+
     log::info!("Publishing work queued for publish record {}", publish_id);
-    
+
     Ok(format!("{}_{}", mode, publish_id))
 }
 
@@ -1962,7 +2112,7 @@ async fn try_publish_branch(
             target_branch_url, result_code, description
         ) VALUES ($1, $2, $3, $4, $5, $6, NULL, 'Publishing in progress')
         RETURNING id
-        "#
+        "#,
     )
     .bind(&run.id)
     .bind(mode.to_string())
@@ -1973,14 +2123,18 @@ async fn try_publish_branch(
     .fetch_one(conn)
     .await?;
 
-    log::info!("Created publish record {} for run {} branch {}", 
-              publish_id, run.id, branch.role);
+    log::info!(
+        "Created publish record {} for run {} branch {}",
+        publish_id,
+        run.id,
+        branch.role
+    );
 
     // For now, return success. In a full implementation, this would:
     // 1. Queue the actual publishing work to the publish worker
     // 2. Handle different publish modes (propose, push, build-only)
     // 3. Create merge proposals if needed
     // 4. Update the publish record with results
-    
+
     Ok(format!("publish_{}", publish_id))
 }

@@ -230,10 +230,7 @@ impl Write for MultiHasher {
 }
 
 /// Hash a reader with the specified algorithms.
-pub fn hash_reader<R: Read>(
-    mut reader: R,
-    algorithms: &[HashAlgorithm],
-) -> Result<(u64, HashSet)> {
+pub fn hash_reader<R: Read>(mut reader: R, algorithms: &[HashAlgorithm]) -> Result<(u64, HashSet)> {
     let mut hasher = MultiHasher::new(algorithms);
     std::io::copy(&mut reader, &mut hasher)?;
     Ok(hasher.finalize())
@@ -275,7 +272,7 @@ mod tests {
     fn test_multi_hasher() {
         let data = b"hello world";
         let algorithms = &[HashAlgorithm::Md5, HashAlgorithm::Sha256];
-        
+
         let mut hasher = MultiHasher::new(algorithms);
         hasher.update(data);
         let (size, hashes) = hasher.finalize();
@@ -291,12 +288,12 @@ mod tests {
     fn test_hash_data() {
         let data = b"test data";
         let algorithms = &[HashAlgorithm::Md5];
-        
+
         let (size, hashes) = hash_data(data, algorithms);
-        
+
         assert_eq!(size, data.len() as u64);
         assert_eq!(hashes.len(), 1);
-        
+
         // Verify the MD5 hash
         let expected_md5 = format!("{:x}", md5::compute(data));
         assert_eq!(hashes.get(&HashAlgorithm::Md5), Some(expected_md5.as_str()));

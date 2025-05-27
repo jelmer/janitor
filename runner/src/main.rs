@@ -68,15 +68,21 @@ async fn main() -> Result<(), i32> {
 
     // Build application from config file or use defaults
     let config_path = args.config.unwrap_or_else(|| PathBuf::from("janitor.conf"));
-    
+
     let mut app_builder = if config_path.exists() {
-        Application::builder_from_file(&config_path)
-            .map_err(|e| {
-                eprintln!("Failed to load config from {}: {}", config_path.display(), e);
-                1
-            })?
+        Application::builder_from_file(&config_path).map_err(|e| {
+            eprintln!(
+                "Failed to load config from {}: {}",
+                config_path.display(),
+                e
+            );
+            1
+        })?
     } else {
-        log::info!("Config file {} not found, using defaults", config_path.display());
+        log::info!(
+            "Config file {} not found, using defaults",
+            config_path.display()
+        );
         Application::builder()
     };
 
@@ -94,15 +100,16 @@ async fn main() -> Result<(), i32> {
 
     // Run the application with graceful shutdown
     app.run_with_graceful_shutdown(|state| async move {
-        let router = janitor_runner::web::app(state.clone())
-            .layer(axum::middleware::from_fn(janitor_runner::tracing::http_tracing_middleware));
+        let router = janitor_runner::web::app(state.clone()).layer(axum::middleware::from_fn(
+            janitor_runner::tracing::http_tracing_middleware,
+        ));
 
         let addr = format!("{}:{}", args.listen_address, args.port);
         log::info!("Listening on {}", addr);
 
         let listener = tokio::net::TcpListener::bind(&addr).await?;
         axum::serve(listener, router.into_make_service()).await?;
-        
+
         Ok(())
     })
     .await

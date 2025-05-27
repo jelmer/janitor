@@ -129,9 +129,10 @@ impl Package {
                     current_field = Some(field.trim().to_lowercase());
                     current_value = value.trim().to_string();
                 } else {
-                    return Err(AptRepositoryError::invalid_package(
-                        format!("Invalid line format: {}", line)
-                    ));
+                    return Err(AptRepositoryError::invalid_package(format!(
+                        "Invalid line format: {}",
+                        line
+                    )));
                 }
             }
         }
@@ -142,23 +143,28 @@ impl Package {
         }
 
         // Extract required fields
-        let package = fields.remove("package")
+        let package = fields
+            .remove("package")
             .ok_or_else(|| AptRepositoryError::missing_field("Package"))?;
-        let version = fields.remove("version")
+        let version = fields
+            .remove("version")
             .ok_or_else(|| AptRepositoryError::missing_field("Version"))?;
-        let architecture = fields.remove("architecture")
+        let architecture = fields
+            .remove("architecture")
             .ok_or_else(|| AptRepositoryError::missing_field("Architecture"))?;
-        let filename = fields.remove("filename")
+        let filename = fields
+            .remove("filename")
             .ok_or_else(|| AptRepositoryError::missing_field("Filename"))?;
-        
-        let size_str = fields.remove("size")
+
+        let size_str = fields
+            .remove("size")
             .ok_or_else(|| AptRepositoryError::missing_field("Size"))?;
-        let size = size_str.parse::<u64>()
+        let size = size_str
+            .parse::<u64>()
             .map_err(|_| AptRepositoryError::invalid_field("Size", &size_str))?;
 
         // Extract optional fields
-        let installed_size = fields.remove("installed-size")
-            .and_then(|s| s.parse().ok());
+        let installed_size = fields.remove("installed-size").and_then(|s| s.parse().ok());
 
         // Handle description specially (split short and long)
         let (description, description_long) = if let Some(desc) = fields.remove("description") {
@@ -354,7 +360,7 @@ impl PackageFile {
     /// Convert the package file to a string.
     pub fn to_string(&self) -> String {
         let mut content = String::new();
-        
+
         for (i, package) in self.packages.iter().enumerate() {
             if i > 0 {
                 content.push('\n');
@@ -378,7 +384,8 @@ impl PackageFile {
     /// Sort packages by name and version.
     pub fn sort(&mut self) {
         self.packages.sort_by(|a, b| {
-            a.package.cmp(&b.package)
+            a.package
+                .cmp(&b.package)
                 .then_with(|| a.version.cmp(&b.version))
         });
     }
@@ -402,8 +409,14 @@ mod tests {
 
     #[test]
     fn test_package_creation() {
-        let package = Package::new("test-package", "1.0.0", "amd64", "pool/main/t/test_1.0.0_amd64.deb", 1024);
-        
+        let package = Package::new(
+            "test-package",
+            "1.0.0",
+            "amd64",
+            "pool/main/t/test_1.0.0_amd64.deb",
+            1024,
+        );
+
         assert_eq!(package.package, "test-package");
         assert_eq!(package.version, "1.0.0");
         assert_eq!(package.architecture, "amd64");
@@ -455,7 +468,7 @@ mod tests {
     #[test]
     fn test_package_sorting() {
         let mut package_file = PackageFile::new();
-        
+
         let package1 = Package::new("zpackage", "1.0.0", "amd64", "z.deb", 1024);
         let package2 = Package::new("apackage", "2.0.0", "amd64", "a.deb", 2048);
         let package3 = Package::new("apackage", "1.0.0", "amd64", "a1.deb", 1024);

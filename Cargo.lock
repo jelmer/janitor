@@ -3471,6 +3471,7 @@ name = "janitor-differ"
 version = "0.0.0"
 dependencies = [
  "accept-header",
+ "async-trait",
  "axum 0.8.4",
  "axum-extra",
  "breezyshim",
@@ -3493,7 +3494,9 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
+ "tower",
  "tracing",
+ "url",
 ]
 
 [[package]]

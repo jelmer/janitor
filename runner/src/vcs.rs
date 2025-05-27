@@ -8,7 +8,6 @@ use crate::metrics::MetricsCollector;
 /// VCS integration for the runner module.
 /// This provides a higher-level interface that coordinates with queue management,
 /// worker assignments, and system monitoring.
-
 pub use janitor::vcs::{
     BranchOpenFailure, LocalBzrVcsManager, LocalGitVcsManager, RemoteBzrVcsManager,
     RemoteGitVcsManager, RevisionInfo, VcsManager, VcsType,
@@ -58,9 +57,10 @@ impl RunnerVcsManager {
         branch_name: &str,
     ) -> Result<Option<Box<dyn breezyshim::branch::Branch>>, BranchOpenFailure> {
         let start_time = std::time::Instant::now();
-        
+
         let result = if let Some(manager) = self.get_manager(vcs_type) {
-            manager.get_branch(codebase, branch_name)
+            manager
+                .get_branch(codebase, branch_name)
                 .map_err(|e| BranchOpenFailure {
                     code: "branch-open-error".to_string(),
                     description: format!("Failed to open branch: {}", e),
@@ -77,7 +77,7 @@ impl RunnerVcsManager {
         // Record metrics
         let duration = start_time.elapsed();
         let status = if result.is_ok() { "success" } else { "error" };
-        
+
         self.metrics.record_vcs_operation_duration(
             &vcs_type.to_string(),
             "open_branch",
@@ -86,7 +86,8 @@ impl RunnerVcsManager {
         );
 
         if let Err(ref failure) = result {
-            self.metrics.record_vcs_error(&vcs_type.to_string(), &failure.code);
+            self.metrics
+                .record_vcs_error(&vcs_type.to_string(), &failure.code);
         }
 
         result
@@ -101,7 +102,7 @@ impl RunnerVcsManager {
         new_revid: &breezyshim::RevisionId,
     ) -> Result<Vec<u8>, VcsError> {
         let start_time = std::time::Instant::now();
-        
+
         let result = if let Some(manager) = self.get_manager(vcs_type) {
             manager.get_diff(codebase, old_revid, new_revid).await
         } else {
@@ -128,9 +129,11 @@ impl RunnerVcsManager {
         new_revid: &breezyshim::RevisionId,
     ) -> Result<Vec<RevisionInfo>, VcsError> {
         let start_time = std::time::Instant::now();
-        
+
         let result = if let Some(manager) = self.get_manager(vcs_type) {
-            manager.get_revision_info(codebase, old_revid, new_revid).await
+            manager
+                .get_revision_info(codebase, old_revid, new_revid)
+                .await
         } else {
             return Err(VcsError::UnsupportedVcs(vcs_type));
         };
@@ -164,7 +167,7 @@ impl RunnerVcsManager {
 
         for (&vcs_type, manager) in &self.managers {
             let start_time = std::time::Instant::now();
-            
+
             // Simple health check - try to list repositories
             let health = match manager.list_repositories().is_empty() {
                 true => VcsHealth::Warning("No repositories available".to_string()),
@@ -175,7 +178,11 @@ impl RunnerVcsManager {
             self.metrics.record_vcs_operation_duration(
                 &vcs_type.to_string(),
                 "health_check",
-                if matches!(health, VcsHealth::Healthy) { "success" } else { "warning" },
+                if matches!(health, VcsHealth::Healthy) {
+                    "success"
+                } else {
+                    "warning"
+                },
                 duration,
             );
 
@@ -203,16 +210,16 @@ impl RunnerVcsManager {
 pub enum VcsError {
     #[error("Unsupported VCS type: {0:?}")]
     UnsupportedVcs(VcsType),
-    
+
     #[error("Branch operation failed: {0}")]
     BranchError(#[from] BranchOpenFailure),
-    
+
     #[error("Repository error: {0}")]
     RepositoryError(String),
-    
+
     #[error("Network error: {0}")]
     NetworkError(String),
-    
+
     #[error("Timeout after {0:?}")]
     Timeout(Duration),
 }
@@ -273,7 +280,10 @@ impl VcsCoordinator for RunnerVcsManager {
         codebase: &str,
         branch: &str,
     ) -> Result<bool, VcsError> {
-        match self.open_branch_with_metrics(vcs_type, codebase, branch).await {
+        match self
+            .open_branch_with_metrics(vcs_type, codebase, branch)
+            .await
+        {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(failure) => {
@@ -295,7 +305,8 @@ impl VcsCoordinator for RunnerVcsManager {
         branch: &str,
     ) -> Result<(), VcsError> {
         // For now, just open the branch to warm any caches
-        self.open_branch_with_metrics(vcs_type, codebase, branch).await?;
+        self.open_branch_with_metrics(vcs_type, codebase, branch)
+            .await?;
         Ok(())
     }
 
@@ -305,7 +316,7 @@ impl VcsCoordinator for RunnerVcsManager {
         codebase: &str,
     ) -> Result<Duration, VcsError> {
         let start = std::time::Instant::now();
-        
+
         if let Some(manager) = self.get_manager(vcs_type) {
             // Quick repository access test
             let _url = manager.get_repository_url(codebase);
@@ -325,7 +336,9 @@ impl MetricsCollector {
         status: &str,
         duration: Duration,
     ) {
-        if let Ok(histogram) = crate::metrics::VCS_OPERATION_DURATION.get_metric_with_label_values(&[vcs_type, operation, status]) {
+        if let Ok(histogram) = crate::metrics::VCS_OPERATION_DURATION
+            .get_metric_with_label_values(&[vcs_type, operation, status])
+        {
             histogram.observe(duration.as_secs_f64());
         }
     }
@@ -346,15 +359,15 @@ mod tests {
     #[test]
     fn test_runner_vcs_manager_creation() {
         let mut managers: HashMap<VcsType, Box<dyn VcsManager>> = HashMap::new();
-        
+
         // Create test managers
         managers.insert(
             VcsType::Git,
             Box::new(LocalGitVcsManager::new(PathBuf::from("/tmp/test-git"))),
         );
-        
+
         let runner_manager = RunnerVcsManager::new(managers);
-        
+
         assert_eq!(runner_manager.supported_vcs_types(), vec![VcsType::Git]);
         assert!(runner_manager.get_manager(VcsType::Git).is_some());
         assert!(runner_manager.get_manager(VcsType::Bzr).is_none());
@@ -367,10 +380,10 @@ mod tests {
             VcsType::Git,
             Box::new(LocalGitVcsManager::new(PathBuf::from("/tmp/test-git"))),
         );
-        
+
         let runner_manager = RunnerVcsManager::new(managers);
         let stats = runner_manager.get_statistics();
-        
+
         assert_eq!(stats.manager_count, 1);
         assert!(stats.supported_vcs_types.contains(&VcsType::Git));
     }
@@ -378,13 +391,11 @@ mod tests {
     #[tokio::test]
     async fn test_vcs_error_handling() {
         let runner_manager = RunnerVcsManager::new(HashMap::new());
-        
-        let result = runner_manager.open_branch_with_metrics(
-            VcsType::Git,
-            "test-codebase",
-            "main",
-        ).await;
-        
+
+        let result = runner_manager
+            .open_branch_with_metrics(VcsType::Git, "test-codebase", "main")
+            .await;
+
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.code, "unsupported-vcs");

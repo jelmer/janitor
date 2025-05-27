@@ -2,8 +2,8 @@
 
 #[cfg(feature = "async")]
 use crate::{
-    AptRepositoryError, HashedFile, PackageFile, Release,
-    ReleaseBuilder, Result, SourceFile, Repository,
+    AptRepositoryError, HashedFile, PackageFile, Release, ReleaseBuilder, Repository, Result,
+    SourceFile,
 };
 use std::path::Path;
 use tokio::fs;
@@ -21,7 +21,11 @@ impl AsyncRepository {
     }
 
     /// Generate repository metadata files at the specified path asynchronously.
-    pub async fn generate_repository<P: AsRef<Path>, PP: AsyncPackageProvider, SP: AsyncSourceProvider>(
+    pub async fn generate_repository<
+        P: AsRef<Path>,
+        PP: AsyncPackageProvider,
+        SP: AsyncSourceProvider,
+    >(
         &self,
         base_path: P,
         package_provider: &PP,
@@ -69,12 +73,16 @@ impl AsyncRepository {
                     .await
                     .map_err(|e| AptRepositoryError::DirectoryCreation(e.to_string()))?;
 
-                let packages = package_provider.get_packages(&self.inner.suite, component, arch).await?;
-                let packages_files = self.write_compressed_file_async(
-                    &arch_dir,
-                    "Packages",
-                    packages.to_string().as_bytes(),
-                ).await?;
+                let packages = package_provider
+                    .get_packages(&self.inner.suite, component, arch)
+                    .await?;
+                let packages_files = self
+                    .write_compressed_file_async(
+                        &arch_dir,
+                        "Packages",
+                        packages.to_string().as_bytes(),
+                    )
+                    .await?;
 
                 for file in &packages_files {
                     let relative_path = component_dir
@@ -91,7 +99,8 @@ impl AsyncRepository {
 
                 // Create by-hash directory structure if enabled
                 if self.inner.acquire_by_hash {
-                    self.create_by_hash_links_async(&arch_dir, &packages_files).await?;
+                    self.create_by_hash_links_async(&arch_dir, &packages_files)
+                        .await?;
                 }
             }
 
@@ -101,12 +110,12 @@ impl AsyncRepository {
                 .await
                 .map_err(|e| AptRepositoryError::DirectoryCreation(e.to_string()))?;
 
-            let sources = source_provider.get_sources(&self.inner.suite, component).await?;
-            let sources_files = self.write_compressed_file_async(
-                &source_dir,
-                "Sources",
-                sources.to_string().as_bytes(),
-            ).await?;
+            let sources = source_provider
+                .get_sources(&self.inner.suite, component)
+                .await?;
+            let sources_files = self
+                .write_compressed_file_async(&source_dir, "Sources", sources.to_string().as_bytes())
+                .await?;
 
             for file in &sources_files {
                 let relative_path = component_dir
@@ -123,7 +132,8 @@ impl AsyncRepository {
 
             // Create by-hash directory structure if enabled
             if self.inner.acquire_by_hash {
-                self.create_by_hash_links_async(&source_dir, &sources_files).await?;
+                self.create_by_hash_links_async(&source_dir, &sources_files)
+                    .await?;
             }
         }
 
@@ -152,7 +162,8 @@ impl AsyncRepository {
             let compressed_content = compression.compress(content)?;
 
             // Calculate hashes
-            let (size, hashes) = crate::hash::hash_data(&compressed_content, &self.inner.hash_algorithms);
+            let (size, hashes) =
+                crate::hash::hash_data(&compressed_content, &self.inner.hash_algorithms);
 
             // Write the file asynchronously
             fs::write(&filepath, &compressed_content).await?;
@@ -246,7 +257,12 @@ impl AsyncRepository {
 #[async_trait::async_trait]
 pub trait AsyncPackageProvider: Send + Sync {
     /// Get packages for a specific suite, component, and architecture.
-    async fn get_packages(&self, suite: &str, component: &str, architecture: &str) -> Result<PackageFile>;
+    async fn get_packages(
+        &self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+    ) -> Result<PackageFile>;
 }
 
 /// Async trait for providing source package data to the repository generator.
@@ -271,9 +287,19 @@ impl AsyncMemoryPackageProvider {
     }
 
     /// Add packages for a specific suite, component, and architecture.
-    pub fn add_packages(&mut self, suite: &str, component: &str, architecture: &str, packages: PackageFile) {
+    pub fn add_packages(
+        &mut self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+        packages: PackageFile,
+    ) {
         self.packages.insert(
-            (suite.to_string(), component.to_string(), architecture.to_string()),
+            (
+                suite.to_string(),
+                component.to_string(),
+                architecture.to_string(),
+            ),
             packages,
         );
     }
@@ -287,9 +313,19 @@ impl Default for AsyncMemoryPackageProvider {
 
 #[async_trait::async_trait]
 impl AsyncPackageProvider for AsyncMemoryPackageProvider {
-    async fn get_packages(&self, suite: &str, component: &str, architecture: &str) -> Result<PackageFile> {
-        Ok(self.packages
-            .get(&(suite.to_string(), component.to_string(), architecture.to_string()))
+    async fn get_packages(
+        &self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+    ) -> Result<PackageFile> {
+        Ok(self
+            .packages
+            .get(&(
+                suite.to_string(),
+                component.to_string(),
+                architecture.to_string(),
+            ))
             .cloned()
             .unwrap_or_default())
     }
@@ -311,10 +347,8 @@ impl AsyncMemorySourceProvider {
 
     /// Add sources for a specific suite and component.
     pub fn add_sources(&mut self, suite: &str, component: &str, sources: SourceFile) {
-        self.sources.insert(
-            (suite.to_string(), component.to_string()),
-            sources,
-        );
+        self.sources
+            .insert((suite.to_string(), component.to_string()), sources);
     }
 }
 
@@ -327,7 +361,8 @@ impl Default for AsyncMemorySourceProvider {
 #[async_trait::async_trait]
 impl AsyncSourceProvider for AsyncMemorySourceProvider {
     async fn get_sources(&self, suite: &str, component: &str) -> Result<SourceFile> {
-        Ok(self.sources
+        Ok(self
+            .sources
             .get(&(suite.to_string(), component.to_string()))
             .cloned()
             .unwrap_or_default())
@@ -362,23 +397,38 @@ mod tests {
 
         let source_provider = AsyncMemorySourceProvider::new();
 
-        let release = async_repo.generate_repository(repo_path, &package_provider, &source_provider).await.unwrap();
+        let release = async_repo
+            .generate_repository(repo_path, &package_provider, &source_provider)
+            .await
+            .unwrap();
 
         // Check that the Release file was created
         assert!(fs::try_exists(repo_path.join("Release")).await.unwrap());
 
         // Check that component directories were created
         assert!(fs::try_exists(repo_path.join("main")).await.unwrap());
-        assert!(fs::try_exists(repo_path.join("main/binary-amd64")).await.unwrap());
+        assert!(fs::try_exists(repo_path.join("main/binary-amd64"))
+            .await
+            .unwrap());
         assert!(fs::try_exists(repo_path.join("main/source")).await.unwrap());
 
         // Check that Packages files were created
-        assert!(fs::try_exists(repo_path.join("main/binary-amd64/Packages")).await.unwrap());
-        assert!(fs::try_exists(repo_path.join("main/binary-amd64/Packages.gz")).await.unwrap());
+        assert!(fs::try_exists(repo_path.join("main/binary-amd64/Packages"))
+            .await
+            .unwrap());
+        assert!(
+            fs::try_exists(repo_path.join("main/binary-amd64/Packages.gz"))
+                .await
+                .unwrap()
+        );
 
         // Check that Sources files were created
-        assert!(fs::try_exists(repo_path.join("main/source/Sources")).await.unwrap());
-        assert!(fs::try_exists(repo_path.join("main/source/Sources.gz")).await.unwrap());
+        assert!(fs::try_exists(repo_path.join("main/source/Sources"))
+            .await
+            .unwrap());
+        assert!(fs::try_exists(repo_path.join("main/source/Sources.gz"))
+            .await
+            .unwrap());
 
         // Check release file content
         assert_eq!(release.origin, Some("Test".to_string()));
@@ -402,7 +452,10 @@ mod tests {
         source_provider.add_sources("stable", "main", sources);
 
         // Test retrieval
-        let retrieved_packages = package_provider.get_packages("stable", "main", "amd64").await.unwrap();
+        let retrieved_packages = package_provider
+            .get_packages("stable", "main", "amd64")
+            .await
+            .unwrap();
         assert_eq!(retrieved_packages.len(), 1);
         assert_eq!(retrieved_packages.packages()[0].package, "test-pkg");
 

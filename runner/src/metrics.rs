@@ -3,8 +3,8 @@
 use lazy_static::lazy_static;
 use prometheus::{
     register_counter_vec, register_gauge_vec, register_histogram_vec, register_int_counter_vec,
-    register_int_gauge_vec, CounterVec, GaugeVec, HistogramVec, IntCounterVec,
-    IntGaugeVec, TextEncoder,
+    register_int_gauge_vec, CounterVec, GaugeVec, HistogramVec, IntCounterVec, IntGaugeVec,
+    TextEncoder,
 };
 
 lazy_static! {
@@ -286,7 +286,7 @@ impl MetricsCollector {
         let version = env!("CARGO_PKG_VERSION");
         let build_time = std::env::var("BUILD_TIME").unwrap_or_else(|_| "unknown".to_string());
         let rust_version = std::env::var("RUST_VERSION").unwrap_or_else(|_| "unknown".to_string());
-        
+
         SYSTEM_INFO
             .with_label_values(&[version, &build_time, &rust_version])
             .set(1.0);
@@ -307,13 +307,13 @@ pub async fn metrics_middleware(
     let start = std::time::Instant::now();
     let method = request.method().to_string();
     let path = request.uri().path().to_string();
-    
+
     let response = next.run(request).await;
-    
+
     let duration = start.elapsed().as_secs_f64();
     let status = response.status().as_u16();
-    
+
     MetricsCollector::record_http_request(&method, &path, status, duration);
-    
+
     response
 }

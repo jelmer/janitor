@@ -1,9 +1,9 @@
 //! Tests to verify configuration compatibility with Python implementation.
 
-use std::collections::HashMap;
+use janitor_runner::config::{ApplicationConfig, DatabaseConfig, RunnerConfig, WebConfig};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use janitor_runner::config::{RunnerConfig, DatabaseConfig, WebConfig, ApplicationConfig};
 
 /// Test that configuration files can be read in Python-compatible format.
 #[test]
@@ -27,12 +27,19 @@ version = "1.0.0"
 environment = "development"
 debug = true
 "#;
-    
+
     let config: Result<RunnerConfig, _> = toml::from_str(toml_config);
-    assert!(config.is_ok(), "Failed to parse TOML config: {:?}", config.err());
-    
+    assert!(
+        config.is_ok(),
+        "Failed to parse TOML config: {:?}",
+        config.err()
+    );
+
     let config = config.unwrap();
-    assert_eq!(config.database.url, "postgresql://user:pass@localhost/janitor");
+    assert_eq!(
+        config.database.url,
+        "postgresql://user:pass@localhost/janitor"
+    );
     assert_eq!(config.database.max_connections, 20);
     assert_eq!(config.web.listen_address, "0.0.0.0");
     assert_eq!(config.web.port, 9911);
@@ -51,10 +58,12 @@ fn test_environment_variable_compatibility() {
         ("WEB_PORT", "8080"),
         ("WEB_LISTEN_ADDRESS", "127.0.0.1"),
     ];
-    
+
     for (key, value) in env_vars {
         // Verify environment variable names match Python conventions
-        assert!(key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'));
+        assert!(key
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'));
         assert!(!key.starts_with('_'));
         assert!(!key.ends_with('_'));
         assert!(!value.is_empty());
@@ -65,18 +74,18 @@ fn test_environment_variable_compatibility() {
 #[test]
 fn test_default_config_values() {
     let config = RunnerConfig::default();
-    
+
     // Database defaults should match Python
     assert_eq!(config.database.max_connections, 10);
     assert_eq!(config.database.connection_timeout_seconds, 30);
     assert_eq!(config.database.query_timeout_seconds, 30);
-    
+
     // Web server defaults should match Python
     assert_eq!(config.web.listen_address, "localhost");
     assert_eq!(config.web.port, 9911);
     assert_eq!(config.web.public_port, 9919);
     assert_eq!(config.web.request_timeout_seconds, 60);
-    
+
     // Application defaults should match Python
     assert_eq!(config.application.environment, "development");
     assert_eq!(config.application.debug, false);
@@ -103,7 +112,7 @@ fn test_campaign_config_structure() {
             "priority": "medium"
         }
     });
-    
+
     // Verify structure matches Python expectations
     assert!(campaign_json["name"].is_string());
     assert!(campaign_json["description"].is_string());
@@ -112,11 +121,13 @@ fn test_campaign_config_structure() {
     assert!(campaign_json["success_chance"].is_number());
     assert!(campaign_json["publish_policy"].is_object());
     assert!(campaign_json["schedule"].is_object());
-    
+
     // Test that campaign name follows Python domain constraint
     let name = campaign_json["name"].as_str().unwrap();
     assert!(name.chars().nth(0).unwrap().is_ascii_alphanumeric());
-    assert!(name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "+-".contains(c)));
+    assert!(name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "+-".contains(c)));
 }
 
 /// Test worker configuration format matches Python.
@@ -129,7 +140,7 @@ fn test_worker_config_format() {
             "DEBEMAIL": "janitor@debian.org",
             "GIT_COMMITTER_NAME": "Janitor Bot",
             "GIT_COMMITTER_EMAIL": "janitor@debian.org",
-            "GIT_AUTHOR_NAME": "Janitor Bot", 
+            "GIT_AUTHOR_NAME": "Janitor Bot",
             "GIT_AUTHOR_EMAIL": "janitor@debian.org",
             "BRZ_EMAIL": "Janitor Bot <janitor@debian.org>",
             "EMAIL": "janitor@debian.org",
@@ -149,11 +160,11 @@ fn test_worker_config_format() {
             "base_url": "https://logs.janitor.debian.net"
         }
     });
-    
+
     // Verify worker config has expected structure
     assert!(worker_config["env"].is_object());
     assert!(worker_config["campaign_config"].is_object());
-    
+
     // Check environment variables match committer_env output
     let env = &worker_config["env"];
     assert!(env["DEBFULLNAME"].is_string());
@@ -180,7 +191,7 @@ fn test_logging_config_compatibility() {
                 "level": "INFO"
             },
             "file": {
-                "type": "file", 
+                "type": "file",
                 "filename": "/var/log/janitor/runner.log",
                 "level": "DEBUG",
                 "rotation": {
@@ -190,12 +201,12 @@ fn test_logging_config_compatibility() {
             }
         }
     });
-    
+
     // Verify logging config structure
     assert!(logging_config["level"].is_string());
     assert!(logging_config["format"].is_string());
     assert!(logging_config["handlers"].is_object());
-    
+
     // Test log levels match Python
     let valid_levels = vec!["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
     let level = logging_config["level"].as_str().unwrap();
@@ -213,13 +224,13 @@ fn test_database_config_compatibility() {
         query_timeout_seconds: 60,
         enable_sql_logging: false,
     };
-    
+
     // Verify PostgreSQL URL format
     assert!(db_config.url.starts_with("postgresql://"));
     assert!(db_config.url.contains("@"));
     assert!(db_config.url.contains(":"));
     assert!(db_config.url.contains("/"));
-    
+
     // Test connection parameters are reasonable
     assert!(db_config.max_connections > 0);
     assert!(db_config.max_connections <= 100); // Reasonable limit
@@ -238,14 +249,14 @@ fn test_vcs_config_compatibility() {
         "enable_caching": true,
         "timeout_seconds": 300
     });
-    
+
     // Verify VCS config structure
     assert!(vcs_config["git_location"].is_string());
     assert!(vcs_config["bzr_location"].is_string());
     assert!(vcs_config["public_vcs_location"].is_string());
     assert!(vcs_config["enable_caching"].is_boolean());
     assert!(vcs_config["timeout_seconds"].is_number());
-    
+
     // Test URL formats
     let git_url = vcs_config["git_location"].as_str().unwrap();
     assert!(git_url.starts_with("http://") || git_url.starts_with("https://"));
@@ -260,18 +271,18 @@ fn test_artifact_config_compatibility() {
         "local_artifact_path": "/var/lib/janitor/artifacts",
         "max_artifact_size": 104857600
     });
-    
+
     assert_eq!(local_config["storage_backend"], "Local");
     assert!(local_config["local_artifact_path"].is_string());
     assert!(local_config["max_artifact_size"].is_number());
-    
-    // Test GCS artifact configuration  
+
+    // Test GCS artifact configuration
     let gcs_config = json!({
         "storage_backend": "Gcs",
         "gcs_bucket": "janitor-artifacts",
         "max_artifact_size": 104857600
     });
-    
+
     assert_eq!(gcs_config["storage_backend"], "Gcs");
     assert!(gcs_config["gcs_bucket"].is_string());
     assert!(gcs_config["max_artifact_size"].is_number());
@@ -286,18 +297,18 @@ fn test_log_config_compatibility() {
         "local_log_path": "/var/lib/janitor/logs",
         "max_log_size": 52428800
     });
-    
+
     assert_eq!(local_config["storage_backend"], "Local");
     assert!(local_config["local_log_path"].is_string());
     assert!(local_config["max_log_size"].is_number());
-    
+
     // Test GCS log configuration
     let gcs_config = json!({
-        "storage_backend": "Gcs", 
+        "storage_backend": "Gcs",
         "gcs_bucket": "janitor-logs",
         "max_log_size": 52428800
     });
-    
+
     assert_eq!(gcs_config["storage_backend"], "Gcs");
     assert!(gcs_config["gcs_bucket"].is_string());
     assert!(gcs_config["max_log_size"].is_number());
@@ -316,14 +327,14 @@ fn test_rate_limiting_config() {
         },
         "window_seconds": 3600
     });
-    
+
     assert!(rate_config["default_limit"].is_number());
     assert!(rate_config["host_limits"].is_object());
     assert!(rate_config["window_seconds"].is_number());
-    
+
     let default_limit = rate_config["default_limit"].as_u64().unwrap();
     assert!(default_limit > 0);
-    
+
     let window = rate_config["window_seconds"].as_u64().unwrap();
     assert!(window > 0);
 }
@@ -338,12 +349,12 @@ fn test_redis_config_compatibility() {
         "command_timeout_seconds": 10,
         "max_connections": 10
     });
-    
+
     assert!(redis_config["url"].is_string());
     assert!(redis_config["connection_timeout_seconds"].is_number());
     assert!(redis_config["command_timeout_seconds"].is_number());
     assert!(redis_config["max_connections"].is_number());
-    
+
     let url = redis_config["url"].as_str().unwrap();
     assert!(url.starts_with("redis://"));
 }
@@ -359,10 +370,10 @@ fn test_config_validation_compatibility() {
         query_timeout_seconds: 30,
         enable_sql_logging: false,
     };
-    
+
     // URL should not be valid
     assert!(!invalid_db_config.url.starts_with("postgresql://"));
-    
+
     // Test invalid port numbers
     let invalid_web_config = WebConfig {
         listen_address: "localhost".to_string(),
@@ -371,9 +382,9 @@ fn test_config_validation_compatibility() {
         request_timeout_seconds: 60,
         max_request_size_bytes: 10 * 1024 * 1024,
     };
-    
+
     assert_eq!(invalid_web_config.port, 0); // Should be rejected by validation
-    
+
     // Test invalid timeout values
     let invalid_timeouts = vec![0, u64::MAX];
     for timeout in invalid_timeouts {
@@ -388,12 +399,12 @@ fn test_config_file_paths() {
     // Test configuration file paths that Python looks for
     let config_paths = vec![
         "/etc/janitor/runner.conf",
-        "/etc/janitor/runner.toml", 
+        "/etc/janitor/runner.toml",
         "~/.config/janitor/runner.conf",
         "./janitor.conf",
         "./janitor.toml",
     ];
-    
+
     for path in config_paths {
         assert!(!path.is_empty());
         assert!(path.contains("janitor"));
@@ -407,14 +418,19 @@ fn test_sensitive_config_handling() {
     // Test that sensitive values are handled like Python
     let sensitive_fields = vec![
         "database.url",
-        "redis.url", 
+        "redis.url",
         "worker.password",
         "api.secret_key",
         "gcs.credentials",
     ];
-    
+
     for field in sensitive_fields {
         // These should be redacted in logs/debug output
-        assert!(field.contains("url") || field.contains("password") || field.contains("secret") || field.contains("credentials"));
+        assert!(
+            field.contains("url")
+                || field.contains("password")
+                || field.contains("secret")
+                || field.contains("credentials")
+        );
     }
 }

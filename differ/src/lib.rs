@@ -9,6 +9,10 @@ pub mod diffoscope;
 /// Error types and handling for the differ service
 pub mod error;
 
+/// Test utilities for integration testing
+#[doc(hidden)]
+pub mod test_utils;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -21,15 +25,15 @@ pub use error::{DifferError, DifferResult};
 ///
 /// # Returns
 /// A result containing an iterator of (filename, path) pairs
-/// 
+///
 /// # Errors
 /// Returns `DifferError::IoError` if the directory cannot be read
 pub fn find_binaries(path: &Path) -> DifferResult<impl Iterator<Item = (OsString, PathBuf)>> {
     let iter = std::fs::read_dir(path)
-        .map_err(|e| DifferError::IoError { 
-            operation: "read_dir".to_string(), 
-            path: path.to_path_buf(), 
-            source: e 
+        .map_err(|e| DifferError::IoError {
+            operation: "read_dir".to_string(),
+            path: path.to_path_buf(),
+            source: e,
         })?
         .filter_map(|entry| {
             let entry = entry.ok()?;
@@ -75,24 +79,24 @@ mod tests {
     #[test]
     fn test_find_binaries_with_files() -> DifferResult<()> {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create some test files
         File::create(temp_dir.path().join("test.deb")).unwrap();
         File::create(temp_dir.path().join("other.txt")).unwrap();
         File::create(temp_dir.path().join("another.udeb")).unwrap();
-        
+
         let binaries: Vec<_> = find_binaries(temp_dir.path())?.collect();
         assert_eq!(binaries.len(), 3);
-        
+
         let filenames: Vec<String> = binaries
             .iter()
             .map(|(name, _)| name.to_string_lossy().to_string())
             .collect();
-        
+
         assert!(filenames.contains(&"test.deb".to_string()));
         assert!(filenames.contains(&"other.txt".to_string()));
         assert!(filenames.contains(&"another.udeb".to_string()));
-        
+
         Ok(())
     }
 
@@ -102,7 +106,7 @@ mod tests {
         assert!(result.is_err());
         if let Err(error) = result {
             match error {
-                DifferError::IoError { .. } => {}, // Expected
+                DifferError::IoError { .. } => {} // Expected
                 _ => panic!("Expected IoError, got: {:?}", error),
             }
         }

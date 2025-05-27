@@ -3,11 +3,11 @@
 //! This module handles the main queue processing loop and related functionality,
 //! ported from the Python implementation.
 
-use crate::{AppState, PublishError, consider_publish_run};
+use crate::{consider_publish_run, AppState, PublishError};
 use chrono::{DateTime, Utc};
+use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::sync::Arc;
-use sqlx::{PgPool, Row};
 
 /// Represents a publish-ready run with its associated metadata.
 #[derive(Debug, Clone)]
@@ -80,7 +80,8 @@ impl PublishReadyIterator {
                 AND run.suite IS NOT NULL
                 AND new_result_branch.role IS NOT NULL
                 AND publish.id IS NULL  -- Not already published
-        "#.to_string();
+        "#
+        .to_string();
 
         if let Some(ref run_id) = self.run_id {
             query.push_str(" AND run.id = $1");
@@ -94,9 +95,7 @@ impl PublishReadyIterator {
                 .fetch_all(&self.conn)
                 .await?
         } else {
-            sqlx::query(&query)
-                .fetch_all(&self.conn)
-                .await?
+            sqlx::query(&query).fetch_all(&self.conn).await?
         };
 
         if rows.is_empty() {
@@ -104,7 +103,14 @@ impl PublishReadyIterator {
         }
 
         // Group by run ID to handle multiple branches per run
-        let mut runs_map: HashMap<String, (janitor::state::Run, Vec<crate::state::UnpublishedBranch>, String)> = HashMap::new();
+        let mut runs_map: HashMap<
+            String,
+            (
+                janitor::state::Run,
+                Vec<crate::state::UnpublishedBranch>,
+                String,
+            ),
+        > = HashMap::new();
 
         for row in rows {
             let run_id: String = row.get("id");
@@ -125,12 +131,18 @@ impl PublishReadyIterator {
                 description: row.get("description"),
                 value: row.get("value"),
                 worker_name: row.get("worker_name"),
-                // TODO: Add missing fields based on actual Run struct definition
-                vcs_type: janitor::vcs::VcsType::Git, // Default value
-                branch_url: url::Url::parse("https://example.com").unwrap(), // Placeholder
-                result: row.get("worker_result"),
-                context: None, // TODO: Get from query if needed
-                instigated_context: None, // TODO: Get from query if needed
+                vcs_type: row.get("vcs_type"),
+                branch_url: row.get("branch_url"),
+                change_set: row.get("change_set"),
+                failure_details: row.get("failure_details"),
+                failure_transient: row.get("failure_transient"),
+                failure_stage: row.get("failure_stage"),
+                context: row.get("context"),
+                result: row.get("result"),
+                instigated_context: row.get("instigated_context"),
+                logfilenames: row.get("logfilenames"),
+                result_branches: row.get("result_branches"),
+                result_tags: row.get("result_tags"),
             };
 
             let branch = crate::state::UnpublishedBranch {
@@ -140,6 +152,7 @@ impl PublishReadyIterator {
                 base_revision: None, // TODO: Get from query if available
                 publish_mode: Some("propose".to_string()), // Default mode
                 max_frequency_days: None, // TODO: Get from config if needed
+                name: row.get("branch_name"), // Use remote_name as name
             };
 
             match runs_map.get_mut(&run_id) {
@@ -186,8 +199,11 @@ pub async fn process_queue_loop(
     modify_mp_limit: Option<i32>,
     require_binary_diff: bool,
 ) {
-    log::info!("Starting publish queue processing loop (auto_publish: {}, interval: {:?})", 
-              auto_publish, interval);
+    log::info!(
+        "Starting publish queue processing loop (auto_publish: {}, interval: {:?})",
+        auto_publish,
+        interval
+    );
 
     loop {
         let cycle_start = Utc::now();
@@ -205,7 +221,8 @@ pub async fn process_queue_loop(
             &state.vcs_managers,
             modify_mp_limit,
             state.unexpected_mp_limit,
-        ).await;
+        )
+        .await;
 
         // Check for straggler merge proposals
         log::debug!("Checking straggler merge proposals");
@@ -216,11 +233,9 @@ pub async fn process_queue_loop(
         // Publish pending ready changes if auto-publishing is enabled
         if auto_publish {
             log::debug!("Publishing pending ready changes");
-            if let Err(e) = publish_pending_ready(
-                state.clone(),
-                push_limit,
-                require_binary_diff,
-            ).await {
+            if let Err(e) =
+                publish_pending_ready(state.clone(), push_limit, require_binary_diff).await
+            {
                 log::error!("Error publishing pending ready changes: {}", e);
             }
         } else {
@@ -230,16 +245,23 @@ pub async fn process_queue_loop(
         // Calculate how long this cycle took and sleep for the remaining interval
         let cycle_duration = Utc::now() - cycle_start;
         let sleep_duration = interval - cycle_duration;
-        
+
         if sleep_duration > chrono::Duration::zero() {
-            log::debug!("Cycle completed in {:?}, sleeping for {:?}", 
-                       cycle_duration, sleep_duration);
-            tokio::time::sleep(
-                std::time::Duration::from_millis(sleep_duration.num_milliseconds().max(0) as u64)
-            ).await;
+            log::debug!(
+                "Cycle completed in {:?}, sleeping for {:?}",
+                cycle_duration,
+                sleep_duration
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(
+                sleep_duration.num_milliseconds().max(0) as u64,
+            ))
+            .await;
         } else {
-            log::warn!("Cycle took {:?}, longer than interval {:?}", 
-                      cycle_duration, interval);
+            log::warn!(
+                "Cycle took {:?}, longer than interval {:?}",
+                cycle_duration,
+                interval
+            );
         }
     }
 }
@@ -266,8 +288,11 @@ pub async fn publish_pending_ready(
     let mut published_count = 0;
     let mut error_count = 0;
 
-    log::info!("Starting publish_pending_ready (push_limit: {:?}, require_binary_diff: {})",
-              push_limit, require_binary_diff);
+    log::info!(
+        "Starting publish_pending_ready (push_limit: {:?}, require_binary_diff: {})",
+        push_limit,
+        require_binary_diff
+    );
 
     // Create iterator for publish-ready runs
     let mut iterator = PublishReadyIterator::new(state.conn.clone(), None);
@@ -280,8 +305,12 @@ pub async fn publish_pending_ready(
             description: format!("Failed to iterate publish-ready runs: {}", e),
         }
     })? {
-        log::info!("Processing publish-ready run: {} (campaign: {}, codebase: {})", 
-                  ready_run.run.id, ready_run.run.suite, ready_run.run.codebase);
+        log::info!(
+            "Processing publish-ready run: {} (campaign: {}, codebase: {})",
+            ready_run.run.id,
+            ready_run.run.suite,
+            ready_run.run.codebase
+        );
 
         // Check push limit
         if let Some(limit) = push_limit {
@@ -305,36 +334,48 @@ pub async fn publish_pending_ready(
             &ready_run.command,
             push_limit.map(|limit| limit - published_count),
             require_binary_diff,
-        ).await {
+        )
+        .await
+        {
             Ok(results) => {
                 // Count different types of actions
                 for (key, value) in results {
                     if key == "status" {
                         if let Some(status) = value.as_ref() {
                             *actions.entry(Some(status.clone())).or_insert(0) += 1;
-                            
+
                             if status == "processing" {
                                 published_count += 1;
                             }
                         }
                     }
                 }
-                
-                log::debug!("Successfully considered run {} for publishing", ready_run.run.id);
+
+                log::debug!(
+                    "Successfully considered run {} for publishing",
+                    ready_run.run.id
+                );
             }
             Err(e) => {
                 error_count += 1;
-                log::error!("Error considering run {} for publishing: {}", ready_run.run.id, e);
+                log::error!(
+                    "Error considering run {} for publishing: {}",
+                    ready_run.run.id,
+                    e
+                );
                 *actions.entry(Some("error".to_string())).or_insert(0) += 1;
             }
         }
     }
 
     let duration = start_time.elapsed();
-    
+
     log::info!(
         "Completed publish_pending_ready in {:?}: {} published, {} errors, actions: {:?}",
-        duration, published_count, error_count, actions
+        duration,
+        published_count,
+        error_count,
+        actions
     );
 
     // Update metrics if available
@@ -364,7 +405,7 @@ pub async fn check_stragglers(
 
     // Query for merge proposals that have been open for more than a week
     let straggler_threshold = Utc::now() - chrono::Duration::days(7);
-    
+
     let stragglers = sqlx::query_as::<_, (String, String, DateTime<Utc>)>(
         r#"
         SELECT url, status, created_time
@@ -373,19 +414,26 @@ pub async fn check_stragglers(
             AND created_time < $1
         ORDER BY created_time ASC
         LIMIT 100
-        "#
+        "#,
     )
     .bind(straggler_threshold)
     .fetch_all(conn)
     .await?;
 
     if !stragglers.is_empty() {
-        log::info!("Found {} straggler merge proposals older than 7 days", stragglers.len());
-        
+        log::info!(
+            "Found {} straggler merge proposals older than 7 days",
+            stragglers.len()
+        );
+
         for (url, status, created_time) in stragglers {
-            log::debug!("Straggler MP: {} (status: {}, age: {} days)", 
-                       url, status, (Utc::now() - created_time).num_days());
-            
+            log::debug!(
+                "Straggler MP: {} (status: {}, age: {} days)",
+                url,
+                status,
+                (Utc::now() - created_time).num_days()
+            );
+
             // In a full implementation, this would:
             // 1. Check if the merge proposal still exists
             // 2. Update its status if it has been merged/closed
@@ -403,12 +451,15 @@ pub async fn check_stragglers(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_publish_ready_iterator_creation() {
-        let conn = sqlx::PgPool::connect("postgresql://localhost/test").await.unwrap();
-        let iterator = PublishReadyIterator::new(conn, None);
+    #[tokio::test]
+    #[ignore = "requires database connection"]
+    async fn test_publish_ready_iterator_creation() {
+        let conn = sqlx::PgPool::connect("postgresql://localhost/test")
+            .await
+            .unwrap();
+        let iterator = PublishReadyIterator::new(conn.clone(), None);
         assert!(iterator.run_id.is_none());
-        
+
         let iterator_with_id = PublishReadyIterator::new(conn, Some("test-run".to_string()));
         assert_eq!(iterator_with_id.run_id, Some("test-run".to_string()));
     }

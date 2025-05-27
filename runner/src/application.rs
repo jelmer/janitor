@@ -2,10 +2,10 @@
 
 use crate::{
     artifacts::{ArtifactConfig, ArtifactManager},
-    config::RunnerConfig,
+    config::{LogConfig, RunnerConfig},
     database::RunnerDatabase,
     error_tracking::{ErrorTracker, ErrorTrackingConfig},
-    logs::{LogConfig, LogFileManager},
+    logs::LogFileManager,
     metrics::MetricsCollector,
     performance::{PerformanceConfig, PerformanceMonitor},
     vcs::RunnerVcsManager,
@@ -74,8 +74,9 @@ impl ApplicationBuilder {
 
     /// Create a new application builder from a config file.
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ApplicationError> {
-        let config = RunnerConfig::from_file(path)
-            .map_err(|e| ApplicationError::Configuration(format!("Failed to load config: {}", e)))?;
+        let config = RunnerConfig::from_file(path).map_err(|e| {
+            ApplicationError::Configuration(format!("Failed to load config: {}", e))
+        })?;
         Ok(Self::from_config(config))
     }
 
@@ -119,14 +120,16 @@ impl ApplicationBuilder {
     /// Build and initialize the application.
     pub async fn build(self) -> Result<Application, ApplicationError> {
         // Initialize tracing and logging first
-        crate::tracing::init_tracing(&self.config.tracing)
-            .map_err(|e| ApplicationError::Configuration(format!("Failed to initialize tracing: {}", e)))?;
+        crate::tracing::init_tracing(&self.config.tracing).map_err(|e| {
+            ApplicationError::Configuration(format!("Failed to initialize tracing: {}", e))
+        })?;
 
         log::info!("Initializing Janitor Runner application...");
 
         // Validate configuration
-        self.config.validate()
-            .map_err(|e| ApplicationError::Configuration(format!("Configuration validation failed: {}", e)))?;
+        self.config.validate().map_err(|e| {
+            ApplicationError::Configuration(format!("Configuration validation failed: {}", e))
+        })?;
 
         // Initialize metrics first so other systems can use them
         log::info!("Initializing metrics collection...");
@@ -143,23 +146,30 @@ impl ApplicationBuilder {
         let database_pool = match janitor::state::create_pool(&janitor_config).await {
             Ok(pool) => pool,
             Err(e) => {
-                let error = ApplicationError::Database(format!("Failed to create database pool: {}", e));
-                error_tracker.track_error(error_tracker.create_tracked_error(
-                    &error,
-                    crate::error_tracking::ErrorCategory::Database,
-                    "application",
-                    "initialization",
-                )).await;
+                let error =
+                    ApplicationError::Database(format!("Failed to create database pool: {}", e));
+                error_tracker
+                    .track_error(error_tracker.create_tracked_error(
+                        &error,
+                        crate::error_tracking::ErrorCategory::Database,
+                        "application",
+                        "initialization",
+                    ))
+                    .await;
                 return Err(error);
             }
         };
 
-        let database = Arc::new(RunnerDatabase::new_with_redis_url(
-            database_pool,
-            self.config.redis.as_ref().map(|r| r.url.clone()),
-        ).await.map_err(|e| {
-            ApplicationError::Database(format!("Failed to initialize database: {}", e))
-        })?);
+        let database = Arc::new(
+            RunnerDatabase::new_with_redis_url(
+                database_pool,
+                self.config.redis.as_ref().map(|r| r.url.clone()),
+            )
+            .await
+            .map_err(|e| {
+                ApplicationError::Database(format!("Failed to initialize database: {}", e))
+            })?,
+        );
 
         // Initialize VCS management
         log::info!("Initializing VCS management...");
@@ -167,15 +177,29 @@ impl ApplicationBuilder {
 
         // Initialize log management
         log::info!("Initializing log management...");
-        let log_manager = Arc::new(LogFileManager::new(self.config.logs.clone()).await.map_err(|e| {
-            ApplicationError::LogManagement(format!("Failed to initialize log manager: {}", e))
-        })?);
+        let log_manager = Arc::new(
+            LogFileManager::new(self.config.logs.clone())
+                .await
+                .map_err(|e| {
+                    ApplicationError::LogManagement(format!(
+                        "Failed to initialize log manager: {}",
+                        e
+                    ))
+                })?,
+        );
 
         // Initialize artifact management
         log::info!("Initializing artifact management...");
-        let artifact_manager = Arc::new(ArtifactManager::new(self.config.artifacts.clone()).await.map_err(|e| {
-            ApplicationError::ArtifactManagement(format!("Failed to initialize artifact manager: {}", e))
-        })?);
+        let artifact_manager = Arc::new(
+            ArtifactManager::new(self.config.artifacts.clone())
+                .await
+                .map_err(|e| {
+                    ApplicationError::ArtifactManagement(format!(
+                        "Failed to initialize artifact manager: {}",
+                        e
+                    ))
+                })?,
+        );
 
         // Initialize performance monitoring
         log::info!("Initializing performance monitoring...");
@@ -184,7 +208,9 @@ impl ApplicationBuilder {
         ));
 
         // Start performance monitoring
-        performance_monitor.start_monitoring(self.config.performance.thresholds.clone()).await;
+        performance_monitor
+            .start_monitoring(self.config.performance.thresholds.clone())
+            .await;
 
         // Initialize upload processor
         log::info!("Initializing upload processor...");
@@ -198,15 +224,16 @@ impl ApplicationBuilder {
         // Initialize authentication and security services
         log::info!("Initializing authentication and security services...");
         let auth_service = Arc::new(crate::auth::WorkerAuthService::new(Arc::clone(&database)));
-        
+
         let security_config = self.config.runner.worker.security.clone();
-        let security_service = Arc::new(crate::auth::SecurityService::new(security_config, Arc::clone(&database)));
+        let security_service = Arc::new(crate::auth::SecurityService::new(
+            security_config,
+            Arc::clone(&database),
+        ));
 
         // Initialize resume service
         log::info!("Initializing resume service...");
-        let resume_service = Arc::new(crate::resume::ResumeService::new(
-            (*database).clone()
-        ));
+        let resume_service = Arc::new(crate::resume::ResumeService::new((*database).clone()));
 
         // Create application state
         let app_state = Arc::new(AppState {
@@ -253,7 +280,9 @@ impl Application {
     }
 
     /// Create a new application builder from config file.
-    pub fn builder_from_file<P: AsRef<std::path::Path>>(path: P) -> Result<ApplicationBuilder, ApplicationError> {
+    pub fn builder_from_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<ApplicationBuilder, ApplicationError> {
         ApplicationBuilder::from_file(path)
     }
 
@@ -269,13 +298,15 @@ impl Application {
     ) -> Result<(), ApplicationError>
     where
         F: FnOnce(Arc<AppState>) -> Fut,
-        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>>
+            + Send
+            + 'static,
     {
         if !self.config.application.enable_graceful_shutdown {
             // Run without graceful shutdown
-            return server_factory(self.state).await.map_err(|e| {
-                ApplicationError::Runtime(format!("Server error: {}", e))
-            });
+            return server_factory(self.state)
+                .await
+                .map_err(|e| ApplicationError::Runtime(format!("Server error: {}", e)));
         }
 
         // Set up graceful shutdown
@@ -359,7 +390,10 @@ impl Application {
 
             // 5. Clean up error tracking
             log::info!("Cleaning up error tracking...");
-            self.state.error_tracker.cleanup_old_errors(chrono::Duration::hours(24)).await;
+            self.state
+                .error_tracker
+                .cleanup_old_errors(chrono::Duration::hours(24))
+                .await;
 
             // 6. Close database connections (handled by connection pool drop)
             log::info!("Closing database connections...");
@@ -386,7 +420,10 @@ impl Application {
                         log::info!("All active runs completed");
                         return Ok(());
                     }
-                    log::info!("Waiting for {} active runs to complete...", active_runs.len());
+                    log::info!(
+                        "Waiting for {} active runs to complete...",
+                        active_runs.len()
+                    );
                 }
                 Err(e) => {
                     log::warn!("Error checking active runs: {}", e);
@@ -410,13 +447,11 @@ impl Application {
 
         // Database health check
         let db_health = match self.state.database.health_check().await {
-            Ok(()) => {
-                ComponentHealth {
-                    component: "database".to_string(),
-                    healthy: true,
-                    message: "Database connection healthy".to_string(),
-                }
-            }
+            Ok(()) => ComponentHealth {
+                component: "database".to_string(),
+                healthy: true,
+                message: "Database connection healthy".to_string(),
+            },
             Err(e) => {
                 result.overall_healthy = false;
                 ComponentHealth {
@@ -505,22 +540,22 @@ pub struct ComponentHealth {
 pub enum ApplicationError {
     #[error("Database error: {0}")]
     Database(String),
-    
+
     #[error("Log management error: {0}")]
     LogManagement(String),
-    
+
     #[error("Artifact management error: {0}")]
     ArtifactManagement(String),
-    
+
     #[error("VCS management error: {0}")]
     VcsManagement(String),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     #[error("Runtime error: {0}")]
     Runtime(String),
-    
+
     #[error("Shutdown timeout")]
     ShutdownTimeout,
 }
@@ -551,6 +586,9 @@ mod tests {
 
         // We can't actually build without a real database, but we can test the builder pattern
         assert_eq!(builder.config.database_url, "postgresql://test/janitor");
-        assert_eq!(builder.config.redis_url, Some("redis://localhost:6379".to_string()));
+        assert_eq!(
+            builder.config.redis_url,
+            Some("redis://localhost:6379".to_string())
+        );
     }
 }

@@ -1,10 +1,10 @@
 //! Main repository generation functionality.
 
-use crate::{
-    AptRepositoryError, Compression, HashAlgorithm, HashedFile, PackageFile,
-    Release, ReleaseBuilder, Result, SourceFile, DEFAULT_COMPRESSIONS, DEFAULT_HASH_ALGORITHMS,
-};
 use crate::hash::MultiHasher;
+use crate::{
+    AptRepositoryError, Compression, HashAlgorithm, HashedFile, PackageFile, Release,
+    ReleaseBuilder, Result, SourceFile, DEFAULT_COMPRESSIONS, DEFAULT_HASH_ALGORITHMS,
+};
 use std::fs;
 use std::path::Path;
 
@@ -119,11 +119,8 @@ impl Repository {
                 .map_err(|e| AptRepositoryError::DirectoryCreation(e.to_string()))?;
 
             let sources = source_provider.get_sources(&self.suite, component)?;
-            let sources_files = self.write_compressed_file(
-                &source_dir,
-                "Sources",
-                sources.to_string().as_bytes(),
-            )?;
+            let sources_files =
+                self.write_compressed_file(&source_dir, "Sources", sources.to_string().as_bytes())?;
 
             for file in &sources_files {
                 let relative_path = component_dir
@@ -251,7 +248,8 @@ impl Repository {
 /// Trait for providing package data to the repository generator.
 pub trait PackageProvider {
     /// Get packages for a specific suite, component, and architecture.
-    fn get_packages(&self, suite: &str, component: &str, architecture: &str) -> Result<PackageFile>;
+    fn get_packages(&self, suite: &str, component: &str, architecture: &str)
+        -> Result<PackageFile>;
 }
 
 /// Trait for providing source package data to the repository generator.
@@ -372,10 +370,14 @@ impl RepositoryBuilder {
             return Err(AptRepositoryError::invalid_config("Suite cannot be empty"));
         }
         if self.repository.architectures.is_empty() {
-            return Err(AptRepositoryError::invalid_config("At least one architecture must be specified"));
+            return Err(AptRepositoryError::invalid_config(
+                "At least one architecture must be specified",
+            ));
         }
         if self.repository.components.is_empty() {
-            return Err(AptRepositoryError::invalid_config("At least one component must be specified"));
+            return Err(AptRepositoryError::invalid_config(
+                "At least one component must be specified",
+            ));
         }
 
         Ok(self.repository)
@@ -403,9 +405,19 @@ impl MemoryPackageProvider {
     }
 
     /// Add packages for a specific suite, component, and architecture.
-    pub fn add_packages(&mut self, suite: &str, component: &str, architecture: &str, packages: PackageFile) {
+    pub fn add_packages(
+        &mut self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+        packages: PackageFile,
+    ) {
         self.packages.insert(
-            (suite.to_string(), component.to_string(), architecture.to_string()),
+            (
+                suite.to_string(),
+                component.to_string(),
+                architecture.to_string(),
+            ),
             packages,
         );
     }
@@ -418,9 +430,19 @@ impl Default for MemoryPackageProvider {
 }
 
 impl PackageProvider for MemoryPackageProvider {
-    fn get_packages(&self, suite: &str, component: &str, architecture: &str) -> Result<PackageFile> {
-        Ok(self.packages
-            .get(&(suite.to_string(), component.to_string(), architecture.to_string()))
+    fn get_packages(
+        &self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+    ) -> Result<PackageFile> {
+        Ok(self
+            .packages
+            .get(&(
+                suite.to_string(),
+                component.to_string(),
+                architecture.to_string(),
+            ))
             .cloned()
             .unwrap_or_default())
     }
@@ -442,10 +464,8 @@ impl MemorySourceProvider {
 
     /// Add sources for a specific suite and component.
     pub fn add_sources(&mut self, suite: &str, component: &str, sources: SourceFile) {
-        self.sources.insert(
-            (suite.to_string(), component.to_string()),
-            sources,
-        );
+        self.sources
+            .insert((suite.to_string(), component.to_string()), sources);
     }
 }
 
@@ -457,7 +477,8 @@ impl Default for MemorySourceProvider {
 
 impl SourceProvider for MemorySourceProvider {
     fn get_sources(&self, suite: &str, component: &str) -> Result<SourceFile> {
-        Ok(self.sources
+        Ok(self
+            .sources
             .get(&(suite.to_string(), component.to_string()))
             .cloned()
             .unwrap_or_default())
@@ -491,21 +512,15 @@ mod tests {
     #[test]
     fn test_repository_builder_validation() {
         // Empty suite should fail
-        let result = RepositoryBuilder::new()
-            .suite("")
-            .build();
+        let result = RepositoryBuilder::new().suite("").build();
         assert!(result.is_err());
 
         // Empty architectures should fail
-        let result = RepositoryBuilder::new()
-            .architectures(vec![])
-            .build();
+        let result = RepositoryBuilder::new().architectures(vec![]).build();
         assert!(result.is_err());
 
         // Empty components should fail
-        let result = RepositoryBuilder::new()
-            .components(vec![])
-            .build();
+        let result = RepositoryBuilder::new().components(vec![]).build();
         assert!(result.is_err());
     }
 
@@ -525,7 +540,9 @@ mod tests {
         source_provider.add_sources("stable", "main", sources);
 
         // Test retrieval
-        let retrieved_packages = package_provider.get_packages("stable", "main", "amd64").unwrap();
+        let retrieved_packages = package_provider
+            .get_packages("stable", "main", "amd64")
+            .unwrap();
         assert_eq!(retrieved_packages.len(), 1);
         assert_eq!(retrieved_packages.packages()[0].package, "test-pkg");
 
@@ -554,7 +571,9 @@ mod tests {
 
         let source_provider = MemorySourceProvider::new();
 
-        let release = repo.generate_repository(repo_path, &package_provider, &source_provider).unwrap();
+        let release = repo
+            .generate_repository(repo_path, &package_provider, &source_provider)
+            .unwrap();
 
         // Check that the Release file was created
         assert!(repo_path.join("Release").exists());

@@ -1,8 +1,8 @@
 //! Tests to verify database operations are compatible with Python implementation.
 
-use std::time::Duration;
-use serde_json::{json, Value};
 use chrono::{DateTime, Utc};
+use serde_json::{json, Value};
+use std::time::Duration;
 
 // Note: These tests verify the data structures and SQL compatibility.
 // In a real test environment, you'd use a test database instance.
@@ -26,7 +26,7 @@ fn test_queue_item_database_structure() {
     LEFT JOIN codebase ON queue.codebase = codebase.name
     WHERE queue.id = $1
     "#;
-    
+
     // Verify query structure is compatible
     assert!(python_queue_query.contains("queue.command AS command"));
     assert!(python_queue_query.contains("queue.context AS context"));
@@ -34,7 +34,7 @@ fn test_queue_item_database_structure() {
     assert!(python_queue_query.contains("queue.estimated_duration AS estimated_duration"));
     assert!(python_queue_query.contains("queue.suite AS campaign"));
     assert!(python_queue_query.contains("LEFT JOIN codebase"));
-    
+
     // Test field mappings match what Python expects
     let field_mappings = vec![
         ("queue.command", "command"),
@@ -47,7 +47,7 @@ fn test_queue_item_database_structure() {
         ("queue.change_set", "change_set"),
         ("codebase.name", "codebase"),
     ];
-    
+
     for (column, alias) in field_mappings {
         assert!(python_queue_query.contains(&format!("{} AS {}", column, alias)));
     }
@@ -59,7 +59,7 @@ fn test_run_table_structure() {
     // Python expects these columns in run table
     let expected_run_columns = vec![
         "id",
-        "command", 
+        "command",
         "description",
         "start_time",
         "finish_time",
@@ -88,7 +88,7 @@ fn test_run_table_structure() {
         "change_set",
         "codebase",
     ];
-    
+
     // Verify all expected columns are accounted for
     for column in expected_run_columns {
         assert!(!column.is_empty());
@@ -104,7 +104,7 @@ fn test_codebase_table_structure() {
     let expected_codebase_columns = vec![
         "name",
         "branch_url",
-        "url", 
+        "url",
         "branch",
         "subpath",
         "vcs_last_revision",
@@ -115,33 +115,35 @@ fn test_codebase_table_structure() {
         "inactive",
         "hostname",
     ];
-    
+
     for column in expected_codebase_columns {
         assert!(!column.is_empty());
         assert!(column.chars().all(|c| c.is_alphanumeric() || c == '_'));
     }
-    
+
     // Test domain constraints that Python relies on
     let codebase_name_pattern = r"[a-z0-9][a-z0-9+-.]+";
-    
+
     // Valid codebase names per Python domain constraint
     let valid_names = vec![
         "example-package",
-        "python3-requests", 
+        "python3-requests",
         "lib64gcc1",
         "0install",
         "a+plus+package",
     ];
-    
+
     for name in valid_names {
         // First character must be alphanumeric
         let first_char = name.chars().nth(0).unwrap();
         assert!(first_char.is_ascii_alphanumeric());
-        
+
         // Rest must be alphanumeric, +, -, or .
-        assert!(name.chars().all(|c| c.is_ascii_alphanumeric() || "+-".contains(c)));
+        assert!(name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "+-".contains(c)));
     }
-    
+
     // Invalid names that should be rejected
     let invalid_names = vec![
         "-starts-with-dash",
@@ -150,11 +152,17 @@ fn test_codebase_table_structure() {
         "has spaces",
         "",
     ];
-    
+
     for name in invalid_names {
         if let Some(first_char) = name.chars().nth(0) {
             // Should violate domain constraint
-            assert!(first_char == '-' || name.contains(' ') || name.contains('_') || first_char.is_uppercase() || name.is_empty());
+            assert!(
+                first_char == '-'
+                    || name.contains(' ')
+                    || name.contains('_')
+                    || first_char.is_uppercase()
+                    || name.is_empty()
+            );
         }
     }
 }
@@ -168,7 +176,7 @@ fn test_queue_table_structure() {
         "bucket",
         "codebase",
         "branch_url",
-        "suite", 
+        "suite",
         "command",
         "priority",
         "context",
@@ -177,23 +185,23 @@ fn test_queue_table_structure() {
         "requester",
         "change_set",
     ];
-    
+
     for column in expected_queue_columns {
         assert!(!column.is_empty());
     }
-    
+
     // Test queue bucket enum values Python uses
     let queue_buckets = vec![
         "update-existing-mp",
         "manual",
-        "control", 
+        "control",
         "hook",
         "reschedule",
         "update-new-mp",
         "missing-deps",
         "default",
     ];
-    
+
     for bucket in queue_buckets {
         assert!(!bucket.is_empty());
         assert!(!bucket.contains(' ')); // No spaces in enum values
@@ -204,17 +212,8 @@ fn test_queue_table_structure() {
 #[test]
 fn test_vcs_type_enum() {
     // Python defines these VCS types in the enum
-    let python_vcs_types = vec![
-        "bzr",
-        "git", 
-        "svn",
-        "mtn",
-        "hg",
-        "arch",
-        "cvs",
-        "darcs",
-    ];
-    
+    let python_vcs_types = vec!["bzr", "git", "svn", "mtn", "hg", "arch", "cvs", "darcs"];
+
     for vcs_type in python_vcs_types {
         assert!(!vcs_type.is_empty());
         assert!(vcs_type.chars().all(|c| c.is_ascii_lowercase()));
@@ -230,10 +229,10 @@ fn test_publish_status_enum() {
         "blocked",
         "needs-manual-review",
         "rejected",
-        "approved", 
+        "approved",
         "ignored",
     ];
-    
+
     for status in publish_statuses {
         assert!(!status.is_empty());
         assert!(status.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
@@ -244,14 +243,8 @@ fn test_publish_status_enum() {
 #[test]
 fn test_change_set_state_enum() {
     // Python defines these change set states
-    let change_set_states = vec![
-        "created",
-        "working",
-        "ready",
-        "publishing",
-        "done",
-    ];
-    
+    let change_set_states = vec!["created", "working", "ready", "publishing", "done"];
+
     for state in change_set_states {
         assert!(!state.is_empty());
         assert!(state.chars().all(|c| c.is_ascii_lowercase()));
@@ -264,13 +257,13 @@ fn test_merge_proposal_status_enum() {
     // Python defines these merge proposal statuses
     let mp_statuses = vec![
         "open",
-        "closed", 
+        "closed",
         "merged",
         "applied",
         "abandoned",
         "rejected",
     ];
-    
+
     for status in mp_statuses {
         assert!(!status.is_empty());
         assert!(status.chars().all(|c| c.is_ascii_lowercase()));
@@ -290,7 +283,7 @@ fn test_publish_mode_enum() {
         "skip",
         "bts",
     ];
-    
+
     for mode in publish_modes {
         assert!(!mode.is_empty());
         assert!(mode.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
@@ -304,7 +297,7 @@ fn test_result_codes() {
     let standard_result_codes = vec![
         "success",
         "nothing-to-do",
-        "failure", 
+        "failure",
         "temporary-failure",
         "unsupported",
         "upstream-merged",
@@ -313,7 +306,7 @@ fn test_result_codes() {
         "timeout",
         "nothing-new-to-do",
     ];
-    
+
     for code in standard_result_codes {
         assert!(!code.is_empty());
         assert!(code.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
@@ -332,7 +325,7 @@ fn test_result_json_structure() {
         "context": {"fixes": 5},
         "value": 100,
         "old_revision": "abc123",
-        "new_revision": "def456", 
+        "new_revision": "def456",
         "tags": ["lintian", "fixes"],
         "target_branch_url": "https://github.com/example/repo.git",
         "vcs": {
@@ -348,15 +341,18 @@ fn test_result_json_structure() {
         "worker_result": null,
         "builder_result": null
     });
-    
+
     // Verify required fields are present
     assert!(python_result_json["code"].is_string());
     assert!(python_result_json["vcs"].is_object());
     assert!(python_result_json["refreshed"].is_boolean());
     assert!(python_result_json["tags"].is_array());
-    
+
     // Verify optional fields can be null
-    assert!(python_result_json["description"].is_string() || python_result_json["description"].is_null());
+    assert!(
+        python_result_json["description"].is_string()
+            || python_result_json["description"].is_null()
+    );
     assert!(python_result_json["context"].is_object() || python_result_json["context"].is_null());
     assert!(python_result_json["value"].is_number() || python_result_json["value"].is_null());
 }
@@ -367,21 +363,25 @@ fn test_timestamp_format() {
     // Python uses ISO 8601 timestamps in UTC
     let test_timestamp = "2023-10-15T14:30:00Z";
     let parsed: DateTime<Utc> = test_timestamp.parse().unwrap();
-    
+
     // Verify round-trip compatibility
     let formatted = parsed.to_rfc3339();
     assert!(formatted.ends_with("+00:00") || formatted.ends_with("Z"));
-    
+
     // Test that we can parse Python's format
     let python_formats = vec![
         "2023-10-15T14:30:00+00:00",
         "2023-10-15T14:30:00Z",
         "2023-10-15T14:30:00.123456+00:00",
     ];
-    
+
     for format in python_formats {
         let parsed: Result<DateTime<Utc>, _> = format.parse();
-        assert!(parsed.is_ok(), "Failed to parse timestamp format: {}", format);
+        assert!(
+            parsed.is_ok(),
+            "Failed to parse timestamp format: {}",
+            format
+        );
     }
 }
 
@@ -390,20 +390,20 @@ fn test_timestamp_format() {
 fn test_duration_compatibility() {
     // Python stores durations as PostgreSQL intervals
     // Test that we handle duration serialization consistently
-    
+
     let test_durations = vec![
         Duration::from_secs(0),
         Duration::from_secs(30),
-        Duration::from_secs(300),   // 5 minutes
-        Duration::from_secs(3600),  // 1 hour  
-        Duration::from_secs(7200),  // 2 hours
+        Duration::from_secs(300),  // 5 minutes
+        Duration::from_secs(3600), // 1 hour
+        Duration::from_secs(7200), // 2 hours
     ];
-    
+
     for duration in test_durations {
         // Verify duration can be converted to seconds (Python compatibility)
         let seconds = duration.as_secs();
         assert!(seconds >= 0);
-        
+
         // Verify JSON serialization matches Python expectation
         let json_value = json!(seconds);
         assert!(json_value.is_number());
@@ -415,9 +415,9 @@ fn test_duration_compatibility() {
 #[test]
 fn test_foreign_key_relationships() {
     // Verify the foreign key relationships Python relies on
-    
+
     // run.codebase -> codebase.name
-    // run.change_set -> change_set.id  
+    // run.change_set -> change_set.id
     // run.worker -> worker.name
     // run.resume_from -> run.id
     // queue.codebase -> codebase.name
@@ -429,7 +429,7 @@ fn test_foreign_key_relationships() {
     // publish.codebase -> codebase.name
     // publish.merge_proposal_url -> merge_proposal.url
     // merge_proposal.codebase -> codebase.name
-    
+
     let foreign_keys = vec![
         ("run", "codebase", "codebase", "name"),
         ("run", "change_set", "change_set", "id"),
@@ -437,26 +437,39 @@ fn test_foreign_key_relationships() {
         ("run", "resume_from", "run", "id"),
         ("queue", "codebase", "codebase", "name"),
         ("queue", "change_set", "change_set", "id"),
-        ("candidate", "codebase", "codebase", "name"), 
+        ("candidate", "codebase", "codebase", "name"),
         ("candidate", "change_set", "change_set", "id"),
-        ("candidate", "publish_policy", "named_publish_policy", "name"),
+        (
+            "candidate",
+            "publish_policy",
+            "named_publish_policy",
+            "name",
+        ),
         ("publish", "change_set", "change_set", "id"),
         ("publish", "codebase", "codebase", "name"),
         ("publish", "merge_proposal_url", "merge_proposal", "url"),
         ("merge_proposal", "codebase", "codebase", "name"),
     ];
-    
+
     for (source_table, source_column, target_table, target_column) in foreign_keys {
         // Verify table and column names are valid SQL identifiers
         assert!(!source_table.is_empty());
-        assert!(!source_column.is_empty());  
+        assert!(!source_column.is_empty());
         assert!(!target_table.is_empty());
         assert!(!target_column.is_empty());
-        
-        assert!(source_table.chars().all(|c| c.is_alphanumeric() || c == '_'));
-        assert!(source_column.chars().all(|c| c.is_alphanumeric() || c == '_'));
-        assert!(target_table.chars().all(|c| c.is_alphanumeric() || c == '_'));
-        assert!(target_column.chars().all(|c| c.is_alphanumeric() || c == '_'));
+
+        assert!(source_table
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_'));
+        assert!(source_column
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_'));
+        assert!(target_table
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_'));
+        assert!(target_column
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_'));
     }
 }
 
@@ -464,7 +477,7 @@ fn test_foreign_key_relationships() {
 #[test]
 fn test_unique_constraints() {
     // Test unique constraints that Python relies on
-    
+
     // codebase: unique(branch_url, subpath), unique(name)
     // merge_proposal: primary key(url)
     // worker: unique(name)
@@ -472,7 +485,7 @@ fn test_unique_constraints() {
     // run: primary key(id)
     // queue: unique(codebase, suite, coalesce(change_set, ''))
     // candidate: primary key(id)
-    
+
     let unique_constraints = vec![
         ("codebase", vec!["branch_url", "subpath"]),
         ("codebase", vec!["name"]),
@@ -483,11 +496,11 @@ fn test_unique_constraints() {
         ("queue", vec!["codebase", "suite", "change_set"]), // Simplified
         ("candidate", vec!["id"]),
     ];
-    
+
     for (table, columns) in unique_constraints {
         assert!(!table.is_empty());
         assert!(!columns.is_empty());
-        
+
         for column in columns {
             assert!(!column.is_empty());
             assert!(column.chars().all(|c| c.is_alphanumeric() || c == '_'));
@@ -496,29 +509,29 @@ fn test_unique_constraints() {
 }
 
 /// Test check constraints match Python expectations.
-#[test] 
+#[test]
 fn test_check_constraints() {
     // Test check constraints that Python relies on
-    
+
     // run: check(finish_time >= start_time)
-    // run: check(result_code != 'nothing-new-to-do' or resume_from is not null)  
+    // run: check(result_code != 'nothing-new-to-do' or resume_from is not null)
     // run: check(publish_status != 'approved' or revision is not null)
     // codebase: check(name is not null or branch_url is not null)
     // codebase: check((branch_url is null) = (url is null))
     // queue: check(command != '')
     // candidate: check(command != '')
     // candidate: check(value > 0)
-    
+
     // Test that empty commands are invalid
     assert!("".is_empty()); // Should fail check constraint
     assert!(!"test-command".is_empty()); // Should pass
-    
+
     // Test that candidate values must be positive
     let valid_values = vec![1, 50, 100, 1000];
     for value in valid_values {
         assert!(value > 0);
     }
-    
+
     let invalid_values = vec![0, -1, -100];
     for value in invalid_values {
         assert!(value <= 0); // Should fail check constraint

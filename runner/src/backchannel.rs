@@ -42,13 +42,12 @@ pub struct HealthStatus {
     pub uptime: Option<Duration>,
 }
 
-
 #[async_trait]
 /// Interface for communication with the worker processes.
 pub trait Backchannel {
     /// Kill the worker process.
     async fn kill(&self) -> Result<(), Error>;
-    
+
     /// Signal the worker to terminate gracefully.
     async fn terminate(&self, _log_id: &str) -> Result<(), Error> {
         // Default implementation falls back to kill
@@ -130,16 +129,19 @@ impl Backchannel for JenkinsBackchannel {
 
     async fn kill(&self) -> Result<(), Error> {
         let session = reqwest::Client::new();
-        let url = self.my_url.join("stop").map_err(|_| Error::FatalFailure("Invalid Jenkins URL".to_string()))?;
-        
+        let url = self
+            .my_url
+            .join("stop")
+            .map_err(|_| Error::FatalFailure("Invalid Jenkins URL".to_string()))?;
+
         log::info!("Stopping Jenkins job at URL {}", url);
-        
+
         let response = session
             .post(url)
             .send()
             .await
             .map_err(Error::IntermediaryFailure)?;
-            
+
         if response.status().is_success() {
             Ok(())
         } else {
@@ -266,7 +268,10 @@ impl PollingBackchannel {
         Ok(resp.text().await?)
     }
 
-    async fn get_status_info(&self, session: reqwest::Client) -> Result<serde_json::Value, reqwest::Error> {
+    async fn get_status_info(
+        &self,
+        session: reqwest::Client,
+    ) -> Result<serde_json::Value, reqwest::Error> {
         let url = self.my_url.join("status").unwrap();
         log::info!("Fetching status from URL {}", url);
         let resp = session.get(url).send().await?;

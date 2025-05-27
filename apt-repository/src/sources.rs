@@ -97,16 +97,19 @@ impl SourceFileEntry {
     pub fn from_checksum_line(line: &str) -> Result<Self> {
         let parts: Vec<&str> = line.trim().split_whitespace().collect();
         if parts.len() != 3 {
-            return Err(AptRepositoryError::invalid_source(
-                format!("Invalid checksum line format: {}", line)
-            ));
+            return Err(AptRepositoryError::invalid_source(format!(
+                "Invalid checksum line format: {}",
+                line
+            )));
         }
 
         let hash = parts[0].to_string();
-        let size = parts[1].parse::<u64>()
-            .map_err(|_| AptRepositoryError::invalid_source(
-                format!("Invalid size in checksum line: {}", parts[1])
-            ))?;
+        let size = parts[1].parse::<u64>().map_err(|_| {
+            AptRepositoryError::invalid_source(format!(
+                "Invalid size in checksum line: {}",
+                parts[1]
+            ))
+        })?;
         let name = parts[2].to_string();
 
         Ok(Self { hash, size, name })
@@ -120,12 +123,7 @@ impl SourceFileEntry {
 
 impl Source {
     /// Create a new source package with required fields.
-    pub fn new<S: Into<String>>(
-        package: S,
-        version: S,
-        architecture: S,
-        directory: S,
-    ) -> Self {
+    pub fn new<S: Into<String>>(package: S, version: S, architecture: S, directory: S) -> Self {
         Self {
             package: package.into(),
             version: version.into(),
@@ -189,9 +187,10 @@ impl Source {
                     current_field = Some(field.trim().to_lowercase());
                     current_value = value.trim().to_string();
                 } else {
-                    return Err(AptRepositoryError::invalid_source(
-                        format!("Invalid line format: {}", line)
-                    ));
+                    return Err(AptRepositoryError::invalid_source(format!(
+                        "Invalid line format: {}",
+                        line
+                    )));
                 }
             }
         }
@@ -202,20 +201,27 @@ impl Source {
         }
 
         // Extract required fields
-        let package = fields.remove("package")
+        let package = fields
+            .remove("package")
             .ok_or_else(|| AptRepositoryError::missing_field("Package"))?;
-        let version = fields.remove("version")
+        let version = fields
+            .remove("version")
             .ok_or_else(|| AptRepositoryError::missing_field("Version"))?;
-        let architecture = fields.remove("architecture")
+        let architecture = fields
+            .remove("architecture")
             .ok_or_else(|| AptRepositoryError::missing_field("Architecture"))?;
-        let directory = fields.remove("directory")
+        let directory = fields
+            .remove("directory")
             .ok_or_else(|| AptRepositoryError::missing_field("Directory"))?;
 
         // Parse file lists
         let files = Self::parse_file_list(&fields.remove("files").unwrap_or_default())?;
-        let checksums_sha1 = Self::parse_file_list(&fields.remove("checksums-sha1").unwrap_or_default())?;
-        let checksums_sha256 = Self::parse_file_list(&fields.remove("checksums-sha256").unwrap_or_default())?;
-        let checksums_sha512 = Self::parse_file_list(&fields.remove("checksums-sha512").unwrap_or_default())?;
+        let checksums_sha1 =
+            Self::parse_file_list(&fields.remove("checksums-sha1").unwrap_or_default())?;
+        let checksums_sha256 =
+            Self::parse_file_list(&fields.remove("checksums-sha256").unwrap_or_default())?;
+        let checksums_sha512 =
+            Self::parse_file_list(&fields.remove("checksums-sha512").unwrap_or_default())?;
 
         Ok(Self {
             package,
@@ -255,7 +261,7 @@ impl Source {
     /// Parse a file list from a multi-line field.
     fn parse_file_list(content: &str) -> Result<Vec<SourceFileEntry>> {
         let mut entries = Vec::new();
-        
+
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -325,7 +331,10 @@ impl Source {
             paragraph.push_str(&format!("Build-Conflicts: {}\n", build_conflicts));
         }
         if let Some(ref build_conflicts_indep) = self.build_conflicts_indep {
-            paragraph.push_str(&format!("Build-Conflicts-Indep: {}\n", build_conflicts_indep));
+            paragraph.push_str(&format!(
+                "Build-Conflicts-Indep: {}\n",
+                build_conflicts_indep
+            ));
         }
         if let Some(ref build_conflicts_arch) = self.build_conflicts_arch {
             paragraph.push_str(&format!("Build-Conflicts-Arch: {}\n", build_conflicts_arch));
@@ -372,16 +381,28 @@ impl Source {
 
         // File lists
         if !self.files.is_empty() {
-            paragraph.push_str(&format!("Files:\n{}\n", Self::format_file_list(&self.files)));
+            paragraph.push_str(&format!(
+                "Files:\n{}\n",
+                Self::format_file_list(&self.files)
+            ));
         }
         if !self.checksums_sha1.is_empty() {
-            paragraph.push_str(&format!("Checksums-Sha1:\n{}\n", Self::format_file_list(&self.checksums_sha1)));
+            paragraph.push_str(&format!(
+                "Checksums-Sha1:\n{}\n",
+                Self::format_file_list(&self.checksums_sha1)
+            ));
         }
         if !self.checksums_sha256.is_empty() {
-            paragraph.push_str(&format!("Checksums-Sha256:\n{}\n", Self::format_file_list(&self.checksums_sha256)));
+            paragraph.push_str(&format!(
+                "Checksums-Sha256:\n{}\n",
+                Self::format_file_list(&self.checksums_sha256)
+            ));
         }
         if !self.checksums_sha512.is_empty() {
-            paragraph.push_str(&format!("Checksums-Sha512:\n{}\n", Self::format_file_list(&self.checksums_sha512)));
+            paragraph.push_str(&format!(
+                "Checksums-Sha512:\n{}\n",
+                Self::format_file_list(&self.checksums_sha512)
+            ));
         }
 
         // Additional fields
@@ -456,7 +477,7 @@ impl SourceFile {
     /// Convert the source file to a string.
     pub fn to_string(&self) -> String {
         let mut content = String::new();
-        
+
         for (i, source) in self.sources.iter().enumerate() {
             if i > 0 {
                 content.push('\n');
@@ -480,7 +501,8 @@ impl SourceFile {
     /// Sort source packages by name and version.
     pub fn sort(&mut self) {
         self.sources.sort_by(|a, b| {
-            a.package.cmp(&b.package)
+            a.package
+                .cmp(&b.package)
                 .then_with(|| a.version.cmp(&b.version))
         });
     }
@@ -519,7 +541,7 @@ mod tests {
     #[test]
     fn test_source_creation() {
         let source = Source::new("test-package", "1.0.0", "any", "pool/main/t/test");
-        
+
         assert_eq!(source.package, "test-package");
         assert_eq!(source.version, "1.0.0");
         assert_eq!(source.architecture, "any");
@@ -531,7 +553,9 @@ mod tests {
         let mut source = Source::new("test-package", "1.0.0", "any", "pool/main/t/test");
         source.maintainer = Some("Test Maintainer <test@example.com>".to_string());
         source.build_depends = Some("debhelper (>= 10)".to_string());
-        source.files.push(SourceFileEntry::new("abc123", 1024, "test_1.0.0.dsc"));
+        source
+            .files
+            .push(SourceFileEntry::new("abc123", 1024, "test_1.0.0.dsc"));
 
         let paragraph = source.to_paragraph();
         let parsed = Source::from_paragraph(&paragraph).unwrap();

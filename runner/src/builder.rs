@@ -154,37 +154,38 @@ fn run_lintian(
         "--exp-output=format=json".to_owned(),
         "--allow-root".to_owned(),
     ];
-    
+
     if let Some(tags) = suppress_tags {
         if !tags.is_empty() {
             args.push(format!("--suppress-tags={}", tags.join(",")));
         }
     }
-    
+
     if let Some(profile_str) = profile {
         args.push(format!("--profile={}", profile_str));
     }
-    
+
     // Add changes file paths
     for changes_name in changes_names {
         args.push(changes_name.clone());
     }
-    
+
     let mut cmd = Command::new("lintian");
     cmd.args(args);
     cmd.current_dir(output_directory);
-    
-    let lintian_output = cmd.output()
+
+    let lintian_output = cmd
+        .output()
         .map_err(|e| BuilderError::Lintian(format!("Failed to run lintian: {}", e)))?;
-    
+
     let output_str = std::str::from_utf8(&lintian_output.stdout)
         .map_err(|e| BuilderError::Lintian(format!("Invalid lintian output: {}", e)))?;
-    
+
     if output_str.trim().is_empty() {
         // Empty output means no issues found
         return Ok(LintianResult::default());
     }
-    
+
     parse_lintian_output(output_str)
 }
 
@@ -300,8 +301,11 @@ impl Builder for DebianBuilder {
         let mut config = HashMap::new();
 
         // Lintian configuration
-        config.insert("lintian_profile".to_string(), self.distro_config.lintian_profile.clone());
-        
+        config.insert(
+            "lintian_profile".to_string(),
+            self.distro_config.lintian_profile.clone(),
+        );
+
         if !self.distro_config.lintian_suppress_tag.is_empty() {
             config.insert(
                 "lintian_suppress_tags".to_string(),
@@ -311,14 +315,12 @@ impl Builder for DebianBuilder {
 
         // Extra repositories
         let mut extra_repositories = Vec::new();
-        
+
         if let Some(debian_config) = &campaign_config.debian_build {
             for dist in &debian_config.extra_build_distribution {
                 if let Some(apt_location) = &self.apt_location {
-                    extra_repositories.push(format!(
-                        "deb [trusted=yes] {} {} main",
-                        apt_location, dist
-                    ));
+                    extra_repositories
+                        .push(format!("deb [trusted=yes] {} {} main", apt_location, dist));
                 }
             }
         }
@@ -334,7 +336,10 @@ impl Builder for DebianBuilder {
         }
 
         if !extra_repositories.is_empty() {
-            config.insert("build_extra_repositories".to_string(), extra_repositories.join("\n"));
+            config.insert(
+                "build_extra_repositories".to_string(),
+                extra_repositories.join("\n"),
+            );
         }
 
         if let Some(dep_server_url) = &self.dep_server_url {
@@ -351,32 +356,32 @@ impl Builder for DebianBuilder {
         _queue_item: &QueueItem,
     ) -> Result<HashMap<String, String>, BuilderError> {
         let mut env = HashMap::new();
-        
+
         // Set Debian-specific environment variables
         env.insert("DEBIAN_FRONTEND".to_string(), "noninteractive".to_string());
         env.insert("DEB_BUILD_OPTIONS".to_string(), "nocheck".to_string());
-        
+
         Ok(env)
     }
 
     fn additional_colocated_branches(&self, main_branch: &str) -> HashMap<String, String> {
         // Implement common Debian branch patterns
         let mut branches = HashMap::new();
-        
+
         // Add upstream branch if this is a packaging branch
         if main_branch.contains("debian") || main_branch == "master" || main_branch == "main" {
             branches.insert("upstream".to_string(), "upstream".to_string());
         }
-        
+
         // Add pristine-tar branch for Debian packaging
         branches.insert("pristine-tar".to_string(), "pristine-tar".to_string());
-        
+
         // Add vendor branches if they exist
         branches.insert("vendor".to_string(), "vendor".to_string());
-        
+
         // Add experimental branches
         branches.insert("experimental".to_string(), "experimental".to_string());
-        
+
         branches
     }
 
@@ -451,7 +456,7 @@ pub fn get_builder(
             lintian_profile: "debian".to_string(),
             lintian_suppress_tag: vec![],
         };
-        
+
         Ok(Box::new(DebianBuilder::new(
             distro_config,
             apt_archive_url,
@@ -471,7 +476,10 @@ mod tests {
     fn test_generic_builder_creation() {
         let builder = GenericBuilder::new(Some("http://dep.server".to_string()));
         assert_eq!(builder.kind(), "generic");
-        assert_eq!(builder.dep_server_url, Some("http://dep.server".to_string()));
+        assert_eq!(
+            builder.dep_server_url,
+            Some("http://dep.server".to_string())
+        );
     }
 
     #[test]
@@ -480,16 +488,19 @@ mod tests {
             lintian_profile: "debian".to_string(),
             lintian_suppress_tag: vec!["tag1".to_string(), "tag2".to_string()],
         };
-        
+
         let builder = DebianBuilder::new(
             distro_config,
             Some("http://apt.archive".to_string()),
             Some("http://dep.server".to_string()),
         );
-        
+
         assert_eq!(builder.kind(), "debian");
         assert_eq!(builder.apt_location, Some("http://apt.archive".to_string()));
-        assert_eq!(builder.dep_server_url, Some("http://dep.server".to_string()));
+        assert_eq!(
+            builder.dep_server_url,
+            Some("http://dep.server".to_string())
+        );
     }
 
     #[test]
@@ -498,17 +509,17 @@ mod tests {
             generic_build: None,
             debian_build: None,
         };
-        
+
         // Test generic builder selection
         let builder = get_builder(&config, None, None).unwrap();
         assert_eq!(builder.kind(), "generic");
-        
+
         // Test Debian builder selection
         config.debian_build = Some(DebianBuildConfig {
             base_distribution: "bullseye".to_string(),
             extra_build_distribution: vec![],
         });
-        
+
         let builder = get_builder(&config, None, None).unwrap();
         assert_eq!(builder.kind(), "debian");
     }
@@ -519,21 +530,21 @@ mod tests {
             lintian_profile: "debian".to_string(),
             lintian_suppress_tag: vec![],
         };
-        
+
         let builder = DebianBuilder::new(distro_config, None, None);
-        
+
         // Test with debian branch
         let branches = builder.additional_colocated_branches("debian/master");
         assert!(branches.contains_key("upstream"));
         assert!(branches.contains_key("pristine-tar"));
         assert!(branches.contains_key("vendor"));
         assert!(branches.contains_key("experimental"));
-        
+
         // Test with main branch
         let branches = builder.additional_colocated_branches("main");
         assert!(branches.contains_key("upstream"));
         assert!(branches.contains_key("pristine-tar"));
-        
+
         // Test with feature branch
         let branches = builder.additional_colocated_branches("feature/some-feature");
         assert!(!branches.contains_key("upstream"));
@@ -569,9 +580,15 @@ OTHER BOGUS DATA
         assert_eq!(result.groups[0].source_name, "test-package");
         assert_eq!(result.groups[0].source_version, "1.0");
         assert_eq!(result.lintian_version, Some("2.116.3".to_string()));
-        
+
         // Paths should be stripped to just filenames
-        assert_eq!(result.groups[0].input_files[0].path, PathBuf::from("test-package_1.0.dsc"));
-        assert_eq!(result.groups[0].input_files[1].path, PathBuf::from("test-package_1.0_source.changes"));
+        assert_eq!(
+            result.groups[0].input_files[0].path,
+            PathBuf::from("test-package_1.0.dsc")
+        );
+        assert_eq!(
+            result.groups[0].input_files[1].path,
+            PathBuf::from("test-package_1.0_source.changes")
+        );
     }
 }

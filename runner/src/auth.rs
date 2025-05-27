@@ -28,23 +28,23 @@ pub enum AuthError {
     /// Missing authorization header.
     #[error("Missing authorization header")]
     MissingAuth,
-    
+
     /// Invalid authorization header format.
     #[error("Invalid authorization header format")]
     InvalidFormat,
-    
+
     /// Invalid credentials.
     #[error("Invalid credentials")]
     InvalidCredentials,
-    
+
     /// Database error during authentication.
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    
+
     /// Base64 decode error.
     #[error("Base64 decode error: {0}")]
     Base64(#[from] base64::DecodeError),
-    
+
     /// UTF-8 decode error.
     #[error("UTF-8 decode error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
@@ -103,7 +103,7 @@ impl WorkerAuthService {
     ) -> Result<Option<WorkerAuth>, AuthError> {
         // Query the worker table with encrypted password verification
         let row = sqlx::query(
-            "SELECT name, link FROM worker WHERE name = $1 AND password = crypt($2, password)"
+            "SELECT name, link FROM worker WHERE name = $1 AND password = crypt($2, password)",
         )
         .bind(username)
         .bind(password)
@@ -128,7 +128,7 @@ impl WorkerAuthService {
         link: Option<&str>,
     ) -> Result<(), AuthError> {
         sqlx::query(
-            "INSERT INTO worker (name, password, link) VALUES ($1, crypt($2, gen_salt('bf')), $3)"
+            "INSERT INTO worker (name, password, link) VALUES ($1, crypt($2, gen_salt('bf')), $3)",
         )
         .bind(name)
         .bind(password)
@@ -146,13 +146,12 @@ impl WorkerAuthService {
         name: &str,
         new_password: &str,
     ) -> Result<bool, AuthError> {
-        let result = sqlx::query(
-            "UPDATE worker SET password = crypt($2, gen_salt('bf')) WHERE name = $1"
-        )
-        .bind(name)
-        .bind(new_password)
-        .execute(self.database.pool())
-        .await?;
+        let result =
+            sqlx::query("UPDATE worker SET password = crypt($2, gen_salt('bf')) WHERE name = $1")
+                .bind(name)
+                .bind(new_password)
+                .execute(self.database.pool())
+                .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -280,12 +279,11 @@ impl SecurityService {
 
     /// Check if a worker can start a new run (concurrency limit).
     pub async fn can_start_run(&self, worker_name: &str) -> Result<bool, AuthError> {
-        let active_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM active_runs WHERE worker_name = $1"
-        )
-        .bind(worker_name)
-        .fetch_one(self.database.pool())
-        .await?;
+        let active_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM active_runs WHERE worker_name = $1")
+                .bind(worker_name)
+                .fetch_one(self.database.pool())
+                .await?;
 
         Ok(active_count < self.config.max_concurrent_runs_per_worker as i64)
     }
@@ -305,7 +303,11 @@ impl SecurityService {
     /// Check if IP address is in allowed ranges.
     pub fn is_ip_allowed(&self, ip: &str) -> bool {
         // For now, simple implementation - in production this would use proper CIDR matching
-        if self.config.allowed_ip_ranges.contains(&"0.0.0.0/0".to_string()) {
+        if self
+            .config
+            .allowed_ip_ranges
+            .contains(&"0.0.0.0/0".to_string())
+        {
             return true;
         }
 
@@ -328,11 +330,10 @@ impl SecurityService {
             .fetch_one(self.database.pool())
             .await?;
 
-        let active_workers: i64 = sqlx::query_scalar(
-            "SELECT COUNT(DISTINCT worker_name) FROM active_runs"
-        )
-        .fetch_one(self.database.pool())
-        .await?;
+        let active_workers: i64 =
+            sqlx::query_scalar("SELECT COUNT(DISTINCT worker_name) FROM active_runs")
+                .fetch_one(self.database.pool())
+                .await?;
 
         let total_active_runs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM active_runs")
             .fetch_one(self.database.pool())
@@ -368,13 +369,13 @@ mod tests {
     fn test_parse_basic_auth() {
         let auth_service = WorkerAuthService::new(Arc::new(
             // This is just for testing - we don't need a real database connection
-            unsafe { std::mem::zeroed() }
+            unsafe { std::mem::zeroed() },
         ));
 
         // Test valid Basic Auth
         let encoded = general_purpose::STANDARD.encode("worker1:password123");
         let auth_header = format!("Basic {}", encoded);
-        
+
         // Note: This would panic in a real test because of the zeroed database
         // In a real test, we'd use a mock or test database
         // let result = auth_service.parse_basic_auth(&auth_header).unwrap();
