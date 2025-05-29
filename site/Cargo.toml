@@ -27,7 +27,8 @@ jsonwebtoken = "9.0"
 cookie = "0.18"
 
 # Database
-sqlx = { workspace = true, features = ["postgres", "chrono", "uuid", "migrate"] }
+sqlx = { workspace = true, features = ["postgres", "chrono", "uuid", "migrate", "macros", "runtime-tokio-native-tls"] }
+thiserror = "2.0"
 
 # API & Serialization
 serde = { workspace = true, features = ["derive"] }

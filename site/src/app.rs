@@ -1,16 +1,16 @@
 use anyhow::Result;
-use sqlx::{Pool, Postgres, PgPool};
 use std::sync::Arc;
 use std::time::Instant;
 use tera::Tera;
 
 use crate::config::Config;
+use crate::database::DatabaseManager;
 use crate::templates::setup_templates;
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
-    pub db: Pool<Postgres>,
+    pub database: DatabaseManager,
     pub templates: Arc<Tera>,
     pub redis: Option<redis::Client>,
     pub start_time: Instant,
@@ -18,11 +18,8 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: Config) -> Result<Self> {
-        // Initialize database connection
-        let db = PgPool::connect(&config.database_url).await?;
-        
-        // Run migrations if needed
-        sqlx::migrate!().run(&db).await?;
+        // Initialize database manager
+        let database = DatabaseManager::new(&config).await?;
         
         // Initialize template engine
         let templates = Arc::new(setup_templates(&config)?);
@@ -36,7 +33,7 @@ impl AppState {
         
         Ok(Self {
             config: Arc::new(config),
-            db,
+            database,
             templates,
             redis,
             start_time: Instant::now(),
@@ -45,7 +42,7 @@ impl AppState {
     
     pub async fn health_check(&self) -> Result<()> {
         // Check database connection
-        sqlx::query("SELECT 1").execute(&self.db).await?;
+        self.database.health_check().await?;
         
         // Check Redis connection if configured
         if let Some(redis_client) = &self.redis {

@@ -47,7 +47,7 @@ pub async fn health_check_middleware(
     }
     
     // Quick database health check
-    match sqlx::query("SELECT 1").execute(&state.db).await {
+    match state.database.health_check().await {
         Ok(_) => Ok(next.run(request).await),
         Err(e) => {
             tracing::error!("Database health check failed: {}", e);
