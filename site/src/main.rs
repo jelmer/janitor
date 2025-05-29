@@ -19,6 +19,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod app;
 mod config;
+mod database;
 mod handlers;
 mod middleware;
 mod templates;
