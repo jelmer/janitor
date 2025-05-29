@@ -21,6 +21,7 @@ pub struct RunnerVcsManager {
 }
 
 impl RunnerVcsManager {
+    /// Create a new VCS manager with the given VCS type managers.
     pub fn new(managers: HashMap<VcsType, Box<dyn VcsManager>>) -> Self {
         let arc_managers: HashMap<VcsType, Arc<dyn VcsManager>> = managers
             .into_iter()
@@ -208,18 +209,23 @@ impl RunnerVcsManager {
 /// Enhanced error types for VCS operations
 #[derive(Debug, thiserror::Error)]
 pub enum VcsError {
+    /// Unsupported VCS type.
     #[error("Unsupported VCS type: {0:?}")]
     UnsupportedVcs(VcsType),
 
+    /// Branch operation failed.
     #[error("Branch operation failed: {0}")]
     BranchError(#[from] BranchOpenFailure),
 
+    /// Repository-related error.
     #[error("Repository error: {0}")]
     RepositoryError(String),
 
+    /// Network-related error.
     #[error("Network error: {0}")]
     NetworkError(String),
 
+    /// Operation timed out.
     #[error("Timeout after {0:?}")]
     Timeout(Duration),
 }
@@ -227,7 +233,9 @@ pub enum VcsError {
 /// Health status for VCS systems
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VcsHealthStatus {
+    /// Overall health status of all VCS systems.
     pub overall_healthy: bool,
+    /// Individual health status for each VCS type.
     pub vcs_statuses: HashMap<VcsType, VcsHealth>,
 }
 

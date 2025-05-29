@@ -551,39 +551,51 @@ impl Application {
 /// Health check result for the entire application.
 #[derive(Debug, Clone)]
 pub struct HealthCheckResult {
+    /// Whether the application is overall healthy.
     pub overall_healthy: bool,
+    /// Individual component health checks.
     pub checks: Vec<ComponentHealth>,
 }
 
 /// Health check result for a single component.
 #[derive(Debug, Clone)]
 pub struct ComponentHealth {
+    /// Name of the component.
     pub component: String,
+    /// Whether the component is healthy.
     pub healthy: bool,
+    /// Human-readable status message.
     pub message: String,
 }
 
 /// Application initialization and runtime errors.
 #[derive(Debug, thiserror::Error)]
 pub enum ApplicationError {
+    /// Database-related errors.
     #[error("Database error: {0}")]
     Database(String),
 
+    /// Log management errors.
     #[error("Log management error: {0}")]
     LogManagement(String),
 
+    /// Artifact management errors.
     #[error("Artifact management error: {0}")]
     ArtifactManagement(String),
 
+    /// VCS management errors.
     #[error("VCS management error: {0}")]
     VcsManagement(String),
 
+    /// Configuration errors.
     #[error("Configuration error: {0}")]
     Configuration(String),
 
+    /// Runtime errors.
     #[error("Runtime error: {0}")]
     Runtime(String),
 
+    /// Shutdown timeout error.
     #[error("Shutdown timeout")]
     ShutdownTimeout,
 }

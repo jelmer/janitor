@@ -495,12 +495,15 @@ where
 /// Tracing error types.
 #[derive(Debug, thiserror::Error)]
 pub enum TracingError {
+    /// Configuration-related errors.
     #[error("Configuration error: {0}")]
     Configuration(String),
 
+    /// Initialization-related errors.
     #[error("Initialization error: {0}")]
     Initialization(String),
 
+    /// Runtime-related errors.
     #[error("Runtime error: {0}")]
     Runtime(String),
 }

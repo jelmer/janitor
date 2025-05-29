@@ -122,6 +122,8 @@ fn _set_limits(limit_mb: Option<u64>) {
     }
 
     // Set resident memory limit (RLIMIT_RSS) - physical memory
+    // Note: RLIMIT_RSS is not available on all platforms (e.g., macOS)
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     if let Err(e) = nix::sys::resource::setrlimit(
         nix::sys::resource::Resource::RLIMIT_RSS,
         memory_bytes,

@@ -51,11 +51,17 @@ impl Default for ErrorTrackingConfig {
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
 pub enum ErrorSeverity {
+    /// Debug-level error.
     Debug = 0,
+    /// Informational error.
     Info = 1,
+    /// Warning-level error.
     Warning = 2,
+    /// Standard error.
     Error = 3,
+    /// Critical error requiring attention.
     Critical = 4,
+    /// Fatal error that causes system failure.
     Fatal = 5,
 }
 
@@ -75,18 +81,31 @@ impl fmt::Display for ErrorSeverity {
 /// Error categories for classification.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ErrorCategory {
+    /// Database-related errors.
     Database,
+    /// Network connectivity errors.
     Network,
+    /// File system errors.
     FileSystem,
+    /// Version control system errors.
     VCS,
+    /// Queue processing errors.
     Queue,
+    /// Worker-related errors.
     Worker,
+    /// Configuration errors.
     Configuration,
+    /// Authentication errors.
     Authentication,
+    /// Rate limiting errors.
     RateLimit,
+    /// Timeout errors.
     Timeout,
+    /// Resource exhaustion errors.
     Resource,
+    /// Business logic errors.
     Business,
+    /// Unknown or uncategorized errors.
     Unknown,
 }
 
@@ -113,34 +132,57 @@ impl fmt::Display for ErrorCategory {
 /// Tracked error entry.
 #[derive(Debug, Clone)]
 pub struct TrackedError {
+    /// Unique error identifier.
     pub id: String,
+    /// When the error occurred.
     pub timestamp: DateTime<Utc>,
+    /// Error severity level.
     pub severity: ErrorSeverity,
+    /// Error category for classification.
     pub category: ErrorCategory,
+    /// Component where the error occurred.
     pub component: String,
+    /// Operation being performed when error occurred.
     pub operation: String,
+    /// Error message.
     pub message: String,
+    /// Additional error details.
     pub details: Option<String>,
+    /// Stack trace if available.
     pub stack_trace: Option<String>,
+    /// Additional context key-value pairs.
     pub context: HashMap<String, String>,
+    /// Correlation ID for tracking related errors.
     pub correlation_id: Option<String>,
+    /// User ID if applicable.
     pub user_id: Option<String>,
+    /// Request ID if applicable.
     pub request_id: Option<String>,
+    /// Number of retry attempts.
     pub retry_count: u32,
+    /// Whether this error is transient.
     pub is_transient: bool,
 }
 
 /// Error pattern for detecting recurring issues.
 #[derive(Debug, Clone)]
 pub struct ErrorPattern {
+    /// Error category.
     pub category: ErrorCategory,
+    /// Component experiencing errors.
     pub component: String,
+    /// Operation that's failing.
     pub operation: String,
+    /// Total count of this error pattern.
     pub count: u64,
+    /// When this pattern was first seen.
     pub first_seen: DateTime<Utc>,
+    /// When this pattern was last seen.
     pub last_seen: DateTime<Utc>,
+    /// Error rate per hour.
     pub rate_per_hour: f64,
-    pub examples: Vec<String>, // Sample error IDs
+    /// Sample error IDs for investigation.
+    pub examples: Vec<String>,
 }
 
 /// Error storage and indexing.
@@ -489,12 +531,19 @@ impl ErrorTracker {
 /// Error statistics summary.
 #[derive(Debug, Clone)]
 pub struct ErrorStatistics {
+    /// Total number of errors.
     pub total_errors: usize,
+    /// Errors in the last hour.
     pub errors_last_hour: usize,
+    /// Errors in the last day.
     pub errors_last_day: usize,
+    /// Error counts by category.
     pub by_category: HashMap<ErrorCategory, u64>,
+    /// Error counts by severity.
     pub by_severity: HashMap<ErrorSeverity, u64>,
+    /// Error counts by component.
     pub by_component: HashMap<String, u64>,
+    /// Top error patterns.
     pub top_patterns: Vec<ErrorPattern>,
 }
 
