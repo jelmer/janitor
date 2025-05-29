@@ -2,7 +2,7 @@ use chrono::TimeDelta;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::types::PgInterval;
 use sqlx::{Error, FromRow, PgPool, Row};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, FromRow)]
@@ -251,5 +251,119 @@ impl<'a> Queue<'a> {
                 (bucket, count)
             })
             .collect())
+    }
+
+    /// Iterator for queue items with filtering and limiting capabilities
+    /// 
+    /// This matches the Python iter_queue() method functionality
+    /// 
+    /// # Arguments
+    /// * `limit` - Optional limit on number of items to return
+    /// * `campaign` - Optional campaign filter
+    /// 
+    /// # Returns
+    /// Vector of QueueItem objects in priority order (bucket ASC, priority ASC, id ASC)
+    pub async fn iter_queue(
+        &self,
+        limit: Option<i64>,
+        campaign: Option<&str>,
+    ) -> Result<Vec<QueueItem>, Error> {
+        let mut query = r#"
+            SELECT queue.id, queue.context, queue.command, queue.estimated_duration,
+                   queue.suite AS campaign, queue.refresh, queue.requester, 
+                   queue.change_set, queue.codebase
+            FROM queue
+        "#.to_string();
+
+        let mut conditions = Vec::new();
+        let mut bind_count = 0;
+
+        // Add campaign filter if provided
+        if campaign.is_some() {
+            bind_count += 1;
+            conditions.push(format!("queue.suite = ${}", bind_count));
+        }
+
+        // Add WHERE clause if we have conditions
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        // Add ordering (same as next_item)
+        query.push_str(" ORDER BY bucket ASC, priority ASC, queue.id ASC");
+
+        // Add limit if provided
+        if limit.is_some() {
+            bind_count += 1;
+            query.push_str(&format!(" LIMIT ${}", bind_count));
+        }
+
+        let mut sqlx_query = sqlx::query_as::<_, QueueItem>(&query);
+
+        // Bind parameters in the order they were added
+        if let Some(campaign) = campaign {
+            sqlx_query = sqlx_query.bind(campaign);
+        }
+        if let Some(limit) = limit {
+            sqlx_query = sqlx_query.bind(limit);
+        }
+
+        sqlx_query.fetch_all(self.pool).await
+    }
+
+    /// Get queue position with tuple return type matching Python API
+    /// 
+    /// # Returns
+    /// (position, wait_time) tuple where both can be None if not found
+    pub async fn get_position_tuple(
+        &self,
+        campaign: &str,
+        codebase: &str,
+    ) -> Result<(Option<i64>, Option<TimeDelta>), Error> {
+        match self.get_position(campaign, codebase).await? {
+            Some(eta) => {
+                // Convert PgInterval to TimeDelta
+                let wait_time = TimeDelta::microseconds(eta.wait_time.microseconds);
+                Ok((Some(eta.position), Some(wait_time)))
+            },
+            None => Ok((None, None)),
+        }
+    }
+
+    /// Get next queue item with fixed return type matching Python API
+    /// 
+    /// # Returns
+    /// (QueueItem, VCS info dict) where VCS dict is never None, just empty
+    pub async fn next_item_tuple(
+        &self,
+        codebase: Option<&str>,
+        campaign: Option<&str>,
+        exclude_hosts: Option<HashSet<String>>,
+        assigned_queue_items: Option<HashSet<i32>>,
+    ) -> Result<(Option<QueueItem>, HashMap<String, String>), Error> {
+        let (item, vcs_info) = self.next_item(codebase, campaign, exclude_hosts, assigned_queue_items).await?;
+        
+        // Convert VcsInfo to HashMap, filtering out None values
+        let mut vcs_dict = HashMap::new();
+        if let Some(vcs) = vcs_info {
+            if let Some(branch_url) = vcs.branch_url {
+                if !branch_url.is_empty() {
+                    vcs_dict.insert("branch_url".to_string(), branch_url);
+                }
+            }
+            if let Some(subpath) = vcs.subpath {
+                if !subpath.is_empty() {
+                    vcs_dict.insert("subpath".to_string(), subpath);
+                }
+            }
+            if let Some(vcs_type) = vcs.vcs_type {
+                if !vcs_type.is_empty() {
+                    vcs_dict.insert("vcs_type".to_string(), vcs_type);
+                }
+            }
+        }
+        
+        Ok((item, vcs_dict))
     }
 }
