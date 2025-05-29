@@ -146,6 +146,16 @@ impl LogFileManager for FileSystemLogFileManager {
         Err(Error::NotFound)
     }
 
+    async fn delete_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<(), Error> {
+        for path in self.get_paths(codebase, run_id, name) {
+            if path.exists() {
+                fs::remove_file(&path)?;
+                return Ok(());
+            }
+        }
+        Err(Error::NotFound)
+    }
+
     async fn health_check(&self) -> Result<(), Error> {
         // Check if the log directory exists and is accessible
         match fs::metadata(&self.log_directory) {

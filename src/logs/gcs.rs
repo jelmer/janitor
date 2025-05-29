@@ -7,6 +7,7 @@ use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_storage::client::{Client, ClientConfig};
 use google_cloud_storage::http::buckets::get::GetBucketRequest;
 use google_cloud_storage::http::buckets::Bucket;
+use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
 use google_cloud_storage::http::objects::download::Range;
 use google_cloud_storage::http::objects::get::GetObjectRequest;
 use google_cloud_storage::http::objects::list::ListObjectsRequest;
@@ -288,6 +289,37 @@ impl LogFileManager for GCSLogFileManager {
                     Err(Error::NotFound)
                 } else {
                     Err(Error::Other(e.to_string()))
+                }
+            }
+        }
+    }
+
+    async fn delete_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<(), Error> {
+        let object_name = self.get_object_name(codebase, run_id, name);
+
+        let delete_request = DeleteObjectRequest {
+            bucket: self.bucket.name.clone(),
+            object: object_name.clone(),
+            ..Default::default()
+        };
+
+        match self.client.delete_object(&delete_request).await {
+            Ok(_) => {
+                log::info!("Successfully deleted log object: {}", object_name);
+                Ok(())
+            }
+            Err(err) => {
+                let error_msg = format!("Failed to delete object {}: {}", object_name, err);
+                if let Ok(mut last_error) = self.last_error.lock() {
+                    *last_error = Some(error_msg.clone());
+                }
+
+                if err.to_string().contains("404") || err.to_string().contains("Not Found") {
+                    Err(Error::NotFound)
+                } else if err.to_string().contains("403") || err.to_string().contains("Forbidden") {
+                    Err(Error::PermissionDenied)
+                } else {
+                    Err(Error::Other(error_msg))
                 }
             }
         }
