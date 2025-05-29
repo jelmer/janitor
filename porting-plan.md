@@ -11,10 +11,17 @@ This document outlines the comprehensive plan for completing the migration of th
   - 📋 **Detailed plan**: [`runner/porting-plan.md`](runner/porting-plan.md) - COMPLETED
 - **Publisher**: ✅ Fully ported with enhanced functionality (3,696 lines ported)
   - 📋 **Detailed plan**: [`publish/porting-plan.md`](publish/porting-plan.md) - COMPLETED  
-- **Differ**: 🚧 Phase 1.1 complete (enhanced error handling) of 819 lines
-  - 📋 **Detailed plan**: [`differ/porting-plan.md`](differ/porting-plan.md) - IN PROGRESS
+- **Differ**: ✅ Fully ported with all phases complete (819 lines ported)
+  - 📋 **Detailed plan**: [`differ/porting-plan.md`](differ/porting-plan.md) - COMPLETED
+- **Core Infrastructure**: ✅ All 4 services ported (state, queue, scheduling, logs) (~1,600 lines ported)
+  - 📋 **Status**: Full Python API parity achieved
 - **Worker**: 🔄 Partially implemented (core functionality exists)
   - 📋 **Status**: Core worker logic implemented, no formal porting plan needed
+
+### 📊 Progress Summary
+- **Total Lines Ported**: ~9,300 lines (52% of original 18,000 lines)
+- **Completed Phases**: Phase 1 (Differ) ✅, Phase 2 (Infrastructure) ✅
+- **Next Priority**: Phase 3 (Site/Web Interface) - 8-12 weeks estimated
 
 ### 📊 Remaining Python Code Analysis
 
@@ -72,10 +79,10 @@ This document outlines the comprehensive plan for completing the migration of th
 - **Completed**: Resource cleanup and monitoring
 - **Completed**: Background cleanup of temporary files
 
-### Phase 2: Core Infrastructure Services 🚧 **75% COMPLETE**
-**Estimated effort: 4-6 weeks | Progress: 3 of 4 services completed**
+### Phase 2: Core Infrastructure Services ✅ **100% COMPLETE**
+**Actual effort: 4 weeks | All 4 services completed**
 
-> 📋 **Implementation Status**: State, queue, and scheduling services completed. Log management service remaining.
+> 📋 **Implementation Status**: All core infrastructure services have been successfully ported to Rust with full Python API compatibility.
 
 #### 2.1 ✅ State Management Service (COMPLETED)
 - **Completed**: Enhanced `src/state.rs` with missing Python API functionality
@@ -100,12 +107,16 @@ This document outlines the comprehensive plan for completing the migration of th
 - **Added**: Dry-run mode with detailed statistics and reporting
 - **Status**: Feature parity with Python version achieved, ready for production use
 
-#### 2.4 ⏳ Log Management Service (NEXT PRIORITY)
-- **Target**: Port `py/janitor/logs.py` (455 lines)
-- **Scope**: Log file managers (filesystem, GCS), upload/download, compression
-- **Dependencies**: Cloud storage APIs, async file operations
-- **Effort**: 2 weeks
-- **Implementation**: Create new `logs/` crate or extend `src/logs/` module
+#### 2.4 ✅ Log Management Service (COMPLETED)
+- **Completed**: Enhanced `src/logs/` module with full Python parity (455 lines ported)
+- **Added**: S3LogFileManager for S3-compatible storage (HTTP/HTTPS URLs)
+- **Added**: Timeout support on all relevant async methods
+- **Added**: Prometheus metrics tracking (upload failures/successes)
+- **Added**: Enhanced error types (ServiceUnavailable, LogRetrieval, Timeout)
+- **Added**: Improved factory function `get_log_manager()` with URL parsing
+- **Added**: Proper async implementation using tokio for all I/O operations
+- **Added**: Import functions with fallback and retry logic matching Python
+- **Status**: Full feature parity with Python implementation achieved
 
 ### Phase 3: Site/Web Interface (HIGH PRIORITY)
 **Estimated effort: 8-12 weeks**
