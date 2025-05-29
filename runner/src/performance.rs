@@ -28,77 +28,119 @@ struct PerformanceData {
 /// CPU usage statistics.
 #[derive(Debug, Clone, Copy)]
 pub struct CpuStats {
+    /// CPU usage percentage.
     pub usage_percent: f64,
-    pub load_average: [f64; 3], // 1min, 5min, 15min
+    /// Load average (1 min, 5 min, 15 min).
+    pub load_average: [f64; 3],
+    /// Number of CPU cores.
     pub cores: usize,
 }
 
 /// Memory usage statistics.
 #[derive(Debug, Clone, Copy)]
 pub struct MemoryStats {
+    /// Total memory in bytes.
     pub total_bytes: u64,
+    /// Used memory in bytes.
     pub used_bytes: u64,
+    /// Available memory in bytes.
     pub available_bytes: u64,
+    /// Buffer/cache memory in bytes.
     pub buffer_cache_bytes: u64,
+    /// Total swap space in bytes.
     pub swap_total_bytes: u64,
+    /// Used swap space in bytes.
     pub swap_used_bytes: u64,
 }
 
 /// Disk I/O statistics.
 #[derive(Debug, Clone)]
 pub struct DiskIoStats {
+    /// Time when these stats were collected.
     pub timestamp: Instant,
+    /// Disk read throughput in bytes per second.
     pub read_bytes_per_sec: u64,
+    /// Disk write throughput in bytes per second.
     pub write_bytes_per_sec: u64,
+    /// Read operations per second.
     pub read_iops: u64,
+    /// Write operations per second.
     pub write_iops: u64,
+    /// Disk usage percentage.
     pub disk_usage_percent: f64,
 }
 
 /// Network I/O statistics.
 #[derive(Debug, Clone)]
 pub struct NetworkIoStats {
+    /// Time when these stats were collected.
     pub timestamp: Instant,
+    /// Network receive throughput in bytes per second.
     pub rx_bytes_per_sec: u64,
+    /// Network transmit throughput in bytes per second.
     pub tx_bytes_per_sec: u64,
+    /// Network receive packets per second.
     pub rx_packets_per_sec: u64,
+    /// Network transmit packets per second.
     pub tx_packets_per_sec: u64,
+    /// Number of active network connections.
     pub connections_active: u64,
 }
 
 /// Database performance statistics.
 #[derive(Debug, Clone)]
 pub struct DatabasePerfStats {
+    /// Time when these stats were collected.
     pub timestamp: Instant,
+    /// Active database connections.
     pub connection_pool_active: u32,
+    /// Idle database connections.
     pub connection_pool_idle: u32,
+    /// Average query duration in milliseconds.
     pub avg_query_duration_ms: f64,
+    /// Number of queries per second.
     pub queries_per_second: f64,
+    /// Count of slow queries.
     pub slow_queries_count: u64,
 }
 
 /// Queue performance statistics.
 #[derive(Debug, Clone)]
 pub struct QueuePerfStats {
+    /// Time when these stats were collected.
     pub timestamp: Instant,
+    /// Number of items pending in queue.
     pub pending_items: u64,
+    /// Number of items currently being processed.
     pub processing_items: u64,
+    /// Average processing time in milliseconds.
     pub avg_processing_time_ms: f64,
+    /// Queue throughput per minute.
     pub throughput_per_minute: f64,
+    /// Age of oldest item in backlog in minutes.
     pub backlog_age_minutes: f64,
 }
 
 /// Performance thresholds for alerting.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PerformanceThresholds {
+    /// CPU usage warning threshold (percentage).
     pub cpu_usage_warning: f64,
+    /// CPU usage critical threshold (percentage).
     pub cpu_usage_critical: f64,
+    /// Memory usage warning threshold (percentage).
     pub memory_usage_warning: f64,
+    /// Memory usage critical threshold (percentage).
     pub memory_usage_critical: f64,
+    /// Disk usage warning threshold (percentage).
     pub disk_usage_warning: f64,
+    /// Disk usage critical threshold (percentage).
     pub disk_usage_critical: f64,
+    /// Queue backlog warning threshold in minutes.
     pub queue_backlog_warning_minutes: f64,
+    /// Queue backlog critical threshold in minutes.
     pub queue_backlog_critical_minutes: f64,
+    /// Database slow query threshold in milliseconds.
     pub database_slow_query_threshold_ms: f64,
 }
 
@@ -121,20 +163,30 @@ impl Default for PerformanceThresholds {
 /// Performance alert levels.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AlertLevel {
+    /// Normal operation.
     Ok,
+    /// Warning threshold exceeded.
     Warning,
+    /// Critical threshold exceeded.
     Critical,
 }
 
 /// Performance alert.
 #[derive(Debug, Clone)]
 pub struct PerformanceAlert {
+    /// Component that triggered the alert.
     pub component: String,
+    /// Metric name that exceeded threshold.
     pub metric: String,
+    /// Alert severity level.
     pub level: AlertLevel,
+    /// Current value of the metric.
     pub current_value: f64,
+    /// Threshold that was exceeded.
     pub threshold: f64,
+    /// Human-readable alert message.
     pub message: String,
+    /// Time when the alert was triggered.
     pub timestamp: Instant,
 }
 
@@ -418,22 +470,34 @@ impl PerformanceMonitor {
 /// Performance summary for monitoring dashboards.
 #[derive(Debug, Clone)]
 pub struct PerformanceSummary {
+    /// Current CPU usage percentage.
     pub cpu_usage_current: f64,
+    /// Average CPU usage over the last hour.
     pub cpu_usage_avg_1h: f64,
+    /// Current memory usage in bytes.
     pub memory_usage_current: u64,
+    /// Peak memory usage in the last hour.
     pub memory_usage_peak_1h: u64,
+    /// Average disk I/O over the last hour.
     pub disk_io_avg_1h: u64,
+    /// Average network I/O over the last hour.
     pub network_io_avg_1h: u64,
+    /// Number of performance data points collected.
     pub data_points_collected: usize,
+    /// Time of last data collection.
     pub last_collection: Option<Instant>,
 }
 
 /// Performance monitoring configuration.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PerformanceConfig {
+    /// Interval between performance data collections.
     pub collection_interval: Duration,
+    /// Performance thresholds for alerting.
     pub thresholds: PerformanceThresholds,
+    /// Whether to enable detailed performance logging.
     pub enable_detailed_logging: bool,
+    /// Cooldown period between alerts.
     pub alert_cooldown: Duration,
 }
 

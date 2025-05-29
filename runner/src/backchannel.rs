@@ -93,7 +93,9 @@ pub trait Backchannel {
 
 /// Backchannel implementation for Jenkins workers.
 pub struct JenkinsBackchannel {
+    /// URL of the Jenkins instance.
     my_url: url::Url,
+    /// Metadata associated with the Jenkins job.
     metadata: serde_json::Value,
 }
 

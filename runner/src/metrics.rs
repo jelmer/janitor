@@ -7,6 +7,7 @@ use prometheus::{
     TextEncoder,
 };
 
+#[allow(missing_docs)]
 lazy_static! {
     /// HTTP request metrics
     pub static ref HTTP_REQUESTS_TOTAL: IntCounterVec = register_int_counter_vec!(
@@ -135,13 +136,14 @@ lazy_static! {
         &["vcs_type", "error_code"]
     ).unwrap();
 
-    /// VCS branch cache metrics
+    /// VCS branch cache hits
     pub static ref VCS_BRANCH_CACHE_HITS: IntCounterVec = register_int_counter_vec!(
         "janitor_runner_vcs_branch_cache_hits_total",
         "Total number of VCS branch cache hits",
         &["vcs_type"]
     ).unwrap();
 
+    /// VCS branch cache misses
     pub static ref VCS_BRANCH_CACHE_MISSES: IntCounterVec = register_int_counter_vec!(
         "janitor_runner_vcs_branch_cache_misses_total",
         "Total number of VCS branch cache misses",
@@ -155,6 +157,7 @@ lazy_static! {
         &["category", "component", "severity"]
     ).unwrap();
 
+    /// Error patterns detected
     pub static ref ERROR_PATTERNS_DETECTED: IntCounterVec = register_int_counter_vec!(
         "janitor_runner_error_patterns_detected_total",
         "Total number of error patterns detected",

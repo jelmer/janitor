@@ -2,7 +2,7 @@
 //!
 //! This crate provides functionality for running code quality checks and tests.
 
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};

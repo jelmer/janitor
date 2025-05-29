@@ -1992,18 +1992,26 @@ impl RunnerDatabase {
 /// Configuration for a codebase from database.
 #[derive(Debug, Clone)]
 pub struct CodebaseConfig {
+    /// Name of the codebase.
     pub name: String,
+    /// URL of the branch.
     pub branch_url: Option<String>,
+    /// Type of version control system.
     pub vcs_type: Option<String>,
+    /// Subpath within the repository.
     pub subpath: Option<String>,
 }
 
 /// Configuration for a distribution from database.
 #[derive(Debug, Clone)]
 pub struct DistributionConfig {
+    /// Name of the distribution.
     pub name: String,
+    /// Archive mirror URI.
     pub archive_mirror_uri: Option<String>,
+    /// Chroot environment name.
     pub chroot: Option<String>,
+    /// Distribution vendor.
     pub vendor: Option<String>,
 }
 
