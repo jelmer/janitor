@@ -28,14 +28,14 @@ fn publish_mode_value(mode: &Mode) -> usize {
 
 #[derive(sqlx::FromRow)]
 pub struct ScheduleRequest {
-    codebase: String,
-    branch_url: String,
-    campaign: String,
-    context: String,
-    value: i64,
-    success_chance: f64,
-    command: String,
-    change_set: Option<String>,
+    pub codebase: String,
+    pub branch_url: String,
+    pub campaign: String,
+    pub context: String,
+    pub value: i64,
+    pub success_chance: f64,
+    pub command: String,
+    pub change_set: Option<String>,
 }
 
 pub async fn iter_schedule_requests_from_candidates(

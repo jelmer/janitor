@@ -4751,6 +4751,7 @@ dependencies = [
  "cfg-if",
  "fnv",
  "lazy_static",
+ "libc",
  "memchr",
  "parking_lot",
  "protobuf 3.7.2",
