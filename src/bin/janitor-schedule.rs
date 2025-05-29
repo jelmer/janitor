@@ -108,17 +108,26 @@ async fn main() -> Result<(), i32> {
     // Log some statistics about what we're scheduling
     let campaigns: std::collections::HashSet<_> = todo.iter().map(|t| &t.campaign).collect();
     let codebases: std::collections::HashSet<_> = todo.iter().map(|t| &t.codebase).collect();
-    log::info!("Scheduling across {} campaigns and {} codebases", campaigns.len(), codebases.len());
+    log::info!(
+        "Scheduling across {} campaigns and {} codebases",
+        campaigns.len(),
+        codebases.len()
+    );
 
     if args.dry_run {
         log::info!("DRY RUN: Would schedule {} items", todo.len());
         for item in &todo {
-            log::debug!("Would schedule: {} on {} (campaign: {}, value: {})", 
-                       item.command, item.codebase, item.campaign, item.value);
+            log::debug!(
+                "Would schedule: {} on {} (campaign: {}, value: {})",
+                item.command,
+                item.codebase,
+                item.campaign,
+                item.value
+            );
         }
     } else {
         log::info!("Adding {} items to queue", todo.len());
-        
+
         janitor::schedule::bulk_add_to_queue(
             &db,
             &todo,
@@ -133,7 +142,7 @@ async fn main() -> Result<(), i32> {
             log::error!("Failed to add items to queue: {}", e);
             1
         })?;
-        
+
         log::info!("Successfully scheduled {} items", todo.len());
     }
 
@@ -142,27 +151,31 @@ async fn main() -> Result<(), i32> {
 
     // Prometheus metrics export if configured
     if let Some(prometheus_gateway) = args.prometheus {
-        log::info!("Exporting metrics to Prometheus gateway: {}", prometheus_gateway);
-        
+        log::info!(
+            "Exporting metrics to Prometheus gateway: {}",
+            prometheus_gateway
+        );
+
         // Create a simple success metric
         let success_gauge = prometheus::Gauge::new(
-            "janitor_schedule_last_success", 
-            "Timestamp of last successful scheduling run"
-        ).map_err(|e| {
+            "janitor_schedule_last_success",
+            "Timestamp of last successful scheduling run",
+        )
+        .map_err(|e| {
             log::error!("Failed to create Prometheus gauge: {}", e);
             1
         })?;
-        
+
         success_gauge.set(chrono::Utc::now().timestamp() as f64);
-        
+
         let metric_families = prometheus::gather();
-        let labels = prometheus::labels!{"instance".to_string() => "main".to_string()};
+        let labels = prometheus::labels! {"instance".to_string() => "main".to_string()};
         if let Err(e) = prometheus::push_metrics(
-            "janitor-scheduler", 
+            "janitor-scheduler",
             labels,
             &prometheus_gateway,
             metric_families,
-            None
+            None,
         ) {
             log::warn!("Failed to push metrics to Prometheus: {}", e);
             // Don't fail the entire run for metrics issues

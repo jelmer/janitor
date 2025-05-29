@@ -254,13 +254,13 @@ impl<'a> Queue<'a> {
     }
 
     /// Iterator for queue items with filtering and limiting capabilities
-    /// 
+    ///
     /// This matches the Python iter_queue() method functionality
-    /// 
+    ///
     /// # Arguments
     /// * `limit` - Optional limit on number of items to return
     /// * `campaign` - Optional campaign filter
-    /// 
+    ///
     /// # Returns
     /// Vector of QueueItem objects in priority order (bucket ASC, priority ASC, id ASC)
     pub async fn iter_queue(
@@ -273,7 +273,8 @@ impl<'a> Queue<'a> {
                    queue.suite AS campaign, queue.refresh, queue.requester, 
                    queue.change_set, queue.codebase
             FROM queue
-        "#.to_string();
+        "#
+        .to_string();
 
         let mut conditions = Vec::new();
         let mut bind_count = 0;
@@ -313,7 +314,7 @@ impl<'a> Queue<'a> {
     }
 
     /// Get queue position with tuple return type matching Python API
-    /// 
+    ///
     /// # Returns
     /// (position, wait_time) tuple where both can be None if not found
     pub async fn get_position_tuple(
@@ -326,13 +327,13 @@ impl<'a> Queue<'a> {
                 // Convert PgInterval to TimeDelta
                 let wait_time = TimeDelta::microseconds(eta.wait_time.microseconds);
                 Ok((Some(eta.position), Some(wait_time)))
-            },
+            }
             None => Ok((None, None)),
         }
     }
 
     /// Get next queue item with fixed return type matching Python API
-    /// 
+    ///
     /// # Returns
     /// (QueueItem, VCS info dict) where VCS dict is never None, just empty
     pub async fn next_item_tuple(
@@ -342,8 +343,10 @@ impl<'a> Queue<'a> {
         exclude_hosts: Option<HashSet<String>>,
         assigned_queue_items: Option<HashSet<i32>>,
     ) -> Result<(Option<QueueItem>, HashMap<String, String>), Error> {
-        let (item, vcs_info) = self.next_item(codebase, campaign, exclude_hosts, assigned_queue_items).await?;
-        
+        let (item, vcs_info) = self
+            .next_item(codebase, campaign, exclude_hosts, assigned_queue_items)
+            .await?;
+
         // Convert VcsInfo to HashMap, filtering out None values
         let mut vcs_dict = HashMap::new();
         if let Some(vcs) = vcs_info {
@@ -363,7 +366,7 @@ impl<'a> Queue<'a> {
                 }
             }
         }
-        
+
         Ok((item, vcs_dict))
     }
 }
