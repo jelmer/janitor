@@ -1,6 +1,9 @@
 # APT Repository Library
 
-A Rust library for creating and parsing APT repositories. This library provides functionality to generate repository metadata files (Release, Packages, Sources) with proper cryptographic hashing and compression support.
+A Rust library for creating and parsing APT repositories. This library provides
+functionality to generate repository metadata files (Release, Packages,
+                                                     Sources) with proper
+cryptographic hashing and compression support.
 
 ## Features
 

@@ -55,7 +55,15 @@ pub fn calculate_next_try_time(finish_time: DateTime<Utc>, attempt_count: usize)
     if attempt_count == 0 {
         finish_time
     } else {
-        let delta = chrono::Duration::hours(2usize.pow(attempt_count as u32).min(7 * 24) as i64);
+        // Use saturating arithmetic to prevent overflow
+        let hours = if attempt_count >= 8 {
+            // Cap at 7 days (168 hours) for attempt_count >= 8
+            7 * 24
+        } else {
+            // 2^attempt_count hours, but cap at 7 days
+            (2usize.pow(attempt_count as u32)).min(7 * 24)
+        };
+        let delta = chrono::Duration::hours(hours as i64);
 
         finish_time + delta
     }
@@ -212,6 +220,12 @@ pub enum PublishError {
     NothingToDo(String),
     /// The branch is already being used.
     BranchBusy(url::Url),
+    /// Authentication failed.
+    AuthenticationFailed,
+    /// Network error occurred.
+    NetworkError(String),
+    /// Database error occurred.
+    DatabaseError(sqlx::Error),
 }
 
 impl PublishError {
@@ -224,6 +238,9 @@ impl PublishError {
             PublishError::Failure { code, .. } => code,
             PublishError::NothingToDo(_) => "nothing-to-do",
             PublishError::BranchBusy(_) => "branch-busy",
+            PublishError::AuthenticationFailed => "authentication-failed",
+            PublishError::NetworkError(_) => "network-error",
+            PublishError::DatabaseError(_) => "database-error",
         }
     }
 
@@ -236,6 +253,9 @@ impl PublishError {
             PublishError::Failure { description, .. } => description,
             PublishError::NothingToDo(description) => description,
             PublishError::BranchBusy(_) => "Branch is busy",
+            PublishError::AuthenticationFailed => "Authentication failed",
+            PublishError::NetworkError(msg) => msg,
+            PublishError::DatabaseError(_) => "Database error",
         }
     }
 }
@@ -264,6 +284,24 @@ impl serde::Serialize for PublishError {
                 state.serialize_field("description", &format!("Branch is busy: {}", url))?;
                 state.end()
             }
+            PublishError::AuthenticationFailed => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", "authentication-failed")?;
+                state.serialize_field("description", "Authentication failed")?;
+                state.end()
+            }
+            PublishError::NetworkError(msg) => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", "network-error")?;
+                state.serialize_field("description", msg)?;
+                state.end()
+            }
+            PublishError::DatabaseError(e) => {
+                let mut state = serializer.serialize_struct("PublishError", 2)?;
+                state.serialize_field("code", "database-error")?;
+                state.serialize_field("description", &e.to_string())?;
+                state.end()
+            }
         }
     }
 }
@@ -279,6 +317,18 @@ impl std::fmt::Display for PublishError {
             }
             PublishError::BranchBusy(url) => {
                 write!(f, "PublishError::BranchBusy: Branch is busy: {}", url)
+            }
+            PublishError::AuthenticationFailed => {
+                write!(
+                    f,
+                    "PublishError::AuthenticationFailed: Authentication failed"
+                )
+            }
+            PublishError::NetworkError(msg) => {
+                write!(f, "PublishError::NetworkError: {}", msg)
+            }
+            PublishError::DatabaseError(e) => {
+                write!(f, "PublishError::DatabaseError: {}", e)
             }
         }
     }

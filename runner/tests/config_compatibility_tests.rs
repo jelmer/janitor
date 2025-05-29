@@ -381,6 +381,8 @@ fn test_config_validation_compatibility() {
         public_port: 9919,
         request_timeout_seconds: 60,
         max_request_size_bytes: 10 * 1024 * 1024,
+        enable_cors: false,
+        enable_request_logging: true,
     };
 
     assert_eq!(invalid_web_config.port, 0); // Should be rejected by validation

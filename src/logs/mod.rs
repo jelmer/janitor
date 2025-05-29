@@ -44,7 +44,7 @@ impl std::error::Error for Error {}
 /// This trait is implemented by various log file managers, which
 /// can be either local or remote.
 #[async_trait]
-pub trait LogFileManager {
+pub trait LogFileManager: Send + Sync {
     /// Check if a log exists.
     async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error>;
 
@@ -96,4 +96,29 @@ pub trait LogFileManager {
         run_id: &str,
         name: &str,
     ) -> Result<DateTime<Utc>, Error>;
+
+    /// Perform a health check on the log manager.
+    ///
+    /// This method should verify that the log storage backend is accessible
+    /// and functioning properly.
+    async fn health_check(&self) -> Result<(), Error>;
+}
+
+/// Create a log file manager based on the location string.
+pub async fn create_log_manager(location: &str) -> Result<Box<dyn LogFileManager>, Error> {
+    if location.starts_with("gs://") {
+        #[cfg(feature = "gcs")]
+        {
+            Ok(Box::new(
+                GCSLogFileManager::new(location.trim_start_matches("gs://"), None).await?,
+            ))
+        }
+        #[cfg(not(feature = "gcs"))]
+        {
+            Err(Error::Other("GCS support not compiled in".to_string()))
+        }
+    } else {
+        // Default to filesystem
+        Ok(Box::new(FileSystemLogFileManager::new(location)?))
+    }
 }

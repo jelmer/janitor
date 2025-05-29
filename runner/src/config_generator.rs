@@ -277,8 +277,7 @@ impl ConfigGenerator for DebianConfigGenerator {
 
         // Add the Debian Janitor repository key for extra repositories
         if !extra_janitor_distributions.is_empty() {
-            config.extra_repositories_keys =
-                Some(vec!["/etc/apt/keyrings/debian-janitor.gpg".to_string()]);
+            config.apt_repository_key = Some("/etc/apt/keyrings/debian-janitor.gpg".to_string());
         }
 
         let build_distribution = campaign_config

@@ -5,28 +5,36 @@ use axum::response::{IntoResponse, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use breezyshim::error::Error as BrzError;
-use breezyshim::forge::Forge;
 use breezyshim::RevisionId;
 use janitor::state::Run;
-use janitor::vcs::{VcsManager, VcsType};
 use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Merge proposal data structure for API responses.
 #[derive(serde::Serialize, serde::Deserialize, sqlx::FromRow)]
-struct MergeProposal {
-    codebase: Option<String>,
-    url: String,
-    target_branch_url: Option<String>,
-    status: Option<String>,
-    revision: Option<String>,
-    merged_by: Option<String>,
-    merged_at: Option<chrono::DateTime<chrono::Utc>>,
-    last_scanned: Option<chrono::DateTime<chrono::Utc>>,
-    can_be_merged: Option<bool>,
-    rate_limit_bucket: Option<String>,
+pub struct MergeProposal {
+    /// The codebase this merge proposal belongs to.
+    pub codebase: Option<String>,
+    /// The URL of the merge proposal.
+    pub url: String,
+    /// The URL of the target branch.
+    pub target_branch_url: Option<String>,
+    /// The current status of the merge proposal.
+    pub status: Option<String>,
+    /// The revision ID of the merge proposal.
+    pub revision: Option<String>,
+    /// Who merged this proposal.
+    pub merged_by: Option<String>,
+    /// When this proposal was merged.
+    pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When this proposal was last scanned.
+    pub last_scanned: Option<chrono::DateTime<chrono::Utc>>,
+    /// Whether this proposal can be merged.
+    pub can_be_merged: Option<bool>,
+    /// The rate limit bucket for this proposal.
+    pub rate_limit_bucket: Option<String>,
 }
 
 async fn get_merge_proposals_by_campaign(

@@ -3,7 +3,6 @@ use breezyshim::RevisionId;
 use janitor::publish::MergeProposalStatus;
 use redis::AsyncCommands;
 use sqlx::{PgPool, Row};
-use url::Url;
 
 /// Information about a merge proposal stored in the database.
 #[derive(Debug, Clone, sqlx::FromRow)]

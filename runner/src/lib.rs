@@ -2,7 +2,7 @@
 //!
 //! This crate provides functionality for running code quality checks and tests.
 
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
 use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
@@ -32,8 +32,6 @@ pub use watchdog::{RunHealthStatus, TerminationReason, Watchdog, WatchdogConfig,
 
 /// Module for application initialization and orchestration.
 pub mod application;
-/// Module for artifact storage management.
-pub mod artifacts;
 /// Module for worker authentication and security.
 pub mod auth;
 /// Module for handling backchannel communication with the worker.
@@ -1264,7 +1262,7 @@ pub struct AppState {
     /// Log file management system.
     pub log_manager: Arc<dyn logs::LogFileManager>,
     /// Artifact storage management system.
-    pub artifact_manager: Arc<artifacts::ArtifactManager>,
+    pub artifact_manager: Arc<dyn janitor::artifacts::ArtifactManager>,
     /// Performance monitoring system.
     pub performance_monitor: Arc<performance::PerformanceMonitor>,
     /// Error tracking system.

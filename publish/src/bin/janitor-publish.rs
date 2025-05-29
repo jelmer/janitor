@@ -160,7 +160,7 @@ async fn main() -> Result<(), i32> {
     });
 
     if args.once {
-        janitor_publish::publish_pending_ready(state)
+        janitor_publish::publish_pending_ready(state, None, false)
             .await
             .map_err(|e| {
                 log::error!("Failed to publish pending proposals: {}", e);
@@ -182,11 +182,18 @@ async fn main() -> Result<(), i32> {
             state.clone(),
             chrono::Duration::seconds(args.interval),
             !args.no_auto_publish,
+            None,  // push_limit
+            None,  // modify_mp_limit
+            false, // require_binary_diff
         ));
 
         tokio::spawn(janitor_publish::refresh_bucket_mp_counts(state.clone()));
 
-        tokio::spawn(janitor_publish::listen_to_runner(state.clone()));
+        let (shutdown_tx, shutdown_rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(janitor_publish::listen_to_runner(
+            state.clone(),
+            shutdown_rx,
+        ));
 
         let app = janitor_publish::web::app(state.clone());
 

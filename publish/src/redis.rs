@@ -10,8 +10,6 @@ use sqlx::Row;
 // Type alias for connection manager
 /// Type alias for Redis connection manager used throughout the publish service.
 pub type RedisConnectionManager = ConnectionManager;
-use serde_json::json;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 

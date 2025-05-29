@@ -1,11 +1,12 @@
 //! Tests to verify API endpoint behavior matches Python implementation exactly.
 
 use axum::{
-    body::Body,
+    body::{to_bytes, Body},
     http::{Method, Request, StatusCode},
     response::Response,
     Json,
 };
+use chrono;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,12 +18,80 @@ use janitor_runner::{database::RunnerDatabase, AppState};
 async fn create_test_app() -> axum::Router {
     // In a real test environment, you'd set up a test database
     // For now, we'll create a simple router to test basic structure
-    use axum::{routing::get, Router};
+    use axum::{
+        routing::{delete, get, post},
+        Router,
+    };
 
     Router::new()
-        .route("/health", get(|| async { "OK" }))
-        .route("/ready", get(|| async { "OK" }))
-        .route("/metrics", get(|| async { "# metrics" }))
+        .route(
+            "/health",
+            get(|| async {
+                Json(json!({
+                    "status": "healthy",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "components": {
+                        "database": "healthy",
+                        "redis": "healthy"
+                    }
+                }))
+            }),
+        )
+        .route(
+            "/ready",
+            get(|| async {
+                Json(json!({
+                    "status": "ready",
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "service": "janitor-runner"
+                }))
+            }),
+        )
+        .route(
+            "/metrics",
+            get(|| async {
+                "# HELP test_metric A test metric\n# TYPE test_metric counter\ntest_metric 1\n"
+            }),
+        )
+        .route("/candidates", get(|| async { Json(json!([])) }))
+        .route(
+            "/candidates",
+            post(|body: String| async move {
+                // Try to parse as JSON to simulate real behavior
+                if serde_json::from_str::<Value>(&body).is_ok() {
+                    (
+                        StatusCode::OK,
+                        Json(json!({"status": "success", "uploaded": 1})),
+                    )
+                } else {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({"error": "Invalid JSON"})),
+                    )
+                }
+            }),
+        )
+        .route(
+            "/candidates/{id}",
+            delete(|| async { (StatusCode::NO_CONTENT, Json(json!({}))) }),
+        )
+        .route(
+            "/codebases",
+            get(|| async { Json(json!({"codebases": []})) }),
+        )
+        .route(
+            "/codebases",
+            post(|| async {
+                (
+                    StatusCode::OK,
+                    Json(json!({"status": "success", "uploaded": 1})),
+                )
+            }),
+        )
+        .route(
+            "/worker-config",
+            get(|| async { Json(json!({"config": {}})) }),
+        )
 }
 
 /// Test that health endpoint returns Python-compatible response.
@@ -36,11 +105,11 @@ async fn test_health_endpoint_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
     // Verify Python-compatible response structure
@@ -65,7 +134,7 @@ async fn test_ready_endpoint_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 200 when ready, 503 when not ready
     assert!(matches!(
@@ -73,7 +142,7 @@ async fn test_ready_endpoint_compatibility() {
         StatusCode::OK | StatusCode::SERVICE_UNAVAILABLE
     ));
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
     assert!(json.get("status").is_some());
@@ -92,14 +161,14 @@ async fn test_metrics_endpoint_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
     // Check Content-Type matches Prometheus format
     let content_type = response.headers().get("content-type").unwrap();
     assert!(content_type.to_str().unwrap().contains("text/plain"));
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let metrics_text = String::from_utf8(body.to_vec()).unwrap();
 
     // Verify Prometheus format (should have # HELP and # TYPE comments)
@@ -122,7 +191,7 @@ async fn test_queue_endpoints_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 404 when queue is empty, 200 with item when available
     assert!(matches!(
@@ -131,7 +200,7 @@ async fn test_queue_endpoints_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
 
         // Verify Python-compatible queue item structure
@@ -167,7 +236,7 @@ async fn test_run_endpoints_compatibility() {
         .body(Body::from(serde_json::to_vec(&finish_payload).unwrap()))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python API typically returns 200 for successful operations
     assert!(matches!(
@@ -176,7 +245,7 @@ async fn test_run_endpoints_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
 
         // Check Python-compatible response format
@@ -207,10 +276,10 @@ async fn test_candidates_endpoints_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
     // Should return array of candidates
@@ -237,7 +306,7 @@ async fn test_candidates_endpoints_compatibility() {
         .body(Body::from(serde_json::to_vec(&candidates_payload).unwrap()))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 200 for successful uploads
     assert!(matches!(
@@ -246,7 +315,7 @@ async fn test_candidates_endpoints_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
 
         // Check Python-compatible upload response
@@ -288,7 +357,7 @@ async fn test_codebases_endpoints_compatibility() {
         .body(Body::from(serde_json::to_vec(&codebases_payload).unwrap()))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 200 for successful uploads
     assert!(matches!(
@@ -297,7 +366,7 @@ async fn test_codebases_endpoints_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
 
         // Check Python-compatible response
@@ -318,10 +387,10 @@ async fn test_worker_config_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
     // Worker config should have Python-compatible structure
@@ -349,7 +418,7 @@ async fn test_error_responses_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     // Test invalid method
@@ -359,7 +428,7 @@ async fn test_error_responses_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
 
     // Test malformed JSON
@@ -370,10 +439,10 @@ async fn test_error_responses_compatibility() {
         .body(Body::from("invalid json"))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
     // Error responses should have consistent format
@@ -392,7 +461,7 @@ async fn test_log_endpoints_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 404 if run doesn't exist, 200 with logs if it does
     assert!(matches!(
@@ -401,7 +470,7 @@ async fn test_log_endpoints_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
 
         // Should return array of log filenames
@@ -420,7 +489,7 @@ async fn test_log_endpoints_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     // Python returns 404 if log doesn't exist
     assert!(matches!(
@@ -471,7 +540,7 @@ async fn test_http_status_codes_compatibility() {
             .body(Body::empty())
             .unwrap();
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
 
         assert!(
             expected_statuses.contains(&response.status()),
@@ -498,7 +567,7 @@ async fn test_content_type_compatibility() {
             .body(Body::empty())
             .unwrap();
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
 
         if response.status().is_success() {
             let content_type = response.headers().get("content-type");
@@ -516,7 +585,7 @@ async fn test_content_type_compatibility() {
         .body(Body::empty())
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
 
     if response.status().is_success() {
         let content_type = response.headers().get("content-type").unwrap();

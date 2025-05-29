@@ -23,9 +23,16 @@ use crate::logs::{Error, LogFileManager};
 pub struct GCSLogFileManager {
     client: Client,
     bucket: Bucket,
+    last_error: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl GCSLogFileManager {
+    fn record_error(&self, error: Option<String>) {
+        if let Ok(mut last_error) = self.last_error.lock() {
+            *last_error = error;
+        }
+    }
+
     pub async fn from_url(
         location: &url::Url,
         creds: Option<CredentialsFile>,
@@ -68,7 +75,11 @@ impl GCSLogFileManager {
             Err(e) => return Err(Error::Other(e.to_string())),
         };
 
-        Ok(Self { client, bucket })
+        Ok(Self {
+            client,
+            bucket,
+            last_error: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        })
     }
 
     fn get_object_name(&self, codebase: &str, run_id: &str, name: &str) -> String {
@@ -90,12 +101,15 @@ impl LogFileManager for GCSLogFileManager {
         match self.client.get_object(&get_request).await {
             Ok(_) => {
                 // If we can get the object, it exists
+                self.record_error(None); // Clear error on success
                 Ok(true)
             }
             Err(e) => {
                 if e.to_string().contains("Not Found") {
+                    self.record_error(None); // Not found is not an error condition
                     Ok(false)
                 } else {
+                    self.record_error(Some(e.to_string()));
                     Err(Error::Other(e.to_string()))
                 }
             }
@@ -276,6 +290,22 @@ impl LogFileManager for GCSLogFileManager {
                     Err(Error::Other(e.to_string()))
                 }
             }
+        }
+    }
+
+    async fn health_check(&self) -> Result<(), Error> {
+        // Check the last error status without making any network calls
+        if let Ok(last_error) = self.last_error.lock() {
+            if let Some(ref error_msg) = *last_error {
+                Err(Error::Other(format!(
+                    "Last operation failed: {}",
+                    error_msg
+                )))
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(Error::Other("Failed to check error status".to_string()))
         }
     }
 }

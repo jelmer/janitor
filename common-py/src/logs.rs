@@ -163,9 +163,14 @@ pub struct FileSystemLogFileManager;
 #[pymethods]
 impl FileSystemLogFileManager {
     #[new]
-    fn new(log_directory: std::path::PathBuf) -> (Self, LogFileManager) {
-        let z = janitor::logs::FileSystemLogFileManager::new(log_directory);
-        (FileSystemLogFileManager, LogFileManager(Arc::new(z)))
+    fn new(log_directory: std::path::PathBuf) -> PyResult<(Self, LogFileManager)> {
+        let z = janitor::logs::FileSystemLogFileManager::new(log_directory).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!(
+                "Failed to create log manager: {}",
+                e
+            ))
+        })?;
+        Ok((FileSystemLogFileManager, LogFileManager(Arc::new(z))))
     }
 }
 

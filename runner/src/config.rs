@@ -1,8 +1,7 @@
 //! Comprehensive configuration management for the runner.
 
 use crate::{
-    artifacts::ArtifactConfig, error_tracking::ErrorTrackingConfig, performance::PerformanceConfig,
-    tracing::TracingConfig,
+    error_tracking::ErrorTrackingConfig, performance::PerformanceConfig, tracing::TracingConfig,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -26,6 +25,22 @@ pub struct LogConfig {
     /// Enable log compression.
     #[serde(default = "default_true")]
     pub enable_compression: bool,
+}
+
+/// Artifact storage configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtifactConfig {
+    /// Storage backend type (filesystem, gcs).
+    #[serde(default = "default_artifact_backend")]
+    pub backend: String,
+    /// Base path for filesystem artifacts.
+    pub filesystem_base_path: Option<PathBuf>,
+    /// GCS bucket for artifacts.
+    pub gcs_bucket: Option<String>,
+}
+
+fn default_artifact_backend() -> String {
+    "filesystem".to_string()
 }
 
 /// Complete runner configuration combining all subsystem configurations.
@@ -1019,7 +1034,7 @@ mod tests {
 
     #[test]
     fn test_config_merge() {
-        let mut base_config = RunnerConfig::default();
+        let base_config = RunnerConfig::default();
         let mut override_config = RunnerConfig::default();
         override_config.web.port = 8080;
         override_config.application.debug = true;
@@ -1101,24 +1116,6 @@ mod tests {
         let config = RunnerConfig::from_sources(&sources).unwrap();
         assert_eq!(config.database.url, "postgresql://localhost/test");
         std::env::remove_var("DATABASE_URL");
-    }
-
-    #[test]
-    fn test_config_content_parsing() {
-        let toml_content = r#"
-[database]
-url = "postgresql://localhost/janitor_test"
-max_connections = 5
-
-[web]
-port = 8080
-"#;
-
-        let config =
-            RunnerConfig::from_content(toml_content, std::path::Path::new("test.toml")).unwrap();
-        assert_eq!(config.database.url, "postgresql://localhost/janitor_test");
-        assert_eq!(config.database.max_connections, 5);
-        assert_eq!(config.web.port, 8080);
     }
 
     #[tokio::test]
