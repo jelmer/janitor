@@ -10,3 +10,55 @@ homepage = "https://github.com/jelmer/janitor"
 
 [dependencies]
 buildlog-consultant = { version = "0.1.0", default-features = false }
+
+# Web Framework
+axum = { workspace = true, features = ["macros"] }
+tower = { workspace = true }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+hyper = { version = "1.0" }
+
+# Templates & Assets
+tera = "1.19"
+include_dir = "0.7"
+
+# Authentication & Security
+oauth2 = "4.4"
+jsonwebtoken = "9.0"
+cookie = "0.18"
+
+# Database
+sqlx = { workspace = true, features = ["postgres", "chrono", "uuid", "migrate"] }
+
+# API & Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+utoipa = { version = "4.0", features = ["axum_extras"] }
+utoipa-axum = "0.1"
+
+# Monitoring & Observability
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+metrics = "0.22"
+metrics-prometheus = "0.7"
+
+# Redis & Pub/Sub
+redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
+
+# Time & Utils
+chrono = { workspace = true, features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+url = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["full"] }
+
+# Configuration
+config = "0.14"
+anyhow = "1.0"
+
+# Janitor dependencies  
+janitor = { path = ".." }
+
+[[bin]]
+name = "janitor-site"
+path = "src/main.rs"

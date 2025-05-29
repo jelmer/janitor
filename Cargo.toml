@@ -85,6 +85,8 @@ deb822-lossless = "0.2.4"
 debian-control = "0.1.40"
 pyo3-filelike = "0.4.0"
 thiserror = "2.0"
+tower = "0.5"
+tracing = "0.1"
 
 [build-dependencies]
 protobuf-codegen = "3"
