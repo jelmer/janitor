@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use std::fs;
-use std::io::Read;
+use std::io::{self, Read};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use tokio::fs as async_fs;
 
 use crate::logs::{Error, LogFileManager};
 
@@ -71,27 +72,32 @@ impl LogFileManager for FileSystemLogFileManager {
         basename: Option<&str>,
     ) -> Result<(), Error> {
         let dest_dir = self.log_directory.join(codebase).join(run_id);
-        fs::create_dir_all(&dest_dir)?;
+        tokio::fs::create_dir_all(&dest_dir).await?;
 
-        let mut inf = fs::File::open(orig_path)?;
+        let data = tokio::fs::read(orig_path).await?;
 
         let basename =
             basename.unwrap_or_else(|| Path::new(orig_path).file_name().unwrap().to_str().unwrap());
         let dest_path = dest_dir.join(format!("{}.gz", basename));
 
-        let mut outf = fs::File::create(&dest_path)?;
-        let mut encoder = flate2::write::GzEncoder::new(&mut outf, flate2::Compression::default());
-        std::io::copy(&mut inf, &mut encoder)?;
-        encoder.finish()?;
+        // Compress data in a blocking task to avoid blocking the executor
+        let compressed = tokio::task::spawn_blocking(move || -> io::Result<Vec<u8>> {
+            let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            io::copy(&mut io::Cursor::new(&data), &mut encoder)?;
+            encoder.finish()
+        }).await.map_err(|e| Error::Other(e.to_string()))??;
 
-        std::mem::drop(outf);
+        tokio::fs::write(&dest_path, compressed).await?;
 
         if let Some(mtime) = mtime {
-            filetime::set_file_times(
-                dest_path,
-                filetime::FileTime::from_system_time(mtime.into()),
-                filetime::FileTime::from_system_time(mtime.into()),
-            )?;
+            let dest_path_clone = dest_path.clone();
+            tokio::task::spawn_blocking(move || {
+                filetime::set_file_times(
+                    dest_path_clone,
+                    filetime::FileTime::from_system_time(mtime.into()),
+                    filetime::FileTime::from_system_time(mtime.into()),
+                )
+            }).await.map_err(|e| Error::Other(e.to_string()))??;
         }
 
         Ok(())
@@ -148,9 +154,10 @@ impl LogFileManager for FileSystemLogFileManager {
 
     async fn delete_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<(), Error> {
         for path in self.get_paths(codebase, run_id, name) {
-            if path.exists() {
-                fs::remove_file(&path)?;
-                return Ok(());
+            match async_fs::remove_file(&path).await {
+                Ok(()) => return Ok(()),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(Error::from(e)),
             }
         }
         Err(Error::NotFound)
@@ -166,7 +173,7 @@ impl LogFileManager for FileSystemLogFileManager {
                         Ok(_) => Ok(()),
                         Err(e) => match e.kind() {
                             std::io::ErrorKind::PermissionDenied => Err(Error::PermissionDenied),
-                            _ => Err(Error::Io(e)),
+                            _ => Err(Error::Io(e.to_string())),
                         },
                     }
                 } else {
@@ -180,7 +187,7 @@ impl LogFileManager for FileSystemLogFileManager {
                     Ok(())
                 }
                 std::io::ErrorKind::PermissionDenied => Err(Error::PermissionDenied),
-                _ => Err(Error::Io(e)),
+                _ => Err(Error::Io(e.to_string())),
             },
         }
     }
