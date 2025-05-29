@@ -45,8 +45,8 @@ This document outlines the comprehensive plan for completing the migration of th
 
 ## Porting Plan by Priority
 
-### Phase 1: Complete Differ Service (URGENT - In Progress)
-**Estimated effort: 1-2 weeks**
+### Phase 1: Complete Differ Service ✅ **COMPLETED**
+**Actual effort: 2-3 weeks**
 
 > 📋 **Detailed Implementation Plan**: See [`differ/porting-plan.md`](differ/porting-plan.md) for complete phase breakdown and technical details.
 
@@ -55,54 +55,50 @@ This document outlines the comprehensive plan for completing the migration of th
 - HTTP status code mapping and structured responses
 - Content negotiation with proper error handling
 
-#### 1.2 Content Format Support (HIGH PRIORITY)
-- **Target**: Complete `/precache-all` endpoint implementation
-- **Target**: Implement HTML and Markdown output generation  
-- **Target**: Add template system for HTML responses
-- **Dependencies**: Template engine (Tera), response formatting
-- **Effort**: 2-3 days
+#### 1.2 ✅ Content Format Support (COMPLETED)
+- **Completed**: `/precache-all` endpoint implementation
+- **Completed**: HTML and Markdown output generation  
+- **Completed**: Content negotiation with Accept headers
+- **Completed**: Memory monitoring and cleanup tasks
+- **Note**: Python integration tests marked for future fixing
 
-#### 1.3 Redis Integration (HIGH PRIORITY)
-- **Target**: Redis listener for automatic precaching triggers
-- **Target**: Event-driven precaching based on run completion
-- **Dependencies**: Redis pub/sub, event processing
-- **Effort**: 2-3 days
+#### 1.3 ✅ Redis Integration (COMPLETED)
+- **Completed**: Redis listener for automatic precaching triggers
+- **Completed**: Event-driven precaching based on run completion
+- **Completed**: Robust connection handling and retry logic
 
-#### 1.4 Memory Management (MEDIUM PRIORITY)
-- **Target**: Memory limits enforcement during diff operations
-- **Target**: Resource cleanup and monitoring
-- **Dependencies**: Process management, resource limits
-- **Effort**: 1-2 days
+#### 1.4 ✅ Memory Management (COMPLETED)
+- **Completed**: Memory limits enforcement during diff operations
+- **Completed**: Resource cleanup and monitoring
+- **Completed**: Background cleanup of temporary files
 
-### Phase 2: Core Infrastructure Services (HIGH PRIORITY)
-**Estimated effort: 4-6 weeks**
+### Phase 2: Core Infrastructure Services 🚧 **IN PROGRESS**
+**Estimated effort: 4-6 weeks | Progress: 50% complete**
 
-> 📋 **Future Porting Plans**: Individual crates will need detailed porting plans created:
-> - `common-py/porting-plan.md` (for shared infrastructure)
-> - `logs/porting-plan.md` (for log management service)
+> 📋 **Implementation Status**: Core state and queue management enhanced, scheduling service next priority
 
-#### 2.1 State Management Service (HIGH PRIORITY)
-- **Target**: Port `py/janitor/state.py` (268 lines)
-- **Scope**: Core data types, database connection management, JSON codecs
-- **Dependencies**: Database types, async connection pooling
-- **Effort**: 1 week
-- **Implementation**: Extend existing `src/state.rs` in root crate
+#### 2.1 ✅ State Management Service (COMPLETED)
+- **Completed**: Enhanced `src/state.rs` with missing Python API functionality
+- **Added**: Public APIs (`has_cotenants`, `iter_publishable_suites`)
+- **Added**: `campaign()` property alias and `get_result_branch()` utility
+- **Added**: Proper ordering implementation (`PartialOrd`, `Ord`)
+- **Status**: API parity with Python version achieved
 
-#### 2.2 Queue Management Service (HIGH PRIORITY)  
-- **Target**: Port `py/janitor/queue.py` (288 lines)
-- **Scope**: Queue operations, position tracking, queue item management
-- **Dependencies**: State management, database operations
-- **Effort**: 1 week
-- **Implementation**: Extend existing `src/queue.rs` in root crate
+#### 2.2 ✅ Queue Management Service (COMPLETED)  
+- **Completed**: Enhanced `src/queue.rs` with missing Python functionality
+- **Added**: `iter_queue()` method with limit and campaign filtering
+- **Added**: `get_position_tuple()` and `next_item_tuple()` for Python API compatibility
+- **Added**: Proper type conversions (PgInterval to TimeDelta)
+- **Status**: Full API compatibility with Python version
 
-#### 2.3 Scheduling Service (HIGH PRIORITY)
+#### 2.3 🔄 Scheduling Service (NEXT PRIORITY)
 - **Target**: Port `py/janitor/schedule.py` (635 lines)
 - **Scope**: Candidate scheduling, priority algorithms, resource allocation
-- **Dependencies**: Queue management, state, configuration
+- **Dependencies**: Queue management ✅, state ✅, configuration
 - **Effort**: 2 weeks
 - **Implementation**: Extend existing `src/schedule.rs` in root crate
 
-#### 2.4 Log Management Service (HIGH PRIORITY)
+#### 2.4 ⏳ Log Management Service (PENDING)
 - **Target**: Port `py/janitor/logs.py` (455 lines)
 - **Scope**: Log file managers (filesystem, GCS), upload/download, compression
 - **Dependencies**: Cloud storage APIs, async file operations
