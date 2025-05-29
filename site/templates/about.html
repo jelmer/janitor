@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - {{ app_name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { background: #f0f0f0; padding: 20px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>About {{ app_name }}</h1>
+        <p><a href="/">← Back to Home</a></p>
+    </div>
+    
+    <div>
+        <h2>Debian Janitor</h2>
+        <p>The Debian Janitor is an automated system that makes changes to packages in the Debian archive.</p>
+        
+        <h3>Implementation Status</h3>
+        <p>This is the Rust implementation of the Janitor web interface, currently in development as part of Phase 3 of the Python-to-Rust migration.</p>
+        
+        <h3>Features</h3>
+        <ul>
+            <li>✅ Basic web server (Axum)</li>
+            <li>✅ Template engine (Tera)</li>
+            <li>🚧 Database integration (sqlx)</li>
+            <li>🚧 Authentication (OpenID Connect)</li>
+            <li>🚧 REST API</li>
+            <li>🚧 Real-time updates (Redis)</li>
+        </ul>
+        
+        <p>Version: {{ version }}</p>
+    </div>
+</body>
+</html>

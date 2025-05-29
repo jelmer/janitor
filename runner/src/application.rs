@@ -184,7 +184,7 @@ impl ApplicationBuilder {
             .unwrap_or_else(|| "/tmp".to_string());
 
         let log_manager: Arc<dyn janitor::logs::LogFileManager> = Arc::from(
-            janitor::logs::create_log_manager(&log_location)
+            janitor::logs::create_log_manager(Some(&log_location))
                 .await
                 .map_err(|e| {
                     ApplicationError::LogManagement(format!(

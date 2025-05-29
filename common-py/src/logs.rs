@@ -18,7 +18,9 @@ fn convert_logs_error_to_py(err: janitor::logs::Error) -> PyErr {
         }
         janitor::logs::Error::NotFound => pyo3::exceptions::PyKeyError::new_err("Log not found"),
         janitor::logs::Error::PermissionDenied => PyRuntimeError::new_err("Permission denied"),
-        janitor::logs::Error::Io(e) => e.into(),
+        janitor::logs::Error::Io(e) => pyo3::exceptions::PyIOError::new_err(e),
+        janitor::logs::Error::LogRetrieval(e) => PyRuntimeError::new_err(e),
+        janitor::logs::Error::Timeout => PyTimeoutError::new_err("Operation timed out"),
         janitor::logs::Error::Other(e) => PyRuntimeError::new_err(e),
     }
 }
