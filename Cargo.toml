@@ -43,7 +43,7 @@ debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
 debian-control = "0.1.28"
 shlex.workspace = true
-prometheus = { version = "0.14.0", features = ["reqwest"] }
+prometheus = { version = "0.14.0", features = ["reqwest", "push"] }
 buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
 
