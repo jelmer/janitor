@@ -308,7 +308,7 @@ mod python_behavior_verification {
         ];
 
         // Verify each route pattern
-        for (method, path) in expected_routes {
+        for (method, path) in &expected_routes {
             // Check that method is valid HTTP method
             assert!(["GET", "POST", "PUT", "DELETE"].contains(&method));
 
@@ -477,7 +477,7 @@ mod performance_verification {
         }
 
         let elapsed = start.elapsed();
-        let per_call = elapsed.as_nanos() / iterations;
+        let per_call = elapsed.as_nanos() / iterations as u128;
 
         // Should be very fast (much faster than Python)
         // Python would likely take milliseconds for this many calls

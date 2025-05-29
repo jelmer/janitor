@@ -72,11 +72,9 @@ impl TerminationReason {
             "terminated_at": Utc::now().to_rfc3339(),
         });
 
-        // Add run duration if available
-        if let Some(start_time) = run.start_time {
-            let duration = Utc::now().signed_duration_since(start_time);
-            details["run_duration_seconds"] = json!(duration.num_seconds());
-        }
+        // Add run duration
+        let duration = Utc::now().signed_duration_since(run.start_time);
+        details["run_duration_seconds"] = json!(duration.num_seconds());
 
         // Add estimated vs actual duration comparison if available
         if let Some(estimated) = run.estimated_duration {

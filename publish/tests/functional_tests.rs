@@ -313,10 +313,10 @@ mod business_logic_functional_tests {
 
         // Test scenarios where backoff should/shouldn't block publishing
         let scenarios = vec![
-            (0, true),  // No previous attempts -> should allow
-            (1, false), // 1 attempt, only 10 hours ago -> should block (needs 2 hours)
-            (2, false), // 2 attempts, only 10 hours ago -> should block (needs 4 hours)
-            (3, true),  // 3 attempts, 10 hours ago -> should allow (needs 8 hours)
+            (0, true), // No previous attempts -> should allow
+            (1, true), // 1 attempt, 10 hours ago -> should allow (needs 2 hours, got 10)
+            (2, true), // 2 attempts, 10 hours ago -> should allow (needs 4 hours, got 10)
+            (3, true), // 3 attempts, 10 hours ago -> should allow (needs 8 hours, got 10)
         ];
 
         for (attempt_count, should_allow) in scenarios {

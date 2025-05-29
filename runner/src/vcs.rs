@@ -231,17 +231,23 @@ pub struct VcsHealthStatus {
     pub vcs_statuses: HashMap<VcsType, VcsHealth>,
 }
 
+/// Health status of a VCS manager.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum VcsHealth {
+    /// VCS manager is healthy and operational.
     Healthy,
+    /// VCS manager has a warning condition.
     Warning(String),
+    /// VCS manager has an error condition.
     Error(String),
 }
 
 /// Statistics about VCS managers
 #[derive(Debug, Clone)]
 pub struct VcsStatistics {
+    /// List of supported VCS types.
     pub supported_vcs_types: Vec<VcsType>,
+    /// Number of active VCS managers.
     pub manager_count: usize,
 }
 
@@ -329,6 +335,7 @@ impl VcsCoordinator for RunnerVcsManager {
 
 /// Integration with metrics collection
 impl MetricsCollector {
+    /// Record the duration of a VCS operation for metrics.
     pub fn record_vcs_operation_duration(
         &self,
         vcs_type: &str,
@@ -343,6 +350,7 @@ impl MetricsCollector {
         }
     }
 
+    /// Record a VCS error for metrics.
     pub fn record_vcs_error(&self, vcs_type: &str, error_code: &str) {
         crate::metrics::VCS_ERRORS_TOTAL
             .with_label_values(&[vcs_type, error_code])
@@ -396,8 +404,11 @@ mod tests {
             .open_branch_with_metrics(VcsType::Git, "test-codebase", "main")
             .await;
 
-        assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert_eq!(error.code, "unsupported-vcs");
+        match result {
+            Err(error) => {
+                assert_eq!(error.code, "unsupported-vcs");
+            }
+            Ok(_) => panic!("Expected error but got success"),
+        }
     }
 }

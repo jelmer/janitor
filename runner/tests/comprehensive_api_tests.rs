@@ -4,7 +4,7 @@
 //! API behavior as the Python janitor.runner module.
 
 use axum::{
-    body::Body,
+    body::{to_bytes, Body},
     http::{Method, Request, StatusCode},
     response::Response,
     Json,
@@ -17,8 +17,8 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 use janitor_runner::{
-    database::RunnerDatabase, web::create_router, ActiveRun, AppState, JanitorResult,
-    QueueAssignment, WorkerResult,
+    database::RunnerDatabase, web::app, ActiveRun, AppState, JanitorResult, QueueAssignment,
+    WorkerResult,
 };
 
 /// Mock database for testing.
@@ -40,7 +40,7 @@ async fn create_test_state() -> Arc<AppState> {
 /// Helper to create test app with full routing.
 async fn create_test_app() -> axum::Router {
     let state = create_test_state().await;
-    create_router(state)
+    app(state)
 }
 
 /// Test assignment endpoint API compatibility.
@@ -75,7 +75,7 @@ async fn test_assignment_endpoint_compatibility() {
     ));
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let assignment: Value = serde_json::from_slice(&body).unwrap();
 
         // Verify Python-compatible assignment structure
@@ -133,7 +133,7 @@ async fn test_result_submission_compatibility() {
     // Should accept valid result
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let result: Value = serde_json::from_slice(&body).unwrap();
 
     // Verify response contains log_id
@@ -154,7 +154,7 @@ async fn test_active_runs_compatibility() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let runs: Value = serde_json::from_slice(&body).unwrap();
 
     // Should return array of active runs
@@ -186,7 +186,7 @@ async fn test_queue_position_compatibility() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let position: Value = serde_json::from_slice(&body).unwrap();
 
     // Should match Python queue position response
@@ -208,7 +208,7 @@ async fn test_health_endpoint_detailed() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let health: Value = serde_json::from_slice(&body).unwrap();
 
     // Verify comprehensive health check structure
@@ -244,7 +244,7 @@ async fn test_schedule_control_compatibility() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let result: Value = serde_json::from_slice(&body).unwrap();
 
     // Should return affected count
@@ -282,7 +282,7 @@ async fn test_metrics_endpoint_compatibility() {
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let metrics = String::from_utf8(body.to_vec()).unwrap();
 
     // Should contain Prometheus format metrics
@@ -397,7 +397,7 @@ async fn test_complete_workflow_compatibility() {
     let response = app.clone().oneshot(request).await.unwrap();
 
     if response.status() == StatusCode::OK {
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let assignment: Value = serde_json::from_slice(&body).unwrap();
 
         // 2. Submit result

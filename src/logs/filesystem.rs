@@ -13,8 +13,9 @@ pub struct FileSystemLogFileManager {
 }
 
 impl FileSystemLogFileManager {
-    pub fn new(log_directory: PathBuf) -> Self {
-        Self { log_directory }
+    pub fn new<P: AsRef<Path>>(log_directory: P) -> Result<Self, Error> {
+        let log_directory = log_directory.as_ref().to_path_buf();
+        Ok(Self { log_directory })
     }
 
     fn get_paths(&self, codebase: &str, run_id: &str, name: &str) -> Vec<PathBuf> {
@@ -143,5 +144,34 @@ impl LogFileManager for FileSystemLogFileManager {
             }
         }
         Err(Error::NotFound)
+    }
+
+    async fn health_check(&self) -> Result<(), Error> {
+        // Check if the log directory exists and is accessible
+        match fs::metadata(&self.log_directory) {
+            Ok(metadata) => {
+                if metadata.is_dir() {
+                    // Try to list the directory to ensure we have read permissions
+                    match fs::read_dir(&self.log_directory) {
+                        Ok(_) => Ok(()),
+                        Err(e) => match e.kind() {
+                            std::io::ErrorKind::PermissionDenied => Err(Error::PermissionDenied),
+                            _ => Err(Error::Io(e)),
+                        },
+                    }
+                } else {
+                    Err(Error::Other("Log directory is not a directory".to_string()))
+                }
+            }
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    // Try to create the directory
+                    fs::create_dir_all(&self.log_directory)?;
+                    Ok(())
+                }
+                std::io::ErrorKind::PermissionDenied => Err(Error::PermissionDenied),
+                _ => Err(Error::Io(e)),
+            },
+        }
     }
 }

@@ -366,24 +366,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_basic_auth() {
-        let auth_service = WorkerAuthService::new(Arc::new(
-            // This is just for testing - we don't need a real database connection
-            unsafe { std::mem::zeroed() },
-        ));
-
-        // Test valid Basic Auth
-        let encoded = general_purpose::STANDARD.encode("worker1:password123");
-        let auth_header = format!("Basic {}", encoded);
-
-        // Note: This would panic in a real test because of the zeroed database
-        // In a real test, we'd use a mock or test database
-        // let result = auth_service.parse_basic_auth(&auth_header).unwrap();
-        // assert_eq!(result.0, "worker1");
-        // assert_eq!(result.1, "password123");
-    }
-
-    #[test]
     fn test_security_config_default() {
         let config = SecurityConfig::default();
         assert_eq!(config.max_requests_per_minute, 60);

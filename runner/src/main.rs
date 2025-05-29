@@ -86,6 +86,10 @@ async fn main() -> Result<(), i32> {
         Application::builder()
     };
 
+    // Store values before moving args
+    let listen_address = args.listen_address.clone();
+    let port = args.port;
+
     // Override config with command line arguments
     app_builder = app_builder
         .with_listen_address(args.listen_address)
@@ -104,7 +108,7 @@ async fn main() -> Result<(), i32> {
             janitor_runner::tracing::http_tracing_middleware,
         ));
 
-        let addr = format!("{}:{}", args.listen_address, args.port);
+        let addr = format!("{}:{}", listen_address, port);
         log::info!("Listening on {}", addr);
 
         let listener = tokio::net::TcpListener::bind(&addr).await?;
