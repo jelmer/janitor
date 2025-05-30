@@ -5,12 +5,10 @@ use std::collections::HashMap;
 use tera::{Context, Tera, Value as TeraValue};
 use url::Url;
 
-use crate::config::Config;
+use crate::config::SiteConfig;
 
-pub fn setup_templates(config: &Config) -> Result<Tera> {
-    let template_dir = config.template_dir
-        .as_deref()
-        .unwrap_or("py/janitor/site/templates");
+pub fn setup_templates(config: &SiteConfig) -> Result<Tera> {
+    let template_dir = config.template_directory();
     
     let template_pattern = format!("{}/**/*.html", template_dir);
     let mut tera = Tera::new(&template_pattern)?;

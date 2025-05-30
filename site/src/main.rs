@@ -21,6 +21,7 @@ mod app;
 mod config;
 mod database;
 mod handlers;
+mod logging;
 mod middleware;
 mod templates;
 
@@ -29,24 +30,27 @@ use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "janitor_site=debug,tower_http=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    // Load configuration
+    // Load configuration first
     let config = Config::from_env()?;
-    info!("Starting Janitor Site server on {}", config.listen_address);
+    
+    // Initialize logging with configuration
+    logging::init_logging(config.site())?;
+    
+    info!(
+        "Starting Janitor Site server on {} (debug: {})",
+        config.site().listen_address,
+        config.site().debug
+    );
+    
+    if let Some(ref janitor_config) = config.janitor() {
+        info!("Loaded janitor configuration with {} campaigns", janitor_config.campaign.len());
+    }
 
     // Initialize application state
     let app_state = AppState::new(config).await?;
 
     // Build the application router
-    let listen_addr = app_state.config.listen_address;
+    let listen_addr = app_state.config.site().listen_address;
     let app = create_app(app_state);
 
     // Start the server
