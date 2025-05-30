@@ -44,6 +44,7 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 metrics = "0.22"
 metrics-prometheus = "0.7"
+regex = "1.0"
 
 # Redis & Pub/Sub
 redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
