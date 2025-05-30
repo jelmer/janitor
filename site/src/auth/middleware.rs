@@ -1,12 +1,14 @@
 use axum::{
-    extract::{FromRequestParts, Request},
+    extract::{FromRequestParts, Request, State},
     http::{request::Parts, StatusCode},
     middleware::Next,
     response::Response,
 };
-use crate::auth::session::{SessionCookieConfig};
+use axum_extra::extract::CookieJar;
+use std::sync::Arc;
+use crate::auth::session::{SessionCookieConfig, SessionManager};
 use crate::auth::types::{SessionInfo, User, UserRole};
-use crate::config::Config;
+use crate::config::SiteConfig;
 
 /// User context extracted from session
 #[derive(Debug, Clone)]
@@ -57,7 +59,6 @@ impl UserContext {
 }
 
 /// Extractor for getting the current user from request
-#[async_trait::async_trait]
 impl<S> FromRequestParts<S> for UserContext
 where
     S: Send + Sync,
@@ -77,7 +78,6 @@ where
 #[derive(Debug, Clone)]
 pub struct OptionalUser(pub Option<UserContext>);
 
-#[async_trait::async_trait]
 impl<S> FromRequestParts<S> for OptionalUser
 where
     S: Send + Sync,
@@ -153,12 +153,87 @@ pub async fn require_qa_reviewer(
     Ok(next.run(req).await)
 }
 
-// TODO: Add the full authentication middleware layer implementation
-// For now, we have the basic middleware functions
+/// Application state for authentication
+#[derive(Clone)]
+pub struct AuthState {
+    pub session_manager: SessionManager,
+    pub cookie_config: SessionCookieConfig,
+    pub admin_group: Option<String>,
+    pub qa_reviewer_group: Option<String>,
+}
 
+impl AuthState {
+    pub fn new(
+        session_manager: SessionManager,
+        config: &SiteConfig,
+    ) -> Self {
+        let cookie_config = if config.debug {
+            SessionCookieConfig::for_development()
+        } else {
+            SessionCookieConfig::default()
+        };
+        
+        Self {
+            session_manager,
+            cookie_config,
+            admin_group: config.admin_group.clone(),
+            qa_reviewer_group: config.qa_reviewer_group.clone(),
+        }
+    }
+}
+
+/// Session middleware that extracts user context from session cookies
+pub async fn session_middleware(
+    State(auth_state): State<Arc<AuthState>>,
+    jar: CookieJar,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    // Try to extract session from cookie
+    if let Some(session_cookie) = jar.get(&auth_state.cookie_config.name) {
+        let session_id = session_cookie.value();
+        
+        // Try to get session from database
+        match auth_state.session_manager.get_session(session_id).await {
+            Ok(session_info) => {
+                // Update session activity
+                if let Err(e) = auth_state.session_manager.update_activity(session_id).await {
+                    tracing::warn!("Failed to update session activity: {}", e);
+                }
+                
+                // Create user context with role information
+                let user_context = UserContext::new(
+                    session_info,
+                    auth_state.admin_group.as_deref(),
+                    auth_state.qa_reviewer_group.as_deref(),
+                );
+                
+                // Insert user context into request extensions
+                req.extensions_mut().insert(user_context);
+            }
+            Err(e) => {
+                tracing::debug!("Session validation failed: {}", e);
+                // Continue without authentication - let individual routes decide
+            }
+        }
+    }
+    
+    next.run(req).await
+}
+
+/// Create middleware layer for session management
+pub fn auth_middleware_layer(auth_state: Arc<AuthState>) -> axum::middleware::FromFnLayer<
+    fn(State<Arc<AuthState>>, CookieJar, Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send + 'static>>,
+    Arc<AuthState>,
+    (State<Arc<AuthState>>, CookieJar),
+> {
+    axum::middleware::from_fn_with_state(auth_state, |state, jar, req, next| {
+        Box::pin(session_middleware(state, jar, req, next))
+    })
+}
+
+/// Middleware layer for session management  
 #[derive(Clone)]
 pub struct AuthMiddleware;
 
 pub use self::UserContext as AuthContext;
-
-// TODO: Implement full AuthLayer and AuthMiddleware when integrated with the app
