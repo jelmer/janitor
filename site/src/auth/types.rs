@@ -16,7 +16,7 @@ pub struct User {
 }
 
 /// User roles based on group membership
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UserRole {
     User,
     QaReviewer,
