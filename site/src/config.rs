@@ -52,23 +52,23 @@ pub struct SiteConfig {
     pub public_listen_address: Option<SocketAddr>,
     pub external_url: Option<String>,
     pub user_agent: String,
-    
+
     // Database & Storage
     pub database_url: String,
     pub redis_url: Option<String>,
-    
+
     // Templates & Assets
     pub template_dir: Option<String>,
     pub static_dir: Option<String>,
     pub minified_assets: bool,
-    
+
     // Debug & Development
     pub debug: bool,
     pub debug_toolbar: bool,
     pub debug_toolbar_allowed_ips: Vec<String>,
     pub log_level: LogLevel,
     pub gcp_logging: bool,
-    
+
     // Authentication & Security
     pub session_secret: String,
     pub oidc_client_id: Option<String>,
@@ -77,7 +77,7 @@ pub struct SiteConfig {
     pub oidc_base_url: Option<String>,
     pub qa_reviewer_group: Option<String>,
     pub admin_group: Option<String>,
-    
+
     // External Services (with defaults)
     pub runner_url: String,
     pub publisher_url: Option<String>,
@@ -85,19 +85,19 @@ pub struct SiteConfig {
     pub differ_url: String,
     pub git_store_url: Option<String>,
     pub bzr_store_url: Option<String>,
-    
+
     // Monitoring & Observability
     pub zipkin_address: Option<String>,
     pub zipkin_sample_rate: f64,
     pub metrics_enabled: bool,
     pub request_timeout: Duration,
-    
+
     // Feature Flags
     pub enable_websockets: bool,
     pub enable_gpg_support: bool,
     pub enable_archive_browsing: bool,
     pub enable_diff_view: bool,
-    
+
     // Main janitor config integration
     pub janitor_config_path: Option<PathBuf>,
 }
@@ -143,14 +143,13 @@ impl SiteConfig {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgresql://localhost/janitor".to_string());
 
-        let session_secret = env::var("SESSION_SECRET")
-            .unwrap_or_else(|_| {
-                if cfg!(debug_assertions) {
-                    "debug-secret-key-not-for-production-use-only".to_string()
-                } else {
-                    panic!("SESSION_SECRET environment variable is required in production")
-                }
-            });
+        let session_secret = env::var("SESSION_SECRET").unwrap_or_else(|_| {
+            if cfg!(debug_assertions) {
+                "debug-secret-key-not-for-production-use-only".to_string()
+            } else {
+                panic!("SESSION_SECRET environment variable is required in production")
+            }
+        });
 
         let debug = env::var("DEBUG")
             .map(|v| v.parse().unwrap_or(false))
@@ -159,7 +158,13 @@ impl SiteConfig {
         let log_level = env::var("LOG_LEVEL")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| if debug { LogLevel::Debug } else { LogLevel::Info });
+            .unwrap_or_else(|| {
+                if debug {
+                    LogLevel::Debug
+                } else {
+                    LogLevel::Info
+                }
+            });
 
         let debug_toolbar_allowed_ips = env::var("DEBUG_TOOLBAR_ALLOWED_IPS")
             .map(|ips| ips.split(',').map(|ip| ip.trim().to_string()).collect())
@@ -183,16 +188,16 @@ impl SiteConfig {
             external_url: env::var("EXTERNAL_URL").ok(),
             user_agent: env::var("USER_AGENT")
                 .unwrap_or_else(|_| format!("janitor-site/{}", env!("CARGO_PKG_VERSION"))),
-            
+
             // Database & Storage
             database_url,
             redis_url: env::var("REDIS_URL").ok(),
-            
+
             // Templates & Assets
             template_dir: env::var("TEMPLATE_DIR").ok(),
             static_dir: env::var("STATIC_DIR").ok(),
             minified_assets: !debug, // Use minified assets in production
-            
+
             // Debug & Development
             debug,
             debug_toolbar: env::var("DEBUG_TOOLBAR")
@@ -203,7 +208,7 @@ impl SiteConfig {
             gcp_logging: env::var("GCP_LOGGING")
                 .map(|v| v.parse().unwrap_or(false))
                 .unwrap_or(false),
-            
+
             // Authentication & Security
             session_secret,
             oidc_client_id: env::var("OAUTH2_CLIENT_ID")
@@ -216,7 +221,7 @@ impl SiteConfig {
             oidc_base_url: env::var("OIDC_BASE_URL").ok(),
             qa_reviewer_group: env::var("QA_REVIEWER_GROUP").ok(),
             admin_group: env::var("ADMIN_GROUP").ok(),
-            
+
             // External Services (matching Python defaults)
             runner_url: env::var("RUNNER_URL")
                 .unwrap_or_else(|_| "http://localhost:9911/".to_string()),
@@ -226,7 +231,7 @@ impl SiteConfig {
                 .unwrap_or_else(|_| "http://localhost:9920/".to_string()),
             git_store_url: env::var("GIT_STORE_URL").ok(),
             bzr_store_url: env::var("BZR_STORE_URL").ok(),
-            
+
             // Monitoring & Observability
             zipkin_address: env::var("ZIPKIN_ADDRESS").ok(),
             zipkin_sample_rate,
@@ -234,7 +239,7 @@ impl SiteConfig {
                 .map(|v| v.parse().unwrap_or(true))
                 .unwrap_or(true),
             request_timeout,
-            
+
             // Feature Flags
             enable_websockets: env::var("ENABLE_WEBSOCKETS")
                 .map(|v| v.parse().unwrap_or(true))
@@ -248,7 +253,7 @@ impl SiteConfig {
             enable_diff_view: env::var("ENABLE_DIFF_VIEW")
                 .map(|v| v.parse().unwrap_or(true))
                 .unwrap_or(true),
-            
+
             // Main janitor config integration
             janitor_config_path: env::var("JANITOR_CONFIG")
                 .or_else(|_| env::var("CONFIG"))
@@ -375,23 +380,23 @@ impl Default for SiteConfig {
             public_listen_address: None,
             external_url: None,
             user_agent: format!("janitor-site/{}", env!("CARGO_PKG_VERSION")),
-            
+
             // Database & Storage
             database_url: "postgresql://localhost/janitor".to_string(),
             redis_url: None,
-            
+
             // Templates & Assets
             template_dir: None,
             static_dir: None,
             minified_assets: false,
-            
+
             // Debug & Development
             debug: true,
             debug_toolbar: true,
             debug_toolbar_allowed_ips: vec!["127.0.0.1".to_string(), "::1".to_string()],
             log_level: LogLevel::Debug,
             gcp_logging: false,
-            
+
             // Authentication & Security
             session_secret: "debug-secret-key-not-for-production".to_string(),
             oidc_client_id: None,
@@ -400,7 +405,7 @@ impl Default for SiteConfig {
             oidc_base_url: None,
             qa_reviewer_group: None,
             admin_group: None,
-            
+
             // External Services
             runner_url: "http://localhost:9911/".to_string(),
             publisher_url: None,
@@ -408,19 +413,19 @@ impl Default for SiteConfig {
             differ_url: "http://localhost:9920/".to_string(),
             git_store_url: None,
             bzr_store_url: None,
-            
+
             // Monitoring & Observability
             zipkin_address: None,
             zipkin_sample_rate: 0.1,
             metrics_enabled: true,
             request_timeout: Duration::seconds(30),
-            
+
             // Feature Flags
             enable_websockets: true,
             enable_gpg_support: false,
             enable_archive_browsing: true,
             enable_diff_view: true,
-            
+
             // Main janitor config integration
             janitor_config_path: None,
         }
@@ -449,26 +454,26 @@ impl Environment {
     /// Get environment-specific defaults
     pub fn defaults(&self) -> HashMap<String, String> {
         let mut defaults = HashMap::new();
-        
+
         match self {
             Environment::Development => {
                 defaults.insert("DEBUG".to_string(), "true".to_string());
                 defaults.insert("LOG_LEVEL".to_string(), "debug".to_string());
                 defaults.insert("METRICS_ENABLED".to_string(), "true".to_string());
-            },
+            }
             Environment::Staging => {
                 defaults.insert("DEBUG".to_string(), "false".to_string());
                 defaults.insert("LOG_LEVEL".to_string(), "info".to_string());
                 defaults.insert("METRICS_ENABLED".to_string(), "true".to_string());
-            },
+            }
             Environment::Production => {
                 defaults.insert("DEBUG".to_string(), "false".to_string());
                 defaults.insert("LOG_LEVEL".to_string(), "warn".to_string());
                 defaults.insert("METRICS_ENABLED".to_string(), "true".to_string());
                 defaults.insert("DEBUG_TOOLBAR".to_string(), "false".to_string());
-            },
+            }
         }
-        
+
         defaults
     }
 }
@@ -508,9 +513,9 @@ impl ConfigBuilder {
         }
 
         // Load site configuration
-        let mut site = self.site_config.unwrap_or_else(|| {
-            SiteConfig::from_env().expect("Failed to load site configuration")
-        });
+        let mut site = self
+            .site_config
+            .unwrap_or_else(|| SiteConfig::from_env().expect("Failed to load site configuration"));
 
         // Override janitor config path if specified
         if let Some(path) = self.janitor_config_path {

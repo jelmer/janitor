@@ -1,0 +1,380 @@
+warning: unused import: `QueueItem`
+ --> src/schedule.rs:2:27
+  |
+2 | use crate::queue::{Queue, QueueItem};
+  |                           ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::state::Run`
+ --> src/schedule.rs:3:5
+  |
+3 | use crate::state::Run;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: field `branch_url` is never read
+  --> src/schedule.rs:33:5
+   |
+31 | pub struct ScheduleRequest {
+   |            --------------- field in this struct
+32 |     codebase: String,
+33 |     branch_url: String,
+   |     ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `janitor` (lib) generated 3 warnings (run `cargo fix --lib -p janitor` to apply 2 suggestions)
+   Compiling janitor-publish v0.0.0 (/home/jelmer/src/janitor/publish)
+warning: unused variable: `db`
+   --> publish/src/lib.rs:568:5
+    |
+568 |     db: sqlx::PgPool,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_db`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `redis`
+   --> publish/src/lib.rs:569:5
+    |
+569 |     redis: Option<redis::aio::ConnectionManager>,
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_redis`
+
+warning: unused variable: `config`
+   --> publish/src/lib.rs:570:5
+    |
+570 |     config: &janitor::config::Config,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `publish_worker`
+   --> publish/src/lib.rs:571:5
+    |
+571 |     publish_worker: Arc<Mutex<PublishWorker>>,
+    |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_publish_worker`
+
+warning: unused variable: `bucket_rate_limiter`
+   --> publish/src/lib.rs:572:5
+    |
+572 |     bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket_rate_limiter`
+
+warning: unused variable: `forge_rate_limiter`
+   --> publish/src/lib.rs:573:5
+    |
+573 |     forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<Utc>>>>,
+    |     ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forge_rate_limiter`
+
+warning: unused variable: `vcs_managers`
+   --> publish/src/lib.rs:574:5
+    |
+574 |     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vcs_managers`
+
+warning: unused variable: `interval`
+   --> publish/src/lib.rs:575:5
+    |
+575 |     interval: chrono::Duration,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_interval`
+
+warning: unused variable: `auto_publish`
+   --> publish/src/lib.rs:576:5
+    |
+576 |     auto_publish: bool,
+    |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_auto_publish`
+
+warning: unused variable: `push_limit`
+   --> publish/src/lib.rs:577:5
+    |
+577 |     push_limit: Option<i32>,
+    |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_push_limit`
+
+warning: unused variable: `modify_mp_limit`
+   --> publish/src/lib.rs:578:5
+    |
+578 |     modify_mp_limit: Option<i32>,
+    |     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modify_mp_limit`
+
+warning: unused variable: `require_binary_diff`
+   --> publish/src/lib.rs:579:5
+    |
+579 |     require_binary_diff: bool,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_require_binary_diff`
+
+warning: unused variable: `db`
+   --> publish/src/lib.rs:585:5
+    |
+585 |     db: sqlx::PgPool,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `redis`
+   --> publish/src/lib.rs:586:5
+    |
+586 |     redis: Option<redis::aio::ConnectionManager>,
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_redis`
+
+warning: unused variable: `config`
+   --> publish/src/lib.rs:587:5
+    |
+587 |     config: &janitor::config::Config,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `publish_worker`
+   --> publish/src/lib.rs:588:5
+    |
+588 |     publish_worker: Arc<Mutex<PublishWorker>>,
+    |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_publish_worker`
+
+warning: unused variable: `bucket_rate_limiter`
+   --> publish/src/lib.rs:589:5
+    |
+589 |     bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket_rate_limiter`
+
+warning: unused variable: `vcs_managers`
+   --> publish/src/lib.rs:590:5
+    |
+590 |     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vcs_managers`
+
+warning: unused variable: `push_limit`
+   --> publish/src/lib.rs:591:5
+    |
+591 |     push_limit: Option<i32>,
+    |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_push_limit`
+
+warning: unused variable: `require_binary_diff`
+   --> publish/src/lib.rs:592:5
+    |
+592 |     require_binary_diff: bool,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_require_binary_diff`
+
+warning: unused variable: `db`
+   --> publish/src/lib.rs:598:5
+    |
+598 |     db: sqlx::PgPool,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `bucket_rate_limiter`
+   --> publish/src/lib.rs:599:5
+    |
+599 |     bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket_rate_limiter`
+
+warning: unused variable: `db`
+   --> publish/src/lib.rs:605:5
+    |
+605 |     db: sqlx::PgPool,
+    |     ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `redis`
+   --> publish/src/lib.rs:606:5
+    |
+606 |     redis: Option<redis::aio::ConnectionManager>,
+    |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_redis`
+
+warning: unused variable: `config`
+   --> publish/src/lib.rs:607:5
+    |
+607 |     config: &janitor::config::Config,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: unused variable: `publish_worker`
+   --> publish/src/lib.rs:608:5
+    |
+608 |     publish_worker: Arc<Mutex<PublishWorker>>,
+    |     ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_publish_worker`
+
+warning: unused variable: `bucket_rate_limiter`
+   --> publish/src/lib.rs:609:5
+    |
+609 |     bucket_rate_limiter: Arc<Mutex<Box<dyn rate_limiter::RateLimiter>>>,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket_rate_limiter`
+
+warning: unused variable: `vcs_managers`
+   --> publish/src/lib.rs:610:5
+    |
+610 |     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+    |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vcs_managers`
+
+warning: unused variable: `require_binary_diff`
+   --> publish/src/lib.rs:611:5
+    |
+611 |     require_binary_diff: bool,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_require_binary_diff`
+
+warning: unused variable: `possible_transports`
+   --> publish/src/state.rs:151:5
+    |
+151 |     possible_transports: Option<&mut Vec<Transport>>,
+    |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_possible_transports`
+
+warning: unused variable: `worker`
+  --> publish/src/web.rs:10:5
+   |
+10 |     worker: Arc<Mutex<crate::PublishWorker>>,
+   |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_worker`
+
+warning: unused variable: `bucket_rate_limiter`
+  --> publish/src/web.rs:11:5
+   |
+11 |     bucket_rate_limiter: Arc<Mutex<Box<dyn RateLimiter>>>,
+   |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket_rate_limiter`
+
+warning: unused variable: `forge_rate_limiter`
+  --> publish/src/web.rs:12:5
+   |
+12 |     forge_rate_limiter: Arc<Mutex<HashMap<Forge, chrono::DateTime<chrono::Utc>>>>,
+   |     ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_forge_rate_limiter`
+
+warning: unused variable: `vcs_managers`
+  --> publish/src/web.rs:13:5
+   |
+13 |     vcs_managers: &HashMap<VcsType, Box<dyn VcsManager>>,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_vcs_managers`
+
+warning: unused variable: `db`
+  --> publish/src/web.rs:14:5
+   |
+14 |     db: PgPool,
+   |     ^^ help: if this is intentional, prefix it with an underscore: `_db`
+
+warning: unused variable: `require_binary_diff`
+  --> publish/src/web.rs:15:5
+   |
+15 |     require_binary_diff: bool,
+   |     ^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_require_binary_diff`
+
+warning: unused variable: `modify_mp_limit`
+  --> publish/src/web.rs:16:5
+   |
+16 |     modify_mp_limit: Option<i32>,
+   |     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_modify_mp_limit`
+
+warning: unused variable: `push_limit`
+  --> publish/src/web.rs:17:5
+   |
+17 |     push_limit: Option<i32>,
+   |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_push_limit`
+
+warning: unused variable: `redis`
+  --> publish/src/web.rs:18:5
+   |
+18 |     redis: Option<redis::aio::ConnectionManager>,
+   |     ^^^^^ help: if this is intentional, prefix it with an underscore: `_redis`
+
+warning: unused variable: `config`
+  --> publish/src/web.rs:19:5
+   |
+19 |     config: &janitor::config::Config,
+   |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: function `run_worker_process` is never used
+   --> publish/src/lib.rs:263:10
+    |
+263 | async fn run_worker_process(
+    |          ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: method `publish_one` is never used
+   --> publish/src/lib.rs:336:14
+    |
+314 | impl PublishWorker {
+    | ------------------ method in this implementation
+...
+336 |     async fn publish_one(
+    |              ^^^^^^^^^^^
+
+warning: function `run_sufficient_for_proposal` is never used
+   --> publish/src/lib.rs:490:4
+    |
+490 | fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option<i32>) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `role_branch_url` is never used
+   --> publish/src/lib.rs:501:4
+    |
+501 | fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `branches_match` is never used
+   --> publish/src/lib.rs:518:4
+    |
+518 | fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `get_merged_by_user_url` is never used
+   --> publish/src/lib.rs:552:4
+    |
+552 | fn get_merged_by_user_url(url: &url::Url, user: &str) -> Result<Option<url::Url>, BrzError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `store_publish` is never used
+ --> publish/src/state.rs:7:10
+  |
+7 | async fn store_publish(
+  |          ^^^^^^^^^^^^^
+
+warning: function `already_published` is never used
+  --> publish/src/state.rs:83:10
+   |
+83 | async fn already_published(
+   |          ^^^^^^^^^^^^^^^^^
+
+warning: function `get_open_merge_proposal` is never used
+  --> publish/src/state.rs:96:10
+   |
+96 | async fn get_open_merge_proposal(
+   |          ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `check_last_published` is never used
+   --> publish/src/state.rs:129:10
+    |
+129 | async fn check_last_published(
+    |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `guess_codebase_from_branch_url` is never used
+   --> publish/src/state.rs:148:10
+    |
+148 | async fn guess_codebase_from_branch_url(
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple fields are never read
+   --> publish/src/state.rs:217:5
+    |
+216 | pub struct MergeProposalRun {
+    |            ---------------- fields in this struct
+217 |     id: String,
+    |     ^^
+218 |     campaign: String,
+    |     ^^^^^^^^
+219 |     branch_url: String,
+    |     ^^^^^^^^^^
+220 |     command: String,
+    |     ^^^^^^^
+221 |     value: i64,
+    |     ^^^^^
+222 |     role: String,
+    |     ^^^^
+223 |     remote_branch_name: String,
+    |     ^^^^^^^^^^^^^^^^^^
+224 |     revision: RevisionId,
+    |     ^^^^^^^^
+225 |     codebase: String,
+    |     ^^^^^^^^
+226 |     change_set: String,
+    |     ^^^^^^^^^^
+
+warning: function `get_merge_proposal_run` is never used
+   --> publish/src/state.rs:229:10
+    |
+229 | async fn get_merge_proposal_run(
+    |          ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_last_effective_run` is never used
+   --> publish/src/state.rs:259:10
+    |
+259 | async fn get_last_effective_run(
+    |          ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `janitor-publish` (lib) generated 54 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.94s

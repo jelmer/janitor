@@ -20,17 +20,17 @@ impl AppState {
     pub async fn new(config: Config) -> Result<Self> {
         // Initialize database manager
         let database = DatabaseManager::new(&config).await?;
-        
+
         // Initialize template engine
         let templates = Arc::new(setup_templates(config.site())?);
-        
+
         // Initialize Redis client if configured
         let redis = if let Some(redis_url) = config.redis_url() {
             Some(redis::Client::open(redis_url)?)
         } else {
             None
         };
-        
+
         Ok(Self {
             config: Arc::new(config),
             database,
@@ -39,17 +39,17 @@ impl AppState {
             start_time: Instant::now(),
         })
     }
-    
+
     pub async fn health_check(&self) -> Result<()> {
         // Check database connection
         self.database.health_check().await?;
-        
+
         // Check Redis connection if configured
         if let Some(redis_client) = &self.redis {
             let mut conn = redis_client.get_async_connection().await?;
             redis::cmd("PING").query_async::<String>(&mut conn).await?;
         }
-        
+
         Ok(())
     }
 }

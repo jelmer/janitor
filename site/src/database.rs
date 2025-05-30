@@ -34,10 +34,10 @@ pub struct Run {
 pub enum DatabaseError {
     #[error("Database connection error: {0}")]
     Connection(sqlx::Error),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 }
@@ -70,21 +70,21 @@ pub struct DatabaseManager {
 impl DatabaseManager {
     pub async fn new(config: &Config) -> Result<Self> {
         let pool = PgPool::connect(config.database_url()).await?;
-        
+
         // Run migrations
         sqlx::migrate!().run(&pool).await?;
-        
+
         Ok(Self { pool })
     }
-    
+
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
-    
+
     pub async fn begin(&self) -> Result<Transaction<'_, Postgres>, DatabaseError> {
         Ok(self.pool.begin().await?)
     }
-    
+
     pub async fn health_check(&self) -> Result<(), DatabaseError> {
         sqlx::query("SELECT 1")
             .execute(&self.pool)
@@ -92,21 +92,21 @@ impl DatabaseManager {
             .map_err(DatabaseError::Connection)?;
         Ok(())
     }
-    
+
     // Simplified queries that don't depend on specific schema
     pub async fn get_stats(&self) -> Result<HashMap<String, i64>, DatabaseError> {
         let mut stats = HashMap::new();
-        
+
         // These queries work with common table patterns but will be enhanced
         // once we have access to the real schema
         stats.insert("total_codebases".to_string(), 0);
         stats.insert("active_runs".to_string(), 0);
         stats.insert("queue_size".to_string(), 0);
         stats.insert("recent_successful_runs".to_string(), 0);
-        
+
         Ok(stats)
     }
-    
+
     pub async fn get_codebases(
         &self,
         limit: Option<i64>,
@@ -116,16 +116,16 @@ impl DatabaseManager {
         // Return empty for now - will be implemented with real schema
         Ok(vec![])
     }
-    
+
     pub async fn get_codebase(&self, _name: &str) -> Result<Codebase, DatabaseError> {
         // Return placeholder data for now
         Err(DatabaseError::NotFound("Codebase not found".to_string()))
     }
-    
+
     pub async fn count_codebases(&self, _search: Option<&str>) -> Result<i64, DatabaseError> {
         Ok(0)
     }
-    
+
     pub async fn get_runs_for_codebase(
         &self,
         _codebase: &str,

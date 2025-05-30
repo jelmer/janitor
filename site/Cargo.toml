@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 utoipa = { version = "4.0", features = ["axum_extras"] }
 utoipa-axum = "0.1"
+validator = { version = "0.18", features = ["derive"] }
 
 # Monitoring & Observability
 tracing = { workspace = true }
