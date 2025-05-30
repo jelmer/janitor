@@ -22,11 +22,11 @@ impl AppState {
         let database = DatabaseManager::new(&config).await?;
         
         // Initialize template engine
-        let templates = Arc::new(setup_templates(&config)?);
+        let templates = Arc::new(setup_templates(config.site())?);
         
         // Initialize Redis client if configured
-        let redis = if let Some(redis_url) = &config.redis_url {
-            Some(redis::Client::open(redis_url.as_str())?)
+        let redis = if let Some(redis_url) = config.redis_url() {
+            Some(redis::Client::open(redis_url)?)
         } else {
             None
         };

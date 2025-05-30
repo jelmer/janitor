@@ -69,7 +69,7 @@ pub struct DatabaseManager {
 
 impl DatabaseManager {
     pub async fn new(config: &Config) -> Result<Self> {
-        let pool = PgPool::connect(&config.database_url).await?;
+        let pool = PgPool::connect(config.database_url()).await?;
         
         // Run migrations
         sqlx::migrate!().run(&pool).await?;
