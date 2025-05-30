@@ -34,7 +34,9 @@ fn init_standard_logging(config: &SiteConfig) -> Result<()> {
         // In production, respect the configured log level
         EnvFilter::default()
             .add_directive(format!("janitor={}", log_level_to_string(config.log_level)).parse()?)
-            .add_directive(format!("janitor_site={}", log_level_to_string(config.log_level)).parse()?)
+            .add_directive(
+                format!("janitor_site={}", log_level_to_string(config.log_level)).parse()?,
+            )
             .add_directive(LevelFilter::WARN.into())
     };
 
@@ -45,9 +47,7 @@ fn init_standard_logging(config: &SiteConfig) -> Result<()> {
         .with_file(config.debug)
         .with_line_number(config.debug);
 
-    let registry = Registry::default()
-        .with(filter)
-        .with(fmt_layer);
+    let registry = Registry::default().with(filter).with(fmt_layer);
 
     if config.debug {
         // In debug mode, also log to stderr for development

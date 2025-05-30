@@ -1,9 +1,10 @@
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use utoipa::{IntoParams, ToSchema};
 
 /// Standard API response wrapper
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ApiResponse<T> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
@@ -66,7 +67,7 @@ impl ApiResponse<()> {
 }
 
 /// API error type for consistent error handling
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ApiError {
     pub error: String,
     pub reason: Option<String>,
@@ -131,7 +132,7 @@ impl ApiError {
 pub type ApiResult<T> = Result<T, ApiError>;
 
 /// Pagination parameters from query string
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct PaginationParams {
     #[serde(default)]
     pub offset: Option<i64>,
@@ -167,7 +168,7 @@ impl PaginationParams {
 }
 
 /// Pagination information in response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PaginationInfo {
     pub total: Option<i64>,
     pub offset: i64,
@@ -193,7 +194,7 @@ impl PaginationInfo {
 }
 
 /// Common query parameters for API endpoints
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema, IntoParams)]
 pub struct CommonQuery {
     #[serde(flatten)]
     pub pagination: PaginationParams,
@@ -209,7 +210,7 @@ pub struct CommonQuery {
     pub filter: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SortOrder {
     Asc,
@@ -222,91 +223,13 @@ impl Default for SortOrder {
     }
 }
 
-/// Run-related API types
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RunInfo {
-    pub id: String,
-    pub codebase: String,
-    pub campaign: String,
-    pub command: Vec<String>,
-    pub result_code: Option<String>,
-    pub description: Option<String>,
-    pub start_time: Option<chrono::DateTime<chrono::Utc>>,
-    pub finish_time: Option<chrono::DateTime<chrono::Utc>>,
-    pub worker: Option<String>,
-    pub branch_name: Option<String>,
-    pub revision: Option<String>,
-    pub suite: Option<String>,
-    pub result_branches: Vec<String>,
-    pub main_branch_revision: Option<String>,
-    pub failure_transient: Option<bool>,
-    pub failure_stage: Option<String>,
-}
-
-/// Queue status information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Queue status information (for backwards compatibility)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QueueStatus {
     pub total_candidates: i64,
     pub pending_candidates: i64,
     pub active_runs: i64,
-    pub campaigns: Vec<CampaignStatus>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CampaignStatus {
-    pub name: String,
-    pub total_candidates: i64,
-    pub pending_candidates: i64,
-    pub active_runs: i64,
-    pub success_rate: Option<f64>,
-}
-
-/// Merge proposal information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MergeProposalInfo {
-    pub url: String,
-    pub status: String,
-    pub codebase: String,
-    pub campaign: String,
-    pub description: Option<String>,
-    pub created_time: chrono::DateTime<chrono::Utc>,
-    pub updated_time: chrono::DateTime<chrono::Utc>,
-    pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub run_id: Option<String>,
-}
-
-/// Publish request
-#[derive(Debug, Clone, Deserialize)]
-pub struct PublishRequest {
-    pub mode: PublishMode,
-    pub requester: Option<String>,
-    pub branch_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PublishMode {
-    Propose,
-    Push,
-    Attempt,
-    Bts,
-}
-
-/// Reschedule request
-#[derive(Debug, Clone, Deserialize)]
-pub struct RescheduleRequest {
-    pub offset: Option<i32>,
-    pub requester: Option<String>,
-}
-
-/// Mass reschedule request (admin only)
-#[derive(Debug, Clone, Deserialize)]
-pub struct MassRescheduleRequest {
-    pub campaign: Option<String>,
-    pub suite: Option<String>,
-    pub result_code: Option<String>,
-    pub limit: Option<i64>,
-    pub requester: Option<String>,
+    pub campaigns: Vec<super::schemas::CampaignStatus>,
 }
 
 #[cfg(test)]

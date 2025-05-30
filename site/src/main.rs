@@ -10,10 +10,7 @@ use serde_json::{json, Value};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer,
-    trace::TraceLayer,
-};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -32,18 +29,21 @@ use config::Config;
 async fn main() -> Result<()> {
     // Load configuration first
     let config = Config::from_env()?;
-    
+
     // Initialize logging with configuration
     logging::init_logging(config.site())?;
-    
+
     info!(
         "Starting Janitor Site server on {} (debug: {})",
         config.site().listen_address,
         config.site().debug
     );
-    
+
     if let Some(ref janitor_config) = config.janitor() {
-        info!("Loaded janitor configuration with {} campaigns", janitor_config.campaign.len());
+        info!(
+            "Loaded janitor configuration with {} campaigns",
+            janitor_config.campaign.len()
+        );
     }
 
     // Initialize application state
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     // Start the server
     let listener = TcpListener::bind(&listen_addr).await?;
     info!("Server listening on {}", listen_addr);
-    
+
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -66,21 +66,17 @@ fn create_app(state: AppState) -> Router {
     Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
-        
         // API routes
         .nest("/api", api_routes())
-        
-        // Main site routes  
+        // Main site routes
         .nest("/", site_routes())
-        
         // Static assets
         .nest("/static", static_routes())
-        
         // Add middleware
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
-                .layer(CorsLayer::permissive())
+                .layer(CorsLayer::permissive()),
         )
         .with_state(state)
 }
@@ -100,8 +96,7 @@ fn site_routes() -> Router<AppState> {
 }
 
 fn static_routes() -> Router<AppState> {
-    Router::new()
-        .nest_service("/", tower_http::services::ServeDir::new("static"))
+    Router::new().nest_service("/", tower_http::services::ServeDir::new("static"))
 }
 
 async fn health_check() -> StatusCode {

@@ -7,6 +7,7 @@ use axum::{
 };
 use std::sync::Arc;
 use tracing::{debug, info};
+use utoipa::path;
 
 use crate::{
     app::AppState,
@@ -16,9 +17,9 @@ use super::{
     content_negotiation::{negotiate_response, ContentType, NegotiatedResponse},
     middleware::{content_negotiation_middleware, logging_middleware, metrics_middleware, cors_middleware},
     types::{
-        ApiResponse, ApiResult, CommonQuery, PaginationParams,
-        RunInfo, QueueStatus, MergeProposalInfo, PublishRequest, RescheduleRequest, MassRescheduleRequest,
+        ApiResponse, ApiResult, CommonQuery, QueueStatus,
     },
+    schemas::{Run, MergeProposal},
     error::AppError,
 };
 
@@ -72,6 +73,15 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
 // ============================================================================
 
 /// Health check endpoint
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service health status", body = ApiResponse<serde_json::Value>),
+        (status = 500, description = "Health check failed", body = ApiError)
+    )
+)]
 async fn health_check(
     State(app_state): State<Arc<AppState>>,
 ) -> ApiResult<Json<ApiResponse<serde_json::Value>>> {
@@ -79,10 +89,14 @@ async fn health_check(
     
     // Check database connectivity
     if let Err(e) = app_state.database.health_check().await {
-        return Ok(Json(ApiResponse::error(
-            "database_error".to_string(),
-            Some(format!("Database health check failed: {}", e)),
-        )));
+        let error_response = ApiResponse {
+            data: None,
+            error: Some("database_error".to_string()),
+            reason: Some(format!("Database health check failed: {}", e)),
+            details: None,
+            pagination: None,
+        };
+        return Ok(Json(error_response));
     }
     
     let status = serde_json::json!({
@@ -98,6 +112,14 @@ async fn health_check(
 }
 
 /// API status and version information
+#[utoipa::path(
+    get,
+    path = "/status",
+    tag = "health",
+    responses(
+        (status = 200, description = "API status and version", body = ApiResponse<serde_json::Value>)
+    )
+)]
 async fn api_status() -> Json<ApiResponse<serde_json::Value>> {
     let status = serde_json::json!({
         "service": "janitor-site",
@@ -121,6 +143,15 @@ async fn api_status() -> Json<ApiResponse<serde_json::Value>> {
 // ============================================================================
 
 /// Get queue status
+#[utoipa::path(
+    get,
+    path = "/queue",
+    tag = "queue",
+    params(CommonQuery),
+    responses(
+        (status = 200, description = "Queue status information", body = ApiResponse<QueueStatus>)
+    )
+)]
 async fn get_queue_status(
     State(_app_state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -148,6 +179,15 @@ async fn get_queue_status(
 // ============================================================================
 
 /// Get all active runs
+#[utoipa::path(
+    get,
+    path = "/active-runs",
+    tag = "runs",
+    params(CommonQuery),
+    responses(
+        (status = 200, description = "List of active runs", body = ApiResponse<Vec<Run>>)
+    )
+)]
 async fn get_active_runs(
     State(_app_state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -156,7 +196,7 @@ async fn get_active_runs(
     debug!("Active runs requested with query: {:?}", query);
     
     // TODO: Implement actual active runs retrieval
-    let runs: Vec<RunInfo> = vec![];
+    let runs: Vec<Run> = vec![];
     let pagination = super::types::PaginationInfo::new(
         Some(0),
         query.pagination.get_offset(),
@@ -172,6 +212,18 @@ async fn get_active_runs(
 }
 
 /// Get specific active run
+#[utoipa::path(
+    get,
+    path = "/active-runs/{run_id}",
+    tag = "runs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run information", body = ApiResponse<Run>),
+        (status = 404, description = "Run not found", body = ApiResponse<()>)
+    )
+)]
 async fn get_active_run(
     State(_app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
@@ -192,6 +244,17 @@ async fn get_active_run(
 }
 
 /// Get run logs
+#[utoipa::path(
+    get,
+    path = "/active-runs/{run_id}/log",
+    tag = "logs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run logs", body = ApiResponse<serde_json::Value>)
+    )
+)]
 async fn get_run_logs(
     State(_app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
@@ -214,6 +277,18 @@ async fn get_run_logs(
 }
 
 /// Get specific run log file
+#[utoipa::path(
+    get,
+    path = "/active-runs/{run_id}/log/{filename}",
+    tag = "logs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier"),
+        ("filename" = String, Path, description = "Log filename")
+    ),
+    responses(
+        (status = 200, description = "Log file content")
+    )
+)]
 async fn get_run_log_file(
     State(_app_state): State<Arc<AppState>>,
     Path((run_id, filename)): Path<(String, String)>,
@@ -225,21 +300,30 @@ async fn get_run_log_file(
     // For log files, we typically want to return plain text or binary content
     let content_type = super::content_negotiation::negotiate_content_type(&headers, &filename);
     
-    match content_type {
-        ContentType::TextPlain | ContentType::Html => {
-            NegotiatedResponse::new("Log file content would be here".to_string(), ContentType::TextPlain)
-        }
-        _ => {
-            NegotiatedResponse::new(
-                ApiResponse::success("Log file content".to_string()),
-                ContentType::Json,
-            )
-        }
-    }
+    negotiate_response(
+        ApiResponse::success(serde_json::json!({
+            "run_id": run_id,
+            "filename": filename,
+            "content": "Log file content would be here"
+        })),
+        &headers,
+        &format!("/api/active-runs/{}/log/{}", run_id, filename),
+    )
 }
 
 
 /// Get VCS diff for run
+#[utoipa::path(
+    get,
+    path = "/run/{run_id}/diff",
+    tag = "diffs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "VCS diff content")
+    )
+)]
 async fn get_run_diff(
     State(_app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
@@ -253,23 +337,32 @@ async fn get_run_diff(
     // TODO: Implement actual diff retrieval
     let diff_content = "diff --git a/file.txt b/file.txt\n...";
     
-    match content_type {
-        ContentType::TextDiff => {
-            NegotiatedResponse::new(diff_content.to_string(), ContentType::TextDiff)
-        }
-        _ => {
-            NegotiatedResponse::new(
-                ApiResponse::success(serde_json::json!({
-                    "run_id": run_id,
-                    "diff": diff_content
-                })),
-                content_type,
-            )
-        }
-    }
+    negotiate_response(
+        ApiResponse::success(serde_json::json!({
+            "run_id": run_id,
+            "diff": diff_content,
+            "format": match content_type {
+                ContentType::TextDiff => "diff",
+                _ => "json"
+            }
+        })),
+        &headers,
+        &format!("/api/run/{}/diff", run_id),
+    )
 }
 
 /// Get debdiff for run
+#[utoipa::path(
+    get,
+    path = "/run/{run_id}/debdiff",
+    tag = "diffs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Debdiff content")
+    )
+)]
 async fn get_run_debdiff(
     State(_app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
@@ -280,23 +373,32 @@ async fn get_run_debdiff(
     // TODO: Implement actual debdiff retrieval
     let content_type = super::content_negotiation::negotiate_content_type(&headers, "/run/{id}/debdiff");
     
-    match content_type {
-        ContentType::TextDiff => {
-            NegotiatedResponse::new("debdiff content here".to_string(), ContentType::TextDiff)
-        }
-        _ => {
-            NegotiatedResponse::new(
-                ApiResponse::success(serde_json::json!({
-                    "run_id": run_id,
-                    "debdiff": "debdiff content here"
-                })),
-                content_type,
-            )
-        }
-    }
+    negotiate_response(
+        ApiResponse::success(serde_json::json!({
+            "run_id": run_id,
+            "debdiff": "debdiff content here",
+            "format": match content_type {
+                ContentType::TextDiff => "diff",
+                _ => "json"
+            }
+        })),
+        &headers,
+        &format!("/api/run/{}/debdiff", run_id),
+    )
 }
 
 /// Get diffoscope output for run
+#[utoipa::path(
+    get,
+    path = "/run/{run_id}/diffoscope",
+    tag = "diffs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Diffoscope output", body = ApiResponse<serde_json::Value>)
+    )
+)]
 async fn get_run_diffoscope(
     State(_app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
@@ -323,6 +425,15 @@ async fn get_run_diffoscope(
 // ============================================================================
 
 /// Get merge proposals
+#[utoipa::path(
+    get,
+    path = "/merge-proposals",
+    tag = "merge-proposals",
+    params(CommonQuery),
+    responses(
+        (status = 200, description = "List of merge proposals", body = ApiResponse<Vec<MergeProposal>>)
+    )
+)]
 async fn get_merge_proposals(
     State(_app_state): State<Arc<AppState>>,
     Query(query): Query<CommonQuery>,
@@ -331,7 +442,7 @@ async fn get_merge_proposals(
     debug!("Merge proposals requested");
     
     // TODO: Implement actual merge proposal retrieval
-    let proposals: Vec<MergeProposalInfo> = vec![];
+    let proposals: Vec<MergeProposal> = vec![];
     let pagination = super::types::PaginationInfo::new(
         Some(0),
         query.pagination.get_offset(),
@@ -352,6 +463,14 @@ async fn get_merge_proposals(
 // ============================================================================
 
 /// Get runner status
+#[utoipa::path(
+    get,
+    path = "/runner/status",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Runner status information", body = ApiResponse<serde_json::Value>)
+    )
+)]
 async fn get_runner_status(
     State(_app_state): State<Arc<AppState>>,
     headers: HeaderMap,

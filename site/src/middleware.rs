@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 
 use crate::app::AppState;
 
@@ -17,12 +17,12 @@ pub async fn request_logging_middleware(
     let method = request.method().clone();
     let uri = request.uri().clone();
     let start = std::time::Instant::now();
-    
+
     let response = next.run(request).await;
-    
+
     let duration = start.elapsed();
     let status = response.status();
-    
+
     tracing::info!(
         method = %method,
         uri = %uri,
@@ -30,7 +30,7 @@ pub async fn request_logging_middleware(
         duration_ms = duration.as_millis(),
         "Request completed"
     );
-    
+
     response
 }
 
@@ -45,7 +45,7 @@ pub async fn health_check_middleware(
     if path.starts_with("/static/") || path == "/health" {
         return Ok(next.run(request).await);
     }
-    
+
     // Quick database health check
     match state.database.health_check().await {
         Ok(_) => Ok(next.run(request).await),

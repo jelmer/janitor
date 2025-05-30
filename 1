@@ -1,0 +1,12 @@
+fn get_sys_executable() -> PyResult<String> {
+    // Acquire the GIL (Global Interpreter Lock)
+    Python::with_gil(|py| {
+        // Import the sys module
+        let sys = PyModule::import_bound(py, "sys")?;
+        // Get the executable attribute from the sys module
+        let executable: String = sys.getattr("executable")?.extract()?;
+        // Return the executable path as a Rust String
+        Ok(executable)
+    })
+}
+

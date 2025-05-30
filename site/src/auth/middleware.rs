@@ -221,15 +221,9 @@ pub async fn session_middleware(
     next.run(req).await
 }
 
-/// Create middleware layer for session management
-pub fn auth_middleware_layer(auth_state: Arc<AuthState>) -> axum::middleware::FromFnLayer<
-    fn(State<Arc<AuthState>>, CookieJar, Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send + 'static>>,
-    Arc<AuthState>,
-    (State<Arc<AuthState>>, CookieJar),
-> {
-    axum::middleware::from_fn_with_state(auth_state, |state, jar, req, next| {
-        Box::pin(session_middleware(state, jar, req, next))
-    })
+/// Create middleware layer for session management  
+pub fn auth_middleware_layer(auth_state: Arc<AuthState>) -> axum::middleware::FromFnLayer<impl Clone, Arc<AuthState>, ()> {
+    axum::middleware::from_fn_with_state(auth_state, session_middleware)
 }
 
 /// Middleware layer for session management  
