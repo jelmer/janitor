@@ -1,0 +1,17 @@
+<div class="result-explanation build-error">
+    <h4>Build Failed: Missing Go Package</h4>
+    <p>
+        The package failed to build because it depends on a Go package that is
+        not available in the APT repository for the distribution.
+    </p>
+    
+    <div class="resolution-suggestions">
+        <h5>Possible Solutions:</h5>
+        <ul>
+            <li>Check if the Go package is available under a different name</li>
+            <li>Add the package as a build dependency in debian/control</li>
+            <li>Use Go modules to manage dependencies</li>
+            <li>Package the missing Go package separately</li>
+        </ul>
+    </div>
+</div>

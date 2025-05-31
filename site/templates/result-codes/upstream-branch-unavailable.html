@@ -1,0 +1,29 @@
+<div class="result-explanation vcs-error">
+    <h4>Upstream Branch Unavailable</h4>
+    <p>
+        The upstream branch specified for this package could not be accessed.
+        This prevents the Janitor from checking for new upstream versions or
+        applying upstream fixes.
+    </p>
+    
+    <div class="common-causes">
+        <h5>Common Causes:</h5>
+        <ul>
+            <li>Repository URL has changed or is no longer accessible</li>
+            <li>Branch name has changed or been removed</li>
+            <li>Network connectivity issues</li>
+            <li>Authentication problems for private repositories</li>
+            <li>Repository hosting service is down</li>
+        </ul>
+    </div>
+    
+    <div class="resolution-suggestions">
+        <h5>Possible Solutions:</h5>
+        <ul>
+            <li>Verify the upstream repository URL is correct</li>
+            <li>Check if the branch name has changed</li>
+            <li>Update the Vcs-* fields in debian/control if needed</li>
+            <li>Contact upstream maintainers if the repository seems missing</li>
+        </ul>
+    </div>
+</div>

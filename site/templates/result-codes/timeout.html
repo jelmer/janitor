@@ -1,0 +1,29 @@
+<div class="result-explanation timeout-error">
+    <h4>Build Timeout</h4>
+    <p>
+        The build of the package timed out. This often means that it is stuck in an
+        endless loop or did not generate output to standard out for a long time
+        (usually an hour).
+    </p>
+    
+    <div class="common-causes">
+        <h5>Common Causes:</h5>
+        <ul>
+            <li>Infinite loops in build scripts or test suites</li>
+            <li>Very long-running tests without output</li>
+            <li>Deadlocks in parallel builds</li>
+            <li>Network timeouts during dependency downloads</li>
+            <li>Resource exhaustion (memory, disk space)</li>
+        </ul>
+    </div>
+    
+    <div class="resolution-suggestions">
+        <h5>Possible Solutions:</h5>
+        <ul>
+            <li>Review build logs for hanging processes</li>
+            <li>Disable long-running tests or increase timeout</li>
+            <li>Reduce parallelism in build process</li>
+            <li>Add periodic output to long-running operations</li>
+        </ul>
+    </div>
+</div>

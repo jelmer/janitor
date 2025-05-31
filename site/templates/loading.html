@@ -1,0 +1,255 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Loading{% endblock %}
+
+{% block body %}
+<div class="loading-page">
+    <div class="loading-container">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="loading-content">
+            <h2>{{ loading_title | default(value="Loading...") }}</h2>
+            
+            {% if loading_message %}
+            <p class="loading-message">{{ loading_message }}</p>
+            {% endif %}
+            
+            {% if operation_type %}
+            <div class="operation-info">
+                <p class="operation-type">{{ operation_type }}</p>
+                {% if estimated_time %}
+                <p class="estimated-time">Estimated time: {{ estimated_time }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if progress %}
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ progress.percentage }}%"></div>
+                </div>
+                <div class="progress-text">
+                    {{ progress.current }} / {{ progress.total }}
+                    {% if progress.step %}({{ progress.step }}){% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if steps %}
+            <div class="loading-steps">
+                <h4>Progress:</h4>
+                <ol class="steps-list">
+                    {% for step in steps %}
+                    <li class="step-item {{ step.status }}">
+                        <span class="step-name">{{ step.name }}</span>
+                        {% if step.status == "in_progress" %}
+                        <div class="step-spinner"></div>
+                        {% elif step.status == "completed" %}
+                        <span class="step-check">✓</span>
+                        {% elif step.status == "failed" %}
+                        <span class="step-error">✗</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if cancel_url %}
+        <div class="loading-actions">
+            <a href="{{ cancel_url }}" class="btn btn-secondary">Cancel</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.loading-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60vh;
+    text-align: center;
+}
+
+.loading-container {
+    max-width: 500px;
+    padding: 2rem;
+}
+
+.loading-spinner {
+    margin-bottom: 2rem;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-message {
+    color: #666;
+    margin-bottom: 1rem;
+}
+
+.operation-info {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 1rem 0;
+}
+
+.progress-container {
+    margin: 1.5rem 0;
+}
+
+.progress-bar {
+    background: #e9ecef;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+    background: #28a745;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.loading-steps {
+    text-align: left;
+    margin: 1.5rem 0;
+}
+
+.steps-list {
+    list-style: none;
+    padding: 0;
+}
+
+.step-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.step-item:last-child {
+    border-bottom: none;
+}
+
+.step-name {
+    flex: 1;
+}
+
+.step-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.step-check {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.step-error {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.step-item.pending {
+    color: #666;
+}
+
+.step-item.in_progress {
+    color: #3498db;
+    font-weight: 500;
+}
+
+.step-item.completed {
+    color: #28a745;
+}
+
+.step-item.failed {
+    color: #dc3545;
+}
+
+.loading-actions {
+    margin-top: 2rem;
+}
+</style>
+
+<script>
+// Auto-refresh for progress updates
+{% if refresh_interval %}
+setTimeout(function() {
+    location.reload();
+}, {{ refresh_interval * 1000 }});
+{% endif %}
+
+// WebSocket for real-time updates
+{% if websocket_url %}
+const ws = new WebSocket('{{ websocket_url }}');
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    updateProgress(data);
+};
+
+function updateProgress(data) {
+    if (data.progress) {
+        const progressFill = document.querySelector('.progress-fill');
+        const progressText = document.querySelector('.progress-text');
+        
+        if (progressFill) {
+            progressFill.style.width = data.progress.percentage + '%';
+        }
+        
+        if (progressText) {
+            progressText.textContent = `${data.progress.current} / ${data.progress.total}`;
+            if (data.progress.step) {
+                progressText.textContent += ` (${data.progress.step})`;
+            }
+        }
+    }
+    
+    if (data.steps) {
+        updateSteps(data.steps);
+    }
+    
+    if (data.completed) {
+        window.location.href = data.redirect_url || '/';
+    }
+}
+
+function updateSteps(steps) {
+    const stepItems = document.querySelectorAll('.step-item');
+    steps.forEach((step, index) => {
+        if (stepItems[index]) {
+            stepItems[index].className = `step-item ${step.status}`;
+        }
+    });
+}
+{% endif %}
+</script>
+{% endblock %}

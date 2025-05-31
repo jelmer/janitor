@@ -1,0 +1,37 @@
+<div class="result-explanation format-error">
+    <h4>Unparseable Changelog</h4>
+    <p>
+        The debian/changelog file could not be parsed. This usually indicates
+        formatting issues or syntax errors in the changelog.
+    </p>
+    
+    <div class="explanation">
+        <h5>Changelog Format:</h5>
+        <p>
+            Debian changelog files must follow a specific format with entries
+            containing package name, version, changes, maintainer, and timestamp.
+            Any deviation from this format can cause parsing failures.
+        </p>
+    </div>
+    
+    <div class="common-issues">
+        <h5>Common Issues:</h5>
+        <ul>
+            <li>Incorrect spacing or indentation</li>
+            <li>Invalid version format</li>
+            <li>Missing or malformed signature line</li>
+            <li>Encoding issues (non-UTF-8 characters)</li>
+            <li>Missing required fields</li>
+        </ul>
+    </div>
+    
+    <div class="resolution-suggestions">
+        <h5>How to Fix:</h5>
+        <ul>
+            <li>Use <code>dch</code> tool to maintain proper changelog format</li>
+            <li>Validate the changelog syntax manually</li>
+            <li>Check for unusual characters or encoding issues</li>
+            <li>Refer to the <a href="https://www.debian.org/doc/debian-policy/ch-source.html#s-dpkgchangelog">Debian Policy on changelogs</a></li>
+        </ul>
+    </div>
+</div>

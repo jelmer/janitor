@@ -1,0 +1,208 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+
+{% block page_title %}System Status{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="status-page">
+    <div class="section" id="system-status">
+        <h1>System Status</h1>
+        
+        <div class="status-overview">
+            <div class="status-grid">
+                <div class="status-item {% if overall_status == 'operational' %}healthy{% elif overall_status == 'degraded' %}warning{% else %}error{% endif %}">
+                    <div class="status-icon"></div>
+                    <div class="status-info">
+                        <h3>Overall Status</h3>
+                        <p class="status-text">{{ overall_status | title }}</p>
+                    </div>
+                </div>
+                
+                {% if last_updated %}
+                <div class="status-item">
+                    <div class="status-icon"></div>
+                    <div class="status-info">
+                        <h3>Last Updated</h3>
+                        <p class="status-text">{{ last_updated | timeago }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if services %}
+        <div class="services-status">
+            <h2>Service Status</h2>
+            <div class="services-grid">
+                {% for service in services %}
+                <div class="service-item {{ service.status }}">
+                    <div class="service-header">
+                        <h4>{{ service.name }}</h4>
+                        <span class="service-status">{{ util.status_badge(service.status) }}</span>
+                    </div>
+                    
+                    {% if service.description %}
+                    <p class="service-description">{{ service.description }}</p>
+                    {% endif %}
+                    
+                    {% if service.last_check %}
+                    <p class="service-timing">Last checked: {{ service.last_check | timeago }}</p>
+                    {% endif %}
+                    
+                    {% if service.metrics %}
+                    <div class="service-metrics">
+                        {% for metric_name, metric_value in service.metrics.items() %}
+                        <div class="metric">
+                            <span class="metric-name">{{ metric_name }}:</span>
+                            <span class="metric-value">{{ metric_value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if queue_stats %}
+        <div class="queue-status">
+            <h2>Queue Status</h2>
+            <div class="queue-grid">
+                {% for queue in queue_stats %}
+                <div class="queue-item">
+                    <div class="queue-header">
+                        <h4>{{ queue.name }}</h4>
+                        <span class="queue-count">{{ queue.count }} items</span>
+                    </div>
+                    
+                    {% if queue.processing_rate %}
+                    <div class="queue-metrics">
+                        <div class="metric">
+                            <span class="metric-name">Processing rate:</span>
+                            <span class="metric-value">{{ queue.processing_rate }}/hour</span>
+                        </div>
+                        {% if queue.estimated_wait %}
+                        <div class="metric">
+                            <span class="metric-name">Est. wait time:</span>
+                            <span class="metric-value">{{ queue.estimated_wait | duration }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if worker_stats %}
+        <div class="workers-status">
+            <h2>Worker Status</h2>
+            <div class="workers-grid">
+                <div class="workers-summary">
+                    <div class="summary-item">
+                        <span class="summary-number">{{ worker_stats.total }}</span>
+                        <span class="summary-label">Total Workers</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-number">{{ worker_stats.active }}</span>
+                        <span class="summary-label">Active</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-number">{{ worker_stats.idle }}</span>
+                        <span class="summary-label">Idle</span>
+                    </div>
+                    {% if worker_stats.offline %}
+                    <div class="summary-item">
+                        <span class="summary-number">{{ worker_stats.offline }}</span>
+                        <span class="summary-label">Offline</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if recent_incidents %}
+        <div class="recent-incidents">
+            <h2>Recent Incidents</h2>
+            <div class="incidents-list">
+                {% for incident in recent_incidents %}
+                <div class="incident-item {{ incident.severity }}">
+                    <div class="incident-header">
+                        <h4>{{ incident.title }}</h4>
+                        <span class="incident-status">{{ incident.status }}</span>
+                        <span class="incident-time">{{ incident.start_time | timeago }}</span>
+                    </div>
+                    
+                    {% if incident.description %}
+                    <p class="incident-description">{{ incident.description }}</p>
+                    {% endif %}
+                    
+                    {% if incident.affected_services %}
+                    <div class="affected-services">
+                        <strong>Affected services:</strong>
+                        {% for service in incident.affected_services %}
+                        <span class="service-tag">{{ service }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if incident.resolution_time %}
+                    <p class="incident-resolution">
+                        Resolved in {{ (incident.resolution_time - incident.start_time) | duration }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="status-actions">
+            <h2>Status Information</h2>
+            <div class="action-links">
+                <a href="/api/v1/health" class="btn btn-secondary">API Health Check</a>
+                <a href="/status/history" class="btn btn-secondary">Status History</a>
+                {% if user and user.is_admin %}
+                <a href="/cupboard/status" class="btn btn-primary">Admin Status</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-refresh status page every 30 seconds
+setTimeout(function() {
+    location.reload();
+}, 30000);
+
+// Add real-time status updates if WebSocket is available
+if (typeof WebSocket !== 'undefined') {
+    const ws = new WebSocket(((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host + '/ws/status');
+    
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        updateStatusDisplay(data);
+    };
+    
+    function updateStatusDisplay(statusData) {
+        // Update status displays in real-time
+        if (statusData.overall_status) {
+            const overallStatus = document.querySelector('.status-overview .status-item');
+            if (overallStatus) {
+                overallStatus.className = `status-item ${statusData.overall_status}`;
+                overallStatus.querySelector('.status-text').textContent = statusData.overall_status;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}
