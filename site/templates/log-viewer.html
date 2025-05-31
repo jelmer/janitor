@@ -1,0 +1,263 @@
+{% extends "layout.html" %}
+
+{% import "codeblock.html" as codeblock %}
+
+{% block page_title %}
+    {% if log_name %}{{ log_name | title }} Log{% else %}Log Viewer{% endif %}
+    {% if codebase %} - {{ codebase }}{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="log-viewer-page">
+    <div class="section" id="log-viewer">
+        <div class="log-header">
+            <h1>
+                {% if log_name %}{{ log_name | title }} Log{% else %}Log Viewer{% endif %}
+                {% if codebase %}for {{ codebase }}{% endif %}
+            </h1>
+            
+            {% if run_id %}
+            <div class="breadcrumb">
+                <a href="/cupboard/">Cupboard</a> › 
+                <a href="/cupboard/c/{{ codebase }}/">{{ codebase }}</a> › 
+                <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/">Run {{ run_id }}</a> › 
+                <span>{{ log_name | title }} Log</span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="log-controls">
+            <div class="log-info">
+                {% if log_info %}
+                <div class="log-metadata">
+                    {% if log_info.size %}
+                    <span class="log-size">Size: {{ log_info.size | filesizeformat }}</span>
+                    {% endif %}
+                    
+                    {% if log_info.last_modified %}
+                    <span class="log-modified">Modified: {{ log_info.last_modified | timeago }}</span>
+                    {% endif %}
+                    
+                    {% if log_info.encoding %}
+                    <span class="log-encoding">Encoding: {{ log_info.encoding }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="view-controls">
+                <div class="line-controls">
+                    <label for="show-lines">Show lines:</label>
+                    <select id="show-lines" onchange="updateLineRange(this.value)">
+                        <option value="all"{% if not line_start and not line_end %} selected{% endif %}>All lines</option>
+                        <option value="first-100"{% if line_start == 1 and line_end == 100 %} selected{% endif %}>First 100</option>
+                        <option value="first-500"{% if line_start == 1 and line_end == 500 %} selected{% endif %}>First 500</option>
+                        <option value="last-100"{% if line_end and line_start == (line_end - 99) %} selected{% endif %}>Last 100</option>
+                        <option value="last-500"{% if line_end and line_start == (line_end - 499) %} selected{% endif %}>Last 500</option>
+                        <option value="custom">Custom range</option>
+                    </select>
+                </div>
+                
+                <div class="custom-range" id="custom-range" style="display: none;">
+                    <input type="number" id="start-line" placeholder="Start line" value="{{ line_start | default(value='') }}">
+                    <input type="number" id="end-line" placeholder="End line" value="{{ line_end | default(value='') }}">
+                    <button onclick="applyCustomRange()" class="btn btn-sm btn-secondary">Apply</button>
+                </div>
+                
+                <div class="search-controls">
+                    <input type="text" id="search-input" placeholder="Search in log..." value="{{ search_query | default(value='') }}">
+                    <button onclick="searchLog()" class="btn btn-sm btn-primary">Search</button>
+                    <button onclick="clearSearch()" class="btn btn-sm btn-secondary">Clear</button>
+                </div>
+                
+                <div class="download-controls">
+                    <a href="?download=1" class="btn btn-sm btn-secondary">Download Raw</a>
+                    {% if log_name != 'worker' %}
+                    <a href="?format=filtered" class="btn btn-sm btn-secondary">Download Filtered</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        {% if search_results %}
+        <div class="search-results">
+            <h3>Search Results</h3>
+            <p>Found {{ search_results | length }} matches for "{{ search_query }}"</p>
+            <div class="search-matches">
+                {% for match in search_results[:20] %}
+                <div class="search-match">
+                    <a href="#line-{{ match.line_number }}" class="line-link">Line {{ match.line_number }}</a>
+                    <span class="match-context">{{ match.context | truncate(100) }}</span>
+                </div>
+                {% endfor %}
+                {% if search_results | length > 20 %}
+                <p class="more-results">... and {{ search_results | length - 20 }} more matches</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if log_content %}
+        <div class="log-content">
+            {% if highlight_lines %}
+            <div class="highlighted-info">
+                <p>Highlighted lines: {{ highlight_lines | join(', ') }}</p>
+            </div>
+            {% endif %}
+            
+            <div class="log-display">
+                {{ codeblock.codeblock(log_content, "text", log_name, 
+                                      lines=display_lines if display_lines else none,
+                                      highlight_lines=highlight_lines if highlight_lines else none) }}
+            </div>
+        </div>
+        
+        {% elif error_message %}
+        <div class="log-error">
+            <h3>Error Loading Log</h3>
+            <p>{{ error_message }}</p>
+            {% if suggested_actions %}
+            <div class="suggested-actions">
+                <h4>Suggested Actions:</h4>
+                <ul>
+                    {% for action in suggested_actions %}
+                    <li>{{ action }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% else %}
+        <div class="no-log">
+            <h3>No Log Content Available</h3>
+            <p>The requested log file is empty or not available.</p>
+            {% if run_id %}
+            <p><a href="/cupboard/c/{{ codebase }}/{{ run_id }}/">Return to run details</a></p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if related_logs %}
+        <div class="related-logs">
+            <h3>Related Logs</h3>
+            <div class="log-links">
+                {% for related_log in related_logs %}
+                <a href="?log={{ related_log.name }}" 
+                   class="log-link{% if related_log.name == log_name %} current{% endif %}">
+                    {{ related_log.description | default(value=related_log.name | title) }}
+                    {% if related_log.size %}
+                    <span class="size">({{ related_log.size | filesizeformat }})</span>
+                    {% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if run_id %}
+        <div class="navigation">
+            <div class="nav-links">
+                <a href="/cupboard/c/{{ codebase }}/{{ run_id }}/" class="btn btn-secondary">← Back to Run Details</a>
+                <a href="/cupboard/c/{{ codebase }}/" class="btn btn-secondary">← Back to Codebase</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function updateLineRange(range) {
+    const url = new URL(window.location);
+    const customRange = document.getElementById('custom-range');
+    
+    if (range === 'custom') {
+        customRange.style.display = 'block';
+        return;
+    } else {
+        customRange.style.display = 'none';
+    }
+    
+    // Clear existing line parameters
+    url.searchParams.delete('line_start');
+    url.searchParams.delete('line_end');
+    
+    switch (range) {
+        case 'first-100':
+            url.searchParams.set('line_start', '1');
+            url.searchParams.set('line_end', '100');
+            break;
+        case 'first-500':
+            url.searchParams.set('line_start', '1');
+            url.searchParams.set('line_end', '500');
+            break;
+        case 'last-100':
+            url.searchParams.set('line_start', '-100');
+            break;
+        case 'last-500':
+            url.searchParams.set('line_start', '-500');
+            break;
+        case 'all':
+        default:
+            // No parameters needed for all lines
+            break;
+    }
+    
+    if (range !== 'all') {
+        window.location = url;
+    }
+}
+
+function applyCustomRange() {
+    const startLine = document.getElementById('start-line').value;
+    const endLine = document.getElementById('end-line').value;
+    
+    if (!startLine && !endLine) {
+        alert('Please specify at least one line number');
+        return;
+    }
+    
+    const url = new URL(window.location);
+    
+    if (startLine) {
+        url.searchParams.set('line_start', startLine);
+    }
+    if (endLine) {
+        url.searchParams.set('line_end', endLine);
+    }
+    
+    window.location = url;
+}
+
+function searchLog() {
+    const query = document.getElementById('search-input').value;
+    if (!query.trim()) {
+        alert('Please enter a search term');
+        return;
+    }
+    
+    const url = new URL(window.location);
+    url.searchParams.set('search', query);
+    window.location = url;
+}
+
+function clearSearch() {
+    const url = new URL(window.location);
+    url.searchParams.delete('search');
+    document.getElementById('search-input').value = '';
+    window.location = url;
+}
+
+// Auto-scroll to highlighted lines
+document.addEventListener('DOMContentLoaded', function() {
+    const highlighted = document.querySelector('.log-display mark');
+    if (highlighted) {
+        highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+</script>
+{% endblock %}

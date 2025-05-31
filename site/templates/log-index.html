@@ -1,0 +1,195 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+
+{% block page_title %}Log Index{% endblock %}
+
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="log-index-page">
+    <div class="section" id="log-index">
+        <h1>Log Index</h1>
+        
+        {% if codebase %}
+        <div class="breadcrumb">
+            <a href="/cupboard/">Cupboard</a> › 
+            <a href="/cupboard/c/{{ codebase }}/">{{ codebase }}</a> › 
+            <span>Logs</span>
+        </div>
+        {% endif %}
+        
+        <div class="log-filters">
+            <form method="GET" class="filter-form">
+                <div class="filter-group">
+                    <label for="codebase">Codebase:</label>
+                    <input type="text" id="codebase" name="codebase" value="{{ codebase | default(value='') }}" placeholder="Filter by codebase...">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="suite">Suite:</label>
+                    <select id="suite" name="suite">
+                        <option value="">All Suites</option>
+                        {% for suite_option in available_suites %}
+                        <option value="{{ suite_option }}"{% if suite_option == suite %} selected{% endif %}>{{ suite_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="result_code">Result:</label>
+                    <select id="result_code" name="result_code">
+                        <option value="">All Results</option>
+                        {% for result_option in available_results %}
+                        <option value="{{ result_option }}"{% if result_option == result_code %} selected{% endif %}>{{ result_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="date_from">Date From:</label>
+                    <input type="date" id="date_from" name="date_from" value="{{ date_from | default(value='') }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="date_to">Date To:</label>
+                    <input type="date" id="date_to" name="date_to" value="{{ date_to | default(value='') }}">
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="?" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+        
+        {% if runs %}
+        <div class="log-entries">
+            <div class="entries-header">
+                <h2>Log Entries ({{ runs | length }} results)</h2>
+                <div class="sort-controls">
+                    <label for="sort">Sort by:</label>
+                    <select id="sort" onchange="updateSort(this.value)">
+                        <option value="date_desc"{% if sort == "date_desc" %} selected{% endif %}>Date (newest first)</option>
+                        <option value="date_asc"{% if sort == "date_asc" %} selected{% endif %}>Date (oldest first)</option>
+                        <option value="codebase"{% if sort == "codebase" %} selected{% endif %}>Codebase</option>
+                        <option value="result"{% if sort == "result" %} selected{% endif %}>Result</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="entries-list">
+                {% for run in runs %}
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <h3>
+                            <a href="/cupboard/c/{{ run.codebase }}/{{ run.id }}/">
+                                {{ run.codebase }}
+                            </a>
+                        </h3>
+                        <div class="entry-metadata">
+                            <span class="suite">{{ run.suite }}</span>
+                            <span class="result">{{ util.status_badge(run.result_code) }}</span>
+                            <span class="date">{{ run.finish_time | timeago }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="entry-details">
+                        {% if run.description %}
+                        <p class="description">{{ run.description }}</p>
+                        {% endif %}
+                        
+                        <div class="timing-info">
+                            <span class="start-time">Started: {{ run.start_time | timestamp }}</span>
+                            <span class="duration">Duration: {{ (run.finish_time - run.start_time) | duration }}</span>
+                        </div>
+                        
+                        {% if run.worker %}
+                        <div class="worker-info">
+                            <span class="worker">Worker: {{ run.worker }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="entry-logs">
+                        <h4>Available Logs:</h4>
+                        <div class="log-links">
+                            {% if run.logs %}
+                            {% for log_name, log_info in run.logs.items() %}
+                            <a href="{{ log_info.url }}" class="log-link {{ log_name }}">
+                                {{ log_info.description | default(value=log_name | title) }}
+                                {% if log_info.size %}
+                                <span class="log-size">({{ log_info.size | filesizeformat }})</span>
+                                {% endif %}
+                            </a>
+                            {% endfor %}
+                            {% else %}
+                            <span class="no-logs">No logs available</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="entry-actions">
+                        <a href="/cupboard/c/{{ run.codebase }}/{{ run.id }}/" class="btn btn-sm btn-primary">View Details</a>
+                        
+                        {% if run.logs and run.logs.worker %}
+                        <a href="{{ run.logs.worker.url }}" class="btn btn-sm btn-secondary">Full Log</a>
+                        {% endif %}
+                        
+                        {% if run.result_code == "success" and run.diff_url %}
+                        <a href="{{ run.diff_url }}" class="btn btn-sm btn-secondary">View Diff</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            {% if pagination %}
+            <div class="pagination">
+                {% if pagination.has_prev %}
+                <a href="?{{ pagination.prev_url }}" class="btn btn-secondary">← Previous</a>
+                {% endif %}
+                
+                <span class="page-info">
+                    Page {{ pagination.page }} of {{ pagination.pages }}
+                    ({{ pagination.total }} runs)
+                </span>
+                
+                {% if pagination.has_next %}
+                <a href="?{{ pagination.next_url }}" class="btn btn-secondary">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        
+        {% else %}
+        <div class="no-entries">
+            <h2>No Log Entries Found</h2>
+            <p>No runs match your current filter criteria.</p>
+            <p>Try adjusting your filters or <a href="?">clearing all filters</a>.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function updateSort(sortBy) {
+    const url = new URL(window.location);
+    url.searchParams.set('sort', sortBy);
+    url.searchParams.delete('page'); // Reset to first page
+    window.location = url;
+}
+
+// Auto-submit form when filters change
+document.addEventListener('DOMContentLoaded', function() {
+    const selects = document.querySelectorAll('#suite, #result_code');
+    selects.forEach(select => {
+        select.addEventListener('change', function() {
+            this.form.submit();
+        });
+    });
+});
+</script>
+{% endblock %}

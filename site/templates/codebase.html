@@ -1,0 +1,266 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+{% import "codeblock.html" as codeblock %}
+
+{% block page_title %}{{ suite }} Codebase - {{ codebase }}{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="codebase-page">
+    <div class="section" id="{{ codebase }}">
+        <div class="codebase-header">
+            <h1>{{ suite }} Codebase - {{ codebase }}</h1>
+            
+            {% if result_code %}
+            <div class="codebase-status">
+                {{ util.status_badge(result_code) }}
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="codebase-metadata">
+            <dl class="metadata-list">
+                {% if publish_policy %}
+                <dt>Automatic publish policy:</dt>
+                <dd>{{ publish_policy }}</dd>
+                {% endif %}
+                
+                {% if changelog_policy and changelog_policy != "auto" %}
+                <dt>Changelog update policy:</dt>
+                <dd>{{ changelog_policy }}</dd>
+                {% endif %}
+                
+                {% if compat_release %}
+                <dt>Release compatibility:</dt>
+                <dd>{{ compat_release }}</dd>
+                {% endif %}
+                
+                {% if previous_runs and previous_runs | length > 0 %}
+                <dt>Last processed:</dt>
+                <dd>
+                    {{ previous_runs[0].finish_time | timeago }}
+                    {% if previous_runs[0].start_time %}
+                    (took {{ (previous_runs[0].finish_time - previous_runs[0].start_time) | duration }})
+                    {% endif %}
+                </dd>
+                {% endif %}
+                
+                {% if vcs_url %}
+                <dt>Branch URL:</dt>
+                <dd><a href="{{ vcs_url }}" class="external">{{ vcs_url }}</a></dd>
+                {% endif %}
+                
+                {% if queue_position %}
+                <dt id="queue-position-{{ codebase }}">Queue position:</dt>
+                <dd>
+                    {{ queue_position }}
+                    {% if queue_wait_time %}
+                    ({{ queue_wait_time | duration }} wait)
+                    {% endif %}
+                </dd>
+                {% endif %}
+                
+                {% if maintainer %}
+                <dt>Maintainer:</dt>
+                <dd>{{ maintainer }}</dd>
+                {% endif %}
+                
+                {% if version %}
+                <dt>Version:</dt>
+                <dd>{{ version }}</dd>
+                {% endif %}
+            </dl>
+        </div>
+        
+        <div class="codebase-actions">
+            {% if branch_url or campaign.default_empty %}
+            <button class="btn btn-primary" onclick="scheduleRun('{{ suite }}', '{{ codebase }}')">
+                Schedule a new run
+            </button>
+            {% endif %}
+            
+            {% if run and run.result_branches %}
+            <button class="btn btn-success" onclick="publishChanges('{{ suite }}', '{{ codebase }}')">
+                Publish Changes
+            </button>
+            {% endif %}
+        </div>
+        
+        {% if merge_proposals and merge_proposals | length > 0 %}
+        <div class="section" id="recent-merge-proposals">
+            <h2>Recent Merge Proposals</h2>
+            <div class="merge-proposals-list">
+                {% for proposal in merge_proposals %}
+                <div class="proposal-item {{ proposal.status | lower }}">
+                    <div class="proposal-header">
+                        <a href="{{ proposal.url }}" class="external">{{ proposal.url }}</a>
+                        <span class="proposal-status">{{ util.status_badge(proposal.status) }}</span>
+                    </div>
+                    {% if proposal.title %}
+                    <div class="proposal-title">{{ proposal.title }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if result_code %}
+        <div class="section" id="result-explanation">
+            <h2>Result: {{ result_code | title }}</h2>
+            {% if run and run.description %}
+            <p class="result-description">{{ run.description }}</p>
+            {% endif %}
+            
+            {% if result_code == "success" and run and run.result_branches %}
+            <div class="ready-changes">
+                <h3>Ready Changes</h3>
+                {% if run.result_branches %}
+                <div class="merge-commands">
+                    <h4>Merge these changes:</h4>
+                    {% for branch in run.result_branches %}
+                    <div class="merge-command">
+                        {{ codeblock.codeblock("git pull " + vcs_url + " " + suite + "/" + branch.role, "bash") }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                {% if show_diff and run.result_branches %}
+                <div class="vcs-diffs">
+                    <h4>Changes</h4>
+                    {% for branch in run.result_branches %}
+                    <div class="branch-diff">
+                        <h5>{{ branch.role }}</h5>
+                        {% if branch.diff %}
+                        {{ codeblock.diff_block(branch.diff, "Changes for " + branch.role) }}
+                        {% else %}
+                        <p>No diff available for {{ branch.role }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                {% if debdiff %}
+                <div class="debdiff-section">
+                    <h4>Debdiff</h4>
+                    {% if debdiff.split('\n') | length < 200 %}
+                    {{ codeblock.diff_block(debdiff, "debian/debdiff") }}
+                    {% else %}
+                    <p>
+                        Debdiff is too long (more than 200 lines). 
+                        <a href="/api/run/{{ run_id }}/debdiff?filter_boring=1" class="btn btn-secondary">Download raw debdiff</a>
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if run and command %}
+            <div class="run-locally">
+                <h3>Run Locally</h3>
+                {% if vcs == "git" %}
+                {{ codeblock.codeblock("git clone " + vcs_url + " " + codebase + "\ncd " + codebase + "\n" + command, "bash") }}
+                {% elif vcs == "bzr" %}
+                {{ codeblock.codeblock("bzr branch " + vcs_url + " " + codebase + "\ncd " + codebase + "\n" + command, "bash") }}
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if run %}
+            <div class="run-details">
+                <h3>More Details</h3>
+                <p><a href="/cupboard/c/{{ run.codebase }}/{{ run.id }}/" class="btn btn-primary">Full run details</a></p>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% else %}
+        <div class="no-result">
+            {% if run and run.result_code == "nothing-to-do" %}
+            <p>Nothing to do for {{ codebase }}.</p>
+            {% else %}
+            <p>No unpublished successful runs for {{ codebase }}.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if previous_runs and previous_runs | length > 0 and result_code not in ["nothing-to-do", "success"] %}
+        <div class="section" id="historical-runs">
+            <h2>Historical Runs</h2>
+            <div class="runs-list">
+                {% for previous_run in previous_runs %}
+                <div class="run-item">
+                    <div class="run-header">
+                        <a href="/cupboard/c/{{ previous_run.codebase }}/{{ previous_run.id }}/">
+                            {{ util.status_badge(previous_run.result_code) }}
+                            {{ previous_run.description | default(value=previous_run.result_code) }}
+                        </a>
+                        <span class="run-date">{{ previous_run.finish_time | timeago }}</span>
+                    </div>
+                    
+                    {% if previous_run.worker %}
+                    <div class="run-metadata">
+                        <span class="worker">Worker: {{ previous_run.worker }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function scheduleRun(suite, codebase) {
+    if (confirm('Schedule a new run for ' + codebase + '?')) {
+        fetch('/api/v1/runs/schedule', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                suite: suite,
+                codebase: codebase
+            })
+        }).then(response => {
+            if (response.ok) {
+                alert('Run scheduled successfully');
+                location.reload();
+            } else {
+                alert('Failed to schedule run');
+            }
+        });
+    }
+}
+
+function publishChanges(suite, codebase) {
+    if (confirm('Publish changes for ' + codebase + '?')) {
+        fetch('/api/v1/publish', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                suite: suite,
+                codebase: codebase
+            })
+        }).then(response => {
+            if (response.ok) {
+                alert('Changes published successfully');
+                location.reload();
+            } else {
+                alert('Failed to publish changes');
+            }
+        });
+    }
+}
+</script>
+{% endblock %}
