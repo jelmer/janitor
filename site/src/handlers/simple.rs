@@ -54,7 +54,7 @@ pub async fn index(
     
     // Add user context
     if let Some(user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
@@ -108,7 +108,7 @@ pub async fn about(
     let mut context = create_base_context();
     
     if let Some(user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
@@ -135,7 +135,7 @@ pub async fn credentials(
     let mut context = create_base_context();
     
     if let Some(user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
@@ -204,7 +204,7 @@ pub async fn campaign_start(
     let mut context = create_base_context();
     
     if let Some(user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
@@ -261,7 +261,7 @@ pub async fn campaign_candidates(
     let mut context = create_base_context();
     
     if let Some(user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
