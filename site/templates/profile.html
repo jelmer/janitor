@@ -1,0 +1,145 @@
+{% extends "layout.html" %}
+
+{% block page_title %}User Profile{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="profile-page">
+    {% if user %}
+    <div class="profile-header">
+        <h1>User Profile</h1>
+    </div>
+    
+    <div class="profile-content">
+        <div class="profile-section">
+            <h2>Account Information</h2>
+            <dl class="profile-details">
+                <dt>Email:</dt>
+                <dd>{{ user.email }}</dd>
+                
+                {% if user.name %}
+                <dt>Name:</dt>
+                <dd>{{ user.name }}</dd>
+                {% endif %}
+                
+                {% if user.preferred_username %}
+                <dt>Username:</dt>
+                <dd>{{ user.preferred_username }}</dd>
+                {% endif %}
+                
+                <dt>Account Type:</dt>
+                <dd>
+                    {% if user.is_admin %}
+                        <span class="role-badge admin">Administrator</span>
+                    {% elif user.is_qa_reviewer %}
+                        <span class="role-badge qa">QA Reviewer</span>
+                    {% else %}
+                        <span class="role-badge user">User</span>
+                    {% endif %}
+                </dd>
+                
+                {% if user.groups %}
+                <dt>Groups:</dt>
+                <dd>
+                    <div class="user-groups">
+                        {% for group in user.groups %}
+                        <span class="group-badge">{{ group }}</span>
+                        {% endfor %}
+                    </div>
+                </dd>
+                {% endif %}
+            </dl>
+        </div>
+        
+        {% if user.is_admin or user.is_qa_reviewer %}
+        <div class="profile-section">
+            <h2>Permissions</h2>
+            <ul class="permissions-list">
+                {% if user.is_admin %}
+                <li>✓ Administrative access to all features</li>
+                <li>✓ Access to Cupboard admin interface</li>
+                <li>✓ Can manage users and permissions</li>
+                <li>✓ Can approve/reject merge proposals</li>
+                <li>✓ Can reschedule runs</li>
+                {% elif user.is_qa_reviewer %}
+                <li>✓ Can review and approve changes</li>
+                <li>✓ Can access QA tools</li>
+                <li>✓ Can reschedule failed runs</li>
+                {% endif %}
+                <li>✓ Can view detailed run logs</li>
+                <li>✓ Can track personal contributions</li>
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if user_stats %}
+        <div class="profile-section">
+            <h2>Your Activity</h2>
+            <div class="activity-stats">
+                <div class="stat-item">
+                    <span class="stat-number">{{ user_stats.packages_contributed | default(value=0) }}</span>
+                    <span class="stat-label">Packages Contributed To</span>
+                </div>
+                
+                <div class="stat-item">
+                    <span class="stat-number">{{ user_stats.merge_proposals | default(value=0) }}</span>
+                    <span class="stat-label">Merge Proposals Created</span>
+                </div>
+                
+                <div class="stat-item">
+                    <span class="stat-number">{{ user_stats.successful_runs | default(value=0) }}</span>
+                    <span class="stat-label">Successful Runs</span>
+                </div>
+                
+                {% if user.is_admin or user.is_qa_reviewer %}
+                <div class="stat-item">
+                    <span class="stat-number">{{ user_stats.reviews_completed | default(value=0) }}</span>
+                    <span class="stat-label">Reviews Completed</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if recent_activity %}
+        <div class="profile-section">
+            <h2>Recent Activity</h2>
+            <div class="activity-list">
+                {% for activity in recent_activity %}
+                <div class="activity-item">
+                    <div class="activity-icon {{ activity.type }}"></div>
+                    <div class="activity-content">
+                        <div class="activity-description">{{ activity.description }}</div>
+                        <div class="activity-time">{{ activity.timestamp | timeago }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="profile-actions">
+            <h2>Account Actions</h2>
+            <div class="action-buttons">
+                <a href="/credentials" class="btn btn-secondary">Manage Credentials</a>
+                <a href="/auth/logout" class="btn btn-danger">Logout</a>
+                
+                {% if user.is_admin %}
+                <a href="/cupboard/" class="btn btn-primary">Admin Dashboard</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="not-logged-in">
+        <h1>Profile</h1>
+        <p>You must be logged in to view your profile.</p>
+        <a href="/auth/login" class="btn btn-primary">Login</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

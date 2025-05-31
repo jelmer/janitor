@@ -1,0 +1,110 @@
+{% extends "layout.html" %}
+
+{% block page_title %}
+    Changes Ready to Publish
+    {% if suite %} - {{ suite }}{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+    {% if not suite %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include "generic/sidebar.html" %}
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="ready-list-page">
+    <div class="section" id="ready-runs">
+        <h1>Ready to Publish</h1>
+        
+        {% if suite %}
+        <div class="suite-info">
+            <h2>{{ suite }}</h2>
+            <p class="suite-description">{{ suite_description | default(value="Changes ready for publication") }}</p>
+        </div>
+        {% endif %}
+        
+        {% if runs %}
+        <div class="runs-list">
+            {% for run in runs %}
+            <div class="run-item{% if run.result_code == 'success' %} success{% elif run.result_code == 'failure' %} failure{% endif %}">
+                <div class="run-header">
+                    <h3>
+                        <a href="{% if suite %}/{{ suite }}{% endif %}/c/{{ run.codebase }}/">{{ run.codebase }}</a>
+                    </h3>
+                    
+                    {% if run.result_code %}
+                    <span class="result-badge {{ run.result_code }}">
+                        {{ run.result_code | title }}
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="run-details">
+                    {% if run.command %}
+                    <p class="run-command"><strong>Command:</strong> {{ run.command }}</p>
+                    {% endif %}
+                    
+                    {% if run.description %}
+                    <p class="run-description">{{ run.description }}</p>
+                    {% endif %}
+                    
+                    {% if run.branch_name %}
+                    <p class="branch-info">
+                        <strong>Branch:</strong> 
+                        <code>{{ run.branch_name }}</code>
+                    </p>
+                    {% endif %}
+                    
+                    {% if run.finish_time %}
+                    <p class="run-timing">
+                        <strong>Completed:</strong> {{ run.finish_time | timeago }}
+                    </p>
+                    {% endif %}
+                </div>
+                
+                <div class="run-actions">
+                    <a href="{% if suite %}/{{ suite }}{% endif %}/c/{{ run.codebase }}/" class="btn btn-primary">View Details</a>
+                    
+                    {% if run.log_url %}
+                    <a href="{{ run.log_url }}" class="btn btn-secondary">View Log</a>
+                    {% endif %}
+                    
+                    {% if run.diff_url %}
+                    <a href="{{ run.diff_url }}" class="btn btn-secondary">View Diff</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if pagination %}
+        <div class="pagination">
+            {% if pagination.has_prev %}
+            <a href="?page={{ pagination.prev_num }}" class="btn btn-secondary">← Previous</a>
+            {% endif %}
+            
+            <span class="page-info">
+                Page {{ pagination.page }} of {{ pagination.pages }}
+                ({{ pagination.total }} ready runs)
+            </span>
+            
+            {% if pagination.has_next %}
+            <a href="?page={{ pagination.next_num }}" class="btn btn-secondary">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="empty-state">
+            <h2>No Ready Changes</h2>
+            <p>There are currently no changes ready to publish{% if suite %} for {{ suite }}{% endif %}.</p>
+            {% if not suite %}
+            <p><a href="/cupboard/" class="btn btn-primary">View All Suites</a></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

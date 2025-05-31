@@ -1,0 +1,197 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+
+{% block page_title %}
+    Packages
+    {% if suite %} - {{ suite }}{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+    {% if suite %}
+        {% include "generic/sidebar.html" %}
+    {% else %}
+        {% include "cupboard/sidebar.html" %}
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="package-list-page">
+    <div class="section" id="packages">
+        <h1>
+            Packages
+            {% if suite %}
+                <span class="suite-name">{{ suite }}</span>
+            {% endif %}
+        </h1>
+        
+        {% if suite and suite_description %}
+        <div class="suite-description">
+            <p>{{ suite_description }}</p>
+        </div>
+        {% endif %}
+        
+        <div class="list-controls">
+            <div class="sorting-controls">
+                <label for="sort">Sort by:</label>
+                <select id="sort" onchange="updateSort(this.value)">
+                    <option value="name"{% if sort_by == "name" %} selected{% endif %}>Name</option>
+                    <option value="last_activity"{% if sort_by == "last_activity" %} selected{% endif %}>Last Activity</option>
+                    <option value="status"{% if sort_by == "status" %} selected{% endif %}>Status</option>
+                    <option value="maintainer"{% if sort_by == "maintainer" %} selected{% endif %}>Maintainer</option>
+                </select>
+                
+                <select id="sort_order" onchange="updateSortOrder(this.value)">
+                    <option value="asc"{% if sort_order == "asc" %} selected{% endif %}>Ascending</option>
+                    <option value="desc"{% if sort_order == "desc" %} selected{% endif %}>Descending</option>
+                </select>
+            </div>
+            
+            <div class="filter-controls">
+                <input type="text" id="filter" placeholder="Filter packages..." onkeyup="filterPackages()" value="{{ filter_query | default(value='') }}">
+                <button class="btn btn-secondary" onclick="clearFilter()">Clear</button>
+            </div>
+        </div>
+        
+        {% if packages %}
+        <div class="packages-grid">
+            {% for package in packages %}
+            <div class="package-card" data-name="{{ package.name | lower }}" data-maintainer="{{ package.maintainer | lower | default(value='') }}">
+                <div class="package-header">
+                    <h3>
+                        <a href="{% if suite %}/{{ suite }}{% endif %}/c/{{ package.name }}/">
+                            {{ package.name }}
+                        </a>
+                    </h3>
+                    
+                    {% if package.last_run %}
+                    <div class="package-status">
+                        {{ util.status_badge(package.last_run.result_code) }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="package-info">
+                    {% if package.description %}
+                    <p class="package-description">{{ package.description | truncate(100) }}</p>
+                    {% endif %}
+                    
+                    <div class="package-metadata">
+                        {% if package.maintainer %}
+                        <div class="maintainer">
+                            <strong>Maintainer:</strong> {{ package.maintainer }}
+                        </div>
+                        {% endif %}
+                        
+                        {% if package.version %}
+                        <div class="version">
+                            <strong>Version:</strong> {{ package.version }}
+                        </div>
+                        {% endif %}
+                        
+                        {% if package.last_run %}
+                        <div class="last-activity">
+                            <strong>Last Run:</strong> {{ package.last_run.finish_time | timeago }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="package-stats">
+                    {% if package.stats %}
+                    <div class="stats-row">
+                        {% if package.stats.total_runs %}
+                        <span class="stat">{{ package.stats.total_runs }} runs</span>
+                        {% endif %}
+                        
+                        {% if package.stats.success_rate %}
+                        <span class="stat">{{ (package.stats.success_rate * 100) | round(1) }}% success</span>
+                        {% endif %}
+                        
+                        {% if package.stats.open_proposals %}
+                        <span class="stat">{{ package.stats.open_proposals }} open proposals</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="package-actions">
+                    <a href="{% if suite %}/{{ suite }}{% endif %}/c/{{ package.name }}/" class="btn btn-primary btn-sm">Details</a>
+                    
+                    {% if package.repository_url %}
+                    <a href="{{ package.repository_url }}" class="btn btn-secondary btn-sm external">Repository</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if pagination %}
+        <div class="pagination">
+            {% if pagination.has_prev %}
+            <a href="?page={{ pagination.prev_num }}&sort={{ sort_by }}&order={{ sort_order }}" class="btn btn-secondary">← Previous</a>
+            {% endif %}
+            
+            <span class="page-info">
+                Page {{ pagination.page }} of {{ pagination.pages }}
+                ({{ pagination.total }} packages)
+            </span>
+            
+            {% if pagination.has_next %}
+            <a href="?page={{ pagination.next_num }}&sort={{ sort_by }}&order={{ sort_order }}" class="btn btn-secondary">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="empty-state">
+            <h2>No Packages Found</h2>
+            <p>
+                {% if suite %}
+                    There are no packages in the {{ suite }} suite.
+                {% else %}
+                    No packages are available.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function updateSort(sortBy) {
+    const url = new URL(window.location);
+    url.searchParams.set('sort', sortBy);
+    url.searchParams.delete('page'); // Reset to first page
+    window.location = url;
+}
+
+function updateSortOrder(sortOrder) {
+    const url = new URL(window.location);
+    url.searchParams.set('order', sortOrder);
+    url.searchParams.delete('page'); // Reset to first page
+    window.location = url;
+}
+
+function filterPackages() {
+    const filter = document.getElementById('filter').value.toLowerCase();
+    const packages = document.querySelectorAll('.package-card');
+    
+    packages.forEach(package => {
+        const name = package.getAttribute('data-name');
+        const maintainer = package.getAttribute('data-maintainer');
+        
+        if (name.includes(filter) || maintainer.includes(filter)) {
+            package.style.display = '';
+        } else {
+            package.style.display = 'none';
+        }
+    });
+}
+
+function clearFilter() {
+    document.getElementById('filter').value = '';
+    filterPackages();
+}
+</script>
+{% endblock %}

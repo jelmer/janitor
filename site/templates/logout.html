@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Logout{% endblock %}
+
+{% block body %}
+<div class="logout-page">
+    <div class="logout-container">
+        <h1>Logout</h1>
+        
+        {% if user %}
+        <div class="logout-confirm">
+            <p>Are you sure you want to logout?</p>
+            
+            <div class="user-info">
+                <p>You are currently logged in as:</p>
+                <div class="current-user">
+                    <strong>{{ user.name | default(value=user.email) }}</strong>
+                    <br>
+                    <small>{{ user.email }}</small>
+                </div>
+            </div>
+            
+            <div class="logout-actions">
+                <form method="POST" action="/auth/logout">
+                    <button type="submit" class="btn btn-danger">Yes, Logout</button>
+                    <a href="/" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="already-logged-out">
+            <p>You are not currently logged in.</p>
+            <p><a href="/auth/login" class="btn btn-primary">Login</a></p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

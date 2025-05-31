@@ -1,0 +1,208 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+
+{% block page_title %}
+    Merge Proposal: {{ proposal.title | default(value=proposal.codebase) }}
+{% endblock %}
+
+{% block sidebar %}
+    {% if not suite %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include "generic/sidebar.html" %}
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="merge-proposal-page">
+    <div class="section" id="merge-proposal-details">
+        <div class="proposal-header">
+            <h1>
+                {% if proposal.title %}
+                    {{ proposal.title }}
+                {% else %}
+                    Merge Proposal for {{ proposal.codebase }}
+                {% endif %}
+            </h1>
+            
+            <div class="proposal-metadata">
+                <span class="proposal-status {{ proposal.status | lower }}">
+                    {{ util.status_badge(proposal.status) }}
+                </span>
+                
+                {% if proposal.created_at %}
+                <span class="proposal-date">
+                    Created {{ proposal.created_at | timeago }}
+                </span>
+                {% endif %}
+                
+                {% if proposal.author %}
+                <span class="proposal-author">
+                    by {{ proposal.author }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="proposal-info">
+            <div class="proposal-links">
+                <h3>Links</h3>
+                <ul>
+                    <li><strong>Original Proposal:</strong> <a href="{{ proposal.url }}" class="external">{{ proposal.url }}</a></li>
+                    {% if proposal.codebase and proposal.suite %}
+                    <li><strong>Package Details:</strong> <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/">{{ proposal.codebase }} in {{ proposal.suite }}</a></li>
+                    {% endif %}
+                    {% if proposal.branch_url %}
+                    <li><strong>Branch:</strong> <a href="{{ proposal.branch_url }}" class="external">{{ proposal.branch_url }}</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+            
+            {% if proposal.description %}
+            <div class="proposal-description">
+                <h3>Description</h3>
+                <div class="description-content">
+                    {{ proposal.description | safe }}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if proposal.changes %}
+            <div class="proposal-changes">
+                <h3>Changes</h3>
+                <ul>
+                    {% for change in proposal.changes %}
+                    <li>{{ change }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if proposal.diff %}
+        <div class="proposal-diff">
+            <h3>Diff</h3>
+            <div class="diff-container">
+                <pre class="diff">{{ proposal.diff }}</pre>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if proposal.commits %}
+        <div class="proposal-commits">
+            <h3>Commits</h3>
+            <div class="commits-list">
+                {% for commit in proposal.commits %}
+                <div class="commit-item">
+                    <div class="commit-header">
+                        <code class="commit-hash">{{ commit.hash | truncate(8, true, "") }}</code>
+                        <span class="commit-date">{{ commit.date | timeago }}</span>
+                    </div>
+                    <div class="commit-message">{{ commit.message }}</div>
+                    {% if commit.author %}
+                    <div class="commit-author">by {{ commit.author }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if proposal.build_status %}
+        <div class="proposal-builds">
+            <h3>Build Status</h3>
+            <div class="build-status">
+                {% for build in proposal.build_status %}
+                <div class="build-item {{ build.status | lower }}">
+                    <span class="build-name">{{ build.name }}</span>
+                    <span class="build-status">{{ util.status_badge(build.status) }}</span>
+                    {% if build.url %}
+                    <a href="{{ build.url }}" class="build-link">View</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if proposal.comments %}
+        <div class="proposal-comments">
+            <h3>Comments</h3>
+            <div class="comments-list">
+                {% for comment in proposal.comments %}
+                <div class="comment-item">
+                    <div class="comment-header">
+                        <span class="comment-author">{{ comment.author }}</span>
+                        <span class="comment-date">{{ comment.date | timeago }}</span>
+                    </div>
+                    <div class="comment-content">
+                        {{ comment.content | safe }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="proposal-actions">
+            <h3>Actions</h3>
+            <div class="action-buttons">
+                {% if proposal.status == "open" %}
+                    {% if user and user.is_admin %}
+                    <button class="btn btn-success" onclick="approveProposal('{{ proposal.url }}')">Approve</button>
+                    <button class="btn btn-danger" onclick="rejectProposal('{{ proposal.url }}')">Reject</button>
+                    {% endif %}
+                {% endif %}
+                
+                <a href="{{ proposal.url }}" class="btn btn-primary external">View on {{ proposal.platform | default(value="Platform") }}</a>
+                
+                {% if proposal.suite and proposal.codebase %}
+                <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Back to Package</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if user and user.is_admin %}
+<script>
+function approveProposal(url) {
+    if (confirm('Are you sure you want to approve this proposal?')) {
+        fetch('/api/v1/merge-proposals/approve', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: url })
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to approve proposal');
+            }
+        });
+    }
+}
+
+function rejectProposal(url) {
+    const reason = prompt('Reason for rejection (optional):');
+    if (reason !== null) {
+        fetch('/api/v1/merge-proposals/reject', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: url, reason: reason })
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to reject proposal');
+            }
+        });
+    }
+}
+</script>
+{% endif %}
+{% endblock %}
