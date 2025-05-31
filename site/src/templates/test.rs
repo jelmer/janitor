@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use tera::Context;
+    use crate::templates::setup_templates;
+    use tera::{Context, Tera};
     use chrono::Utc;
     use crate::config::SiteConfig;
 

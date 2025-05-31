@@ -12,7 +12,7 @@ use tracing::instrument;
 use url::Url;
 
 use crate::{
-    api::content_negotiation::{negotiate_content_type, ContentType},
+    api::{negotiate_content_type, ContentType},
     app::AppState,
     auth::OptionalUser,
     database::{DatabaseError, RunDetails, VcsInfo},
@@ -119,7 +119,7 @@ pub async fn codebase_detail(
 ) -> Response {
     let mut context = create_base_context();
     
-    if let Some(ref user_ctx) = user_ctx {
+    if let Some(user_ctx) = user_ctx.as_ref() {
         context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
@@ -189,7 +189,7 @@ pub async fn run_detail(
 ) -> Response {
     let mut context = create_base_context();
     
-    if let Some(ref user_ctx) = user_ctx {
+    if let Some(user_ctx) = user_ctx.as_ref() {
         context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());

@@ -14,12 +14,16 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod analyze;
+mod api;
 mod app;
+mod auth;
 mod config;
 mod database;
 mod handlers;
 mod logging;
 mod middleware;
+mod routes;
 mod templates;
 
 use app::AppState;
