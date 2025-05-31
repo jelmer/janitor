@@ -120,7 +120,7 @@ pub async fn codebase_detail(
     let mut context = create_base_context();
     
     if let Some(ref user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
@@ -190,7 +190,7 @@ pub async fn run_detail(
     let mut context = create_base_context();
     
     if let Some(ref user_ctx) = user_ctx {
-        context.insert("user", &user_ctx.user());
+        context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
         context.insert("is_qa_reviewer", &user_ctx.is_qa_reviewer());
     }
