@@ -16,6 +16,8 @@ pub enum ContentType {
     TextPlain,
     TextDiff,
     OctetStream,
+    Xml,
+    Csv,
 }
 
 impl ContentType {
@@ -26,6 +28,8 @@ impl ContentType {
             Self::TextPlain => "text/plain",
             Self::TextDiff => "text/x-diff",
             Self::OctetStream => "application/octet-stream",
+            Self::Xml => "application/xml",
+            Self::Csv => "text/csv",
         }
     }
 
@@ -36,6 +40,8 @@ impl ContentType {
             Self::TextPlain => Some("txt"),
             Self::TextDiff => Some("diff"),
             Self::OctetStream => None,
+            Self::Xml => Some("xml"),
+            Self::Csv => Some("csv"),
         }
     }
 }
@@ -50,6 +56,8 @@ impl FromStr for ContentType {
             "text/plain" | "plain" => Ok(Self::TextPlain),
             "text/x-diff" | "diff" => Ok(Self::TextDiff),
             "application/octet-stream" | "binary" => Ok(Self::OctetStream),
+            "application/xml" | "xml" => Ok(Self::Xml),
+            "text/csv" | "csv" => Ok(Self::Csv),
             _ => Err(()),
         }
     }
@@ -99,6 +107,8 @@ fn parse_accept_header(accept: &str) -> ContentType {
             "text/plain" => ContentType::TextPlain,
             "text/x-diff" => ContentType::TextDiff,
             "application/octet-stream" => ContentType::OctetStream,
+            "application/xml" => ContentType::Xml,
+            "text/csv" => ContentType::Csv,
             "*/*" => ContentType::Json, // Default for wildcard
             _ if media_type.starts_with("text/") => ContentType::TextPlain,
             _ if media_type.starts_with("application/") => ContentType::Json,
@@ -281,6 +291,41 @@ where
                     Err(_) => {
                         warn!("Failed to serialize data for binary response");
                         "Error: Failed to render binary response".into_response()
+                    }
+                }
+            }
+            ContentType::Xml => {
+                // For XML responses, serialize to JSON and return as XML
+                match serde_json::to_string_pretty(&self.data) {
+                    Ok(json) => {
+                        let xml = format!(r#"<?xml version="1.0" encoding="UTF-8"?><data>{}</data>"#, json);
+                        let mut response = xml.into_response();
+                        response.headers_mut().insert(
+                            header::CONTENT_TYPE,
+                            HeaderValue::from_static("application/xml"),
+                        );
+                        response
+                    }
+                    Err(_) => {
+                        warn!("Failed to serialize data for XML response");
+                        "Error: Failed to render XML response".into_response()
+                    }
+                }
+            }
+            ContentType::Csv => {
+                // For CSV responses, attempt to serialize as CSV
+                match serde_json::to_string(&self.data) {
+                    Ok(content) => {
+                        let mut response = content.into_response();
+                        response.headers_mut().insert(
+                            header::CONTENT_TYPE,
+                            HeaderValue::from_static("text/csv"),
+                        );
+                        response
+                    }
+                    Err(_) => {
+                        warn!("Failed to serialize data for CSV response");
+                        "Error: Failed to render CSV response".into_response()
                     }
                 }
             }

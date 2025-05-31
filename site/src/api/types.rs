@@ -210,7 +210,7 @@ pub struct CommonQuery {
     pub filter: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SortOrder {
     Asc,
