@@ -18,6 +18,16 @@ pub struct UserContext {
     pub highest_role: UserRole,
 }
 
+// Add Serialize for template usage
+impl serde::Serialize for UserContext {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.session_info.user.serialize(serializer)
+    }
+}
+
 impl UserContext {
     pub fn new(session_info: SessionInfo, admin_group: Option<&str>, qa_reviewer_group: Option<&str>) -> Self {
         let user = &session_info.user;

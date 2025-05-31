@@ -107,6 +107,26 @@ pub struct SiteConfig {
 pub struct Config {
     pub site: SiteConfig,
     pub janitor: Option<janitor::config::Config>,
+    // Convenience accessor for campaigns
+    pub campaigns: HashMap<String, serde_json::Value>,
+}
+
+impl Config {
+    pub fn new(site: SiteConfig, janitor: Option<janitor::config::Config>) -> Self {
+        let campaigns = janitor.as_ref()
+            .map(|j| {
+                // Extract campaigns from janitor config
+                // TODO: This needs to match the actual janitor config structure
+                HashMap::new()
+            })
+            .unwrap_or_default();
+            
+        Self {
+            site,
+            janitor,
+            campaigns,
+        }
+    }
 }
 
 /// Environment-specific configuration profiles
