@@ -1,0 +1,55 @@
+{% import "macros/inputs.html" as inputs %}
+<div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+    <div class="sphinxsidebarwrapper">
+        <h1 class="logo">
+            <a href="/">Janitor</a>
+        </h1>
+        {% if suite %}
+        <h3>
+            <a href="/{{ suite }}">{{ suite_description }}</a>
+        </h3>
+        {% endif %}
+        {% if user %}
+            Logged in as <a href="/m/{{ user.email }}">{{ user.name }}</a>
+            <a href="/logout">[Logout]</a>
+        {% else %}
+            {% include "partials/login.html" %}
+        {% endif %}
+        {% if suite %}
+        <ul class="current">
+            <li class="toctree-l1{% if active_page == 'merge-proposals' %} active{% endif %}">
+                <a class="reference internal" href="/{{ suite }}/merge-proposals">Merge Proposals</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'ready' %} active{% endif %}">
+                <a class="reference internal" href="/{{ suite }}/ready">Ready Changes</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'done' %} active{% endif %}">
+                <a class="reference internal" href="/{{ suite }}/done">Merged or Pushed Changes</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'candidates' %} active{% endif %}">
+                <a class="reference internal" href="/{{ suite }}/candidates">Candidates</a>
+            </li>
+        </ul>
+        <p>
+            See the status for a specific package:
+            <form autocomplete="off" action="/{{ suite }}/c">
+                <div class="sidebar-packages" style="width:300px;">
+                    {{ inputs::codebase_input(name="package") }}
+                </div>
+                <input type="submit" style="display: none" />
+            </form>
+        </p>
+        {% endif %}
+        <div class="sidebar-links">
+            <h3>Links</h3>
+            <ul>
+                <li><a href="/about">About</a></li>
+                <li><a href="/api">API</a></li>
+                <li><a href="/faq">FAQ</a></li>
+                {% if is_admin %}
+                <li><a href="/cupboard">Admin</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>

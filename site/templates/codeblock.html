@@ -1,0 +1,57 @@
+{# Template for displaying code blocks with syntax highlighting #}
+{% macro codeblock(content, language="", filename="", lines="", highlight_lines="") %}
+<div class="codeblock-container">
+    {% if filename %}
+    <div class="codeblock-header">
+        <span class="filename">{{ filename }}</span>
+        {% if language %}
+        <span class="language">{{ language }}</span>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div class="codeblock{% if language %} language-{{ language }}{% endif %}">
+        <pre><code>{% if lines %}{% for line in content.split('\n') %}{% if loop.index in lines %}{{ line }}
+{% endif %}{% endfor %}{% else %}{{ content }}{% endif %}</code></pre>
+    </div>
+    
+    {% if highlight_lines %}
+    <script>
+        // Highlight specific lines
+        document.addEventListener('DOMContentLoaded', function() {
+            const lines = {{ highlight_lines | tojson }};
+            const codeblock = document.querySelector('.codeblock pre');
+            if (codeblock) {
+                const codeLines = codeblock.innerHTML.split('\n');
+                lines.forEach(lineNum => {
+                    if (lineNum <= codeLines.length) {
+                        codeLines[lineNum - 1] = '<mark>' + codeLines[lineNum - 1] + '</mark>';
+                    }
+                });
+                codeblock.innerHTML = codeLines.join('\n');
+            }
+        });
+    </script>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Inline code snippet #}
+{% macro inline_code(content, language="") %}
+<code{% if language %} class="language-{{ language }}"{% endif %}>{{ content }}</code>
+{% endmacro %}
+
+{# Diff display #}
+{% macro diff_block(diff_content, filename="") %}
+<div class="diff-container">
+    {% if filename %}
+    <div class="diff-header">
+        <span class="filename">{{ filename }}</span>
+    </div>
+    {% endif %}
+    
+    <div class="diff-content">
+        <pre class="diff">{{ diff_content }}</pre>
+    </div>
+</div>
+{% endmacro %}

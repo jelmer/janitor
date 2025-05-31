@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Login{% endblock %}
+
+{% block body %}
+<div class="login-page">
+    <h1>Login to Janitor</h1>
+    
+    {% if error_message %}
+    <div class="alert alert-error">
+        {{ error_message }}
+    </div>
+    {% endif %}
+    
+    <div class="login-options">
+        <h2>Choose your login method:</h2>
+        
+        {% for provider in oauth_providers %}
+        <div class="login-provider">
+            <a href="/auth/login/{{ provider.name }}?return_to={{ return_to | urlencode }}" 
+               class="btn btn-oauth btn-{{ provider.name }}">
+                Login with {{ provider.display_name }}
+            </a>
+        </div>
+        {% endfor %}
+        
+        {% if allow_anonymous %}
+        <div class="login-anonymous">
+            <p>Or continue without logging in:</p>
+            <a href="{{ return_to | default(value="/") }}" class="btn btn-secondary">
+                Continue as Guest
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="login-info">
+        <h3>Why login?</h3>
+        <ul>
+            <li>Track your merge proposals and contributions</li>
+            <li>Receive notifications about your changes</li>
+            <li>Access personalized dashboard</li>
+            {% if is_admin %}
+            <li>Access administrative features</li>
+            {% endif %}
+        </ul>
+    </div>
+</div>
+{% endblock %}

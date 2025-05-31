@@ -1,0 +1,41 @@
+<div class="section" id="supported-vcs">
+    <h3>
+        <a class="toc-backref" href="#id21">What version control systems are supported?</a>
+    </h3>
+    <p>
+        The Janitor supports several version control systems and hosting platforms:
+    </p>
+    
+    <h4>Version Control Systems</h4>
+    <ul>
+        <li><strong>Git</strong> - Full support for Git repositories</li>
+        <li><strong>Bazaar (bzr)</strong> - Legacy support for Bazaar repositories</li>
+    </ul>
+    
+    <h4>Hosting Platforms</h4>
+    <ul>
+        <li><strong>GitHub</strong> - Pull requests and direct pushes</li>
+        <li><strong>GitLab</strong> - Merge requests and direct pushes (including self-hosted instances)</li>
+        <li><strong>Launchpad</strong> - Merge proposals for Bazaar and Git</li>
+        <li><strong>Salsa (Debian GitLab)</strong> - Specialized support for Debian packaging</li>
+    </ul>
+    
+    <h4>Protocol Support</h4>
+    <ul>
+        <li>HTTPS repositories (public and private with authentication)</li>
+        <li>SSH repositories (with appropriate key configuration)</li>
+        <li>Git protocol (for public repositories)</li>
+    </ul>
+    
+    <div class="alert alert-info">
+        <strong>Note:</strong> While Bazaar repositories are supported for legacy reasons,
+        new development focuses primarily on Git repositories. If you have a Bazaar
+        repository, consider migrating to Git for better long-term support.
+    </div>
+    
+    <p>
+        For repositories on other platforms or using other version control systems,
+        <a href="https://github.com/jelmer/janitor/issues">contact us</a> to discuss
+        adding support.
+    </p>
+</div>

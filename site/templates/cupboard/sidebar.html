@@ -1,0 +1,74 @@
+<div class="sphinxsidebar" role="navigation" aria-label="admin navigation">
+    <div class="sphinxsidebarwrapper">
+        <h1 class="logo">
+            <a href="/cupboard">Cupboard</a>
+        </h1>
+        <p class="subtitle">Janitor Admin Interface</p>
+        {% if user %}
+            <div class="user-info">
+                Logged in as <a href="/m/{{ user.email }}">{{ user.name }}</a>
+                {% if user.is_admin %}
+                    <span class="badge">Admin</span>
+                {% endif %}
+                <a href="/logout">[Logout]</a>
+            </div>
+        {% endif %}
+        <h3>Queue Management</h3>
+        <ul class="current">
+            <li class="toctree-l1{% if active_page == 'queue' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/queue">Queue Status</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'workers' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/workers">Workers</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'active-runs' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/active-runs">Active Runs</a>
+            </li>
+        </ul>
+        <h3>Publishing</h3>
+        <ul>
+            <li class="toctree-l1{% if active_page == 'publish' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/publish">Publish Queue</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'publish-history' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/publish-history">Publish History</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'merge-proposals' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/broken-merge-proposals">Broken Merge Proposals</a>
+            </li>
+        </ul>
+        <h3>Analysis</h3>
+        <ul>
+            <li class="toctree-l1{% if active_page == 'result-codes' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/result-code-index">Result Codes</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'failure-stages' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/failure-stage-index">Failure Stages</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'never-processed' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/never-processed">Never Processed</a>
+            </li>
+        </ul>
+        <h3>Review</h3>
+        <ul>
+            <li class="toctree-l1{% if active_page == 'review' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/review">Review Queue</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'review-done' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/review-done">Reviewed Items</a>
+            </li>
+        </ul>
+        <h3>Maintenance</h3>
+        <ul>
+            <li class="toctree-l1{% if active_page == 'reprocess-logs' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/reprocess-logs">Reprocess Logs</a>
+            </li>
+            <li class="toctree-l1{% if active_page == 'reschedule' %} active{% endif %}">
+                <a class="reference internal" href="/cupboard/reschedule">Mass Reschedule</a>
+            </li>
+        </ul>
+        <div class="sidebar-back">
+            <a href="/">« Back to Main Site</a>
+        </div>
+    </div>
+</div>

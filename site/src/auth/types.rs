@@ -24,6 +24,18 @@ pub enum UserRole {
 }
 
 impl User {
+    /// Check if user is an admin (simple helper for templates)
+    pub fn is_admin(&self) -> bool {
+        // TODO: Get admin group configuration from somewhere
+        self.has_role(UserRole::Admin, None, None)
+    }
+    
+    /// Check if user is a QA reviewer (simple helper for templates)
+    pub fn is_qa_reviewer(&self) -> bool {
+        // TODO: Get qa reviewer group configuration from somewhere
+        self.has_role(UserRole::QaReviewer, None, None)
+    }
+    
     /// Check if user has a specific role based on configured groups
     pub fn has_role(&self, role: UserRole, admin_group: Option<&str>, qa_reviewer_group: Option<&str>) -> bool {
         match role {

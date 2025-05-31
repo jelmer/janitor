@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Webhook Information{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="webhook-page">
+    <h1>Webhook Integration</h1>
+    
+    <div class="webhook-info">
+        <p>
+            The Janitor supports webhook notifications to keep external systems
+            informed about run status and merge proposal events.
+        </p>
+        
+        <h2>Supported Events</h2>
+        <ul>
+            <li><strong>run.started</strong> - A new run has been started</li>
+            <li><strong>run.completed</strong> - A run has completed (success or failure)</li>
+            <li><strong>run.failed</strong> - A run has failed</li>
+            <li><strong>merge_proposal.created</strong> - A new merge proposal has been created</li>
+            <li><strong>merge_proposal.merged</strong> - A merge proposal has been merged</li>
+            <li><strong>merge_proposal.closed</strong> - A merge proposal has been closed</li>
+        </ul>
+        
+        <h2>Webhook Payload Format</h2>
+        <p>Webhooks are sent as HTTP POST requests with a JSON payload:</p>
+        <pre><code>{
+  "event": "run.completed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": {
+    "run_id": "12345",
+    "codebase": "example-package",
+    "suite": "lintian-fixes",
+    "result_code": "success",
+    "branch_name": "janitor/fix-lintian-issues",
+    "log_url": "https://janitor.debian.org/logs/12345"
+  }
+}</code></pre>
+        
+        <h2>Configuration</h2>
+        {% if user and user.is_admin %}
+        <p>
+            As an administrator, you can configure webhook endpoints in the
+            <a href="/cupboard/webhooks">admin panel</a>.
+        </p>
+        {% else %}
+        <p>
+            Webhook configuration is available to administrators only.
+            Contact your system administrator to set up webhook integrations.
+        </p>
+        {% endif %}
+        
+        <h2>Security</h2>
+        <ul>
+            <li>Webhooks include an HMAC signature in the <code>X-Janitor-Signature</code> header</li>
+            <li>Verify the signature using your webhook secret to ensure authenticity</li>
+            <li>Use HTTPS endpoints to protect webhook data in transit</li>
+        </ul>
+        
+        <h2>Retry Policy</h2>
+        <p>
+            Failed webhook deliveries are retried with exponential backoff:
+        </p>
+        <ul>
+            <li>Initial retry after 1 minute</li>
+            <li>Subsequent retries at 2, 4, 8, 16, and 32 minute intervals</li>
+            <li>Maximum of 6 retry attempts</li>
+            <li>Webhooks are considered failed if they don't return a 2xx status code</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

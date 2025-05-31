@@ -1,38 +1,78 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About - {{ app_name }}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { background: #f0f0f0; padding: 20px; margin-bottom: 20px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>About {{ app_name }}</h1>
-        <p><a href="/">← Back to Home</a></p>
-    </div>
+{% extends "layout.html" %}
+
+{% block page_title %}About{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="about-page">
+    <h1>About the Janitor</h1>
     
-    <div>
-        <h2>Debian Janitor</h2>
-        <p>The Debian Janitor is an automated system that makes changes to packages in the Debian archive.</p>
+    <div class="about-content">
+        <h2>What is the Janitor?</h2>
+        <p>
+            The Janitor is an automated system that makes changes to version control repositories.
+            It can automatically fix common issues, apply systematic improvements, and propose
+            changes through merge proposals on various hosting platforms.
+        </p>
         
-        <h3>Implementation Status</h3>
-        <p>This is the Rust implementation of the Janitor web interface, currently in development as part of Phase 3 of the Python-to-Rust migration.</p>
+        <h2>How It Works</h2>
+        <ol>
+            <li><strong>Detection</strong>: The Janitor identifies repositories that could benefit from automated fixes</li>
+            <li><strong>Execution</strong>: It runs specialized tools and scripts to make improvements</li>
+            <li><strong>Building</strong>: Changes are tested by building the modified code</li>
+            <li><strong>Proposal</strong>: Successful changes are proposed as merge requests</li>
+        </ol>
         
-        <h3>Features</h3>
+        <h2>Supported Platforms</h2>
         <ul>
-            <li>✅ Basic web server (Axum)</li>
-            <li>✅ Template engine (Tera)</li>
-            <li>🚧 Database integration (sqlx)</li>
-            <li>🚧 Authentication (OpenID Connect)</li>
-            <li>🚧 REST API</li>
-            <li>🚧 Real-time updates (Redis)</li>
+            <li>GitHub (Pull Requests)</li>
+            <li>GitLab (Merge Requests)</li>
+            <li>Launchpad (Merge Proposals)</li>
+            <li>Direct Git pushes (with appropriate permissions)</li>
         </ul>
         
-        <p>Version: {{ version }}</p>
+        <h2>Common Fixes</h2>
+        <p>The Janitor can handle various types of improvements:</p>
+        <ul>
+            <li>Lintian fixes for Debian packages</li>
+            <li>New upstream version updates</li>
+            <li>Build dependency updates</li>
+            <li>Standards version bumps</li>
+            <li>Homepage URL updates</li>
+            <li>Repository relocation tracking</li>
+            <li>And many more...</li>
+        </ul>
+        
+        <h2>Open Source</h2>
+        <p>
+            The Janitor is free software, licensed under the GNU GPL version 2 or later.
+            You can find the source code, report issues, and contribute on 
+            <a href="https://github.com/jelmer/janitor">GitHub</a>.
+        </p>
+        
+        <h2>Contact</h2>
+        <p>
+            The Janitor is maintained by <a href="https://jelmer.uk/">Jelmer Vernooĳ</a>.
+            For questions, bug reports, or feature requests, please use the 
+            <a href="https://github.com/jelmer/janitor/issues">GitHub issue tracker</a>.
+        </p>
+        
+        <div class="version-info">
+            <h3>Version Information</h3>
+            <dl>
+                <dt>Version:</dt>
+                <dd>{{ version }}</dd>
+                
+                <dt>Build Time:</dt>
+                <dd>{{ build_time | default(value="unknown") }}</dd>
+                
+                <dt>Git Revision:</dt>
+                <dd>{{ git_revision | default(value="unknown") }}</dd>
+            </dl>
+        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

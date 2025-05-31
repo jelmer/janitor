@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Internal Server Error{% endblock %}
+
+{% block body %}
+<div class="error-page error-500">
+    <h1>500 - Internal Server Error</h1>
+    <p>Something went wrong on our end. We apologize for the inconvenience.</p>
+    <p>The error has been logged and we'll look into it.</p>
+    
+    <div class="error-actions">
+        <a href="/" class="btn btn-primary">Go to Homepage</a>
+        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+    </div>
+    
+    {% if is_development and error_trace %}
+    <div class="error-trace">
+        <h3>Debug Information (Development Mode Only):</h3>
+        <pre>{{ error_trace }}</pre>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

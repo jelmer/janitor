@@ -1,0 +1,25 @@
+<div class="section" id="auto-push">
+    <h3>
+        <a class="toc-backref" href="#id9">This is great. How do I get it to automatically push improvements to my repository?</a>
+    </h3>
+    <p>Simply give the bot commit access to your repository, and it will push fixes rather than proposing them.</p>
+    <p>
+        The bot will need permission to push to the relevant branches. For
+        repositories on a GitLab instances (such as salsa) this means that
+        it will need developer permissions if the relevant branch is unprotected,
+        and maintainer permissions if the relevant branch is protected.
+        See the <a href="https://docs.gitlab.com/ee/user/permissions.html">GitLab permissions guide</a> for details.
+    </p>
+    <p>
+        For GitHub repositories, the bot needs:
+    </p>
+    <ul>
+        <li>Write access to the repository</li>
+        <li>Permission to push to the target branch (may require special configuration for protected branches)</li>
+    </ul>
+    <p>
+        Note: Direct pushes will only happen for changes that meet certain quality thresholds.
+        More experimental or risky changes will still be submitted as merge proposals even if
+        the bot has push access.
+    </p>
+</div>
