@@ -1,0 +1,39 @@
+<div class="section" id="out-of-date-proposal">
+    <h3>
+        <a class="toc-backref" href="#id15">What if a merge proposal is out of date?</a>
+    </h3>
+    <p>
+        If a merge proposal from the Janitor has become out of date (e.g., due to
+        conflicts with changes you've made), you have several options:
+    </p>
+    <ol>
+        <li>
+            <strong>Wait for automatic refresh:</strong> The Janitor periodically
+            refreshes merge proposals that have become out of date. This usually
+            happens within a few days.
+        </li>
+        <li>
+            <strong>Manually trigger a refresh:</strong> If you have access to the
+            Janitor's web interface, you can manually trigger a refresh of the
+            merge proposal.
+        </li>
+        <li>
+            <strong>Close and reschedule:</strong> Close the merge proposal and
+            reschedule the run for that package. The Janitor will create a new
+            merge proposal with updated changes.
+        </li>
+        <li>
+            <strong>Manual merge:</strong> If the conflicts are minor, you can
+            manually resolve them and merge the proposal yourself.
+        </li>
+    </ol>
+    <p>
+        The Janitor tracks the upstream branch and will automatically update
+        proposals when possible. However, if there are conflicts that require
+        human intervention, the proposal may need to be recreated.
+    </p>
+    <div class="alert alert-warning">
+        <strong>Important:</strong> Don't force-push to branches created by the Janitor,
+        as this can interfere with the automated update process.
+    </div>
+</div>

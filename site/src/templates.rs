@@ -7,6 +7,11 @@ use url::Url;
 
 use crate::config::SiteConfig;
 
+pub mod helpers;
+
+#[cfg(test)]
+mod test;
+
 pub fn setup_templates(config: &SiteConfig) -> Result<Tera> {
     let template_dir = config.template_directory();
 

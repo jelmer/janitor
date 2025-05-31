@@ -1,0 +1,68 @@
+{% macro codebase_input(name="codebase", placeholder="Codebase", value="") %}
+    <input id="sidebar-codebase"
+           type="text"
+           name="{{ name }}"
+           class="typeahead"
+           placeholder="{{ placeholder }}"
+           value="{{ value }}" />
+    <script>
+        $.typeahead({
+            input: "#sidebar-codebase",
+            order: "asc",
+            source: {
+                codebases: {
+                    ajax: {
+                        url: '/api/pkgnames',
+                        path: ''
+                    },
+                }
+            }
+        });
+    </script>
+{% endmacro %}
+
+{% macro pagination(current_page, total_pages, base_url) %}
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if current_page > 1 %}
+            <a href="{{ base_url }}?page=1">« First</a>
+            <a href="{{ base_url }}?page={{ current_page - 1 }}">‹ Previous</a>
+        {% endif %}
+        
+        {% for page in range(start=1, end=total_pages + 1) %}
+            {% if page == current_page %}
+                <span class="current">{{ page }}</span>
+            {% elif page >= current_page - 2 and page <= current_page + 2 %}
+                <a href="{{ base_url }}?page={{ page }}">{{ page }}</a>
+            {% elif page == 1 or page == total_pages %}
+                <a href="{{ base_url }}?page={{ page }}">{{ page }}</a>
+            {% elif page == current_page - 3 or page == current_page + 3 %}
+                <span>...</span>
+            {% endif %}
+        {% endfor %}
+        
+        {% if current_page < total_pages %}
+            <a href="{{ base_url }}?page={{ current_page + 1 }}">Next ›</a>
+            <a href="{{ base_url }}?page={{ total_pages }}">Last »</a>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro error_message(error) %}
+    <div class="alert alert-error">
+        <strong>Error:</strong> {{ error }}
+    </div>
+{% endmacro %}
+
+{% macro success_message(message) %}
+    <div class="alert alert-success">
+        <strong>Success:</strong> {{ message }}
+    </div>
+{% endmacro %}
+
+{% macro info_message(message) %}
+    <div class="alert alert-info">
+        <strong>Info:</strong> {{ message }}
+    </div>
+{% endmacro %}

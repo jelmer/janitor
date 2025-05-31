@@ -1,0 +1,82 @@
+{% macro format_timestamp(timestamp, format="%Y-%m-%d %H:%M:%S") %}
+    {% if timestamp %}
+        <time datetime="{{ timestamp | date(format="%Y-%m-%dT%H:%M:%SZ") }}">
+            {{ timestamp | date(format=format) }}
+        </time>
+    {% else %}
+        -
+    {% endif %}
+{% endmacro %}
+
+{% macro format_duration(seconds) %}
+    {% if seconds %}
+        {% set hours = seconds // 3600 %}
+        {% set minutes = (seconds % 3600) // 60 %}
+        {% set secs = seconds % 60 %}
+        {% if hours > 0 %}
+            {{ hours }}h {{ minutes }}m {{ secs }}s
+        {% elif minutes > 0 %}
+            {{ minutes }}m {{ secs }}s
+        {% else %}
+            {{ secs }}s
+        {% endif %}
+    {% else %}
+        -
+    {% endif %}
+{% endmacro %}
+
+{% macro format_bytes(bytes) %}
+    {% if bytes %}
+        {% if bytes < 1024 %}
+            {{ bytes }} B
+        {% elif bytes < 1048576 %}
+            {{ (bytes / 1024) | round(method="ceil", precision=1) }} KB
+        {% elif bytes < 1073741824 %}
+            {{ (bytes / 1048576) | round(method="ceil", precision=1) }} MB
+        {% else %}
+            {{ (bytes / 1073741824) | round(method="ceil", precision=1) }} GB
+        {% endif %}
+    {% else %}
+        0 B
+    {% endif %}
+{% endmacro %}
+
+{% macro status_badge(status) %}
+    {% if status == "success" %}
+        <span class="badge badge-success">{{ status }}</span>
+    {% elif status == "failed" %}
+        <span class="badge badge-danger">{{ status }}</span>
+    {% elif status == "pending" %}
+        <span class="badge badge-warning">{{ status }}</span>
+    {% elif status == "running" %}
+        <span class="badge badge-info">{{ status }}</span>
+    {% else %}
+        <span class="badge badge-secondary">{{ status }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro link_to_codebase(codebase, suite="") %}
+    {% if suite %}
+        <a href="/{{ suite }}/c/{{ codebase | urlencode }}">{{ codebase }}</a>
+    {% else %}
+        <span>{{ codebase }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro link_to_run(run_id, text="") %}
+    <a href="/run/{{ run_id }}">{{ text | default(value=run_id) }}</a>
+{% endmacro %}
+
+{% macro render_diff_stats(insertions, deletions) %}
+    <span class="diff-stats">
+        {% if insertions > 0 %}
+            <span class="insertions">+{{ insertions }}</span>
+        {% endif %}
+        {% if deletions > 0 %}
+            <span class="deletions">-{{ deletions }}</span>
+        {% endif %}
+        {% if insertions == 0 and deletions == 0 %}
+            <span class="no-changes">No changes</span>
+        {% endif %}
+    </span>
+{% endmacro %}

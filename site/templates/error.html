@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Error{% endblock %}
+
+{% block body %}
+<div class="error-page">
+    <h1>{{ error_code | default(value="Error") }}</h1>
+    <p class="error-message">{{ error_message | default(value="An unexpected error occurred.") }}</p>
+    
+    {% if error_details %}
+    <div class="error-details">
+        <h3>Details:</h3>
+        <pre>{{ error_details }}</pre>
+    </div>
+    {% endif %}
+    
+    <div class="error-actions">
+        <a href="/" class="btn btn-primary">Go to Homepage</a>
+        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+    </div>
+</div>
+{% endblock %}

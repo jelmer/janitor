@@ -1,50 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { background: #f0f0f0; padding: 20px; margin-bottom: 20px; }
-        .stats { display: flex; gap: 20px; margin: 20px 0; }
-        .stat-box { background: #e9e9e9; padding: 15px; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>{{ app_name }}</h1>
-        <p>Automated VCS change management platform (Rust implementation)</p>
-        <p>Version: {{ version }}</p>
+{% extends "layout.html" %}
+{% import "macros/util.html" as util %}
+
+{% block page_title %}Home{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="home-page">
+    <h1>Welcome to Janitor</h1>
+    <p class="lead">
+        The Janitor is an automated system for making and proposing changes to version control repositories.
+    </p>
+    
+    {% if suites %}
+    <div class="suites-section">
+        <h2>Available Suites</h2>
+        <div class="suites-grid">
+            {% for suite in suites %}
+            <div class="suite-card">
+                <h3><a href="/{{ suite.name }}">{{ suite.description }}</a></h3>
+                <p>{{ suite.summary }}</p>
+                <div class="suite-stats">
+                    <span>{{ suite.codebase_count }} codebases</span>
+                    <span>{{ suite.active_runs }} active runs</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="stats-section">
+        <h2>Platform Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Total Codebases</h4>
+                <p class="stat-value">{{ total_codebases | default(value=0) }}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Active Runs</h4>
+                <p class="stat-value">{{ active_runs | default(value=0) }}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Merge Proposals</h4>
+                <p class="stat-value">{{ merge_proposals | default(value=0) }}</p>
+            </div>
+            <div class="stat-card">
+                <h4>Changes Applied</h4>
+                <p class="stat-value">{{ changes_applied | default(value=0) }}</p>
+            </div>
+        </div>
     </div>
     
-    <div class="stats">
-        <div class="stat-box">
-            <h3>Total Packages</h3>
-            <p>{{ total_packages }}</p>
-        </div>
-        <div class="stat-box">
-            <h3>Active Runs</h3>
-            <p>{{ active_runs }}</p>
-        </div>
-        <div class="stat-box">
-            <h3>Queue Size</h3>
-            <p>{{ queue_size }}</p>
-        </div>
-        <div class="stat-box">
-            <h3>Recent Successful</h3>
-            <p>{{ recent_successful_runs }}</p>
-            <small>(last 24 hours)</small>
-        </div>
+    <div class="recent-activity">
+        <h2>Recent Activity</h2>
+        {% if recent_runs %}
+        <table class="activity-table">
+            <thead>
+                <tr>
+                    <th>Codebase</th>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in recent_runs %}
+                <tr>
+                    <td>{{ util::link_to_codebase(codebase=run.codebase, suite=run.suite) }}</td>
+                    <td>{{ run.campaign }}</td>
+                    <td>{{ util::status_badge(status=run.status) }}</td>
+                    <td>{{ util::format_timestamp(timestamp=run.finish_time) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No recent activity to show.</p>
+        {% endif %}
     </div>
-    
-    <div>
-        <h2>Quick Links</h2>
-        <ul>
-            <li><a href="/pkg">Browse Packages</a></li>
-            <li><a href="/about">About</a></li>
-            <li><a href="/api/v1/health">API Health</a></li>
-        </ul>
-    </div>
-</body>
-</html>
+</div>
+{% endblock %}

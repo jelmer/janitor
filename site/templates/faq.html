@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Frequently Asked Questions{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="faq-page">
+    <h1>Frequently Asked Questions</h1>
+    
+    <div class="faq-toc">
+        <h2>Table of Contents</h2>
+        <ul>
+            <li><a href="#automation">How can I automate interactions with the Janitor?</a></li>
+            <li><a href="#auto-push">How do I get it to automatically push improvements to my repository?</a></li>
+            <li><a href="#incorrect">What if the Janitor made an incorrect change?</a></li>
+            <li><a href="#out-of-date-proposal">What if a merge proposal is out of date?</a></li>
+            <li><a href="#supported-vcs">What version control systems are supported?</a></li>
+        </ul>
+    </div>
+    
+    <div class="faq-content">
+        {% include "faq-api.html" %}
+        {% include "faq-auto-push.html" %}
+        {% include "faq-incorrect.html" %}
+        {% include "faq-out-of-date-proposal.html" %}
+        {% include "faq-supported-vcs.html" %}
+    </div>
+</div>
+{% endblock %}
