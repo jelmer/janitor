@@ -1,0 +1,277 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+
+{% block page_title %}Merge Proposal Status{% endblock %}
+
+{% block sidebar %}
+    {% if not suite %}
+        {% include "cupboard/sidebar.html" %}
+    {% else %}
+        {% include "generic/sidebar.html" %}
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="merge-proposals-page">
+    <div class="section" id="merge-proposal-status">
+        <h1>Merge Proposal Status</h1>
+        
+        {% if suite %}
+        <div class="suite-info">
+            <h2>{{ suite }}</h2>
+            <p>Showing merge proposals for {{ suite }} suite.</p>
+        </div>
+        {% endif %}
+        
+        <!-- Open Proposals -->
+        {% if open_proposals %}
+        <div class="section" id="open-proposals">
+            <h2>Open Proposals</h2>
+            <p>These proposals are currently waiting for review.</p>
+            
+            <div class="proposals-list">
+                {% for proposal in open_proposals %}
+                <div class="proposal-item open">
+                    <div class="proposal-header">
+                        <h3>
+                            <a class="reference external" href="{{ proposal.url }}">
+                                {% if proposal.codebase %}
+                                    {{ proposal.codebase }}
+                                {% else %}
+                                    {{ proposal.url }}
+                                {% endif %}
+                            </a>
+                        </h3>
+                        <span class="proposal-status open">Open</span>
+                    </div>
+                    
+                    <div class="proposal-details">
+                        {% if proposal.title %}
+                        <p class="proposal-title">{{ proposal.title }}</p>
+                        {% endif %}
+                        
+                        {% if proposal.description %}
+                        <p class="proposal-description">{{ proposal.description | truncate(200) }}</p>
+                        {% endif %}
+                        
+                        {% if proposal.created_at %}
+                        <p class="proposal-timing">Created {{ proposal.created_at | timeago }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="proposal-actions">
+                        {% if proposal.suite and proposal.codebase %}
+                        <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Details</a>
+                        {% endif %}
+                        {% if not suite %}
+                        <a href="/cupboard/merge-proposal?url={{ proposal.url | urlencode }}" class="btn btn-secondary">Info</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Merged Proposals -->
+        {% if merged_proposals %}
+        <div class="section" id="merged-proposals">
+            <h2>Merged Proposals</h2>
+            <p>These proposals have been merged in the past.</p>
+            
+            <div class="proposals-list">
+                {% for proposal in merged_proposals %}
+                <div class="proposal-item merged">
+                    <div class="proposal-header">
+                        <h3>
+                            <a class="reference external" href="{{ proposal.url }}">
+                                {% if proposal.codebase %}
+                                    {{ proposal.codebase }}
+                                {% else %}
+                                    {{ proposal.url }}
+                                {% endif %}
+                            </a>
+                        </h3>
+                        <span class="proposal-status merged">Merged</span>
+                    </div>
+                    
+                    <div class="proposal-details">
+                        {% if proposal.merged_at %}
+                        <p class="proposal-timing">Merged {{ proposal.merged_at | timeago }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="proposal-actions">
+                        {% if proposal.suite and proposal.codebase %}
+                        <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Details</a>
+                        {% endif %}
+                        {% if not suite %}
+                        <a href="/cupboard/merge-proposal?url={{ proposal.url | urlencode }}" class="btn btn-secondary">Info</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Closed Proposals -->
+        {% if closed_proposals %}
+        <div class="section" id="closed-proposals">
+            <h2>Closed Proposals</h2>
+            <p>
+                Proposals can be closed without being merged for a number of reasons - a
+                similar change has already been applied, the change was rejected or the change
+                was merged without history being referenced (i.e. in the case of a
+                cherry-pick merge).
+            </p>
+            
+            <div class="proposals-list">
+                {% for proposal in closed_proposals %}
+                <div class="proposal-item closed">
+                    <div class="proposal-header">
+                        <h3>
+                            <a class="reference external" href="{{ proposal.url }}">
+                                {% if proposal.codebase %}
+                                    {{ proposal.codebase }}
+                                {% else %}
+                                    {{ proposal.url }}
+                                {% endif %}
+                            </a>
+                        </h3>
+                        <span class="proposal-status closed">Closed</span>
+                    </div>
+                    
+                    <div class="proposal-details">
+                        {% if proposal.closed_at %}
+                        <p class="proposal-timing">Closed {{ proposal.closed_at | timeago }}</p>
+                        {% endif %}
+                        
+                        {% if proposal.close_reason %}
+                        <p class="close-reason">Reason: {{ proposal.close_reason }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="proposal-actions">
+                        {% if proposal.suite and proposal.codebase %}
+                        <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Details</a>
+                        {% endif %}
+                        {% if not suite %}
+                        <a href="/cupboard/merge-proposal?url={{ proposal.url | urlencode }}" class="btn btn-secondary">Info</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Abandoned Proposals -->
+        {% if abandoned_proposals %}
+        <div class="section" id="abandoned-proposals">
+            <h2>Abandoned Proposals</h2>
+            <p>
+                Proposals can be abandoned by the bot for a number of reasons. In some
+                cases, the relevant branch changes (e.g. if it is named after the active release),
+                or the package could have been removed from the archive.
+            </p>
+            
+            <div class="proposals-list">
+                {% for proposal in abandoned_proposals %}
+                <div class="proposal-item abandoned">
+                    <div class="proposal-header">
+                        <h3>
+                            <a class="reference external" href="{{ proposal.url }}">
+                                {% if proposal.codebase %}
+                                    {{ proposal.codebase }}
+                                {% else %}
+                                    {{ proposal.url }}
+                                {% endif %}
+                            </a>
+                        </h3>
+                        <span class="proposal-status abandoned">Abandoned</span>
+                    </div>
+                    
+                    <div class="proposal-details">
+                        {% if proposal.abandoned_at %}
+                        <p class="proposal-timing">Abandoned {{ proposal.abandoned_at | timeago }}</p>
+                        {% endif %}
+                        
+                        {% if proposal.abandon_reason %}
+                        <p class="abandon-reason">Reason: {{ proposal.abandon_reason }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="proposal-actions">
+                        {% if proposal.suite and proposal.codebase %}
+                        <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Details</a>
+                        {% endif %}
+                        {% if not suite %}
+                        <a href="/cupboard/merge-proposal?url={{ proposal.url | urlencode }}" class="btn btn-secondary">Info</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Rejected Proposals -->
+        {% if rejected_proposals %}
+        <div class="section" id="rejected-proposals">
+            <h2>Rejected Proposals</h2>
+            <p>
+                Rejected proposals are proposals that are closed by somebody other than the
+                bot itself, e.g. because the maintainer didn't think the change was correct.
+            </p>
+            
+            <div class="proposals-list">
+                {% for proposal in rejected_proposals %}
+                <div class="proposal-item rejected">
+                    <div class="proposal-header">
+                        <h3>
+                            <a class="reference external" href="{{ proposal.url }}">
+                                {% if proposal.codebase %}
+                                    {{ proposal.codebase }}
+                                {% else %}
+                                    {{ proposal.url }}
+                                {% endif %}
+                            </a>
+                        </h3>
+                        <span class="proposal-status rejected">Rejected</span>
+                    </div>
+                    
+                    <div class="proposal-details">
+                        {% if proposal.rejected_at %}
+                        <p class="proposal-timing">Rejected {{ proposal.rejected_at | timeago }}</p>
+                        {% endif %}
+                        
+                        {% if proposal.rejection_reason %}
+                        <p class="rejection-reason">Reason: {{ proposal.rejection_reason }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="proposal-actions">
+                        {% if proposal.suite and proposal.codebase %}
+                        <a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/" class="btn btn-secondary">Details</a>
+                        {% endif %}
+                        {% if not suite %}
+                        <a href="/cupboard/merge-proposal?url={{ proposal.url | urlencode }}" class="btn btn-secondary">Info</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if not open_proposals and not merged_proposals and not closed_proposals and not abandoned_proposals and not rejected_proposals %}
+        <div class="empty-state">
+            <h2>No Merge Proposals Found</h2>
+            <p>There are no merge proposals to display{% if suite %} for {{ suite }}{% endif %}.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

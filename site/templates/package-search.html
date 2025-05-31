@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+
+{% import "macros/inputs.html" as inputs %}
+{% import "macros/util.html" as util %}
+
+{% block page_title %}Package Search{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="package-search-page">
+    <div class="section" id="search">
+        <h1>Package Search</h1>
+        
+        <div class="search-form">
+            <form method="GET" action="/search" class="search-form-container">
+                <div class="search-input-group">
+                    {{ inputs.text_input("q", value=query, placeholder="Search packages...", class="search-input") }}
+                    <button type="submit" class="btn btn-primary search-button">Search</button>
+                </div>
+                
+                <div class="search-filters">
+                    <div class="filter-group">
+                        {{ inputs.select("suite", suites, value=selected_suite, label="Suite", include_blank="All Suites") }}
+                    </div>
+                    
+                    <div class="filter-group">
+                        {{ inputs.select("status", status_options, value=selected_status, label="Status", include_blank="All Statuses") }}
+                    </div>
+                    
+                    <div class="filter-group">
+                        {{ inputs.select("result", result_options, value=selected_result, label="Last Result", include_blank="All Results") }}
+                    </div>
+                    
+                    <div class="filter-group">
+                        {{ inputs.checkbox("only_ready", value=only_ready, label="Only ready to publish") }}
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        {% if query %}
+        <div class="search-results">
+            <h2>
+                Search Results
+                {% if results %}
+                    ({{ results | length }} of {{ total_results }} packages)
+                {% endif %}
+            </h2>
+            
+            {% if results %}
+            <div class="results-list">
+                {% for package in results %}
+                <div class="package-result">
+                    <div class="package-header">
+                        <h3>
+                            <a href="{% if package.suite %}/{{ package.suite }}{% endif %}/c/{{ package.name }}/">
+                                {{ package.name }}
+                            </a>
+                        </h3>
+                        
+                        {% if package.suite %}
+                        <span class="package-suite">{{ package.suite }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="package-details">
+                        {% if package.description %}
+                        <p class="package-description">{{ package.description | truncate(200) }}</p>
+                        {% endif %}
+                        
+                        <div class="package-metadata">
+                            {% if package.last_run %}
+                            <div class="last-run">
+                                <strong>Last Run:</strong> 
+                                {{ util.status_badge(package.last_run.result_code) }}
+                                {{ package.last_run.finish_time | timeago }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if package.maintainer %}
+                            <div class="maintainer">
+                                <strong>Maintainer:</strong> {{ package.maintainer }}
+                            </div>
+                            {% endif %}
+                            
+                            {% if package.version %}
+                            <div class="version">
+                                <strong>Version:</strong> {{ package.version }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="package-actions">
+                        <a href="{% if package.suite %}/{{ package.suite }}{% endif %}/c/{{ package.name }}/" class="btn btn-primary">Details</a>
+                        
+                        {% if package.merge_proposals %}
+                        <a href="{% if package.suite %}/{{ package.suite }}{% endif %}/c/{{ package.name }}/merge-proposals" class="btn btn-secondary">
+                            Proposals ({{ package.merge_proposals | length }})
+                        </a>
+                        {% endif %}
+                        
+                        {% if package.repository_url %}
+                        <a href="{{ package.repository_url }}" class="btn btn-secondary external">Repository</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            {% if pagination %}
+            <div class="pagination">
+                {% if pagination.has_prev %}
+                <a href="?{{ pagination.prev_url }}" class="btn btn-secondary">← Previous</a>
+                {% endif %}
+                
+                <span class="page-info">
+                    Page {{ pagination.page }} of {{ pagination.pages }}
+                    ({{ pagination.total }} packages)
+                </span>
+                
+                {% if pagination.has_next %}
+                <a href="?{{ pagination.next_url }}" class="btn btn-secondary">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="no-results">
+                <h3>No packages found</h3>
+                <p>No packages match your search criteria. Try:</p>
+                <ul>
+                    <li>Checking your spelling</li>
+                    <li>Using different search terms</li>
+                    <li>Removing some filters</li>
+                    <li>Searching for a broader term</li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="search-suggestions">
+            <h2>Popular Packages</h2>
+            <p>Try searching for one of these popular packages:</p>
+            
+            {% if popular_packages %}
+            <div class="popular-packages">
+                {% for package in popular_packages %}
+                <a href="/c/{{ package.name }}/" class="package-tag">{{ package.name }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <h3>Search Tips</h3>
+            <ul>
+                <li>Use partial package names (e.g., "python" to find all Python packages)</li>
+                <li>Filter by suite to narrow down results</li>
+                <li>Use the status filter to find packages with specific run results</li>
+                <li>Check "Only ready to publish" to see packages with pending changes</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

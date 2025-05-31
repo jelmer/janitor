@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Repository List - {{ vcs | default(value="Git") }}{% endblock %}
+
+{% block sidebar %}
+    {% include "generic/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="repo-list-page">
+    <div class="section" id="repo-list">
+        <h1>Repository List - {{ vcs | default(value="Git") }}</h1>
+        
+        {% if repositories %}
+        <div class="repo-grid">
+            {% for repo in repositories %}
+            <div class="repo-item">
+                <div class="repo-info">
+                    <h3><a href="{{ repo.url | default(value=repo) }}">{{ repo.name | default(value=repo) }}</a></h3>
+                    {% if repo.description %}
+                    <p class="repo-description">{{ repo.description }}</p>
+                    {% endif %}
+                    {% if repo.last_activity %}
+                    <p class="repo-activity">Last activity: {{ repo.last_activity | timeago }}</p>
+                    {% endif %}
+                </div>
+                
+                {% if repo.stats %}
+                <div class="repo-stats">
+                    {% if repo.stats.branches %}
+                    <span class="stat">{{ repo.stats.branches }} branches</span>
+                    {% endif %}
+                    {% if repo.stats.commits %}
+                    <span class="stat">{{ repo.stats.commits }} commits</span>
+                    {% endif %}
+                    {% if repo.stats.size %}
+                    <span class="stat">{{ repo.stats.size | filesizeformat }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if pagination %}
+        <div class="pagination">
+            {% if pagination.has_prev %}
+            <a href="?page={{ pagination.prev_num }}" class="btn btn-secondary">← Previous</a>
+            {% endif %}
+            
+            <span class="page-info">
+                Page {{ pagination.page }} of {{ pagination.pages }}
+                ({{ pagination.total }} repositories)
+            </span>
+            
+            {% if pagination.has_next %}
+            <a href="?page={{ pagination.next_num }}" class="btn btn-secondary">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="empty-state">
+            <h2>No Repositories Found</h2>
+            <p>There are no repositories available for {{ vcs | default(value="this VCS") }}.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
