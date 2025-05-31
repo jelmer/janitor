@@ -1,0 +1,17 @@
+<div class="result-explanation build-error">
+    <h4>Build Failed: Missing Python Module</h4>
+    <p>
+        The package failed to build because it depends on a Python module that is
+        not available in the APT repository for the distribution.
+    </p>
+    
+    <div class="resolution-suggestions">
+        <h5>Possible Solutions:</h5>
+        <ul>
+            <li>Check if the Python module is available in a newer distribution</li>
+            <li>Add the module as a build dependency in debian/control</li>
+            <li>Consider using a different Python module that provides similar functionality</li>
+            <li>Package the missing module separately</li>
+        </ul>
+    </div>
+</div>

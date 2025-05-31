@@ -1,0 +1,26 @@
+<div class="result-explanation package-error">
+    <h4>Missing Control File</h4>
+    <p>
+        The package is missing a debian/control file, which is required for all
+        Debian packages. This file contains essential metadata about the package.
+    </p>
+    
+    <div class="explanation">
+        <h5>About debian/control:</h5>
+        <p>
+            The debian/control file contains package metadata including dependencies,
+            maintainer information, package descriptions, and build requirements.
+            It is mandatory for all Debian packages.
+        </p>
+    </div>
+    
+    <div class="resolution-suggestions">
+        <h5>Resolution:</h5>
+        <ul>
+            <li>Create a debian/control file with package metadata</li>
+            <li>Ensure the control file is properly formatted</li>
+            <li>Include all required fields (Package, Version, Architecture, etc.)</li>
+            <li>Refer to the <a href="https://www.debian.org/doc/debian-policy/ch-controlfields.html">Debian Policy Manual</a></li>
+        </ul>
+    </div>
+</div>

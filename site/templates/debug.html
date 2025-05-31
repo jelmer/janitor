@@ -1,0 +1,342 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Template Debug{% endblock %}
+
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="debug-page">
+    {% if user and user.is_admin %}
+    <div class="section" id="template-debug">
+        <h1>Template Debug Information</h1>
+        
+        <div class="debug-warning">
+            <h3>⚠️ Debug Mode</h3>
+            <p>This page is only available to administrators and should not be exposed in production.</p>
+        </div>
+        
+        <div class="debug-sections">
+            <div class="debug-section">
+                <h2>Template Context</h2>
+                <div class="debug-content">
+                    <pre class="debug-data">{{ debug_context | tojson(indent=2) }}</pre>
+                </div>
+            </div>
+            
+            {% if template_variables %}
+            <div class="debug-section">
+                <h2>Available Variables</h2>
+                <div class="variables-list">
+                    {% for var_name, var_info in template_variables.items() %}
+                    <div class="variable-item">
+                        <div class="variable-header">
+                            <code class="variable-name">{{ var_name }}</code>
+                            <span class="variable-type">{{ var_info.type }}</span>
+                        </div>
+                        {% if var_info.description %}
+                        <p class="variable-description">{{ var_info.description }}</p>
+                        {% endif %}
+                        {% if var_info.value %}
+                        <div class="variable-value">
+                            <strong>Value:</strong>
+                            <pre>{{ var_info.value | tojson(indent=2) }}</pre>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if template_functions %}
+            <div class="debug-section">
+                <h2>Available Functions</h2>
+                <div class="functions-list">
+                    {% for func_name, func_info in template_functions.items() %}
+                    <div class="function-item">
+                        <div class="function-header">
+                            <code class="function-name">{{ func_name }}()</code>
+                        </div>
+                        {% if func_info.description %}
+                        <p class="function-description">{{ func_info.description }}</p>
+                        {% endif %}
+                        {% if func_info.parameters %}
+                        <div class="function-params">
+                            <strong>Parameters:</strong>
+                            <ul>
+                                {% for param in func_info.parameters %}
+                                <li><code>{{ param.name }}</code> ({{ param.type }}) - {{ param.description }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if func_info.example %}
+                        <div class="function-example">
+                            <strong>Example:</strong>
+                            <code>{{ func_info.example }}</code>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if template_filters %}
+            <div class="debug-section">
+                <h2>Available Filters</h2>
+                <div class="filters-list">
+                    {% for filter_name, filter_info in template_filters.items() %}
+                    <div class="filter-item">
+                        <div class="filter-header">
+                            <code class="filter-name">{{ filter_name }}</code>
+                        </div>
+                        {% if filter_info.description %}
+                        <p class="filter-description">{{ filter_info.description }}</p>
+                        {% endif %}
+                        {% if filter_info.example %}
+                        <div class="filter-example">
+                            <strong>Example:</strong>
+                            <code>{{ filter_info.example }}</code>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="debug-section">
+                <h2>Environment Information</h2>
+                <div class="env-info">
+                    <dl>
+                        <dt>Template Engine:</dt>
+                        <dd>Tera {{ tera_version | default(value="unknown") }}</dd>
+                        
+                        <dt>Template Directory:</dt>
+                        <dd><code>{{ template_directory | default(value="unknown") }}</code></dd>
+                        
+                        <dt>Auto-escape:</dt>
+                        <dd>{{ autoescape | default(value="unknown") }}</dd>
+                        
+                        <dt>Debug Mode:</dt>
+                        <dd>{{ debug_mode | default(value="unknown") }}</dd>
+                        
+                        <dt>Template Cache:</dt>
+                        <dd>{{ template_cache | default(value="unknown") }}</dd>
+                    </dl>
+                </div>
+            </div>
+            
+            {% if request_info %}
+            <div class="debug-section">
+                <h2>Request Information</h2>
+                <div class="request-info">
+                    <dl>
+                        <dt>Path:</dt>
+                        <dd><code>{{ request_info.path }}</code></dd>
+                        
+                        <dt>Method:</dt>
+                        <dd>{{ request_info.method }}</dd>
+                        
+                        <dt>User Agent:</dt>
+                        <dd>{{ request_info.user_agent }}</dd>
+                        
+                        {% if request_info.query_params %}
+                        <dt>Query Parameters:</dt>
+                        <dd>
+                            <pre>{{ request_info.query_params | tojson(indent=2) }}</pre>
+                        </dd>
+                        {% endif %}
+                        
+                        {% if request_info.headers %}
+                        <dt>Headers:</dt>
+                        <dd>
+                            <pre>{{ request_info.headers | tojson(indent=2) }}</pre>
+                        </dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="debug-actions">
+            <h2>Debug Actions</h2>
+            <div class="action-buttons">
+                <button onclick="validateTemplates()" class="btn btn-primary">Validate All Templates</button>
+                <button onclick="clearTemplateCache()" class="btn btn-secondary">Clear Template Cache</button>
+                <button onclick="reloadTemplates()" class="btn btn-secondary">Reload Templates</button>
+                <a href="?download=context" class="btn btn-secondary">Download Context JSON</a>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="access-denied">
+        <h1>Access Denied</h1>
+        <p>Template debugging is only available to administrators.</p>
+        <a href="/" class="btn btn-primary">Return to Home</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.debug-page {
+    font-family: 'Courier New', monospace;
+}
+
+.debug-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.debug-section {
+    margin-bottom: 2rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.debug-section h2 {
+    background: #f8f9fa;
+    padding: 1rem;
+    margin: 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.debug-content, .variables-list, .functions-list, .filters-list, .env-info, .request-info {
+    padding: 1rem;
+}
+
+.debug-data {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-x: auto;
+    max-height: 400px;
+}
+
+.variable-item, .function-item, .filter-item {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+}
+
+.variable-item:last-child, .function-item:last-child, .filter-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.variable-header, .function-header, .filter-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.variable-name, .function-name, .filter-name {
+    background: #e9ecef;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-weight: bold;
+}
+
+.variable-type {
+    background: #d1ecf1;
+    color: #0c5460;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+
+.variable-value, .function-params, .function-example, .filter-example {
+    margin-top: 0.5rem;
+}
+
+.variable-value pre, .function-example code, .filter-example code {
+    background: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 3px;
+    display: block;
+    margin-top: 0.25rem;
+}
+
+.env-info dl, .request-info dl {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.env-info dt, .request-info dt {
+    font-weight: bold;
+}
+
+.env-info dd, .request-info dd {
+    margin: 0;
+}
+
+.access-denied {
+    text-align: center;
+    padding: 2rem;
+}
+</style>
+
+<script>
+async function validateTemplates() {
+    try {
+        const response = await fetch('/api/v1/debug/templates/validate', {
+            method: 'POST'
+        });
+        const result = await response.json();
+        
+        if (result.valid) {
+            alert('All templates are valid!');
+        } else {
+            alert(`Template validation failed:\n${result.errors.join('\n')}`);
+        }
+    } catch (error) {
+        alert('Failed to validate templates: ' + error.message);
+    }
+}
+
+async function clearTemplateCache() {
+    try {
+        const response = await fetch('/api/v1/debug/templates/clear-cache', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            alert('Template cache cleared successfully!');
+        } else {
+            alert('Failed to clear template cache');
+        }
+    } catch (error) {
+        alert('Failed to clear template cache: ' + error.message);
+    }
+}
+
+async function reloadTemplates() {
+    try {
+        const response = await fetch('/api/v1/debug/templates/reload', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            alert('Templates reloaded successfully!');
+            location.reload();
+        } else {
+            alert('Failed to reload templates');
+        }
+    } catch (error) {
+        alert('Failed to reload templates: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
