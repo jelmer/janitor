@@ -330,7 +330,7 @@ impl Config {
             None
         };
 
-        Ok(Config { site, janitor })
+        Ok(Config::new(site, janitor))
     }
 
     /// Access the site configuration
@@ -379,9 +379,20 @@ impl Config {
         self.site.archiver_url.as_deref()
     }
 
-    pub fn differ_url(&self) -> &str {
+    pub fn differ_url(&self) -> Option<&str> {
         // TODO: Check if janitor config has these fields when available
-        &self.site.differ_url
+        Some(&self.site.differ_url)
+    }
+
+    /// Get external URL for VCS access
+    pub fn external_url(&self) -> Option<&str> {
+        self.site.external_url.as_deref()
+    }
+
+    /// Get log base path
+    pub fn log_base_path(&self) -> Option<String> {
+        // TODO: Check if janitor config has this field when available
+        env::var("LOG_BASE_PATH").ok()
     }
 
     /// Get OAuth2 configuration from janitor config if available
@@ -457,6 +468,7 @@ impl Default for Config {
         Self {
             site: SiteConfig::default(),
             janitor: None,
+            campaigns: HashMap::new(),
         }
     }
 }
@@ -552,6 +564,6 @@ impl ConfigBuilder {
             None
         };
 
-        Ok(Config { site, janitor })
+        Ok(Config::new(site, janitor))
     }
 }
