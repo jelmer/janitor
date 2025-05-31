@@ -134,4 +134,244 @@ impl DatabaseManager {
     ) -> Result<Vec<Run>, DatabaseError> {
         Ok(vec![])
     }
+
+    // Campaign/suite-related queries
+    pub async fn count_candidates(
+        &self,
+        _suite: &str,
+        _search: Option<&str>,
+    ) -> Result<i64, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(0)
+    }
+
+    pub async fn count_runs_by_result(
+        &self,
+        _campaign: &str,
+        _result_code: &str,
+    ) -> Result<i64, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(0)
+    }
+
+    pub async fn count_pending_publishes(
+        &self,
+        _campaign: &str,
+    ) -> Result<i64, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(0)
+    }
+
+    pub async fn get_candidates(
+        &self,
+        _suite: &str,
+        _limit: Option<i64>,
+        _offset: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_candidate(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<serde_json::Value, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(serde_json::json!({
+            "codebase": _codebase,
+            "campaign": _campaign,
+            "active": true
+        }))
+    }
+
+    pub async fn get_vcs_info(
+        &self,
+        _codebase: &str,
+    ) -> Result<VcsInfo, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(VcsInfo {
+            url: "https://github.com/example/repo".to_string(),
+            vcs_type: "git".to_string(),
+            branch_url: None,
+        })
+    }
+
+    pub async fn get_last_unabsorbed_run(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<RunDetails, DatabaseError> {
+        // TODO: Implement when schema is available
+        Err(DatabaseError::NotFound("No unabsorbed runs".to_string()))
+    }
+
+    pub async fn get_previous_runs(
+        &self,
+        _codebase: &str,
+        _campaign: &str,
+        _limit: Option<i64>,
+    ) -> Result<Vec<RunDetails>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_merge_proposals_for_codebase(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_queue_position(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<i64, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(0)
+    }
+
+    pub async fn get_average_run_time(
+        &self,
+        _campaign: &str,
+    ) -> Result<i64, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(300) // 5 minutes default
+    }
+
+    pub async fn get_publish_policy(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<String, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok("manual".to_string())
+    }
+
+    pub async fn get_changelog_policy(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<String, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok("auto".to_string())
+    }
+
+    pub async fn get_run(
+        &self,
+        _run_id: &str,
+    ) -> Result<RunDetails, DatabaseError> {
+        // TODO: Implement when schema is available
+        Err(DatabaseError::NotFound("Run not found".to_string()))
+    }
+
+    pub async fn get_run_statistics(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+    ) -> Result<RunStatistics, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(RunStatistics {
+            total: 10,
+            successful: 7,
+            failed: 3,
+        })
+    }
+
+    pub async fn get_unchanged_run(
+        &self,
+        _campaign: &str,
+        _codebase: &str,
+        _before: Option<&DateTime<Utc>>,
+    ) -> Result<RunDetails, DatabaseError> {
+        // TODO: Implement when schema is available
+        Err(DatabaseError::NotFound("No unchanged run found".to_string()))
+    }
+
+    pub async fn get_binary_packages(
+        &self,
+        _run_id: &str,
+    ) -> Result<Vec<String>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_reviews(
+        &self,
+        _run_id: &str,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_ready_runs(
+        &self,
+        _suite: &str,
+        _search: Option<&str>,
+        _result_code: Option<&str>,
+        _limit: Option<i64>,
+        _offset: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_absorbed_runs(
+        &self,
+        _campaign: &str,
+        _from_date: Option<&DateTime<Utc>>,
+        _to_date: Option<&DateTime<Utc>>,
+        _limit: Option<i64>,
+        _offset: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+
+    pub async fn get_merge_proposals_by_status(
+        &self,
+        _suite: &str,
+        _status: &str,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        // TODO: Implement when schema is available
+        Ok(vec![])
+    }
+}
+
+// Additional types for database results
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VcsInfo {
+    pub url: String,
+    pub vcs_type: String,
+    pub branch_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunDetails {
+    pub id: String,
+    pub codebase: String,
+    pub suite: String,
+    pub command: Option<String>,
+    pub result_code: Option<String>,
+    pub description: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub finish_time: DateTime<Utc>,
+    pub worker: Option<String>,
+    pub build_version: Option<String>,
+    pub result_branches: Vec<serde_json::Value>,
+    pub result_tags: Vec<serde_json::Value>,
+    pub publish_status: Option<String>,
+    pub failure_stage: Option<String>,
+    pub main_branch_revision: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunStatistics {
+    pub total: i64,
+    pub successful: i64,
+    pub failed: i64,
 }
