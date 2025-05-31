@@ -385,7 +385,7 @@ async fn fetch_candidates(
     filter: &FilterQuery,
 ) -> anyhow::Result<Vec<serde_json::Value>> {
     // TODO: Implement full candidate fetching with filtering
-    state.database.get_candidates(suite, limit, offset).await
+    state.database.get_candidates(suite, limit, offset).await.map_err(|e| anyhow::anyhow!(e))
 }
 
 async fn count_candidates(
@@ -394,7 +394,7 @@ async fn count_candidates(
     filter: &FilterQuery,
 ) -> anyhow::Result<i64> {
     // TODO: Implement filtered counting
-    state.database.count_candidates(suite, filter.search.as_deref()).await
+    state.database.count_candidates(suite, filter.search.as_deref()).await.map_err(|e| anyhow::anyhow!(e))
 }
 
 async fn fetch_worker_stats(state: &AppState) -> anyhow::Result<HashMap<String, i64>> {

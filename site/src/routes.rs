@@ -34,6 +34,16 @@ pub fn app_routes() -> Router<AppState> {
         .route("/:campaign/c/:codebase/", get(pkg::codebase_detail))
         .route("/:campaign/c/:codebase/:run_id", get(pkg::run_detail))
         
+        // Log viewing and downloading (Phase 3.5.2 Package Views implementation)
+        .route("/:campaign/c/:codebase/:run_id/logs/:log_name", get(pkg::view_log))
+        .route("/:campaign/c/:codebase/:run_id/logs/:log_name/download", get(pkg::download_log))
+        
+        // VCS diff viewing
+        .route("/:campaign/c/:codebase/:run_id/diff", get(pkg::view_diff))
+        
+        // Debian package diff viewing
+        .route("/:campaign/c/:codebase/:run_id/debdiff", get(pkg::view_debdiff))
+        
         // Result files (logs, artifacts)
         .route("/:suite/pkg/:pkg/:run_id/*filename", get(serve_result_file))
         
