@@ -1,0 +1,461 @@
+{% extends "layout.html" %}
+
+{% import "macros/util.html" as util %}
+{% import "codeblock.html" as codeblock %}
+
+{% block page_title %}Run Details - {{ run.codebase }}{% endblock %}
+
+{% block sidebar %}
+    {% include "cupboard/sidebar.html" %}
+{% endblock %}
+
+{% block body %}
+<div class="run-details-page">
+    <div class="section" id="run-{{ run_id }}">
+        <div class="run-header">
+            <h1>Run of {{ suite }} for {{ run.codebase }}</h1>
+            <div class="run-status">
+                {{ util.status_badge(result_code) }}
+            </div>
+        </div>
+        
+        <div class="run-metadata">
+            <dl class="metadata-list">
+                <dt>Worker:</dt>
+                <dd>
+                    {% if worker_link and worker_link_is_global %}
+                    <a href="{{ worker_link }}">{{ worker_name }}</a>
+                    {% else %}
+                    {{ worker_name }}
+                    {% endif %}
+                </dd>
+                
+                <dt>Codebase:</dt>
+                <dd><a href="../">{{ run.codebase }}</a></dd>
+                
+                {% if run.change_set %}
+                <dt>Change set:</dt>
+                <dd><a href="/cupboard/cs/{{ run.change_set }}/">{{ run.change_set }}</a></dd>
+                {% endif %}
+                
+                {% if vcs_url %}
+                <dt>Branch URL:</dt>
+                <dd><a href="{{ vcs_url }}" class="external">{{ vcs_url }}</a></dd>
+                {% endif %}
+                
+                {% if run.result and run.result.upstream_branch_url %}
+                <dt>Upstream Branch URL:</dt>
+                <dd><a href="{{ run.result.upstream_branch_url }}" class="external">{{ run.result.upstream_branch_url }}</a></dd>
+                {% endif %}
+                
+                <dt>Start time:</dt>
+                <dd>{{ run.start_time | timestamp }}</dd>
+                
+                <dt>Duration:</dt>
+                <dd>{{ (run.finish_time - run.start_time) | duration }}</dd>
+                
+                {% if success_probability %}
+                <dt>Success probability:</dt>
+                <dd>{{ (success_probability * 100) | round(1) }}% (based on {{ total_previous_runs }} previous runs)</dd>
+                {% endif %}
+                
+                <dt>Status:</dt>
+                <dd>
+                    {{ util.status_badge(result_code) }}
+                    {% if unchanged_run and suite not in ["unchanged", "control"] %}
+                    (<a href="/cupboard/c/{{ unchanged_run.codebase }}/{{ unchanged_run.id }}/">run</a> without changes: {{ util.status_badge(unchanged_run.result_code) }})
+                    {% elif suite not in ["unchanged", "control"] %}
+                    <button class="btn btn-sm btn-secondary" onclick="scheduleControlRun('{{ run.id }}')">Schedule control run</button>
+                    {% endif %}
+                    
+                    {% if run.resume_from %}
+                    (<a href="/cupboard/c/{{ run.codebase }}/{{ run.resume_from }}/">base run</a>)
+                    {% endif %}
+                </dd>
+                
+                <dt>Description:</dt>
+                <dd>{{ description | default(value="No description") }}</dd>
+                
+                <dt>Publish Status:</dt>
+                <dd>{{ run.publish_status | default(value="Not published") }}</dd>
+                
+                {% if queue_position %}
+                <dt>Queue position:</dt>
+                <dd>
+                    <a href="/cupboard/queue">Queue</a> position: {{ queue_position }}
+                    {% if queue_wait_time %}({{ queue_wait_time | duration }} wait){% endif %}
+                </dd>
+                {% endif %}
+                
+                {% if revision and suite not in ["unchanged", "control"] %}
+                <dt>Diff:</dt>
+                <dd>
+                    <a href="/api/run/{{ run_id }}/diff" class="btn btn-sm btn-secondary">Raw diff</a>
+                    {% if debdiff %}
+                    <a href="/api/run/{{ run_id }}/debdiff?filter_boring=true" class="btn btn-sm btn-secondary">Raw debdiff</a>
+                    <a href="/api/run/{{ run_id }}/diffoscope?filter_boring=true" class="btn btn-sm btn-secondary">Diffoscope</a>
+                    <a href="/api/run/{{ run_id }}/diffoscope" class="btn btn-sm btn-secondary">Unfiltered diffoscope</a>
+                    {% else %}
+                    <span class="text-muted">Binary diffs not available (missing control run)</span>
+                    <button class="btn btn-sm btn-secondary" onclick="scheduleControlRun('{{ run.id }}')">Schedule control run</button>
+                    {% endif %}
+                </dd>
+                {% endif %}
+                
+                {% if command %}
+                <dt>Command:</dt>
+                <dd><code>{{ command }}</code></dd>
+                {% endif %}
+                
+                {% if run.build_version %}
+                <dt>Build Version:</dt>
+                <dd>{{ run.build_version }}</dd>
+                {% endif %}
+            </dl>
+        </div>
+        
+        <div class="run-actions">
+            <h2>Actions</h2>
+            <div class="action-buttons">
+                {% if branch_url or campaign.default_empty %}
+                <button class="btn btn-primary" onclick="rescheduleRun('{{ suite }}', '{{ codebase }}', false)">
+                    Reschedule
+                </button>
+                <button class="btn btn-secondary" onclick="rescheduleRun('{{ suite }}', '{{ codebase }}', true)">
+                    Reschedule (from scratch)
+                </button>
+                
+                {% if run.result_branches %}
+                <button class="btn btn-success" onclick="publishChanges('{{ suite }}', '{{ run.codebase }}')">
+                    Publish Changes
+                </button>
+                {% endif %}
+                {% endif %}
+                
+                <button class="btn btn-secondary" onclick="reprocessLogs('{{ run_id }}')">
+                    Reprocess Logs
+                </button>
+                
+                {% if config.bugtracker %}
+                <button class="btn btn-warning" onclick="fileBug('{{ run_id }}', '{{ result_code }}')">
+                    File Bug
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if command and vcs_url %}
+        <div class="run-locally">
+            <h2>Run Locally</h2>
+            {% if vcs_type == "git" %}
+            {{ codeblock.codeblock("git clone " + vcs_url + " " + run.codebase + "\ncd " + run.codebase + "\n" + command, "bash") }}
+            {% elif vcs_type == "bzr" %}
+            {{ codeblock.codeblock("bzr branch " + vcs_url + " " + run.codebase + "\ncd " + run.codebase + "\n" + command, "bash") }}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if run.result_branches %}
+        <div class="merge-commands">
+            <h2>Merge Commands</h2>
+            {% if suite not in ["unchanged", "control"] %}
+            {% for branch in run.result_branches %}
+            <div class="merge-command">
+                <h4>{{ branch.role }}</h4>
+                {% if vcs_type == "git" %}
+                {{ codeblock.codeblock("git pull " + git_repository_url + " " + suite + "/" + branch.role, "bash") }}
+                {% elif vcs_type == "bzr" %}
+                {{ codeblock.codeblock("bzr merge " + bzr_branch_url, "bash") }}
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if logs %}
+        <div class="logs-section">
+            <h2>Logs</h2>
+            
+            {% if primary_log %}
+            <div class="primary-log">
+                <h3>{{ primary_log | title }} Log</h3>
+                {% if logs[primary_log] %}
+                <div class="log-content">
+                    {{ codeblock.codeblock(logs[primary_log].content, "text", logs[primary_log].name) }}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <div class="log-links">
+                <h4>Available Logs</h4>
+                <ul>
+                    {% for log_name, log_info in logs.items() %}
+                    <li>
+                        <a href="{{ log_info.url }}"{% if log_name == primary_log %} class="primary-log"{% endif %}>
+                            {% if log_name == primary_log %}<strong>{% endif %}
+                            {{ log_info.description | default(value=log_name | title + " log") }}
+                            {% if log_name == primary_log %}</strong>{% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if result %}
+        <div class="result-summary">
+            <h2>Summary</h2>
+            <div class="result-content">
+                <!-- Include suite-specific summary template -->
+                {% if result.changes %}
+                <div class="changes-summary">
+                    <h4>Changes Made</h4>
+                    <ul>
+                        {% for change in result.changes %}
+                        <li>{{ change }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if result.files_modified %}
+                <div class="files-modified">
+                    <h4>Files Modified</h4>
+                    <ul>
+                        {% for file in result.files_modified %}
+                        <li>{{ file }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if revision and result_code in ["success", "nothing-to-do"] and suite not in ["unchanged", "control"] %}
+        <div class="vcs-diffs">
+            <h2>Changes</h2>
+            {% if run.result_branches %}
+            {% for branch in run.result_branches %}
+            <div class="branch-diff">
+                <h4>{{ branch.role }}</h4>
+                {% if branch.diff %}
+                {{ codeblock.diff_block(branch.diff, "Changes for " + branch.role) }}
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if debdiff %}
+        <div class="debdiff-section">
+            <h2>Debdiff</h2>
+            {% if debdiff.split('\n') | length < 200 %}
+            {{ codeblock.diff_block(debdiff, "debian/debdiff") }}
+            {% else %}
+            <p>
+                Debdiff is too long (more than 200 lines). 
+                <a href="/api/run/{{ run_id }}/debdiff?filter_boring=1" class="btn btn-secondary">Download raw debdiff</a>
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if publish_history %}
+        <div class="publish-history">
+            <h2>Publish History</h2>
+            <div class="history-list">
+                {% for entry in publish_history[:10] %}
+                <div class="history-item">
+                    <div class="history-timestamp">{{ entry.timestamp | timestamp }}</div>
+                    <div class="history-description">
+                        {{ entry.mode }}: {{ entry.description }}
+                        {% if entry.merge_proposal_url %}
+                        (<a href="{{ entry.merge_proposal_url }}">proposal</a>)
+                        {% endif %}
+                    </div>
+                    {% if entry.requester and not entry.requester.startswith('publisher') %}
+                    <div class="history-requester">Requested by {{ entry.requester }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if binary_packages %}
+        <div class="resulting-packages">
+            <h2>Resulting Package</h2>
+            <div class="install-commands">
+                {% for package in binary_packages %}
+                {{ codeblock.codeblock("apt install " + package, "bash") }}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if lintian_result %}
+        <div class="lintian-result">
+            <h2>Lintian Result</h2>
+            <div class="lintian-content">
+                <!-- Display lintian results -->
+                {% if lintian_result.tags %}
+                <ul class="lintian-tags">
+                    {% for tag in lintian_result.tags %}
+                    <li class="lintian-tag {{ tag.severity }}">
+                        <span class="tag-name">{{ tag.name }}</span>
+                        <span class="tag-description">{{ tag.description }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if reviews or (is_qa_reviewer and run.result_code == "success") %}
+        <div class="reviews-section">
+            <h2>Reviews</h2>
+            {% if reviews %}
+            <div class="reviews-list">
+                {% for review in reviews %}
+                <div class="review-item">
+                    <div class="review-header">
+                        <span class="reviewer">{{ review.reviewer }}</span>
+                        <span class="review-status">{{ review.status }}</span>
+                        <span class="review-date">{{ review.date | timeago }}</span>
+                    </div>
+                    {% if review.comment %}
+                    <div class="review-comment">{{ review.comment }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if is_qa_reviewer and run.result_code == "success" %}
+            <div class="add-review">
+                <h4>Add Review</h4>
+                <form onsubmit="submitReview(event)">
+                    <div class="form-group">
+                        <label for="review-status">Status:</label>
+                        <select id="review-status" name="status" required>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="needs-work">Needs Work</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="review-comment">Comment:</label>
+                        <textarea id="review-comment" name="comment" rows="4"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Review</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function rescheduleRun(suite, codebase, fromScratch) {
+    const action = fromScratch ? 'reschedule from scratch' : 'reschedule';
+    if (confirm(`${action} run for ${codebase}?`)) {
+        const data = { suite: suite, codebase: codebase };
+        if (fromScratch) data.refresh = true;
+        
+        fetch('/api/v1/runs/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).then(response => {
+            if (response.ok) {
+                alert('Run rescheduled successfully');
+                location.reload();
+            } else {
+                alert('Failed to reschedule run');
+            }
+        });
+    }
+}
+
+function scheduleControlRun(runId) {
+    if (confirm('Schedule a control run?')) {
+        fetch('/api/v1/runs/schedule-control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ run_id: runId })
+        }).then(response => {
+            if (response.ok) {
+                alert('Control run scheduled successfully');
+                location.reload();
+            } else {
+                alert('Failed to schedule control run');
+            }
+        });
+    }
+}
+
+function publishChanges(suite, codebase) {
+    if (confirm(`Publish changes for ${codebase}?`)) {
+        fetch('/api/v1/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ suite: suite, codebase: codebase })
+        }).then(response => {
+            if (response.ok) {
+                alert('Changes published successfully');
+                location.reload();
+            } else {
+                alert('Failed to publish changes');
+            }
+        });
+    }
+}
+
+function reprocessLogs(runId) {
+    if (confirm('Reprocess logs for this run?')) {
+        fetch('/api/v1/runs/reprocess-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ run_id: runId })
+        }).then(response => {
+            if (response.ok) {
+                alert('Logs reprocessed successfully');
+                location.reload();
+            } else {
+                alert('Failed to reprocess logs');
+            }
+        });
+    }
+}
+
+function submitReview(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    fetch('/api/v1/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            run_id: '{{ run_id }}',
+            status: formData.get('status'),
+            comment: formData.get('comment')
+        })
+    }).then(response => {
+        if (response.ok) {
+            alert('Review submitted successfully');
+            location.reload();
+        } else {
+            alert('Failed to submit review');
+        }
+    });
+}
+</script>
+{% endblock %}
