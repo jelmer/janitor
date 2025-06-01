@@ -1,21 +1,26 @@
 use axum::{
     extract::{Path, Query, State},
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
     response::Json,
     routing::{get, post},
     Router,
 };
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, info};
+use utoipa::path;
 
-use crate::app::AppState;
+use crate::{
+    app::AppState,
+    auth::{require_admin, require_login, require_qa_reviewer, UserContext, OptionalUser},
+};
 use super::{
-    content_negotiation::{negotiate_response, ContentType},
+    content_negotiation::{negotiate_response, ContentType, NegotiatedResponse},
     middleware::{content_negotiation_middleware, logging_middleware, metrics_middleware, cors_middleware},
     types::{
         ApiResponse, ApiResult, CommonQuery, QueueStatus,
     },
     schemas::{Run, MergeProposal},
+    error::AppError,
 };
 
 /// Create the main API router
@@ -100,7 +105,7 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
 )]
 async fn health_check(
     State(app_state): State<Arc<AppState>>,
-) -> ApiResult<Json<ApiResponse<serde_json::Value>>> {
+) -> Json<ApiResponse<serde_json::Value>> {
     debug!("Health check requested");
     
     let mut services = std::collections::HashMap::new();
@@ -119,7 +124,7 @@ async fn health_check(
                 details: Some(serde_json::json!({"services": services})),
                 pagination: None,
             };
-            return Ok(Json(error_response));
+            return Json(error_response);
         }
     }
     
@@ -132,7 +137,7 @@ async fn health_check(
         "services": services
     });
     
-    Ok(Json(ApiResponse::success(status)))
+    Json(ApiResponse::success(status))
 }
 
 /// API status and version information
@@ -842,7 +847,7 @@ async fn get_codebase(
     match app_state.database.get_codebase(&codebase).await {
         Ok(codebase_data) => {
             negotiate_response(
-                ApiResponse::success(codebase_data),
+                ApiResponse::success(serde_json::to_value(codebase_data).unwrap_or_default()),
                 &headers,
                 &format!("/api/c/{}", codebase),
             )
@@ -858,10 +863,13 @@ async fn get_codebase(
             };
             
             debug!("Failed to get codebase {}: {}", codebase, e);
-            let error_response = ApiResponse::<()>::error(
-                error_code.to_string(),
-                Some(reason),
-            );
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some(error_code.to_string()),
+                reason: Some(reason),
+                details: None,
+                pagination: None,
+            };
             
             negotiate_response(
                 error_response,
