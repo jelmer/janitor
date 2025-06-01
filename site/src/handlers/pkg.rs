@@ -282,6 +282,28 @@ pub async fn view_log(
         Ok(log_info) => {
             context.insert("log_info", &log_info);
             
+            // If log exists, fetch actual content
+            if log_info.exists {
+                match download_log_file(&state, &run_id, &log_name).await {
+                    Ok(content) => {
+                        let log_text = String::from_utf8_lossy(&content);
+                        context.insert("log_content", &log_text);
+                        
+                        // Add line filtering if requested
+                        if let Some(start) = query.offset {
+                            context.insert("line_start", &start);
+                        }
+                        if let Some(limit) = query.limit {
+                            context.insert("line_end", &(query.offset.unwrap_or(0) + limit));
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to download log content: {}", e);
+                        context.insert("error_message", &format!("Failed to load log content: {}", e));
+                    }
+                }
+            }
+            
             // Content negotiation for raw vs formatted
             let content_type = negotiate_content_type(&headers, "log");
             
@@ -291,7 +313,7 @@ pub async fn view_log(
                 }
                 _ => {
                     // HTML view with syntax highlighting
-                    match state.templates.render("log_view.html", &context) {
+                    match state.templates.render("log-viewer.html", &context) {
                         Ok(html) => Html(html).into_response(),
                         Err(e) => {
                             tracing::error!("Template rendering error: {}", e);
@@ -303,7 +325,11 @@ pub async fn view_log(
         }
         Err(e) => {
             tracing::error!("Failed to get log content: {}", e);
-            StatusCode::NOT_FOUND.into_response()
+            context.insert("error_message", &format!("Log not found: {}", e));
+            match state.templates.render("log-viewer.html", &context) {
+                Ok(html) => Html(html).into_response(),
+                Err(_) => StatusCode::NOT_FOUND.into_response()
+            }
         }
     }
 }
@@ -387,7 +413,7 @@ pub async fn view_diff(
                     Json(serde_json::to_value(&diff_info).unwrap()).into_response()
                 }
                 _ => {
-                    match state.templates.render("diff_view.html", &context) {
+                    match state.templates.render("diff-viewer.html", &context) {
                         Ok(html) => Html(html).into_response(),
                         Err(e) => {
                             tracing::error!("Template rendering error: {}", e);
@@ -442,7 +468,7 @@ pub async fn view_debdiff(
                     Json(serde_json::to_value(&diff_info).unwrap()).into_response()
                 }
                 _ => {
-                    match state.templates.render("debdiff_view.html", &context) {
+                    match state.templates.render("debdiff-viewer.html", &context) {
                         Ok(html) => Html(html).into_response(),
                         Err(e) => {
                             tracing::error!("Template rendering error: {}", e);
@@ -950,8 +976,8 @@ async fn get_log_content(
 ) -> anyhow::Result<LogInfo> {
     let log_manager = &state.log_manager;
     
-    // Check if log exists
-    let exists = log_manager.log_exists(run_id, log_name).await?;
+    // Check if log exists (using empty codebase for now - TODO: pass actual codebase)
+    let exists = log_manager.has_log("", run_id, log_name).await?;
     if !exists {
         return Ok(LogInfo {
             name: log_name.to_string(),
@@ -964,8 +990,9 @@ async fn get_log_content(
         });
     }
     
-    // Get log metadata
-    let size = log_manager.get_log_size(run_id, log_name).await?;
+    // Get log metadata - we need to get the log to determine size
+    // For now, set a placeholder size
+    let size = 0i64; // TODO: Implement proper size retrieval if needed
     
     // Analyze log for failure information if it's a primary log
     let (line_count, include_lines, highlight_lines) = if matches!(log_name, BUILD_LOG_FILENAME | DIST_LOG_FILENAME) {
@@ -992,8 +1019,19 @@ async fn download_log_file(
     run_id: &str,
     log_name: &str,
 ) -> anyhow::Result<Vec<u8>> {
+    use std::io::Read;
+    
     let log_manager = &state.log_manager;
-    log_manager.get_log_content(run_id, log_name).await
+    // Get log reader (using empty codebase for now - TODO: pass actual codebase)
+    let mut reader = log_manager.get_log("", run_id, log_name).await
+        .map_err(|e| anyhow::anyhow!("Failed to get log: {}", e))?;
+    
+    // Read content into bytes
+    let mut content = Vec::new();
+    reader.read_to_end(&mut content)
+        .map_err(|e| anyhow::anyhow!("Failed to read log content: {}", e))?;
+    
+    Ok(content)
 }
 
 /// Analyze log files for failure information (matches Python find_build_log_failure/find_dist_log_failure)

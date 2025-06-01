@@ -1,0 +1,113 @@
+{% extends "layout.html" %}
+
+{% import "codeblock.html" as codeblock %}
+
+{% block page_title %}
+    VCS Diff - {{ codebase }} - {{ run_id }}
+{% endblock %}
+
+{% block body %}
+<div class="diff-viewer-page">
+    <div class="section" id="diff-viewer">
+        <div class="diff-header">
+            <h1>VCS Diff for {{ codebase }}</h1>
+            
+            <div class="breadcrumb">
+                <a href="/{{ campaign }}/">{{ campaign | title }}</a> › 
+                <a href="/{{ campaign }}/c/{{ codebase }}/">{{ codebase }}</a> › 
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}">Run {{ run_id }}</a> › 
+                <span>VCS Diff</span>
+            </div>
+        </div>
+        
+        {% if diff_info %}
+        <div class="diff-metadata">
+            <div class="revision-info">
+                {% if diff_info.base_revision %}
+                <div class="base-revision">
+                    <strong>Base Revision:</strong> <code>{{ diff_info.base_revision }}</code>
+                </div>
+                {% endif %}
+                {% if diff_info.new_revision %}
+                <div class="new-revision">
+                    <strong>New Revision:</strong> <code>{{ diff_info.new_revision }}</code>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="diff-actions">
+                <a href="?format=raw" class="btn btn-sm btn-secondary">Download Raw Diff</a>
+                <a href="?format=patch" class="btn btn-sm btn-secondary">Download as Patch</a>
+            </div>
+        </div>
+        
+        <div class="diff-content">
+            {% if diff_info.content %}
+                {% if diff_info.content_type == "text/plain" %}
+                    {{ codeblock.codeblock(diff_info.content, "diff", "diff") }}
+                {% else %}
+                    <div class="diff-html">
+                        {{ diff_info.content | safe }}
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="no-diff">
+                    <p>No differences found between revisions.</p>
+                </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="diff-error">
+            <h3>Diff Not Available</h3>
+            <p>The diff could not be generated for this run.</p>
+            {% if error_message %}
+            <div class="error-details">
+                <strong>Error:</strong> {{ error_message }}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <div class="navigation">
+            <div class="nav-links">
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}" class="btn btn-secondary">← Back to Run Details</a>
+                <a href="/{{ campaign }}/c/{{ codebase }}/" class="btn btn-secondary">← Back to Codebase</a>
+            </div>
+            
+            {% if show_debdiff %}
+            <div class="other-diffs">
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}/debdiff" class="btn btn-secondary">View Debian Package Diff</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Add line highlighting on click
+document.addEventListener('DOMContentLoaded', function() {
+    const diffLines = document.querySelectorAll('.diff-content .line');
+    diffLines.forEach(line => {
+        line.addEventListener('click', function() {
+            // Remove existing highlights
+            diffLines.forEach(l => l.classList.remove('highlighted'));
+            // Add highlight to clicked line
+            this.classList.add('highlighted');
+            // Update URL hash
+            if (this.id) {
+                window.location.hash = this.id;
+            }
+        });
+    });
+    
+    // Highlight line from URL hash
+    if (window.location.hash) {
+        const targetLine = document.querySelector(window.location.hash);
+        if (targetLine) {
+            targetLine.classList.add('highlighted');
+            targetLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+});
+</script>
+{% endblock %}

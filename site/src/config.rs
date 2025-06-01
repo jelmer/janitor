@@ -115,9 +115,22 @@ impl Config {
     pub fn new(site: SiteConfig, janitor: Option<janitor::config::Config>) -> Self {
         let campaigns = janitor.as_ref()
             .map(|j| {
-                // Extract campaigns from janitor config
-                // TODO: This needs to match the actual janitor config structure
-                HashMap::new()
+                // Extract campaigns from janitor config and convert to JSON values
+                j.campaign.iter()
+                    .filter_map(|campaign| {
+                        campaign.name.as_ref().map(|name| {
+                            let campaign_data = serde_json::json!({
+                                "name": name,
+                                // Use the name as title since Campaign doesn't have a title field
+                                "title": name.clone(),
+                                // Extract description from merge proposal config if available
+                                "description": campaign.merge_proposal.as_ref()
+                                    .and_then(|mp| mp.title.clone()),
+                            });
+                            (name.clone(), campaign_data)
+                        })
+                    })
+                    .collect()
             })
             .unwrap_or_default();
             
@@ -393,6 +406,15 @@ impl Config {
     pub fn log_base_path(&self) -> Option<String> {
         // TODO: Check if janitor config has this field when available
         env::var("LOG_BASE_PATH").ok()
+    }
+    
+    /// Get log URL (for log storage backends like GCS, S3, etc.)
+    pub fn log_url(&self) -> Option<String> {
+        // Check environment variable first, then janitor config
+        env::var("LOG_URL").ok().or_else(|| {
+            self.janitor.as_ref()
+                .and_then(|config| config.logs_location.clone())
+        })
     }
 
     /// Get OAuth2 configuration from janitor config if available
