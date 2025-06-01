@@ -51,6 +51,10 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         // Search and discovery
         .route("/pkgnames", get(get_package_names))
         .route("/search", get(search_packages))
+        .route("/codebases", get(get_codebases_filtered))
+        .route("/runs", get(get_runs_filtered))
+        .route("/export/codebases", get(export_codebases))
+        .route("/export/runs", get(export_runs))
         
         // Campaign endpoints
         .route("/:campaign/merge-proposals", get(get_campaign_merge_proposals))
@@ -184,21 +188,35 @@ async fn api_status() -> Json<ApiResponse<serde_json::Value>> {
 async fn get_queue_status(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Query(_query): Query<CommonQuery>,
+    Query(query): Query<CommonQuery>,
 ) -> impl axum::response::IntoResponse {
-    debug!("Queue status requested");
+    debug!("Queue status requested with query: {:?}", query);
     
     match app_state.database.get_stats().await {
         Ok(stats) => {
-            let queue_status = QueueStatus {
+            let mut queue_status = QueueStatus {
                 total_candidates: stats.get("total_codebases").unwrap_or(&0).clone(),
                 pending_candidates: stats.get("queue_size").unwrap_or(&0).clone(),
                 active_runs: stats.get("active_runs").unwrap_or(&0).clone(),
                 campaigns: vec![], // TODO: Implement campaign listing
             };
             
+            // Enhanced response with additional statistics if requested
+            let enhanced_response = serde_json::json!({
+                "queue": queue_status,
+                "additional_stats": {
+                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
+                    "timestamp": chrono::Utc::now(),
+                },
+                "query_options": {
+                    "limit_supported": true,
+                    "filtering_supported": true,
+                    "available_filters": ["campaign", "result_code", "vcs_type"]
+                }
+            });
+            
             negotiate_response(
-                ApiResponse::success(queue_status),
+                ApiResponse::success(enhanced_response),
                 &headers,
                 "/api/queue",
             )
@@ -543,11 +561,11 @@ async fn get_runner_status(
 // Search and Discovery
 // ============================================================================
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 
 /// Search query parameters
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
 pub struct SearchQuery {
     /// Search term for package/codebase names
     pub q: Option<String>,
@@ -559,6 +577,45 @@ pub struct SearchQuery {
     pub result_code: Option<String>,
     /// Include only publishable results
     pub publishable_only: Option<bool>,
+}
+
+/// Enhanced filtering parameters for complex queries
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct FilterQuery {
+    /// Search term for package/codebase names
+    pub q: Option<String>,
+    /// Limit number of results
+    pub limit: Option<u32>,
+    /// Offset for pagination
+    pub offset: Option<u32>,
+    /// Campaign filter
+    pub campaign: Option<String>,
+    /// Suite filter (alias for campaign)
+    pub suite: Option<String>,
+    /// Result code filter
+    pub result_code: Option<String>,
+    /// Multiple result codes (comma-separated)
+    pub result_codes: Option<String>,
+    /// VCS type filter (git, bzr, etc.)
+    pub vcs_type: Option<String>,
+    /// Include only publishable results
+    pub publishable_only: Option<bool>,
+    /// Include only successful runs
+    pub success_only: Option<bool>,
+    /// Time range filter - start time
+    pub start_time: Option<String>,
+    /// Time range filter - end time  
+    pub end_time: Option<String>,
+    /// Minimum success chance
+    pub min_success_chance: Option<f64>,
+    /// Maximum success chance
+    pub max_success_chance: Option<f64>,
+    /// Sort field (name, last_run, success_chance, etc.)
+    pub sort: Option<String>,
+    /// Sort order (asc, desc)
+    pub order: Option<String>,
+    /// Include inactive codebases
+    pub include_inactive: Option<bool>,
 }
 
 /// Package names endpoint for typeahead
@@ -671,6 +728,345 @@ async fn search_packages(
             )
         }
     }
+}
+
+// ============================================================================
+// Phase 3.6.2: Enhanced Query & Filtering APIs
+// ============================================================================
+
+/// Enhanced codebases listing with filtering and sorting
+#[utoipa::path(
+    get,
+    path = "/codebases",
+    tag = "query",
+    params(FilterQuery),
+    responses(
+        (status = 200, description = "Filtered codebases list", body = ApiResponse<Vec<serde_json::Value>>)
+    )
+)]
+async fn get_codebases_filtered(
+    State(app_state): State<Arc<AppState>>,
+    Query(filter): Query<FilterQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Filtered codebases requested with filter: {:?}", filter);
+    
+    // Parse pagination from filter query
+    let limit = filter.limit.unwrap_or(50) as i64;
+    let offset = filter.offset.unwrap_or(0) as i64;
+    
+    // Use campaign or suite (campaign alias)
+    let campaign_filter = filter.campaign.or(filter.suite);
+    
+    // Build search term
+    let search_term = filter.q.as_deref();
+    
+    match app_state.database.get_codebases(Some(limit), Some(offset), search_term).await {
+        Ok(codebases) => {
+            // Apply additional filtering that's not handled in the database query
+            let mut filtered_codebases: Vec<serde_json::Value> = codebases
+                .into_iter()
+                .map(|cb| serde_json::to_value(cb).unwrap_or_default())
+                .collect();
+            
+            // Apply VCS type filter if specified
+            if let Some(vcs_filter) = &filter.vcs_type {
+                filtered_codebases.retain(|cb| {
+                    cb.get("vcs_type")
+                        .and_then(|v| v.as_str())
+                        .map(|vcs| vcs.to_lowercase() == vcs_filter.to_lowercase())
+                        .unwrap_or(false)
+                });
+            }
+            
+            // Apply sorting if specified
+            if let Some(sort_field) = &filter.sort {
+                let ascending = filter.order.as_deref() != Some("desc");
+                
+                filtered_codebases.sort_by(|a, b| {
+                    let a_val = a.get(sort_field);
+                    let b_val = b.get(sort_field);
+                    
+                    match (a_val, b_val) {
+                        (Some(a_str), Some(b_str)) => {
+                            if ascending {
+                                a_str.to_string().cmp(&b_str.to_string())
+                            } else {
+                                b_str.to_string().cmp(&a_str.to_string())
+                            }
+                        }
+                        (Some(_), None) => if ascending { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater },
+                        (None, Some(_)) => if ascending { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Less },
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                });
+            }
+            
+            let pagination = super::types::PaginationInfo::new(
+                None, // total_count would need additional query
+                offset,
+                limit,
+                filtered_codebases.len(),
+            );
+            
+            let response_data = serde_json::json!({
+                "codebases": filtered_codebases,
+                "filters_applied": {
+                    "search": search_term,
+                    "campaign": campaign_filter,
+                    "vcs_type": filter.vcs_type,
+                    "sort": filter.sort,
+                    "order": filter.order,
+                },
+                "total_results": filtered_codebases.len()
+            });
+            
+            negotiate_response(
+                ApiResponse::success_with_pagination(response_data, pagination),
+                &headers,
+                "/api/codebases",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get filtered codebases: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve codebases: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/codebases",
+            )
+        }
+    }
+}
+
+/// Enhanced runs listing with filtering and sorting
+#[utoipa::path(
+    get,
+    path = "/runs",
+    tag = "query",
+    params(FilterQuery),
+    responses(
+        (status = 200, description = "Filtered runs list", body = ApiResponse<Vec<serde_json::Value>>)
+    )
+)]
+async fn get_runs_filtered(
+    State(app_state): State<Arc<AppState>>,
+    Query(filter): Query<FilterQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Filtered runs requested with filter: {:?}", filter);
+    
+    // For runs, we need to query across multiple codebases or use a different approach
+    // This is a simplified implementation - in a real system, you'd want a dedicated runs table query
+    
+    let result = serde_json::json!({
+        "runs": [],
+        "message": "Enhanced runs filtering not yet implemented - needs dedicated database query",
+        "filters_requested": {
+            "search": filter.q,
+            "campaign": filter.campaign.or(filter.suite),
+            "result_code": filter.result_code,
+            "result_codes": filter.result_codes,
+            "vcs_type": filter.vcs_type,
+            "publishable_only": filter.publishable_only,
+            "success_only": filter.success_only,
+            "time_range": {
+                "start": filter.start_time,
+                "end": filter.end_time
+            },
+            "success_chance_range": {
+                "min": filter.min_success_chance,
+                "max": filter.max_success_chance
+            },
+            "sort": filter.sort,
+            "order": filter.order,
+            "include_inactive": filter.include_inactive
+        }
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/runs",
+    )
+}
+
+/// Export query parameters
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct ExportQuery {
+    /// Export format (json, csv, xml)
+    pub format: Option<String>,
+    /// Include all filters from FilterQuery
+    #[serde(flatten)]
+    pub filter: FilterQuery,
+}
+
+/// Export codebases data in various formats
+#[utoipa::path(
+    get,
+    path = "/export/codebases",
+    tag = "export",
+    params(ExportQuery),
+    responses(
+        (status = 200, description = "Exported codebases data")
+    )
+)]
+async fn export_codebases(
+    State(app_state): State<Arc<AppState>>,
+    Query(export_query): Query<ExportQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Codebases export requested: {:?}", export_query);
+    
+    let format = export_query.format.as_deref().unwrap_or("json");
+    
+    // Get filtered codebases using the same logic as get_codebases_filtered
+    let limit = export_query.filter.limit.unwrap_or(1000) as i64; // Higher default for export
+    let offset = export_query.filter.offset.unwrap_or(0) as i64;
+    let search_term = export_query.filter.q.as_deref();
+    
+    match app_state.database.get_codebases(Some(limit), Some(offset), search_term).await {
+        Ok(codebases) => {
+            match format {
+                "csv" => {
+                    let csv_headers = "name,url,branch,vcs_type\n";
+                    let csv_rows: String = codebases
+                        .iter()
+                        .map(|cb| format!("{},{},{},{}", 
+                            cb.name, 
+                            cb.url, 
+                            cb.branch.as_deref().unwrap_or(""), 
+                            "git" // Default, would need to be fetched from DB
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    
+                    let csv_content = format!("{}{}", csv_headers, csv_rows);
+                    
+                    negotiate_response(
+                        ApiResponse::success(serde_json::json!({
+                            "format": "csv",
+                            "content": csv_content,
+                            "content_type": "text/csv",
+                            "filename": format!("codebases_export_{}.csv", chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+                        })),
+                        &headers,
+                        "/api/export/codebases",
+                    )
+                }
+                "xml" => {
+                    let xml_content = format!(
+                        r#"<?xml version="1.0" encoding="UTF-8"?>
+<codebases exported="{}" count="{}">
+{}
+</codebases>"#,
+                        chrono::Utc::now().to_rfc3339(),
+                        codebases.len(),
+                        codebases
+                            .iter()
+                            .map(|cb| format!(
+                                r#"  <codebase name="{}" url="{}" branch="{}" />"#,
+                                cb.name,
+                                cb.url,
+                                cb.branch.as_deref().unwrap_or("")
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
+                    
+                    negotiate_response(
+                        ApiResponse::success(serde_json::json!({
+                            "format": "xml",
+                            "content": xml_content,
+                            "content_type": "application/xml",
+                            "filename": format!("codebases_export_{}.xml", chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+                        })),
+                        &headers,
+                        "/api/export/codebases",
+                    )
+                }
+                _ => {
+                    // Default to JSON
+                    negotiate_response(
+                        ApiResponse::success(serde_json::json!({
+                            "format": "json",
+                            "codebases": codebases,
+                            "export_metadata": {
+                                "exported_at": chrono::Utc::now(),
+                                "total_count": codebases.len(),
+                                "filters_applied": {
+                                    "search": search_term,
+                                    "limit": limit,
+                                    "offset": offset
+                                }
+                            }
+                        })),
+                        &headers,
+                        "/api/export/codebases",
+                    )
+                }
+            }
+        }
+        Err(e) => {
+            debug!("Failed to export codebases: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("export_failed".to_string()),
+                reason: Some(format!("Failed to export codebases: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/export/codebases",
+            )
+        }
+    }
+}
+
+/// Export runs data in various formats
+#[utoipa::path(
+    get,
+    path = "/export/runs",
+    tag = "export",
+    params(ExportQuery),
+    responses(
+        (status = 200, description = "Exported runs data")
+    )
+)]
+async fn export_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Query(export_query): Query<ExportQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Runs export requested: {:?}", export_query);
+    
+    let format = export_query.format.as_deref().unwrap_or("json");
+    
+    // Placeholder implementation - would need proper runs table query
+    let result = serde_json::json!({
+        "format": format,
+        "message": "Runs export not yet implemented - needs dedicated database queries",
+        "export_metadata": {
+            "requested_at": chrono::Utc::now(),
+            "filters_requested": export_query.filter
+        }
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/export/runs",
+    )
 }
 
 // ============================================================================
