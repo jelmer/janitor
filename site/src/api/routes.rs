@@ -238,7 +238,7 @@ async fn get_active_run(
         Some(format!("Run {} not found", run_id)),
     );
     
-    let mut response = negotiate_response(error_response, &headers, "/api/active-runs/{id}");
+    let response = negotiate_response(error_response, &headers, "/api/active-runs/{id}");
     // Set status to 404 - this would be handled by the error system in real implementation
     response
 }

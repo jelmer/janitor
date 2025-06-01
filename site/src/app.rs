@@ -6,6 +6,7 @@ use tera::Tera;
 use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::templates::setup_templates;
+use janitor::logs::{LogFileManager, get_log_manager};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -14,35 +15,8 @@ pub struct AppState {
     pub templates: Arc<Tera>,
     pub redis: Option<redis::Client>,
     pub http_client: reqwest::Client,
-    pub log_manager: Arc<LogManager>,
+    pub log_manager: Arc<Box<dyn LogFileManager>>,
     pub start_time: Instant,
-}
-
-// Placeholder log manager - will be enhanced when log storage is implemented
-#[derive(Debug)]
-pub struct LogManager {
-    base_path: String,
-}
-
-impl LogManager {
-    pub fn new(base_path: String) -> Self {
-        Self { base_path }
-    }
-    
-    pub async fn log_exists(&self, _run_id: &str, _log_name: &str) -> Result<bool> {
-        // TODO: Implement actual log existence check
-        Ok(true)
-    }
-    
-    pub async fn get_log_size(&self, _run_id: &str, _log_name: &str) -> Result<i64> {
-        // TODO: Implement actual log size retrieval
-        Ok(1024)
-    }
-    
-    pub async fn get_log_content(&self, _run_id: &str, _log_name: &str) -> Result<Vec<u8>> {
-        // TODO: Implement actual log content retrieval
-        Ok(b"Log file content placeholder".to_vec())
-    }
 }
 
 impl AppState {
@@ -65,10 +39,11 @@ impl AppState {
             .timeout(std::time::Duration::from_secs(30))
             .build()?;
             
-        // Initialize log manager
-        let log_manager = Arc::new(LogManager::new(
-            config.log_base_path().unwrap_or("/var/log/janitor".to_string())
-        ));
+        // Initialize log manager using the factory function
+        let log_url = config.log_url()
+            .unwrap_or_else(|| format!("file://{}", config.log_base_path()
+                .unwrap_or("/var/log/janitor".to_string())));
+        let log_manager = Arc::new(get_log_manager(Some(&log_url)).await?);
 
         Ok(Self {
             config: Arc::new(config),

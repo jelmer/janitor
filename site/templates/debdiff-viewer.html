@@ -1,0 +1,173 @@
+{% extends "layout.html" %}
+
+{% block page_title %}
+    Debian Package Diff - {{ codebase }} - {{ run_id }}
+{% endblock %}
+
+{% block body %}
+<div class="debdiff-viewer-page">
+    <div class="section" id="debdiff-viewer">
+        <div class="debdiff-header">
+            <h1>Debian Package Diff for {{ codebase }}</h1>
+            
+            <div class="breadcrumb">
+                <a href="/{{ campaign }}/">{{ campaign | title }}</a> › 
+                <a href="/{{ campaign }}/c/{{ codebase }}/">{{ codebase }}</a> › 
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}">Run {{ run_id }}</a> › 
+                <span>Debian Package Diff</span>
+            </div>
+        </div>
+        
+        {% if debdiff_info %}
+        <div class="debdiff-info">
+            <div class="info-box">
+                <p class="description">
+                    This diff shows the changes in Debian package metadata and contents 
+                    between the original and modified versions.
+                </p>
+                
+                {% if binary_packages %}
+                <div class="binary-packages">
+                    <strong>Binary Packages:</strong>
+                    <ul class="package-list">
+                        {% for pkg in binary_packages %}
+                        <li>{{ pkg }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="debdiff-actions">
+                <a href="?format=raw" class="btn btn-sm btn-secondary">Download Raw Debdiff</a>
+                {% if show_boring %}
+                <a href="?filter_boring=no" class="btn btn-sm btn-secondary">Hide Boring Changes</a>
+                {% else %}
+                <a href="?filter_boring=yes" class="btn btn-sm btn-primary">Show All Changes</a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="debdiff-content">
+            {% if debdiff_info.content %}
+                {% if debdiff_info.content_type == "text/html" %}
+                    <div class="debdiff-html">
+                        {{ debdiff_info.content | safe }}
+                    </div>
+                {% else %}
+                    <pre class="debdiff-text">{{ debdiff_info.content }}</pre>
+                {% endif %}
+            {% else %}
+                <div class="no-debdiff">
+                    <p>No package differences found.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        {% if lintian_diff %}
+        <div class="lintian-diff">
+            <h3>Lintian Changes</h3>
+            <div class="lintian-content">
+                {{ lintian_diff | safe }}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="debdiff-error">
+            <h3>Debian Package Diff Not Available</h3>
+            <p>The debian package diff could not be generated for this run.</p>
+            {% if error_message %}
+            <div class="error-details">
+                <strong>Error:</strong> {{ error_message }}
+            </div>
+            {% endif %}
+            <div class="possible-reasons">
+                <h4>Possible Reasons:</h4>
+                <ul>
+                    <li>The build did not produce any .deb packages</li>
+                    <li>The differ service is temporarily unavailable</li>
+                    <li>This is not a Debian package build</li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="navigation">
+            <div class="nav-links">
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}" class="btn btn-secondary">← Back to Run Details</a>
+                <a href="/{{ campaign }}/c/{{ codebase }}/" class="btn btn-secondary">← Back to Codebase</a>
+            </div>
+            
+            {% if show_diff %}
+            <div class="other-diffs">
+                <a href="/{{ campaign }}/c/{{ codebase }}/{{ run_id }}/diff" class="btn btn-secondary">View VCS Diff</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+/* Debdiff-specific styles */
+.debdiff-html {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.debdiff-html table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.debdiff-html td {
+    padding: 0.25rem 0.5rem;
+    vertical-align: top;
+}
+
+.debdiff-html .added {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.debdiff-html .removed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.debdiff-html .changed {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.lintian-diff {
+    margin-top: 2rem;
+}
+
+.lintian-content {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 1rem;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+.binary-packages {
+    margin-top: 1rem;
+}
+
+.package-list {
+    list-style-type: none;
+    padding-left: 1rem;
+}
+
+.package-list li:before {
+    content: "• ";
+    color: #6c757d;
+}
+</style>
+{% endblock %}
