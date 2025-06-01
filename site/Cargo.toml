@@ -59,6 +59,7 @@ time = { version = "0.3", features = ["macros"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = "0.1"
 
 # Configuration
 config = "0.14"
