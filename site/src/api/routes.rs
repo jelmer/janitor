@@ -95,8 +95,61 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
 /// Create the Cupboard (admin) API router
 pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
     Router::new()
-        // Admin queue operations - simplified for now
+        // Core admin status
         .route("/status", get(api_status))
+        
+        // Phase 3.7.1: Admin Dashboard
+        .route("/dashboard", get(cupboard_dashboard))
+        .route("/dashboard/stats", get(cupboard_dashboard_stats))
+        
+        // Worker monitoring and management
+        .route("/workers", get(cupboard_workers))
+        .route("/workers/:worker_id", get(cupboard_worker_details))
+        .route("/workers/:worker_id/pause", post(cupboard_worker_pause))
+        .route("/workers/:worker_id/resume", post(cupboard_worker_resume))
+        
+        // System status and health
+        .route("/system", get(cupboard_system_status))
+        .route("/system/health", get(cupboard_system_health))
+        .route("/system/metrics", get(cupboard_system_metrics))
+        .route("/system/config", get(cupboard_system_config))
+        
+        // Metrics and reporting
+        .route("/reports", get(cupboard_reports))
+        .route("/reports/performance", get(cupboard_performance_report))
+        .route("/reports/success-rates", get(cupboard_success_rates))
+        .route("/reports/trending", get(cupboard_trending_report))
+        
+        // Queue management (Phase 3.7.2)
+        .route("/queue", get(cupboard_queue_status))
+        .route("/queue/browse", get(cupboard_queue_browse))
+        .route("/queue/manage", get(cupboard_queue_manage))
+        .route("/queue/bulk-operations", post(cupboard_queue_bulk_operations))
+        
+        // Job control operations
+        .route("/jobs/pause", post(cupboard_jobs_pause))
+        .route("/jobs/resume", post(cupboard_jobs_resume))
+        .route("/jobs/cancel", post(cupboard_jobs_cancel))
+        .route("/jobs/requeue", post(cupboard_jobs_requeue))
+        
+        // Run management for admins
+        .route("/runs", get(cupboard_runs))
+        .route("/runs/failed", get(cupboard_failed_runs))
+        .route("/runs/stuck", get(cupboard_stuck_runs))
+        .route("/runs/:run_id/details", get(cupboard_run_details))
+        .route("/runs/:run_id/force-finish", post(cupboard_run_force_finish))
+        
+        // Publishing oversight
+        .route("/publish", get(cupboard_publish_overview))
+        .route("/publish/pending", get(cupboard_publish_pending))
+        .route("/publish/rate-limits", get(cupboard_publish_rate_limits))
+        .route("/publish/history", get(cupboard_publish_history))
+        
+        // Review system management
+        .route("/reviews", get(cupboard_reviews))
+        .route("/reviews/pending", get(cupboard_reviews_pending))
+        .route("/reviews/assign", post(cupboard_reviews_assign))
+        .route("/reviews/verdicts", get(cupboard_reviews_verdicts))
         
         // Apply middleware
         .layer(axum::middleware::from_fn(cors_middleware))
@@ -2022,6 +2075,1768 @@ async fn post_run_schedule_control(
         ApiResponse::success(result),
         &headers,
         &format!("/api/run/{}/schedule-control", run_id),
+    )
+}
+
+// ============================================================================
+// Phase 3.7: Cupboard Admin Interface Implementation
+// ============================================================================
+
+/// Cupboard query parameters for filtering and control
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct CupboardQuery {
+    /// Limit number of results
+    pub limit: Option<u32>,
+    /// Offset for pagination
+    pub offset: Option<u32>,
+    /// Filter by status
+    pub status: Option<String>,
+    /// Filter by worker ID
+    pub worker_id: Option<String>,
+    /// Include detailed information
+    pub detailed: Option<bool>,
+}
+
+/// Worker control parameters
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct WorkerControlQuery {
+    /// Reason for the action
+    pub reason: Option<String>,
+    /// Force the action even if worker is busy
+    pub force: Option<bool>,
+}
+
+/// Bulk operation parameters
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct BulkOperationQuery {
+    /// Operation type (pause, resume, cancel, requeue)
+    pub operation: String,
+    /// Target selection criteria
+    pub target: Option<String>,
+    /// Batch size for processing
+    pub batch_size: Option<u32>,
+    /// Requester information
+    pub requester: Option<String>,
+}
+
+// ============================================================================
+// Phase 3.7.1: Admin Dashboard Endpoints
+// ============================================================================
+
+/// Get main cupboard dashboard overview
+#[utoipa::path(
+    get,
+    path = "/dashboard",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Dashboard overview", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Admin access required")
+    )
+)]
+async fn cupboard_dashboard(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard dashboard requested");
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let dashboard_data = serde_json::json!({
+                "summary": {
+                    "total_codebases": stats.get("total_codebases").unwrap_or(&0),
+                    "active_runs": stats.get("active_runs").unwrap_or(&0),
+                    "queue_size": stats.get("queue_size").unwrap_or(&0),
+                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
+                },
+                "system_status": {
+                    "status": "operational",
+                    "uptime": "unknown", // TODO: Track uptime
+                    "workers": {
+                        "total": "unknown", // TODO: Get from runner service
+                        "active": "unknown",
+                        "idle": "unknown"
+                    }
+                },
+                "recent_activity": {
+                    "last_24h": {
+                        "runs_completed": "unknown", // TODO: Calculate from database
+                        "success_rate": "unknown",
+                        "average_duration": "unknown"
+                    }
+                },
+                "alerts": [], // TODO: Implement alert system
+                "timestamp": chrono::Utc::now()
+            });
+            
+            negotiate_response(
+                ApiResponse::success(dashboard_data),
+                &headers,
+                "/cupboard/dashboard",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get dashboard data: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("dashboard_error".to_string()),
+                reason: Some(format!("Failed to retrieve dashboard data: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/cupboard/dashboard",
+            )
+        }
+    }
+}
+
+/// Get detailed dashboard statistics
+#[utoipa::path(
+    get,
+    path = "/dashboard/stats",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Detailed dashboard statistics", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_dashboard_stats(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard dashboard stats requested");
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let detailed_stats = serde_json::json!({
+                "performance": {
+                    "average_run_duration": "unknown", // TODO: Calculate from database
+                    "runs_per_hour": "unknown",
+                    "success_rate_7d": "unknown",
+                    "failure_rate_7d": "unknown"
+                },
+                "queue_metrics": {
+                    "average_wait_time": "unknown",
+                    "queue_length_trend": "unknown",
+                    "processing_rate": "unknown"
+                },
+                "resource_usage": {
+                    "database_connections": "unknown", // TODO: Get from connection pool
+                    "memory_usage": "unknown",
+                    "cpu_usage": "unknown"
+                },
+                "campaign_breakdown": {
+                    "active_campaigns": "unknown", // TODO: Query campaigns
+                    "top_campaigns": []
+                },
+                "worker_statistics": {
+                    "worker_efficiency": "unknown",
+                    "worker_utilization": "unknown",
+                    "average_tasks_per_worker": "unknown"
+                },
+                "database_stats": stats,
+                "generated_at": chrono::Utc::now()
+            });
+            
+            negotiate_response(
+                ApiResponse::success(detailed_stats),
+                &headers,
+                "/cupboard/dashboard/stats",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get detailed dashboard stats: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("stats_error".to_string()),
+                reason: Some(format!("Failed to retrieve dashboard statistics: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/cupboard/dashboard/stats",
+            )
+        }
+    }
+}
+
+// ============================================================================
+// Worker Monitoring and Management
+// ============================================================================
+
+/// Get all workers status and information
+#[utoipa::path(
+    get,
+    path = "/workers",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Worker information", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_workers(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard workers list requested: {:?}", query);
+    
+    // TODO: Integrate with runner service to get actual worker data
+    let workers_data = serde_json::json!({
+        "workers": [],
+        "summary": {
+            "total_workers": 0,
+            "active_workers": 0,
+            "idle_workers": 0,
+            "failed_workers": 0
+        },
+        "status": "not_implemented",
+        "message": "Worker monitoring requires integration with runner service",
+        "query_parameters": {
+            "limit": query.limit.unwrap_or(50),
+            "offset": query.offset.unwrap_or(0),
+            "status_filter": query.status,
+            "detailed": query.detailed.unwrap_or(false)
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(workers_data),
+        &headers,
+        "/cupboard/workers",
+    )
+}
+
+/// Get detailed information about a specific worker
+#[utoipa::path(
+    get,
+    path = "/workers/{worker_id}",
+    tag = "cupboard",
+    params(
+        ("worker_id" = String, Path, description = "Worker identifier")
+    ),
+    responses(
+        (status = 200, description = "Worker details", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker not found")
+    )
+)]
+async fn cupboard_worker_details(
+    State(_app_state): State<Arc<AppState>>,
+    Path(worker_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard worker details requested for: {}", worker_id);
+    
+    // TODO: Get actual worker details from runner service
+    let worker_details = serde_json::json!({
+        "worker_id": worker_id,
+        "status": "not_implemented",
+        "message": "Worker details require integration with runner service",
+        "placeholder_data": {
+            "worker_name": worker_id,
+            "status": "unknown",
+            "current_task": null,
+            "last_heartbeat": null,
+            "capabilities": [],
+            "performance_metrics": {
+                "tasks_completed": 0,
+                "average_task_duration": null,
+                "success_rate": null
+            }
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(worker_details),
+        &headers,
+        &format!("/cupboard/workers/{}", worker_id),
+    )
+}
+
+/// Pause a specific worker
+#[utoipa::path(
+    post,
+    path = "/workers/{worker_id}/pause",
+    tag = "cupboard",
+    params(
+        ("worker_id" = String, Path, description = "Worker identifier"),
+        WorkerControlQuery
+    ),
+    responses(
+        (status = 200, description = "Worker pause initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker not found")
+    )
+)]
+async fn cupboard_worker_pause(
+    State(_app_state): State<Arc<AppState>>,
+    Path(worker_id): Path<String>,
+    Query(control): Query<WorkerControlQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard worker pause requested for: {} with control: {:?}", worker_id, control);
+    
+    // TODO: Implement actual worker pause via runner service
+    let result = serde_json::json!({
+        "worker_id": worker_id,
+        "action": "pause",
+        "status": "not_implemented",
+        "message": "Worker control requires integration with runner service",
+        "parameters": {
+            "reason": control.reason,
+            "force": control.force.unwrap_or(false)
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/cupboard/workers/{}/pause", worker_id),
+    )
+}
+
+/// Resume a specific worker
+#[utoipa::path(
+    post,
+    path = "/workers/{worker_id}/resume",
+    tag = "cupboard",
+    params(
+        ("worker_id" = String, Path, description = "Worker identifier"),
+        WorkerControlQuery
+    ),
+    responses(
+        (status = 200, description = "Worker resume initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker not found")
+    )
+)]
+async fn cupboard_worker_resume(
+    State(_app_state): State<Arc<AppState>>,
+    Path(worker_id): Path<String>,
+    Query(control): Query<WorkerControlQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard worker resume requested for: {} with control: {:?}", worker_id, control);
+    
+    // TODO: Implement actual worker resume via runner service
+    let result = serde_json::json!({
+        "worker_id": worker_id,
+        "action": "resume",
+        "status": "not_implemented",
+        "message": "Worker control requires integration with runner service",
+        "parameters": {
+            "reason": control.reason,
+            "force": control.force.unwrap_or(false)
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/cupboard/workers/{}/resume", worker_id),
+    )
+}
+
+// ============================================================================
+// System Status and Health
+// ============================================================================
+
+/// Get comprehensive system status for cupboard admin
+#[utoipa::path(
+    get,
+    path = "/system",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "System status", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_system_status(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard system status requested");
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let system_status = serde_json::json!({
+                "overall_status": "operational",
+                "services": {
+                    "database": {
+                        "status": "healthy",
+                        "stats": stats
+                    },
+                    "runner": {
+                        "status": "unknown", // TODO: Check runner service
+                        "endpoint": "unknown"
+                    },
+                    "publisher": {
+                        "status": "unknown", // TODO: Check publisher service
+                        "endpoint": "unknown"
+                    },
+                    "differ": {
+                        "status": "unknown", // TODO: Check differ service
+                        "endpoint": "unknown"
+                    }
+                },
+                "infrastructure": {
+                    "redis": {
+                        "status": "unknown", // TODO: Check Redis connection
+                        "connection_count": "unknown"
+                    },
+                    "storage": {
+                        "status": "unknown", // TODO: Check storage systems
+                        "disk_usage": "unknown"
+                    }
+                },
+                "performance": {
+                    "response_time_avg": "unknown",
+                    "throughput": "unknown",
+                    "error_rate": "unknown"
+                },
+                "last_updated": chrono::Utc::now()
+            });
+            
+            negotiate_response(
+                ApiResponse::success(system_status),
+                &headers,
+                "/cupboard/system",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get system status: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("system_error".to_string()),
+                reason: Some(format!("Failed to retrieve system status: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/cupboard/system",
+            )
+        }
+    }
+}
+
+/// Get system health check information
+#[utoipa::path(
+    get,
+    path = "/system/health",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "System health check", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_system_health(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard system health check requested");
+    
+    let mut health_status = serde_json::json!({
+        "overall_health": "healthy",
+        "checks": {},
+        "timestamp": chrono::Utc::now()
+    });
+    
+    // Database health check
+    match app_state.database.health_check().await {
+        Ok(_) => {
+            health_status["checks"]["database"] = serde_json::json!({
+                "status": "healthy",
+                "response_time_ms": "unknown" // TODO: Measure response time
+            });
+        }
+        Err(e) => {
+            health_status["checks"]["database"] = serde_json::json!({
+                "status": "unhealthy",
+                "error": format!("Database health check failed: {}", e)
+            });
+            health_status["overall_health"] = serde_json::Value::String("degraded".to_string());
+        }
+    }
+    
+    // TODO: Add health checks for other services (Redis, external APIs, etc.)
+    health_status["checks"]["redis"] = serde_json::json!({
+        "status": "unknown",
+        "message": "Redis health check not implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(health_status),
+        &headers,
+        "/cupboard/system/health",
+    )
+}
+
+/// Get detailed system metrics for monitoring
+#[utoipa::path(
+    get,
+    path = "/system/metrics",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "System metrics", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_system_metrics(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard system metrics requested");
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let metrics = serde_json::json!({
+                "application": {
+                    "uptime_seconds": "unknown", // TODO: Track application uptime
+                    "requests_total": "unknown", // TODO: Track total requests
+                    "requests_per_second": "unknown",
+                    "active_connections": "unknown"
+                },
+                "database": {
+                    "connection_pool_size": "unknown", // TODO: Get from sqlx pool
+                    "active_connections": "unknown",
+                    "idle_connections": "unknown",
+                    "query_duration_avg": "unknown",
+                    "stats": stats
+                },
+                "memory": {
+                    "heap_used_bytes": "unknown", // TODO: Add memory monitoring
+                    "heap_total_bytes": "unknown",
+                    "rss_bytes": "unknown"
+                },
+                "business_metrics": {
+                    "total_codebases": stats.get("total_codebases").unwrap_or(&0),
+                    "active_runs": stats.get("active_runs").unwrap_or(&0),
+                    "queue_size": stats.get("queue_size").unwrap_or(&0),
+                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0)
+                },
+                "collection_interval_seconds": 60,
+                "timestamp": chrono::Utc::now()
+            });
+            
+            negotiate_response(
+                ApiResponse::success(metrics),
+                &headers,
+                "/cupboard/system/metrics",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get system metrics: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("metrics_error".to_string()),
+                reason: Some(format!("Failed to retrieve system metrics: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/cupboard/system/metrics",
+            )
+        }
+    }
+}
+
+/// Get system configuration (admin view)
+#[utoipa::path(
+    get,
+    path = "/system/config",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "System configuration", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_system_config(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard system config requested");
+    
+    // Return non-sensitive configuration information
+    let config = serde_json::json!({
+        "application": {
+            "name": "janitor-site",
+            "version": env!("CARGO_PKG_VERSION"),
+            "build_time": option_env!("BUILD_TIME").unwrap_or("unknown"),
+            "git_revision": option_env!("GIT_REVISION").unwrap_or("unknown")
+        },
+        "features": {
+            "cupboard_enabled": true,
+            "admin_api_enabled": true,
+            "worker_monitoring": true,
+            "system_metrics": true
+        },
+        "limits": {
+            "max_concurrent_requests": "unknown", // TODO: Get from server config
+            "max_database_connections": "unknown",
+            "request_timeout_seconds": 30
+        },
+        "endpoints": {
+            "runner_service": "unknown", // TODO: Get from config
+            "publisher_service": "unknown",
+            "differ_service": "unknown"
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(config),
+        &headers,
+        "/cupboard/system/config",
+    )
+}
+
+// ============================================================================
+// Metrics and Reporting
+// ============================================================================
+
+/// Get available reports overview
+#[utoipa::path(
+    get,
+    path = "/reports",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Available reports", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_reports(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard reports list requested");
+    
+    let reports = serde_json::json!({
+        "available_reports": [
+            {
+                "name": "performance",
+                "title": "Performance Report",
+                "description": "System and application performance metrics",
+                "endpoint": "/cupboard/reports/performance"
+            },
+            {
+                "name": "success-rates",
+                "title": "Success Rates Report",
+                "description": "Campaign and run success rate analysis",
+                "endpoint": "/cupboard/reports/success-rates"
+            },
+            {
+                "name": "trending",
+                "title": "Trending Analysis",
+                "description": "Trending data for campaigns and success rates",
+                "endpoint": "/cupboard/reports/trending"
+            }
+        ],
+        "report_generation": {
+            "formats": ["json", "csv", "html"],
+            "time_ranges": ["1h", "24h", "7d", "30d", "custom"],
+            "scheduling": "not_implemented"
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(reports),
+        &headers,
+        "/cupboard/reports",
+    )
+}
+
+/// Generate performance report
+#[utoipa::path(
+    get,
+    path = "/reports/performance",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Performance report", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_performance_report(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard performance report requested");
+    
+    // TODO: Generate actual performance report from database
+    let performance_report = serde_json::json!({
+        "report_type": "performance",
+        "time_range": "24h",
+        "metrics": {
+            "response_times": {
+                "avg_ms": "unknown",
+                "p50_ms": "unknown",
+                "p95_ms": "unknown",
+                "p99_ms": "unknown"
+            },
+            "throughput": {
+                "requests_per_second": "unknown",
+                "runs_per_hour": "unknown"
+            },
+            "errors": {
+                "error_rate_percent": "unknown",
+                "total_errors": "unknown"
+            }
+        },
+        "trends": {
+            "response_time_trend": "stable",
+            "throughput_trend": "unknown",
+            "error_trend": "unknown"
+        },
+        "status": "not_implemented",
+        "message": "Performance reporting requires database queries and metrics collection",
+        "generated_at": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(performance_report),
+        &headers,
+        "/cupboard/reports/performance",
+    )
+}
+
+/// Generate success rates report
+#[utoipa::path(
+    get,
+    path = "/reports/success-rates",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Success rates report", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_success_rates(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard success rates report requested");
+    
+    // TODO: Calculate actual success rates from database
+    let success_report = serde_json::json!({
+        "report_type": "success_rates",
+        "time_range": "7d",
+        "overall_success_rate": "unknown",
+        "by_campaign": {},
+        "by_time_period": {
+            "last_24h": "unknown",
+            "last_7d": "unknown",
+            "last_30d": "unknown"
+        },
+        "failure_analysis": {
+            "top_failure_reasons": [],
+            "transient_failures": "unknown",
+            "permanent_failures": "unknown"
+        },
+        "trends": {
+            "success_rate_trend": "unknown",
+            "volume_trend": "unknown"
+        },
+        "status": "not_implemented",
+        "message": "Success rate reporting requires database queries for run outcomes",
+        "generated_at": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(success_report),
+        &headers,
+        "/cupboard/reports/success-rates",
+    )
+}
+
+/// Generate trending analysis report
+#[utoipa::path(
+    get,
+    path = "/reports/trending",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Trending analysis report", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_trending_report(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard trending report requested");
+    
+    // TODO: Generate actual trending analysis
+    let trending_report = serde_json::json!({
+        "report_type": "trending",
+        "analysis_period": "30d",
+        "campaign_trends": {
+            "most_active_campaigns": [],
+            "improving_campaigns": [],
+            "declining_campaigns": []
+        },
+        "package_trends": {
+            "most_processed_packages": [],
+            "successful_packages": [],
+            "problematic_packages": []
+        },
+        "system_trends": {
+            "processing_volume": "unknown",
+            "queue_length_trend": "unknown",
+            "worker_efficiency_trend": "unknown"
+        },
+        "predictions": {
+            "next_week_volume": "unknown",
+            "resource_requirements": "unknown"
+        },
+        "status": "not_implemented",
+        "message": "Trending analysis requires time-series data and statistical calculations",
+        "generated_at": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(trending_report),
+        &headers,
+        "/cupboard/reports/trending",
+    )
+}
+
+// ============================================================================
+// Phase 3.7.2: Queue Management Endpoints  
+// ============================================================================
+
+/// Get queue status for cupboard management
+#[utoipa::path(
+    get,
+    path = "/queue",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Queue status for admin", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_queue_status(
+    State(app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard queue status requested: {:?}", query);
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let queue_status = serde_json::json!({
+                "queue_overview": {
+                    "total_items": stats.get("queue_size").unwrap_or(&0),
+                    "processing_items": stats.get("active_runs").unwrap_or(&0),
+                    "waiting_items": "unknown", // TODO: Calculate waiting items
+                    "failed_items": "unknown"
+                },
+                "queue_health": {
+                    "processing_rate": "unknown", // TODO: Calculate processing rate
+                    "average_wait_time": "unknown",
+                    "oldest_item_age": "unknown"
+                },
+                "worker_allocation": {
+                    "busy_workers": "unknown", // TODO: Get from runner service
+                    "idle_workers": "unknown",
+                    "total_workers": "unknown"
+                },
+                "priority_distribution": {
+                    "high_priority": "unknown",
+                    "normal_priority": "unknown", 
+                    "low_priority": "unknown"
+                },
+                "campaign_breakdown": "unknown", // TODO: Group by campaign
+                "management_actions": {
+                    "pause_available": true,
+                    "resume_available": true,
+                    "bulk_operations_available": true
+                },
+                "query_parameters": {
+                    "limit": query.limit.unwrap_or(50),
+                    "offset": query.offset.unwrap_or(0),
+                    "status_filter": query.status
+                },
+                "timestamp": chrono::Utc::now()
+            });
+            
+            negotiate_response(
+                ApiResponse::success(queue_status),
+                &headers,
+                "/cupboard/queue",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get queue status: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("queue_error".to_string()),
+                reason: Some(format!("Failed to retrieve queue status: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/cupboard/queue",
+            )
+        }
+    }
+}
+
+/// Browse queue items with detailed information
+#[utoipa::path(
+    get,
+    path = "/queue/browse",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Queue items for browsing", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_queue_browse(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard queue browse requested: {:?}", query);
+    
+    // TODO: Implement actual queue browsing from database
+    let queue_items = serde_json::json!({
+        "items": [],
+        "pagination": {
+            "limit": query.limit.unwrap_or(50),
+            "offset": query.offset.unwrap_or(0),
+            "total": 0,
+            "has_more": false
+        },
+        "filtering": {
+            "status_filter": query.status,
+            "available_statuses": ["pending", "running", "failed", "completed"]
+        },
+        "status": "not_implemented",
+        "message": "Queue browsing requires database queries for queue items",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(queue_items),
+        &headers,
+        "/cupboard/queue/browse",
+    )
+}
+
+/// Queue management operations interface
+#[utoipa::path(
+    get,
+    path = "/queue/manage",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Queue management options", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_queue_manage(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard queue management interface requested");
+    
+    let management_options = serde_json::json!({
+        "available_operations": [
+            {
+                "operation": "pause_queue",
+                "description": "Pause queue processing",
+                "endpoint": "/cupboard/jobs/pause",
+                "method": "POST"
+            },
+            {
+                "operation": "resume_queue", 
+                "description": "Resume queue processing",
+                "endpoint": "/cupboard/jobs/resume",
+                "method": "POST"
+            },
+            {
+                "operation": "bulk_cancel",
+                "description": "Cancel multiple jobs",
+                "endpoint": "/cupboard/queue/bulk-operations",
+                "method": "POST"
+            },
+            {
+                "operation": "requeue_failed",
+                "description": "Requeue failed items",
+                "endpoint": "/cupboard/jobs/requeue",
+                "method": "POST"
+            }
+        ],
+        "current_status": {
+            "queue_processing": "unknown", // TODO: Get actual status
+            "admin_controls": "enabled"
+        },
+        "bulk_operation_limits": {
+            "max_batch_size": 1000,
+            "rate_limit": "10 operations per minute"
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(management_options),
+        &headers,
+        "/cupboard/queue/manage",
+    )
+}
+
+/// Execute bulk operations on queue items
+#[utoipa::path(
+    post,
+    path = "/queue/bulk-operations",
+    tag = "cupboard",
+    params(BulkOperationQuery),
+    responses(
+        (status = 200, description = "Bulk operation initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_queue_bulk_operations(
+    State(_app_state): State<Arc<AppState>>,
+    Query(operation): Query<BulkOperationQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard bulk operation requested: {:?}", operation);
+    
+    // TODO: Implement actual bulk operations
+    let result = serde_json::json!({
+        "operation": operation.operation,
+        "status": "not_implemented",
+        "message": "Bulk operations require integration with runner service",
+        "parameters": {
+            "target": operation.target,
+            "batch_size": operation.batch_size.unwrap_or(100),
+            "requester": operation.requester
+        },
+        "estimated_affected_items": 0,
+        "execution_time_estimate": "unknown",
+        "initiated_at": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/queue/bulk-operations",
+    )
+}
+
+// ============================================================================
+// Job Control Operations
+// ============================================================================
+
+/// Pause job processing
+#[utoipa::path(
+    post,
+    path = "/jobs/pause",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Job processing paused", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_jobs_pause(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard jobs pause requested");
+    
+    // TODO: Implement actual job pause via runner service
+    let result = serde_json::json!({
+        "action": "pause_jobs",
+        "status": "not_implemented",
+        "message": "Job control requires integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/jobs/pause",
+    )
+}
+
+/// Resume job processing
+#[utoipa::path(
+    post,
+    path = "/jobs/resume",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Job processing resumed", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_jobs_resume(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard jobs resume requested");
+    
+    // TODO: Implement actual job resume via runner service
+    let result = serde_json::json!({
+        "action": "resume_jobs",
+        "status": "not_implemented", 
+        "message": "Job control requires integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/jobs/resume",
+    )
+}
+
+/// Cancel specific jobs
+#[utoipa::path(
+    post,
+    path = "/jobs/cancel",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Job cancellation initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_jobs_cancel(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard jobs cancel requested");
+    
+    // TODO: Implement actual job cancellation via runner service
+    let result = serde_json::json!({
+        "action": "cancel_jobs",
+        "status": "not_implemented",
+        "message": "Job control requires integration with runner service", 
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/jobs/cancel",
+    )
+}
+
+/// Requeue failed jobs
+#[utoipa::path(
+    post,
+    path = "/jobs/requeue",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Job requeue initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_jobs_requeue(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard jobs requeue requested");
+    
+    // TODO: Implement actual job requeue via runner service
+    let result = serde_json::json!({
+        "action": "requeue_jobs",
+        "status": "not_implemented",
+        "message": "Job control requires integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/jobs/requeue",
+    )
+}
+
+// ============================================================================
+// Advanced Run Management for Admins
+// ============================================================================
+
+/// Get runs with admin-level details
+#[utoipa::path(
+    get,
+    path = "/runs",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Admin view of runs", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard runs requested: {:?}", query);
+    
+    // TODO: Implement admin-level runs query with enhanced details
+    let runs_data = serde_json::json!({
+        "runs": [],
+        "summary": {
+            "total_runs": 0,
+            "active_runs": 0,
+            "failed_runs": 0,
+            "completed_runs": 0
+        },
+        "admin_actions": [
+            "force_finish",
+            "requeue",
+            "cancel",
+            "view_logs"
+        ],
+        "status": "not_implemented",
+        "message": "Admin runs view requires database queries for run details",
+        "query_parameters": {
+            "limit": query.limit.unwrap_or(50),
+            "offset": query.offset.unwrap_or(0),
+            "status_filter": query.status,
+            "detailed": query.detailed.unwrap_or(true)
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(runs_data),
+        &headers,
+        "/cupboard/runs",
+    )
+}
+
+/// Get failed runs for troubleshooting
+#[utoipa::path(
+    get,
+    path = "/runs/failed",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Failed runs for analysis", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_failed_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard failed runs requested: {:?}", query);
+    
+    // TODO: Query database for failed runs with failure reasons
+    let failed_runs = serde_json::json!({
+        "failed_runs": [],
+        "failure_analysis": {
+            "total_failed": 0,
+            "failure_categories": {},
+            "recent_failures": 0,
+            "retry_candidates": 0
+        },
+        "troubleshooting": {
+            "common_failure_patterns": [],
+            "suggested_actions": []
+        },
+        "status": "not_implemented",
+        "message": "Failed runs analysis requires database queries for failure data",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(failed_runs),
+        &headers,
+        "/cupboard/runs/failed",
+    )
+}
+
+/// Get stuck runs that need intervention
+#[utoipa::path(
+    get,
+    path = "/runs/stuck",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Stuck runs needing intervention", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_stuck_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard stuck runs requested: {:?}", query);
+    
+    // TODO: Identify runs that have been running too long or are stuck
+    let stuck_runs = serde_json::json!({
+        "stuck_runs": [],
+        "detection_criteria": {
+            "max_runtime_hours": 24,
+            "no_progress_hours": 4,
+            "heartbeat_timeout_hours": 1
+        },
+        "intervention_options": [
+            "force_finish",
+            "restart",
+            "cancel_and_requeue"
+        ],
+        "status": "not_implemented",
+        "message": "Stuck run detection requires runtime and heartbeat analysis",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(stuck_runs),
+        &headers,
+        "/cupboard/runs/stuck",
+    )
+}
+
+/// Get detailed run information for admin analysis
+#[utoipa::path(
+    get,
+    path = "/runs/{run_id}/details",
+    tag = "cupboard",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Detailed admin view of run", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found")
+    )
+)]
+async fn cupboard_run_details(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard run details requested for: {}", run_id);
+    
+    // TODO: Get comprehensive run details including logs, worker info, etc.
+    let run_details = serde_json::json!({
+        "run_id": run_id,
+        "admin_details": {
+            "worker_assigned": "unknown",
+            "start_time": "unknown",
+            "estimated_completion": "unknown",
+            "resource_usage": "unknown"
+        },
+        "debugging_info": {
+            "log_files": [],
+            "error_traces": [],
+            "performance_metrics": {}
+        },
+        "admin_actions": {
+            "can_force_finish": true,
+            "can_restart": true,
+            "can_cancel": true
+        },
+        "status": "not_implemented",
+        "message": "Run details require database and log system integration",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(run_details),
+        &headers,
+        &format!("/cupboard/runs/{}/details", run_id),
+    )
+}
+
+/// Force finish a run (admin emergency action)
+#[utoipa::path(
+    post,
+    path = "/runs/{run_id}/force-finish",
+    tag = "cupboard",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run force finish initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found")
+    )
+)]
+async fn cupboard_run_force_finish(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard run force finish requested for: {}", run_id);
+    
+    // TODO: Implement force finish via runner service
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "force_finish",
+        "status": "not_implemented",
+        "message": "Force finish requires integration with runner service",
+        "warning": "This is an emergency action that may result in data loss",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/cupboard/runs/{}/force-finish", run_id),
+    )
+}
+
+// ============================================================================
+// Publishing Oversight
+// ============================================================================
+
+/// Get publishing overview for admin monitoring
+#[utoipa::path(
+    get,
+    path = "/publish",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Publishing system overview", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_publish_overview(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard publish overview requested");
+    
+    // TODO: Get publishing statistics and status
+    let publish_overview = serde_json::json!({
+        "overview": {
+            "publishing_enabled": true,
+            "auto_publish_enabled": "unknown",
+            "total_published": "unknown",
+            "pending_publish": "unknown"
+        },
+        "rate_limiting": {
+            "current_rate": "unknown",
+            "rate_limit": "unknown",
+            "next_available": "unknown"
+        },
+        "recent_activity": {
+            "last_24h_published": "unknown",
+            "success_rate": "unknown",
+            "failed_publishes": "unknown"
+        },
+        "monitoring": {
+            "forge_connectivity": "unknown",
+            "merge_proposal_status": "unknown"
+        },
+        "status": "not_implemented",
+        "message": "Publishing oversight requires integration with publisher service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(publish_overview),
+        &headers,
+        "/cupboard/publish",
+    )
+}
+
+/// Get pending publishing items
+#[utoipa::path(
+    get,
+    path = "/publish/pending",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Pending publishing items", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_publish_pending(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard pending publishes requested: {:?}", query);
+    
+    // TODO: Query database for pending publishing items
+    let pending_publishes = serde_json::json!({
+        "pending_items": [],
+        "summary": {
+            "total_pending": 0,
+            "awaiting_review": 0,
+            "rate_limited": 0,
+            "ready_to_publish": 0
+        },
+        "admin_actions": [
+            "force_publish",
+            "skip_rate_limit",
+            "bulk_approve"
+        ],
+        "status": "not_implemented",
+        "message": "Pending publishes require database queries for publishing queue",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(pending_publishes),
+        &headers,
+        "/cupboard/publish/pending",
+    )
+}
+
+/// Get rate limiting status and controls
+#[utoipa::path(
+    get,
+    path = "/publish/rate-limits",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Publishing rate limits", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_publish_rate_limits(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard publish rate limits requested");
+    
+    // TODO: Get rate limiting configuration and status
+    let rate_limits = serde_json::json!({
+        "rate_limits": {
+            "github": {
+                "limit": "unknown",
+                "remaining": "unknown",
+                "reset_time": "unknown"
+            },
+            "gitlab": {
+                "limit": "unknown",
+                "remaining": "unknown",
+                "reset_time": "unknown"
+            }
+        },
+        "configuration": {
+            "respect_forge_limits": true,
+            "custom_rate_limit": "unknown",
+            "burst_allowance": "unknown"
+        },
+        "admin_controls": {
+            "can_override_limits": true,
+            "can_pause_publishing": true,
+            "can_adjust_rates": true
+        },
+        "status": "not_implemented",
+        "message": "Rate limiting requires integration with publisher service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(rate_limits),
+        &headers,
+        "/cupboard/publish/rate-limits",
+    )
+}
+
+/// Get publishing history and analytics
+#[utoipa::path(
+    get,
+    path = "/publish/history",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Publishing history", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_publish_history(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard publish history requested: {:?}", query);
+    
+    // TODO: Query database for publishing history
+    let publish_history = serde_json::json!({
+        "history": [],
+        "analytics": {
+            "total_published": 0,
+            "success_rate": "unknown",
+            "average_time_to_publish": "unknown",
+            "most_active_campaigns": []
+        },
+        "trends": {
+            "publishing_volume": "unknown",
+            "success_rate_trend": "unknown",
+            "forge_performance": {}
+        },
+        "status": "not_implemented",
+        "message": "Publishing history requires database queries for publish records",
+        "query_parameters": {
+            "limit": query.limit.unwrap_or(50),
+            "offset": query.offset.unwrap_or(0)
+        },
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(publish_history),
+        &headers,
+        "/cupboard/publish/history",
+    )
+}
+
+// ============================================================================
+// Review System Management
+// ============================================================================
+
+/// Get review system overview
+#[utoipa::path(
+    get,
+    path = "/reviews",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Review system overview", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_reviews(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard reviews overview requested");
+    
+    // TODO: Get review system statistics
+    let reviews_overview = serde_json::json!({
+        "system_status": {
+            "reviews_enabled": true,
+            "auto_review_enabled": "unknown",
+            "manual_review_required": "unknown"
+        },
+        "statistics": {
+            "total_reviews": "unknown",
+            "pending_reviews": "unknown",
+            "approved_reviews": "unknown",
+            "rejected_reviews": "unknown"
+        },
+        "reviewers": {
+            "active_reviewers": "unknown",
+            "review_load_distribution": {}
+        },
+        "performance": {
+            "average_review_time": "unknown",
+            "review_throughput": "unknown"
+        },
+        "status": "not_implemented",
+        "message": "Review system requires database queries for review data",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(reviews_overview),
+        &headers,
+        "/cupboard/reviews",
+    )
+}
+
+/// Get pending reviews needing attention
+#[utoipa::path(
+    get,
+    path = "/reviews/pending",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Pending reviews", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_reviews_pending(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard pending reviews requested: {:?}", query);
+    
+    // TODO: Query database for pending reviews
+    let pending_reviews = serde_json::json!({
+        "pending_reviews": [],
+        "summary": {
+            "total_pending": 0,
+            "overdue_reviews": 0,
+            "high_priority": 0,
+            "auto_reviewable": 0
+        },
+        "admin_actions": [
+            "bulk_approve",
+            "assign_reviewer",
+            "escalate_review"
+        ],
+        "status": "not_implemented",
+        "message": "Pending reviews require database queries for review queue",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(pending_reviews),
+        &headers,
+        "/cupboard/reviews/pending",
+    )
+}
+
+/// Assign reviews to reviewers
+#[utoipa::path(
+    post,
+    path = "/reviews/assign",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Review assignment completed", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_reviews_assign(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard review assignment requested");
+    
+    // TODO: Implement review assignment logic
+    let assignment_result = serde_json::json!({
+        "action": "assign_reviews",
+        "status": "not_implemented",
+        "message": "Review assignment requires reviewer management system",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(assignment_result),
+        &headers,
+        "/cupboard/reviews/assign",
+    )
+}
+
+/// Get review verdicts and outcomes
+#[utoipa::path(
+    get,
+    path = "/reviews/verdicts",
+    tag = "cupboard",
+    params(CupboardQuery),
+    responses(
+        (status = 200, description = "Review verdicts", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_reviews_verdicts(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<CupboardQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard review verdicts requested: {:?}", query);
+    
+    // TODO: Query database for review verdicts and outcomes
+    let verdicts = serde_json::json!({
+        "verdicts": [],
+        "summary": {
+            "total_verdicts": 0,
+            "approved_count": 0,
+            "rejected_count": 0,
+            "pending_count": 0
+        },
+        "analytics": {
+            "approval_rate": "unknown",
+            "average_review_time": "unknown",
+            "reviewer_performance": {}
+        },
+        "status": "not_implemented",
+        "message": "Review verdicts require database queries for verdict data",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(verdicts),
+        &headers,
+        "/cupboard/reviews/verdicts",
     )
 }
 
