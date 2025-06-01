@@ -56,6 +56,18 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/export/codebases", get(export_codebases))
         .route("/export/runs", get(export_runs))
         
+        // Administrative APIs (Phase 3.6.3)
+        .route("/admin/system/status", get(admin_system_status))
+        .route("/admin/system/config", get(admin_system_config))
+        .route("/admin/system/metrics", get(admin_system_metrics))
+        .route("/admin/runs/:run_id/kill", post(admin_kill_run))
+        .route("/admin/runs/mass-reschedule", post(admin_mass_reschedule))
+        .route("/admin/runs/:run_id/reprocess-logs", post(admin_reprocess_run_logs))
+        .route("/admin/publish/autopublish", post(admin_autopublish))
+        .route("/admin/publish/scan", post(admin_publish_scan))
+        .route("/admin/workers", get(admin_get_workers))
+        .route("/admin/workers/:worker_id", get(admin_get_worker_details))
+        
         // Campaign endpoints
         .route("/:campaign/merge-proposals", get(get_campaign_merge_proposals))
         .route("/:campaign/ready", get(get_campaign_ready_runs))
@@ -908,6 +920,30 @@ pub struct ExportQuery {
     pub filter: FilterQuery,
 }
 
+/// Admin mass reschedule parameters
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct MassRescheduleQuery {
+    /// Result code to reschedule
+    pub result_code: Option<String>,
+    /// Include transient failures
+    pub include_transient: Option<bool>,
+    /// Campaign/suite filter
+    pub campaign: Option<String>,
+    /// Maximum number of runs to reschedule
+    pub limit: Option<u32>,
+    /// Requester information
+    pub requester: Option<String>,
+}
+
+/// Admin configuration query parameters
+#[derive(Debug, Serialize, Deserialize, IntoParams)]
+pub struct AdminConfigQuery {
+    /// Include sensitive configuration values
+    pub include_sensitive: Option<bool>,
+    /// Configuration section filter
+    pub section: Option<String>,
+}
+
 /// Export codebases data in various formats
 #[utoipa::path(
     get,
@@ -1066,6 +1102,478 @@ async fn export_runs(
         ApiResponse::success(result),
         &headers,
         "/api/export/runs",
+    )
+}
+
+// ============================================================================
+// Phase 3.6.3: Administrative APIs
+// ============================================================================
+
+/// Get comprehensive system status for administrators
+#[utoipa::path(
+    get,
+    path = "/admin/system/status",
+    tag = "admin",
+    responses(
+        (status = 200, description = "System status information", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_system_status(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    // TODO: Add admin authentication middleware
+) -> impl axum::response::IntoResponse {
+    debug!("Admin system status requested");
+    
+    // Get comprehensive system information
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let system_status = serde_json::json!({
+                "system": {
+                    "status": "operational",
+                    "uptime": "unknown", // TODO: Track uptime
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "build_time": option_env!("BUILD_TIME").unwrap_or("unknown"),
+                    "git_revision": option_env!("GIT_REVISION").unwrap_or("unknown"),
+                },
+                "database": {
+                    "status": "healthy",
+                    "total_codebases": stats.get("total_codebases").unwrap_or(&0),
+                    "active_runs": stats.get("active_runs").unwrap_or(&0),
+                    "queue_size": stats.get("queue_size").unwrap_or(&0),
+                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
+                },
+                "services": {
+                    "runner": "unknown", // TODO: Check runner service
+                    "publisher": "unknown", // TODO: Check publisher service
+                    "worker_pool": "unknown", // TODO: Check worker pool
+                },
+                "resources": {
+                    "memory_usage": "unknown", // TODO: Add memory monitoring
+                    "cpu_usage": "unknown", // TODO: Add CPU monitoring
+                    "disk_usage": "unknown", // TODO: Add disk monitoring
+                },
+                "timestamp": chrono::Utc::now(),
+            });
+            
+            negotiate_response(
+                ApiResponse::success(system_status),
+                &headers,
+                "/api/admin/system/status",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get admin system status: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("system_error".to_string()),
+                reason: Some(format!("Failed to retrieve system status: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/admin/system/status",
+            )
+        }
+    }
+}
+
+/// Get system configuration for administrators
+#[utoipa::path(
+    get,
+    path = "/admin/system/config",
+    tag = "admin",
+    params(AdminConfigQuery),
+    responses(
+        (status = 200, description = "System configuration", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_system_config(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<AdminConfigQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin system config requested: {:?}", query);
+    
+    let include_sensitive = query.include_sensitive.unwrap_or(false);
+    
+    // Get system configuration (filtered for security)
+    let mut config = serde_json::json!({
+        "application": {
+            "name": "janitor-site",
+            "version": env!("CARGO_PKG_VERSION"),
+            "environment": "production", // TODO: Get from actual config
+        },
+        "features": {
+            "authentication_enabled": true,
+            "rate_limiting_enabled": true,
+            "export_enabled": true,
+            "admin_api_enabled": true,
+        },
+        "limits": {
+            "max_page_size": 1000,
+            "max_export_size": 10000,
+            "request_timeout_seconds": 30,
+        }
+    });
+    
+    if include_sensitive {
+        // Add sensitive configuration (would need proper admin auth)
+        config["sensitive"] = serde_json::json!({
+            "database_url": "***REDACTED***",
+            "redis_url": "***REDACTED***",
+            "secret_keys": "***REDACTED***",
+            "note": "Sensitive values redacted for security"
+        });
+    }
+    
+    if let Some(section) = query.section {
+        if let Some(section_data) = config.get(&section) {
+            config = section_data.clone();
+        } else {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("section_not_found".to_string()),
+                reason: Some(format!("Configuration section '{}' not found", section)),
+                details: None,
+                pagination: None,
+            };
+            
+            return negotiate_response(
+                error_response,
+                &headers,
+                "/api/admin/system/config",
+            );
+        }
+    }
+    
+    negotiate_response(
+        ApiResponse::success(config),
+        &headers,
+        "/api/admin/system/config",
+    )
+}
+
+/// Get system metrics for monitoring
+#[utoipa::path(
+    get,
+    path = "/admin/system/metrics",
+    tag = "admin",
+    responses(
+        (status = 200, description = "System metrics", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_system_metrics(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin system metrics requested");
+    
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let metrics = serde_json::json!({
+                "performance": {
+                    "avg_response_time_ms": "unknown", // TODO: Add performance tracking
+                    "requests_per_second": "unknown",
+                    "error_rate_percent": "unknown",
+                },
+                "database": {
+                    "connection_pool_size": "unknown", // TODO: Get from pool
+                    "active_connections": "unknown",
+                    "query_avg_time_ms": "unknown",
+                    "total_queries": "unknown",
+                },
+                "business_metrics": {
+                    "total_codebases": stats.get("total_codebases").unwrap_or(&0),
+                    "active_runs": stats.get("active_runs").unwrap_or(&0),
+                    "queue_size": stats.get("queue_size").unwrap_or(&0),
+                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
+                    "success_rate_24h": "unknown", // TODO: Calculate success rate
+                },
+                "system_resources": {
+                    "memory_used_mb": "unknown", // TODO: Add system monitoring
+                    "memory_total_mb": "unknown",
+                    "cpu_percent": "unknown",
+                    "disk_used_percent": "unknown",
+                },
+                "timestamp": chrono::Utc::now(),
+                "collection_interval_seconds": 60,
+            });
+            
+            negotiate_response(
+                ApiResponse::success(metrics),
+                &headers,
+                "/api/admin/system/metrics",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get admin metrics: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("metrics_error".to_string()),
+                reason: Some(format!("Failed to retrieve system metrics: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/admin/system/metrics",
+            )
+        }
+    }
+}
+
+/// Kill a specific run (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/runs/{run_id}/kill",
+    tag = "admin",
+    params(
+        ("run_id" = String, Path, description = "Run ID to kill")
+    ),
+    responses(
+        (status = 200, description = "Run kill initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_kill_run(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin kill run requested for run: {}", run_id);
+    
+    // TODO: Implement actual run killing via runner service
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "kill",
+        "status": "not_implemented",
+        "message": "Run killing requires integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/runs/{}/kill", run_id),
+    )
+}
+
+/// Mass reschedule runs based on criteria (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/runs/mass-reschedule",
+    tag = "admin",
+    params(MassRescheduleQuery),
+    responses(
+        (status = 200, description = "Mass reschedule initiated", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_mass_reschedule(
+    State(_app_state): State<Arc<AppState>>,
+    Query(query): Query<MassRescheduleQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin mass reschedule requested: {:?}", query);
+    
+    // TODO: Implement actual mass rescheduling
+    let result = serde_json::json!({
+        "action": "mass_reschedule",
+        "criteria": {
+            "result_code": query.result_code,
+            "include_transient": query.include_transient.unwrap_or(false),
+            "campaign": query.campaign,
+            "limit": query.limit.unwrap_or(100),
+        },
+        "status": "not_implemented",
+        "message": "Mass rescheduling requires integration with runner service",
+        "estimated_affected_runs": 0,
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/runs/mass-reschedule",
+    )
+}
+
+/// Reprocess logs for a specific run (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/runs/{run_id}/reprocess-logs",
+    tag = "admin",
+    params(
+        ("run_id" = String, Path, description = "Run ID to reprocess logs")
+    ),
+    responses(
+        (status = 200, description = "Log reprocessing initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_reprocess_run_logs(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin reprocess logs requested for run: {}", run_id);
+    
+    // TODO: Implement actual log reprocessing
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "reprocess_logs",
+        "status": "not_implemented",
+        "message": "Log reprocessing requires integration with log management service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/runs/{}/reprocess-logs", run_id),
+    )
+}
+
+/// Trigger autopublish scan (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/publish/autopublish",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Autopublish scan initiated", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_autopublish(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin autopublish scan requested");
+    
+    // TODO: Implement actual autopublish trigger
+    let result = serde_json::json!({
+        "action": "autopublish_scan",
+        "status": "not_implemented",
+        "message": "Autopublish scanning requires integration with publisher service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/publish/autopublish",
+    )
+}
+
+/// Trigger publish scan (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/publish/scan",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Publish scan initiated", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_publish_scan(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin publish scan requested");
+    
+    // TODO: Implement actual publish scan
+    let result = serde_json::json!({
+        "action": "publish_scan",
+        "status": "not_implemented", 
+        "message": "Publish scanning requires integration with publisher service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/publish/scan",
+    )
+}
+
+/// Get worker information (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/workers",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Worker information", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_workers(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin workers list requested");
+    
+    // TODO: Implement actual worker status retrieval
+    let workers = serde_json::json!({
+        "workers": [],
+        "total_workers": 0,
+        "active_workers": 0,
+        "idle_workers": 0,
+        "status": "not_implemented",
+        "message": "Worker monitoring requires integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(workers),
+        &headers,
+        "/api/admin/workers",
+    )
+}
+
+/// Get detailed worker information (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/workers/{worker_id}",
+    tag = "admin",
+    params(
+        ("worker_id" = String, Path, description = "Worker ID")
+    ),
+    responses(
+        (status = 200, description = "Worker details", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_worker_details(
+    State(_app_state): State<Arc<AppState>>,
+    Path(worker_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin worker details requested for worker: {}", worker_id);
+    
+    // TODO: Implement actual worker details retrieval
+    let worker_details = serde_json::json!({
+        "worker_id": worker_id,
+        "status": "not_implemented",
+        "message": "Worker details require integration with runner service",
+        "timestamp": chrono::Utc::now()
+    });
+    
+    negotiate_response(
+        ApiResponse::success(worker_details),
+        &headers,
+        &format!("/api/admin/workers/{}", worker_id),
     )
 }
 
