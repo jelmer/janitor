@@ -1,26 +1,21 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::Json,
     routing::{get, post},
     Router,
 };
 use std::sync::Arc;
-use tracing::{debug, info};
-use utoipa::path;
+use tracing::debug;
 
-use crate::{
-    app::AppState,
-    auth::{require_admin, require_login, require_qa_reviewer, UserContext, OptionalUser},
-};
+use crate::app::AppState;
 use super::{
-    content_negotiation::{negotiate_response, ContentType, NegotiatedResponse},
+    content_negotiation::{negotiate_response, ContentType},
     middleware::{content_negotiation_middleware, logging_middleware, metrics_middleware, cors_middleware},
     types::{
         ApiResponse, ApiResult, CommonQuery, QueueStatus,
     },
     schemas::{Run, MergeProposal},
-    error::AppError,
 };
 
 /// Create the main API router
@@ -108,25 +103,33 @@ async fn health_check(
 ) -> ApiResult<Json<ApiResponse<serde_json::Value>>> {
     debug!("Health check requested");
     
+    let mut services = std::collections::HashMap::new();
+    
     // Check database connectivity
-    if let Err(e) = app_state.database.health_check().await {
-        let error_response = ApiResponse {
-            data: None,
-            error: Some("database_error".to_string()),
-            reason: Some(format!("Database health check failed: {}", e)),
-            details: None,
-            pagination: None,
-        };
-        return Ok(Json(error_response));
+    match app_state.database.health_check().await {
+        Ok(_) => {
+            services.insert("database", "healthy");
+        }
+        Err(e) => {
+            services.insert("database", "unhealthy");
+            let error_response = ApiResponse {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Database health check failed: {}", e)),
+                details: Some(serde_json::json!({"services": services})),
+                pagination: None,
+            };
+            return Ok(Json(error_response));
+        }
     }
+    
+    // TODO: Add Redis health check when available
+    services.insert("redis", "unknown");
     
     let status = serde_json::json!({
         "status": "healthy",
         "timestamp": chrono::Utc::now(),
-        "services": {
-            "database": "healthy",
-            "redis": "unknown" // TODO: Add Redis health check
-        }
+        "services": services
     });
     
     Ok(Json(ApiResponse::success(status)))
@@ -174,25 +177,43 @@ async fn api_status() -> Json<ApiResponse<serde_json::Value>> {
     )
 )]
 async fn get_queue_status(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(_query): Query<CommonQuery>,
 ) -> impl axum::response::IntoResponse {
     debug!("Queue status requested");
     
-    // TODO: Implement actual queue status retrieval
-    let queue_status = QueueStatus {
-        total_candidates: 1000,
-        pending_candidates: 50,
-        active_runs: 10,
-        campaigns: vec![],
-    };
-    
-    negotiate_response(
-        ApiResponse::success(queue_status),
-        &headers,
-        "/api/queue",
-    )
+    match app_state.database.get_stats().await {
+        Ok(stats) => {
+            let queue_status = QueueStatus {
+                total_candidates: stats.get("total_codebases").unwrap_or(&0).clone(),
+                pending_candidates: stats.get("queue_size").unwrap_or(&0).clone(),
+                active_runs: stats.get("active_runs").unwrap_or(&0).clone(),
+                campaigns: vec![], // TODO: Implement campaign listing
+            };
+            
+            negotiate_response(
+                ApiResponse::success(queue_status),
+                &headers,
+                "/api/queue",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get queue status: {}", e);
+            let error_response = ApiResponse {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve queue status: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/queue",
+            )
+        }
+    }
 }
 
 // ============================================================================
@@ -812,23 +833,43 @@ async fn post_codebase_publish(
     )
 )]
 async fn get_codebase(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(codebase): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Codebase {} requested", codebase);
     
-    // TODO: Implement actual codebase retrieval
-    let result = serde_json::json!({
-        "codebase": codebase,
-        "status": "not_implemented"
-    });
-    
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/c/{}", codebase),
-    )
+    match app_state.database.get_codebase(&codebase).await {
+        Ok(codebase_data) => {
+            negotiate_response(
+                ApiResponse::success(codebase_data),
+                &headers,
+                &format!("/api/c/{}", codebase),
+            )
+        }
+        Err(e) => {
+            let (error_code, reason) = match e {
+                crate::database::DatabaseError::NotFound(_) => {
+                    ("not_found", format!("Codebase '{}' not found", codebase))
+                }
+                _ => {
+                    ("database_error", format!("Failed to retrieve codebase: {}", e))
+                }
+            };
+            
+            debug!("Failed to get codebase {}: {}", codebase, e);
+            let error_response = ApiResponse::<()>::error(
+                error_code.to_string(),
+                Some(reason),
+            );
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/c/{}", codebase),
+            )
+        }
+    }
 }
 
 /// Get merge proposals for a specific codebase
@@ -882,27 +923,50 @@ async fn get_codebase_merge_proposals(
     )
 )]
 async fn get_codebase_runs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(codebase): Path<String>,
     Query(query): Query<CommonQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Codebase {} runs requested", codebase);
     
-    // TODO: Implement actual codebase runs retrieval
-    let runs: Vec<Run> = vec![];
-    let pagination = super::types::PaginationInfo::new(
-        Some(0),
-        query.pagination.get_offset(),
-        query.pagination.get_limit(),
-        runs.len(),
-    );
+    let limit = query.pagination.get_limit();
+    let offset = query.pagination.get_offset();
     
-    negotiate_response(
-        ApiResponse::success_with_pagination(runs, pagination),
-        &headers,
-        &format!("/api/c/{}/runs", codebase),
-    )
+    match app_state.database.get_runs_for_codebase(&codebase, Some(limit), Some(offset)).await {
+        Ok(runs) => {
+            // For proper pagination, we'd need to count total runs
+            // For now, we'll use the returned runs length as an approximation
+            let pagination = super::types::PaginationInfo::new(
+                None, // total_count not implemented yet
+                offset,
+                limit,
+                runs.len(),
+            );
+            
+            negotiate_response(
+                ApiResponse::success_with_pagination(runs, pagination),
+                &headers,
+                &format!("/api/c/{}/runs", codebase),
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get runs for codebase {}: {}", codebase, e);
+            let error_response = ApiResponse {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve runs for codebase: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/c/{}/runs", codebase),
+            )
+        }
+    }
 }
 
 // ============================================================================
