@@ -5,6 +5,7 @@ use tera::Tera;
 
 use crate::config::Config;
 use crate::database::DatabaseManager;
+use crate::realtime::{RealtimeManager, RealtimeConfig};
 use crate::templates::setup_templates;
 use janitor::logs::{LogFileManager, get_log_manager};
 
@@ -16,6 +17,7 @@ pub struct AppState {
     pub redis: Option<redis::Client>,
     pub http_client: reqwest::Client,
     pub log_manager: Arc<Box<dyn LogFileManager>>,
+    pub realtime: Arc<RealtimeManager>,
     pub start_time: Instant,
 }
 
@@ -45,6 +47,15 @@ impl AppState {
                 .unwrap_or("/var/log/janitor".to_string())));
         let log_manager = Arc::new(get_log_manager(Some(&log_url)).await?);
 
+        // Initialize real-time manager
+        let realtime_config = RealtimeConfig::default();
+        let realtime_manager = Arc::new(RealtimeManager::new(redis.clone(), realtime_config));
+        
+        // Start real-time manager
+        if let Err(e) = realtime_manager.start().await {
+            tracing::warn!("Failed to start real-time manager: {}", e);
+        }
+
         Ok(Self {
             config: Arc::new(config),
             database,
@@ -52,6 +63,7 @@ impl AppState {
             redis,
             http_client,
             log_manager,
+            realtime: realtime_manager,
             start_time: Instant::now(),
         })
     }
@@ -65,6 +77,9 @@ impl AppState {
             let mut conn = redis_client.get_async_connection().await?;
             redis::cmd("PING").query_async::<String>(&mut conn).await?;
         }
+
+        // Check real-time manager
+        self.realtime.health_check().await?;
 
         Ok(())
     }
