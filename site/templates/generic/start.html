@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ campaign }} - Campaign Overview</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .stat-card { background: #f8f9fa; padding: 15px; border-radius: 5px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
+        .stat-label { color: #666; margin-top: 5px; }
+        .actions { margin: 20px 0; }
+        .btn { display: inline-block; padding: 10px 20px; margin: 5px; text-decoration: none; border-radius: 5px; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ campaign }} Campaign</h1>
+        {% if campaign_config.description %}
+        <p>{{ campaign_config.description }}</p>
+        {% endif %}
+    </div>
+
+    <!-- Include search form -->
+    {% include "search_form.html" %}
+
+    {% if stats %}
+    <div class="stats-grid">
+        {% if stats.total_candidates %}
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_candidates }}</div>
+            <div class="stat-label">Total Candidates</div>
+        </div>
+        {% endif %}
+        
+        {% if stats.successful_runs %}
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.successful_runs }}</div>
+            <div class="stat-label">Successful Runs</div>
+        </div>
+        {% endif %}
+        
+        {% if stats.pending_publishes %}
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.pending_publishes }}</div>
+            <div class="stat-label">Pending Publishes</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="actions">
+        <h2>Actions</h2>
+        <a href="/{{ campaign }}/candidates" class="btn btn-primary">View Candidates</a>
+        <a href="/{{ campaign }}/ready" class="btn btn-secondary">Ready for Publishing</a>
+        <a href="/{{ campaign }}/done" class="btn btn-secondary">Completed Runs</a>
+    </div>
+
+    <div class="campaign-info">
+        <h2>Campaign Information</h2>
+        <p>This is the {{ campaign }} campaign page. Use the search form above to find specific packages or browse the candidates to see what's available for processing.</p>
+        
+        {% if campaign_config %}
+        <h3>Configuration</h3>
+        <ul>
+            {% if campaign_config.description %}
+            <li><strong>Description:</strong> {{ campaign_config.description }}</li>
+            {% endif %}
+            <!-- Add more config details as needed -->
+        </ul>
+        {% endif %}
+    </div>
+    
+    <!-- Pass variables to search form -->
+    <script>
+        window.searchFormData = {
+            show_filters: true,
+            campaign: "{{ campaign }}",
+            filter: {},
+            page: 1,
+            per_page: 50
+        };
+    </script>
+</body>
+</html>

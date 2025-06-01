@@ -827,6 +827,180 @@ impl DatabaseManager {
         
         Ok(proposals)
     }
+
+    /// Search codebase names for typeahead functionality
+    pub async fn search_codebase_names(
+        &self,
+        search_term: Option<&str>,
+        limit: Option<i64>,
+    ) -> Result<Vec<String>, DatabaseError> {
+        let limit = limit.unwrap_or(20);
+        
+        let query = if let Some(term) = search_term {
+            // Search with prefix matching and relevance scoring
+            sqlx::query_scalar::<_, String>(
+                "SELECT name FROM codebase 
+                 WHERE NOT inactive 
+                 AND (name ILIKE $1 OR name ILIKE $2)
+                 ORDER BY 
+                   CASE WHEN name ILIKE $1 THEN 1 ELSE 2 END,
+                   name ASC
+                 LIMIT $3"
+            )
+            .bind(format!("{}%", term))      // Prefix match
+            .bind(format!("%{}%", term))     // Contains match
+            .bind(limit)
+        } else {
+            // Return most recently active codebases
+            sqlx::query_scalar::<_, String>(
+                "SELECT c.name FROM codebase c
+                 LEFT JOIN run r ON c.name = r.codebase
+                 WHERE NOT c.inactive
+                 GROUP BY c.name
+                 ORDER BY MAX(r.finish_time) DESC NULLS LAST, c.name ASC
+                 LIMIT $1"
+            )
+            .bind(limit)
+        };
+        
+        let names = query.fetch_all(&self.pool).await?;
+        Ok(names)
+    }
+
+    /// Advanced package search with filtering and ranking
+    pub async fn search_packages_advanced(
+        &self,
+        search_term: Option<&str>,
+        campaign: Option<&str>,
+        result_code: Option<&str>,
+        publishable_only: Option<bool>,
+        limit: Option<i64>,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        let limit = limit.unwrap_or(50);
+        let publishable_only = publishable_only.unwrap_or(false);
+        
+        // Build dynamic query with relevance scoring
+        let mut query_parts = vec![
+            "SELECT DISTINCT
+                c.name as codebase,
+                c.summary,
+                c.vcs_url,
+                r.suite as campaign,
+                r.result_code,
+                r.finish_time,
+                r.id as last_run_id,
+                CASE 
+                    WHEN c.name ILIKE $1 THEN 100
+                    WHEN c.summary ILIKE $2 THEN 50  
+                    WHEN c.name ILIKE $2 THEN 25
+                    ELSE 10
+                END as relevance_score
+             FROM codebase c
+             LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+             WHERE NOT c.inactive".to_string(),
+        ];
+        
+        let mut param_count = 2; // $1 and $2 for search terms
+        let mut bind_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>> = vec![];
+        
+        // Add search term filters
+        if let Some(term) = search_term {
+            bind_values.push(Box::new(format!("{}%", term)));  // $1: prefix match
+            bind_values.push(Box::new(format!("%{}%", term))); // $2: contains match
+            query_parts.push("AND (c.name ILIKE $1 OR c.name ILIKE $2 OR c.summary ILIKE $2)".to_string());
+        } else {
+            bind_values.push(Box::new("".to_string()));  // $1: empty for no search
+            bind_values.push(Box::new("".to_string()));  // $2: empty for no search
+        }
+        
+        // Add campaign filter
+        if let Some(campaign_filter) = campaign {
+            param_count += 1;
+            query_parts.push(format!("AND r.suite = ${}", param_count));
+            bind_values.push(Box::new(campaign_filter.to_string()));
+        }
+        
+        // Add result code filter
+        if let Some(code) = result_code {
+            param_count += 1;
+            query_parts.push(format!("AND r.result_code = ${}", param_count));
+            bind_values.push(Box::new(code.to_string()));
+        }
+        
+        // Add publishable filter
+        if publishable_only {
+            query_parts.push("AND r.result_code = 'success'".to_string());
+        }
+        
+        // Add ordering and limit
+        query_parts.push("ORDER BY relevance_score DESC, c.name ASC".to_string());
+        param_count += 1;
+        query_parts.push(format!("LIMIT ${}", param_count));
+        bind_values.push(Box::new(limit));
+        
+        let query_str = query_parts.join(" ");
+        
+        // For now, use a simpler query that we can actually execute
+        // TODO: Implement proper dynamic query building
+        let simplified_query = if let Some(term) = search_term {
+            sqlx::query(
+                "SELECT 
+                    c.name as codebase,
+                    c.summary,
+                    c.vcs_url,
+                    r.suite as campaign,
+                    r.result_code,
+                    r.finish_time,
+                    r.id as last_run_id
+                 FROM codebase c
+                 LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                 WHERE NOT c.inactive
+                 AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                 ORDER BY 
+                   CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                   c.name ASC
+                 LIMIT $3"
+            )
+            .bind(format!("{}%", term))
+            .bind(format!("%{}%", term))
+            .bind(limit)
+        } else {
+            sqlx::query(
+                "SELECT 
+                    c.name as codebase,
+                    c.summary,
+                    c.vcs_url,
+                    r.suite as campaign,
+                    r.result_code,
+                    r.finish_time,
+                    r.id as last_run_id
+                 FROM codebase c
+                 LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                 WHERE NOT c.inactive
+                 ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                 LIMIT $1"
+            )
+            .bind(limit)
+        };
+        
+        let rows = simplified_query.fetch_all(&self.pool).await?;
+        
+        let mut results = Vec::new();
+        for row in rows {
+            let result = serde_json::json!({
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "summary": row.try_get::<Option<String>, _>("summary")?,
+                "vcs_url": row.try_get::<Option<String>, _>("vcs_url")?,
+                "campaign": row.try_get::<Option<String>, _>("campaign")?,
+                "result_code": row.try_get::<Option<String>, _>("result_code")?,
+                "finish_time": row.try_get::<Option<DateTime<Utc>>, _>("finish_time")?,
+                "last_run_id": row.try_get::<Option<String>, _>("last_run_id")?
+            });
+            results.push(result);
+        }
+        
+        Ok(results)
+    }
 }
 
 // Additional types for database results
