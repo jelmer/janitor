@@ -6,6 +6,7 @@ use axum::{
 use crate::{
     app::AppState,
     handlers::{simple, pkg},
+    webhook,
 };
 
 pub fn app_routes() -> Router<AppState> {
@@ -48,7 +49,7 @@ pub fn app_routes() -> Router<AppState> {
         .route("/:suite/pkg/:pkg/:run_id/*filename", get(serve_result_file))
         
         // Webhooks
-        .route("/webhook", post(webhook_handler))
+        .merge(webhook::create_webhook_routes())
         
         // Legacy package routes (redirect to new URLs)
         .route("/pkg", get(legacy_package_list))
@@ -73,13 +74,6 @@ async fn serve_result_file(
     axum::http::StatusCode::NOT_IMPLEMENTED
 }
 
-async fn webhook_handler(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    body: String,
-) -> impl axum::response::IntoResponse {
-    // TODO: Implement webhook processing
-    axum::http::StatusCode::OK
-}
 
 async fn legacy_package_list(
     axum::extract::State(state): axum::extract::State<AppState>,

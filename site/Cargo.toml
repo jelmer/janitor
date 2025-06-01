@@ -61,6 +61,11 @@ time = { version = "0.3", features = ["macros"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1"
 
+# Cryptography for webhook signatures
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
 # Configuration
 config = "0.14"
 anyhow = "1.0"

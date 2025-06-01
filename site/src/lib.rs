@@ -10,3 +10,4 @@ pub mod middleware;
 pub mod realtime;
 pub mod routes;
 pub mod templates;
+pub mod webhook;
