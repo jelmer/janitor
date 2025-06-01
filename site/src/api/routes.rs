@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Json,
-    routing::{get, post, put, delete},
+    routing::{get, post},
     Router,
 };
 use std::sync::Arc;
@@ -51,6 +51,23 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         // Search and discovery
         .route("/pkgnames", get(get_package_names))
         .route("/search", get(search_packages))
+        
+        // Campaign endpoints
+        .route("/:campaign/merge-proposals", get(get_campaign_merge_proposals))
+        .route("/:campaign/ready", get(get_campaign_ready_runs))
+        .route("/:campaign/c/:codebase", get(get_campaign_codebase))
+        .route("/:campaign/c/:codebase/publish", post(post_codebase_publish))
+        
+        // Codebase endpoints
+        .route("/c/:codebase", get(get_codebase))
+        .route("/c/:codebase/merge-proposals", get(get_codebase_merge_proposals))
+        .route("/c/:codebase/runs", get(get_codebase_runs))
+        
+        // Run endpoints (enhanced)
+        .route("/run/:run_id", get(get_run_details))
+        .route("/run/:run_id", post(post_run_update))
+        .route("/run/:run_id/reschedule", post(post_run_reschedule))
+        .route("/run/:run_id/schedule-control", post(post_run_schedule_control))
         
         // Apply middleware
         .layer(axum::middleware::from_fn(cors_middleware))
@@ -628,5 +645,407 @@ async fn search_packages(
             )
         }
     }
+}
+
+// ============================================================================
+// Campaign Endpoints
+// ============================================================================
+
+/// Get merge proposals for a specific campaign
+#[utoipa::path(
+    get,
+    path = "/{campaign}/merge-proposals",
+    tag = "campaigns",
+    params(
+        ("campaign" = String, Path, description = "Campaign name"),
+        CommonQuery
+    ),
+    responses(
+        (status = 200, description = "Campaign merge proposals", body = ApiResponse<Vec<MergeProposal>>)
+    )
+)]
+async fn get_campaign_merge_proposals(
+    State(_app_state): State<Arc<AppState>>,
+    Path(campaign): Path<String>,
+    Query(query): Query<CommonQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Campaign {} merge proposals requested", campaign);
+    
+    // TODO: Implement actual campaign merge proposal retrieval
+    let proposals: Vec<MergeProposal> = vec![];
+    let pagination = super::types::PaginationInfo::new(
+        Some(0),
+        query.pagination.get_offset(),
+        query.pagination.get_limit(),
+        proposals.len(),
+    );
+    
+    negotiate_response(
+        ApiResponse::success_with_pagination(proposals, pagination),
+        &headers,
+        &format!("/api/{}/merge-proposals", campaign),
+    )
+}
+
+/// Get ready runs for a specific campaign
+#[utoipa::path(
+    get,
+    path = "/{campaign}/ready",
+    tag = "campaigns",
+    params(
+        ("campaign" = String, Path, description = "Campaign name"),
+        CommonQuery
+    ),
+    responses(
+        (status = 200, description = "Campaign ready runs", body = ApiResponse<Vec<Run>>)
+    )
+)]
+async fn get_campaign_ready_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Path(campaign): Path<String>,
+    Query(query): Query<CommonQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Campaign {} ready runs requested", campaign);
+    
+    // TODO: Implement actual campaign ready runs retrieval
+    let runs: Vec<Run> = vec![];
+    let pagination = super::types::PaginationInfo::new(
+        Some(0),
+        query.pagination.get_offset(),
+        query.pagination.get_limit(),
+        runs.len(),
+    );
+    
+    negotiate_response(
+        ApiResponse::success_with_pagination(runs, pagination),
+        &headers,
+        &format!("/api/{}/ready", campaign),
+    )
+}
+
+/// Get campaign-specific codebase information
+#[utoipa::path(
+    get,
+    path = "/{campaign}/c/{codebase}",
+    tag = "campaigns",
+    params(
+        ("campaign" = String, Path, description = "Campaign name"),
+        ("codebase" = String, Path, description = "Codebase identifier")
+    ),
+    responses(
+        (status = 200, description = "Campaign codebase information", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn get_campaign_codebase(
+    State(_app_state): State<Arc<AppState>>,
+    Path((campaign, codebase)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Campaign {} codebase {} requested", campaign, codebase);
+    
+    // TODO: Implement actual campaign codebase retrieval
+    let result = serde_json::json!({
+        "campaign": campaign,
+        "codebase": codebase,
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/{}/c/{}", campaign, codebase),
+    )
+}
+
+/// Publish a codebase within a campaign
+#[utoipa::path(
+    post,
+    path = "/{campaign}/c/{codebase}/publish",
+    tag = "campaigns",
+    params(
+        ("campaign" = String, Path, description = "Campaign name"),
+        ("codebase" = String, Path, description = "Codebase identifier")
+    ),
+    responses(
+        (status = 200, description = "Publish operation result", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn post_codebase_publish(
+    State(_app_state): State<Arc<AppState>>,
+    Path((campaign, codebase)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Publish requested for campaign {} codebase {}", campaign, codebase);
+    
+    // TODO: Implement actual publish operation
+    let result = serde_json::json!({
+        "campaign": campaign,
+        "codebase": codebase,
+        "action": "publish",
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/{}/c/{}/publish", campaign, codebase),
+    )
+}
+
+// ============================================================================
+// Codebase Endpoints
+// ============================================================================
+
+/// Get general codebase information
+#[utoipa::path(
+    get,
+    path = "/c/{codebase}",
+    tag = "codebases",
+    params(
+        ("codebase" = String, Path, description = "Codebase identifier")
+    ),
+    responses(
+        (status = 200, description = "Codebase information", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn get_codebase(
+    State(_app_state): State<Arc<AppState>>,
+    Path(codebase): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Codebase {} requested", codebase);
+    
+    // TODO: Implement actual codebase retrieval
+    let result = serde_json::json!({
+        "codebase": codebase,
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/c/{}", codebase),
+    )
+}
+
+/// Get merge proposals for a specific codebase
+#[utoipa::path(
+    get,
+    path = "/c/{codebase}/merge-proposals",
+    tag = "codebases",
+    params(
+        ("codebase" = String, Path, description = "Codebase identifier"),
+        CommonQuery
+    ),
+    responses(
+        (status = 200, description = "Codebase merge proposals", body = ApiResponse<Vec<MergeProposal>>)
+    )
+)]
+async fn get_codebase_merge_proposals(
+    State(_app_state): State<Arc<AppState>>,
+    Path(codebase): Path<String>,
+    Query(query): Query<CommonQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Codebase {} merge proposals requested", codebase);
+    
+    // TODO: Implement actual codebase merge proposal retrieval
+    let proposals: Vec<MergeProposal> = vec![];
+    let pagination = super::types::PaginationInfo::new(
+        Some(0),
+        query.pagination.get_offset(),
+        query.pagination.get_limit(),
+        proposals.len(),
+    );
+    
+    negotiate_response(
+        ApiResponse::success_with_pagination(proposals, pagination),
+        &headers,
+        &format!("/api/c/{}/merge-proposals", codebase),
+    )
+}
+
+/// Get runs for a specific codebase
+#[utoipa::path(
+    get,
+    path = "/c/{codebase}/runs",
+    tag = "codebases",
+    params(
+        ("codebase" = String, Path, description = "Codebase identifier"),
+        CommonQuery
+    ),
+    responses(
+        (status = 200, description = "Codebase runs", body = ApiResponse<Vec<Run>>)
+    )
+)]
+async fn get_codebase_runs(
+    State(_app_state): State<Arc<AppState>>,
+    Path(codebase): Path<String>,
+    Query(query): Query<CommonQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Codebase {} runs requested", codebase);
+    
+    // TODO: Implement actual codebase runs retrieval
+    let runs: Vec<Run> = vec![];
+    let pagination = super::types::PaginationInfo::new(
+        Some(0),
+        query.pagination.get_offset(),
+        query.pagination.get_limit(),
+        runs.len(),
+    );
+    
+    negotiate_response(
+        ApiResponse::success_with_pagination(runs, pagination),
+        &headers,
+        &format!("/api/c/{}/runs", codebase),
+    )
+}
+
+// ============================================================================
+// Enhanced Run Endpoints
+// ============================================================================
+
+/// Get detailed run information
+#[utoipa::path(
+    get,
+    path = "/run/{run_id}",
+    tag = "runs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Detailed run information", body = ApiResponse<Run>),
+        (status = 404, description = "Run not found")
+    )
+)]
+async fn get_run_details(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Run details for {} requested", run_id);
+    
+    // TODO: Implement actual run details retrieval
+    let error_response = ApiResponse::<()>::error(
+        "not_found".to_string(),
+        Some(format!("Run {} not found", run_id)),
+    );
+    
+    negotiate_response(
+        error_response,
+        &headers,
+        &format!("/api/run/{}", run_id),
+    )
+}
+
+/// Update run information
+#[utoipa::path(
+    post,
+    path = "/run/{run_id}",
+    tag = "runs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run updated successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn post_run_update(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+    body: String,
+) -> impl axum::response::IntoResponse {
+    debug!("Run {} update requested", run_id);
+    
+    // TODO: Implement actual run update
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "update",
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/run/{}", run_id),
+    )
+}
+
+/// Reschedule a run
+#[utoipa::path(
+    post,
+    path = "/run/{run_id}/reschedule",
+    tag = "runs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run rescheduled successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn post_run_reschedule(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Run {} reschedule requested", run_id);
+    
+    // TODO: Implement actual run reschedule
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "reschedule",
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/run/{}/reschedule", run_id),
+    )
+}
+
+/// Control run scheduling
+#[utoipa::path(
+    post,
+    path = "/run/{run_id}/schedule-control",
+    tag = "runs",
+    params(
+        ("run_id" = String, Path, description = "Run identifier")
+    ),
+    responses(
+        (status = 200, description = "Run schedule control applied", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Run not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn post_run_schedule_control(
+    State(_app_state): State<Arc<AppState>>,
+    Path(run_id): Path<String>,
+    headers: HeaderMap,
+    query: Query<std::collections::HashMap<String, String>>,
+) -> impl axum::response::IntoResponse {
+    debug!("Run {} schedule control requested", run_id);
+    
+    // TODO: Implement actual run schedule control
+    let result = serde_json::json!({
+        "run_id": run_id,
+        "action": "schedule_control",
+        "status": "not_implemented"
+    });
+    
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/run/{}/schedule-control", run_id),
+    )
 }
 
