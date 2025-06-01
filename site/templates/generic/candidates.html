@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ campaign }} - Candidates</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 20px; }
+        .candidates-list { list-style: none; padding: 0; }
+        .candidates-list li { margin: 10px 0; padding: 10px; border: 1px solid #eee; border-radius: 5px; }
+        .candidate-info { display: flex; justify-content: space-between; align-items: center; }
+        .candidate-name { font-weight: bold; }
+        .candidate-meta { color: #666; font-size: 0.9em; }
+        .pagination { margin: 20px 0; text-align: center; }
+        .pagination a { margin: 0 5px; padding: 5px 10px; text-decoration: none; border: 1px solid #ddd; }
+        .pagination .current { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ campaign }} - Candidates</h1>
+        <p>Showing candidates for the {{ campaign }} campaign</p>
+    </div>
+
+    <!-- Include search form -->
+    {% include "search_form.html" %}
+
+    <div class="section" id="candidates">
+        {% if candidates %}
+        <p>Found {{ total_count or candidates|length }} candidates</p>
+        
+        <ul class="candidates-list">
+            {% for candidate in candidates %}
+            <li>
+                <div class="candidate-info">
+                    <div>
+                        <span class="candidate-name">
+                            <a href="/{{ campaign }}/c/{{ candidate.codebase }}/">{{ candidate.codebase }}</a>
+                        </span>
+                        {% if candidate.value %}
+                        <span class="candidate-meta">(Value: {{ candidate.value }})</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if candidate.result_code %}
+                        <span class="badge result-{{ candidate.result_code }}">{{ candidate.result_code }}</span>
+                        {% endif %}
+                        {% if candidate.success_chance %}
+                        <span class="candidate-meta">{{ "%.0f"|format(candidate.success_chance * 100) }}% chance</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if candidate.command %}
+                <div class="candidate-meta">Command: {{ candidate.command }}</div>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        
+        <!-- Pagination -->
+        {% if total_pages and total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}{% if filter.search %}&search={{ filter.search }}{% endif %}{% if filter.result_code %}&result_code={{ filter.result_code }}{% endif %}">&laquo; Previous</a>
+            {% endif %}
+            
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="current">{{ p }}</span>
+                {% else %}
+                <a href="?page={{ p }}{% if filter.search %}&search={{ filter.search }}{% endif %}{% if filter.result_code %}&result_code={{ filter.result_code }}{% endif %}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}{% if filter.search %}&search={{ filter.search }}{% endif %}{% if filter.result_code %}&result_code={{ filter.result_code }}{% endif %}">Next &raquo;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="no-results">
+            {% if filter.search or filter.result_code %}
+            <p>No candidates found matching your search criteria.</p>
+            <p><a href="?">Clear filters</a> to see all candidates.</p>
+            {% else %}
+            <p>No candidates available for this campaign.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <style>
+        .badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .result-success { background: #d4edda; color: #155724; }
+        .result-failed { background: #f8d7da; color: #721c24; }
+        .result-nothing-to-do { background: #fff3cd; color: #856404; }
+        .no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+    </style>
+    
+    <!-- Pass variables to search form -->
+    <script>
+        window.searchFormData = {
+            show_filters: true,
+            campaign: "{{ campaign }}",
+            filter: {{ filter | tojson | safe }},
+            page: {{ page }},
+            per_page: {{ per_page }}
+        };
+    </script>
+</body>
+</html>

@@ -384,8 +384,20 @@ async fn fetch_candidates(
     offset: Option<i64>,
     filter: &FilterQuery,
 ) -> anyhow::Result<Vec<serde_json::Value>> {
-    // TODO: Implement full candidate fetching with filtering
-    state.database.get_candidates(suite, limit, offset).await.map_err(|e| anyhow::anyhow!(e))
+    // Enhanced candidate fetching with search filtering
+    if filter.search.is_some() || filter.result_code.is_some() {
+        // Use advanced search for filtered queries
+        state.database.search_packages_advanced(
+            filter.search.as_deref(),
+            Some(suite),
+            filter.result_code.as_deref(),
+            None, // publishable_only - could be added to FilterQuery
+            limit
+        ).await.map_err(|e| anyhow::anyhow!(e))
+    } else {
+        // Use basic candidate listing for unfiltered queries
+        state.database.get_candidates(suite, limit, offset).await.map_err(|e| anyhow::anyhow!(e))
+    }
 }
 
 async fn count_candidates(
@@ -393,8 +405,21 @@ async fn count_candidates(
     suite: &str,
     filter: &FilterQuery,
 ) -> anyhow::Result<i64> {
-    // TODO: Implement filtered counting
-    state.database.count_candidates(suite, filter.search.as_deref()).await.map_err(|e| anyhow::anyhow!(e))
+    // Enhanced candidate counting with filtering
+    if filter.search.is_some() || filter.result_code.is_some() {
+        // For filtered queries, get count from search results
+        let results = state.database.search_packages_advanced(
+            filter.search.as_deref(),
+            Some(suite),
+            filter.result_code.as_deref(),
+            None,
+            None // No limit for counting
+        ).await.map_err(|e| anyhow::anyhow!(e))?;
+        Ok(results.len() as i64)
+    } else {
+        // Use basic counting for unfiltered queries
+        state.database.count_candidates(suite, filter.search.as_deref()).await.map_err(|e| anyhow::anyhow!(e))
+    }
 }
 
 async fn fetch_worker_stats(state: &AppState) -> anyhow::Result<HashMap<String, i64>> {

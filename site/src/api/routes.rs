@@ -48,6 +48,10 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         // Runner status
         .route("/runner/status", get(get_runner_status))
         
+        // Search and discovery
+        .route("/pkgnames", get(get_package_names))
+        .route("/search", get(search_packages))
+        
         // Apply middleware
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn(metrics_middleware))
@@ -490,5 +494,139 @@ async fn get_runner_status(
         &headers,
         "/api/runner/status",
     )
+}
+
+// ============================================================================
+// Search and Discovery
+// ============================================================================
+
+use serde::Deserialize;
+use utoipa::IntoParams;
+
+/// Search query parameters
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct SearchQuery {
+    /// Search term for package/codebase names
+    pub q: Option<String>,
+    /// Limit number of results
+    pub limit: Option<u32>,
+    /// Campaign filter
+    pub campaign: Option<String>,
+    /// Result code filter
+    pub result_code: Option<String>,
+    /// Include only publishable results
+    pub publishable_only: Option<bool>,
+}
+
+/// Package names endpoint for typeahead
+#[utoipa::path(
+    get,
+    path = "/pkgnames",
+    tag = "search",
+    params(
+        ("q" = Option<String>, Query, description = "Search prefix"),
+        ("limit" = Option<u32>, Query, description = "Maximum results to return")
+    ),
+    responses(
+        (status = 200, description = "List of package names", body = Vec<String>)
+    )
+)]
+async fn get_package_names(
+    State(app_state): State<Arc<AppState>>,
+    Query(query): Query<SearchQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Package names search requested: {:?}", query.q);
+    
+    let limit = query.limit.unwrap_or(20) as i64;
+    let search_term = query.q.as_deref();
+    
+    match app_state.database.search_codebase_names(search_term, Some(limit)).await {
+        Ok(names) => {
+            negotiate_response(
+                ApiResponse::success(names),
+                &headers,
+                "/api/pkgnames",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to search package names: {}", e);
+            let error_response = ApiResponse {
+                data: None,
+                error: Some("search_failed".to_string()),
+                reason: Some(format!("Search failed: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/pkgnames",
+            )
+        }
+    }
+}
+
+/// Advanced package search endpoint
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = "search",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "Search results with ranking", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn search_packages(
+    State(app_state): State<Arc<AppState>>,
+    Query(query): Query<SearchQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Advanced package search requested: {:?}", query);
+    
+    let limit = query.limit.unwrap_or(50) as i64;
+    let search_term = query.q.as_deref();
+    
+    match app_state.database.search_packages_advanced(
+        search_term,
+        query.campaign.as_deref(),
+        query.result_code.as_deref(),
+        query.publishable_only,
+        Some(limit)
+    ).await {
+        Ok(results) => {
+            let response = serde_json::json!({
+                "results": results,
+                "total": results.len(),
+                "query": query.q,
+                "filters": {
+                    "campaign": query.campaign,
+                    "result_code": query.result_code,
+                    "publishable_only": query.publishable_only.unwrap_or(false),
+                }
+            });
+            
+            negotiate_response(
+                ApiResponse::success(response),
+                &headers,
+                "/api/search",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to search packages: {}", e);
+            let error_response = ApiResponse {
+                data: None,
+                error: Some("search_failed".to_string()),
+                reason: Some(format!("Search failed: {}", e)),
+                details: None,
+                pagination: None,
+            };
+            negotiate_response(
+                error_response,
+                &headers,
+                "/api/search",
+            )
+        }
+    }
 }
 

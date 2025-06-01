@@ -1,0 +1,186 @@
+<!-- Search and filter form component -->
+<form method="get" class="search-form" id="search-form">
+    <div class="form-group">
+        <label for="search">Search packages:</label>
+        <input type="text" 
+               name="search" 
+               id="search" 
+               value="{{ filter.search or '' }}" 
+               placeholder="Type package name..."
+               autocomplete="off"
+               data-typeahead-url="/api/pkgnames">
+        <button type="submit">Search</button>
+    </div>
+    
+    {% if show_filters %}
+    <div class="filters">
+        <div class="form-group">
+            <label for="result_code">Result code:</label>
+            <select name="result_code" id="result_code">
+                <option value="">Any result</option>
+                <option value="success" {% if filter.result_code == "success" %}selected{% endif %}>Success</option>
+                <option value="failed" {% if filter.result_code == "failed" %}selected{% endif %}>Failed</option>
+                <option value="nothing-to-do" {% if filter.result_code == "nothing-to-do" %}selected{% endif %}>Nothing to do</option>
+                <option value="build-failed" {% if filter.result_code == "build-failed" %}selected{% endif %}>Build failed</option>
+            </select>
+        </div>
+        
+        {% if campaign %}
+        <input type="hidden" name="campaign" value="{{ campaign }}">
+        {% endif %}
+        
+        <!-- Preserve pagination -->
+        {% if page and page != 1 %}
+        <input type="hidden" name="page" value="{{ page }}">
+        {% endif %}
+        {% if per_page and per_page != 50 %}
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        {% endif %}
+    </div>
+    {% endif %}
+</form>
+
+<script>
+// Simple typeahead functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('search');
+    const typeaheadUrl = searchInput.dataset.typeaheadUrl;
+    
+    if (!typeaheadUrl) return;
+    
+    let timeoutId;
+    let currentResults = [];
+    
+    searchInput.addEventListener('input', function() {
+        clearTimeout(timeoutId);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            hideTypeahead();
+            return;
+        }
+        
+        timeoutId = setTimeout(() => {
+            fetch(`${typeaheadUrl}?q=${encodeURIComponent(query)}&limit=10`)
+                .then(response => response.json())
+                .then(data => {
+                    currentResults = data.data || data || [];
+                    showTypeahead(currentResults);
+                })
+                .catch(err => console.warn('Typeahead error:', err));
+        }, 300);
+    });
+    
+    function showTypeahead(results) {
+        hideTypeahead();
+        
+        if (results.length === 0) return;
+        
+        const dropdown = document.createElement('div');
+        dropdown.className = 'typeahead-dropdown';
+        dropdown.style.cssText = `
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            width: ${searchInput.offsetWidth}px;
+        `;
+        
+        results.forEach(result => {
+            const item = document.createElement('div');
+            item.className = 'typeahead-item';
+            item.textContent = result;
+            item.style.cssText = `
+                padding: 8px 12px;
+                cursor: pointer;
+                border-bottom: 1px solid #eee;
+            `;
+            
+            item.addEventListener('click', () => {
+                searchInput.value = result;
+                hideTypeahead();
+            });
+            
+            item.addEventListener('mouseover', () => {
+                item.style.backgroundColor = '#f5f5f5';
+            });
+            
+            item.addEventListener('mouseout', () => {
+                item.style.backgroundColor = '';
+            });
+            
+            dropdown.appendChild(item);
+        });
+        
+        searchInput.parentNode.style.position = 'relative';
+        searchInput.parentNode.appendChild(dropdown);
+    }
+    
+    function hideTypeahead() {
+        const existing = document.querySelector('.typeahead-dropdown');
+        if (existing) {
+            existing.remove();
+        }
+    }
+    
+    // Hide on outside click
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !e.target.closest('.typeahead-dropdown')) {
+            hideTypeahead();
+        }
+    });
+});
+</script>
+
+<style>
+.search-form {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.search-form .form-group {
+    margin-bottom: 10px;
+}
+
+.search-form label {
+    display: inline-block;
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+.search-form input, .search-form select {
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.search-form button {
+    padding: 6px 15px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.search-form button:hover {
+    background: #0056b3;
+}
+
+.filters {
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+    margin-top: 10px;
+}
+
+.typeahead-item:last-child {
+    border-bottom: none !important;
+}
+</style>
