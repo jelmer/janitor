@@ -10,7 +10,7 @@ pub mod service;
 #[cfg(test)]
 mod tests;
 
-pub use middleware::{AuthMiddleware, AuthState, require_admin, require_login, require_qa_reviewer, session_middleware, session_middleware as auth_middleware, auth_middleware_layer, OptionalUser, UserContext};
+pub use middleware::{AuthMiddleware, AuthState, require_admin, require_login, require_qa_reviewer, session_middleware, session_middleware as auth_middleware, auth_middleware_layer, require_admin_layer, require_login_layer, require_qa_reviewer_layer, OptionalUser, UserContext};
 pub use session::{SessionManager, SessionCookieConfig};
 pub use types::{User, UserRole, SessionInfo};
 pub use oidc::{OidcClient, OidcConfig, AuthError};

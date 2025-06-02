@@ -1,5 +1,6 @@
 pub mod simple;
 pub mod pkg;
+pub mod cupboard;
 
 use axum::{
     extract::{Path, Query, State},
