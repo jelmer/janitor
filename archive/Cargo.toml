@@ -9,3 +9,20 @@ tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.41"
 deb822-lossless.workspace = true
 debian-control.workspace = true
+
+# Archive-specific dependencies
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+thiserror = "2.0"
+anyhow = "1.0"
+bytes = "1.0"
+tempfile = "3.0"
+async-stream = "0.3"
+num_cpus = "1.0"
+
+# Database integration
+sqlx = { workspace = true, features = ["postgres", "chrono", "uuid", "migrate", "macros", "runtime-tokio-native-tls"] }
+
+# Artifact management  
+janitor = { path = ".." }
