@@ -3636,7 +3636,9 @@ name = "janitor-archive"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apt-repository",
  "async-stream",
+ "async-trait",
  "bytes",
  "chrono",
  "deb822-lossless",
