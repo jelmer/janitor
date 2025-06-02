@@ -93,6 +93,30 @@ impl DatabaseManager {
         Ok(())
     }
 
+    /// Run database migrations
+    pub async fn run_migrations(&self) -> Result<(), DatabaseError> {
+        sqlx::migrate!().run(&self.pool).await
+            .map_err(|e| DatabaseError::Connection(sqlx::Error::Migrate(Box::new(e))))?;
+        Ok(())
+    }
+
+    /// Clear test data (for integration tests)
+    #[cfg(test)]
+    pub async fn clear_test_data(&self) -> Result<(), DatabaseError> {
+        // Delete test data in reverse dependency order
+        sqlx::query("DELETE FROM run WHERE id LIKE 'test-%'")
+            .execute(&self.pool)
+            .await
+            .map_err(DatabaseError::Connection)?;
+            
+        sqlx::query("DELETE FROM codebase WHERE name LIKE 'test-%'")
+            .execute(&self.pool)
+            .await
+            .map_err(DatabaseError::Connection)?;
+            
+        Ok(())
+    }
+
     // Get global statistics for homepage
     pub async fn get_stats(&self) -> Result<HashMap<String, i64>, DatabaseError> {
         let mut stats = HashMap::new();

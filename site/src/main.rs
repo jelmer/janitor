@@ -17,14 +17,17 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod analyze;
 mod api;
 mod app;
+mod assets;
 mod auth;
 mod config;
 mod database;
 mod handlers;
 mod logging;
 mod middleware;
+mod realtime;
 mod routes;
 mod templates;
+mod webhook;
 
 use app::AppState;
 use config::Config;
