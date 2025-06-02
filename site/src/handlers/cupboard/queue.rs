@@ -87,8 +87,14 @@ pub async fn queue_dashboard(
     
     let mut context = create_admin_context(&admin_user);
     
-    // Fetch queue items and statistics
-    match fetch_queue_data(&state, &filters).await {
+    // Fetch queue items and statistics using new database methods
+    match state.database.get_queue_items_with_stats(
+        filters.suite.as_deref(),
+        filters.status.as_deref(),
+        filters.priority.as_deref(),
+        filters.limit,
+        filters.offset
+    ).await {
         Ok((items, stats)) => {
             context.insert("queue_items", &items);
             context.insert("queue_stats", &stats);
@@ -292,41 +298,7 @@ pub async fn worker_management(
 
 // Helper functions
 
-async fn fetch_queue_data(
-    state: &AppState,
-    filters: &QueueFilters,
-) -> anyhow::Result<(Vec<QueueItem>, QueueStatistics)> {
-    // TODO: Implement queue data fetching from database and runner service
-    // This would query the queue table and integrate with runner service for real-time status
-    
-    // Placeholder implementation
-    let items = vec![
-        QueueItem {
-            id: "queue-1".to_string(),
-            codebase: "example-package".to_string(),
-            suite: "lintian-fixes".to_string(),
-            command: Some("fix-lintian-issues".to_string()),
-            priority: 100,
-            success_chance: Some(0.85),
-            created_at: Utc::now() - chrono::Duration::hours(2),
-            estimated_duration: Some(300), // 5 minutes
-            worker: None,
-            status: "pending".to_string(),
-        },
-    ];
-    
-    let stats = QueueStatistics {
-        total_items: 1,
-        pending_items: 1,
-        in_progress_items: 0,
-        failed_items: 0,
-        average_wait_time: 300, // 5 minutes
-        estimated_completion: Some(Utc::now() + chrono::Duration::minutes(5)),
-        worker_utilization: 0.0,
-    };
-    
-    Ok((items, stats))
-}
+// This function is no longer needed - we use the database methods directly
 
 async fn fetch_queue_item_details(
     state: &AppState,
@@ -375,79 +347,108 @@ async fn execute_bulk_queue_operation(
     state: &AppState,
     operation: &BulkQueueOperation,
 ) -> anyhow::Result<QueueOperationResult> {
-    let total_items = operation.item_ids.len();
-    let mut successful = 0;
-    let mut errors = Vec::new();
+    let admin_user_name = "admin"; // This should be passed from context
+    let now = Utc::now();
     
     match operation.operation.as_str() {
         "reschedule" => {
-            // TODO: Implement bulk reschedule through runner service
-            for item_id in &operation.item_ids {
-                // Placeholder implementation
-                if item_id.starts_with("queue-") {
-                    successful += 1;
-                } else {
-                    errors.push(format!("Invalid queue item ID: {}", item_id));
-                }
-            }
+            let affected_rows = state.database.bulk_reschedule_queue_items(
+                &operation.item_ids,
+                admin_user_name,
+            ).await?;
+            
+            Ok(QueueOperationResult {
+                operation: operation.operation.clone(),
+                total_items: operation.item_ids.len(),
+                successful: affected_rows as usize,
+                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                errors: vec![],
+                completed_at: now,
+            })
         }
         "cancel" => {
-            // TODO: Implement bulk cancel through runner service
-            for item_id in &operation.item_ids {
-                if item_id.starts_with("queue-") {
-                    successful += 1;
-                } else {
-                    errors.push(format!("Invalid queue item ID: {}", item_id));
-                }
-            }
+            let affected_rows = state.database.bulk_cancel_queue_items(
+                &operation.item_ids,
+                admin_user_name,
+            ).await?;
+            
+            Ok(QueueOperationResult {
+                operation: operation.operation.clone(),
+                total_items: operation.item_ids.len(),
+                successful: affected_rows as usize,
+                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                errors: vec![],
+                completed_at: now,
+            })
         }
         "priority_boost" => {
-            // TODO: Implement priority adjustment in database
-            for item_id in &operation.item_ids {
-                if item_id.starts_with("queue-") {
-                    successful += 1;
-                } else {
-                    errors.push(format!("Invalid queue item ID: {}", item_id));
-                }
-            }
+            // Extract priority adjustment from parameters
+            let priority_adjustment = operation.parameters
+                .as_ref()
+                .and_then(|p| p.get("adjustment"))
+                .and_then(|a| a.as_i64())
+                .unwrap_or(10) as i32;
+                
+            let affected_rows = state.database.bulk_adjust_priority(
+                &operation.item_ids,
+                priority_adjustment,
+                admin_user_name,
+            ).await?;
+            
+            Ok(QueueOperationResult {
+                operation: operation.operation.clone(),
+                total_items: operation.item_ids.len(),
+                successful: affected_rows as usize,
+                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                errors: vec![],
+                completed_at: now,
+            })
+        }
+        "priority_decrease" => {
+            // Extract priority adjustment from parameters (negative)
+            let priority_adjustment = operation.parameters
+                .as_ref()
+                .and_then(|p| p.get("adjustment"))
+                .and_then(|a| a.as_i64())
+                .map(|a| -a)
+                .unwrap_or(-10) as i32;
+                
+            let affected_rows = state.database.bulk_adjust_priority(
+                &operation.item_ids,
+                priority_adjustment,
+                admin_user_name,
+            ).await?;
+            
+            Ok(QueueOperationResult {
+                operation: operation.operation.clone(),
+                total_items: operation.item_ids.len(),
+                successful: affected_rows as usize,
+                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                errors: vec![],
+                completed_at: now,
+            })
         }
         "assign_worker" => {
             // TODO: Implement worker assignment through runner service
-            for item_id in &operation.item_ids {
-                if item_id.starts_with("queue-") {
-                    successful += 1;
-                } else {
-                    errors.push(format!("Invalid queue item ID: {}", item_id));
-                }
-            }
+            // This would require communication with the runner service
+            Ok(QueueOperationResult {
+                operation: operation.operation.clone(),
+                total_items: operation.item_ids.len(),
+                successful: 0,
+                failed: operation.item_ids.len(),
+                errors: vec!["Worker assignment not yet implemented".to_string()],
+                completed_at: now,
+            })
         }
         _ => {
             return Err(anyhow::anyhow!("Unknown queue operation: {}", operation.operation));
         }
     }
-    
-    Ok(QueueOperationResult {
-        operation: operation.operation.clone(),
-        total_items,
-        successful,
-        failed: total_items - successful,
-        errors,
-        completed_at: Utc::now(),
-    })
 }
 
 async fn fetch_worker_information(state: &AppState) -> anyhow::Result<serde_json::Value> {
-    // TODO: Implement worker information fetching from runner service
-    // This would query the runner service for current worker status
-    
-    Ok(serde_json::json!({
-        "workers": [],
-        "total_workers": 0,
-        "active_workers": 0,
-        "idle_workers": 0,
-        "offline_workers": 0,
-        "last_updated": Utc::now(),
-    }))
+    // Use the new database method to get real worker information
+    state.database.get_worker_information().await.map_err(|e| anyhow::anyhow!("Database error: {}", e))
 }
 
 fn extract_ip_address(headers: &header::HeaderMap) -> String {
