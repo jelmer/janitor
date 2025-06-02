@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tera::Tera;
 
+use crate::assets::{AssetManager, AssetManifest};
 use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::realtime::{RealtimeManager, RealtimeConfig};
@@ -18,6 +19,7 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub log_manager: Arc<Box<dyn LogFileManager>>,
     pub realtime: Arc<RealtimeManager>,
+    pub assets: AssetManifest,
     pub start_time: Instant,
 }
 
@@ -56,6 +58,20 @@ impl AppState {
             tracing::warn!("Failed to start real-time manager: {}", e);
         }
 
+        // Initialize asset manager
+        let mut asset_manager = if cfg!(debug_assertions) {
+            AssetManager::development("site/static".to_string())
+        } else {
+            AssetManager::new("site/static".to_string())
+        };
+
+        // Generate asset fingerprints for cache busting
+        if let Err(e) = asset_manager.generate_fingerprints() {
+            tracing::warn!("Failed to generate asset fingerprints: {}", e);
+        }
+
+        let asset_manifest = AssetManifest::new(asset_manager);
+
         Ok(Self {
             config: Arc::new(config),
             database,
@@ -64,6 +80,7 @@ impl AppState {
             http_client,
             log_manager,
             realtime: realtime_manager,
+            assets: asset_manifest,
             start_time: Instant::now(),
         })
     }
