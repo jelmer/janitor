@@ -30,3 +30,10 @@ janitor = { path = ".." }
 
 # APT repository generation
 apt-repository = { path = "../apt-repository" }
+
+# Web service dependencies
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "validate-request"] }
+hyper = "1.0"
+tokio-util = "0.7"
