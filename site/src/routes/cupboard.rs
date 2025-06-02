@@ -36,7 +36,12 @@ pub fn cupboard_routes() -> Router<AppState> {
         
         // Publishing controls
         .route("/cupboard/publish", get(cupboard::publish::publish_dashboard))
+        .route("/cupboard/publish/history", get(cupboard::publish::publish_history))
+        .route("/cupboard/publish/:publish_id", get(cupboard::publish::publish_details))
+        .route("/cupboard/publish/ready", get(cupboard::publish::ready_runs))
+        .route("/cupboard/publish/statistics", get(cupboard::publish::publish_statistics))
         .route("/cupboard/publish/emergency-stop", post(cupboard::publish::emergency_publish_stop))
+        .route("/cupboard/publish/rate-limits", post(cupboard::publish::adjust_rate_limits))
         
         // Merge proposal management
         .route("/cupboard/merge-proposals", get(cupboard::merge_proposals::mp_dashboard))
@@ -75,7 +80,12 @@ pub fn cupboard_api_routes() -> Router<AppState> {
         
         // Publishing API
         .route("/api/v1/admin/publish", get(cupboard::publish::publish_dashboard))
+        .route("/api/v1/admin/publish/history", get(cupboard::publish::publish_history))
+        .route("/api/v1/admin/publish/:publish_id", get(cupboard::publish::publish_details))
+        .route("/api/v1/admin/publish/ready", get(cupboard::publish::ready_runs))
+        .route("/api/v1/admin/publish/statistics", get(cupboard::publish::publish_statistics))
         .route("/api/v1/admin/publish/emergency-stop", post(cupboard::publish::emergency_publish_stop))
+        .route("/api/v1/admin/publish/rate-limits", post(cupboard::publish::adjust_rate_limits))
         
         // Merge proposals API
         .route("/api/v1/admin/merge-proposals", get(cupboard::merge_proposals::mp_dashboard))
