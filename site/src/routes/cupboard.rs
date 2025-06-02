@@ -45,6 +45,9 @@ pub fn cupboard_routes() -> Router<AppState> {
         
         // Merge proposal management
         .route("/cupboard/merge-proposals", get(cupboard::merge_proposals::mp_dashboard))
+        .route("/cupboard/merge-proposals/details/:mp_url", get(cupboard::merge_proposals::mp_details))
+        .route("/cupboard/merge-proposals/statistics", get(cupboard::merge_proposals::mp_statistics))
+        .route("/cupboard/merge-proposals/forge-health", get(cupboard::merge_proposals::forge_health))
         .route("/cupboard/merge-proposals/bulk", post(cupboard::merge_proposals::bulk_mp_operation))
         
         // Admin API endpoints
@@ -89,6 +92,9 @@ pub fn cupboard_api_routes() -> Router<AppState> {
         
         // Merge proposals API
         .route("/api/v1/admin/merge-proposals", get(cupboard::merge_proposals::mp_dashboard))
+        .route("/api/v1/admin/merge-proposals/details/:mp_url", get(cupboard::merge_proposals::mp_details))
+        .route("/api/v1/admin/merge-proposals/statistics", get(cupboard::merge_proposals::mp_statistics))
+        .route("/api/v1/admin/merge-proposals/forge-health", get(cupboard::merge_proposals::forge_health))
         .route("/api/v1/admin/merge-proposals/bulk", post(cupboard::merge_proposals::bulk_mp_operation))
         
         // Apply admin authentication middleware
