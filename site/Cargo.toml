@@ -66,6 +66,9 @@ hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 
+# Asset compression
+flate2 = "1.0"
+
 # Configuration
 config = "0.14"
 anyhow = "1.0"

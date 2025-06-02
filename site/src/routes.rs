@@ -2,6 +2,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use tower_http::services::ServeDir;
 
 use crate::{
     app::AppState,
@@ -11,6 +12,10 @@ use crate::{
 
 pub fn app_routes() -> Router<AppState> {
     Router::new()
+        // Static file serving
+        .nest_service("/_static", ServeDir::new("static"))
+        .nest_service("/static", ServeDir::new("static"))
+        
         // Homepage and static pages
         .route("/", get(simple::index))
         .route("/about", get(simple::about))
