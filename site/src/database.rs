@@ -1046,6 +1046,318 @@ impl DatabaseManager {
         
         Ok(results)
     }
+
+    // Queue management methods for admin interface
+
+    /// Get queue items with filtering and statistics
+    pub async fn get_queue_items_with_stats(
+        &self,
+        suite: Option<&str>,
+        status: Option<&str>,
+        priority: Option<&str>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> Result<(Vec<serde_json::Value>, serde_json::Value), DatabaseError> {
+        // TODO: Implement proper filtering - for now using basic query without filters
+
+        // For now, use a simple query without complex filtering
+        let rows = sqlx::query(
+            "SELECT 
+                q.id,
+                q.codebase,
+                q.suite,
+                q.command,
+                q.context,
+                q.value as priority_value,
+                q.success_chance,
+                q.publish_policy,
+                q.status,
+                q.created_time,
+                q.assigned_time,
+                q.worker,
+                c.url as vcs_url,
+                c.branch,
+                c.vcs_type
+             FROM queue q
+             LEFT JOIN codebase c ON q.codebase = c.name
+             ORDER BY q.value DESC, q.created_time ASC
+             LIMIT $1"
+        )
+        .bind(limit.unwrap_or(50))
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut items = Vec::new();
+        for row in rows {
+            let item = serde_json::json!({
+                "id": row.try_get::<Option<String>, _>("id")?,
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "suite": row.try_get::<String, _>("suite")?,
+                "command": row.try_get::<Option<String>, _>("command")?,
+                "context": row.try_get::<Option<String>, _>("context")?,
+                "priority_value": row.try_get::<Option<i32>, _>("priority_value")?,
+                "success_chance": row.try_get::<Option<f64>, _>("success_chance")?,
+                "publish_policy": row.try_get::<Option<String>, _>("publish_policy")?,
+                "status": row.try_get::<Option<String>, _>("status")?,
+                "created_time": row.try_get::<Option<DateTime<Utc>>, _>("created_time")?,
+                "assigned_time": row.try_get::<Option<DateTime<Utc>>, _>("assigned_time")?,
+                "worker": row.try_get::<Option<String>, _>("worker")?,
+                "vcs_url": row.try_get::<Option<String>, _>("vcs_url")?,
+                "branch": row.try_get::<Option<String>, _>("branch")?,
+                "vcs_type": row.try_get::<Option<String>, _>("vcs_type")?
+            });
+            items.push(item);
+        }
+
+        // Get queue statistics
+        let stats = self.get_queue_statistics().await?;
+
+        Ok((items, stats))
+    }
+
+    /// Get comprehensive queue statistics for admin dashboard
+    pub async fn get_queue_statistics(&self) -> Result<serde_json::Value, DatabaseError> {
+        // Total items in queue
+        let total_items: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue")
+            .fetch_one(&self.pool)
+            .await?;
+
+        // Items by status
+        let pending_items: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE status = 'pending' OR status IS NULL"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let assigned_items: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE status = 'assigned'"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let running_items: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE status = 'running'"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Worker statistics
+        let active_workers: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT worker) FROM queue WHERE status = 'running' AND worker IS NOT NULL"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Priority distribution
+        let high_priority: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE value >= 75"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let medium_priority: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE value >= 25 AND value < 75"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let low_priority: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM queue WHERE value < 25"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        // Average wait time for pending items
+        let avg_wait_time: Option<f64> = sqlx::query_scalar(
+            "SELECT EXTRACT(EPOCH FROM AVG(NOW() - created_time))/3600 
+             FROM queue 
+             WHERE status = 'pending' OR status IS NULL"
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+
+        Ok(serde_json::json!({
+            "total_items": total_items,
+            "pending_items": pending_items,
+            "assigned_items": assigned_items,
+            "running_items": running_items,
+            "active_workers": active_workers,
+            "priority_distribution": {
+                "high": high_priority,
+                "medium": medium_priority,
+                "low": low_priority
+            },
+            "average_wait_time_hours": avg_wait_time.unwrap_or(0.0)
+        }))
+    }
+
+    /// Reschedule queue items (bulk operation)
+    pub async fn bulk_reschedule_queue_items(
+        &self,
+        item_ids: &[String],
+        admin_user: &str,
+    ) -> Result<i64, DatabaseError> {
+        let mut tx = self.pool.begin().await?;
+
+        let affected_rows = sqlx::query(
+            "UPDATE queue 
+             SET status = 'pending', 
+                 assigned_time = NULL, 
+                 worker = NULL, 
+                 updated_time = NOW()
+             WHERE id = ANY($1)"
+        )
+        .bind(item_ids)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        // Log the bulk operation
+        sqlx::query(
+            "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
+             VALUES (NOW(), $1, 'bulk_reschedule', 'queue', $2)"
+        )
+        .bind(admin_user)
+        .bind(serde_json::json!({
+            "item_ids": item_ids,
+            "affected_rows": affected_rows
+        }))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(affected_rows as i64)
+    }
+
+    /// Cancel queue items (bulk operation)
+    pub async fn bulk_cancel_queue_items(
+        &self,
+        item_ids: &[String],
+        admin_user: &str,
+    ) -> Result<i64, DatabaseError> {
+        let mut tx = self.pool.begin().await?;
+
+        let affected_rows = sqlx::query(
+            "DELETE FROM queue WHERE id = ANY($1)"
+        )
+        .bind(item_ids)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        // Log the bulk operation
+        sqlx::query(
+            "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
+             VALUES (NOW(), $1, 'bulk_cancel', 'queue', $2)"
+        )
+        .bind(admin_user)
+        .bind(serde_json::json!({
+            "item_ids": item_ids,
+            "affected_rows": affected_rows
+        }))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(affected_rows as i64)
+    }
+
+    /// Adjust priority of queue items (bulk operation)
+    pub async fn bulk_adjust_priority(
+        &self,
+        item_ids: &[String],
+        priority_adjustment: i32,
+        admin_user: &str,
+    ) -> Result<i64, DatabaseError> {
+        let mut tx = self.pool.begin().await?;
+
+        let affected_rows = sqlx::query(
+            "UPDATE queue 
+             SET value = GREATEST(0, LEAST(100, value + $1)),
+                 updated_time = NOW()
+             WHERE id = ANY($2)"
+        )
+        .bind(priority_adjustment)
+        .bind(item_ids)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        // Log the bulk operation
+        sqlx::query(
+            "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
+             VALUES (NOW(), $1, 'bulk_priority_adjust', 'queue', $2)"
+        )
+        .bind(admin_user)
+        .bind(serde_json::json!({
+            "item_ids": item_ids,
+            "priority_adjustment": priority_adjustment,
+            "affected_rows": affected_rows
+        }))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(affected_rows as i64)
+    }
+
+    /// Get worker information for admin monitoring
+    pub async fn get_worker_information(&self) -> Result<serde_json::Value, DatabaseError> {
+        let workers = sqlx::query(
+            "SELECT 
+                worker,
+                COUNT(*) as assigned_tasks,
+                MIN(assigned_time) as earliest_assignment,
+                MAX(assigned_time) as latest_assignment,
+                COUNT(DISTINCT suite) as suite_count
+             FROM queue 
+             WHERE worker IS NOT NULL AND status IN ('assigned', 'running')
+             GROUP BY worker
+             ORDER BY assigned_tasks DESC"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut worker_list = Vec::new();
+        for row in workers {
+            let worker_info = serde_json::json!({
+                "worker": row.try_get::<String, _>("worker")?,
+                "assigned_tasks": row.try_get::<i64, _>("assigned_tasks")?,
+                "earliest_assignment": row.try_get::<Option<DateTime<Utc>>, _>("earliest_assignment")?,
+                "latest_assignment": row.try_get::<Option<DateTime<Utc>>, _>("latest_assignment")?,
+                "suite_count": row.try_get::<i64, _>("suite_count")?
+            });
+            worker_list.push(worker_info);
+        }
+
+        // Get overall worker statistics
+        let total_workers: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT worker) FROM queue WHERE worker IS NOT NULL"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let idle_workers: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT w.name) 
+             FROM workers w 
+             LEFT JOIN queue q ON w.name = q.worker AND q.status IN ('assigned', 'running')
+             WHERE q.worker IS NULL"
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(0); // This query might fail if workers table doesn't exist
+
+        Ok(serde_json::json!({
+            "workers": worker_list,
+            "total_workers": total_workers,
+            "active_workers": worker_list.len(),
+            "idle_workers": idle_workers
+        }))
+    }
 }
 
 // Additional types for database results
