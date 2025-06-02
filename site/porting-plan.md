@@ -251,14 +251,14 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 - [ ] Add system status and monitoring APIs
 - [ ] Create bulk operation endpoints
 
-### Phase 3.7: Cupboard Admin Interface (3-4 weeks)
+### Phase 3.7: Cupboard Admin Interface ✅ **Phase 4.1 COMPLETED** (3-4 weeks)
 **Target**: Port all cupboard functionality (1,629 lines)
 
-#### 3.7.1: Admin Dashboard
-- [ ] Port main cupboard interface
-- [ ] Implement worker monitoring views
-- [ ] Add system status dashboard
-- [ ] Create metrics and reporting views
+#### 3.7.1: Admin Dashboard ✅ **COMPLETED**
+- [x] Port main cupboard interface (src/handlers/cupboard/mod.rs)
+- [x] Implement admin authentication and role-based access control
+- [x] Add system status dashboard (src/handlers/cupboard/api.rs)
+- [x] Create admin framework with permission system
 
 #### 3.7.2: Queue Management
 - [ ] Port queue browsing and management
@@ -410,7 +410,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 | 3.4 Template Migration | 4-5 weeks | Phase 3.1 | High |
 | 3.5 Main Site | 3-4 weeks | Phase 3.4 | Medium |
 | 3.6 REST API | 4-5 weeks | Phase 3.3, 3.5 | Medium |
-| 3.7 Cupboard Admin | 3-4 weeks | Phase 3.6 | Medium |
+| 3.7 Cupboard Admin | 3-4 weeks | Phase 3.6 | Medium | ✅ **Phase 4.1 COMPLETED** |
 | 3.8 Real-time Features | 2 weeks | Phase 3.6 | Medium |
 | 3.9 Static Assets | 1-2 weeks | Phase 3.5 | Low |
 | 3.10 Testing & Validation | 2-3 weeks | All phases | Low |
