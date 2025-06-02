@@ -3648,6 +3648,7 @@ dependencies = [
  "hyper 1.6.0",
  "janitor",
  "num_cpus",
+ "redis 0.24.0",
  "serde",
  "serde_json",
  "sqlx",
@@ -3658,6 +3659,7 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3688,7 +3690,7 @@ dependencies = [
  "nix 0.29.0",
  "patchkit",
  "pyo3",
- "redis",
+ "redis 0.27.6",
  "serde",
  "serde_json",
  "shlex",
@@ -3736,7 +3738,7 @@ dependencies = [
  "minijinja",
  "prometheus 0.14.0",
  "pyo3",
- "redis",
+ "redis 0.27.6",
  "reqwest 0.12.15",
  "rslock",
  "serde",
@@ -3770,7 +3772,7 @@ dependencies = [
  "maplit",
  "num_cpus",
  "prometheus 0.13.4",
- "redis",
+ "redis 0.27.6",
  "reqwest 0.12.15",
  "serde",
  "serde_json",
@@ -3818,7 +3820,7 @@ dependencies = [
  "metrics 0.22.4",
  "metrics-prometheus",
  "oauth2",
- "redis",
+ "redis 0.27.6",
  "regex",
  "reqwest 0.12.15",
  "serde",
@@ -5689,6 +5691,30 @@ dependencies = [
 
 [[package]]
 name = "redis"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c580d9cbbe1d1b479e8d67cf9daf6a62c957e6846048408b80b43ac3f6af84cd"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "combine",
+ "futures",
+ "futures-util",
+ "itoa",
+ "percent-encoding",
+ "pin-project-lite",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.4.10",
+ "tokio",
+ "tokio-retry",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "redis"
 version = "0.27.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d8f99a4090c89cc489a94833c901ead69bfbf3877b4867d5482e321ee875bc"
@@ -6004,7 +6030,7 @@ checksum = "cea47427a397d878cc17423954434f77e646458d2b90bf19386a8772809dd12f"
 dependencies = [
  "futures",
  "rand 0.8.5",
- "redis",
+ "redis 0.27.6",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -7483,6 +7509,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
 dependencies = [
  "native-tls",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-retry"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f57eb36ecbe0fc510036adff84824dd3c24bb781e21bfa67b69d556aa85214f"
+dependencies = [
+ "pin-project",
+ "rand 0.8.5",
  "tokio",
 ]
 

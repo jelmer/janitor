@@ -169,6 +169,7 @@ impl RedisSubscriber {
 
         let handle = tokio::spawn(async move {
             let mut retry_count = 0;
+            let mut shutdown_rx = shutdown_rx;
 
             loop {
                 match Self::run_subscriber_loop(
@@ -176,7 +177,7 @@ impl RedisSubscriber {
                     &config,
                     &generator_manager,
                     &channels,
-                    shutdown_rx.as_ref(),
+                    shutdown_rx.as_mut(),
                 )
                 .await
                 {
@@ -217,7 +218,7 @@ impl RedisSubscriber {
         config: &RedisConfig,
         generator_manager: &Arc<GeneratorManager>,
         channels: &[String],
-        shutdown_rx: Option<&mpsc::Receiver<()>>,
+        mut shutdown_rx: Option<&mut mpsc::Receiver<()>>,
     ) -> ArchiveResult<()> {
         let mut conn = client
             .get_async_connection()
@@ -241,14 +242,14 @@ impl RedisSubscriber {
             tokio::select! {
                 // Handle shutdown signal
                 shutdown_result = async {
-                    match shutdown_rx.as_mut() {
-                        Some(rx) => rx.recv().await,
+                    match shutdown_rx {
+                        Some(ref mut rx) => rx.recv().await,
                         None => std::future::pending().await,
                     }
                 } => {
                     match shutdown_result {
-                        Ok(_) => info!("Received shutdown signal, stopping Redis subscriber"),
-                        Err(_) => info!("Shutdown channel closed, stopping Redis subscriber"),
+                        Some(_) => info!("Received shutdown signal, stopping Redis subscriber"),
+                        None => info!("Shutdown channel closed, stopping Redis subscriber"),
                     }
                     break;
                 }

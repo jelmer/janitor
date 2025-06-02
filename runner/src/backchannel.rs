@@ -367,7 +367,14 @@ impl Backchannel for PollingBackchannel {
 
         let log_id = match self.get_log_id(session).await {
             Ok(log_id) => log_id,
-            Err(_e) => return Err(Error::PingTimeout),
+            Err(e) => {
+                // Connection errors should be IntermediaryFailure, other errors are timeouts
+                if e.is_connect() || e.is_timeout() || e.is_request() {
+                    return Err(Error::IntermediaryFailure(e));
+                } else {
+                    return Err(Error::PingTimeout);
+                }
+            }
         };
 
         if log_id != expected_log_id {
