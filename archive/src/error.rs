@@ -57,6 +57,22 @@ pub enum ArchiveError {
     /// Invalid archive configuration.
     #[error("Invalid archive configuration: {0}")]
     InvalidConfiguration(String),
+
+    /// Redis operation error.
+    #[error("Redis error: {0}")]
+    Redis(String),
+
+    /// Serialization error.
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    /// Resource limit exceeded.
+    #[error("Resource limit exceeded: {0}")]
+    ResourceLimit(String),
+
+    /// Resource not found.
+    #[error("Resource not found: {0}")]
+    NotFound(String),
 }
 
 /// Result type for archive operations.

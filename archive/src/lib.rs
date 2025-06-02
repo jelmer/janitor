@@ -32,10 +32,22 @@ pub mod repository;
 /// Web service implementation.
 pub mod web;
 
+/// Generator manager for background operations.
+pub mod manager;
+
+/// Redis integration for pub/sub messaging.
+pub mod redis;
+
+/// Periodic services for background operations.
+pub mod periodic;
+
 // Re-export commonly used types
 pub use error::{ArchiveError, ArchiveResult};
 pub use scanner::{BuildInfo, PackageScanner};
 pub use repository::{RepositoryGenerator, RepositoryGenerationConfig};
 pub use web::{ArchiveWebService, AppState, PublishRequest, PublishResponse};
+pub use manager::{GeneratorManager, GeneratorManagerConfig, JobInfo, JobStatus, ManagerStatistics};
+pub use redis::{RedisConfig, RedisManager, RedisPublisher, RedisSubscriber, ArchiveEvent};
+pub use periodic::{PeriodicServices, PeriodicConfig, HealthCheck, HealthStatus, ServiceMetrics};
 
 // TODO(jelmer): Generate contents file
