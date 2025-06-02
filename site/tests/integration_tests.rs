@@ -1,15 +1,17 @@
 // Integration tests for the site module
 // These tests require external services (database, Redis) and test full workflows
+//
+// NOTE: These tests are currently disabled due to testcontainers API compatibility issues
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{http::StatusCode, Router};
+use axum::http::StatusCode;
 use axum_test::TestServer;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
-use testcontainers::{Container, RunnableImage};
+use testcontainers::{ContainerAsync, runners::AsyncRunner};
 use testcontainers_modules::{postgres::Postgres, redis::Redis};
 
 use janitor_site::{
@@ -18,18 +20,16 @@ use janitor_site::{
     database::DatabaseManager,
 };
 
-// Import the create_app function - we'll need to define this
-fn create_app(state: Arc<AppState>) -> axum::Router {
-    use axum::{routing::get, Router};
-    
+// Import the create_app function - we'll need to define this  
+fn create_app(state: Arc<AppState>) -> axum::routing::Router {
     // Simplified app for testing
-    Router::new()
-        .route("/health", get(health_check))
-        .route("/api/status", get(api_status))
-        .route("/api/queue", get(api_queue))
-        .route("/api/search", get(api_search))
-        .route("/auth/login", get(auth_login))
-        .route("/admin/system/status", get(admin_status))
+    axum::routing::Router::new()
+        .route("/health", axum::routing::get(health_check))
+        .route("/api/status", axum::routing::get(api_status))
+        .route("/api/queue", axum::routing::get(api_queue))
+        .route("/api/search", axum::routing::get(api_search))
+        .route("/auth/login", axum::routing::get(auth_login))
+        .route("/admin/system/status", axum::routing::get(admin_status))
         .with_state(state)
 }
 
@@ -60,8 +60,8 @@ async fn admin_status() -> axum::http::StatusCode {
 
 // Test configuration and setup utilities
 pub struct IntegrationTestEnvironment {
-    pub postgres_container: Container<Postgres>,
-    pub redis_container: Container<Redis>,
+    pub postgres_container: ContainerAsync<Postgres>,
+    pub redis_container: ContainerAsync<Redis>,
     pub database: DatabaseManager,
     pub app_state: Arc<AppState>,
     pub test_server: TestServer,
@@ -70,17 +70,15 @@ pub struct IntegrationTestEnvironment {
 impl IntegrationTestEnvironment {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Start PostgreSQL container
-        let postgres_container = testcontainers::clients::Cli::default()
-            .run(Postgres::default());
+        let postgres_container = Postgres::default().start().await?;
         
-        let postgres_port = postgres_container.get_host_port_ipv4(5432);
+        let postgres_port = postgres_container.get_host_port_ipv4(5432).await?;
         let database_url = format!("postgresql://postgres:postgres@localhost:{}/postgres", postgres_port);
         
         // Start Redis container
-        let redis_container = testcontainers::clients::Cli::default()
-            .run(Redis::default());
+        let redis_container = Redis::default().start().await?;
         
-        let redis_port = redis_container.get_host_port_ipv4(6379);
+        let redis_port = redis_container.get_host_port_ipv4(6379).await?;
         let redis_url = format!("redis://localhost:{}", redis_port);
 
         // Create test configuration
@@ -102,8 +100,9 @@ impl IntegrationTestEnvironment {
         let app_state = Arc::new(AppState::new(config).await?);
         
         // Create test server
-        let app = create_app(app_state.clone());
-        let test_server = TestServer::new(app)?;
+        let app: axum::routing::Router = create_app(app_state.clone());
+        let service: axum::routing::IntoMakeService<axum::routing::Router> = app.into_make_service();
+        let test_server = TestServer::new(service)?;
 
         Ok(Self {
             postgres_container,
