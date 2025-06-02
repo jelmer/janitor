@@ -48,6 +48,11 @@ pub enum Permission {
     ModifyPublishSettings,
     EmergencyPublishControls,
     
+    // Merge proposals
+    ViewMergeProposals,
+    BulkMpOperations,
+    ManageForgeIntegration,
+    
     // System administration
     ViewSystemMetrics,
     ModifySystemSettings,
@@ -82,6 +87,9 @@ impl AdminUser {
             permissions.insert(Permission::ViewPublishQueue);
             permissions.insert(Permission::ModifyPublishSettings);
             permissions.insert(Permission::EmergencyPublishControls);
+            permissions.insert(Permission::ViewMergeProposals);
+            permissions.insert(Permission::BulkMpOperations);
+            permissions.insert(Permission::ManageForgeIntegration);
             permissions.insert(Permission::ViewSystemMetrics);
             permissions.insert(Permission::ModifySystemSettings);
             permissions.insert(Permission::ManageUsers);
@@ -94,6 +102,7 @@ impl AdminUser {
             permissions.insert(Permission::ViewReviews);
             permissions.insert(Permission::BulkReviewActions);
             permissions.insert(Permission::ViewPublishQueue);
+            permissions.insert(Permission::ViewMergeProposals);
             permissions.insert(Permission::ViewSystemMetrics);
         }
         
