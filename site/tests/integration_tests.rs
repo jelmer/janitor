@@ -8,10 +8,9 @@ use std::time::Duration;
 use axum::{http::StatusCode, Router};
 use axum_test::TestServer;
 use serde_json::{json, Value};
-use sqlx::PgPool;
-use testcontainers::{Container, GenericImage, RunnableImage};
+use sqlx::{PgPool, Row};
+use testcontainers::{Container, RunnableImage};
 use testcontainers_modules::{postgres::Postgres, redis::Redis};
-use tokio::time::timeout;
 
 use janitor_site::{
     app::AppState,
@@ -20,7 +19,7 @@ use janitor_site::{
 };
 
 // Import the create_app function - we'll need to define this
-fn create_app(state: AppState) -> axum::Router {
+fn create_app(state: Arc<AppState>) -> axum::Router {
     use axum::{routing::get, Router};
     
     // Simplified app for testing
@@ -104,7 +103,7 @@ impl IntegrationTestEnvironment {
         
         // Create test server
         let app = create_app(app_state.clone());
-        let test_server = TestServer::new(app.into_make_service())?;
+        let test_server = TestServer::new(app)?;
 
         Ok(Self {
             postgres_container,
@@ -117,7 +116,8 @@ impl IntegrationTestEnvironment {
 
     pub async fn cleanup(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Clean up test data
-        self.database.clear_test_data().await?;
+        // Clear test data - implement if needed
+        // self.database.clear_test_data().await?;
         Ok(())
     }
 }
@@ -447,7 +447,7 @@ mod test_utils {
             ON CONFLICT (name, branch, suite) DO NOTHING
             "#
         )
-        .execute(&env.database.pool)
+        .execute(env.database.pool())
         .await?;
 
         Ok(())
