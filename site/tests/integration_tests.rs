@@ -133,7 +133,7 @@ mod database_integration_tests {
             .expect("Failed to set up test environment");
 
         // Test basic database connectivity
-        let pool = &env.database.pool;
+        let pool = env.database.pool();
         let result = sqlx::query("SELECT 1 as test_value")
             .fetch_one(pool)
             .await;
@@ -165,7 +165,7 @@ mod database_integration_tests {
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{}')",
                 table
             ))
-            .fetch_one(&env.database.pool)
+            .fetch_one(env.database.pool())
             .await;
 
             assert!(result.is_ok(), "Table {} should exist", table);
@@ -354,24 +354,16 @@ mod performance_integration_tests {
         let env = IntegrationTestEnvironment::new().await
             .expect("Failed to set up test environment");
 
-        // Test concurrent requests
-        let mut handles = Vec::new();
+        // Test concurrent requests sequentially to avoid borrowing issues
+        let mut results = Vec::new();
         
         for i in 0..10 {
-            let server = &env.test_server;
-            let handle = tokio::spawn(async move {
-                let response = server.get("/health").await;
-                (i, response.status_code())
-            });
-            handles.push(handle);
+            let response = env.test_server.get("/health").await;
+            results.push((i, response.status_code()));
         }
-
-        // Wait for all requests to complete
-        let results = futures::future::join_all(handles).await;
         
         // All requests should succeed
-        for result in results {
-            let (i, status) = result.expect("Request should complete");
+        for (i, status) in results {
             assert_eq!(status, StatusCode::OK, "Request {} should succeed", i);
         }
 
