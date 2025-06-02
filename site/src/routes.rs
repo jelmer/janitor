@@ -1,8 +1,10 @@
 use axum::{
     routing::{get, post},
     Router,
+    response::IntoResponse,
 };
 use tower_http::services::ServeDir;
+use std::io::Read;
 
 use crate::{
     app::AppState,
@@ -67,16 +69,97 @@ async fn vcs_repo_list(
     axum::extract::Path(vcs): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl axum::response::IntoResponse {
-    // TODO: Implement VCS repository listing
-    axum::http::StatusCode::NOT_IMPLEMENTED
+    use axum::response::Html;
+    use crate::templates::create_base_context;
+    
+    let mut context = create_base_context();
+    context.insert("vcs_type", &vcs);
+    
+    // Fetch repositories from database based on VCS type
+    match state.database.get_repositories_by_vcs(&vcs).await {
+        Ok(repositories) => {
+            context.insert("repositories", &repositories);
+            context.insert("repository_count", &repositories.len());
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch {} repositories: {}", vcs, e);
+            context.insert("repositories", &Vec::<String>::new());
+            context.insert("repository_count", &0);
+        }
+    }
+    
+    match state.templates.render("repo-list.html", &context) {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!("Template rendering error: {}", e);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 async fn serve_result_file(
     axum::extract::Path((suite, pkg, run_id, filename)): axum::extract::Path<(String, String, String, String)>,
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl axum::response::IntoResponse {
-    // TODO: Implement result file serving
-    axum::http::StatusCode::NOT_IMPLEMENTED
+    use axum::response::{IntoResponse, Response};
+    use axum::body::Body;
+    use axum::http::{header, StatusCode};
+    
+    // Sanitize the filename to prevent path traversal
+    let safe_filename = filename.replace("..", "").replace('/', "_");
+    
+    // Try to get the file from the log manager
+    match state.log_manager.get_log(&pkg, &run_id, &safe_filename).await {
+        Ok(mut content) => {
+            // Read the content into a Vec<u8>
+            let mut buffer = Vec::new();
+            match std::io::Read::read_to_end(&mut *content, &mut buffer) {
+                Ok(_) => {},
+                Err(e) => {
+                    tracing::error!("Failed to read log content: {}", e);
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+            let content = buffer;
+            // Determine content type based on file extension
+            let content_type = match safe_filename.split('.').last() {
+                Some("log") | Some("txt") => "text/plain; charset=utf-8",
+                Some("html") | Some("htm") => "text/html; charset=utf-8",
+                Some("json") => "application/json",
+                Some("xml") => "application/xml",
+                Some("tar") => "application/x-tar",
+                Some("gz") => "application/gzip",
+                Some("bz2") => "application/x-bzip2",
+                Some("xz") => "application/x-xz",
+                Some("deb") => "application/x-debian-package",
+                Some("dsc") => "text/plain; charset=utf-8",
+                Some("changes") => "text/plain; charset=utf-8",
+                _ => "application/octet-stream",
+            };
+            
+            // Set appropriate headers
+            let response = Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, content_type)
+                .header(
+                    header::CONTENT_DISPOSITION,
+                    format!("inline; filename=\"{}\"", safe_filename)
+                )
+                .body(Body::from(content))
+                .unwrap();
+                
+            response.into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to serve file {}/{}/{}: {}", pkg, run_id, safe_filename, e);
+            
+            // Check if it's a not found error or server error
+            match e.to_string().contains("not found") || e.to_string().contains("NotFound") {
+                true => StatusCode::NOT_FOUND.into_response(),
+                false => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            }
+        }
+    }
 }
 
 
@@ -92,7 +175,20 @@ async fn legacy_package_detail(
     axum::extract::Path(name): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl axum::response::IntoResponse {
-    // Redirect to appropriate campaign page
-    // TODO: Determine correct campaign from package name
-    axum::response::Redirect::permanent(&format!("/lintian-fixes/c/{}/", name))
+    use axum::response::Redirect;
+    
+    // Try to determine the most appropriate campaign for this package
+    let default_campaign = if let Some(campaigns) = state.config.janitor() {
+        // Use the first available campaign as default
+        campaigns.campaign.first()
+            .map(|c| c.name())
+            .unwrap_or("lintian-fixes")
+    } else {
+        "lintian-fixes"
+    };
+    
+    // For now, redirect to the default campaign
+    // In a full implementation, this could query the database to find
+    // which campaigns this package has been run with
+    Redirect::permanent(&format!("/{}/c/{}/", default_campaign, name))
 }

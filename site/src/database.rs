@@ -211,6 +211,27 @@ impl DatabaseManager {
         })
     }
 
+    pub async fn get_repositories_by_vcs(&self, vcs_type: &str) -> Result<Vec<Codebase>, DatabaseError> {
+        let rows = sqlx::query(
+            "SELECT name, url, branch FROM codebase 
+             WHERE url LIKE $1 AND NOT inactive 
+             ORDER BY name LIMIT 1000"
+        )
+        .bind(format!("{}://%", vcs_type))
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let repositories = rows.into_iter()
+            .map(|row| Codebase {
+                name: row.try_get("name").unwrap_or_default(),
+                url: row.try_get("url").unwrap_or_default(),
+                branch: row.try_get("branch").ok(),
+            })
+            .collect();
+            
+        Ok(repositories)
+    }
+
     pub async fn count_codebases(&self, search: Option<&str>) -> Result<i64, DatabaseError> {
         let mut query = "SELECT COUNT(*) FROM codebase WHERE NOT inactive".to_string();
         
