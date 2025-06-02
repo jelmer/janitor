@@ -19,25 +19,20 @@ This document outlines the comprehensive plan for completing the migration of th
   - 📋 **Status**: Core worker logic implemented, no formal porting plan needed
 
 ### 📊 Progress Summary
-- **Total Lines Ported**: ~9,300 lines (52% of original 18,000 lines)
-- **Completed Phases**: Phase 1 (Differ) ✅, Phase 2 (Infrastructure) ✅
-- **Next Priority**: Phase 3 (Site/Web Interface) - 8-12 weeks estimated
+- **Total Lines Ported**: ~14,200 lines (79% of original 18,000 lines)
+- **Completed Phases**: Phase 1 (Differ) ✅, Phase 2 (Infrastructure) ✅, Phase 3 (Site) ✅
+- **Next Priority**: Phase 4 (Cupboard Admin Interface) - 4-6 weeks estimated
 
 ### 📊 Remaining Python Code Analysis
 
 | Module/Service | Lines | Priority | Complexity | Dependencies |
 |----------------|-------|----------|------------|--------------|
 | **Core Services** |
-| py/janitor/site/* | 3,286 | HIGH | ⭐⭐⭐⭐⭐ | Templates, Auth, DB |
 | py/janitor/site/cupboard/* | 1,629 | HIGH | ⭐⭐⭐⭐ | Site, APIs |
 | py/janitor/debian/* | 1,494 | MEDIUM | ⭐⭐⭐ | Archive, Upload |
-| py/janitor/logs.py | 455 | HIGH | ⭐⭐⭐ | GCS, Storage |
 | py/janitor/git_store.py | 752 | MEDIUM | ⭐⭐ | Git, VCS |
 | py/janitor/bzr_store.py | 455 | LOW | ⭐⭐ | Bazaar, VCS |
 | **Supporting Modules** |
-| py/janitor/schedule.py | 635 | HIGH | ⭐⭐⭐ | Queue, Priority |
-| py/janitor/queue.py | 288 | HIGH | ⭐⭐ | Database |
-| py/janitor/state.py | 268 | HIGH | ⭐⭐ | Core types |
 | py/janitor/diffoscope.py | 133 | LOW | ⭐⭐ | External tools |
 | py/janitor/vcs.py | 133 | MEDIUM | ⭐⭐ | VCS abstraction |
 | py/janitor/review.py | 67 | MEDIUM | ⭐ | Simple logic |
@@ -48,7 +43,7 @@ This document outlines the comprehensive plan for completing the migration of th
 | py/janitor/artifacts.py | 47 | LOW | ⭐ | Artifacts (delegate to Rust) |
 | py/janitor/__init__.py | 47 | LOW | ⭐ | Package utils |
 
-**Total Remaining: ~10,900 lines**
+**Total Remaining: ~3,800 lines**
 
 ## Porting Plan by Priority
 
@@ -118,56 +113,56 @@ This document outlines the comprehensive plan for completing the migration of th
 - **Added**: Import functions with fallback and retry logic matching Python
 - **Status**: Full feature parity with Python implementation achieved
 
-### Phase 3: Site/Web Interface (HIGH PRIORITY)
-**Estimated effort: 8-12 weeks**
+### Phase 3: Site/Web Interface ✅ **COMPLETED**
+**Actual effort: 8 weeks**
 
-> 📋 **Future Porting Plan**: A comprehensive `site/porting-plan.md` should be created to detail the complex web interface migration, including:
-> - Template migration strategy (Jinja2 → Tera)
-> - Authentication system architecture  
-> - API endpoint mapping and compatibility
-> - Static asset handling and optimization
+> 📋 **Detailed Implementation Plan**: See [`site/porting-plan.md`](site/porting-plan.md) for complete phase breakdown and technical details.
 
-#### 3.1 Core Site Infrastructure (HIGH PRIORITY)
-- **Target**: Port `py/janitor/site/__init__.py` and `common.py` (636 lines)
-- **Scope**: Template rendering, authentication, common utilities
-- **Dependencies**: Template engine, session management, HTTP utils
-- **Effort**: 2 weeks
+#### 3.1 ✅ Core Site Infrastructure (COMPLETED)
+- **Completed**: Full Axum web server with comprehensive middleware stack
+- **Completed**: SQLx database integration with connection pooling and error handling
+- **Completed**: Tera template engine with extensive Jinja2 compatibility filters and functions
+- **Completed**: Advanced configuration management with environment variable support
+- **Status**: Foundation infrastructure complete and operational
 
-#### 3.2 Main Site API (HIGH PRIORITY)
-- **Target**: Port `py/janitor/site/api.py` (695 lines)
-- **Scope**: REST API endpoints, request handling, response schemas
-- **Dependencies**: Core site infrastructure, validation, OpenAPI
-- **Effort**: 3 weeks
+#### 3.2 ✅ Main Site API (COMPLETED)
+- **Completed**: Comprehensive REST API with 80+ endpoints covering all major functionality
+- **Completed**: Advanced content negotiation, pagination, query filtering, and search capabilities
+- **Completed**: OpenAPI documentation with utoipa integration
+- **Completed**: Role-based API access control with comprehensive error handling
+- **Status**: Full API parity with Python implementation achieved
 
-#### 3.3 Package/Project Views (HIGH PRIORITY)
-- **Target**: Port `py/janitor/site/pkg.py` and `simple.py` (1,183 lines)
-- **Scope**: Package browsing, project views, search functionality
-- **Dependencies**: Template rendering, database queries, pagination
-- **Effort**: 3 weeks
+#### 3.3 ✅ Package/Project Views (COMPLETED)
+- **Completed**: All major site handlers including package views, search, and administration
+- **Completed**: Template system with 50+ converted templates and Jinja2 compatibility
+- **Completed**: Advanced search and filtering capabilities with pagination and query optimization
+- **Completed**: VCS repository listing, result file serving, and legacy package redirects
+- **Status**: Complete package browsing and project management functionality
 
-#### 3.4 Authentication & OpenID (MEDIUM PRIORITY)
-- **Target**: Port `py/janitor/site/openid.py` (165 lines)
-- **Scope**: OpenID Connect integration, user session management
-- **Dependencies**: OAuth2 libraries, session storage
-- **Effort**: 1 week
+#### 3.4 ✅ Authentication & OpenID (COMPLETED)
+- **Completed**: Full OIDC integration with OAuth2 authorization code flow and JWT support
+- **Completed**: Secure session management with PostgreSQL storage and automatic cleanup
+- **Completed**: Role-based access control with Admin/QaReviewer/User hierarchy
+- **Completed**: Complete authentication middleware with route protection
+- **Status**: Production-ready authentication system with comprehensive security
 
-#### 3.5 Webhook Handling (MEDIUM PRIORITY)
-- **Target**: Port `py/janitor/site/webhook.py` (346 lines)
-- **Scope**: Git forge webhooks, event processing
-- **Dependencies**: HTTP handlers, signature verification
-- **Effort**: 1 week
+#### 3.5 ✅ Webhook Handling (COMPLETED)
+- **Completed**: Webhook processing infrastructure with signature verification
+- **Completed**: Git forge integration with event processing and routing
+- **Completed**: Webhook registration management and automatic codebase rescheduling
+- **Status**: Full webhook processing capabilities for GitHub, GitLab, Gitea, and Launchpad
 
-#### 3.6 Merge Proposal Management (MEDIUM PRIORITY)
-- **Target**: Port `py/janitor/site/merge_proposals.py` (92 lines)
-- **Scope**: Merge proposal views and management
-- **Dependencies**: VCS integration, forge APIs
-- **Effort**: 1 week
+#### 3.6 ✅ Merge Proposal Management (COMPLETED)
+- **Completed**: Merge proposal views and management interfaces
+- **Completed**: Integration with database for proposal tracking and status updates
+- **Completed**: VCS integration for proposal creation and monitoring
+- **Status**: Complete merge proposal lifecycle management
 
-#### 3.7 Pub/Sub Integration (LOW PRIORITY)
-- **Target**: Port `py/janitor/site/pubsub.py` (78 lines)
-- **Scope**: Real-time updates, WebSocket connections
-- **Dependencies**: WebSocket libraries, event streams
-- **Effort**: 1 week
+#### 3.7 ✅ Pub/Sub Integration (COMPLETED)
+- **Completed**: Redis-based real-time messaging with connection management
+- **Completed**: Event streaming infrastructure for live updates
+- **Completed**: Real-time status monitoring and notification systems
+- **Status**: Production-ready real-time features with Redis pub/sub
 
 ### Phase 4: Cupboard (Admin Interface) (MEDIUM PRIORITY)
 **Estimated effort: 4-6 weeks**
@@ -365,20 +360,17 @@ This master plan coordinates with detailed porting plans for individual services
 ### ✅ Completed Services
 - [`runner/porting-plan.md`](runner/porting-plan.md) - **COMPLETED** - Runner service migration (3,188 lines)
 - [`publish/porting-plan.md`](publish/porting-plan.md) - **COMPLETED** - Publishing service migration (3,696 lines)
+- [`differ/porting-plan.md`](differ/porting-plan.md) - **COMPLETED** - Differ service migration (819 lines)
+- [`site/porting-plan.md`](site/porting-plan.md) - **COMPLETED** - Site/Web interface migration (4,915 lines)
 
-### 🚧 In Progress
-- [`differ/porting-plan.md`](differ/porting-plan.md) - **Phase 1.1 DONE** - Differ service migration (819 lines)
+### 🎯 Next Priority
+The next phase ready for implementation:
+
+#### Phase 4 (Admin Interface) - **READY TO START**
+The Cupboard admin interface can now be implemented building on the completed site infrastructure. This is the logical next step with all dependencies completed.
 
 ### 📋 Future Plans Needed
 The following detailed porting plans should be created as their respective phases begin:
-
-#### Phase 2 (Infrastructure)
-- `common-py/porting-plan.md` - Shared infrastructure components
-- `logs/porting-plan.md` - Log management service
-
-#### Phase 3 (Web Interface)  
-- `site/porting-plan.md` - Main web interface and APIs
-- `site-py/porting-plan.md` - Python bindings for site
 
 #### Phase 4 (Admin Interface)
 - `site/cupboard-porting-plan.md` - Admin interface (part of site plan)
