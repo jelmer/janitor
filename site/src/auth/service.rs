@@ -76,11 +76,14 @@ impl AuthService {
 
     /// Start the login flow
     pub async fn start_login(&self, redirect_after_login: Option<String>) -> Result<Response> {
-        let oidc_client = self.oidc_client.as_ref()
+        let oidc_client = self
+            .oidc_client
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Authentication not configured"))?;
 
         // Generate authorization URL and state
-        let (auth_url, auth_state) = oidc_client.get_authorization_url(redirect_after_login.clone());
+        let (auth_url, auth_state) =
+            oidc_client.get_authorization_url(redirect_after_login.clone());
 
         // Store pending auth state
         let pending_auth = PendingAuth {
@@ -107,14 +110,14 @@ impl AuthService {
         code: &str,
         state: &str,
     ) -> Result<(User, String), AuthError> {
-        let oidc_client = self.oidc_client.as_ref()
-            .ok_or(AuthError::InvalidConfig("Authentication not configured".to_string()))?;
+        let oidc_client = self.oidc_client.as_ref().ok_or(AuthError::InvalidConfig(
+            "Authentication not configured".to_string(),
+        ))?;
 
         // Retrieve and remove pending auth state
         let pending_auth = {
             let mut pending_auths = self.pending_auths.write().await;
-            pending_auths.remove(state)
-                .ok_or(AuthError::InvalidState)?
+            pending_auths.remove(state).ok_or(AuthError::InvalidState)?
         };
 
         // Verify state matches
@@ -136,11 +139,18 @@ impl AuthService {
         };
 
         // Exchange code for user info
-        let user = oidc_client.handle_callback(code, state, &stored_state).await?;
+        let user = oidc_client
+            .handle_callback(code, state, &stored_state)
+            .await?;
 
         // Create session
-        let session_id = self.session_manager.create_session(user.clone()).await
-            .map_err(|e| AuthError::TokenExchangeFailed(format!("Session creation failed: {}", e)))?;
+        let session_id = self
+            .session_manager
+            .create_session(user.clone())
+            .await
+            .map_err(|e| {
+                AuthError::TokenExchangeFailed(format!("Session creation failed: {}", e))
+            })?;
 
         let redirect_url = pending_auth.redirect_url.unwrap_or_else(|| "/".to_string());
 
@@ -150,15 +160,15 @@ impl AuthService {
     /// Create a session cookie
     pub fn create_session_cookie(&self, session_id: &str) -> Cookie<'static> {
         let mut cookie = Cookie::new(self.cookie_config.name.clone(), session_id.to_string());
-        
+
         if let Some(domain) = &self.cookie_config.domain {
             cookie.set_domain(domain.clone());
         }
-        
+
         cookie.set_path(self.cookie_config.path.clone());
         cookie.set_secure(self.cookie_config.secure);
         cookie.set_http_only(self.cookie_config.http_only);
-        
+
         cookie.set_same_site(match self.cookie_config.same_site {
             crate::auth::session::SameSite::Strict => SameSite::Strict,
             crate::auth::session::SameSite::Lax => SameSite::Lax,
@@ -191,7 +201,7 @@ impl AuthService {
     /// Cleanup expired pending auth states
     async fn cleanup_expired_pending_auths(&self) {
         let cutoff = chrono::Utc::now() - chrono::Duration::minutes(10);
-        
+
         let mut pending_auths = self.pending_auths.write().await;
         pending_auths.retain(|_, auth| auth.created_at > cutoff);
     }
@@ -246,18 +256,20 @@ impl AuthService {
         match self.handle_callback(&code, &state).await {
             Ok((user, session_id)) => {
                 info!("User {} logged in successfully", user.email);
-                
+
                 // Create session cookie
                 let session_cookie = self.create_session_cookie(&session_id);
-                
+
                 // Create response with session cookie
                 let mut response = Redirect::to("/").into_response();
                 response.headers_mut().insert(
                     axum::http::header::SET_COOKIE,
-                    session_cookie.to_string().parse()
+                    session_cookie
+                        .to_string()
+                        .parse()
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
                 );
-                
+
                 Ok(response)
             }
             Err(e) => {
@@ -288,10 +300,12 @@ impl AuthService {
         // Create response with cleared session cookie
         let clear_cookie = self.clear_session_cookie();
         let mut response = Redirect::to(&redirect_url).into_response();
-        
+
         response.headers_mut().insert(
             axum::http::header::SET_COOKIE,
-            clear_cookie.to_string().parse()
+            clear_cookie
+                .to_string()
+                .parse()
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
         );
 
@@ -311,10 +325,10 @@ mod tests {
             pkce_verifier: Some("verifier".to_string()),
             created_at: chrono::Utc::now(),
         };
-        
+
         let json = serde_json::to_string(&pending_auth).unwrap();
         let deserialized: PendingAuth = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(pending_auth.state, deserialized.state);
         assert_eq!(pending_auth.redirect_url, deserialized.redirect_url);
     }
@@ -325,7 +339,7 @@ mod tests {
         assert_eq!(config.name, "session_id");
         assert!(config.secure);
         assert!(config.http_only);
-        
+
         let dev_config = SessionCookieConfig::for_development();
         assert!(!dev_config.secure);
     }

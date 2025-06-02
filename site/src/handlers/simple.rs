@@ -51,7 +51,7 @@ pub async fn index(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     // Add user context
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
@@ -77,7 +77,7 @@ pub async fn index(
     };
 
     context.insert("stats", &stats);
-    
+
     // Add campaign/suite information
     let campaigns: Vec<String> = state.config.campaigns.keys().cloned().collect();
     context.insert("campaigns", &campaigns);
@@ -85,18 +85,16 @@ pub async fn index(
 
     // Content negotiation
     let content_type = negotiate_content_type(&headers, "index");
-    
+
     match content_type {
         ContentType::Json => Json(stats).into_response(),
-        _ => {
-            match state.templates.render("index.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        _ => match state.templates.render("index.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -106,7 +104,7 @@ pub async fn about(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -116,7 +114,10 @@ pub async fn about(
     // Add version information
     context.insert("version", env!("CARGO_PKG_VERSION"));
     context.insert("build_time", option_env!("BUILD_TIME").unwrap_or("unknown"));
-    context.insert("git_revision", option_env!("GIT_REVISION").unwrap_or("unknown"));
+    context.insert(
+        "git_revision",
+        option_env!("GIT_REVISION").unwrap_or("unknown"),
+    );
 
     match state.templates.render("about.html", &context) {
         Ok(html) => Html(html).into_response(),
@@ -133,7 +134,7 @@ pub async fn credentials(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -168,7 +169,10 @@ pub async fn archive_keyring_asc(State(state): State<AppState>) -> Response {
         Ok(keyring) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "application/pgp-keys")
-            .header(header::CONTENT_DISPOSITION, "inline; filename=\"archive-keyring.asc\"")
+            .header(
+                header::CONTENT_DISPOSITION,
+                "inline; filename=\"archive-keyring.asc\"",
+            )
             .body(keyring.into())
             .unwrap(),
         Err(e) => {
@@ -183,7 +187,10 @@ pub async fn archive_keyring_gpg(State(state): State<AppState>) -> Response {
         Ok(keyring) => Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "application/pgp-keys")
-            .header(header::CONTENT_DISPOSITION, "inline; filename=\"archive-keyring.gpg\"")
+            .header(
+                header::CONTENT_DISPOSITION,
+                "inline; filename=\"archive-keyring.gpg\"",
+            )
             .body(keyring.into())
             .unwrap(),
         Err(e) => {
@@ -202,7 +209,7 @@ pub async fn campaign_start(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -216,7 +223,7 @@ pub async fn campaign_start(
 
     context.insert("campaign", &campaign);
     context.insert("suite", &campaign); // Legacy compatibility
-    
+
     // Get campaign configuration
     let campaign_config = &state.config.campaigns[&campaign];
     context.insert("campaign_config", &campaign_config);
@@ -246,7 +253,7 @@ pub async fn campaign_start(
             }
         }
     };
-    
+
     Html(html).into_response()
 }
 
@@ -259,7 +266,7 @@ pub async fn campaign_candidates(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -275,13 +282,15 @@ pub async fn campaign_candidates(
 
     let page = pagination.page.unwrap_or(1) as i64;
     let per_page = pagination.per_page.unwrap_or(50) as i64;
-    let offset = pagination.offset.unwrap_or_else(|| ((page - 1) * per_page) as u32) as i64;
+    let offset = pagination
+        .offset
+        .unwrap_or_else(|| ((page - 1) * per_page) as u32) as i64;
 
     // Fetch candidates
     match fetch_candidates(&state, &suite, Some(per_page), Some(offset), &filter).await {
         Ok(candidates) => {
             context.insert("candidates", &candidates);
-            
+
             // Get total count for pagination
             if let Ok(total) = count_candidates(&state, &suite, &filter).await {
                 let total_pages = (total + per_page - 1) / per_page;
@@ -314,7 +323,7 @@ pub async fn campaign_candidates(
             }
         }
     };
-    
+
     Html(html).into_response()
 }
 
@@ -323,7 +332,7 @@ pub async fn campaign_candidates(
 async fn fetch_index_statistics(state: &AppState) -> anyhow::Result<IndexStatistics> {
     let mut stats = IndexStatistics {
         total_packages: 0,
-        active_runs: 0, 
+        active_runs: 0,
         queue_size: 0,
         recent_successful_runs: 0,
         total_campaigns: state.config.campaigns.len(),
@@ -348,7 +357,9 @@ async fn fetch_index_statistics(state: &AppState) -> anyhow::Result<IndexStatist
     Ok(stats)
 }
 
-async fn fetch_publisher_credentials(state: &AppState) -> anyhow::Result<HashMap<String, serde_json::Value>> {
+async fn fetch_publisher_credentials(
+    state: &AppState,
+) -> anyhow::Result<HashMap<String, serde_json::Value>> {
     // TODO: Implement publisher service client
     Ok(HashMap::new())
 }
@@ -358,22 +369,29 @@ async fn fetch_archive_keyring(state: &AppState, format: &str) -> anyhow::Result
     Ok(Vec::new())
 }
 
-async fn fetch_campaign_statistics(state: &AppState, campaign: &str) -> anyhow::Result<HashMap<String, i64>> {
+async fn fetch_campaign_statistics(
+    state: &AppState,
+    campaign: &str,
+) -> anyhow::Result<HashMap<String, i64>> {
     let mut stats = HashMap::new();
-    
+
     // Fetch campaign-specific stats from database
     if let Ok(count) = state.database.count_candidates(campaign, None).await {
         stats.insert("total_candidates".to_string(), count);
     }
-    
-    if let Ok(count) = state.database.count_runs_by_result(campaign, "success").await {
+
+    if let Ok(count) = state
+        .database
+        .count_runs_by_result(campaign, "success")
+        .await
+    {
         stats.insert("successful_runs".to_string(), count);
     }
-    
+
     if let Ok(count) = state.database.count_pending_publishes(campaign).await {
         stats.insert("pending_publishes".to_string(), count);
     }
-    
+
     Ok(stats)
 }
 
@@ -387,16 +405,24 @@ async fn fetch_candidates(
     // Enhanced candidate fetching with search filtering
     if filter.search.is_some() || filter.result_code.is_some() {
         // Use advanced search for filtered queries
-        state.database.search_packages_advanced(
-            filter.search.as_deref(),
-            Some(suite),
-            filter.result_code.as_deref(),
-            None, // publishable_only - could be added to FilterQuery
-            limit
-        ).await.map_err(|e| anyhow::anyhow!(e))
+        state
+            .database
+            .search_packages_advanced(
+                filter.search.as_deref(),
+                Some(suite),
+                filter.result_code.as_deref(),
+                None, // publishable_only - could be added to FilterQuery
+                limit,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     } else {
         // Use basic candidate listing for unfiltered queries
-        state.database.get_candidates(suite, limit, offset).await.map_err(|e| anyhow::anyhow!(e))
+        state
+            .database
+            .get_candidates(suite, limit, offset)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 
@@ -408,17 +434,25 @@ async fn count_candidates(
     // Enhanced candidate counting with filtering
     if filter.search.is_some() || filter.result_code.is_some() {
         // For filtered queries, get count from search results
-        let results = state.database.search_packages_advanced(
-            filter.search.as_deref(),
-            Some(suite),
-            filter.result_code.as_deref(),
-            None,
-            None // No limit for counting
-        ).await.map_err(|e| anyhow::anyhow!(e))?;
+        let results = state
+            .database
+            .search_packages_advanced(
+                filter.search.as_deref(),
+                Some(suite),
+                filter.result_code.as_deref(),
+                None,
+                None, // No limit for counting
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         Ok(results.len() as i64)
     } else {
         // Use basic counting for unfiltered queries
-        state.database.count_candidates(suite, filter.search.as_deref()).await.map_err(|e| anyhow::anyhow!(e))
+        state
+            .database
+            .count_candidates(suite, filter.search.as_deref())
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 }
 

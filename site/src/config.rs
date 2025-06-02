@@ -113,10 +113,12 @@ pub struct Config {
 
 impl Config {
     pub fn new(site: SiteConfig, janitor: Option<janitor::config::Config>) -> Self {
-        let campaigns = janitor.as_ref()
+        let campaigns = janitor
+            .as_ref()
             .map(|j| {
                 // Extract campaigns from janitor config and convert to JSON values
-                j.campaign.iter()
+                j.campaign
+                    .iter()
                     .filter_map(|campaign| {
                         campaign.name.as_ref().map(|name| {
                             let campaign_data = serde_json::json!({
@@ -133,7 +135,7 @@ impl Config {
                     .collect()
             })
             .unwrap_or_default();
-            
+
         Self {
             site,
             janitor,
@@ -407,12 +409,13 @@ impl Config {
         // TODO: Check if janitor config has this field when available
         env::var("LOG_BASE_PATH").ok()
     }
-    
+
     /// Get log URL (for log storage backends like GCS, S3, etc.)
     pub fn log_url(&self) -> Option<String> {
         // Check environment variable first, then janitor config
         env::var("LOG_URL").ok().or_else(|| {
-            self.janitor.as_ref()
+            self.janitor
+                .as_ref()
                 .and_then(|config| config.logs_location.clone())
         })
     }
@@ -431,7 +434,7 @@ impl Config {
         site.database_url = "sqlite::memory:".to_string();
         site.debug = true;
         site.session_secret = "test-secret-key-for-testing-only".to_string();
-        
+
         Config::new(site, None)
     }
 }

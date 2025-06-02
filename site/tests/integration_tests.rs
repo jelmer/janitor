@@ -1,17 +1,14 @@
 // Integration tests for the site module
 // These tests require external services (database, Redis) and test full workflows
-//
-// NOTE: These tests are currently disabled due to testcontainers API compatibility issues
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use serde_json::{json, Value};
-use sqlx::{PgPool, Row};
-use testcontainers::{ContainerAsync, runners::AsyncRunner};
+use sqlx::Row;
+use testcontainers::{runners::AsyncRunner, ContainerAsync};
 use testcontainers_modules::{postgres::Postgres, redis::Redis};
 
 use janitor_site::{
@@ -20,17 +17,19 @@ use janitor_site::{
     database::DatabaseManager,
 };
 
-// Import the create_app function - we'll need to define this  
+// Import the create_app function - we'll need to define this
 fn create_app(state: Arc<AppState>) -> axum::routing::Router {
+    use axum::routing::get;
+
     // Simplified app for testing
     axum::routing::Router::new()
-        .route("/health", axum::routing::get(health_check))
-        .route("/api/status", axum::routing::get(api_status))
-        .route("/api/queue", axum::routing::get(api_queue))
-        .route("/api/search", axum::routing::get(api_search))
-        .route("/auth/login", axum::routing::get(auth_login))
-        .route("/admin/system/status", axum::routing::get(admin_status))
-        .with_state(state)
+        .route("/health", get(health_check))
+        .route("/api/status", get(api_status))
+        .route("/api/queue", get(api_queue))
+        .route("/api/search", get(api_search))
+        .route("/auth/login", get(auth_login))
+        .route("/admin/system/status", get(admin_status))
+        .with_state(Arc::try_unwrap(state).unwrap_or_else(|arc| (*arc).clone()))
 }
 
 // Simple test handlers
@@ -71,13 +70,16 @@ impl IntegrationTestEnvironment {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Start PostgreSQL container
         let postgres_container = Postgres::default().start().await?;
-        
+
         let postgres_port = postgres_container.get_host_port_ipv4(5432).await?;
-        let database_url = format!("postgresql://postgres:postgres@localhost:{}/postgres", postgres_port);
-        
+        let database_url = format!(
+            "postgresql://postgres:postgres@localhost:{}/postgres",
+            postgres_port
+        );
+
         // Start Redis container
         let redis_container = Redis::default().start().await?;
-        
+
         let redis_port = redis_container.get_host_port_ipv4(6379).await?;
         let redis_url = format!("redis://localhost:{}", redis_port);
 
@@ -87,22 +89,21 @@ impl IntegrationTestEnvironment {
         site_config.redis_url = Some(redis_url);
         site_config.debug = true;
         site_config.session_secret = "test-secret-key-for-integration-testing".to_string();
-        
+
         let config = Config::new(site_config, None);
-        
+
         // Initialize database
         let database = DatabaseManager::new(&config).await?;
-        
+
         // Run database migrations
         database.run_migrations().await?;
-        
+
         // Create app state
         let app_state = Arc::new(AppState::new(config).await?);
-        
+
         // Create test server
-        let app: axum::routing::Router = create_app(app_state.clone());
-        let service: axum::routing::IntoMakeService<axum::routing::Router> = app.into_make_service();
-        let test_server = TestServer::new(service)?;
+        let app = create_app(app_state.clone());
+        let test_server = TestServer::new(app)?;
 
         Ok(Self {
             postgres_container,
@@ -128,15 +129,14 @@ mod database_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_database_connection_and_basic_operations() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test basic database connectivity
         let pool = env.database.pool();
-        let result = sqlx::query("SELECT 1 as test_value")
-            .fetch_one(pool)
-            .await;
-        
+        let result = sqlx::query("SELECT 1 as test_value").fetch_one(pool).await;
+
         assert!(result.is_ok());
         let row = result.unwrap();
         let test_value: i32 = row.get("test_value");
@@ -148,16 +148,12 @@ mod database_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_database_schema_migrations() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Verify that essential tables exist
-        let tables = vec![
-            "site_session",
-            "run",
-            "codebase", 
-            "campaign",
-        ];
+        let tables = vec!["site_session", "run", "codebase", "campaign"];
 
         for table in tables {
             let result = sqlx::query(&format!(
@@ -179,18 +175,17 @@ mod database_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_session_storage_and_retrieval() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
-        // Create a session manager for testing  
-        let session_manager = janitor_site::auth::SessionManager::new(
-            env.database.pool().clone()
-        );
-        
+        // Create a session manager for testing
+        let session_manager = janitor_site::auth::SessionManager::new(env.database.pool().clone());
+
         // Create a test user
         let mut groups = std::collections::HashSet::new();
         groups.insert("users".to_string());
-        
+
         let user = janitor_site::auth::types::User {
             email: "test@example.com".to_string(),
             name: Some("Test User".to_string()),
@@ -201,22 +196,30 @@ mod database_integration_tests {
         };
 
         // Create session
-        let session_id = session_manager.create_session(user.clone()).await
+        let session_id = session_manager
+            .create_session(user.clone())
+            .await
             .expect("Should create session");
 
         // Retrieve session
-        let retrieved_session = session_manager.get_session(&session_id).await
+        let retrieved_session = session_manager
+            .get_session(&session_id)
+            .await
             .expect("Should retrieve session");
 
         assert_eq!(retrieved_session.user.email, user.email);
         assert_eq!(retrieved_session.user.sub, user.sub);
 
         // Update activity
-        session_manager.update_activity(&session_id).await
+        session_manager
+            .update_activity(&session_id)
+            .await
             .expect("Should update activity");
 
         // Clean up session
-        session_manager.delete_session(&session_id).await
+        session_manager
+            .delete_session(&session_id)
+            .await
             .expect("Should delete session");
 
         env.cleanup().await.expect("Failed to cleanup");
@@ -230,7 +233,8 @@ mod workflow_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_health_check_workflow() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test health check endpoint
@@ -247,7 +251,8 @@ mod workflow_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_api_status_workflow() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test API status endpoint
@@ -264,7 +269,8 @@ mod workflow_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_authentication_workflow() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test unauthenticated access to protected endpoint
@@ -275,8 +281,7 @@ mod workflow_integration_tests {
         let response = env.test_server.get("/auth/login").await;
         // Should redirect to OIDC provider or show login page
         assert!(
-            response.status_code() == StatusCode::FOUND || 
-            response.status_code() == StatusCode::OK
+            response.status_code() == StatusCode::FOUND || response.status_code() == StatusCode::OK
         );
 
         env.cleanup().await.expect("Failed to cleanup");
@@ -285,7 +290,8 @@ mod workflow_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_queue_api_workflow() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test queue status API
@@ -303,7 +309,8 @@ mod workflow_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_search_workflow() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test package search
@@ -325,7 +332,8 @@ mod performance_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_response_time_performance() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test that health check responds quickly
@@ -334,7 +342,11 @@ mod performance_integration_tests {
         let duration = start.elapsed();
 
         response.assert_status(StatusCode::OK);
-        assert!(duration.as_millis() < 200, "Health check should respond in under 200ms, took {}ms", duration.as_millis());
+        assert!(
+            duration.as_millis() < 200,
+            "Health check should respond in under 200ms, took {}ms",
+            duration.as_millis()
+        );
 
         // Test API endpoint performance
         let start = std::time::Instant::now();
@@ -342,7 +354,11 @@ mod performance_integration_tests {
         let duration = start.elapsed();
 
         response.assert_status(StatusCode::OK);
-        assert!(duration.as_millis() < 500, "API status should respond in under 500ms, took {}ms", duration.as_millis());
+        assert!(
+            duration.as_millis() < 500,
+            "API status should respond in under 500ms, took {}ms",
+            duration.as_millis()
+        );
 
         env.cleanup().await.expect("Failed to cleanup");
     }
@@ -350,17 +366,18 @@ mod performance_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_concurrent_request_handling() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test concurrent requests sequentially to avoid borrowing issues
         let mut results = Vec::new();
-        
+
         for i in 0..10 {
             let response = env.test_server.get("/health").await;
             results.push((i, response.status_code()));
         }
-        
+
         // All requests should succeed
         for (i, status) in results {
             assert_eq!(status, StatusCode::OK, "Request {} should succeed", i);
@@ -377,16 +394,16 @@ mod realtime_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_redis_connectivity() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         // Test Redis connection through the realtime manager
         let realtime_manager = &env.app_state.realtime;
         // Test basic Redis connectivity
-        let result = realtime_manager.publish_event(
-            "test_channel",
-            &json!({"test": "message"})
-        ).await;
+        let result = realtime_manager
+            .publish_event("test_channel", &json!({"test": "message"}))
+            .await;
 
         assert!(result.is_ok(), "Should be able to publish to Redis");
 
@@ -396,7 +413,8 @@ mod realtime_integration_tests {
     #[tokio::test]
     #[ignore = "requires docker for testcontainers"]
     async fn test_event_publishing() {
-        let env = IntegrationTestEnvironment::new().await
+        let env = IntegrationTestEnvironment::new()
+            .await
             .expect("Failed to set up test environment");
 
         let realtime_manager = &env.app_state.realtime;
@@ -409,7 +427,9 @@ mod realtime_integration_tests {
             }
         });
 
-        let result = realtime_manager.publish_event("test_events", &event_data).await;
+        let result = realtime_manager
+            .publish_event("test_events", &event_data)
+            .await;
         assert!(result.is_ok(), "Should publish event successfully");
 
         env.cleanup().await.expect("Failed to cleanup");
@@ -437,7 +457,9 @@ mod test_utils {
         false
     }
 
-    pub async fn create_test_data(env: &IntegrationTestEnvironment) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn create_test_data(
+        env: &IntegrationTestEnvironment,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Insert test data for integration tests
         sqlx::query(
             r#"

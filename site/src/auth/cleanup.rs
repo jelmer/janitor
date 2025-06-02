@@ -1,6 +1,6 @@
 use std::time::Duration;
 use tokio::time::interval;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::auth::session::SessionManager;
 
@@ -18,7 +18,7 @@ impl SessionCleanupTask {
             cleanup_interval: Duration::from_secs(3600), // Run every hour
         }
     }
-    
+
     /// Create a new session cleanup task with custom interval
     pub fn with_interval(session_manager: SessionManager, cleanup_interval: Duration) -> Self {
         Self {
@@ -26,19 +26,19 @@ impl SessionCleanupTask {
             cleanup_interval,
         }
     }
-    
+
     /// Run the cleanup task in a loop
     pub async fn run(self) {
         let mut interval = interval(self.cleanup_interval);
-        
+
         info!(
             "Starting session cleanup task with interval of {:?}",
             self.cleanup_interval
         );
-        
+
         loop {
             interval.tick().await;
-            
+
             match self.session_manager.cleanup_expired_sessions().await {
                 Ok(count) => {
                     if count > 0 {
@@ -51,7 +51,7 @@ impl SessionCleanupTask {
             }
         }
     }
-    
+
     /// Run the cleanup task once (for testing or manual cleanup)
     pub async fn run_once(&self) -> Result<u64, crate::auth::session::SessionError> {
         info!("Running session cleanup task once");
@@ -82,13 +82,13 @@ pub fn spawn_cleanup_task_with_interval(
 mod tests {
     use super::*;
     use std::time::Duration;
-    
+
     #[test]
     fn test_cleanup_task_creation() {
         // This would require a test database setup
         // For now, just test the constructor
         let interval = Duration::from_secs(1800); // 30 minutes
-        
+
         // Can't easily test without a real SessionManager
         // but we can test the interval logic
         assert_eq!(interval.as_secs(), 1800);

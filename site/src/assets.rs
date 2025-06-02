@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    http::{header, StatusCode, HeaderMap, HeaderValue},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
 use std::collections::HashMap;
@@ -87,7 +87,7 @@ impl AssetManager {
             let entry = entry?;
             let path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
-            
+
             if path.is_dir() {
                 let new_prefix = if prefix.is_empty() {
                     file_name
@@ -101,7 +101,7 @@ impl AssetManager {
                 } else {
                     format!("{}/{}", prefix, file_name)
                 };
-                
+
                 // Generate fingerprint based on file content hash
                 if let Ok(content) = std::fs::read(&path) {
                     let fingerprint = self.generate_content_hash(&content);
@@ -116,7 +116,7 @@ impl AssetManager {
     fn generate_content_hash(&self, content: &[u8]) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         format!("{:x}", hasher.finish())
@@ -130,15 +130,19 @@ impl AssetManager {
     }
 
     /// Add appropriate headers for static assets
-    pub fn add_static_headers(&self, mut response: Response<Body>, file_path: &str) -> Response<Body> {
+    pub fn add_static_headers(
+        &self,
+        mut response: Response<Body>,
+        file_path: &str,
+    ) -> Response<Body> {
         let headers = response.headers_mut();
-        
+
         // Add cache control headers
         if self.cache_max_age > 0 {
             headers.insert(
                 header::CACHE_CONTROL,
                 HeaderValue::from_str(&format!("public, max-age={}", self.cache_max_age))
-                    .unwrap_or_else(|_| HeaderValue::from_static("public, max-age=31536000"))
+                    .unwrap_or_else(|_| HeaderValue::from_static("public, max-age=31536000")),
             );
         }
 
@@ -159,10 +163,7 @@ impl AssetManager {
 
     /// Get content type based on file extension
     fn get_content_type(&self, file_path: &str) -> Option<HeaderValue> {
-        let extension = Path::new(file_path)
-            .extension()?
-            .to_str()?
-            .to_lowercase();
+        let extension = Path::new(file_path).extension()?.to_str()?.to_lowercase();
 
         let content_type = match extension.as_str() {
             "css" => "text/css; charset=utf-8",
@@ -291,7 +292,7 @@ impl AssetOptimizer {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_dir() {
                 Self::compress_directory(&path)?;
             } else if Self::should_compress(&path) {
@@ -304,7 +305,10 @@ impl AssetOptimizer {
     /// Check if file should be compressed
     fn should_compress(path: &Path) -> bool {
         if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
-            matches!(extension.to_lowercase().as_str(), "css" | "js" | "html" | "svg" | "json")
+            matches!(
+                extension.to_lowercase().as_str(),
+                "css" | "js" | "html" | "svg" | "json"
+            )
         } else {
             false
         }
@@ -314,16 +318,17 @@ impl AssetOptimizer {
     fn compress_file(path: &Path) -> Result<()> {
         use std::fs::File;
         use std::io::{Read, Write};
-        
+
         let mut file = File::open(path)?;
         let mut content = Vec::new();
         file.read_to_end(&mut content)?;
 
         // Create gzip compressed version
-        let gzip_path = path.with_extension(
-            format!("{}.gz", path.extension().unwrap_or_default().to_string_lossy())
-        );
-        
+        let gzip_path = path.with_extension(format!(
+            "{}.gz",
+            path.extension().unwrap_or_default().to_string_lossy()
+        ));
+
         let gzip_file = File::create(gzip_path)?;
         let mut encoder = flate2::write::GzEncoder::new(gzip_file, flate2::Compression::default());
         encoder.write_all(&content)?;
@@ -364,17 +369,17 @@ mod tests {
     #[test]
     fn test_content_type_detection() {
         let manager = AssetManager::new("static".to_string());
-        
+
         assert_eq!(
             manager.get_content_type("style.css").unwrap(),
             HeaderValue::from_static("text/css; charset=utf-8")
         );
-        
+
         assert_eq!(
             manager.get_content_type("app.js").unwrap(),
             HeaderValue::from_static("application/javascript; charset=utf-8")
         );
-        
+
         assert_eq!(
             manager.get_content_type("image.png").unwrap(),
             HeaderValue::from_static("image/png")
@@ -385,9 +390,12 @@ mod tests {
     fn test_asset_manifest() {
         let manager = AssetManager::new("static".to_string());
         let manifest = AssetManifest::new(manager);
-        
+
         assert_eq!(manifest.css("main.css"), "/_static/css/main.css");
         assert_eq!(manifest.js("app.js"), "/_static/js/app.js");
-        assert_eq!(manifest.asset("fonts/icon.woff"), "/_static/fonts/icon.woff");
+        assert_eq!(
+            manifest.asset("fonts/icon.woff"),
+            "/_static/fonts/icon.woff"
+        );
     }
 }

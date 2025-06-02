@@ -6,9 +6,7 @@ use axum::{
 use std::sync::Arc;
 
 use crate::auth::{
-    handlers::{
-        admin_handler, protected_handler, qa_handler, status_handler,
-    },
+    handlers::{admin_handler, protected_handler, qa_handler, status_handler},
     middleware::{require_admin, require_login, require_qa_reviewer, AuthState},
 };
 
@@ -30,21 +28,18 @@ pub fn api_auth_routes(auth_state: Arc<AuthState>) -> Router<Arc<AuthState>> {
         // API routes that require authentication
         .route(
             "/auth/user-info",
-            get(protected_handler).route_layer(middleware::from_fn(require_login))
+            get(protected_handler).route_layer(middleware::from_fn(require_login)),
         )
         .route(
             "/auth/admin-info",
-            get(admin_handler).route_layer(middleware::from_fn(require_admin))
+            get(admin_handler).route_layer(middleware::from_fn(require_admin)),
         )
         .with_state(auth_state)
 }
 
 /// Helper function to create a router with authentication middleware applied
-pub fn with_auth_middleware<S>(
-    router: Router<S>, 
-    auth_state: Arc<AuthState>
-) -> Router<S> 
-where 
+pub fn with_auth_middleware<S>(router: Router<S>, auth_state: Arc<AuthState>) -> Router<S>
+where
     S: Clone + Send + Sync + 'static,
 {
     // For now, just return the router without middleware - this will be implemented
@@ -55,14 +50,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::session::{SessionManager, SessionCookieConfig};
+    use crate::auth::session::{SessionCookieConfig, SessionManager};
     use crate::config::SiteConfig;
     use sqlx::PgPool;
 
     fn create_test_auth_state() -> Arc<AuthState> {
         // This is a placeholder for testing - in real tests we'd need a test database
         let config = SiteConfig::default();
-        
+
         // For testing, we can't easily create a real SessionManager without a database
         // This would need to be mocked or use a test database
         todo!("Implement test auth state creation with proper mocking")

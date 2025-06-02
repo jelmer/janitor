@@ -10,12 +10,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use apt_repository::{
-    AsyncPackageProvider, AsyncRepository, AsyncSourceProvider, AptRepositoryError, Compression,
-    HashAlgorithm, PackageFile, RepositoryBuilder, Result as AptResult, SourceFile,
-    Package as AptPackage, Source as AptSource,
+    AptRepositoryError, AsyncPackageProvider, AsyncRepository, AsyncSourceProvider, Compression,
+    HashAlgorithm, Package as AptPackage, PackageFile, RepositoryBuilder, Result as AptResult,
+    Source as AptSource, SourceFile,
 };
-use debian_control::lossy::apt::{Package as DebianPackage, Source as DebianSource};
 use async_trait::async_trait;
+use debian_control::lossy::apt::{Package as DebianPackage, Source as DebianSource};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -30,15 +30,17 @@ use crate::scanner::{BuildInfo, PackageScanner};
 fn convert_package(debian_pkg: DebianPackage) -> ArchiveResult<AptPackage> {
     // The debian-control crate doesn't expose the Filename field directly
     // Generate a conventional filename based on package information
-    let filename = format!("pool/main/{}/{}_{}_{}.deb", 
-                          &debian_pkg.name.chars().next().unwrap_or('a'),
-                          &debian_pkg.name,
-                          &debian_pkg.version,
-                          &debian_pkg.architecture);
-    
+    let filename = format!(
+        "pool/main/{}/{}_{}_{}.deb",
+        &debian_pkg.name.chars().next().unwrap_or('a'),
+        &debian_pkg.name,
+        &debian_pkg.version,
+        &debian_pkg.architecture
+    );
+
     // Handle Optional size field and convert usize to u64
     let size = debian_pkg.size.unwrap_or(0) as u64;
-    
+
     let mut apt_pkg = AptPackage::new(
         debian_pkg.name,
         debian_pkg.version.to_string(),
@@ -270,21 +272,19 @@ impl ArchivePackageProvider {
             let mut package_stream = Box::pin(package_stream);
             while let Some(package_result) = package_stream.next().await {
                 match package_result {
-                    Ok(debian_package) => {
-                        match convert_package(debian_package) {
-                            Ok(apt_package) => {
-                                debug!(
-                                    "Adding package: {} version {}",
-                                    apt_package.package, apt_package.version
-                                );
-                                package_file.add_package(apt_package);
-                            }
-                            Err(e) => {
-                                warn!("Failed to convert package: {}", e);
-                                continue;
-                            }
+                    Ok(debian_package) => match convert_package(debian_package) {
+                        Ok(apt_package) => {
+                            debug!(
+                                "Adding package: {} version {}",
+                                apt_package.package, apt_package.version
+                            );
+                            package_file.add_package(apt_package);
                         }
-                    }
+                        Err(e) => {
+                            warn!("Failed to convert package: {}", e);
+                            continue;
+                        }
+                    },
                     Err(e) => {
                         warn!("Failed to scan package from build {}: {}", build_info.id, e);
                         continue;
@@ -347,21 +347,19 @@ impl ArchiveSourceProvider {
             let mut source_stream = Box::pin(source_stream);
             while let Some(source_result) = source_stream.next().await {
                 match source_result {
-                    Ok(debian_source) => {
-                        match convert_source(debian_source) {
-                            Ok(apt_source) => {
-                                debug!(
-                                    "Adding source package: {} version {}",
-                                    apt_source.package, apt_source.version
-                                );
-                                source_file.add_source(apt_source);
-                            }
-                            Err(e) => {
-                                warn!("Failed to convert source: {}", e);
-                                continue;
-                            }
+                    Ok(debian_source) => match convert_source(debian_source) {
+                        Ok(apt_source) => {
+                            debug!(
+                                "Adding source package: {} version {}",
+                                apt_source.package, apt_source.version
+                            );
+                            source_file.add_source(apt_source);
                         }
-                    }
+                        Err(e) => {
+                            warn!("Failed to convert source: {}", e);
+                            continue;
+                        }
+                    },
                     Err(e) => {
                         warn!("Failed to scan source from build {}: {}", build_info.id, e);
                         continue;
@@ -445,14 +443,10 @@ impl RepositoryGenerator {
         let async_repo = AsyncRepository::new(repository);
 
         // Create providers
-        let _package_provider = ArchivePackageProvider::new(
-            Arc::clone(&self.scanner),
-            Arc::clone(&self.build_manager),
-        );
-        let _source_provider = ArchiveSourceProvider::new(
-            Arc::clone(&self.scanner),
-            Arc::clone(&self.build_manager),
-        );
+        let _package_provider =
+            ArchivePackageProvider::new(Arc::clone(&self.scanner), Arc::clone(&self.build_manager));
+        let _source_provider =
+            ArchiveSourceProvider::new(Arc::clone(&self.scanner), Arc::clone(&self.build_manager));
 
         // Ensure the base path exists
         fs::create_dir_all(&repo_config.base_path)
@@ -475,7 +469,11 @@ impl RepositoryGenerator {
         );
 
         let _release = async_repo
-            .generate_repository(&repo_config.base_path, &async_package_provider, &async_source_provider)
+            .generate_repository(
+                &repo_config.base_path,
+                &async_package_provider,
+                &async_source_provider,
+            )
             .await
             .map_err(|e| ArchiveError::RepositoryGeneration(e.to_string()))?;
 
@@ -503,7 +501,8 @@ impl RepositoryGenerator {
             );
 
             let repo_config = repo_config.clone();
-            let task = tokio::spawn(async move { generator.generate_repository(&repo_config).await });
+            let task =
+                tokio::spawn(async move { generator.generate_repository(&repo_config).await });
 
             tasks.push(task);
 
@@ -617,11 +616,7 @@ impl AsyncArchiveSourceProvider {
 
 #[async_trait]
 impl AsyncSourceProvider for AsyncArchiveSourceProvider {
-    async fn get_sources(
-        &self,
-        suite: &str,
-        component: &str,
-    ) -> AptResult<SourceFile> {
+    async fn get_sources(&self, suite: &str, component: &str) -> AptResult<SourceFile> {
         self.inner
             .get_sources_async(suite, component)
             .await

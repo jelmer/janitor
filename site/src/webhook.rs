@@ -243,8 +243,8 @@ impl WebhookProcessor {
         use sha2::Sha256;
         type HmacSha256 = Hmac<Sha256>;
 
-        let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-            .context("Invalid secret key for HMAC")?;
+        let mut mac =
+            HmacSha256::new_from_slice(secret.as_bytes()).context("Invalid secret key for HMAC")?;
         mac.update(payload);
         let expected = mac.finalize().into_bytes();
         let expected_hex = hex::encode(expected);
@@ -277,8 +277,8 @@ impl WebhookProcessor {
             return Ok(None);
         }
 
-        let payload: Value = serde_json::from_slice(body)
-            .context("Failed to parse GitHub webhook JSON")?;
+        let payload: Value =
+            serde_json::from_slice(body).context("Failed to parse GitHub webhook JSON")?;
 
         let repository: GitHubRepository = serde_json::from_value(payload["repository"].clone())
             .context("Failed to parse GitHub repository")?;
@@ -289,8 +289,10 @@ impl WebhookProcessor {
         let head_commit = if payload["head_commit"].is_null() {
             None
         } else {
-            Some(serde_json::from_value(payload["head_commit"].clone())
-                .context("Failed to parse GitHub head commit")?)
+            Some(
+                serde_json::from_value(payload["head_commit"].clone())
+                    .context("Failed to parse GitHub head commit")?,
+            )
         };
 
         let git_ref = payload["ref"]
@@ -314,8 +316,8 @@ impl WebhookProcessor {
             return Ok(None);
         }
 
-        let payload: Value = serde_json::from_slice(body)
-            .context("Failed to parse GitLab webhook JSON")?;
+        let payload: Value =
+            serde_json::from_slice(body).context("Failed to parse GitLab webhook JSON")?;
 
         let project: GitLabProject = serde_json::from_value(payload["project"].clone())
             .context("Failed to parse GitLab project")?;
@@ -338,8 +340,8 @@ impl WebhookProcessor {
 
     /// Parse Gitea webhook payload
     fn parse_gitea_webhook(&self, body: &[u8]) -> Result<Option<WebhookEvent>> {
-        let payload: Value = serde_json::from_slice(body)
-            .context("Failed to parse Gitea webhook JSON")?;
+        let payload: Value =
+            serde_json::from_slice(body).context("Failed to parse Gitea webhook JSON")?;
 
         let repository: GiteaRepository = serde_json::from_value(payload["repository"].clone())
             .context("Failed to parse Gitea repository")?;
@@ -361,8 +363,8 @@ impl WebhookProcessor {
 
     /// Parse Gogs webhook payload
     fn parse_gogs_webhook(&self, body: &[u8]) -> Result<Option<WebhookEvent>> {
-        let payload: Value = serde_json::from_slice(body)
-            .context("Failed to parse Gogs webhook JSON")?;
+        let payload: Value =
+            serde_json::from_slice(body).context("Failed to parse Gogs webhook JSON")?;
 
         let repository: GogsRepository = serde_json::from_value(payload["repository"].clone())
             .context("Failed to parse Gogs repository")?;
@@ -383,7 +385,11 @@ impl WebhookProcessor {
     }
 
     /// Parse Launchpad webhook payload
-    fn parse_launchpad_webhook(&self, event_type: &str, body: &[u8]) -> Result<Option<WebhookEvent>> {
+    fn parse_launchpad_webhook(
+        &self,
+        event_type: &str,
+        body: &[u8],
+    ) -> Result<Option<WebhookEvent>> {
         match event_type {
             "bzr:push:0.1" | "git:push:0.1" => {
                 let payload: Value = serde_json::from_slice(body)
@@ -503,7 +509,9 @@ impl WebhookProcessor {
                 new_revno,
                 new_revid,
             } => {
-                if let (Some(bzr_branch), Some(revno), Some(revid)) = (bzr_branch, new_revno, new_revid) {
+                if let (Some(bzr_branch), Some(revno), Some(revid)) =
+                    (bzr_branch, new_revno, new_revid)
+                {
                     Ok(Some(VcsChange::Bzr {
                         urls: vec![bzr_branch.clone()],
                         revno: *revno,
@@ -528,7 +536,10 @@ impl WebhookProcessor {
     /// Extract branch name from Git ref
     fn extract_branch_from_ref(&self, git_ref: &str) -> String {
         if git_ref.starts_with("refs/heads/") {
-            git_ref.strip_prefix("refs/heads/").unwrap_or(git_ref).to_string()
+            git_ref
+                .strip_prefix("refs/heads/")
+                .unwrap_or(git_ref)
+                .to_string()
         } else {
             git_ref.to_string()
         }
@@ -614,7 +625,10 @@ impl WebhookRegistration {
             .context("Failed to send GitLab webhook subscription request")?;
 
         if response.status().is_success() || response.status() == StatusCode::UNPROCESSABLE_ENTITY {
-            info!("GitLab webhook subscription successful for project {}", project_id);
+            info!(
+                "GitLab webhook subscription successful for project {}",
+                project_id
+            );
             Ok(())
         } else {
             let error_text = response.text().await.unwrap_or_default();
@@ -625,24 +639,30 @@ impl WebhookRegistration {
     /// Extract GitHub repository path from URL
     fn extract_github_repo_path(&self, url: &str) -> Result<String> {
         let parsed_url = Url::parse(url).context("Invalid GitHub URL")?;
-        
+
         if !parsed_url.host_str().unwrap_or("").contains("github.com") {
             anyhow::bail!("Not a GitHub URL: {}", url);
         }
 
-        let path = parsed_url.path().trim_start_matches('/').trim_end_matches(".git");
+        let path = parsed_url
+            .path()
+            .trim_start_matches('/')
+            .trim_end_matches(".git");
         Ok(path.to_string())
     }
 
     /// Extract GitLab project ID from URL (simplified implementation)
     fn extract_gitlab_project_id(&self, url: &str) -> Result<String> {
         let parsed_url = Url::parse(url).context("Invalid GitLab URL")?;
-        
+
         if !parsed_url.host_str().unwrap_or("").contains("gitlab.com") {
             anyhow::bail!("Not a GitLab URL: {}", url);
         }
 
-        let path = parsed_url.path().trim_start_matches('/').trim_end_matches(".git");
+        let path = parsed_url
+            .path()
+            .trim_start_matches('/')
+            .trim_end_matches(".git");
         // URL encode the project path for GitLab API
         Ok(urlencoding::encode(path).to_string())
     }
@@ -673,7 +693,9 @@ pub async fn webhook_post_handler(
         Ok(Some(event)) => event,
         Ok(None) => {
             debug!("Webhook event ignored (unsupported event type)");
-            return Ok(Json(json!({"status": "ignored", "message": "Unsupported event type"})));
+            return Ok(Json(
+                json!({"status": "ignored", "message": "Unsupported event type"}),
+            ));
         }
         Err(e) => {
             error!("Failed to parse webhook payload: {}", e);
@@ -686,7 +708,9 @@ pub async fn webhook_post_handler(
         Ok(Some(change)) => change,
         Ok(None) => {
             debug!("No actionable changes in webhook");
-            return Ok(Json(json!({"status": "no_changes", "message": "No actionable changes"})));
+            return Ok(Json(
+                json!({"status": "no_changes", "message": "No actionable changes"}),
+            ));
         }
         Err(e) => {
             error!("Failed to convert webhook to VCS change: {}", e);
@@ -706,7 +730,9 @@ pub async fn webhook_post_handler(
     }
 
     info!("Webhook processed successfully");
-    Ok(Json(json!({"status": "success", "message": "Webhook processed"})))
+    Ok(Json(
+        json!({"status": "success", "message": "Webhook processed"}),
+    ))
 }
 
 /// Webhook documentation handler
@@ -715,9 +741,10 @@ pub async fn webhook_get_handler(
 ) -> Result<Html<String>, StatusCode> {
     let mut context = tera::Context::new();
     context.insert("webhook_endpoint", "/webhook");
-    context.insert("supported_platforms", &vec![
-        "GitHub", "GitLab", "Gitea", "Gogs", "Launchpad"
-    ]);
+    context.insert(
+        "supported_platforms",
+        &vec!["GitHub", "GitLab", "Gitea", "Gogs", "Launchpad"],
+    );
 
     match app_state.templates.render("webhook.html", &context) {
         Ok(html) => Ok(Html(html)),
@@ -731,28 +758,39 @@ pub async fn webhook_get_handler(
 /// Process VCS change by updating database and triggering rescheduling
 async fn process_vcs_change(app_state: &AppState, vcs_change: &VcsChange) -> Result<()> {
     match vcs_change {
-        VcsChange::Git { urls, commit_sha, branch } => {
+        VcsChange::Git {
+            urls,
+            commit_sha,
+            branch,
+        } => {
             // Update codebase table with new revision information
             for url in urls {
                 if let Err(e) = update_codebase_revision(app_state, url, commit_sha, branch).await {
                     warn!("Failed to update codebase for URL {}: {}", url, e);
                     continue;
                 }
-                
+
                 // Trigger rescheduling via runner API
                 if let Err(e) = trigger_codebase_reschedule(app_state, url).await {
                     warn!("Failed to trigger reschedule for URL {}: {}", url, e);
                 }
             }
         }
-        VcsChange::Bzr { urls, revno, revid, branch } => {
+        VcsChange::Bzr {
+            urls,
+            revno,
+            revid,
+            branch,
+        } => {
             // Update Bzr codebase with revision information
             for url in urls {
-                if let Err(e) = update_bzr_codebase_revision(app_state, url, *revno, revid, branch).await {
+                if let Err(e) =
+                    update_bzr_codebase_revision(app_state, url, *revno, revid, branch).await
+                {
                     warn!("Failed to update Bzr codebase for URL {}: {}", url, e);
                     continue;
                 }
-                
+
                 // Trigger rescheduling via runner API
                 if let Err(e) = trigger_codebase_reschedule(app_state, url).await {
                     warn!("Failed to trigger reschedule for URL {}: {}", url, e);
@@ -775,9 +813,9 @@ async fn update_codebase_revision(
         SET vcs_last_revision = $1, last_scanned = NOW()
         WHERE branch_url = $2 OR branch_url LIKE $3
     ";
-    
+
     let url_pattern = format!("%{}%", url);
-    
+
     sqlx::query(query)
         .bind(commit_sha)
         .bind(url)
@@ -785,8 +823,11 @@ async fn update_codebase_revision(
         .execute(app_state.database.pool())
         .await
         .context("Failed to update codebase revision")?;
-    
-    debug!("Updated codebase revision for URL {} to {}", url, commit_sha);
+
+    debug!(
+        "Updated codebase revision for URL {} to {}",
+        url, commit_sha
+    );
     Ok(())
 }
 
@@ -803,9 +844,9 @@ async fn update_bzr_codebase_revision(
         SET vcs_last_revision = $1, last_scanned = NOW()
         WHERE branch_url = $2 OR branch_url LIKE $3
     ";
-    
+
     let url_pattern = format!("%{}%", url);
-    
+
     sqlx::query(query)
         .bind(revid)
         .bind(url)
@@ -813,8 +854,11 @@ async fn update_bzr_codebase_revision(
         .execute(app_state.database.pool())
         .await
         .context("Failed to update Bzr codebase revision")?;
-    
-    debug!("Updated Bzr codebase revision for URL {} to revno {} ({})", url, revno, revid);
+
+    debug!(
+        "Updated Bzr codebase revision for URL {} to revno {} ({})",
+        url, revno, revid
+    );
     Ok(())
 }
 
@@ -823,7 +867,7 @@ async fn trigger_codebase_reschedule(app_state: &AppState, url: &str) -> Result<
     // This would typically call the runner service API to trigger rescheduling
     // For now, we'll just log the action
     debug!("Would trigger reschedule for codebase URL: {}", url);
-    
+
     // TODO: Implement actual runner API call
     // let runner_url = app_state.config.runner_url();
     // let response = app_state.http_client
@@ -831,7 +875,7 @@ async fn trigger_codebase_reschedule(app_state: &AppState, url: &str) -> Result<
     //     .json(&json!({"codebase_url": url}))
     //     .send()
     //     .await?;
-    
+
     Ok(())
 }
 
@@ -843,31 +887,44 @@ async fn publish_webhook_event(app_state: &AppState, webhook_event: &WebhookEven
         WebhookEvent::GitLab { project, .. } => ("gitlab", project.path_with_namespace.clone()),
         WebhookEvent::Gitea { repository, .. } => ("gitea", repository.full_name.clone()),
         WebhookEvent::Gogs { repository, .. } => ("gogs", repository.full_name.clone()),
-        WebhookEvent::Launchpad { bzr_branch, git_repository, .. } => {
+        WebhookEvent::Launchpad {
+            bzr_branch,
+            git_repository,
+            ..
+        } => {
             let unknown = "unknown".to_string();
-            let repo = bzr_branch.as_ref().or(git_repository.as_ref()).unwrap_or(&unknown);
+            let repo = bzr_branch
+                .as_ref()
+                .or(git_repository.as_ref())
+                .unwrap_or(&unknown);
             ("launchpad", repo.clone())
         }
     };
 
     // Publish via realtime manager
-    app_state.realtime.publish_campaign_update(
-        "webhook".to_string(),
-        "push_received".to_string(),
-        json!({
-            "platform": platform,
-            "repository": repository_name,
-            "timestamp": chrono::Utc::now(),
-        }),
-    ).await.context("Failed to publish webhook real-time event")?;
+    app_state
+        .realtime
+        .publish_campaign_update(
+            "webhook".to_string(),
+            "push_received".to_string(),
+            json!({
+                "platform": platform,
+                "repository": repository_name,
+                "timestamp": chrono::Utc::now(),
+            }),
+        )
+        .await
+        .context("Failed to publish webhook real-time event")?;
 
     Ok(())
 }
 
 /// Create webhook routes
 pub fn create_webhook_routes() -> Router<AppState> {
-    Router::new()
-        .route("/webhook", get(webhook_get_handler).post(webhook_post_handler))
+    Router::new().route(
+        "/webhook",
+        get(webhook_get_handler).post(webhook_post_handler),
+    )
 }
 
 #[cfg(test)]
@@ -877,22 +934,29 @@ mod tests {
     #[test]
     fn test_extract_branch_from_ref() {
         let processor = WebhookProcessor::new(WebhookConfig::default());
-        
+
         assert_eq!(processor.extract_branch_from_ref("refs/heads/main"), "main");
-        assert_eq!(processor.extract_branch_from_ref("refs/heads/develop"), "develop");
+        assert_eq!(
+            processor.extract_branch_from_ref("refs/heads/develop"),
+            "develop"
+        );
         assert_eq!(processor.extract_branch_from_ref("main"), "main");
     }
 
     #[test]
     fn test_github_repo_path_extraction() {
         let registration = WebhookRegistration::new();
-        
+
         assert_eq!(
-            registration.extract_github_repo_path("https://github.com/owner/repo").unwrap(),
+            registration
+                .extract_github_repo_path("https://github.com/owner/repo")
+                .unwrap(),
             "owner/repo"
         );
         assert_eq!(
-            registration.extract_github_repo_path("https://github.com/owner/repo.git").unwrap(),
+            registration
+                .extract_github_repo_path("https://github.com/owner/repo.git")
+                .unwrap(),
             "owner/repo"
         );
     }
@@ -900,9 +964,11 @@ mod tests {
     #[test]
     fn test_gitlab_project_id_extraction() {
         let registration = WebhookRegistration::new();
-        
+
         assert_eq!(
-            registration.extract_gitlab_project_id("https://gitlab.com/group/project").unwrap(),
+            registration
+                .extract_gitlab_project_id("https://gitlab.com/group/project")
+                .unwrap(),
             "group%2Fproject"
         );
     }
@@ -927,7 +993,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&event).unwrap();
         let deserialized: WebhookEvent = serde_json::from_str(&serialized).unwrap();
-        
+
         match deserialized {
             WebhookEvent::GitHub { event_type, .. } => {
                 assert_eq!(event_type, "push");

@@ -15,7 +15,7 @@ use crate::{
     templates::create_base_context,
 };
 
-use super::{AdminUser, Permission, create_admin_context, log_admin_action};
+use super::{create_admin_context, log_admin_action, AdminUser, Permission};
 
 /// Review dashboard - alias for review queue
 pub async fn review_dashboard(
@@ -110,13 +110,13 @@ pub async fn review_queue(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewReviews) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch pending reviews using database methods
     match fetch_review_queue(&state, &filters).await {
         Ok((items, stats)) => {
@@ -126,22 +126,26 @@ pub async fn review_queue(
         }
         Err(e) => {
             tracing::error!("Failed to fetch review data: {}", e);
-            context.insert("error_message", &format!("Failed to load review data: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load review data: {}", e),
+            );
         }
     }
-    
+
     // Add available campaigns for filtering
     let campaigns: Vec<String> = state.config.campaigns.keys().cloned().collect();
     context.insert("available_campaigns", &campaigns);
-    
+
     let content_type = negotiate_content_type(&headers, "review_queue");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
+        ContentType::Json => Json(context.into_json()).into_response(),
         _ => {
-            match state.templates.render("cupboard/review-queue.html", &context) {
+            match state
+                .templates
+                .render("cupboard/review-queue.html", &context)
+            {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     tracing::error!("Template rendering error: {}", e);
@@ -163,14 +167,14 @@ pub async fn review_interface(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewReviews) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
     context.insert("run_id", &run_id);
-    
+
     // Fetch run details and evaluation
     match fetch_run_for_review(&state, &run_id).await {
         Ok(review_data) => {
@@ -185,22 +189,18 @@ pub async fn review_interface(
             return StatusCode::NOT_FOUND.into_response();
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "review_interface");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/review.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/review.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -215,17 +215,17 @@ pub async fn submit_review(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewReviews) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = extract_ip_address(&headers);
     let user_agent = extract_user_agent(&headers);
-    
+
     let reviewer = admin_user.user.email.clone();
-    
+
     // Store the review in database
     match store_review_verdict(&state, &review_request, &reviewer).await {
         Ok(_) => {
@@ -238,19 +238,21 @@ pub async fn submit_review(
                 serde_json::to_value(&review_request).unwrap_or_default(),
                 &ip_address,
                 &user_agent,
-            ).await;
-            
+            )
+            .await;
+
             tracing::info!(
                 "Review submitted by {}: {} for run {}",
                 reviewer,
                 review_request.verdict,
                 review_request.run_id
             );
-            
+
             Json(serde_json::json!({
                 "success": true,
                 "message": "Review submitted successfully"
-            })).into_response()
+            }))
+            .into_response()
         }
         Err(e) => {
             tracing::error!("Failed to store review: {}", e);
@@ -270,15 +272,15 @@ pub async fn bulk_review_action(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::BulkReviewActions) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = extract_ip_address(&headers);
     let user_agent = extract_user_agent(&headers);
-    
+
     // Log the bulk review action attempt
     log_admin_action(
         &state,
@@ -288,15 +290,20 @@ pub async fn bulk_review_action(
         serde_json::to_value(&action).unwrap_or_default(),
         &ip_address,
         &user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // Execute bulk review action
     match execute_bulk_review_action(&state, &action, &admin_user.user.email).await {
         Ok(result) => {
             tracing::info!(
                 "Bulk review action '{}' completed by {}: {}/{} successful",
                 action.action,
-                admin_user.user.name.as_deref().unwrap_or(&admin_user.user.email),
+                admin_user
+                    .user
+                    .name
+                    .as_deref()
+                    .unwrap_or(&admin_user.user.email),
                 result.successful,
                 result.total_items
             );
@@ -319,11 +326,11 @@ pub async fn review_statistics(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewReviews) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     match fetch_review_statistics(&state, &filters).await {
         Ok(stats) => Json(stats).into_response(),
         Err(e) => {
@@ -344,13 +351,13 @@ pub async fn rejected_runs(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewReviews) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch rejected runs
     match fetch_rejected_runs(&state, &filters).await {
         Ok(rejected_runs) => {
@@ -359,25 +366,24 @@ pub async fn rejected_runs(
         }
         Err(e) => {
             tracing::error!("Failed to fetch rejected runs: {}", e);
-            context.insert("error_message", &format!("Failed to load rejected runs: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load rejected runs: {}", e),
+            );
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "rejected_runs");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/rejected.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/rejected.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -389,30 +395,30 @@ async fn fetch_review_queue(
 ) -> anyhow::Result<(Vec<ReviewItem>, ReviewStatistics)> {
     // TODO: Implement comprehensive review queue fetching
     // This would query runs that need review, with filtering and pagination
-    
+
     // Placeholder implementation - in real implementation, this would:
     // 1. Query publish_ready table for runs needing review
     // 2. Join with review table to get existing reviews
     // 3. Apply filters and pagination
     // 4. Calculate statistics
-    
-    let items = vec![
-        ReviewItem {
-            run_id: "run-review-1".to_string(),
-            codebase: "example-package".to_string(),
-            campaign: "lintian-fixes".to_string(),
-            result_code: "success".to_string(),
-            finish_time: Some(Utc::now() - chrono::Duration::hours(1)),
-            value: Some(85),
-            command: Some("fix-lintian-issues".to_string()),
-            description: Some("Fixed multiple lintian issues".to_string()),
-            reviews: vec![],
-            publish_status: Some("needs-manual-review".to_string()),
-            branch_url: Some("https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string()),
-            needs_review: true,
-        },
-    ];
-    
+
+    let items = vec![ReviewItem {
+        run_id: "run-review-1".to_string(),
+        codebase: "example-package".to_string(),
+        campaign: "lintian-fixes".to_string(),
+        result_code: "success".to_string(),
+        finish_time: Some(Utc::now() - chrono::Duration::hours(1)),
+        value: Some(85),
+        command: Some("fix-lintian-issues".to_string()),
+        description: Some("Fixed multiple lintian issues".to_string()),
+        reviews: vec![],
+        publish_status: Some("needs-manual-review".to_string()),
+        branch_url: Some(
+            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
+        ),
+        needs_review: true,
+    }];
+
     let stats = ReviewStatistics {
         total_pending: 1,
         total_reviewed: 0,
@@ -422,17 +428,14 @@ async fn fetch_review_queue(
         average_review_time: 0.0,
         reviewers_active: 0,
     };
-    
+
     Ok((items, stats))
 }
 
-async fn fetch_run_for_review(
-    state: &AppState,
-    run_id: &str,
-) -> anyhow::Result<ReviewItem> {
+async fn fetch_run_for_review(state: &AppState, run_id: &str) -> anyhow::Result<ReviewItem> {
     // TODO: Implement detailed run fetching for review
     // This would get run details, branch information, and existing reviews
-    
+
     Ok(ReviewItem {
         run_id: run_id.to_string(),
         codebase: "example-package".to_string(),
@@ -444,18 +447,17 @@ async fn fetch_run_for_review(
         description: Some("Fixed multiple lintian issues".to_string()),
         reviews: vec![],
         publish_status: Some("needs-manual-review".to_string()),
-        branch_url: Some("https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string()),
+        branch_url: Some(
+            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
+        ),
         needs_review: true,
     })
 }
 
-async fn fetch_run_evaluation(
-    state: &AppState,
-    run_id: &str,
-) -> anyhow::Result<serde_json::Value> {
+async fn fetch_run_evaluation(state: &AppState, run_id: &str) -> anyhow::Result<serde_json::Value> {
     // TODO: Implement run evaluation fetching
     // This would get detailed evaluation data for the run
-    
+
     Ok(serde_json::json!({
         "evaluation": "Run completed successfully with no issues detected",
         "score": 85,
@@ -470,14 +472,14 @@ async fn store_review_verdict(
 ) -> anyhow::Result<()> {
     // TODO: Implement review storage in database
     // This would store the review verdict and comment in the review table
-    
+
     tracing::info!(
         "Storing review verdict '{}' for run {} by reviewer {}",
         review_request.verdict,
         review_request.run_id,
         reviewer
     );
-    
+
     Ok(())
 }
 
@@ -487,7 +489,7 @@ async fn execute_bulk_review_action(
     reviewer: &str,
 ) -> anyhow::Result<ReviewActionResult> {
     let now = Utc::now();
-    
+
     match action.action.as_str() {
         "approve" => {
             // TODO: Implement bulk approval
@@ -549,7 +551,7 @@ async fn fetch_review_statistics(
 ) -> anyhow::Result<ReviewStatistics> {
     // TODO: Implement comprehensive review statistics
     // This would aggregate review data from the database
-    
+
     Ok(ReviewStatistics {
         total_pending: 5,
         total_reviewed: 20,
@@ -567,30 +569,28 @@ async fn fetch_rejected_runs(
 ) -> anyhow::Result<Vec<ReviewItem>> {
     // TODO: Implement rejected runs fetching
     // This would query for runs with publish_status = 'rejected'
-    
-    Ok(vec![
-        ReviewItem {
-            run_id: "run-rejected-1".to_string(),
-            codebase: "problem-package".to_string(),
-            campaign: "lintian-fixes".to_string(),
-            result_code: "success".to_string(),
-            finish_time: Some(Utc::now() - chrono::Duration::hours(2)),
-            value: Some(50),
-            command: Some("fix-lintian-issues".to_string()),
-            description: Some("Changes introduce regression".to_string()),
-            reviews: vec![
-                ReviewRecord {
-                    reviewer: "qa@example.com".to_string(),
-                    verdict: "rejected".to_string(),
-                    comment: Some("This introduces a regression in the build process".to_string()),
-                    reviewed_at: Utc::now() - chrono::Duration::minutes(30),
-                },
-            ],
-            publish_status: Some("rejected".to_string()),
-            branch_url: Some("https://salsa.debian.org/jelmer/problem-package/-/merge_requests/1".to_string()),
-            needs_review: false,
-        },
-    ])
+
+    Ok(vec![ReviewItem {
+        run_id: "run-rejected-1".to_string(),
+        codebase: "problem-package".to_string(),
+        campaign: "lintian-fixes".to_string(),
+        result_code: "success".to_string(),
+        finish_time: Some(Utc::now() - chrono::Duration::hours(2)),
+        value: Some(50),
+        command: Some("fix-lintian-issues".to_string()),
+        description: Some("Changes introduce regression".to_string()),
+        reviews: vec![ReviewRecord {
+            reviewer: "qa@example.com".to_string(),
+            verdict: "rejected".to_string(),
+            comment: Some("This introduces a regression in the build process".to_string()),
+            reviewed_at: Utc::now() - chrono::Duration::minutes(30),
+        }],
+        publish_status: Some("rejected".to_string()),
+        branch_url: Some(
+            "https://salsa.debian.org/jelmer/problem-package/-/merge_requests/1".to_string(),
+        ),
+        needs_review: false,
+    }])
 }
 
 fn extract_ip_address(headers: &header::HeaderMap) -> String {

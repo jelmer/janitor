@@ -7,13 +7,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{
-    app::AppState,
-    auth::UserContext,
-    database::DatabaseError,
-};
+use crate::{app::AppState, auth::UserContext, database::DatabaseError};
 
-use super::{AdminUser, Permission, log_admin_action};
+use super::{log_admin_action, AdminUser, Permission};
 
 /// Admin API endpoint for system status
 pub async fn admin_system_status(
@@ -25,11 +21,11 @@ pub async fn admin_system_status(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewSystemMetrics) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Fetch comprehensive system status
     match fetch_comprehensive_system_status(&state).await {
         Ok(status) => Json(status).into_response(),
@@ -41,19 +37,16 @@ pub async fn admin_system_status(
 }
 
 /// Admin API endpoint for system configuration
-pub async fn admin_system_config(
-    State(state): State<AppState>,
-    user_ctx: UserContext,
-) -> Response {
+pub async fn admin_system_config(State(state): State<AppState>, user_ctx: UserContext) -> Response {
     let admin_user = match AdminUser::from_user_context(&user_ctx) {
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewSystemMetrics) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Return system configuration (sanitized for security)
     let config = serde_json::json!({
         "campaigns": state.config.campaigns.keys().collect::<Vec<_>>(),
@@ -66,7 +59,7 @@ pub async fn admin_system_config(
         },
         "version": env!("CARGO_PKG_VERSION"),
     });
-    
+
     Json(config).into_response()
 }
 
@@ -79,11 +72,11 @@ pub async fn admin_system_metrics(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewSystemMetrics) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Fetch system metrics
     match fetch_system_metrics(&state).await {
         Ok(metrics) => Json(metrics).into_response(),
@@ -122,7 +115,7 @@ pub async fn admin_bulk_operation(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     // Check permissions based on operation type
     let required_permission = match request.operation.as_str() {
         "reschedule" | "cancel" | "requeue" => Permission::BulkQueueOperations,
@@ -130,23 +123,23 @@ pub async fn admin_bulk_operation(
         "emergency_stop" | "rate_limit" => Permission::EmergencyPublishControls,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
-    
+
     if !admin_user.has_permission(&required_permission) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = headers
         .get("x-forwarded-for")
         .or(headers.get("x-real-ip"))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
-    
+
     let user_agent = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
-    
+
     // Log the bulk operation attempt
     log_admin_action(
         &state,
@@ -156,15 +149,20 @@ pub async fn admin_bulk_operation(
         serde_json::to_value(&request).unwrap_or_default(),
         ip_address,
         user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // Execute bulk operation
     match execute_bulk_operation(&state, &request).await {
         Ok(result) => {
             tracing::info!(
                 "Bulk operation '{}' completed by {}: {}/{} successful",
                 request.operation,
-                admin_user.user.name.as_deref().unwrap_or(&admin_user.user.email),
+                admin_user
+                    .user
+                    .name
+                    .as_deref()
+                    .unwrap_or(&admin_user.user.email),
                 result.successful,
                 result.total_targets
             );
@@ -194,11 +192,11 @@ pub async fn admin_list_users(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ManageUsers) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // TODO: Implement user listing from database
     // For now, return placeholder data
     let users = serde_json::json!({
@@ -207,7 +205,7 @@ pub async fn admin_list_users(
         "limit": query.limit.unwrap_or(50),
         "offset": query.offset.unwrap_or(0),
     });
-    
+
     Json(users).into_response()
 }
 
@@ -229,23 +227,23 @@ pub async fn admin_create_user(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ManageUsers) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = headers
         .get("x-forwarded-for")
         .or(headers.get("x-real-ip"))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
-    
+
     let user_agent = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
-    
+
     // Log user creation attempt
     log_admin_action(
         &state,
@@ -255,8 +253,9 @@ pub async fn admin_create_user(
         serde_json::to_value(&request).unwrap_or_default(),
         ip_address,
         user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // TODO: Implement user creation
     // For now, return success response
     let response = serde_json::json!({
@@ -269,7 +268,7 @@ pub async fn admin_create_user(
             "created_at": Utc::now(),
         }
     });
-    
+
     Json(response).into_response()
 }
 
@@ -277,25 +276,28 @@ pub async fn admin_create_user(
 
 async fn fetch_comprehensive_system_status(state: &AppState) -> anyhow::Result<serde_json::Value> {
     let mut status = HashMap::new();
-    
+
     // Database health check
     match state.database.health_check().await {
         Ok(_) => status.insert("database", "healthy"),
         Err(_) => status.insert("database", "unhealthy"),
     };
-    
+
     // TODO: Add checks for other services:
     // - Runner service health
     // - Publisher service health
     // - Redis connectivity
     // - VCS store health
     // - Log manager health
-    
+
     // Basic system info
     status.insert("version", env!("CARGO_PKG_VERSION"));
     status.insert("build_time", option_env!("BUILD_TIME").unwrap_or("unknown"));
-    status.insert("git_revision", option_env!("GIT_REVISION").unwrap_or("unknown"));
-    
+    status.insert(
+        "git_revision",
+        option_env!("GIT_REVISION").unwrap_or("unknown"),
+    );
+
     Ok(serde_json::json!({
         "status": status,
         "timestamp": Utc::now(),
@@ -314,13 +316,13 @@ async fn fetch_comprehensive_system_status(state: &AppState) -> anyhow::Result<s
 async fn fetch_system_metrics(state: &AppState) -> anyhow::Result<serde_json::Value> {
     // Fetch database statistics
     let db_stats = state.database.get_stats().await.unwrap_or_default();
-    
+
     // TODO: Add metrics from other sources:
     // - Prometheus metrics
     // - System resource usage
     // - Performance counters
     // - Error rates
-    
+
     Ok(serde_json::json!({
         "database": {
             "total_codebases": db_stats.get("total_codebases").unwrap_or(&0),
@@ -348,7 +350,7 @@ async fn execute_bulk_operation(
     let total_targets = request.targets.len();
     let mut successful = 0;
     let mut errors = Vec::new();
-    
+
     match request.operation.as_str() {
         "reschedule" => {
             // TODO: Implement bulk reschedule operation
@@ -387,10 +389,13 @@ async fn execute_bulk_operation(
             successful = total_targets; // Placeholder
         }
         _ => {
-            return Err(anyhow::anyhow!("Unknown bulk operation: {}", request.operation));
+            return Err(anyhow::anyhow!(
+                "Unknown bulk operation: {}",
+                request.operation
+            ));
         }
     }
-    
+
     Ok(BulkOperationResult {
         operation: request.operation.clone(),
         total_targets,

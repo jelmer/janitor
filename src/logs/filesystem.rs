@@ -82,10 +82,13 @@ impl LogFileManager for FileSystemLogFileManager {
 
         // Compress data in a blocking task to avoid blocking the executor
         let compressed = tokio::task::spawn_blocking(move || -> io::Result<Vec<u8>> {
-            let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
             io::copy(&mut io::Cursor::new(&data), &mut encoder)?;
             encoder.finish()
-        }).await.map_err(|e| Error::Other(e.to_string()))??;
+        })
+        .await
+        .map_err(|e| Error::Other(e.to_string()))??;
 
         tokio::fs::write(&dest_path, compressed).await?;
 
@@ -97,7 +100,9 @@ impl LogFileManager for FileSystemLogFileManager {
                     filetime::FileTime::from_system_time(mtime.into()),
                     filetime::FileTime::from_system_time(mtime.into()),
                 )
-            }).await.map_err(|e| Error::Other(e.to_string()))??;
+            })
+            .await
+            .map_err(|e| Error::Other(e.to_string()))??;
         }
 
         Ok(())

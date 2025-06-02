@@ -6,9 +6,9 @@ use tera::Tera;
 use crate::assets::{AssetManager, AssetManifest};
 use crate::config::Config;
 use crate::database::DatabaseManager;
-use crate::realtime::{RealtimeManager, RealtimeConfig};
+use crate::realtime::{RealtimeConfig, RealtimeManager};
 use crate::templates::setup_templates;
-use janitor::logs::{LogFileManager, get_log_manager};
+use janitor::logs::{get_log_manager, LogFileManager};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -37,22 +37,27 @@ impl AppState {
         } else {
             None
         };
-        
+
         // Initialize HTTP client for service communication
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()?;
-            
+
         // Initialize log manager using the factory function
-        let log_url = config.log_url()
-            .unwrap_or_else(|| format!("file://{}", config.log_base_path()
-                .unwrap_or("/var/log/janitor".to_string())));
+        let log_url = config.log_url().unwrap_or_else(|| {
+            format!(
+                "file://{}",
+                config
+                    .log_base_path()
+                    .unwrap_or("/var/log/janitor".to_string())
+            )
+        });
         let log_manager = Arc::new(get_log_manager(Some(&log_url)).await?);
 
         // Initialize real-time manager
         let realtime_config = RealtimeConfig::default();
         let realtime_manager = Arc::new(RealtimeManager::new(redis.clone(), realtime_config));
-        
+
         // Start real-time manager
         if let Err(e) = realtime_manager.start().await {
             tracing::warn!("Failed to start real-time manager: {}", e);

@@ -43,11 +43,13 @@ pub mod periodic;
 
 // Re-export commonly used types
 pub use error::{ArchiveError, ArchiveResult};
+pub use manager::{
+    GeneratorManager, GeneratorManagerConfig, JobInfo, JobStatus, ManagerStatistics,
+};
+pub use periodic::{HealthCheck, HealthStatus, PeriodicConfig, PeriodicServices, ServiceMetrics};
+pub use redis::{ArchiveEvent, RedisConfig, RedisManager, RedisPublisher, RedisSubscriber};
+pub use repository::{RepositoryGenerationConfig, RepositoryGenerator};
 pub use scanner::{BuildInfo, PackageScanner};
-pub use repository::{RepositoryGenerator, RepositoryGenerationConfig};
-pub use web::{ArchiveWebService, AppState, PublishRequest, PublishResponse};
-pub use manager::{GeneratorManager, GeneratorManagerConfig, JobInfo, JobStatus, ManagerStatistics};
-pub use redis::{RedisConfig, RedisManager, RedisPublisher, RedisSubscriber, ArchiveEvent};
-pub use periodic::{PeriodicServices, PeriodicConfig, HealthCheck, HealthStatus, ServiceMetrics};
+pub use web::{AppState, ArchiveWebService, PublishRequest, PublishResponse};
 
 // TODO(jelmer): Generate contents file

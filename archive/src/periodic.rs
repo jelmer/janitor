@@ -7,14 +7,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, broadcast};
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, warn};
 
 use crate::error::{ArchiveError, ArchiveResult};
 use crate::manager::GeneratorManager;
-use crate::redis::{RedisManager, ArchiveEvent};
+use crate::redis::{ArchiveEvent, RedisManager};
 
 /// Configuration for periodic services.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,7 +187,9 @@ impl PeriodicServices {
 
         // Start republishing service
         if self.config.enable_republishing {
-            let handle = self.start_republishing_service(shutdown_tx.subscribe()).await;
+            let handle = self
+                .start_republishing_service(shutdown_tx.subscribe())
+                .await;
             self.task_handles.push(handle);
         }
 
@@ -236,13 +238,19 @@ impl PeriodicServices {
     }
 
     /// Start republishing service.
-    async fn start_republishing_service(&self, mut shutdown_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    async fn start_republishing_service(
+        &self,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> JoinHandle<()> {
         let generator_manager = Arc::clone(&self.generator_manager);
         let redis_manager = self.redis_manager.clone();
         let interval_seconds = self.config.republishing_interval_seconds;
 
         tokio::spawn(async move {
-            info!("Starting periodic republishing service (interval: {}s)", interval_seconds);
+            info!(
+                "Starting periodic republishing service (interval: {}s)",
+                interval_seconds
+            );
             let mut interval = interval(Duration::from_secs(interval_seconds));
 
             loop {
@@ -262,7 +270,7 @@ impl PeriodicServices {
 
                             match generator_manager.trigger_campaign(&campaign_name).await {
                                 Ok(job_ids) => {
-                                    info!("Triggered {} jobs for periodic republish of campaign {}", 
+                                    info!("Triggered {} jobs for periodic republish of campaign {}",
                                           job_ids.len(), campaign_name);
 
                                     // Publish event if Redis is available
@@ -281,7 +289,7 @@ impl PeriodicServices {
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Failed to trigger periodic republish for campaign {}: {}", 
+                                    error!("Failed to trigger periodic republish for campaign {}: {}",
                                            campaign_name, e);
                                 }
                             }
@@ -297,7 +305,10 @@ impl PeriodicServices {
     }
 
     /// Start cleanup service.
-    async fn start_cleanup_service(&self, mut shutdown_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    async fn start_cleanup_service(
+        &self,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> JoinHandle<()> {
         let generator_manager = Arc::clone(&self.generator_manager);
         let interval_seconds = self.config.cleanup_interval_seconds;
 
@@ -333,14 +344,20 @@ impl PeriodicServices {
     }
 
     /// Start health monitoring service.
-    async fn start_health_monitoring(&self, mut shutdown_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    async fn start_health_monitoring(
+        &self,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> JoinHandle<()> {
         let generator_manager = Arc::clone(&self.generator_manager);
         let redis_manager = self.redis_manager.clone();
         let health_checks = Arc::clone(&self.health_checks);
         let interval_seconds = self.config.health_check_interval_seconds;
 
         tokio::spawn(async move {
-            info!("Starting health monitoring service (interval: {}s)", interval_seconds);
+            info!(
+                "Starting health monitoring service (interval: {}s)",
+                interval_seconds
+            );
             let mut interval = interval(Duration::from_secs(interval_seconds));
 
             loop {
@@ -377,7 +394,7 @@ impl PeriodicServices {
                         if let Some(redis_mgr) = &redis_manager {
                             let start = Instant::now();
                             let mut redis_guard = redis_mgr.lock().await;
-                            
+
                             match redis_guard.health_check().await {
                                 Ok(_) => {
                                     let duration = start.elapsed().as_millis() as u64;
@@ -404,14 +421,20 @@ impl PeriodicServices {
     }
 
     /// Start metrics collection service.
-    async fn start_metrics_collection(&self, mut shutdown_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    async fn start_metrics_collection(
+        &self,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> JoinHandle<()> {
         let generator_manager = Arc::clone(&self.generator_manager);
         let redis_manager = self.redis_manager.clone();
         let metrics = Arc::clone(&self.metrics);
         let interval_seconds = self.config.metrics_interval_seconds;
 
         tokio::spawn(async move {
-            info!("Starting metrics collection service (interval: {}s)", interval_seconds);
+            info!(
+                "Starting metrics collection service (interval: {}s)",
+                interval_seconds
+            );
             let mut interval = interval(Duration::from_secs(interval_seconds));
 
             loop {
@@ -541,7 +564,7 @@ mod tests {
     #[test]
     fn test_periodic_config_default() {
         let config = PeriodicConfig::default();
-        
+
         assert!(config.enable_republishing);
         assert_eq!(config.republishing_interval_seconds, 3600);
         assert!(config.enable_cleanup);
@@ -611,11 +634,11 @@ mod tests {
     #[tokio::test]
     async fn test_periodic_services_creation() {
         let config = PeriodicConfig::default();
-        
+
         // Would need to set up mock GeneratorManager for full test
         // let generator_manager = Arc::new(mock_generator_manager);
         // let services = PeriodicServices::new(config, generator_manager, None);
-        
+
         // For now, just test configuration
         assert!(config.enable_republishing);
         assert!(config.enable_cleanup);

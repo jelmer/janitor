@@ -20,12 +20,12 @@ impl S3LogFileManager {
     pub fn new(endpoint_url: &str, bucket_name: Option<&str>) -> Result<Self, Error> {
         let bucket_name = bucket_name.unwrap_or("debian-janitor");
         let base_url = format!("{}/{}/", endpoint_url.trim_end_matches('/'), bucket_name);
-        
+
         let client = Client::builder()
             .timeout(Duration::from_secs(300))
             .build()
             .map_err(|e| Error::Other(e.to_string()))?;
-        
+
         Ok(Self {
             base_url,
             bucket_name: bucket_name.to_string(),
@@ -46,13 +46,16 @@ impl S3LogFileManager {
 impl LogFileManager for S3LogFileManager {
     async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error> {
         let url = self.get_url(codebase, run_id, name);
-        
+
         match self.client.head(&url).send().await {
             Ok(resp) => match resp.status() {
                 StatusCode::OK => Ok(true),
                 StatusCode::NOT_FOUND => Ok(false),
                 StatusCode::FORBIDDEN => Ok(false),
-                status => Err(Error::Other(format!("Unexpected response code: {}", status))),
+                status => Err(Error::Other(format!(
+                    "Unexpected response code: {}",
+                    status
+                ))),
             },
             Err(e) => Err(Error::ServiceUnavailable),
         }
@@ -65,13 +68,15 @@ impl LogFileManager for S3LogFileManager {
         name: &str,
     ) -> Result<Box<dyn Read + Send + Sync>, Error> {
         let url = self.get_url(codebase, run_id, name);
-        
-        let resp = self.client.get(&url)
+
+        let resp = self
+            .client
+            .get(&url)
             .timeout(Duration::from_secs(300))
             .send()
             .await
             .map_err(|_| Error::ServiceUnavailable)?;
-        
+
         match resp.status() {
             StatusCode::OK => {
                 let bytes = resp.bytes().await.map_err(|_| Error::ServiceUnavailable)?;
@@ -81,7 +86,10 @@ impl LogFileManager for S3LogFileManager {
             }
             StatusCode::NOT_FOUND => Err(Error::NotFound),
             StatusCode::FORBIDDEN => Err(Error::PermissionDenied),
-            status => Err(Error::Other(format!("Unexpected response code: {}", status))),
+            status => Err(Error::Other(format!(
+                "Unexpected response code: {}",
+                status
+            ))),
         }
     }
 
@@ -94,49 +102,59 @@ impl LogFileManager for S3LogFileManager {
         basename: Option<&str>,
     ) -> Result<(), Error> {
         let data = tokio::fs::read(orig_path).await?;
-        
+
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         io::copy(&mut Cursor::new(&data), &mut encoder)?;
         let compressed_data = encoder.finish()?;
-        
+
         let basename = basename.unwrap_or_else(|| {
             Path::new(orig_path)
                 .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("unknown")
         });
-        
+
         let key = self.get_key(codebase, run_id, basename);
         let url = format!("{}{}", self.base_url, key);
-        
-        let resp = self.client.put(&url)
+
+        let resp = self
+            .client
+            .put(&url)
             .header("x-amz-acl", "public-read")
             .body(compressed_data)
             .send()
             .await
             .map_err(|_| Error::ServiceUnavailable)?;
-        
+
         match resp.status() {
             StatusCode::OK | StatusCode::CREATED => Ok(()),
             StatusCode::FORBIDDEN => Err(Error::PermissionDenied),
             StatusCode::SERVICE_UNAVAILABLE => Err(Error::ServiceUnavailable),
-            status => Err(Error::Other(format!("Upload failed with status: {}", status))),
+            status => Err(Error::Other(format!(
+                "Upload failed with status: {}",
+                status
+            ))),
         }
     }
 
     async fn delete_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<(), Error> {
         let url = self.get_url(codebase, run_id, name);
-        
-        let resp = self.client.delete(&url)
+
+        let resp = self
+            .client
+            .delete(&url)
             .send()
             .await
             .map_err(|_| Error::ServiceUnavailable)?;
-        
+
         match resp.status() {
             StatusCode::OK | StatusCode::NO_CONTENT => Ok(()),
             StatusCode::NOT_FOUND => Err(Error::NotFound),
             StatusCode::FORBIDDEN => Err(Error::PermissionDenied),
-            status => Err(Error::Other(format!("Delete failed with status: {}", status))),
+            status => Err(Error::Other(format!(
+                "Delete failed with status: {}",
+                status
+            ))),
         }
     }
 
@@ -159,11 +177,13 @@ impl LogFileManager for S3LogFileManager {
 
     async fn health_check(&self) -> Result<(), Error> {
         // Try to access the bucket root
-        let resp = self.client.head(&self.base_url)
+        let resp = self
+            .client
+            .head(&self.base_url)
             .timeout(Duration::from_secs(10))
             .send()
             .await;
-        
+
         match resp {
             Ok(r) if r.status().is_success() => Ok(()),
             Ok(r) if r.status() == StatusCode::FORBIDDEN => Err(Error::PermissionDenied),
