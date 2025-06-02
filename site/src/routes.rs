@@ -12,6 +12,8 @@ use crate::{
     webhook,
 };
 
+mod cupboard;
+
 pub fn app_routes() -> Router<AppState> {
     Router::new()
         // Static file serving
@@ -57,6 +59,10 @@ pub fn app_routes() -> Router<AppState> {
         
         // Webhooks
         .merge(webhook::create_webhook_routes())
+        
+        // Cupboard admin interface
+        .merge(cupboard::cupboard_routes())
+        .merge(cupboard::cupboard_api_routes())
         
         // Legacy package routes (redirect to new URLs)
         .route("/pkg", get(legacy_package_list))

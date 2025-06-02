@@ -236,6 +236,21 @@ pub fn auth_middleware_layer(auth_state: Arc<AuthState>) -> axum::middleware::Fr
     axum::middleware::from_fn_with_state(auth_state, session_middleware)
 }
 
+/// Create middleware layer for requiring login
+pub fn require_login_layer() -> axum::middleware::FromFnLayer<impl Clone, (), ()> {
+    axum::middleware::from_fn(require_login)
+}
+
+/// Create middleware layer for requiring admin role
+pub fn require_admin_layer() -> axum::middleware::FromFnLayer<impl Clone, (), ()> {
+    axum::middleware::from_fn(require_admin)
+}
+
+/// Create middleware layer for requiring QA reviewer role
+pub fn require_qa_reviewer_layer() -> axum::middleware::FromFnLayer<impl Clone, (), ()> {
+    axum::middleware::from_fn(require_qa_reviewer)
+}
+
 /// Middleware layer for session management  
 #[derive(Clone)]
 pub struct AuthMiddleware;
