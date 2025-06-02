@@ -6,12 +6,12 @@
 //! metadata with proper compression and hashing.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use apt_repository::{
     AsyncPackageProvider, AsyncRepository, AsyncSourceProvider, AptRepositoryError, Compression,
-    HashAlgorithm, PackageFile, Repository, RepositoryBuilder, Result as AptResult, SourceFile,
+    HashAlgorithm, PackageFile, RepositoryBuilder, Result as AptResult, SourceFile,
     Package as AptPackage, Source as AptSource,
 };
 use debian_control::lossy::apt::{Package as DebianPackage, Source as DebianSource};
@@ -445,11 +445,11 @@ impl RepositoryGenerator {
         let async_repo = AsyncRepository::new(repository);
 
         // Create providers
-        let package_provider = ArchivePackageProvider::new(
+        let _package_provider = ArchivePackageProvider::new(
             Arc::clone(&self.scanner),
             Arc::clone(&self.build_manager),
         );
-        let source_provider = ArchiveSourceProvider::new(
+        let _source_provider = ArchiveSourceProvider::new(
             Arc::clone(&self.scanner),
             Arc::clone(&self.build_manager),
         );

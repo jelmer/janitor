@@ -29,9 +29,13 @@ pub mod config;
 /// Repository generation engine.
 pub mod repository;
 
+/// Web service implementation.
+pub mod web;
+
 // Re-export commonly used types
 pub use error::{ArchiveError, ArchiveResult};
 pub use scanner::{BuildInfo, PackageScanner};
 pub use repository::{RepositoryGenerator, RepositoryGenerationConfig};
+pub use web::{ArchiveWebService, AppState, PublishRequest, PublishResponse};
 
 // TODO(jelmer): Generate contents file
