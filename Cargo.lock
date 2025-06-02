@@ -3635,9 +3635,20 @@ dependencies = [
 name = "janitor-archive"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-stream",
+ "bytes",
+ "chrono",
  "deb822-lossless",
  "debian-control",
  "futures",
+ "janitor",
+ "num_cpus",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
