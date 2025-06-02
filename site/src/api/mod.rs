@@ -8,6 +8,9 @@ pub mod validation;
 pub mod openapi;
 pub mod utilities;
 
+#[cfg(test)]
+mod tests;
+
 pub use routes::{create_api_router, create_cupboard_api_router};
 pub use middleware::{content_negotiation_middleware, logging_middleware, metrics_middleware};
 pub use types::{ApiResponse, ApiError, PaginationParams, ApiResult};
