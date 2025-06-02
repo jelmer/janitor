@@ -7,7 +7,10 @@ pub mod handlers;
 pub mod routes;
 pub mod service;
 
-pub use middleware::{AuthMiddleware, AuthState, require_admin, require_login, require_qa_reviewer, session_middleware, auth_middleware_layer, OptionalUser, UserContext};
+#[cfg(test)]
+mod tests;
+
+pub use middleware::{AuthMiddleware, AuthState, require_admin, require_login, require_qa_reviewer, session_middleware, session_middleware as auth_middleware, auth_middleware_layer, OptionalUser, UserContext};
 pub use session::{SessionManager, SessionCookieConfig};
 pub use types::{User, UserRole, SessionInfo};
 pub use oidc::{OidcClient, OidcConfig, AuthError};

@@ -76,6 +76,15 @@ anyhow = "1.0"
 # Janitor dependencies  
 janitor = { path = ".." }
 
+[dev-dependencies]
+# Testing framework
+tokio-test = "0.4"
+tower-test = "0.4"
+axum-test = "14.0"
+serde_json = { workspace = true }
+tempfile = "3.0"
+wiremock = "0.6"
+
 [[bin]]
 name = "janitor-site"
 path = "src/main.rs"

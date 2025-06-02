@@ -423,6 +423,17 @@ impl Config {
             .as_ref()
             .and_then(|config| config.oauth2_provider.as_ref())
     }
+
+    /// Create a test configuration suitable for unit tests
+    #[cfg(test)]
+    pub fn test_config() -> Self {
+        let mut site = SiteConfig::default();
+        site.database_url = "sqlite::memory:".to_string();
+        site.debug = true;
+        site.session_secret = "test-secret-key-for-testing-only".to_string();
+        
+        Config::new(site, None)
+    }
 }
 
 impl Default for SiteConfig {
