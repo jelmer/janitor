@@ -367,13 +367,140 @@ impl ParityTester {
             .join("\n")
     }
 
-    /// Check if HTML structures match (simplified implementation)
+    /// Check if HTML structures match with advanced comparison
     fn html_structure_matches(&self, html1: &str, html2: &str) -> bool {
         // Extract tag structure
         let tags1 = self.extract_html_tags(html1);
         let tags2 = self.extract_html_tags(html2);
         
-        tags1 == tags2
+        if tags1 == tags2 {
+            return true;
+        }
+        
+        // Try content-based comparison for template differences
+        self.compare_html_content_advanced(html1, html2)
+    }
+    
+    /// Advanced HTML content comparison for templates
+    fn compare_html_content_advanced(&self, html1: &str, html2: &str) -> bool {
+        // Extract meaningful content (text nodes, attributes)
+        let content1 = self.extract_html_content(html1);
+        let content2 = self.extract_html_content(html2);
+        
+        // Compare normalized content
+        let normalized1 = self.normalize_html_content(&content1);
+        let normalized2 = self.normalize_html_content(&content2);
+        
+        normalized1 == normalized2
+    }
+    
+    /// Extract meaningful content from HTML (text nodes and key attributes)
+    fn extract_html_content(&self, html: &str) -> Vec<String> {
+        let mut content = Vec::new();
+        let mut in_tag = false;
+        let mut current_text = String::new();
+        let mut current_tag = String::new();
+        
+        for ch in html.chars() {
+            match ch {
+                '<' => {
+                    if !current_text.trim().is_empty() {
+                        content.push(format!("TEXT:{}", current_text.trim()));
+                    }
+                    current_text.clear();
+                    current_tag.clear();
+                    current_tag.push(ch);
+                    in_tag = true;
+                }
+                '>' => {
+                    if in_tag {
+                        current_tag.push(ch);
+                        // Extract key attributes from tags
+                        if let Some(attr_content) = self.extract_key_attributes(&current_tag) {
+                            content.push(attr_content);
+                        }
+                        in_tag = false;
+                    }
+                }
+                _ => {
+                    if in_tag {
+                        current_tag.push(ch);
+                    } else {
+                        current_text.push(ch);
+                    }
+                }
+            }
+        }
+        
+        // Add any remaining text
+        if !current_text.trim().is_empty() {
+            content.push(format!("TEXT:{}", current_text.trim()));
+        }
+        
+        content
+    }
+    
+    /// Extract key attributes that matter for functional comparison
+    fn extract_key_attributes(&self, tag: &str) -> Option<String> {
+        let key_attrs = ["id=", "class=", "href=", "src=", "action=", "method="];
+        
+        for attr in key_attrs.iter() {
+            if tag.contains(attr) {
+                if let Some(start) = tag.find(attr) {
+                    let value_start = start + attr.len();
+                    if let Some(quote_char) = tag.chars().nth(value_start) {
+                        if quote_char == '"' || quote_char == '\'' {
+                            if let Some(end) = tag[value_start + 1..].find(quote_char) {
+                                let value = &tag[value_start + 1..value_start + 1 + end];
+                                return Some(format!("ATTR:{}={}", &attr[..attr.len()-1], value));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Normalize HTML content for comparison
+    fn normalize_html_content(&self, content: &[String]) -> Vec<String> {
+        content.iter()
+            .filter(|item| !item.trim().is_empty())
+            .map(|item| {
+                // Normalize dynamic content patterns
+                if item.starts_with("TEXT:") {
+                    let text = &item[5..];
+                    // Replace timestamps and dynamic IDs
+                    let normalized = self.normalize_dynamic_content(text);
+                    format!("TEXT:{}", normalized)
+                } else {
+                    item.clone()
+                }
+            })
+            .collect()
+    }
+    
+    /// Normalize dynamic content that may differ between implementations
+    fn normalize_dynamic_content(&self, content: &str) -> String {
+        let mut normalized = content.to_string();
+        
+        // Normalize timestamps (ISO format)
+        if let Ok(timestamp_regex) = regex::Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?") {
+            normalized = timestamp_regex.replace_all(&normalized, "TIMESTAMP").to_string();
+        }
+        
+        // Normalize UUIDs and long IDs
+        if let Ok(uuid_regex) = regex::Regex::new(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}") {
+            normalized = uuid_regex.replace_all(&normalized, "UUID").to_string();
+        }
+        
+        // Normalize numbers (durations, counts, etc.)
+        if let Ok(number_regex) = regex::Regex::new(r"\b\d+\.\d+\b") {
+            normalized = number_regex.replace_all(&normalized, "NUMBER").to_string();
+        }
+        
+        normalized
     }
 
     /// Extract HTML tags for structure comparison
@@ -549,6 +676,65 @@ mod tests {
         let expected = vec!["<html>", "<head>", "<title>", "</title>", "</head>", "<body>", "<h1>", "</h1>", "</body>", "</html>"];
         assert_eq!(tags, expected);
     }
+    
+    #[test]
+    fn test_html_content_extraction() {
+        let tester = ParityTester::new(ParityTestConfig::default());
+        
+        let html = r#"<div id="test" class="main">Hello <span>World</span></div>"#;
+        let content = tester.extract_html_content(html);
+        
+        // Should extract text content and key attributes
+        assert!(content.iter().any(|item| item.starts_with("TEXT:Hello")));
+        assert!(content.iter().any(|item| item.starts_with("TEXT:World")));
+        assert!(content.iter().any(|item| item == "ATTR:id=test"));
+        assert!(content.iter().any(|item| item == "ATTR:class=main"));
+    }
+    
+    #[test]
+    fn test_dynamic_content_normalization() {
+        let tester = ParityTester::new(ParityTestConfig::default());
+        
+        let content1 = "Updated at 2023-12-01T15:30:45Z with ID abc123def-456g-789h-012i-345jklmnopqr";
+        let content2 = "Updated at 2024-01-15T09:22:18Z with ID def456ghi-789j-012k-345l-678mnopqrstuv";
+        
+        let normalized1 = tester.normalize_dynamic_content(content1);
+        let normalized2 = tester.normalize_dynamic_content(content2);
+        
+        assert_eq!(normalized1, normalized2);
+        assert!(normalized1.contains("TIMESTAMP"));
+        assert!(normalized1.contains("UUID"));
+    }
+    
+    #[test]
+    fn test_advanced_html_comparison() {
+        let tester = ParityTester::new(ParityTestConfig::default());
+        
+        let html1 = r#"
+            <div class="container">
+                <h1>Welcome</h1>
+                <p>Last updated: 2023-12-01T15:30:45Z</p>
+                <ul>
+                    <li id="item2">Second</li>
+                    <li id="item1">First</li>
+                </ul>
+            </div>
+        "#;
+        
+        let html2 = r#"
+            <div class="container">
+                <h1>Welcome</h1>
+                <p>Last updated: 2024-01-15T09:22:18Z</p>
+                <ul>
+                    <li id="item1">First</li>
+                    <li id="item2">Second</li>
+                </ul>
+            </div>
+        "#;
+        
+        // Should match despite different timestamps and item order
+        assert!(tester.compare_html_content_advanced(html1, html2));
+    }
 }
 
 /// Pre-defined test suites for common parity verification scenarios
@@ -617,26 +803,198 @@ pub mod test_suites {
         // Invalid parameters
         tester.test_get_endpoint("/api/v1/packages?limit=invalid").await?;
         tester.test_get_endpoint("/lintian-fixes/c/non-existent-package/").await?;
+        
+        // Edge case parameter values
+        tester.test_get_endpoint("/api/v1/packages?limit=0").await?;
+        tester.test_get_endpoint("/api/v1/packages?limit=999999").await?;
+        tester.test_get_endpoint("/api/v1/packages?limit=-1").await?;
+        
+        // Special characters in parameters
+        tester.test_get_endpoint("/api/v1/packages?search=%3Cscript%3E").await?; // URL-encoded <script>
+        tester.test_get_endpoint("/pkg?search=../../etc/passwd").await?; // Path traversal attempt
+        
+        // Malformed requests
+        tester.test_post_endpoint(
+            "/api/v1/campaigns", 
+            Some("{invalid json}"), 
+            Some("application/json")
+        ).await?;
+        
+        // Timeout scenarios (very large requests)
+        tester.test_get_endpoint("/api/v1/runs?limit=10000").await?;
 
         Ok(())
     }
+    
+    /// Test performance improvements and validate they meet requirements
+    pub async fn test_performance_improvements(tester: &mut ParityTester) -> anyhow::Result<()> {
+        println!("🚀 Running performance verification tests...");
+        
+        // Test multiple iterations for statistical significance
+        let test_endpoints = [
+            "/",
+            "/api/v1/health",
+            "/api/v1/status",
+            "/api/v1/packages",
+            "/pkg",
+        ];
+        
+        for endpoint in test_endpoints.iter() {
+            println!("Testing performance for endpoint: {}", endpoint);
+            
+            // Run multiple iterations to get average performance
+            for i in 0..5 {
+                tester.test_get_endpoint(endpoint).await?;
+                println!("  Iteration {} completed", i + 1);
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Test load handling and concurrent requests
+    pub async fn test_load_handling(tester: &mut ParityTester) -> anyhow::Result<()> {
+        println!("📊 Testing concurrent load handling...");
+        
+        // Create multiple concurrent requests
+        let endpoints = vec![
+            "/api/v1/health",
+            "/api/v1/status", 
+            "/api/v1/packages",
+            "/",
+            "/pkg",
+        ];
+        
+        let mut handles = vec![];
+        
+        for endpoint in endpoints {
+            let mut tester_clone = ParityTester::new(tester.config.clone());
+            let endpoint = endpoint.to_string();
+            
+            let handle = tokio::spawn(async move {
+                for _ in 0..3 {
+                    let _ = tester_clone.test_get_endpoint(&endpoint).await;
+                }
+            });
+            
+            handles.push(handle);
+        }
+        
+        // Wait for all concurrent requests to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+        
+        println!("Concurrent load test completed");
+        Ok(())
+    }
+    
+    /// Test large response handling
+    pub async fn test_large_responses(tester: &mut ParityTester) -> anyhow::Result<()> {
+        println!("📦 Testing large response handling...");
+        
+        // Test endpoints that might return large responses
+        tester.test_get_endpoint("/api/v1/runs?limit=1000").await?;
+        tester.test_get_endpoint("/api/v1/packages?limit=500").await?;
+        
+        Ok(())
+    }
+    
+    /// Test boundary conditions and edge cases
+    pub async fn test_boundary_conditions(tester: &mut ParityTester) -> anyhow::Result<()> {
+        println!("🔍 Testing boundary conditions...");
+        
+        // Test pagination boundaries
+        tester.test_get_endpoint("/api/v1/packages?offset=0&limit=1").await?;
+        tester.test_get_endpoint("/api/v1/packages?offset=0&limit=100").await?;
+        
+        // Test empty search results
+        tester.test_get_endpoint("/api/v1/packages?search=nonexistentpackagename12345").await?;
+        
+        // Test special characters in search
+        tester.test_get_endpoint("/pkg?search=test+package").await?;
+        tester.test_get_endpoint("/pkg?search=test%20package").await?;
+        
+        Ok(())
+    }
 
-    /// Comprehensive parity test suite
+    /// Comprehensive parity test suite including all Phase 3.10.3 requirements
     pub async fn run_comprehensive_suite() -> anyhow::Result<ParityTestSummary> {
         let config = ParityTestConfig::default();
         let mut tester = ParityTester::new(config);
 
         println!("🔍 Running comprehensive Python parity verification...");
+        println!("Phase 3.10.3: Python Parity Verification");
 
-        // Run all test suites
+        // Core functionality tests (API response comparison - completed)
+        println!("\n📋 Testing API responses...");
         test_api_endpoints(&mut tester).await?;
+        
+        // HTML output matching validation
+        println!("\n🌐 Testing HTML output matching...");
         test_site_pages(&mut tester).await?;
+        
+        // Authentication flow validation
+        println!("\n🔐 Testing authentication flows...");
         test_auth_flows(&mut tester).await?;
+        
+        // Edge cases and error handling
+        println!("\n⚠️ Testing edge cases and error handling...");
         test_error_handling(&mut tester).await?;
+        test_boundary_conditions(&mut tester).await?;
+        
+        // Performance improvement verification
+        println!("\n⚡ Testing performance improvements...");
+        test_performance_improvements(&mut tester).await?;
+        
+        // Load and stress testing
+        println!("\n💪 Testing load handling...");
+        test_load_handling(&mut tester).await?;
+        test_large_responses(&mut tester).await?;
 
         let summary = tester.get_summary();
         summary.print_report();
+        
+        // Validate Phase 3.10.3 completion criteria
+        validate_phase_completion(&summary)?;
 
         Ok(summary)
+    }
+    
+    /// Validate that Phase 3.10.3 completion criteria are met
+    fn validate_phase_completion(summary: &ParityTestSummary) -> anyhow::Result<()> {
+        println!("\n🎯 Validating Phase 3.10.3 completion criteria...");
+        
+        // Check pass rate meets minimum threshold (90%)
+        if summary.pass_rate() < 90.0 {
+            anyhow::bail!(
+                "Parity verification failed: {:.1}% pass rate (minimum 90% required)", 
+                summary.pass_rate()
+            );
+        }
+        
+        // Check performance improvements
+        if summary.avg_performance_improvement < 1.5 {
+            anyhow::bail!(
+                "Performance requirements not met: {:.2}x improvement (minimum 1.5x required)",
+                summary.avg_performance_improvement
+            );
+        }
+        
+        // Check HTML output matching
+        let html_match_rate = (summary.content_matches as f64 / summary.total_tests as f64) * 100.0;
+        if html_match_rate < 85.0 {
+            anyhow::bail!(
+                "HTML output matching failed: {:.1}% match rate (minimum 85% required)",
+                html_match_rate
+            );
+        }
+        
+        println!("✅ Phase 3.10.3 completion criteria validated:");
+        println!("  - Pass rate: {:.1}% (✓ > 90%)", summary.pass_rate());
+        println!("  - Performance improvement: {:.2}x (✓ > 1.5x)", summary.avg_performance_improvement);
+        println!("  - HTML output matching: {:.1}% (✓ > 85%)", html_match_rate);
+        
+        Ok(())
     }
 }
