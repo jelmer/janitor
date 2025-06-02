@@ -225,7 +225,18 @@ impl RealtimeManager {
     }
 
     /// Publish an event to Redis and local subscribers
-    pub async fn publish_event(&self, event: RealtimeEvent) -> Result<()> {
+    pub async fn publish_event(&self, channel: &str, event_data: &serde_json::Value) -> Result<()> {
+        let event = RealtimeEvent::CampaignUpdate {
+            campaign: channel.to_string(),
+            update_type: "generic".to_string(),
+            data: event_data.clone(),
+            timestamp: chrono::Utc::now(),
+        };
+        self.publish_real_event(event).await
+    }
+
+    /// Publish a RealtimeEvent to Redis and local subscribers
+    pub async fn publish_real_event(&self, event: RealtimeEvent) -> Result<()> {
         if !self.config.enabled {
             return Ok(());
         }
@@ -349,7 +360,7 @@ impl RealtimeManager {
             active_runs,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 
     /// Publish run status change
@@ -360,7 +371,7 @@ impl RealtimeManager {
             new_status,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 
     /// Publish worker status update
@@ -371,7 +382,7 @@ impl RealtimeManager {
             current_task,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 
     /// Publish system health change
@@ -383,7 +394,7 @@ impl RealtimeManager {
             details,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 
     /// Publish publishing event
@@ -394,7 +405,7 @@ impl RealtimeManager {
             result,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 
     /// Publish campaign update
@@ -405,7 +416,7 @@ impl RealtimeManager {
             data,
             timestamp: chrono::Utc::now(),
         };
-        self.publish_event(event).await
+        self.publish_real_event(event).await
     }
 }
 
