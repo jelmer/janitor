@@ -386,3 +386,20 @@ mod tests {
         assert_eq!(record.binary_files.len(), 1);
     }
 }
+
+/// Type alias for compatibility with repository module.
+pub type BuildManager = ArchiveDatabase;
+
+impl From<BuildRecord> for BuildInfo {
+    fn from(record: BuildRecord) -> Self {
+        Self {
+            id: record.id,
+            codebase: record.codebase,
+            suite: record.suite,
+            architecture: record.architecture,
+            component: record.component,
+            binary_files: record.binary_files,
+            source_files: record.source_files,
+        }
+    }
+}

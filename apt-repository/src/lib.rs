@@ -55,7 +55,7 @@ pub use repository::{Repository, RepositoryBuilder};
 pub use sources::{Source, SourceFile};
 
 #[cfg(feature = "async")]
-pub use async_repository::AsyncRepository;
+pub use async_repository::{AsyncRepository, AsyncPackageProvider, AsyncSourceProvider};
 
 /// Default compression formats used for repository files
 pub const DEFAULT_COMPRESSIONS: &[Compression] =

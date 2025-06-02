@@ -26,8 +26,12 @@ pub mod database;
 /// Archive configuration and setup.
 pub mod config;
 
+/// Repository generation engine.
+pub mod repository;
+
 // Re-export commonly used types
 pub use error::{ArchiveError, ArchiveResult};
 pub use scanner::{BuildInfo, PackageScanner};
+pub use repository::{RepositoryGenerator, RepositoryGenerationConfig};
 
 // TODO(jelmer): Generate contents file
