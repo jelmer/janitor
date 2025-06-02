@@ -16,7 +16,8 @@ mod unit_tests {
 
     #[test]
     fn test_api_response_error() {
-        let response: ApiResponse<()> = ApiResponse::error("Test error".to_string(), Some("reason".to_string()));
+        let response: ApiResponse<()> =
+            ApiResponse::error("Test error".to_string(), Some("reason".to_string()));
         assert!(response.data.is_none());
         assert!(response.error.is_some());
         assert_eq!(response.error.unwrap(), "Test error");
@@ -31,20 +32,20 @@ mod unit_tests {
             active_runs: 5,
             campaigns: vec![],
         };
-        
+
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains("\"total_candidates\":100"));
         assert!(json.contains("\"active_runs\":5"));
     }
 
-    #[test] 
+    #[test]
     fn test_pagination_params() {
         let params = PaginationParams {
             page: Some(2),
             limit: Some(20),
             offset: None,
         };
-        
+
         assert_eq!(params.get_offset(), 20); // (2-1) * 20
         assert_eq!(params.get_limit(), 20);
     }

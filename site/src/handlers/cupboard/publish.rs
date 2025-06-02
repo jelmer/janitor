@@ -15,7 +15,7 @@ use crate::{
     templates::create_base_context,
 };
 
-use super::{AdminUser, Permission, create_admin_context, log_admin_action};
+use super::{create_admin_context, log_admin_action, AdminUser, Permission};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PublishFilters {
@@ -117,13 +117,13 @@ pub async fn publish_dashboard(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewPublishQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch publishing data and statistics
     match fetch_publish_dashboard_data(&state, &filters).await {
         Ok((publish_items, stats)) => {
@@ -133,22 +133,26 @@ pub async fn publish_dashboard(
         }
         Err(e) => {
             tracing::error!("Failed to fetch publish data: {}", e);
-            context.insert("error_message", &format!("Failed to load publish data: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load publish data: {}", e),
+            );
         }
     }
-    
+
     // Add available suites for filtering
     let campaigns: Vec<String> = state.config.campaigns.keys().cloned().collect();
     context.insert("available_campaigns", &campaigns);
-    
+
     let content_type = negotiate_content_type(&headers, "publish_dashboard");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
+        ContentType::Json => Json(context.into_json()).into_response(),
         _ => {
-            match state.templates.render("cupboard/publish-dashboard.html", &context) {
+            match state
+                .templates
+                .render("cupboard/publish-dashboard.html", &context)
+            {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     tracing::error!("Template rendering error: {}", e);
@@ -170,13 +174,13 @@ pub async fn publish_history(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewPublishQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch publish history
     match fetch_publish_history(&state, &filters).await {
         Ok(history) => {
@@ -185,18 +189,22 @@ pub async fn publish_history(
         }
         Err(e) => {
             tracing::error!("Failed to fetch publish history: {}", e);
-            context.insert("error_message", &format!("Failed to load publish history: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load publish history: {}", e),
+            );
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "publish_history");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
+        ContentType::Json => Json(context.into_json()).into_response(),
         _ => {
-            match state.templates.render("cupboard/publish-history.html", &context) {
+            match state
+                .templates
+                .render("cupboard/publish-history.html", &context)
+            {
                 Ok(html) => Html(html).into_response(),
                 Err(e) => {
                     tracing::error!("Template rendering error: {}", e);
@@ -218,14 +226,14 @@ pub async fn publish_details(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewPublishQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
     context.insert("publish_id", &publish_id);
-    
+
     // Fetch publish details
     match fetch_publish_details(&state, &publish_id).await {
         Ok(publish) => {
@@ -236,22 +244,18 @@ pub async fn publish_details(
             return StatusCode::NOT_FOUND.into_response();
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "publish_details");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/publish.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/publish.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -266,13 +270,13 @@ pub async fn ready_runs(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewPublishQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch ready runs
     match fetch_ready_runs(&state, &filters).await {
         Ok(ready_runs) => {
@@ -281,25 +285,24 @@ pub async fn ready_runs(
         }
         Err(e) => {
             tracing::error!("Failed to fetch ready runs: {}", e);
-            context.insert("error_message", &format!("Failed to load ready runs: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load ready runs: {}", e),
+            );
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "ready_runs");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/ready-list.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/ready-list.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -314,15 +317,15 @@ pub async fn emergency_publish_stop(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::EmergencyPublishControls) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = extract_ip_address(&headers);
     let user_agent = extract_user_agent(&headers);
-    
+
     // Log the emergency action
     log_admin_action(
         &state,
@@ -332,15 +335,20 @@ pub async fn emergency_publish_stop(
         serde_json::to_value(&params).unwrap_or_default(),
         &ip_address,
         &user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // Execute emergency action
     match execute_emergency_publish_action(&state, &params).await {
         Ok(result) => {
             tracing::warn!(
                 "Emergency publish action '{}' executed by {}: {} items affected. Reason: {}",
                 params.action,
-                admin_user.user.name.as_deref().unwrap_or(&admin_user.user.email),
+                admin_user
+                    .user
+                    .name
+                    .as_deref()
+                    .unwrap_or(&admin_user.user.email),
                 result.affected_items,
                 params.reason
             );
@@ -364,15 +372,15 @@ pub async fn adjust_rate_limits(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ModifyPublishSettings) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = extract_ip_address(&headers);
     let user_agent = extract_user_agent(&headers);
-    
+
     // Log the rate limit adjustment
     log_admin_action(
         &state,
@@ -382,15 +390,20 @@ pub async fn adjust_rate_limits(
         serde_json::to_value(&adjustment).unwrap_or_default(),
         &ip_address,
         &user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // Apply rate limit changes
     match apply_rate_limit_adjustment(&state, &adjustment).await {
         Ok(new_limits) => {
             tracing::info!(
                 "Rate limits adjusted for bucket {} by {}: action={}",
                 adjustment.bucket,
-                admin_user.user.name.as_deref().unwrap_or(&admin_user.user.email),
+                admin_user
+                    .user
+                    .name
+                    .as_deref()
+                    .unwrap_or(&admin_user.user.email),
                 adjustment.action
             );
             Json(new_limits).into_response()
@@ -412,11 +425,11 @@ pub async fn publish_statistics(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewPublishQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     match fetch_publish_statistics(&state, &filters).await {
         Ok(stats) => Json(stats).into_response(),
         Err(e) => {
@@ -434,24 +447,24 @@ async fn fetch_publish_dashboard_data(
 ) -> anyhow::Result<(Vec<PublishItem>, PublishStatistics)> {
     // TODO: Implement comprehensive publish dashboard data fetching
     // This would query the publish table with filtering and statistics
-    
-    let items = vec![
-        PublishItem {
-            id: "pub-1".to_string(),
-            codebase: "example-package".to_string(),
-            suite: "lintian-fixes".to_string(),
-            branch_name: Some("debian/lintian-fixes".to_string()),
-            mode: "propose".to_string(),
-            result_code: Some("success".to_string()),
-            description: Some("Successfully created merge proposal".to_string()),
-            merge_proposal_url: Some("https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string()),
-            timestamp: Utc::now() - chrono::Duration::hours(1),
-            vcs_browse: Some("https://salsa.debian.org/jelmer/example-package".to_string()),
-            rate_limited: false,
-            retry_after: None,
-        },
-    ];
-    
+
+    let items = vec![PublishItem {
+        id: "pub-1".to_string(),
+        codebase: "example-package".to_string(),
+        suite: "lintian-fixes".to_string(),
+        branch_name: Some("debian/lintian-fixes".to_string()),
+        mode: "propose".to_string(),
+        result_code: Some("success".to_string()),
+        description: Some("Successfully created merge proposal".to_string()),
+        merge_proposal_url: Some(
+            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
+        ),
+        timestamp: Utc::now() - chrono::Duration::hours(1),
+        vcs_browse: Some("https://salsa.debian.org/jelmer/example-package".to_string()),
+        rate_limited: false,
+        retry_after: None,
+    }];
+
     let stats = PublishStatistics {
         total_published: 150,
         successful_publishes: 142,
@@ -462,18 +475,21 @@ async fn fetch_publish_dashboard_data(
         pending_queue_size: 12,
         rate_limit_status: {
             let mut limits = HashMap::new();
-            limits.insert("salsa.debian.org".to_string(), RateLimitInfo {
-                bucket: "salsa.debian.org".to_string(),
-                current_requests: 8,
-                max_requests: 10,
-                window_seconds: 3600,
-                reset_time: Some(Utc::now() + chrono::Duration::minutes(45)),
-                is_limited: false,
-            });
+            limits.insert(
+                "salsa.debian.org".to_string(),
+                RateLimitInfo {
+                    bucket: "salsa.debian.org".to_string(),
+                    current_requests: 8,
+                    max_requests: 10,
+                    window_seconds: 3600,
+                    reset_time: Some(Utc::now() + chrono::Duration::minutes(45)),
+                    is_limited: false,
+                },
+            );
             limits
         },
     };
-    
+
     Ok((items, stats))
 }
 
@@ -483,32 +499,27 @@ async fn fetch_publish_history(
 ) -> anyhow::Result<Vec<PublishItem>> {
     // TODO: Implement publish history fetching
     // This would query the publish table with date filtering and pagination
-    
-    Ok(vec![
-        PublishItem {
-            id: "pub-hist-1".to_string(),
-            codebase: "historical-package".to_string(),
-            suite: "lintian-fixes".to_string(),
-            branch_name: Some("debian/lintian-fixes".to_string()),
-            mode: "push".to_string(),
-            result_code: Some("success".to_string()),
-            description: Some("Successfully pushed changes".to_string()),
-            merge_proposal_url: None,
-            timestamp: Utc::now() - chrono::Duration::days(1),
-            vcs_browse: Some("https://salsa.debian.org/jelmer/historical-package".to_string()),
-            rate_limited: false,
-            retry_after: None,
-        },
-    ])
+
+    Ok(vec![PublishItem {
+        id: "pub-hist-1".to_string(),
+        codebase: "historical-package".to_string(),
+        suite: "lintian-fixes".to_string(),
+        branch_name: Some("debian/lintian-fixes".to_string()),
+        mode: "push".to_string(),
+        result_code: Some("success".to_string()),
+        description: Some("Successfully pushed changes".to_string()),
+        merge_proposal_url: None,
+        timestamp: Utc::now() - chrono::Duration::days(1),
+        vcs_browse: Some("https://salsa.debian.org/jelmer/historical-package".to_string()),
+        rate_limited: false,
+        retry_after: None,
+    }])
 }
 
-async fn fetch_publish_details(
-    state: &AppState,
-    publish_id: &str,
-) -> anyhow::Result<PublishItem> {
+async fn fetch_publish_details(state: &AppState, publish_id: &str) -> anyhow::Result<PublishItem> {
     // TODO: Implement detailed publish fetching
     // This would query the publish table for specific publish details
-    
+
     Ok(PublishItem {
         id: publish_id.to_string(),
         codebase: "example-package".to_string(),
@@ -517,7 +528,9 @@ async fn fetch_publish_details(
         mode: "propose".to_string(),
         result_code: Some("success".to_string()),
         description: Some("Successfully created merge proposal".to_string()),
-        merge_proposal_url: Some("https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string()),
+        merge_proposal_url: Some(
+            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
+        ),
         timestamp: Utc::now() - chrono::Duration::hours(1),
         vcs_browse: Some("https://salsa.debian.org/jelmer/example-package".to_string()),
         rate_limited: false,
@@ -531,20 +544,18 @@ async fn fetch_ready_runs(
 ) -> anyhow::Result<Vec<ReadyRun>> {
     // TODO: Implement ready runs fetching
     // This would query the publish_ready table
-    
-    Ok(vec![
-        ReadyRun {
-            id: "run-ready-1".to_string(),
-            codebase: "ready-package".to_string(),
-            suite: "lintian-fixes".to_string(),
-            command: Some("fix-lintian-issues".to_string()),
-            result_code: "success".to_string(),
-            publish_status: Some("ready".to_string()),
-            value: Some(90),
-            finish_time: Some(Utc::now() - chrono::Duration::minutes(30)),
-            can_publish: true,
-        },
-    ])
+
+    Ok(vec![ReadyRun {
+        id: "run-ready-1".to_string(),
+        codebase: "ready-package".to_string(),
+        suite: "lintian-fixes".to_string(),
+        command: Some("fix-lintian-issues".to_string()),
+        result_code: "success".to_string(),
+        publish_status: Some("ready".to_string()),
+        value: Some(90),
+        finish_time: Some(Utc::now() - chrono::Duration::minutes(30)),
+        can_publish: true,
+    }])
 }
 
 async fn execute_emergency_publish_action(
@@ -553,21 +564,21 @@ async fn execute_emergency_publish_action(
 ) -> anyhow::Result<EmergencyStopResult> {
     // TODO: Implement emergency publish actions
     // This would communicate with the publisher service to stop/resume publishing
-    
+
     let affected_items = match params.action.as_str() {
-        "stop_all" => 25, // All pending publishes
-        "stop_suite" => 8, // Suite-specific publishes
+        "stop_all" => 25,     // All pending publishes
+        "stop_suite" => 8,    // Suite-specific publishes
         "stop_codebase" => 3, // Codebase-specific publishes
-        "resume_all" => 25, // Resume all stopped publishes
+        "resume_all" => 25,   // Resume all stopped publishes
         _ => 0,
     };
-    
+
     let resume_at = if let Some(duration) = params.duration {
         Some(Utc::now() + chrono::Duration::minutes(duration))
     } else {
         None
     };
-    
+
     Ok(EmergencyStopResult {
         action: params.action.clone(),
         affected_items,
@@ -583,16 +594,16 @@ async fn apply_rate_limit_adjustment(
 ) -> anyhow::Result<RateLimitInfo> {
     // TODO: Implement rate limit adjustment
     // This would communicate with the publisher service to adjust rate limits
-    
+
     let new_max_requests = match adjustment.action.as_str() {
         "increase" => adjustment.max_requests.unwrap_or(20),
         "decrease" => adjustment.max_requests.unwrap_or(5),
-        "reset" => 10, // Default limit
+        "reset" => 10,     // Default limit
         "disable" => 1000, // Very high limit
-        "enable" => 10, // Standard limit
+        "enable" => 10,    // Standard limit
         _ => 10,
     };
-    
+
     Ok(RateLimitInfo {
         bucket: adjustment.bucket.clone(),
         current_requests: 0, // Reset after adjustment
@@ -609,7 +620,7 @@ async fn fetch_publish_statistics(
 ) -> anyhow::Result<PublishStatistics> {
     // TODO: Implement comprehensive publish statistics
     // This would aggregate data from the publish table
-    
+
     Ok(PublishStatistics {
         total_published: 1250,
         successful_publishes: 1180,
@@ -620,22 +631,28 @@ async fn fetch_publish_statistics(
         pending_queue_size: 18,
         rate_limit_status: {
             let mut limits = HashMap::new();
-            limits.insert("salsa.debian.org".to_string(), RateLimitInfo {
-                bucket: "salsa.debian.org".to_string(),
-                current_requests: 5,
-                max_requests: 10,
-                window_seconds: 3600,
-                reset_time: Some(Utc::now() + chrono::Duration::minutes(30)),
-                is_limited: false,
-            });
-            limits.insert("github.com".to_string(), RateLimitInfo {
-                bucket: "github.com".to_string(),
-                current_requests: 45,
-                max_requests: 50,
-                window_seconds: 3600,
-                reset_time: Some(Utc::now() + chrono::Duration::minutes(15)),
-                is_limited: true,
-            });
+            limits.insert(
+                "salsa.debian.org".to_string(),
+                RateLimitInfo {
+                    bucket: "salsa.debian.org".to_string(),
+                    current_requests: 5,
+                    max_requests: 10,
+                    window_seconds: 3600,
+                    reset_time: Some(Utc::now() + chrono::Duration::minutes(30)),
+                    is_limited: false,
+                },
+            );
+            limits.insert(
+                "github.com".to_string(),
+                RateLimitInfo {
+                    bucket: "github.com".to_string(),
+                    current_requests: 45,
+                    max_requests: 50,
+                    window_seconds: 3600,
+                    reset_time: Some(Utc::now() + chrono::Duration::minutes(15)),
+                    is_limited: true,
+                },
+            );
             limits
         },
     })

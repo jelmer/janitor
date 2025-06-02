@@ -57,22 +57,19 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 // Metrics tracking
-use prometheus::{IntCounter, register_int_counter, Result as PrometheusResult};
+use prometheus::{register_int_counter, IntCounter, Result as PrometheusResult};
 use std::sync::LazyLock;
 
-static PRIMARY_LOGFILE_UPLOAD_FAILED_COUNT: LazyLock<PrometheusResult<IntCounter>> = LazyLock::new(|| {
-    register_int_counter!(
-        "primary_logfile_upload_failed",
-        "Number of failed logs to primary logfile target"
-    )
-});
+static PRIMARY_LOGFILE_UPLOAD_FAILED_COUNT: LazyLock<PrometheusResult<IntCounter>> =
+    LazyLock::new(|| {
+        register_int_counter!(
+            "primary_logfile_upload_failed",
+            "Number of failed logs to primary logfile target"
+        )
+    });
 
-static LOGFILE_UPLOADED_COUNT: LazyLock<PrometheusResult<IntCounter>> = LazyLock::new(|| {
-    register_int_counter!(
-        "logfile_uploads",
-        "Number of uploaded log files"
-    )
-});
+static LOGFILE_UPLOADED_COUNT: LazyLock<PrometheusResult<IntCounter>> =
+    LazyLock::new(|| register_int_counter!("logfile_uploads", "Number of uploaded log files"));
 
 // Helper functions to safely increment counters
 fn increment_upload_failed() {
@@ -98,11 +95,11 @@ pub trait LogFileManager: Send + Sync {
 
     /// Check if a log exists with timeout.
     async fn has_log_with_timeout(
-        &self, 
-        codebase: &str, 
-        run_id: &str, 
+        &self,
+        codebase: &str,
+        run_id: &str,
         name: &str,
-        timeout: Option<Duration>
+        timeout: Option<Duration>,
     ) -> Result<bool, Error> {
         // Default implementation ignores timeout
         self.has_log(codebase, run_id, name).await
@@ -185,7 +182,7 @@ pub trait LogFileManager: Send + Sync {
 }
 
 /// Create a log file manager based on the location string.
-/// 
+///
 /// Supported location formats:
 /// - Local filesystem path (e.g., "/var/log/janitor")
 /// - Google Cloud Storage URL (e.g., "gs://bucket-name")
@@ -203,9 +200,7 @@ pub async fn create_log_manager(location: Option<&str>) -> Result<Box<dyn LogFil
             {
                 let url = url::Url::parse(loc)
                     .map_err(|e| Error::Other(format!("Invalid GCS URL: {}", e)))?;
-                Ok(Box::new(
-                    GCSLogFileManager::from_url(&url, None).await?,
-                ))
+                Ok(Box::new(GCSLogFileManager::from_url(&url, None).await?))
             }
             #[cfg(not(feature = "gcs"))]
             {

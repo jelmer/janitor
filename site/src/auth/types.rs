@@ -8,8 +8,8 @@ pub struct User {
     pub name: Option<String>,
     pub preferred_username: Option<String>,
     pub groups: HashSet<String>,
-    pub sub: String,  // Subject identifier
-    
+    pub sub: String, // Subject identifier
+
     // Additional fields that might be present
     #[serde(flatten)]
     pub additional_claims: serde_json::Map<String, serde_json::Value>,
@@ -29,15 +29,20 @@ impl User {
         // TODO: Get admin group configuration from somewhere
         self.has_role(UserRole::Admin, None, None)
     }
-    
+
     /// Check if user is a QA reviewer (simple helper for templates)
     pub fn is_qa_reviewer(&self) -> bool {
         // TODO: Get qa reviewer group configuration from somewhere
         self.has_role(UserRole::QaReviewer, None, None)
     }
-    
+
     /// Check if user has a specific role based on configured groups
-    pub fn has_role(&self, role: UserRole, admin_group: Option<&str>, qa_reviewer_group: Option<&str>) -> bool {
+    pub fn has_role(
+        &self,
+        role: UserRole,
+        admin_group: Option<&str>,
+        qa_reviewer_group: Option<&str>,
+    ) -> bool {
         match role {
             UserRole::User => true, // All authenticated users have user role
             UserRole::Admin => {
@@ -53,7 +58,7 @@ impl User {
                 if self.has_role(UserRole::Admin, admin_group, qa_reviewer_group) {
                     return true;
                 }
-                
+
                 if let Some(qa_reviewer_group) = qa_reviewer_group {
                     self.groups.contains(qa_reviewer_group)
                 } else {
@@ -63,9 +68,13 @@ impl User {
             }
         }
     }
-    
+
     /// Get the highest role this user has
-    pub fn get_highest_role(&self, admin_group: Option<&str>, qa_reviewer_group: Option<&str>) -> UserRole {
+    pub fn get_highest_role(
+        &self,
+        admin_group: Option<&str>,
+        qa_reviewer_group: Option<&str>,
+    ) -> UserRole {
         if self.has_role(UserRole::Admin, admin_group, qa_reviewer_group) {
             UserRole::Admin
         } else if self.has_role(UserRole::QaReviewer, admin_group, qa_reviewer_group) {
@@ -93,7 +102,7 @@ impl SessionInfo {
             last_activity: now,
         }
     }
-    
+
     pub fn update_activity(&mut self) {
         self.last_activity = chrono::Utc::now();
     }
@@ -102,12 +111,12 @@ impl SessionInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_user_roles() {
         let mut groups = HashSet::new();
         groups.insert("developers".to_string());
-        
+
         let user = User {
             email: "test@example.com".to_string(),
             name: Some("Test User".to_string()),
@@ -116,26 +125,26 @@ mod tests {
             sub: "123456".to_string(),
             additional_claims: serde_json::Map::new(),
         };
-        
+
         // No groups configured - everyone is admin/qa
         assert!(user.has_role(UserRole::Admin, None, None));
         assert!(user.has_role(UserRole::QaReviewer, None, None));
         assert!(user.has_role(UserRole::User, None, None));
-        
+
         // Admin group configured, user not in it
         assert!(!user.has_role(UserRole::Admin, Some("admins"), None));
         assert!(user.has_role(UserRole::User, Some("admins"), None));
-        
+
         // User in qa reviewer group
         assert!(user.has_role(UserRole::QaReviewer, Some("admins"), Some("developers")));
         assert!(!user.has_role(UserRole::Admin, Some("admins"), Some("developers")));
     }
-    
+
     #[test]
     fn test_highest_role() {
         let mut groups = HashSet::new();
         groups.insert("qa".to_string());
-        
+
         let user = User {
             email: "qa@example.com".to_string(),
             name: Some("QA User".to_string()),
@@ -144,7 +153,7 @@ mod tests {
             sub: "789".to_string(),
             additional_claims: serde_json::Map::new(),
         };
-        
+
         assert_eq!(
             user.get_highest_role(Some("admins"), Some("qa")),
             UserRole::QaReviewer

@@ -67,11 +67,11 @@ impl ArchiveDatabase {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-    
+
     /// Get all successful builds for a specific suite.
     pub async fn get_builds_for_suite(&self, suite_name: &str) -> ArchiveResult<Vec<BuildRecord>> {
         debug!("Querying builds for suite: {}", suite_name);
-        
+
         let query = r#"
             SELECT 
                 db.id,
@@ -94,31 +94,31 @@ impl ArchiveDatabase {
               AND r.result_code = 'success'
             ORDER BY db.package, db.version DESC
         "#;
-        
+
         let rows = sqlx::query(query)
             .bind(suite_name)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| ArchiveError::Database(e))?;
-        
+
         let mut builds = Vec::new();
-        
+
         for row in rows {
             let binary_files: serde_json::Value = row.get("binary_files");
             let source_files: serde_json::Value = row.get("source_files");
-            
-            let binary_files: Vec<String> = serde_json::from_value(binary_files)
-                .unwrap_or_else(|e| {
+
+            let binary_files: Vec<String> =
+                serde_json::from_value(binary_files).unwrap_or_else(|e| {
                     warn!("Failed to parse binary_files: {}", e);
                     Vec::new()
                 });
-            
-            let source_files: Vec<String> = serde_json::from_value(source_files)
-                .unwrap_or_else(|e| {
+
+            let source_files: Vec<String> =
+                serde_json::from_value(source_files).unwrap_or_else(|e| {
                     warn!("Failed to parse source_files: {}", e);
                     Vec::new()
                 });
-            
+
             builds.push(BuildRecord {
                 id: row.get("id"),
                 run_id: row.get("run_id"),
@@ -135,15 +135,18 @@ impl ArchiveDatabase {
                 source_files,
             });
         }
-        
+
         debug!("Found {} builds for suite {}", builds.len(), suite_name);
         Ok(builds)
     }
-    
+
     /// Get builds for a specific changeset.
-    pub async fn get_builds_for_changeset(&self, changeset_id: &str) -> ArchiveResult<Vec<BuildRecord>> {
+    pub async fn get_builds_for_changeset(
+        &self,
+        changeset_id: &str,
+    ) -> ArchiveResult<Vec<BuildRecord>> {
         debug!("Querying builds for changeset: {}", changeset_id);
-        
+
         let query = r#"
             SELECT 
                 db.id,
@@ -166,20 +169,20 @@ impl ArchiveDatabase {
               AND r.result_code = 'success'
             ORDER BY db.package, db.version DESC
         "#;
-        
+
         let rows = sqlx::query(query)
             .bind(changeset_id)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| ArchiveError::Database(e))?;
-        
+
         self.parse_build_records(rows).await
     }
-    
+
     /// Get builds for a specific run.
     pub async fn get_builds_for_run(&self, run_id: &str) -> ArchiveResult<Vec<BuildRecord>> {
         debug!("Querying builds for run: {}", run_id);
-        
+
         let query = r#"
             SELECT 
                 db.id,
@@ -202,20 +205,23 @@ impl ArchiveDatabase {
               AND r.result_code = 'success'
             ORDER BY db.package, db.version DESC
         "#;
-        
+
         let rows = sqlx::query(query)
             .bind(run_id)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| ArchiveError::Database(e))?;
-        
+
         self.parse_build_records(rows).await
     }
-    
+
     /// Get builds grouped by package for a suite (for duplicate resolution).
-    pub async fn get_latest_builds_for_suite(&self, suite_name: &str) -> ArchiveResult<Vec<BuildRecord>> {
+    pub async fn get_latest_builds_for_suite(
+        &self,
+        suite_name: &str,
+    ) -> ArchiveResult<Vec<BuildRecord>> {
         debug!("Querying latest builds for suite: {}", suite_name);
-        
+
         let query = r#"
             WITH latest_builds AS (
                 SELECT 
@@ -253,24 +259,27 @@ impl ArchiveDatabase {
               AND r.result_code = 'success'
             ORDER BY db.package, db.architecture
         "#;
-        
+
         let rows = sqlx::query(query)
             .bind(suite_name)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| ArchiveError::Database(e))?;
-        
+
         self.parse_build_records(rows).await
     }
-    
+
     /// Get campaign information from configuration.
-    pub async fn get_campaign_info(&self, campaign_name: &str) -> ArchiveResult<Option<CampaignInfo>> {
+    pub async fn get_campaign_info(
+        &self,
+        campaign_name: &str,
+    ) -> ArchiveResult<Option<CampaignInfo>> {
         debug!("Querying campaign info for: {}", campaign_name);
-        
+
         // This would query a campaigns table or configuration
         // For now, return a placeholder implementation
         // TODO: Implement actual campaign configuration queries
-        
+
         match campaign_name {
             "lintian-fixes" => Ok(Some(CampaignInfo {
                 name: campaign_name.to_string(),
@@ -289,7 +298,7 @@ impl ArchiveDatabase {
             _ => Ok(None),
         }
     }
-    
+
     /// Convert BuildRecord to BuildInfo for scanner.
     pub fn build_record_to_info(&self, record: &BuildRecord) -> BuildInfo {
         BuildInfo {
@@ -302,27 +311,30 @@ impl ArchiveDatabase {
             source_files: record.source_files.clone(),
         }
     }
-    
+
     /// Helper function to parse build records from database rows.
-    async fn parse_build_records(&self, rows: Vec<sqlx::postgres::PgRow>) -> ArchiveResult<Vec<BuildRecord>> {
+    async fn parse_build_records(
+        &self,
+        rows: Vec<sqlx::postgres::PgRow>,
+    ) -> ArchiveResult<Vec<BuildRecord>> {
         let mut builds = Vec::new();
-        
+
         for row in rows {
             let binary_files: serde_json::Value = row.get("binary_files");
             let source_files: serde_json::Value = row.get("source_files");
-            
-            let binary_files: Vec<String> = serde_json::from_value(binary_files)
-                .unwrap_or_else(|e| {
+
+            let binary_files: Vec<String> =
+                serde_json::from_value(binary_files).unwrap_or_else(|e| {
                     warn!("Failed to parse binary_files: {}", e);
                     Vec::new()
                 });
-            
-            let source_files: Vec<String> = serde_json::from_value(source_files)
-                .unwrap_or_else(|e| {
+
+            let source_files: Vec<String> =
+                serde_json::from_value(source_files).unwrap_or_else(|e| {
                     warn!("Failed to parse source_files: {}", e);
                     Vec::new()
                 });
-            
+
             builds.push(BuildRecord {
                 id: row.get("id"),
                 run_id: row.get("run_id"),
@@ -339,7 +351,7 @@ impl ArchiveDatabase {
                 source_files,
             });
         }
-        
+
         Ok(builds)
     }
 }
@@ -347,7 +359,7 @@ impl ArchiveDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_database_manager_creation() {
         // This test would require a database connection
@@ -356,7 +368,7 @@ mod tests {
         // let db = ArchiveDatabase::new(pool);
         // assert!(db.pool.is_closed() == false);
     }
-    
+
     #[test]
     fn test_build_record_to_info_conversion() {
         let record = BuildRecord {
@@ -374,12 +386,12 @@ mod tests {
             binary_files: vec!["test-package_1.0-1_amd64.deb".to_string()],
             source_files: vec!["test-package_1.0-1.dsc".to_string()],
         };
-        
+
         // Create a dummy pool for testing (won't be used)
         // let pool = PgPool::connect_lazy("postgresql://dummy").unwrap();
         // let db = ArchiveDatabase::new(pool);
         // let info = db.build_record_to_info(&record);
-        
+
         // For now, just test the record structure
         assert_eq!(record.id, "build-123");
         assert_eq!(record.architecture, "amd64");

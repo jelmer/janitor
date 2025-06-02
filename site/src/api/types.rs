@@ -113,13 +113,19 @@ impl ApiError {
     }
 
     pub fn internal_error(reason: String) -> Self {
-        Self::new("internal_error".to_string(), StatusCode::INTERNAL_SERVER_ERROR)
-            .with_reason(reason)
+        Self::new(
+            "internal_error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+        .with_reason(reason)
     }
 
     pub fn service_unavailable(service: String) -> Self {
-        Self::new("service_unavailable".to_string(), StatusCode::SERVICE_UNAVAILABLE)
-            .with_reason(format!("Unable to contact {}", service))
+        Self::new(
+            "service_unavailable".to_string(),
+            StatusCode::SERVICE_UNAVAILABLE,
+        )
+        .with_reason(format!("Unable to contact {}", service))
     }
 
     pub fn gateway_timeout(service: String) -> Self {
@@ -198,14 +204,14 @@ impl PaginationInfo {
 pub struct CommonQuery {
     #[serde(flatten)]
     pub pagination: PaginationParams,
-    
+
     /// Search query
     pub search: Option<String>,
-    
+
     /// Sorting parameters
     pub sort: Option<String>,
     pub order: Option<SortOrder>,
-    
+
     /// Filtering
     pub filter: Option<HashMap<String, String>>,
 }
@@ -259,7 +265,7 @@ mod tests {
             limit: Some(25),
             offset: None,
         };
-        
+
         assert_eq!(params.get_offset(), 50); // (3-1) * 25
         assert_eq!(params.get_limit(), 25);
     }

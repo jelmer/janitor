@@ -157,7 +157,7 @@ pub mod parameters {
         /// Campaign name
         #[param(example = "lintian-fixes")]
         pub campaign: String,
-        
+
         /// Codebase name
         #[param(example = "package-name")]
         pub codebase: String,
@@ -169,19 +169,19 @@ pub mod parameters {
         /// Page offset
         #[param(example = 0)]
         pub offset: Option<i64>,
-        
+
         /// Page size
         #[param(example = 50)]
         pub limit: Option<i64>,
-        
+
         /// Search query
         #[param(example = "search term")]
         pub search: Option<String>,
-        
+
         /// Sort field
         #[param(example = "created_time")]
         pub sort: Option<String>,
-        
+
         /// Sort order
         #[param(example = "desc")]
         pub order: Option<String>,
@@ -193,7 +193,7 @@ pub mod parameters {
         /// Run identifier
         #[param(example = "12345")]
         pub run_id: String,
-        
+
         /// Log filename
         #[param(example = "build.log")]
         pub filename: String,
@@ -241,14 +241,12 @@ pub mod examples {
             branch_url: Some("https://github.com/example/package".to_string()),
             logfilenames: vec!["build.log".to_string(), "test.log".to_string()],
             worker_name: Some("worker-01".to_string()),
-            result_branches: vec![
-                ResultBranch {
-                    name: "main".to_string(),
-                    role: Some("main".to_string()),
-                    base_revision: Some("abc123".to_string()),
-                    revision: Some("def456".to_string()),
-                }
-            ],
+            result_branches: vec![ResultBranch {
+                name: "main".to_string(),
+                role: Some("main".to_string()),
+                base_revision: Some("abc123".to_string()),
+                revision: Some("def456".to_string()),
+            }],
             result_tags: vec![],
             target_branch_url: Some("https://github.com/example/package".to_string()),
             change_set: Some("lintian-fixes".to_string()),
@@ -285,7 +283,7 @@ pub mod examples {
                 error: None,
                 response_time_ms: Some(15),
                 last_check: Some(Utc::now()),
-            }
+            },
         );
         services.insert(
             "redis".to_string(),
@@ -294,7 +292,7 @@ pub mod examples {
                 error: None,
                 response_time_ms: Some(5),
                 last_check: Some(Utc::now()),
-            }
+            },
         );
 
         HealthStatus {

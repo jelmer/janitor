@@ -95,7 +95,9 @@ impl DatabaseManager {
 
     /// Run database migrations
     pub async fn run_migrations(&self) -> Result<(), DatabaseError> {
-        sqlx::migrate!().run(&self.pool).await
+        sqlx::migrate!()
+            .run(&self.pool)
+            .await
             .map_err(|e| DatabaseError::Connection(sqlx::Error::Migrate(Box::new(e))))?;
         Ok(())
     }
@@ -108,12 +110,12 @@ impl DatabaseManager {
             .execute(&self.pool)
             .await
             .map_err(DatabaseError::Connection)?;
-            
+
         sqlx::query("DELETE FROM codebase WHERE name LIKE 'test-%'")
             .execute(&self.pool)
             .await
             .map_err(DatabaseError::Connection)?;
-            
+
         Ok(())
     }
 
@@ -122,27 +124,23 @@ impl DatabaseManager {
         let mut stats = HashMap::new();
 
         // Total codebases
-        let total_codebases: i64 = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM codebase WHERE NOT inactive"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let total_codebases: i64 =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM codebase WHERE NOT inactive")
+                .fetch_one(&self.pool)
+                .await?;
         stats.insert("total_codebases".to_string(), total_codebases);
 
         // Active runs (currently running)
-        let active_runs: i64 = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM run WHERE finish_time IS NULL"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let active_runs: i64 =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM run WHERE finish_time IS NULL")
+                .fetch_one(&self.pool)
+                .await?;
         stats.insert("active_runs".to_string(), active_runs);
 
         // Queue size
-        let queue_size: i64 = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM queue"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let queue_size: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM queue")
+            .fetch_one(&self.pool)
+            .await?;
         stats.insert("queue_size".to_string(), queue_size);
 
         // Recent successful runs (last 24 hours)
@@ -163,27 +161,27 @@ impl DatabaseManager {
         search: Option<&str>,
     ) -> Result<Vec<Codebase>, DatabaseError> {
         let mut query = "SELECT name, url, branch FROM codebase WHERE NOT inactive".to_string();
-        
+
         if let Some(search_term) = search {
-            query.push_str(&format!(" AND (name ILIKE '%{}%' OR url ILIKE '%{}%')", 
+            query.push_str(&format!(
+                " AND (name ILIKE '%{}%' OR url ILIKE '%{}%')",
                 search_term.replace("%", "\\%").replace("_", "\\_"),
-                search_term.replace("%", "\\%").replace("_", "\\_")));
+                search_term.replace("%", "\\%").replace("_", "\\_")
+            ));
         }
-        
+
         query.push_str(" ORDER BY name");
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         if let Some(offset) = offset {
             query.push_str(&format!(" OFFSET {}", offset));
         }
-        
-        let rows = sqlx::query(&query)
-            .fetch_all(&self.pool)
-            .await?;
-            
+
+        let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
+
         let mut codebases = Vec::new();
         for row in rows {
             codebases.push(Codebase {
@@ -192,18 +190,17 @@ impl DatabaseManager {
                 branch: row.try_get("branch")?,
             });
         }
-        
+
         Ok(codebases)
     }
 
     pub async fn get_codebase(&self, name: &str) -> Result<Codebase, DatabaseError> {
-        let row = sqlx::query(
-            "SELECT name, url, branch FROM codebase WHERE name = $1 AND NOT inactive"
-        )
-        .bind(name)
-        .fetch_one(&self.pool)
-        .await?;
-        
+        let row =
+            sqlx::query("SELECT name, url, branch FROM codebase WHERE name = $1 AND NOT inactive")
+                .bind(name)
+                .fetch_one(&self.pool)
+                .await?;
+
         Ok(Codebase {
             name: row.try_get("name")?,
             url: row.try_get("url")?,
@@ -211,40 +208,46 @@ impl DatabaseManager {
         })
     }
 
-    pub async fn get_repositories_by_vcs(&self, vcs_type: &str) -> Result<Vec<Codebase>, DatabaseError> {
+    pub async fn get_repositories_by_vcs(
+        &self,
+        vcs_type: &str,
+    ) -> Result<Vec<Codebase>, DatabaseError> {
         let rows = sqlx::query(
             "SELECT name, url, branch FROM codebase 
              WHERE url LIKE $1 AND NOT inactive 
-             ORDER BY name LIMIT 1000"
+             ORDER BY name LIMIT 1000",
         )
         .bind(format!("{}://%", vcs_type))
         .fetch_all(&self.pool)
         .await?;
-        
-        let repositories = rows.into_iter()
+
+        let repositories = rows
+            .into_iter()
             .map(|row| Codebase {
                 name: row.try_get("name").unwrap_or_default(),
                 url: row.try_get("url").unwrap_or_default(),
                 branch: row.try_get("branch").ok(),
             })
             .collect();
-            
+
         Ok(repositories)
     }
 
     pub async fn count_codebases(&self, search: Option<&str>) -> Result<i64, DatabaseError> {
         let mut query = "SELECT COUNT(*) FROM codebase WHERE NOT inactive".to_string();
-        
+
         if let Some(search_term) = search {
-            query.push_str(&format!(" AND (name ILIKE '%{}%' OR url ILIKE '%{}%')", 
+            query.push_str(&format!(
+                " AND (name ILIKE '%{}%' OR url ILIKE '%{}%')",
                 search_term.replace("%", "\\%").replace("_", "\\_"),
-                search_term.replace("%", "\\%").replace("_", "\\_")));
+                search_term.replace("%", "\\%").replace("_", "\\_")
+            ));
         }
-        
+
         let count: i64 = sqlx::query_scalar::<_, i64>(&query)
             .fetch_one(&self.pool)
             .await?;
-            
+
         Ok(count)
     }
 
@@ -255,20 +258,20 @@ impl DatabaseManager {
         offset: Option<i64>,
     ) -> Result<Vec<Run>, DatabaseError> {
         let mut query = "SELECT id, codebase, suite, start_time FROM run WHERE codebase = $1 ORDER BY start_time DESC".to_string();
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         if let Some(offset) = offset {
             query.push_str(&format!(" OFFSET {}", offset));
         }
-        
+
         let rows = sqlx::query(&query)
             .bind(codebase)
             .fetch_all(&self.pool)
             .await?;
-            
+
         let mut runs = Vec::new();
         for row in rows {
             runs.push(Run {
@@ -278,7 +281,7 @@ impl DatabaseManager {
                 start_time: row.try_get("start_time")?,
             });
         }
-        
+
         Ok(runs)
     }
 
@@ -289,17 +292,19 @@ impl DatabaseManager {
         search: Option<&str>,
     ) -> Result<i64, DatabaseError> {
         let mut query = "SELECT COUNT(*) FROM candidate WHERE suite = $1".to_string();
-        
+
         if let Some(search_term) = search {
-            query.push_str(&format!(" AND codebase ILIKE '%{}%'", 
-                search_term.replace("%", "\\%").replace("_", "\\_")));
+            query.push_str(&format!(
+                " AND codebase ILIKE '%{}%'",
+                search_term.replace("%", "\\%").replace("_", "\\_")
+            ));
         }
-        
+
         let count: i64 = sqlx::query_scalar::<_, i64>(&query)
             .bind(suite)
             .fetch_one(&self.pool)
             .await?;
-            
+
         Ok(count)
     }
 
@@ -309,27 +314,23 @@ impl DatabaseManager {
         result_code: &str,
     ) -> Result<i64, DatabaseError> {
         let count: i64 = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM run WHERE suite = $1 AND result_code = $2"
+            "SELECT COUNT(*) FROM run WHERE suite = $1 AND result_code = $2",
         )
         .bind(campaign)
         .bind(result_code)
         .fetch_one(&self.pool)
         .await?;
-            
+
         Ok(count)
     }
 
-    pub async fn count_pending_publishes(
-        &self,
-        campaign: &str,
-    ) -> Result<i64, DatabaseError> {
-        let count: i64 = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM publish_ready WHERE suite = $1"
-        )
-        .bind(campaign)
-        .fetch_one(&self.pool)
-        .await?;
-            
+    pub async fn count_pending_publishes(&self, campaign: &str) -> Result<i64, DatabaseError> {
+        let count: i64 =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM publish_ready WHERE suite = $1")
+                .bind(campaign)
+                .fetch_one(&self.pool)
+                .await?;
+
         Ok(count)
     }
 
@@ -340,20 +341,20 @@ impl DatabaseManager {
         offset: Option<i64>,
     ) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let mut query = "SELECT candidate.codebase, candidate.suite, candidate.command, candidate.context, candidate.value, candidate.success_chance, candidate.publish_policy, codebase.url, codebase.branch FROM candidate LEFT JOIN codebase ON candidate.codebase = codebase.name WHERE candidate.suite = $1 ORDER BY candidate.value DESC, candidate.codebase".to_string();
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         if let Some(offset) = offset {
             query.push_str(&format!(" OFFSET {}", offset));
         }
-        
+
         let rows = sqlx::query(&query)
             .bind(suite)
             .fetch_all(&self.pool)
             .await?;
-            
+
         let mut candidates = Vec::new();
         for row in rows {
             let candidate = serde_json::json!({
@@ -369,7 +370,7 @@ impl DatabaseManager {
             });
             candidates.push(candidate);
         }
-        
+
         Ok(candidates)
     }
 
@@ -385,7 +386,7 @@ impl DatabaseManager {
         .bind(codebase)
         .fetch_one(&self.pool)
         .await?;
-        
+
         let candidate = serde_json::json!({
             "codebase": row.try_get::<String, _>("codebase")?,
             "suite": row.try_get::<String, _>("suite")?,
@@ -398,24 +399,22 @@ impl DatabaseManager {
             "branch": row.try_get::<Option<String>, _>("branch")?,
             "vcs_type": row.try_get::<Option<String>, _>("vcs_type")?
         });
-        
+
         Ok(candidate)
     }
 
-    pub async fn get_vcs_info(
-        &self,
-        codebase: &str,
-    ) -> Result<VcsInfo, DatabaseError> {
-        let row = sqlx::query(
-            "SELECT url, branch_url, vcs_type, web_url FROM codebase WHERE name = $1"
-        )
-        .bind(codebase)
-        .fetch_one(&self.pool)
-        .await?;
-        
+    pub async fn get_vcs_info(&self, codebase: &str) -> Result<VcsInfo, DatabaseError> {
+        let row =
+            sqlx::query("SELECT url, branch_url, vcs_type, web_url FROM codebase WHERE name = $1")
+                .bind(codebase)
+                .fetch_one(&self.pool)
+                .await?;
+
         Ok(VcsInfo {
             url: row.try_get::<Option<String>, _>("url")?.unwrap_or_default(),
-            vcs_type: row.try_get::<Option<String>, _>("vcs_type")?.unwrap_or("unknown".to_string()),
+            vcs_type: row
+                .try_get::<Option<String>, _>("vcs_type")?
+                .unwrap_or("unknown".to_string()),
             branch_url: row.try_get::<Option<String>, _>("web_url")?,
         })
     }
@@ -432,7 +431,7 @@ impl DatabaseManager {
         .bind(codebase)
         .fetch_one(&self.pool)
         .await?;
-        
+
         Ok(RunDetails {
             id: row.try_get("id")?,
             codebase: row.try_get("codebase")?,
@@ -443,10 +442,10 @@ impl DatabaseManager {
             start_time: row.try_get("start_time")?,
             finish_time: row.try_get("finish_time")?,
             worker: row.try_get("worker")?,
-            build_version: None, // Not in schema
+            build_version: None,     // Not in schema
             result_branches: vec![], // TODO: Join with new_result_branch
-            result_tags: vec![], // TODO: Handle result_tags
-            publish_status: None, // TODO: Add to query
+            result_tags: vec![],     // TODO: Handle result_tags
+            publish_status: None,    // TODO: Add to query
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
@@ -460,17 +459,17 @@ impl DatabaseManager {
         limit: Option<i64>,
     ) -> Result<Vec<RunDetails>, DatabaseError> {
         let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE codebase = $1 AND suite = $2 ORDER BY start_time DESC".to_string();
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         let rows = sqlx::query(&query)
             .bind(codebase)
             .bind(campaign)
             .fetch_all(&self.pool)
             .await?;
-            
+
         let mut runs = Vec::new();
         for row in rows {
             runs.push(RunDetails {
@@ -492,7 +491,7 @@ impl DatabaseManager {
                 vcs_type: None, // TODO: Add to query
             });
         }
-        
+
         Ok(runs)
     }
 
@@ -508,7 +507,7 @@ impl DatabaseManager {
         .bind(codebase)
         .fetch_all(&self.pool)
         .await?;
-            
+
         let mut proposals = Vec::new();
         for row in rows {
             let proposal = serde_json::json!({
@@ -521,7 +520,7 @@ impl DatabaseManager {
             });
             proposals.push(proposal);
         }
-        
+
         Ok(proposals)
     }
 
@@ -531,21 +530,18 @@ impl DatabaseManager {
         codebase: &str,
     ) -> Result<i64, DatabaseError> {
         let position: Option<i64> = sqlx::query_scalar::<_, Option<i64>>(
-            "SELECT position FROM queue_positions WHERE suite = $1 AND codebase = $2"
+            "SELECT position FROM queue_positions WHERE suite = $1 AND codebase = $2",
         )
         .bind(campaign)
         .bind(codebase)
         .fetch_optional(&self.pool)
         .await?
         .flatten();
-            
+
         Ok(position.unwrap_or(0))
     }
 
-    pub async fn get_average_run_time(
-        &self,
-        campaign: &str,
-    ) -> Result<i64, DatabaseError> {
+    pub async fn get_average_run_time(&self, campaign: &str) -> Result<i64, DatabaseError> {
         let avg_seconds: Option<f64> = sqlx::query_scalar::<_, Option<f64>>(
             "SELECT EXTRACT(EPOCH FROM AVG(finish_time - start_time)) FROM run WHERE suite = $1 AND finish_time IS NOT NULL AND start_time IS NOT NULL"
         )
@@ -553,7 +549,7 @@ impl DatabaseManager {
         .fetch_optional(&self.pool)
         .await?
         .flatten();
-            
+
         Ok(avg_seconds.unwrap_or(300.0) as i64) // Default to 5 minutes
     }
 
@@ -563,14 +559,14 @@ impl DatabaseManager {
         codebase: &str,
     ) -> Result<String, DatabaseError> {
         let policy: Option<String> = sqlx::query_scalar::<_, Option<String>>(
-            "SELECT publish_policy FROM candidate WHERE suite = $1 AND codebase = $2"
+            "SELECT publish_policy FROM candidate WHERE suite = $1 AND codebase = $2",
         )
         .bind(campaign)
         .bind(codebase)
         .fetch_optional(&self.pool)
         .await?
         .flatten();
-            
+
         Ok(policy.unwrap_or("manual".to_string()))
     }
 
@@ -584,17 +580,14 @@ impl DatabaseManager {
         Ok("auto".to_string())
     }
 
-    pub async fn get_run(
-        &self,
-        run_id: &str,
-    ) -> Result<RunDetails, DatabaseError> {
+    pub async fn get_run(&self, run_id: &str) -> Result<RunDetails, DatabaseError> {
         let row = sqlx::query(
             "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE id = $1"
         )
         .bind(run_id)
         .fetch_one(&self.pool)
         .await?;
-        
+
         Ok(RunDetails {
             id: row.try_get("id")?,
             codebase: row.try_get("codebase")?,
@@ -607,8 +600,8 @@ impl DatabaseManager {
             worker: row.try_get("worker")?,
             build_version: None,
             result_branches: vec![], // TODO: Join with new_result_branch
-            result_tags: vec![], // TODO: Handle result_tags array
-            publish_status: None, // TODO: Add publish_status to query
+            result_tags: vec![],     // TODO: Handle result_tags array
+            publish_status: None,    // TODO: Add publish_status to query
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
@@ -627,7 +620,7 @@ impl DatabaseManager {
         .bind(codebase)
         .fetch_one(&self.pool)
         .await?;
-        
+
         Ok(RunStatistics {
             total: row.try_get::<i64, _>("total")?,
             successful: row.try_get::<i64, _>("successful")?,
@@ -642,23 +635,23 @@ impl DatabaseManager {
         before: Option<&DateTime<Utc>>,
     ) -> Result<RunDetails, DatabaseError> {
         let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE suite = 'unchanged' AND codebase = $1".to_string();
-        
+
         let mut bind_count = 1;
         if let Some(before_time) = before {
             bind_count += 1;
             query.push_str(&format!(" AND start_time < ${}", bind_count));
         }
-        
+
         query.push_str(" ORDER BY start_time DESC LIMIT 1");
-        
+
         let mut sql_query = sqlx::query(&query).bind(codebase);
-        
+
         if let Some(before_time) = before {
             sql_query = sql_query.bind(before_time);
         }
-        
+
         let row = sql_query.fetch_one(&self.pool).await?;
-        
+
         Ok(RunDetails {
             id: row.try_get("id")?,
             codebase: row.try_get("codebase")?,
@@ -679,32 +672,26 @@ impl DatabaseManager {
         })
     }
 
-    pub async fn get_binary_packages(
-        &self,
-        run_id: &str,
-    ) -> Result<Vec<String>, DatabaseError> {
+    pub async fn get_binary_packages(&self, run_id: &str) -> Result<Vec<String>, DatabaseError> {
         let packages: Option<Vec<String>> = sqlx::query_scalar::<_, Option<Vec<String>>>(
-            "SELECT binary_packages FROM debian_build WHERE run_id = $1"
+            "SELECT binary_packages FROM debian_build WHERE run_id = $1",
         )
         .bind(run_id)
         .fetch_optional(&self.pool)
         .await?
         .flatten();
-            
+
         Ok(packages.unwrap_or_default())
     }
 
-    pub async fn get_reviews(
-        &self,
-        run_id: &str,
-    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+    pub async fn get_reviews(&self, run_id: &str) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let rows = sqlx::query(
             "SELECT comment, reviewer, verdict, reviewed_at FROM review WHERE run_id = $1 ORDER BY reviewed_at DESC"
         )
         .bind(run_id)
         .fetch_all(&self.pool)
         .await?;
-            
+
         let mut reviews = Vec::new();
         for row in rows {
             let review = serde_json::json!({
@@ -715,7 +702,7 @@ impl DatabaseManager {
             });
             reviews.push(review);
         }
-        
+
         Ok(reviews)
     }
 
@@ -729,39 +716,39 @@ impl DatabaseManager {
     ) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let mut query = "SELECT id, codebase, command, description, start_time, finish_time, result_code, value, publish_policy_name, publish_status FROM publish_ready WHERE suite = $1".to_string();
         let mut bind_count = 1;
-        
+
         if let Some(search_term) = search {
             bind_count += 1;
             query.push_str(&format!(" AND codebase ILIKE ${}", bind_count));
         }
-        
+
         if let Some(code) = result_code {
             bind_count += 1;
             query.push_str(&format!(" AND result_code = ${}", bind_count));
         }
-        
+
         query.push_str(" ORDER BY value DESC, start_time DESC");
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         if let Some(offset) = offset {
             query.push_str(&format!(" OFFSET {}", offset));
         }
-        
+
         let mut sql_query = sqlx::query(&query).bind(suite);
-        
+
         if let Some(search_term) = search {
             sql_query = sql_query.bind(format!("%{}%", search_term));
         }
-        
+
         if let Some(code) = result_code {
             sql_query = sql_query.bind(code);
         }
-        
+
         let rows = sql_query.fetch_all(&self.pool).await?;
-            
+
         let mut runs = Vec::new();
         for row in rows {
             let run = serde_json::json!({
@@ -778,7 +765,7 @@ impl DatabaseManager {
             });
             runs.push(run);
         }
-        
+
         Ok(runs)
     }
 
@@ -792,39 +779,39 @@ impl DatabaseManager {
     ) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let mut query = "SELECT id, codebase, campaign, result, absorbed_at, merged_by, merge_proposal_url, revision, delay FROM absorbed_runs WHERE campaign = $1".to_string();
         let mut bind_count = 1;
-        
+
         if let Some(from) = from_date {
             bind_count += 1;
             query.push_str(&format!(" AND absorbed_at >= ${}", bind_count));
         }
-        
+
         if let Some(to) = to_date {
             bind_count += 1;
             query.push_str(&format!(" AND absorbed_at <= ${}", bind_count));
         }
-        
+
         query.push_str(" ORDER BY absorbed_at DESC");
-        
+
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
         }
-        
+
         if let Some(offset) = offset {
             query.push_str(&format!(" OFFSET {}", offset));
         }
-        
+
         let mut sql_query = sqlx::query(&query).bind(campaign);
-        
+
         if let Some(from) = from_date {
             sql_query = sql_query.bind(from);
         }
-        
+
         if let Some(to) = to_date {
             sql_query = sql_query.bind(to);
         }
-        
+
         let rows = sql_query.fetch_all(&self.pool).await?;
-            
+
         let mut runs = Vec::new();
         for row in rows {
             let run = serde_json::json!({
@@ -839,7 +826,7 @@ impl DatabaseManager {
             });
             runs.push(run);
         }
-        
+
         Ok(runs)
     }
 
@@ -855,7 +842,7 @@ impl DatabaseManager {
         .bind(status)
         .fetch_all(&self.pool)
         .await?;
-            
+
         let mut proposals = Vec::new();
         for row in rows {
             let proposal = serde_json::json!({
@@ -869,7 +856,7 @@ impl DatabaseManager {
             });
             proposals.push(proposal);
         }
-        
+
         Ok(proposals)
     }
 
@@ -880,7 +867,7 @@ impl DatabaseManager {
         limit: Option<i64>,
     ) -> Result<Vec<String>, DatabaseError> {
         let limit = limit.unwrap_or(20);
-        
+
         let query = if let Some(term) = search_term {
             // Search with prefix matching and relevance scoring
             sqlx::query_scalar::<_, String>(
@@ -890,10 +877,10 @@ impl DatabaseManager {
                  ORDER BY 
                    CASE WHEN name ILIKE $1 THEN 1 ELSE 2 END,
                    name ASC
-                 LIMIT $3"
+                 LIMIT $3",
             )
-            .bind(format!("{}%", term))      // Prefix match
-            .bind(format!("%{}%", term))     // Contains match
+            .bind(format!("{}%", term)) // Prefix match
+            .bind(format!("%{}%", term)) // Contains match
             .bind(limit)
         } else {
             // Return most recently active codebases
@@ -903,11 +890,11 @@ impl DatabaseManager {
                  WHERE NOT c.inactive
                  GROUP BY c.name
                  ORDER BY MAX(r.finish_time) DESC NULLS LAST, c.name ASC
-                 LIMIT $1"
+                 LIMIT $1",
             )
             .bind(limit)
         };
-        
+
         let names = query.fetch_all(&self.pool).await?;
         Ok(names)
     }
@@ -923,10 +910,9 @@ impl DatabaseManager {
     ) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let limit = limit.unwrap_or(50);
         let publishable_only = publishable_only.unwrap_or(false);
-        
+
         // Build dynamic query with relevance scoring
-        let mut query_parts = vec![
-            "SELECT DISTINCT
+        let mut query_parts = vec!["SELECT DISTINCT
                 c.name as codebase,
                 c.summary,
                 c.vcs_url,
@@ -942,49 +928,50 @@ impl DatabaseManager {
                 END as relevance_score
              FROM codebase c
              LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
-             WHERE NOT c.inactive".to_string(),
-        ];
-        
+             WHERE NOT c.inactive"
+            .to_string()];
+
         let mut param_count = 2; // $1 and $2 for search terms
         let mut bind_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>> = vec![];
-        
+
         // Add search term filters
         if let Some(term) = search_term {
-            bind_values.push(Box::new(format!("{}%", term)));  // $1: prefix match
+            bind_values.push(Box::new(format!("{}%", term))); // $1: prefix match
             bind_values.push(Box::new(format!("%{}%", term))); // $2: contains match
-            query_parts.push("AND (c.name ILIKE $1 OR c.name ILIKE $2 OR c.summary ILIKE $2)".to_string());
+            query_parts
+                .push("AND (c.name ILIKE $1 OR c.name ILIKE $2 OR c.summary ILIKE $2)".to_string());
         } else {
-            bind_values.push(Box::new("".to_string()));  // $1: empty for no search
-            bind_values.push(Box::new("".to_string()));  // $2: empty for no search
+            bind_values.push(Box::new("".to_string())); // $1: empty for no search
+            bind_values.push(Box::new("".to_string())); // $2: empty for no search
         }
-        
+
         // Add campaign filter
         if let Some(campaign_filter) = campaign {
             param_count += 1;
             query_parts.push(format!("AND r.suite = ${}", param_count));
             bind_values.push(Box::new(campaign_filter.to_string()));
         }
-        
+
         // Add result code filter
         if let Some(code) = result_code {
             param_count += 1;
             query_parts.push(format!("AND r.result_code = ${}", param_count));
             bind_values.push(Box::new(code.to_string()));
         }
-        
+
         // Add publishable filter
         if publishable_only {
             query_parts.push("AND r.result_code = 'success'".to_string());
         }
-        
+
         // Add ordering and limit
         query_parts.push("ORDER BY relevance_score DESC, c.name ASC".to_string());
         param_count += 1;
         query_parts.push(format!("LIMIT ${}", param_count));
         bind_values.push(Box::new(limit));
-        
+
         let query_str = query_parts.join(" ");
-        
+
         // For now, use a simpler query that we can actually execute
         // TODO: Implement proper dynamic query building
         let simplified_query = if let Some(term) = search_term {
@@ -1004,7 +991,7 @@ impl DatabaseManager {
                  ORDER BY 
                    CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
                    c.name ASC
-                 LIMIT $3"
+                 LIMIT $3",
             )
             .bind(format!("{}%", term))
             .bind(format!("%{}%", term))
@@ -1023,13 +1010,13 @@ impl DatabaseManager {
                  LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
                  WHERE NOT c.inactive
                  ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
-                 LIMIT $1"
+                 LIMIT $1",
             )
             .bind(limit)
         };
-        
+
         let rows = simplified_query.fetch_all(&self.pool).await?;
-        
+
         let mut results = Vec::new();
         for row in rows {
             let result = serde_json::json!({
@@ -1043,7 +1030,7 @@ impl DatabaseManager {
             });
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
@@ -1081,7 +1068,7 @@ impl DatabaseManager {
              FROM queue q
              LEFT JOIN codebase c ON q.codebase = c.name
              ORDER BY q.value DESC, q.created_time ASC
-             LIMIT $1"
+             LIMIT $1",
         )
         .bind(limit.unwrap_or(50))
         .fetch_all(&self.pool)
@@ -1124,22 +1111,20 @@ impl DatabaseManager {
 
         // Items by status
         let pending_items: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE status = 'pending' OR status IS NULL"
+            "SELECT COUNT(*) FROM queue WHERE status = 'pending' OR status IS NULL",
         )
         .fetch_one(&self.pool)
         .await?;
 
-        let assigned_items: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE status = 'assigned'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let assigned_items: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE status = 'assigned'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let running_items: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE status = 'running'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let running_items: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE status = 'running'")
+                .fetch_one(&self.pool)
+                .await?;
 
         // Worker statistics
         let active_workers: i64 = sqlx::query_scalar(
@@ -1149,29 +1134,24 @@ impl DatabaseManager {
         .await?;
 
         // Priority distribution
-        let high_priority: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE value >= 75"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let high_priority: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE value >= 75")
+            .fetch_one(&self.pool)
+            .await?;
 
-        let medium_priority: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE value >= 25 AND value < 75"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let medium_priority: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE value >= 25 AND value < 75")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let low_priority: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM queue WHERE value < 25"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let low_priority: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE value < 25")
+            .fetch_one(&self.pool)
+            .await?;
 
         // Average wait time for pending items
         let avg_wait_time: Option<f64> = sqlx::query_scalar(
             "SELECT EXTRACT(EPOCH FROM AVG(NOW() - created_time))/3600 
              FROM queue 
-             WHERE status = 'pending' OR status IS NULL"
+             WHERE status = 'pending' OR status IS NULL",
         )
         .fetch_optional(&self.pool)
         .await?
@@ -1206,7 +1186,7 @@ impl DatabaseManager {
                  assigned_time = NULL, 
                  worker = NULL, 
                  updated_time = NOW()
-             WHERE id = ANY($1)"
+             WHERE id = ANY($1)",
         )
         .bind(item_ids)
         .execute(&mut *tx)
@@ -1216,7 +1196,7 @@ impl DatabaseManager {
         // Log the bulk operation
         sqlx::query(
             "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
-             VALUES (NOW(), $1, 'bulk_reschedule', 'queue', $2)"
+             VALUES (NOW(), $1, 'bulk_reschedule', 'queue', $2)",
         )
         .bind(admin_user)
         .bind(serde_json::json!({
@@ -1239,18 +1219,16 @@ impl DatabaseManager {
     ) -> Result<i64, DatabaseError> {
         let mut tx = self.pool.begin().await?;
 
-        let affected_rows = sqlx::query(
-            "DELETE FROM queue WHERE id = ANY($1)"
-        )
-        .bind(item_ids)
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
+        let affected_rows = sqlx::query("DELETE FROM queue WHERE id = ANY($1)")
+            .bind(item_ids)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
 
         // Log the bulk operation
         sqlx::query(
             "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
-             VALUES (NOW(), $1, 'bulk_cancel', 'queue', $2)"
+             VALUES (NOW(), $1, 'bulk_cancel', 'queue', $2)",
         )
         .bind(admin_user)
         .bind(serde_json::json!({
@@ -1278,7 +1256,7 @@ impl DatabaseManager {
             "UPDATE queue 
              SET value = GREATEST(0, LEAST(100, value + $1)),
                  updated_time = NOW()
-             WHERE id = ANY($2)"
+             WHERE id = ANY($2)",
         )
         .bind(priority_adjustment)
         .bind(item_ids)
@@ -1289,7 +1267,7 @@ impl DatabaseManager {
         // Log the bulk operation
         sqlx::query(
             "INSERT INTO admin_audit_log (timestamp, admin_user, action, target, details)
-             VALUES (NOW(), $1, 'bulk_priority_adjust', 'queue', $2)"
+             VALUES (NOW(), $1, 'bulk_priority_adjust', 'queue', $2)",
         )
         .bind(admin_user)
         .bind(serde_json::json!({
@@ -1317,7 +1295,7 @@ impl DatabaseManager {
              FROM queue 
              WHERE worker IS NOT NULL AND status IN ('assigned', 'running')
              GROUP BY worker
-             ORDER BY assigned_tasks DESC"
+             ORDER BY assigned_tasks DESC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1335,17 +1313,16 @@ impl DatabaseManager {
         }
 
         // Get overall worker statistics
-        let total_workers: i64 = sqlx::query_scalar(
-            "SELECT COUNT(DISTINCT worker) FROM queue WHERE worker IS NOT NULL"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let total_workers: i64 =
+            sqlx::query_scalar("SELECT COUNT(DISTINCT worker) FROM queue WHERE worker IS NOT NULL")
+                .fetch_one(&self.pool)
+                .await?;
 
         let idle_workers: i64 = sqlx::query_scalar(
             "SELECT COUNT(DISTINCT w.name) 
              FROM workers w 
              LEFT JOIN queue q ON w.name = q.worker AND q.status IN ('assigned', 'running')
-             WHERE q.worker IS NULL"
+             WHERE q.worker IS NULL",
         )
         .fetch_one(&self.pool)
         .await

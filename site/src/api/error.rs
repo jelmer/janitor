@@ -47,16 +47,16 @@ impl ApiErrorType {
 pub enum ServiceError {
     #[error("Connection error: {0}")]
     Connection(#[from] reqwest::Error),
-    
+
     #[error("Timeout error: {service} service timeout")]
     Timeout { service: String },
-    
+
     #[error("Service returned error: {status} - {message}")]
     ServiceError { status: u16, message: String },
-    
+
     #[error("Invalid response format: {0}")]
     InvalidResponse(String),
-    
+
     #[error("Service unavailable: {service}")]
     Unavailable { service: String },
 }
@@ -76,19 +76,17 @@ impl ServiceError {
                 warn!("Service error: {} - {}", status, message);
                 match *status {
                     400..=499 => ApiError::bad_request(message.clone()),
-                    500..=599 => ApiError::new(
-                        "service_error".to_string(),
-                        StatusCode::BAD_GATEWAY,
-                    ).with_reason(message.clone()),
+                    500..=599 => {
+                        ApiError::new("service_error".to_string(), StatusCode::BAD_GATEWAY)
+                            .with_reason(message.clone())
+                    }
                     _ => ApiError::internal_error(message.clone()),
                 }
             }
             Self::InvalidResponse(msg) => {
                 error!("Invalid service response: {}", msg);
-                ApiError::new(
-                    "invalid_response".to_string(),
-                    StatusCode::BAD_GATEWAY,
-                ).with_reason(msg.clone())
+                ApiError::new("invalid_response".to_string(), StatusCode::BAD_GATEWAY)
+                    .with_reason(msg.clone())
             }
             Self::Unavailable { service } => {
                 warn!("Service unavailable: {}", service);
@@ -103,13 +101,13 @@ impl ServiceError {
 pub enum DatabaseError {
     #[error("Database query error: {0}")]
     Query(#[from] sqlx::Error),
-    
+
     #[error("Record not found: {resource}")]
     NotFound { resource: String },
-    
+
     #[error("Constraint violation: {0}")]
     Constraint(String),
-    
+
     #[error("Transaction error: {0}")]
     Transaction(String),
 }
@@ -119,17 +117,17 @@ impl DatabaseError {
         match self {
             Self::Query(e) => {
                 error!("Database query error: {}", e);
-                
+
                 // Check for specific PostgreSQL error codes
                 if let Some(db_err) = e.as_database_error() {
                     match db_err.code().as_ref().map(|s| s.as_ref()) {
-                        Some("23505") => { // unique_violation
-                            ApiError::new(
-                                "conflict".to_string(),
-                                StatusCode::CONFLICT,
-                            ).with_reason("Resource already exists".to_string())
+                        Some("23505") => {
+                            // unique_violation
+                            ApiError::new("conflict".to_string(), StatusCode::CONFLICT)
+                                .with_reason("Resource already exists".to_string())
                         }
-                        Some("23503") => { // foreign_key_violation
+                        Some("23503") => {
+                            // foreign_key_violation
                             ApiError::bad_request("Referenced resource does not exist".to_string())
                         }
                         _ => ApiError::internal_error("Database operation failed".to_string()),
@@ -138,12 +136,8 @@ impl DatabaseError {
                     ApiError::internal_error("Database operation failed".to_string())
                 }
             }
-            Self::NotFound { resource } => {
-                ApiError::not_found(resource.clone())
-            }
-            Self::Constraint(msg) => {
-                ApiError::bad_request(msg.clone())
-            }
+            Self::NotFound { resource } => ApiError::not_found(resource.clone()),
+            Self::Constraint(msg) => ApiError::bad_request(msg.clone()),
             Self::Transaction(msg) => {
                 error!("Database transaction error: {}", msg);
                 ApiError::internal_error("Transaction failed".to_string())
@@ -157,13 +151,13 @@ impl DatabaseError {
 pub enum ValidationError {
     #[error("Missing required field: {field}")]
     MissingField { field: String },
-    
+
     #[error("Invalid field value: {field} - {reason}")]
     InvalidField { field: String, reason: String },
-    
+
     #[error("Invalid format: {0}")]
     InvalidFormat(String),
-    
+
     #[error("Value out of range: {field} must be between {min} and {max}")]
     OutOfRange { field: String, min: i64, max: i64 },
 }
@@ -177,9 +171,7 @@ impl ValidationError {
             Self::InvalidField { field, reason } => {
                 ApiError::bad_request(format!("Invalid {}: {}", field, reason))
             }
-            Self::InvalidFormat(msg) => {
-                ApiError::bad_request(format!("Invalid format: {}", msg))
-            }
+            Self::InvalidFormat(msg) => ApiError::bad_request(format!("Invalid format: {}", msg)),
             Self::OutOfRange { field, min, max } => {
                 ApiError::bad_request(format!("{} must be between {} and {}", field, min, max))
             }
@@ -192,22 +184,22 @@ impl ValidationError {
 pub enum AppError {
     #[error("Service error: {0}")]
     Service(#[from] ServiceError),
-    
+
     #[error("Database error: {0}")]
     Database(#[from] DatabaseError),
-    
+
     #[error("Validation error: {0}")]
     Validation(#[from] ValidationError),
-    
+
     #[error("Authentication error: {0}")]
     Auth(#[from] crate::auth::AuthError),
-    
+
     #[error("Configuration error: {0}")]
     Config(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -246,14 +238,15 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let api_error = self.to_api_error();
-        let status = StatusCode::from_u16(api_error.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
+        let status =
+            StatusCode::from_u16(api_error.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
         let response = ApiResponse::<()>::error_with_details(
             api_error.error.clone(),
             api_error.reason.clone(),
             api_error.details.unwrap_or_else(|| serde_json::json!({})),
         );
-        
+
         (status, Json(response)).into_response()
     }
 }
@@ -262,13 +255,13 @@ impl IntoResponse for AppError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
+
         let response = ApiResponse::<()>::error_with_details(
             self.error.clone(),
             self.reason.clone(),
             self.details.unwrap_or_else(|| serde_json::json!({})),
         );
-        
+
         (status, Json(response)).into_response()
     }
 }
@@ -280,11 +273,12 @@ pub fn handle_service_error(service_name: &str, error: reqwest::Error) -> ApiErr
     } else if error.is_connect() {
         ApiError::service_unavailable(service_name.to_string())
     } else {
-        error!("Service communication error with {}: {}", service_name, error);
-        ApiError::new(
-            "service_error".to_string(),
-            StatusCode::BAD_GATEWAY,
-        ).with_reason(format!("Communication error with {}", service_name))
+        error!(
+            "Service communication error with {}: {}",
+            service_name, error
+        );
+        ApiError::new("service_error".to_string(), StatusCode::BAD_GATEWAY)
+            .with_reason(format!("Communication error with {}", service_name))
     }
 }
 
@@ -309,9 +303,15 @@ mod tests {
 
     #[test]
     fn test_api_error_type_status_codes() {
-        assert_eq!(ApiErrorType::BadRequest.status_code(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            ApiErrorType::BadRequest.status_code(),
+            StatusCode::BAD_REQUEST
+        );
         assert_eq!(ApiErrorType::NotFound.status_code(), StatusCode::NOT_FOUND);
-        assert_eq!(ApiErrorType::InternalError.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            ApiErrorType::InternalError.status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 
     #[test]
@@ -319,10 +319,13 @@ mod tests {
         let validation_err = ValidationError::MissingField {
             field: "name".to_string(),
         };
-        
+
         let api_err = validation_err.to_api_error();
         assert_eq!(api_err.error, "bad_request");
-        assert!(api_err.reason.unwrap().contains("Missing required field: name"));
+        assert!(api_err
+            .reason
+            .unwrap()
+            .contains("Missing required field: name"));
     }
 
     #[test]
@@ -330,7 +333,7 @@ mod tests {
         let service_err = ServiceError::Unavailable {
             service: "runner".to_string(),
         };
-        
+
         let api_err = service_err.to_api_error();
         assert_eq!(api_err.error, "service_unavailable");
         assert_eq!(api_err.status, 503);

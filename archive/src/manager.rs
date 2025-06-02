@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::config::{ArchiveConfig, AptRepositoryConfig};
+use crate::config::{AptRepositoryConfig, ArchiveConfig};
 use crate::database::BuildManager;
 use crate::error::{ArchiveError, ArchiveResult};
 use crate::repository::RepositoryGenerator;
@@ -195,16 +195,22 @@ impl GeneratorManager {
             // For now, assume all repositories are part of a default campaign
             // In a real implementation, this would come from repository configuration
             let campaign_name = repo_config.suite.clone();
-            
+
             campaign_mapping
                 .entry(campaign_name)
                 .or_insert_with(Vec::new)
                 .push(repo_config.clone());
 
-            debug!("Mapped repository '{}' to campaign '{}'", repo_name, repo_config.suite);
+            debug!(
+                "Mapped repository '{}' to campaign '{}'",
+                repo_name, repo_config.suite
+            );
         }
 
-        info!("Built campaign mapping for {} campaigns", campaign_mapping.len());
+        info!(
+            "Built campaign mapping for {} campaigns",
+            campaign_mapping.len()
+        );
 
         Ok(Self {
             config,
@@ -220,7 +226,10 @@ impl GeneratorManager {
 
     /// Trigger repository generation for a specific campaign.
     pub async fn trigger_campaign(&self, campaign_name: &str) -> ArchiveResult<Vec<Uuid>> {
-        info!("Triggering repository generation for campaign: {}", campaign_name);
+        info!(
+            "Triggering repository generation for campaign: {}",
+            campaign_name
+        );
 
         let campaign_mapping = self.campaign_to_repository.read().await;
         let repositories = match campaign_mapping.get(campaign_name) {
@@ -234,10 +243,16 @@ impl GeneratorManager {
         let mut job_ids = Vec::new();
 
         for repo_config in repositories {
-            match self.trigger_repository(&repo_config, Some(campaign_name.to_string())).await {
+            match self
+                .trigger_repository(&repo_config, Some(campaign_name.to_string()))
+                .await
+            {
                 Ok(job_id) => {
                     job_ids.push(job_id);
-                    info!("Triggered job {} for repository {}", job_id, repo_config.name);
+                    info!(
+                        "Triggered job {} for repository {}",
+                        job_id, repo_config.name
+                    );
                 }
                 Err(e) => {
                     error!("Failed to trigger repository {}: {}", repo_config.name, e);
@@ -245,7 +260,11 @@ impl GeneratorManager {
             }
         }
 
-        info!("Triggered {} jobs for campaign {}", job_ids.len(), campaign_name);
+        info!(
+            "Triggered {} jobs for campaign {}",
+            job_ids.len(),
+            campaign_name
+        );
         Ok(job_ids)
     }
 
@@ -271,7 +290,10 @@ impl GeneratorManager {
         // Check concurrent job limit
         let active_count = {
             let active_jobs = self.active_jobs.read().await;
-            active_jobs.values().filter(|job| !job.is_finished()).count()
+            active_jobs
+                .values()
+                .filter(|job| !job.is_finished())
+                .count()
         };
 
         if active_count >= self.manager_config.max_concurrent_jobs {
@@ -285,7 +307,10 @@ impl GeneratorManager {
         let mut job_info = JobInfo::new(repo_name.clone(), campaign);
         let job_id = job_info.id;
 
-        info!("Starting repository generation job {} for {}", job_id, repo_name);
+        info!(
+            "Starting repository generation job {} for {}",
+            job_id, repo_name
+        );
 
         // Clone necessary data for the task
         let generator = Arc::clone(&self.generator);
@@ -441,7 +466,8 @@ impl GeneratorManager {
         let cleanup_interval = self.manager_config.cleanup_interval_seconds;
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(cleanup_interval));
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_secs(cleanup_interval));
 
             loop {
                 interval.tick().await;
@@ -493,10 +519,19 @@ impl GeneratorManager {
         let history = self.job_history.lock().await;
 
         let active_count = active_jobs.len();
-        let running_count = active_jobs.values().filter(|job| !job.is_finished()).count();
+        let running_count = active_jobs
+            .values()
+            .filter(|job| !job.is_finished())
+            .count();
         let total_historical = history.len();
-        let completed_count = history.iter().filter(|job| job.status == JobStatus::Completed).count();
-        let failed_count = history.iter().filter(|job| job.status == JobStatus::Failed).count();
+        let completed_count = history
+            .iter()
+            .filter(|job| job.status == JobStatus::Completed)
+            .count();
+        let failed_count = history
+            .iter()
+            .filter(|job| job.status == JobStatus::Failed)
+            .count();
 
         ManagerStatistics {
             active_jobs: active_count,
@@ -534,7 +569,7 @@ mod tests {
     #[test]
     fn test_job_info_creation() {
         let job = JobInfo::new("test-repo".to_string(), Some("test-campaign".to_string()));
-        
+
         assert_eq!(job.repository_name, "test-repo");
         assert_eq!(job.campaign, Some("test-campaign".to_string()));
         assert_eq!(job.status, JobStatus::Pending);
@@ -544,12 +579,12 @@ mod tests {
     #[test]
     fn test_job_info_lifecycle() {
         let mut job = JobInfo::new("test-repo".to_string(), None);
-        
+
         // Start the job
         job.start();
         assert_eq!(job.status, JobStatus::Running);
         assert!(!job.is_finished());
-        
+
         // Complete the job
         job.complete();
         assert_eq!(job.status, JobStatus::Completed);
@@ -560,10 +595,10 @@ mod tests {
     #[test]
     fn test_job_info_failure() {
         let mut job = JobInfo::new("test-repo".to_string(), None);
-        
+
         job.start();
         job.fail("Test error");
-        
+
         assert_eq!(job.status, JobStatus::Failed);
         assert!(job.is_finished());
         assert_eq!(job.error_message, Some("Test error".to_string()));
@@ -573,7 +608,7 @@ mod tests {
     #[test]
     fn test_generator_manager_config_default() {
         let config = GeneratorManagerConfig::default();
-        
+
         assert_eq!(config.max_concurrent_jobs, 4);
         assert_eq!(config.job_timeout_seconds, 3600);
         assert!(config.enable_cleanup);
@@ -584,11 +619,11 @@ mod tests {
     async fn test_generator_manager_creation() {
         // This test would require setting up all dependencies
         // For now, just test that the config and mapping logic work
-        
+
         // Create a mock configuration
         let temp_dir = TempDir::new().unwrap();
         let mut repositories = HashMap::new();
-        
+
         let repo_config = AptRepositoryConfig::new(
             "test-repo".to_string(),
             "test-suite".to_string(),
@@ -596,7 +631,7 @@ mod tests {
             temp_dir.path().to_path_buf(),
         );
         repositories.insert("test-repo".to_string(), repo_config);
-        
+
         let archive_config = ArchiveConfig {
             repositories,
             gpg: None,
@@ -605,7 +640,7 @@ mod tests {
             cache: crate::config::CacheConfig::default(),
             server: crate::config::ServerConfig::default(),
         };
-        
+
         // Test would continue with full setup when dependencies are available
         assert!(!archive_config.repositories.is_empty());
     }
@@ -620,9 +655,12 @@ mod tests {
             failed_jobs: 2,
             max_concurrent_jobs: 4,
         };
-        
+
         assert_eq!(stats.active_jobs, 2);
         assert_eq!(stats.running_jobs, 1);
-        assert_eq!(stats.completed_jobs + stats.failed_jobs, stats.total_historical_jobs);
+        assert_eq!(
+            stats.completed_jobs + stats.failed_jobs,
+            stats.total_historical_jobs
+        );
     }
 }

@@ -7,12 +7,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::StreamExt;
 use redis::{aio::ConnectionManager, AsyncCommands, Client, RedisError};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use futures::StreamExt;
 use tracing::{debug, error, info, warn};
 
 use crate::error::{ArchiveError, ArchiveResult};
@@ -159,7 +159,10 @@ impl RedisSubscriber {
     }
 
     /// Start listening for archive events.
-    pub async fn start_listening(&mut self, channels: Vec<String>) -> ArchiveResult<JoinHandle<()>> {
+    pub async fn start_listening(
+        &mut self,
+        channels: Vec<String>,
+    ) -> ArchiveResult<JoinHandle<()>> {
         info!("Starting Redis subscriber for channels: {:?}", channels);
 
         let client = self.client.clone();
@@ -229,10 +232,9 @@ impl RedisSubscriber {
 
         // Subscribe to channels
         for channel in channels {
-            pubsub
-                .subscribe(channel)
-                .await
-                .map_err(|e| ArchiveError::Redis(format!("Failed to subscribe to {}: {}", channel, e)))?;
+            pubsub.subscribe(channel).await.map_err(|e| {
+                ArchiveError::Redis(format!("Failed to subscribe to {}: {}", channel, e))
+            })?;
             info!("Subscribed to Redis channel: {}", channel);
         }
 
@@ -301,8 +303,11 @@ impl RedisSubscriber {
 
         match event {
             ArchiveEvent::BuildCompleted { campaign, .. } => {
-                info!("Triggering repository generation for build completion in campaign: {}", campaign);
-                
+                info!(
+                    "Triggering repository generation for build completion in campaign: {}",
+                    campaign
+                );
+
                 match generator_manager.trigger_campaign(&campaign).await {
                     Ok(job_ids) => {
                         info!("Triggered {} jobs for campaign {}", job_ids.len(), campaign);
@@ -312,7 +317,11 @@ impl RedisSubscriber {
                     }
                 }
             }
-            ArchiveEvent::CampaignFinished { campaign, successful_runs, total_runs } => {
+            ArchiveEvent::CampaignFinished {
+                campaign,
+                successful_runs,
+                total_runs,
+            } => {
                 info!(
                     "Campaign {} finished: {}/{} successful runs",
                     campaign, successful_runs, total_runs
@@ -321,7 +330,11 @@ impl RedisSubscriber {
                 if successful_runs > 0 {
                     match generator_manager.trigger_campaign(&campaign).await {
                         Ok(job_ids) => {
-                            info!("Triggered {} jobs for finished campaign {}", job_ids.len(), campaign);
+                            info!(
+                                "Triggered {} jobs for finished campaign {}",
+                                job_ids.len(),
+                                campaign
+                            );
                         }
                         Err(e) => {
                             error!("Failed to trigger finished campaign {}: {}", campaign, e);
@@ -329,7 +342,11 @@ impl RedisSubscriber {
                     }
                 }
             }
-            ArchiveEvent::ManualRegeneration { repository, campaign, requested_by } => {
+            ArchiveEvent::ManualRegeneration {
+                repository,
+                campaign,
+                requested_by,
+            } => {
                 info!(
                     "Manual regeneration requested for repository {} (campaign: {:?}, by: {:?})",
                     repository, campaign, requested_by
@@ -346,8 +363,14 @@ impl RedisSubscriber {
                     }
                 }
             }
-            ArchiveEvent::PeriodicRepublish { campaign, interval_type } => {
-                info!("Periodic republish triggered for campaign {} ({})", campaign, interval_type);
+            ArchiveEvent::PeriodicRepublish {
+                campaign,
+                interval_type,
+            } => {
+                info!(
+                    "Periodic republish triggered for campaign {} ({})",
+                    campaign, interval_type
+                );
 
                 match generator_manager.trigger_campaign(&campaign).await {
                     Ok(job_ids) => {
@@ -380,9 +403,9 @@ impl RedisPublisher {
         let client = Client::open(config.url.as_str())
             .map_err(|e| ArchiveError::Redis(format!("Failed to create Redis client: {}", e)))?;
 
-        let connection_manager = ConnectionManager::new(client)
-            .await
-            .map_err(|e| ArchiveError::Redis(format!("Failed to create connection manager: {}", e)))?;
+        let connection_manager = ConnectionManager::new(client).await.map_err(|e| {
+            ArchiveError::Redis(format!("Failed to create connection manager: {}", e))
+        })?;
 
         Ok(Self {
             connection_manager,
@@ -392,7 +415,8 @@ impl RedisPublisher {
 
     /// Publish an archive event.
     pub async fn publish_event(&mut self, event: &ArchiveEvent) -> ArchiveResult<()> {
-        self.publish_event_to_channel(&self.default_channel.clone(), event).await
+        self.publish_event_to_channel(&self.default_channel.clone(), event)
+            .await
     }
 
     /// Publish an archive event to a specific channel.
@@ -401,8 +425,9 @@ impl RedisPublisher {
         channel: &str,
         event: &ArchiveEvent,
     ) -> ArchiveResult<()> {
-        let payload = serde_json::to_string(event)
-            .map_err(|e| ArchiveError::Serialization(format!("Failed to serialize event: {}", e)))?;
+        let payload = serde_json::to_string(event).map_err(|e| {
+            ArchiveError::Serialization(format!("Failed to serialize event: {}", e))
+        })?;
 
         debug!("Publishing event to {}: {}", channel, payload);
 
@@ -498,7 +523,9 @@ impl RedisManager {
 
     /// Initialize subscriber.
     pub async fn init_subscriber(&mut self) -> ArchiveResult<()> {
-        self.subscriber = Some(RedisSubscriber::new(self.config.clone(), Arc::clone(&self.generator_manager)).await?);
+        self.subscriber = Some(
+            RedisSubscriber::new(self.config.clone(), Arc::clone(&self.generator_manager)).await?,
+        );
         info!("Redis subscriber initialized");
         Ok(())
     }
@@ -514,10 +541,15 @@ impl RedisManager {
     }
 
     /// Start listening for events.
-    pub async fn start_listening(&mut self, channels: Vec<String>) -> ArchiveResult<JoinHandle<()>> {
+    pub async fn start_listening(
+        &mut self,
+        channels: Vec<String>,
+    ) -> ArchiveResult<JoinHandle<()>> {
         match &mut self.subscriber {
             Some(subscriber) => subscriber.start_listening(channels).await,
-            None => Err(ArchiveError::Configuration("Subscriber not initialized".to_string())),
+            None => Err(ArchiveError::Configuration(
+                "Subscriber not initialized".to_string(),
+            )),
         }
     }
 
@@ -552,7 +584,7 @@ mod tests {
     #[test]
     fn test_redis_config_default() {
         let config = RedisConfig::default();
-        
+
         assert_eq!(config.url, "redis://localhost:6379");
         assert_eq!(config.connection_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
@@ -573,7 +605,12 @@ mod tests {
         let deserialized: ArchiveEvent = serde_json::from_str(&serialized).unwrap();
 
         match deserialized {
-            ArchiveEvent::BuildCompleted { run_id, codebase, campaign, artifacts } => {
+            ArchiveEvent::BuildCompleted {
+                run_id,
+                codebase,
+                campaign,
+                artifacts,
+            } => {
                 assert_eq!(run_id, "test-run-123");
                 assert_eq!(codebase, "test-codebase");
                 assert_eq!(campaign, "test-campaign");
@@ -631,10 +668,10 @@ mod tests {
         // This test would require a Redis instance running
         // For now, just test configuration
         let config = RedisConfig::default();
-        
+
         // Would need to set up mock GeneratorManager for full test
         // let manager = RedisManager::new(config, generator_manager).await;
-        
+
         assert!(!config.url.is_empty());
         assert!(config.retry_attempts > 0);
     }

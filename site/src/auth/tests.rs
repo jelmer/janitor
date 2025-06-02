@@ -1,11 +1,11 @@
-use std::collections::HashSet;
 use crate::auth::types::{SessionInfo, User, UserRole};
+use std::collections::HashSet;
 
 /// Mock user for testing
 fn create_test_user() -> User {
     let mut groups = std::collections::HashSet::new();
     groups.insert("users".to_string());
-    
+
     User {
         email: "test@example.com".to_string(),
         name: Some("Test User".to_string()),
@@ -41,7 +41,7 @@ mod user_role_tests {
         assert_eq!(UserRole::Admin, UserRole::Admin);
         assert_eq!(UserRole::QaReviewer, UserRole::QaReviewer);
         assert_eq!(UserRole::User, UserRole::User);
-        
+
         assert_ne!(UserRole::Admin, UserRole::User);
         assert_ne!(UserRole::QaReviewer, UserRole::Admin);
     }
@@ -51,7 +51,7 @@ mod user_role_tests {
         let role = UserRole::Admin;
         let serialized = serde_json::to_string(&role).unwrap();
         let deserialized: UserRole = serde_json::from_str(&serialized).unwrap();
-        
+
         assert_eq!(role, deserialized);
     }
 }

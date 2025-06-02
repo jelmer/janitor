@@ -118,7 +118,7 @@ pub async fn codebase_detail(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx.as_ref() {
         context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -150,7 +150,7 @@ pub async fn codebase_detail(
 
     // Content negotiation
     let content_type = negotiate_content_type(&headers, "codebase");
-    
+
     match content_type {
         ContentType::Json => {
             // Return JSON representation
@@ -173,7 +173,7 @@ pub async fn codebase_detail(
                     }
                 }
             };
-            
+
             Html(html).into_response()
         }
     }
@@ -188,7 +188,7 @@ pub async fn run_detail(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx.as_ref() {
         context.insert("user", user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -221,7 +221,7 @@ pub async fn run_detail(
 
     // Content negotiation
     let content_type = negotiate_content_type(&headers, "run");
-    
+
     match content_type {
         ContentType::Json => {
             // Return JSON representation
@@ -244,7 +244,7 @@ pub async fn run_detail(
                     }
                 }
             };
-            
+
             Html(html).into_response()
         }
     }
@@ -259,7 +259,7 @@ pub async fn view_log(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -281,14 +281,14 @@ pub async fn view_log(
     match get_log_content(&state, &run_id, &log_name, &query).await {
         Ok(log_info) => {
             context.insert("log_info", &log_info);
-            
+
             // If log exists, fetch actual content
             if log_info.exists {
                 match download_log_file(&state, &run_id, &log_name).await {
                     Ok(content) => {
                         let log_text = String::from_utf8_lossy(&content);
                         context.insert("log_content", &log_text);
-                        
+
                         // Add line filtering if requested
                         if let Some(start) = query.offset {
                             context.insert("line_start", &start);
@@ -299,18 +299,19 @@ pub async fn view_log(
                     }
                     Err(e) => {
                         tracing::error!("Failed to download log content: {}", e);
-                        context.insert("error_message", &format!("Failed to load log content: {}", e));
+                        context.insert(
+                            "error_message",
+                            &format!("Failed to load log content: {}", e),
+                        );
                     }
                 }
             }
-            
+
             // Content negotiation for raw vs formatted
             let content_type = negotiate_content_type(&headers, "log");
-            
+
             match content_type {
-                ContentType::Json => {
-                    Json(serde_json::to_value(&log_info).unwrap()).into_response()
-                }
+                ContentType::Json => Json(serde_json::to_value(&log_info).unwrap()).into_response(),
                 _ => {
                     // HTML view with syntax highlighting
                     match state.templates.render("log-viewer.html", &context) {
@@ -328,7 +329,7 @@ pub async fn view_log(
             context.insert("error_message", &format!("Log not found: {}", e));
             match state.templates.render("log-viewer.html", &context) {
                 Ok(html) => Html(html).into_response(),
-                Err(_) => StatusCode::NOT_FOUND.into_response()
+                Err(_) => StatusCode::NOT_FOUND.into_response(),
             }
         }
     }
@@ -384,7 +385,7 @@ pub async fn view_diff(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -405,22 +406,20 @@ pub async fn view_diff(
     match generate_diff_content(&state, &run_id, &query).await {
         Ok(diff_info) => {
             context.insert("diff_info", &diff_info);
-            
+
             let content_type = negotiate_content_type(&headers, "diff");
-            
+
             match content_type {
                 ContentType::Json => {
                     Json(serde_json::to_value(&diff_info).unwrap()).into_response()
                 }
-                _ => {
-                    match state.templates.render("diff-viewer.html", &context) {
-                        Ok(html) => Html(html).into_response(),
-                        Err(e) => {
-                            tracing::error!("Template rendering error: {}", e);
-                            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                        }
+                _ => match state.templates.render("diff-viewer.html", &context) {
+                    Ok(html) => Html(html).into_response(),
+                    Err(e) => {
+                        tracing::error!("Template rendering error: {}", e);
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
                     }
-                }
+                },
             }
         }
         Err(e) => {
@@ -439,7 +438,7 @@ pub async fn view_debdiff(
     headers: header::HeaderMap,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -460,22 +459,20 @@ pub async fn view_debdiff(
     match generate_debdiff_content(&state, &run_id, &query).await {
         Ok(diff_info) => {
             context.insert("debdiff_info", &diff_info);
-            
+
             let content_type = negotiate_content_type(&headers, "debdiff");
-            
+
             match content_type {
                 ContentType::Json => {
                     Json(serde_json::to_value(&diff_info).unwrap()).into_response()
                 }
-                _ => {
-                    match state.templates.render("debdiff-viewer.html", &context) {
-                        Ok(html) => Html(html).into_response(),
-                        Err(e) => {
-                            tracing::error!("Template rendering error: {}", e);
-                            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                        }
+                _ => match state.templates.render("debdiff-viewer.html", &context) {
+                    Ok(html) => Html(html).into_response(),
+                    Err(e) => {
+                        tracing::error!("Template rendering error: {}", e);
+                        StatusCode::INTERNAL_SERVER_ERROR.into_response()
                     }
-                }
+                },
             }
         }
         Err(e) => {
@@ -494,7 +491,7 @@ pub async fn ready_list(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -536,7 +533,7 @@ pub async fn done_list(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -575,7 +572,7 @@ pub async fn done_list(
             }
         }
     };
-    
+
     Html(html).into_response()
 }
 
@@ -586,7 +583,7 @@ pub async fn merge_proposals(
     OptionalUser(user_ctx): OptionalUser,
 ) -> Response {
     let mut context = create_base_context();
-    
+
     if let Some(user_ctx) = user_ctx {
         context.insert("user", &user_ctx.user());
         context.insert("is_admin", &user_ctx.is_admin());
@@ -603,10 +600,22 @@ pub async fn merge_proposals(
     match fetch_merge_proposals(&state, &suite).await {
         Ok(proposals) => {
             context.insert("open_proposals", &proposals.get("open").unwrap_or(&vec![]));
-            context.insert("merged_proposals", &proposals.get("merged").unwrap_or(&vec![]));
-            context.insert("closed_proposals", &proposals.get("closed").unwrap_or(&vec![]));
-            context.insert("abandoned_proposals", &proposals.get("abandoned").unwrap_or(&vec![]));
-            context.insert("rejected_proposals", &proposals.get("rejected").unwrap_or(&vec![]));
+            context.insert(
+                "merged_proposals",
+                &proposals.get("merged").unwrap_or(&vec![]),
+            );
+            context.insert(
+                "closed_proposals",
+                &proposals.get("closed").unwrap_or(&vec![]),
+            );
+            context.insert(
+                "abandoned_proposals",
+                &proposals.get("abandoned").unwrap_or(&vec![]),
+            );
+            context.insert(
+                "rejected_proposals",
+                &proposals.get("rejected").unwrap_or(&vec![]),
+            );
         }
         Err(e) => {
             tracing::error!("Failed to fetch merge proposals: {}", e);
@@ -644,24 +653,37 @@ async fn generate_codebase_context(
     // Fetch VCS info
     if let Ok(vcs_info) = state.database.get_vcs_info(codebase).await {
         context.insert("vcs_url".to_string(), serde_json::to_value(&vcs_info.url)?);
-        context.insert("vcs_type".to_string(), serde_json::to_value(&vcs_info.vcs_type)?);
-        context.insert("branch_url".to_string(), serde_json::to_value(&vcs_info.branch_url)?);
+        context.insert(
+            "vcs_type".to_string(),
+            serde_json::to_value(&vcs_info.vcs_type)?,
+        );
+        context.insert(
+            "branch_url".to_string(),
+            serde_json::to_value(&vcs_info.branch_url)?,
+        );
     }
 
     // Fetch last unabsorbed run
-    match state.database.get_last_unabsorbed_run(campaign, codebase).await {
+    match state
+        .database
+        .get_last_unabsorbed_run(campaign, codebase)
+        .await
+    {
         Ok(run) => {
             context.insert("run".to_string(), serde_json::to_value(&run)?);
             context.insert("run_id".to_string(), serde_json::to_value(&run.id)?);
-            context.insert("result_code".to_string(), serde_json::to_value(&run.result_code)?);
-            
+            context.insert(
+                "result_code".to_string(),
+                serde_json::to_value(&run.result_code)?,
+            );
+
             // Check if we should show diff
             if query.show_diff.unwrap_or(false) && run.result_code == Some("success".to_string()) {
                 if let Ok(diff) = fetch_diff(&state, &run.id).await {
                     context.insert("diff".to_string(), serde_json::to_value(&diff)?);
                 }
             }
-            
+
             // Check if we should show debdiff
             if query.show_debdiff.unwrap_or(false) {
                 if let Ok(debdiff) = fetch_debdiff(&state, &run.id).await {
@@ -676,37 +698,67 @@ async fn generate_codebase_context(
     }
 
     // Fetch previous runs
-    if let Ok(previous_runs) = state.database.get_previous_runs(codebase, campaign, Some(10)).await {
-        context.insert("previous_runs".to_string(), serde_json::to_value(&previous_runs)?);
+    if let Ok(previous_runs) = state
+        .database
+        .get_previous_runs(codebase, campaign, Some(10))
+        .await
+    {
+        context.insert(
+            "previous_runs".to_string(),
+            serde_json::to_value(&previous_runs)?,
+        );
     }
 
     // Fetch merge proposals
-    if let Ok(merge_proposals) = state.database.get_merge_proposals_for_codebase(campaign, codebase).await {
-        context.insert("merge_proposals".to_string(), serde_json::to_value(&merge_proposals)?);
+    if let Ok(merge_proposals) = state
+        .database
+        .get_merge_proposals_for_codebase(campaign, codebase)
+        .await
+    {
+        context.insert(
+            "merge_proposals".to_string(),
+            serde_json::to_value(&merge_proposals)?,
+        );
     }
 
     // Check queue position
     if let Ok(queue_position) = state.database.get_queue_position(campaign, codebase).await {
-        context.insert("queue_position".to_string(), serde_json::to_value(&queue_position)?);
-        
+        context.insert(
+            "queue_position".to_string(),
+            serde_json::to_value(&queue_position)?,
+        );
+
         // Estimate wait time
         if queue_position > 0 {
             if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
                 let wait_seconds = queue_position as i64 * avg_time;
                 let wait_duration = Duration::seconds(wait_seconds);
-                context.insert("queue_wait_time".to_string(), serde_json::to_value(&wait_duration)?);
+                context.insert(
+                    "queue_wait_time".to_string(),
+                    serde_json::to_value(&wait_duration)?,
+                );
             }
         }
     }
 
     // Add publish policy
     if let Ok(publish_policy) = state.database.get_publish_policy(campaign, codebase).await {
-        context.insert("publish_policy".to_string(), serde_json::to_value(&publish_policy)?);
+        context.insert(
+            "publish_policy".to_string(),
+            serde_json::to_value(&publish_policy)?,
+        );
     }
 
     // Add changelog policy
-    if let Ok(changelog_policy) = state.database.get_changelog_policy(campaign, codebase).await {
-        context.insert("changelog_policy".to_string(), serde_json::to_value(&changelog_policy)?);
+    if let Ok(changelog_policy) = state
+        .database
+        .get_changelog_policy(campaign, codebase)
+        .await
+    {
+        context.insert(
+            "changelog_policy".to_string(),
+            serde_json::to_value(&changelog_policy)?,
+        );
     }
 
     Ok(context)
@@ -725,12 +777,12 @@ async fn generate_run_file(
 
     // This is the most complex function - aggregates all data for a run detail page
     // and matches the Python generate_run_file implementation exactly
-    
+
     // Fetch the run
     let run = state.database.get_run(run_id).await?;
     context.insert("run".to_string(), serde_json::to_value(&run)?);
     context.insert("run_id".to_string(), serde_json::to_value(run_id)?);
-    
+
     // Verify run belongs to this campaign/codebase
     if run.suite != campaign || run.codebase != codebase {
         return Err(anyhow::anyhow!("Run does not match campaign/codebase"));
@@ -739,11 +791,17 @@ async fn generate_run_file(
     // Add basic run metadata
     context.insert("suite".to_string(), serde_json::to_value(&run.suite)?);
     context.insert("codebase".to_string(), serde_json::to_value(&run.codebase)?);
-    context.insert("resume_from".to_string(), serde_json::to_value(&run.failure_stage)?);
-    
+    context.insert(
+        "resume_from".to_string(),
+        serde_json::to_value(&run.failure_stage)?,
+    );
+
     // Add user context
     if let Some(user_ctx) = user_ctx {
-        context.insert("is_admin".to_string(), serde_json::to_value(user_ctx.is_admin())?);
+        context.insert(
+            "is_admin".to_string(),
+            serde_json::to_value(user_ctx.is_admin())?,
+        );
     } else {
         context.insert("is_admin".to_string(), serde_json::to_value(false)?);
     }
@@ -755,26 +813,47 @@ async fn generate_run_file(
         } else {
             0.0
         };
-        context.insert("success_probability".to_string(), serde_json::to_value(&success_probability)?);
-        context.insert("total_previous_runs".to_string(), serde_json::to_value(&stats.total)?);
+        context.insert(
+            "success_probability".to_string(),
+            serde_json::to_value(&success_probability)?,
+        );
+        context.insert(
+            "total_previous_runs".to_string(),
+            serde_json::to_value(&stats.total)?,
+        );
     }
 
     // Analyze logs and determine primary log (matches Python logic)
     let primary_log = determine_primary_log(&run.result_code, &run.failure_stage);
-    context.insert("primary_log".to_string(), serde_json::to_value(&primary_log)?);
+    context.insert(
+        "primary_log".to_string(),
+        serde_json::to_value(&primary_log)?,
+    );
 
     // Add log information for each log type
-    let log_names = [BUILD_LOG_FILENAME, DIST_LOG_FILENAME, WORKER_LOG_FILENAME, CODEMOD_LOG_FILENAME];
+    let log_names = [
+        BUILD_LOG_FILENAME,
+        DIST_LOG_FILENAME,
+        WORKER_LOG_FILENAME,
+        CODEMOD_LOG_FILENAME,
+    ];
     for &log_name in &log_names {
-        if let Ok(log_info) = get_log_content(state, run_id, log_name, &LogQuery { 
-            offset: None, 
-            limit: None, 
-            filter: None 
-        }).await {
+        if let Ok(log_info) = get_log_content(
+            state,
+            run_id,
+            log_name,
+            &LogQuery {
+                offset: None,
+                limit: None,
+                filter: None,
+            },
+        )
+        .await
+        {
             if log_info.exists {
                 let key = format!("{}_log_name", log_name.replace(".log", ""));
                 context.insert(key, serde_json::to_value(log_name)?);
-                
+
                 // Add failure analysis for primary logs
                 if log_name == BUILD_LOG_FILENAME || log_name == DIST_LOG_FILENAME {
                     if let Some(line_count) = log_info.line_count {
@@ -782,11 +861,13 @@ async fn generate_run_file(
                         context.insert(key_count, serde_json::to_value(line_count)?);
                     }
                     if let Some(include_lines) = log_info.include_lines {
-                        let key_include = format!("{}_log_include_lines", log_name.replace(".log", ""));
+                        let key_include =
+                            format!("{}_log_include_lines", log_name.replace(".log", ""));
                         context.insert(key_include, serde_json::to_value(include_lines)?);
                     }
                     if let Some(ref highlight_lines) = log_info.highlight_lines {
-                        let key_highlight = format!("{}_log_highlight_lines", log_name.replace(".log", ""));
+                        let key_highlight =
+                            format!("{}_log_highlight_lines", log_name.replace(".log", ""));
                         context.insert(key_highlight, serde_json::to_value(highlight_lines)?);
                     }
                 }
@@ -795,8 +876,15 @@ async fn generate_run_file(
     }
 
     // Add unchanged run for comparison (matches Python logic)
-    if let Ok(unchanged_run) = state.database.get_unchanged_run(campaign, codebase, Some(&run.start_time)).await {
-        context.insert("unchanged_run".to_string(), serde_json::to_value(&unchanged_run)?);
+    if let Ok(unchanged_run) = state
+        .database
+        .get_unchanged_run(campaign, codebase, Some(&run.start_time))
+        .await
+    {
+        context.insert(
+            "unchanged_run".to_string(),
+            serde_json::to_value(&unchanged_run)?,
+        );
     }
 
     // VCS diff and debdiff generation (matches Python show_diff and show_debdiff functions)
@@ -805,7 +893,7 @@ async fn generate_run_file(
             context.insert("diff".to_string(), serde_json::to_value(&diff)?);
         }
     }
-    
+
     if query.show_debdiff.unwrap_or(true) {
         if let Ok(debdiff) = fetch_debdiff(state, run_id).await {
             context.insert("debdiff".to_string(), serde_json::to_value(&debdiff)?);
@@ -815,7 +903,10 @@ async fn generate_run_file(
     // Publish history (matches Python get_publish_history)
     if let Some(revision) = &run.main_branch_revision {
         if let Ok(publish_history) = get_publish_history(state, revision).await {
-            context.insert("publish_history".to_string(), serde_json::to_value(&publish_history)?);
+            context.insert(
+                "publish_history".to_string(),
+                serde_json::to_value(&publish_history)?,
+            );
         }
     }
 
@@ -826,23 +917,35 @@ async fn generate_run_file(
 
     // Queue position and wait time
     if let Ok(queue_position) = state.database.get_queue_position(campaign, codebase).await {
-        context.insert("queue_position".to_string(), serde_json::to_value(&queue_position)?);
-        
+        context.insert(
+            "queue_position".to_string(),
+            serde_json::to_value(&queue_position)?,
+        );
+
         if queue_position > 0 {
             if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
                 let wait_seconds = queue_position as i64 * avg_time;
-                context.insert("queue_wait_time".to_string(), serde_json::to_value(&wait_seconds)?);
+                context.insert(
+                    "queue_wait_time".to_string(),
+                    serde_json::to_value(&wait_seconds)?,
+                );
             }
         }
     }
 
     // Binary packages and lintian results
     if let Ok(binary_packages) = state.database.get_binary_packages(run_id).await {
-        context.insert("binary_packages".to_string(), serde_json::to_value(&binary_packages)?);
+        context.insert(
+            "binary_packages".to_string(),
+            serde_json::to_value(&binary_packages)?,
+        );
     }
 
     if let Ok(lintian_result) = fetch_lintian_result(state, run_id).await {
-        context.insert("lintian_result".to_string(), serde_json::to_value(&lintian_result)?);
+        context.insert(
+            "lintian_result".to_string(),
+            serde_json::to_value(&lintian_result)?,
+        );
     }
 
     Ok(context)
@@ -856,14 +959,18 @@ async fn generate_ready_list(
 ) -> anyhow::Result<Vec<serde_json::Value>> {
     let limit = pagination.per_page.unwrap_or(50) as i64;
     let offset = pagination.offset.unwrap_or(0) as i64;
-    
-    state.database.get_ready_runs(
-        suite,
-        filter.search.as_deref(),
-        filter.result_code.as_deref(),
-        Some(limit),
-        Some(offset),
-    ).await.map_err(|e| anyhow::anyhow!(e))
+
+    state
+        .database
+        .get_ready_runs(
+            suite,
+            filter.search.as_deref(),
+            filter.result_code.as_deref(),
+            Some(limit),
+            Some(offset),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e))
 }
 
 async fn generate_done_list(
@@ -874,23 +981,31 @@ async fn generate_done_list(
 ) -> anyhow::Result<Vec<serde_json::Value>> {
     let limit = pagination.per_page.unwrap_or(50) as i64;
     let offset = pagination.offset.unwrap_or(0) as i64;
-    
+
     // Parse date filters
-    let from_date = filter.from_date.as_ref()
+    let from_date = filter
+        .from_date
+        .as_ref()
         .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
         .map(|d| d.with_timezone(&Utc));
-    
-    let to_date = filter.to_date.as_ref()
+
+    let to_date = filter
+        .to_date
+        .as_ref()
         .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
         .map(|d| d.with_timezone(&Utc));
-    
-    state.database.get_absorbed_runs(
-        campaign,
-        from_date.as_ref(),
-        to_date.as_ref(),
-        Some(limit),
-        Some(offset),
-    ).await.map_err(|e| anyhow::anyhow!(e))
+
+    state
+        .database
+        .get_absorbed_runs(
+            campaign,
+            from_date.as_ref(),
+            to_date.as_ref(),
+            Some(limit),
+            Some(offset),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!(e))
 }
 
 async fn fetch_merge_proposals(
@@ -898,14 +1013,18 @@ async fn fetch_merge_proposals(
     suite: &str,
 ) -> anyhow::Result<HashMap<String, Vec<serde_json::Value>>> {
     let mut proposals = HashMap::new();
-    
+
     // Fetch proposals by status
     for status in ["open", "merged", "closed", "abandoned", "rejected"] {
-        if let Ok(props) = state.database.get_merge_proposals_by_status(suite, status).await {
+        if let Ok(props) = state
+            .database
+            .get_merge_proposals_by_status(suite, status)
+            .await
+        {
             proposals.insert(status.to_string(), props);
         }
     }
-    
+
     Ok(proposals)
 }
 
@@ -916,10 +1035,10 @@ async fn fetch_merge_proposals(
 async fn fetch_diff(state: &AppState, run_id: &str) -> anyhow::Result<String> {
     // Get run info to determine VCS type
     let run = state.database.get_run(run_id).await?;
-    
+
     // Extract revision info from result_branches
     let (base_revision, new_revision) = extract_diff_revisions(&run.result_branches)?;
-    
+
     // Call appropriate VCS manager based on VCS type
     match run.vcs_type.as_deref() {
         Some("git") => {
@@ -937,15 +1056,20 @@ async fn fetch_diff(state: &AppState, run_id: &str) -> anyhow::Result<String> {
 /// Fetch debdiff using differ service
 #[instrument(skip(state))]
 async fn fetch_debdiff(state: &AppState, run_id: &str) -> anyhow::Result<String> {
-    let differ_url = state.config.differ_url()
+    let differ_url = state
+        .config
+        .differ_url()
         .ok_or_else(|| anyhow::anyhow!("Differ service not configured"))?;
-    
+
     // Get unchanged run for comparison
     let run = state.database.get_run(run_id).await?;
-    let unchanged_run = state.database.get_unchanged_run(&run.suite, &run.codebase, Some(&run.start_time)).await?;
-    
+    let unchanged_run = state
+        .database
+        .get_unchanged_run(&run.suite, &run.codebase, Some(&run.start_time))
+        .await?;
+
     let url = format!("{}/debdiff/{}/{}", differ_url, unchanged_run.id, run_id);
-    
+
     let client = &state.http_client;
     let response = client
         .get(&url)
@@ -956,13 +1080,16 @@ async fn fetch_debdiff(state: &AppState, run_id: &str) -> anyhow::Result<String>
         .header("Accept", "text/html")
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         Ok(response.text().await?)
     } else if response.status() == 404 {
         Err(anyhow::anyhow!("Debdiff not available"))
     } else {
-        Err(anyhow::anyhow!("Failed to fetch debdiff: HTTP {}", response.status()))
+        Err(anyhow::anyhow!(
+            "Failed to fetch debdiff: HTTP {}",
+            response.status()
+        ))
     }
 }
 
@@ -975,7 +1102,7 @@ async fn get_log_content(
     query: &LogQuery,
 ) -> anyhow::Result<LogInfo> {
     let log_manager = &state.log_manager;
-    
+
     // Check if log exists (using empty codebase for now - TODO: pass actual codebase)
     let exists = log_manager.has_log("", run_id, log_name).await?;
     if !exists {
@@ -989,18 +1116,21 @@ async fn get_log_content(
             highlight_lines: None,
         });
     }
-    
+
     // Get log metadata - we need to get the log to determine size
     // For now, set a placeholder size
     let size = 0i64; // TODO: Implement proper size retrieval if needed
-    
+
     // Analyze log for failure information if it's a primary log
-    let (line_count, include_lines, highlight_lines) = if matches!(log_name, BUILD_LOG_FILENAME | DIST_LOG_FILENAME) {
-        analyze_log_failure_lines(state, run_id, log_name).await.unwrap_or((0, None, vec![]))
-    } else {
-        (0, None, vec![])
-    };
-    
+    let (line_count, include_lines, highlight_lines) =
+        if matches!(log_name, BUILD_LOG_FILENAME | DIST_LOG_FILENAME) {
+            analyze_log_failure_lines(state, run_id, log_name)
+                .await
+                .unwrap_or((0, None, vec![]))
+        } else {
+            (0, None, vec![])
+        };
+
     Ok(LogInfo {
         name: log_name.to_string(),
         exists: true,
@@ -1020,17 +1150,20 @@ async fn download_log_file(
     log_name: &str,
 ) -> anyhow::Result<Vec<u8>> {
     use std::io::Read;
-    
+
     let log_manager = &state.log_manager;
     // Get log reader (using empty codebase for now - TODO: pass actual codebase)
-    let mut reader = log_manager.get_log("", run_id, log_name).await
+    let mut reader = log_manager
+        .get_log("", run_id, log_name)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to get log: {}", e))?;
-    
+
     // Read content into bytes
     let mut content = Vec::new();
-    reader.read_to_end(&mut content)
+    reader
+        .read_to_end(&mut content)
         .map_err(|e| anyhow::anyhow!("Failed to read log content: {}", e))?;
-    
+
     Ok(content)
 }
 
@@ -1044,16 +1177,16 @@ async fn analyze_log_failure_lines(
     let log_content = download_log_file(state, run_id, log_name).await?;
     let log_text = String::from_utf8_lossy(&log_content);
     let lines: Vec<&str> = log_text.lines().collect();
-    
+
     let line_count = lines.len();
-    
+
     // Find failure patterns based on log type
     let (include_lines, highlight_lines) = match log_name {
         BUILD_LOG_FILENAME => find_build_failure_lines(&lines),
         DIST_LOG_FILENAME => find_dist_failure_lines(&lines),
         _ => (None, vec![]),
     };
-    
+
     Ok((line_count, include_lines, highlight_lines))
 }
 
@@ -1065,10 +1198,10 @@ async fn generate_diff_content(
     query: &RunQuery,
 ) -> anyhow::Result<DiffInfo> {
     let diff_content = fetch_diff(state, run_id).await?;
-    
+
     let run = state.database.get_run(run_id).await?;
     let (base_revision, new_revision) = extract_diff_revisions(&run.result_branches)?;
-    
+
     Ok(DiffInfo {
         diff_type: "vcs".to_string(),
         content: diff_content,
@@ -1086,7 +1219,7 @@ async fn generate_debdiff_content(
     query: &RunQuery,
 ) -> anyhow::Result<DiffInfo> {
     let debdiff_content = fetch_debdiff(state, run_id).await?;
-    
+
     Ok(DiffInfo {
         diff_type: "debdiff".to_string(),
         content: debdiff_content,
@@ -1098,16 +1231,19 @@ async fn generate_debdiff_content(
 
 /// Get publish history for a revision
 #[instrument(skip(state))]
-async fn get_publish_history(state: &AppState, revision: &str) -> anyhow::Result<Vec<PublishHistory>> {
+async fn get_publish_history(
+    state: &AppState,
+    revision: &str,
+) -> anyhow::Result<Vec<PublishHistory>> {
     // Query publish table for this revision
     let records = sqlx::query(
         "SELECT mode, merge_proposal_url, description, result_code, requester, timestamp 
-         FROM publish WHERE revision = $1 ORDER BY timestamp DESC"
+         FROM publish WHERE revision = $1 ORDER BY timestamp DESC",
     )
     .bind(revision.as_bytes())
     .fetch_all(state.database.pool())
     .await?;
-    
+
     let mut history = Vec::new();
     for record in records {
         history.push(PublishHistory {
@@ -1119,7 +1255,7 @@ async fn get_publish_history(state: &AppState, revision: &str) -> anyhow::Result
             timestamp: record.get("timestamp"),
         });
     }
-    
+
     Ok(history)
 }
 
@@ -1131,7 +1267,7 @@ async fn fetch_lintian_result(state: &AppState, run_id: &str) -> anyhow::Result<
         .bind(run_id)
         .fetch_optional(state.database.pool())
         .await?;
-    
+
     match record {
         Some(record) => {
             let lintian_result: Option<serde_json::Value> = record.get("lintian_result");
@@ -1149,15 +1285,21 @@ async fn fetch_git_diff(
     base_revision: &str,
     new_revision: &str,
 ) -> anyhow::Result<String> {
-    let url = format!("{}/{}/diff/{}/{}", git_url, codebase, base_revision, new_revision);
-    
+    let url = format!(
+        "{}/{}/diff/{}/{}",
+        git_url, codebase, base_revision, new_revision
+    );
+
     let client = reqwest::Client::new();
     let response = client.get(&url).send().await?;
-    
+
     if response.status().is_success() {
         Ok(response.text().await?)
     } else {
-        Err(anyhow::anyhow!("Failed to fetch git diff: HTTP {}", response.status()))
+        Err(anyhow::anyhow!(
+            "Failed to fetch git diff: HTTP {}",
+            response.status()
+        ))
     }
 }
 
@@ -1167,31 +1309,41 @@ async fn fetch_bzr_diff(
     base_revision: &str,
     new_revision: &str,
 ) -> anyhow::Result<String> {
-    let url = format!("{}/{}/diff?old={}&new={}", bzr_url, codebase, base_revision, new_revision);
-    
+    let url = format!(
+        "{}/{}/diff?old={}&new={}",
+        bzr_url, codebase, base_revision, new_revision
+    );
+
     let client = reqwest::Client::new();
     let response = client.get(&url).send().await?;
-    
+
     if response.status().is_success() {
         Ok(response.text().await?)
     } else {
-        Err(anyhow::anyhow!("Failed to fetch bzr diff: HTTP {}", response.status()))
+        Err(anyhow::anyhow!(
+            "Failed to fetch bzr diff: HTTP {}",
+            response.status()
+        ))
     }
 }
 
 // Utility functions for log analysis and revision extraction
 
-fn extract_diff_revisions(result_branches: &[serde_json::Value]) -> anyhow::Result<(String, String)> {
+fn extract_diff_revisions(
+    result_branches: &[serde_json::Value],
+) -> anyhow::Result<(String, String)> {
     // Extract base and new revisions from result_branches
     // This matches the Python logic in state.get_result_branch
     for branch in result_branches {
         if let Some(role) = branch.get("role").and_then(|r| r.as_str()) {
             if role == "main" {
-                let base_revid = branch.get("base_revid")
+                let base_revid = branch
+                    .get("base_revid")
                     .and_then(|r| r.as_str())
                     .unwrap_or("null")
                     .to_string();
-                let revid = branch.get("revid")
+                let revid = branch
+                    .get("revid")
                     .and_then(|r| r.as_str())
                     .ok_or_else(|| anyhow::anyhow!("Missing revid"))?
                     .to_string();
@@ -1205,12 +1357,12 @@ fn extract_diff_revisions(result_branches: &[serde_json::Value]) -> anyhow::Resu
 /// Find build failure patterns in log lines (matches Python find_build_log_failure)
 fn find_build_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usize>) {
     let mut error_lines = Vec::new();
-    
+
     // Look for common build failure patterns
     for (i, line) in lines.iter().enumerate() {
         let line_lower = line.to_lowercase();
-        if line_lower.contains("error:") 
-            || line_lower.contains("fatal:") 
+        if line_lower.contains("error:")
+            || line_lower.contains("fatal:")
             || line_lower.contains("failed to build")
             || line_lower.contains("make: *** ")
             || line_lower.contains("dpkg-buildpackage: error")
@@ -1218,7 +1370,7 @@ fn find_build_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usiz
             error_lines.push(i + 1); // 1-based line numbers
         }
     }
-    
+
     if !error_lines.is_empty() {
         // Include context around the last error
         let last_error = *error_lines.last().unwrap();
@@ -1233,7 +1385,7 @@ fn find_build_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usiz
 /// Find dist failure patterns in log lines (matches Python find_dist_log_failure)
 fn find_dist_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usize>) {
     let mut error_lines = Vec::new();
-    
+
     // Look for dist-specific failure patterns
     for (i, line) in lines.iter().enumerate() {
         let line_lower = line.to_lowercase();
@@ -1245,7 +1397,7 @@ fn find_dist_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usize
             error_lines.push(i + 1); // 1-based line numbers
         }
     }
-    
+
     if !error_lines.is_empty() {
         let last_error = *error_lines.last().unwrap();
         let start = last_error.saturating_sub(FAIL_BUILD_LOG_LEN);

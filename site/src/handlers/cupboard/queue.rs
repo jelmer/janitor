@@ -15,7 +15,7 @@ use crate::{
     templates::create_base_context,
 };
 
-use super::{AdminUser, Permission, create_admin_context, log_admin_action};
+use super::{create_admin_context, log_admin_action, AdminUser, Permission};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct QueueFilters {
@@ -80,21 +80,25 @@ pub async fn queue_dashboard(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch queue items and statistics using new database methods
-    match state.database.get_queue_items_with_stats(
-        filters.suite.as_deref(),
-        filters.status.as_deref(),
-        filters.priority.as_deref(),
-        filters.limit,
-        filters.offset
-    ).await {
+    match state
+        .database
+        .get_queue_items_with_stats(
+            filters.suite.as_deref(),
+            filters.status.as_deref(),
+            filters.priority.as_deref(),
+            filters.limit,
+            filters.offset,
+        )
+        .await
+    {
         Ok((items, stats)) => {
             context.insert("queue_items", &items);
             context.insert("queue_stats", &stats);
@@ -102,29 +106,28 @@ pub async fn queue_dashboard(
         }
         Err(e) => {
             tracing::error!("Failed to fetch queue data: {}", e);
-            context.insert("error_message", &format!("Failed to load queue data: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load queue data: {}", e),
+            );
         }
     }
-    
+
     // Add available suites for filtering
     let suites: Vec<String> = state.config.campaigns.keys().cloned().collect();
     context.insert("available_suites", &suites);
-    
+
     let content_type = negotiate_content_type(&headers, "queue_dashboard");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/queue.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/queue.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -139,14 +142,14 @@ pub async fn queue_item_details(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
     context.insert("item_id", &item_id);
-    
+
     // Fetch queue item details
     match fetch_queue_item_details(&state, &item_id).await {
         Ok(item) => {
@@ -157,22 +160,18 @@ pub async fn queue_item_details(
             return StatusCode::NOT_FOUND.into_response();
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "queue_item");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/queue-item.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/queue-item.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -187,15 +186,15 @@ pub async fn bulk_queue_operation(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::BulkQueueOperations) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     // Extract IP and User-Agent for audit logging
     let ip_address = extract_ip_address(&headers);
     let user_agent = extract_user_agent(&headers);
-    
+
     // Log the bulk operation attempt
     log_admin_action(
         &state,
@@ -205,15 +204,20 @@ pub async fn bulk_queue_operation(
         serde_json::to_value(&operation).unwrap_or_default(),
         &ip_address,
         &user_agent,
-    ).await;
-    
+    )
+    .await;
+
     // Execute bulk operation
     match execute_bulk_queue_operation(&state, &operation).await {
         Ok(result) => {
             tracing::info!(
                 "Bulk queue operation '{}' completed by {}: {}/{} successful",
                 operation.operation,
-                admin_user.user.name.as_deref().unwrap_or(&admin_user.user.email),
+                admin_user
+                    .user
+                    .name
+                    .as_deref()
+                    .unwrap_or(&admin_user.user.email),
                 result.successful,
                 result.total_items
             );
@@ -236,11 +240,11 @@ pub async fn queue_statistics(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     match fetch_queue_statistics(&state, &filters).await {
         Ok(stats) => Json(stats).into_response(),
         Err(e) => {
@@ -260,13 +264,13 @@ pub async fn worker_management(
         Some(admin) => admin,
         None => return StatusCode::FORBIDDEN.into_response(),
     };
-    
+
     if !admin_user.has_permission(&Permission::ViewQueue) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    
+
     let mut context = create_admin_context(&admin_user);
-    
+
     // Fetch worker information
     match fetch_worker_information(&state).await {
         Ok(workers) => {
@@ -274,25 +278,24 @@ pub async fn worker_management(
         }
         Err(e) => {
             tracing::error!("Failed to fetch worker information: {}", e);
-            context.insert("error_message", &format!("Failed to load worker data: {}", e));
+            context.insert(
+                "error_message",
+                &format!("Failed to load worker data: {}", e),
+            );
         }
     }
-    
+
     let content_type = negotiate_content_type(&headers, "worker_management");
-    
+
     match content_type {
-        ContentType::Json => {
-            Json(context.into_json()).into_response()
-        }
-        _ => {
-            match state.templates.render("cupboard/workers.html", &context) {
-                Ok(html) => Html(html).into_response(),
-                Err(e) => {
-                    tracing::error!("Template rendering error: {}", e);
-                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
-                }
+        ContentType::Json => Json(context.into_json()).into_response(),
+        _ => match state.templates.render("cupboard/workers.html", &context) {
+            Ok(html) => Html(html).into_response(),
+            Err(e) => {
+                tracing::error!("Template rendering error: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
-        }
+        },
     }
 }
 
@@ -300,13 +303,10 @@ pub async fn worker_management(
 
 // This function is no longer needed - we use the database methods directly
 
-async fn fetch_queue_item_details(
-    state: &AppState,
-    item_id: &str,
-) -> anyhow::Result<QueueItem> {
+async fn fetch_queue_item_details(state: &AppState, item_id: &str) -> anyhow::Result<QueueItem> {
     // TODO: Implement queue item detail fetching
     // This would query the database for detailed queue item information
-    
+
     // Placeholder implementation
     Ok(QueueItem {
         id: item_id.to_string(),
@@ -328,15 +328,15 @@ async fn fetch_queue_statistics(
 ) -> anyhow::Result<QueueStatistics> {
     // TODO: Implement comprehensive queue statistics
     // This would aggregate data from the queue and provide real-time metrics
-    
+
     // Use database stats as baseline
     let db_stats = state.database.get_stats().await.unwrap_or_default();
-    
+
     Ok(QueueStatistics {
         total_items: db_stats.get("queue_size").copied().unwrap_or(0),
         pending_items: db_stats.get("queue_size").copied().unwrap_or(0),
         in_progress_items: db_stats.get("active_runs").copied().unwrap_or(0),
-        failed_items: 0, // TODO: Calculate failed items
+        failed_items: 0,        // TODO: Calculate failed items
         average_wait_time: 300, // TODO: Calculate from historical data
         estimated_completion: Some(Utc::now() + chrono::Duration::minutes(30)),
         worker_utilization: 0.0, // TODO: Calculate from worker data
@@ -349,81 +349,93 @@ async fn execute_bulk_queue_operation(
 ) -> anyhow::Result<QueueOperationResult> {
     let admin_user_name = "admin"; // This should be passed from context
     let now = Utc::now();
-    
+
     match operation.operation.as_str() {
         "reschedule" => {
-            let affected_rows = state.database.bulk_reschedule_queue_items(
-                &operation.item_ids,
-                admin_user_name,
-            ).await?;
-            
+            let affected_rows = state
+                .database
+                .bulk_reschedule_queue_items(&operation.item_ids, admin_user_name)
+                .await?;
+
             Ok(QueueOperationResult {
                 operation: operation.operation.clone(),
                 total_items: operation.item_ids.len(),
                 successful: affected_rows as usize,
-                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                failed: operation
+                    .item_ids
+                    .len()
+                    .saturating_sub(affected_rows as usize),
                 errors: vec![],
                 completed_at: now,
             })
         }
         "cancel" => {
-            let affected_rows = state.database.bulk_cancel_queue_items(
-                &operation.item_ids,
-                admin_user_name,
-            ).await?;
-            
+            let affected_rows = state
+                .database
+                .bulk_cancel_queue_items(&operation.item_ids, admin_user_name)
+                .await?;
+
             Ok(QueueOperationResult {
                 operation: operation.operation.clone(),
                 total_items: operation.item_ids.len(),
                 successful: affected_rows as usize,
-                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                failed: operation
+                    .item_ids
+                    .len()
+                    .saturating_sub(affected_rows as usize),
                 errors: vec![],
                 completed_at: now,
             })
         }
         "priority_boost" => {
             // Extract priority adjustment from parameters
-            let priority_adjustment = operation.parameters
+            let priority_adjustment = operation
+                .parameters
                 .as_ref()
                 .and_then(|p| p.get("adjustment"))
                 .and_then(|a| a.as_i64())
                 .unwrap_or(10) as i32;
-                
-            let affected_rows = state.database.bulk_adjust_priority(
-                &operation.item_ids,
-                priority_adjustment,
-                admin_user_name,
-            ).await?;
-            
+
+            let affected_rows = state
+                .database
+                .bulk_adjust_priority(&operation.item_ids, priority_adjustment, admin_user_name)
+                .await?;
+
             Ok(QueueOperationResult {
                 operation: operation.operation.clone(),
                 total_items: operation.item_ids.len(),
                 successful: affected_rows as usize,
-                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                failed: operation
+                    .item_ids
+                    .len()
+                    .saturating_sub(affected_rows as usize),
                 errors: vec![],
                 completed_at: now,
             })
         }
         "priority_decrease" => {
             // Extract priority adjustment from parameters (negative)
-            let priority_adjustment = operation.parameters
+            let priority_adjustment = operation
+                .parameters
                 .as_ref()
                 .and_then(|p| p.get("adjustment"))
                 .and_then(|a| a.as_i64())
                 .map(|a| -a)
                 .unwrap_or(-10) as i32;
-                
-            let affected_rows = state.database.bulk_adjust_priority(
-                &operation.item_ids,
-                priority_adjustment,
-                admin_user_name,
-            ).await?;
-            
+
+            let affected_rows = state
+                .database
+                .bulk_adjust_priority(&operation.item_ids, priority_adjustment, admin_user_name)
+                .await?;
+
             Ok(QueueOperationResult {
                 operation: operation.operation.clone(),
                 total_items: operation.item_ids.len(),
                 successful: affected_rows as usize,
-                failed: operation.item_ids.len().saturating_sub(affected_rows as usize),
+                failed: operation
+                    .item_ids
+                    .len()
+                    .saturating_sub(affected_rows as usize),
                 errors: vec![],
                 completed_at: now,
             })
@@ -441,14 +453,21 @@ async fn execute_bulk_queue_operation(
             })
         }
         _ => {
-            return Err(anyhow::anyhow!("Unknown queue operation: {}", operation.operation));
+            return Err(anyhow::anyhow!(
+                "Unknown queue operation: {}",
+                operation.operation
+            ));
         }
     }
 }
 
 async fn fetch_worker_information(state: &AppState) -> anyhow::Result<serde_json::Value> {
     // Use the new database method to get real worker information
-    state.database.get_worker_information().await.map_err(|e| anyhow::anyhow!("Database error: {}", e))
+    state
+        .database
+        .get_worker_information()
+        .await
+        .map_err(|e| anyhow::anyhow!("Database error: {}", e))
 }
 
 fn extract_ip_address(headers: &header::HeaderMap) -> String {

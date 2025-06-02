@@ -1,10 +1,9 @@
+use async_trait::async_trait;
 use axum::{
     body::Body,
     extract::{FromRequest, Request},
-    http,
-    Json,
+    http, Json,
 };
-use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use validator::{Validate, ValidationErrors};
 
@@ -54,7 +53,7 @@ where
 /// Convert validator ValidationErrors to ApiError
 fn validation_errors_to_api_error(errors: ValidationErrors) -> ApiError {
     let mut error_details = serde_json::Map::new();
-    
+
     for (field, field_errors) in errors.field_errors() {
         let field_error_messages: Vec<String> = field_errors
             .iter()
@@ -66,7 +65,7 @@ fn validation_errors_to_api_error(errors: ValidationErrors) -> ApiError {
                     .unwrap_or_else(|| format!("Validation failed for field: {}", field))
             })
             .collect();
-        
+
         error_details.insert(
             field.to_string(),
             serde_json::Value::Array(
@@ -77,7 +76,7 @@ fn validation_errors_to_api_error(errors: ValidationErrors) -> ApiError {
             ),
         );
     }
-    
+
     ApiError::bad_request("Validation failed".to_string())
         .with_details(serde_json::Value::Object(error_details))
 }
@@ -312,8 +311,14 @@ mod tests {
     fn test_validation_helper_bool_string() {
         assert_eq!(ValidationHelper::validate_bool_string("0").unwrap(), false);
         assert_eq!(ValidationHelper::validate_bool_string("1").unwrap(), true);
-        assert_eq!(ValidationHelper::validate_bool_string("true").unwrap(), true);
-        assert_eq!(ValidationHelper::validate_bool_string("false").unwrap(), false);
+        assert_eq!(
+            ValidationHelper::validate_bool_string("true").unwrap(),
+            true
+        );
+        assert_eq!(
+            ValidationHelper::validate_bool_string("false").unwrap(),
+            false
+        );
         assert!(ValidationHelper::validate_bool_string("invalid").is_err());
     }
 
@@ -353,7 +358,7 @@ mod tests {
 
         let errors = validation_result.unwrap_err();
         let api_error = validation_errors_to_api_error(errors);
-        
+
         assert_eq!(api_error.error, "bad_request");
         assert!(api_error.details.is_some());
     }

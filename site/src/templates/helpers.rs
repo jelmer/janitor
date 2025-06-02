@@ -168,25 +168,28 @@ pub fn add_common_helpers(context: &mut Context, request_path: &str) {
     // Add commonly used template variables
     context.insert("now", &chrono::Utc::now());
     context.insert("request_path", request_path);
-    
+
     // Add build information
     context.insert("version", env!("CARGO_PKG_VERSION"));
     context.insert("build_time", option_env!("BUILD_TIME").unwrap_or("unknown"));
-    context.insert("git_revision", option_env!("GIT_REVISION").unwrap_or("unknown"));
+    context.insert(
+        "git_revision",
+        option_env!("GIT_REVISION").unwrap_or("unknown"),
+    );
 }
 
 /// Template cache key builder for efficient caching
 pub fn build_cache_key(template_name: &str, params: &HashMap<String, String>) -> String {
     let mut parts = vec![template_name.to_string()];
-    
+
     // Sort parameters for consistent cache keys
     let mut sorted_params: Vec<_> = params.iter().collect();
     sorted_params.sort_by_key(|(k, _)| k.as_str());
-    
+
     for (key, value) in sorted_params {
         parts.push(format!("{}={}", key, value));
     }
-    
+
     parts.join(":")
 }
 
@@ -201,7 +204,7 @@ mod tests {
             "https://example.com".to_string(),
             "/test".to_string(),
         );
-        
+
         let context = base.to_context();
         assert_eq!(
             context.get("site_name").and_then(|v| v.as_str()),
@@ -215,7 +218,7 @@ mod tests {
             FlashMessage::success("Operation completed"),
             FlashMessage::error("Something went wrong"),
         ];
-        
+
         assert_eq!(messages[0].category, "success");
         assert_eq!(messages[1].category, "error");
     }
@@ -225,7 +228,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("b".to_string(), "2".to_string());
         params.insert("a".to_string(), "1".to_string());
-        
+
         let key = build_cache_key("template.html", &params);
         assert_eq!(key, "template.html:a=1:b=2");
     }

@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
-use redis::{Client as RedisClient, AsyncCommands};
+use redis::{AsyncCommands, Client as RedisClient};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
-
 
 /// Real-time event types for the Janitor system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,10 +73,16 @@ impl RealtimeEvent {
         match self {
             RealtimeEvent::QueueStatusUpdate { .. } => "janitor:queue:status".to_string(),
             RealtimeEvent::RunStatusChange { run_id, .. } => format!("janitor:run:{}", run_id),
-            RealtimeEvent::WorkerStatusUpdate { worker_id, .. } => format!("janitor:worker:{}", worker_id),
-            RealtimeEvent::SystemHealthChange { component, .. } => format!("janitor:system:{}", component),
+            RealtimeEvent::WorkerStatusUpdate { worker_id, .. } => {
+                format!("janitor:worker:{}", worker_id)
+            }
+            RealtimeEvent::SystemHealthChange { component, .. } => {
+                format!("janitor:system:{}", component)
+            }
             RealtimeEvent::PublishEvent { codebase, .. } => format!("janitor:publish:{}", codebase),
-            RealtimeEvent::CampaignUpdate { campaign, .. } => format!("janitor:campaign:{}", campaign),
+            RealtimeEvent::CampaignUpdate { campaign, .. } => {
+                format!("janitor:campaign:{}", campaign)
+            }
         }
     }
 }
@@ -161,7 +166,14 @@ impl RealtimeManager {
 
         tokio::spawn(async move {
             loop {
-                match Self::redis_subscriber_loop(&redis_client, &broadcasters, &stats, &channel_prefix).await {
+                match Self::redis_subscriber_loop(
+                    &redis_client,
+                    &broadcasters,
+                    &stats,
+                    &channel_prefix,
+                )
+                .await
+                {
                     Ok(_) => {
                         warn!("Redis subscriber loop ended, restarting...");
                     }
@@ -183,14 +195,18 @@ impl RealtimeManager {
         stats: &Arc<RwLock<RealtimeStats>>,
         channel_prefix: &str,
     ) -> Result<()> {
-        let conn = redis_client.get_async_connection().await
+        let conn = redis_client
+            .get_async_connection()
+            .await
             .context("Failed to connect to Redis for pub/sub")?;
 
         let pattern = format!("{}:*", channel_prefix);
         debug!("Subscribing to Redis pattern: {}", pattern);
 
         let mut pubsub = conn.into_pubsub();
-        pubsub.psubscribe(pattern.as_str()).await
+        pubsub
+            .psubscribe(pattern.as_str())
+            .await
             .context("Failed to subscribe to Redis pattern")?;
 
         let mut stream = pubsub.on_message();
@@ -199,7 +215,7 @@ impl RealtimeManager {
             if let Ok(payload) = msg.get_payload::<String>() {
                 if let Ok(event) = serde_json::from_str::<RealtimeEvent>(&payload) {
                     debug!("Received real-time event: {}", event.event_type());
-                    
+
                     // Update stats
                     {
                         let mut stats_guard = stats.write().await;
@@ -242,17 +258,20 @@ impl RealtimeManager {
         }
 
         let channel = event.channel();
-        let payload = serde_json::to_string(&event)
-            .context("Failed to serialize event")?;
+        let payload = serde_json::to_string(&event).context("Failed to serialize event")?;
 
         // Publish to Redis if available
         if let Some(redis_client) = &self.redis_client {
-            let mut conn = redis_client.get_async_connection().await
+            let mut conn = redis_client
+                .get_async_connection()
+                .await
                 .context("Failed to connect to Redis for publishing")?;
-            
-            let _: i32 = conn.publish(&channel, &payload).await
+
+            let _: i32 = conn
+                .publish(&channel, &payload)
+                .await
                 .context("Failed to publish to Redis")?;
-            
+
             debug!("Published event to Redis channel: {}", channel);
         }
 
@@ -277,20 +296,28 @@ impl RealtimeManager {
         // Get or create broadcaster for this channel
         let broadcaster = {
             let mut broadcasters_guard = self.event_broadcasters.write().await;
-            broadcasters_guard.entry(channel.clone()).or_insert_with(|| {
-                debug!("Creating new broadcast channel: {}", channel);
-                broadcast::channel(self.config.buffer_size).0
-            }).clone()
+            broadcasters_guard
+                .entry(channel.clone())
+                .or_insert_with(|| {
+                    debug!("Creating new broadcast channel: {}", channel);
+                    broadcast::channel(self.config.buffer_size).0
+                })
+                .clone()
         };
 
         // Send to subscribers
         match broadcaster.send(event) {
             Ok(subscriber_count) => {
-                debug!("Sent {} event to {} local subscribers on channel: {}", 
-                       event_type, subscriber_count, channel);
+                debug!(
+                    "Sent {} event to {} local subscribers on channel: {}",
+                    event_type, subscriber_count, channel
+                );
             }
             Err(_) => {
-                debug!("No local subscribers for {} event on channel: {}", event_type, channel);
+                debug!(
+                    "No local subscribers for {} event on channel: {}",
+                    event_type, channel
+                );
             }
         }
     }
@@ -298,13 +325,18 @@ impl RealtimeManager {
     /// Subscribe to real-time events for a specific channel
     pub async fn subscribe(&self, channel: &str) -> broadcast::Receiver<RealtimeEvent> {
         let mut broadcasters_guard = self.event_broadcasters.write().await;
-        let broadcaster = broadcasters_guard.entry(channel.to_string()).or_insert_with(|| {
-            debug!("Creating new broadcast channel for subscription: {}", channel);
-            broadcast::channel(self.config.buffer_size).0
-        });
+        let broadcaster = broadcasters_guard
+            .entry(channel.to_string())
+            .or_insert_with(|| {
+                debug!(
+                    "Creating new broadcast channel for subscription: {}",
+                    channel
+                );
+                broadcast::channel(self.config.buffer_size).0
+            });
 
         let receiver = broadcaster.subscribe();
-        
+
         // Update stats
         {
             let mut stats_guard = self.stats.write().await;
@@ -328,10 +360,14 @@ impl RealtimeManager {
         }
 
         if let Some(redis_client) = &self.redis_client {
-            let mut conn = redis_client.get_async_connection().await
+            let mut conn = redis_client
+                .get_async_connection()
+                .await
                 .context("Failed to connect to Redis for health check")?;
-            
-            let _: String = redis::cmd("PING").query_async(&mut conn).await
+
+            let _: String = redis::cmd("PING")
+                .query_async(&mut conn)
+                .await
                 .context("Redis PING failed")?;
         }
 
@@ -364,7 +400,12 @@ impl RealtimeManager {
     }
 
     /// Publish run status change
-    pub async fn publish_run_status_change(&self, run_id: String, old_status: String, new_status: String) -> Result<()> {
+    pub async fn publish_run_status_change(
+        &self,
+        run_id: String,
+        old_status: String,
+        new_status: String,
+    ) -> Result<()> {
         let event = RealtimeEvent::RunStatusChange {
             run_id,
             old_status,
@@ -375,7 +416,12 @@ impl RealtimeManager {
     }
 
     /// Publish worker status update
-    pub async fn publish_worker_status(&self, worker_id: String, status: String, current_task: Option<String>) -> Result<()> {
+    pub async fn publish_worker_status(
+        &self,
+        worker_id: String,
+        status: String,
+        current_task: Option<String>,
+    ) -> Result<()> {
         let event = RealtimeEvent::WorkerStatusUpdate {
             worker_id,
             status,
@@ -386,7 +432,13 @@ impl RealtimeManager {
     }
 
     /// Publish system health change
-    pub async fn publish_system_health(&self, component: String, old_status: String, new_status: String, details: Option<serde_json::Value>) -> Result<()> {
+    pub async fn publish_system_health(
+        &self,
+        component: String,
+        old_status: String,
+        new_status: String,
+        details: Option<serde_json::Value>,
+    ) -> Result<()> {
         let event = RealtimeEvent::SystemHealthChange {
             component,
             old_status,
@@ -398,7 +450,12 @@ impl RealtimeManager {
     }
 
     /// Publish publishing event
-    pub async fn publish_publish_event(&self, codebase: String, action: String, result: String) -> Result<()> {
+    pub async fn publish_publish_event(
+        &self,
+        codebase: String,
+        action: String,
+        result: String,
+    ) -> Result<()> {
         let event = RealtimeEvent::PublishEvent {
             codebase,
             action,
@@ -409,7 +466,12 @@ impl RealtimeManager {
     }
 
     /// Publish campaign update
-    pub async fn publish_campaign_update(&self, campaign: String, update_type: String, data: serde_json::Value) -> Result<()> {
+    pub async fn publish_campaign_update(
+        &self,
+        campaign: String,
+        update_type: String,
+        data: serde_json::Value,
+    ) -> Result<()> {
         let event = RealtimeEvent::CampaignUpdate {
             campaign,
             update_type,
@@ -460,7 +522,7 @@ mod tests {
     async fn test_realtime_manager_creation() {
         let config = RealtimeConfig::default();
         let manager = RealtimeManager::new(None, config);
-        
+
         let stats = manager.get_stats().await;
         assert_eq!(stats.events_published, 0);
         assert_eq!(stats.events_received, 0);
@@ -470,17 +532,17 @@ mod tests {
     async fn test_local_event_publishing() {
         let config = RealtimeConfig::default();
         let manager = RealtimeManager::new(None, config);
-        
+
         let mut receiver = manager.subscribe("janitor:queue:status").await;
-        
+
         let event = RealtimeEvent::QueueStatusUpdate {
             queue_size: 15,
             active_runs: 8,
             timestamp: chrono::Utc::now(),
         };
-        
+
         manager.publish_local_event(event.clone()).await;
-        
+
         let received_event = receiver.recv().await.unwrap();
         assert_eq!(received_event.event_type(), event.event_type());
     }

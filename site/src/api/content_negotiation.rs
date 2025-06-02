@@ -100,7 +100,7 @@ fn parse_accept_header(accept: &str) -> ContentType {
     for part in accept.split(',') {
         let part = part.trim();
         let (media_type, quality) = parse_media_type(part);
-        
+
         let content_type = match media_type.as_str() {
             "application/json" => ContentType::Json,
             "text/html" => ContentType::Html,
@@ -121,7 +121,10 @@ fn parse_accept_header(accept: &str) -> ContentType {
         }
     }
 
-    debug!("Content negotiation: Accept='{}' -> {:?}", accept, best_match);
+    debug!(
+        "Content negotiation: Accept='{}' -> {:?}",
+        accept, best_match
+    );
     best_match
 }
 
@@ -129,7 +132,7 @@ fn parse_accept_header(accept: &str) -> ContentType {
 fn parse_media_type(media_type: &str) -> (String, f64) {
     if let Some((media, params)) = media_type.split_once(';') {
         let media = media.trim().to_lowercase();
-        
+
         // Look for q= parameter
         for param in params.split(';') {
             let param = param.trim();
@@ -141,7 +144,7 @@ fn parse_media_type(media_type: &str) -> (String, f64) {
                 }
             }
         }
-        
+
         (media, 1.0)
     } else {
         (media_type.trim().to_lowercase(), 1.0)
@@ -152,10 +155,10 @@ fn parse_media_type(media_type: &str) -> (String, f64) {
 fn extract_file_extension(path: &str) -> Option<&str> {
     // Remove query parameters
     let path = path.split('?').next().unwrap_or(path);
-    
+
     // Get filename part
     let filename = path.split('/').last()?;
-    
+
     // Extract extension
     if let Some((_, extension)) = filename.rsplit_once('.') {
         Some(extension)
@@ -244,22 +247,19 @@ where
                     }
                 }
             }
-            ContentType::TextPlain => {
-                match serde_json::to_string_pretty(&self.data) {
-                    Ok(json) => {
-                        let mut response = json.into_response();
-                        response.headers_mut().insert(
-                            header::CONTENT_TYPE,
-                            HeaderValue::from_static("text/plain"),
-                        );
-                        response
-                    }
-                    Err(_) => {
-                        warn!("Failed to serialize data for plain text response");
-                        "Error: Failed to render response".into_response()
-                    }
+            ContentType::TextPlain => match serde_json::to_string_pretty(&self.data) {
+                Ok(json) => {
+                    let mut response = json.into_response();
+                    response
+                        .headers_mut()
+                        .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/plain"));
+                    response
                 }
-            }
+                Err(_) => {
+                    warn!("Failed to serialize data for plain text response");
+                    "Error: Failed to render response".into_response()
+                }
+            },
             ContentType::TextDiff => {
                 // For diff responses, we expect the data to be a string
                 match serde_json::to_string(&self.data) {
@@ -298,7 +298,10 @@ where
                 // For XML responses, serialize to JSON and return as XML
                 match serde_json::to_string_pretty(&self.data) {
                     Ok(json) => {
-                        let xml = format!(r#"<?xml version="1.0" encoding="UTF-8"?><data>{}</data>"#, json);
+                        let xml = format!(
+                            r#"<?xml version="1.0" encoding="UTF-8"?><data>{}</data>"#,
+                            json
+                        );
                         let mut response = xml.into_response();
                         response.headers_mut().insert(
                             header::CONTENT_TYPE,
@@ -317,10 +320,9 @@ where
                 match serde_json::to_string(&self.data) {
                     Ok(content) => {
                         let mut response = content.into_response();
-                        response.headers_mut().insert(
-                            header::CONTENT_TYPE,
-                            HeaderValue::from_static("text/csv"),
-                        );
+                        response
+                            .headers_mut()
+                            .insert(header::CONTENT_TYPE, HeaderValue::from_static("text/csv"));
                         response
                     }
                     Err(_) => {
@@ -334,11 +336,7 @@ where
 }
 
 /// Helper function to create negotiated responses
-pub fn negotiate_response<T>(
-    data: T,
-    headers: &HeaderMap,
-    path: &str,
-) -> NegotiatedResponse<T> {
+pub fn negotiate_response<T>(data: T, headers: &HeaderMap, path: &str) -> NegotiatedResponse<T> {
     let content_type = negotiate_content_type(headers, path);
     NegotiatedResponse::new(data, content_type)
 }
@@ -371,41 +369,68 @@ mod tests {
         assert_eq!(extract_file_extension("/api/test.json"), Some("json"));
         assert_eq!(extract_file_extension("/api/test.html"), Some("html"));
         assert_eq!(extract_file_extension("/api/test"), None);
-        assert_eq!(extract_file_extension("/api/test.json?param=value"), Some("json"));
+        assert_eq!(
+            extract_file_extension("/api/test.json?param=value"),
+            Some("json")
+        );
     }
 
     #[test]
     fn test_parse_media_type() {
-        assert_eq!(parse_media_type("application/json"), ("application/json".to_string(), 1.0));
-        assert_eq!(parse_media_type("text/html; q=0.8"), ("text/html".to_string(), 0.8));
+        assert_eq!(
+            parse_media_type("application/json"),
+            ("application/json".to_string(), 1.0)
+        );
+        assert_eq!(
+            parse_media_type("text/html; q=0.8"),
+            ("text/html".to_string(), 0.8)
+        );
         assert_eq!(parse_media_type("*/*; q=0.1"), ("*/*".to_string(), 0.1));
     }
 
     #[test]
     fn test_negotiate_content_type() {
         let mut headers = HeaderMap::new();
-        
+
         // Test default for API paths
-        assert_eq!(negotiate_content_type(&headers, "/api/test"), ContentType::Json);
+        assert_eq!(
+            negotiate_content_type(&headers, "/api/test"),
+            ContentType::Json
+        );
         assert_eq!(negotiate_content_type(&headers, "/test"), ContentType::Html);
-        
+
         // Test file extensions
-        assert_eq!(negotiate_content_type(&headers, "/api/test.json"), ContentType::Json);
-        assert_eq!(negotiate_content_type(&headers, "/api/test.html"), ContentType::Html);
-        
+        assert_eq!(
+            negotiate_content_type(&headers, "/api/test.json"),
+            ContentType::Json
+        );
+        assert_eq!(
+            negotiate_content_type(&headers, "/api/test.html"),
+            ContentType::Html
+        );
+
         // Test Accept header
         headers.insert(header::ACCEPT, "application/json".parse().unwrap());
         assert_eq!(negotiate_content_type(&headers, "/test"), ContentType::Json);
-        
+
         headers.insert(header::ACCEPT, "text/html".parse().unwrap());
-        assert_eq!(negotiate_content_type(&headers, "/api/test"), ContentType::Html);
+        assert_eq!(
+            negotiate_content_type(&headers, "/api/test"),
+            ContentType::Html
+        );
     }
 
     #[test]
     fn test_parse_accept_header() {
         assert_eq!(parse_accept_header("application/json"), ContentType::Json);
         assert_eq!(parse_accept_header("text/html"), ContentType::Html);
-        assert_eq!(parse_accept_header("text/html, application/json; q=0.8"), ContentType::Html);
-        assert_eq!(parse_accept_header("application/json; q=0.9, text/html; q=0.8"), ContentType::Json);
+        assert_eq!(
+            parse_accept_header("text/html, application/json; q=0.8"),
+            ContentType::Html
+        );
+        assert_eq!(
+            parse_accept_header("application/json; q=0.9, text/html; q=0.8"),
+            ContentType::Json
+        );
     }
 }

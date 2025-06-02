@@ -1,19 +1,19 @@
+use anyhow::Result;
 /// Module for scanning Debian package archives with enhanced stream-based processing.
 use deb822_lossless::FromDeb822Paragraph;
 use debian_control::lossy::apt::{Package, Source};
 use futures::stream::Stream;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
-use tempfile::TempDir;
-use anyhow::Result;
 
 use crate::error::{ArchiveError, ArchiveResult};
-use janitor::artifacts::{ArtifactManager, get_artifact_manager};
+use janitor::artifacts::{get_artifact_manager, ArtifactManager};
 
 /// Build information retrieved from database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,17 +43,17 @@ pub struct PackageScanner {
 impl PackageScanner {
     /// Create a new package scanner with artifact manager.
     pub async fn new() -> ArchiveResult<Self> {
-        let artifact_manager = get_artifact_manager("dummy://location").await
+        let artifact_manager = get_artifact_manager("dummy://location")
+            .await
             .map_err(|e| ArchiveError::ArtifactRetrieval(e.to_string()))?;
-        let temp_dir = tempfile::TempDir::new()
-            .map_err(|e| ArchiveError::Io(e))?;
-        
+        let temp_dir = tempfile::TempDir::new().map_err(|e| ArchiveError::Io(e))?;
+
         Ok(Self {
             artifact_manager: Arc::from(artifact_manager),
             temp_dir,
         })
     }
-    
+
     /// Scan packages for a specific build, downloading artifacts as needed.
     pub async fn scan_packages_for_build<'a>(
         &'a self,
@@ -62,21 +62,21 @@ impl PackageScanner {
     ) -> impl Stream<Item = ArchiveResult<Package>> + 'a {
         let build_id = build_info.id.clone();
         let temp_path = self.temp_dir.path().to_path_buf();
-        
+
         // Create async stream that downloads artifacts and scans packages
         async_stream::try_stream! {
             // Download build artifacts to temp directory
             let artifact_dir = self.download_build_artifacts(&build_id, &temp_path).await?;
-            
+
             // Scan packages in the artifact directory
             let packages = scan_packages_in_directory(&artifact_dir, arch).await?;
-            
+
             for package in packages {
                 yield package;
             }
         }
     }
-    
+
     /// Scan sources for a specific build, downloading artifacts as needed.
     pub async fn scan_sources_for_build<'a>(
         &'a self,
@@ -84,21 +84,21 @@ impl PackageScanner {
     ) -> impl Stream<Item = ArchiveResult<Source>> + 'a {
         let build_id = build_info.id.clone();
         let temp_path = self.temp_dir.path().to_path_buf();
-        
+
         // Create async stream that downloads artifacts and scans sources
         async_stream::try_stream! {
             // Download build artifacts to temp directory
             let artifact_dir = self.download_build_artifacts(&build_id, &temp_path).await?;
-            
+
             // Scan sources in the artifact directory
             let sources = scan_sources_in_directory(&artifact_dir).await?;
-            
+
             for source in sources {
                 yield source;
             }
         }
     }
-    
+
     /// Download build artifacts to temporary directory.
     async fn download_build_artifacts(
         &self,
@@ -106,55 +106,56 @@ impl PackageScanner {
         temp_path: &Path,
     ) -> ArchiveResult<PathBuf> {
         let artifact_dir = temp_path.join(format!("build-{}", build_id));
-        tokio::fs::create_dir_all(&artifact_dir).await
+        tokio::fs::create_dir_all(&artifact_dir)
+            .await
             .map_err(|e| ArchiveError::Io(e))?;
-        
-        debug!("Downloading artifacts for build {} to {:?}", build_id, artifact_dir);
-        
+
+        debug!(
+            "Downloading artifacts for build {} to {:?}",
+            build_id, artifact_dir
+        );
+
         // Download all artifacts for this build using the artifact manager
         // Filter to only download package files (.deb, .dsc, .tar.*, .orig.tar.*)
         let package_filter = |filename: &str| -> bool {
-            filename.ends_with(".deb") || 
-            filename.ends_with(".dsc") ||
-            filename.ends_with(".tar.gz") ||
-            filename.ends_with(".tar.xz") ||
-            filename.ends_with(".tar.bz2") ||
-            filename.contains(".orig.tar.") ||
-            filename.contains(".debian.tar.")
+            filename.ends_with(".deb")
+                || filename.ends_with(".dsc")
+                || filename.ends_with(".tar.gz")
+                || filename.ends_with(".tar.xz")
+                || filename.ends_with(".tar.bz2")
+                || filename.contains(".orig.tar.")
+                || filename.contains(".debian.tar.")
         };
-        
+
         self.artifact_manager
             .retrieve_artifacts(build_id, &artifact_dir, Some(&package_filter))
             .await
             .map_err(|e| match e {
-                janitor::artifacts::Error::ArtifactsMissing => {
-                    ArchiveError::ArtifactsMissing {
-                        build_id: build_id.to_string(),
-                        message: "No artifacts found for build".to_string(),
-                    }
-                }
-                janitor::artifacts::Error::ServiceUnavailable => {
-                    ArchiveError::ArtifactRetrieval(
-                        "Artifact service is currently unavailable".to_string()
-                    )
-                }
-                janitor::artifacts::Error::IoError(io_err) => {
-                    ArchiveError::Io(io_err)
-                }
-                janitor::artifacts::Error::Other(msg) => {
-                    ArchiveError::ArtifactRetrieval(msg)
-                }
+                janitor::artifacts::Error::ArtifactsMissing => ArchiveError::ArtifactsMissing {
+                    build_id: build_id.to_string(),
+                    message: "No artifacts found for build".to_string(),
+                },
+                janitor::artifacts::Error::ServiceUnavailable => ArchiveError::ArtifactRetrieval(
+                    "Artifact service is currently unavailable".to_string(),
+                ),
+                janitor::artifacts::Error::IoError(io_err) => ArchiveError::Io(io_err),
+                janitor::artifacts::Error::Other(msg) => ArchiveError::ArtifactRetrieval(msg),
             })?;
-        
+
         // Verify that we actually downloaded some artifacts
-        let entries = tokio::fs::read_dir(&artifact_dir).await
+        let entries = tokio::fs::read_dir(&artifact_dir)
+            .await
             .map_err(|e| ArchiveError::Io(e))?;
         let mut entry_count = 0;
         let mut entries = entries;
-        while let Some(_entry) = entries.next_entry().await.map_err(|e| ArchiveError::Io(e))? {
+        while let Some(_entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| ArchiveError::Io(e))?
+        {
             entry_count += 1;
         }
-        
+
         if entry_count == 0 {
             warn!("No artifacts downloaded for build {}", build_id);
             return Err(ArchiveError::ArtifactsMissing {
@@ -162,8 +163,11 @@ impl PackageScanner {
                 message: "No package artifacts found after download".to_string(),
             });
         }
-        
-        info!("Downloaded {} artifacts for build {} to {:?}", entry_count, build_id, artifact_dir);
+
+        info!(
+            "Downloaded {} artifacts for build {} to {:?}",
+            entry_count, build_id, artifact_dir
+        );
         Ok(artifact_dir)
     }
 }
@@ -188,10 +192,18 @@ async fn scan_packages_in_directory(td: &Path, arch: Option<&str>) -> ArchiveRes
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| ArchiveError::PackageScanning(format!("Failed to spawn dpkg-scanpackages: {}", e)))?;
+        .map_err(|e| {
+            ArchiveError::PackageScanning(format!("Failed to spawn dpkg-scanpackages: {}", e))
+        })?;
 
-    let stdout = proc.stdout.take().ok_or_else(|| ArchiveError::PackageScanning("Failed to open stdout".to_string()))?;
-    let stderr = proc.stderr.take().ok_or_else(|| ArchiveError::PackageScanning("Failed to open stderr".to_string()))?;
+    let stdout = proc
+        .stdout
+        .take()
+        .ok_or_else(|| ArchiveError::PackageScanning("Failed to open stdout".to_string()))?;
+    let stderr = proc
+        .stderr
+        .take()
+        .ok_or_else(|| ArchiveError::PackageScanning("Failed to open stderr".to_string()))?;
 
     let mut stdout_reader = BufReader::new(stdout);
     let stderr_reader = BufReader::new(stderr);
@@ -225,7 +237,7 @@ async fn scan_packages_in_directory(td: &Path, arch: Option<&str>) -> ArchiveRes
         .into_iter()
         .map(|p| Package::from_paragraph(&p))
         .collect();
-    
+
     packages.map_err(|e| ArchiveError::PackageScanning(format!("Failed to parse package: {}", e)))
 }
 
@@ -242,10 +254,18 @@ async fn scan_sources_in_directory(td: &Path) -> ArchiveResult<Vec<Source>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| ArchiveError::SourceScanning(format!("Failed to spawn dpkg-scansources: {}", e)))?;
+        .map_err(|e| {
+            ArchiveError::SourceScanning(format!("Failed to spawn dpkg-scansources: {}", e))
+        })?;
 
-    let stdout = proc.stdout.take().ok_or_else(|| ArchiveError::SourceScanning("Failed to open stdout".to_string()))?;
-    let stderr = proc.stderr.take().ok_or_else(|| ArchiveError::SourceScanning("Failed to open stderr".to_string()))?;
+    let stdout = proc
+        .stdout
+        .take()
+        .ok_or_else(|| ArchiveError::SourceScanning("Failed to open stdout".to_string()))?;
+    let stderr = proc
+        .stderr
+        .take()
+        .ok_or_else(|| ArchiveError::SourceScanning("Failed to open stderr".to_string()))?;
 
     let mut stdout_reader = BufReader::new(stdout);
     let stderr_reader = BufReader::new(stderr);
@@ -278,7 +298,7 @@ async fn scan_sources_in_directory(td: &Path) -> ArchiveResult<Vec<Source>> {
         .into_iter()
         .map(|p| Source::from_paragraph(&p))
         .collect();
-    
+
     sources.map_err(|e| ArchiveError::SourceScanning(format!("Failed to parse source: {}", e)))
 }
 
@@ -305,7 +325,9 @@ mod tests {
     #[tokio::test]
     async fn test_scan_packages() {
         let test_dir = std::path::Path::new("tests/data");
-        let packages = super::scan_packages_in_directory(test_dir, None).await.unwrap();
+        let packages = super::scan_packages_in_directory(test_dir, None)
+            .await
+            .unwrap();
 
         assert_eq!(packages.len(), 1);
 
@@ -327,7 +349,7 @@ mod tests {
         assert_eq!(source.package, "hello");
         assert_eq!(source.version, "2.10-3".parse().unwrap());
     }
-    
+
     #[tokio::test]
     async fn test_package_scanner_creation() {
         // This test might fail if artifact manager is not available

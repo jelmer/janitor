@@ -24,7 +24,7 @@ impl PaginationHelper {
     ) -> PaginationInfo {
         let offset = params.get_offset();
         let limit = params.get_limit();
-        
+
         PaginationInfo::new(total_count, offset, limit, result_count)
     }
 
@@ -37,45 +37,61 @@ impl PaginationHelper {
     ) -> PaginationUrls {
         let offset = params.get_offset();
         let limit = params.get_limit();
-        
+
         let mut urls = PaginationUrls {
             first: None,
             prev: None,
             next: None,
             last: None,
         };
-        
+
         // First page URL
         if offset > 0 {
             urls.first = Some(format!("{}?offset=0&limit={}", base_url, limit));
         }
-        
+
         // Previous page URL
         if offset > 0 {
             let prev_offset = (offset - limit).max(0);
-            urls.prev = Some(format!("{}?offset={}&limit={}", base_url, prev_offset, limit));
+            urls.prev = Some(format!(
+                "{}?offset={}&limit={}",
+                base_url, prev_offset, limit
+            ));
         }
-        
+
         // Next page URL
         if let Some(total) = total_count {
             if offset + limit < total {
-                urls.next = Some(format!("{}?offset={}&limit={}", base_url, offset + limit, limit));
+                urls.next = Some(format!(
+                    "{}?offset={}&limit={}",
+                    base_url,
+                    offset + limit,
+                    limit
+                ));
             }
-            
+
             // Last page URL
             if total > limit {
                 let last_offset = ((total - 1) / limit) * limit;
                 if last_offset != offset {
-                    urls.last = Some(format!("{}?offset={}&limit={}", base_url, last_offset, limit));
+                    urls.last = Some(format!(
+                        "{}?offset={}&limit={}",
+                        base_url, last_offset, limit
+                    ));
                 }
             }
         } else {
             // If we don't know the total, assume there might be a next page if we got a full page
             if result_count >= limit as usize {
-                urls.next = Some(format!("{}?offset={}&limit={}", base_url, offset + limit, limit));
+                urls.next = Some(format!(
+                    "{}?offset={}&limit={}",
+                    base_url,
+                    offset + limit,
+                    limit
+                ));
             }
         }
-        
+
         urls
     }
 
@@ -126,21 +142,22 @@ impl QueryHelper {
         T: std::str::FromStr + PartialOrd + std::fmt::Display + Copy,
         T::Err: std::fmt::Display,
     {
-        let parsed = value.parse::<T>()
+        let parsed = value
+            .parse::<T>()
             .map_err(|e| format!("Invalid integer value '{}': {}", value, e))?;
-            
+
         if let Some(min_val) = min {
             if parsed < min_val {
                 return Err(format!("Value {} is below minimum {}", parsed, min_val));
             }
         }
-        
+
         if let Some(max_val) = max {
             if parsed > max_val {
                 return Err(format!("Value {} is above maximum {}", parsed, max_val));
             }
         }
-        
+
         Ok(parsed)
     }
 
@@ -149,7 +166,8 @@ impl QueryHelper {
         if value.trim().is_empty() {
             Vec::new()
         } else {
-            value.split(',')
+            value
+                .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect()
@@ -165,7 +183,7 @@ impl QueryHelper {
         } else {
             (value, SortOrder::Asc)
         };
-        
+
         if !valid_fields.contains(&field) {
             return Err(format!(
                 "Invalid sort field '{}'. Valid fields: {}",
@@ -173,7 +191,7 @@ impl QueryHelper {
                 valid_fields.join(", ")
             ));
         }
-        
+
         Ok((field.to_string(), order))
     }
 }
@@ -188,10 +206,7 @@ impl ResponseHelper {
     }
 
     /// Create success response with pagination
-    pub fn success_with_pagination<T>(
-        data: T,
-        pagination: PaginationInfo,
-    ) -> ApiResponse<T> {
+    pub fn success_with_pagination<T>(data: T, pagination: PaginationInfo) -> ApiResponse<T> {
         ApiResponse::success_with_pagination(data, pagination)
     }
 
@@ -206,11 +221,7 @@ impl ResponseHelper {
         message: &str,
         details: serde_json::Value,
     ) -> ApiResponse<()> {
-        ApiResponse::error_with_details(
-            code.to_string(),
-            Some(message.to_string()),
-            details,
-        )
+        ApiResponse::error_with_details(code.to_string(), Some(message.to_string()), details)
     }
 
     /// Create not found response
@@ -246,18 +257,19 @@ impl UrlHelper {
         if params.is_empty() {
             return base.to_string();
         }
-        
+
         let query: Vec<String> = params
             .iter()
             .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
             .collect();
-            
+
         format!("{}?{}", base, query.join("&"))
     }
 
     /// Extract base URL from request URI
     pub fn get_base_url(uri: &Uri) -> String {
-        format!("{}://{}{}", 
+        format!(
+            "{}://{}{}",
             uri.scheme_str().unwrap_or("http"),
             uri.authority().map(|a| a.as_str()).unwrap_or("localhost"),
             uri.path()
@@ -271,7 +283,11 @@ impl UrlHelper {
 
     /// Build API endpoint URL
     pub fn api_url(base: &str, endpoint: &str) -> String {
-        format!("{}/api/{}", base.trim_end_matches('/'), endpoint.trim_start_matches('/'))
+        format!(
+            "{}/api/{}",
+            base.trim_end_matches('/'),
+            endpoint.trim_start_matches('/')
+        )
     }
 }
 
@@ -280,22 +296,22 @@ impl UrlHelper {
 pub struct SearchParams {
     /// Search query string
     pub q: Option<String>,
-    
+
     /// Filter by status
     pub status: Option<String>,
-    
+
     /// Filter by campaign
     pub campaign: Option<String>,
-    
+
     /// Filter by suite
     pub suite: Option<String>,
-    
+
     /// Filter by codebase
     pub codebase: Option<String>,
-    
+
     /// Date range filter (start)
     pub since: Option<chrono::DateTime<chrono::Utc>>,
-    
+
     /// Date range filter (end)
     pub until: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -303,7 +319,7 @@ pub struct SearchParams {
 impl SearchParams {
     /// Check if any search/filter parameters are set
     pub fn has_filters(&self) -> bool {
-        self.q.is_some() 
+        self.q.is_some()
             || self.status.is_some()
             || self.campaign.is_some()
             || self.suite.is_some()
@@ -319,7 +335,11 @@ impl SearchParams {
         let mut param_index = 1;
 
         if let Some(ref query) = self.q {
-            conditions.push(format!("(codebase ILIKE ${} OR description ILIKE ${})", param_index, param_index + 1));
+            conditions.push(format!(
+                "(codebase ILIKE ${} OR description ILIKE ${})",
+                param_index,
+                param_index + 1
+            ));
             let search_pattern = format!("%{}%", query);
             params.push(search_pattern.clone());
             params.push(search_pattern);
@@ -409,7 +429,7 @@ impl ApiResponseHelper {
 
     /// Create a standard deletion response
     pub fn deleted() -> ApiResponse<DeletedResponse> {
-        ApiResponse::success(DeletedResponse { 
+        ApiResponse::success(DeletedResponse {
             deleted: true,
             timestamp: chrono::Utc::now(),
         })
@@ -464,7 +484,10 @@ impl RateLimitHelper {
         vec![
             ("X-RateLimit-Limit".to_string(), limit.to_string()),
             ("X-RateLimit-Remaining".to_string(), remaining.to_string()),
-            ("X-RateLimit-Reset".to_string(), reset_time.timestamp().to_string()),
+            (
+                "X-RateLimit-Reset".to_string(),
+                reset_time.timestamp().to_string(),
+            ),
         ]
     }
 }
@@ -475,7 +498,13 @@ pub struct ContentTypeHelper;
 impl ContentTypeHelper {
     /// Detect content type from file extension
     pub fn from_extension(filename: &str) -> ContentType {
-        match filename.split('.').last().unwrap_or("").to_lowercase().as_str() {
+        match filename
+            .split('.')
+            .last()
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str()
+        {
             "json" => ContentType::Json,
             "html" | "htm" => ContentType::Html,
             "txt" | "log" => ContentType::TextPlain,
@@ -509,17 +538,17 @@ impl ValidationHelper {
         if email.is_empty() {
             return Err("Email cannot be empty".to_string());
         }
-        
+
         if !email.contains('@') || !email.contains('.') {
             return Err("Invalid email format".to_string());
         }
-        
+
         // Basic email validation - in production you'd use a proper regex
         let parts: Vec<&str> = email.split('@').collect();
         if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
             return Err("Invalid email format".to_string());
         }
-        
+
         Ok(())
     }
 
@@ -533,23 +562,36 @@ impl ValidationHelper {
     /// Validate identifier (alphanumeric + hyphens/underscores)
     pub fn validate_identifier(id: &str, min_len: usize, max_len: usize) -> Result<(), String> {
         if id.len() < min_len {
-            return Err(format!("Identifier too short (minimum {} characters)", min_len));
+            return Err(format!(
+                "Identifier too short (minimum {} characters)",
+                min_len
+            ));
         }
-        
+
         if id.len() > max_len {
-            return Err(format!("Identifier too long (maximum {} characters)", max_len));
+            return Err(format!(
+                "Identifier too long (maximum {} characters)",
+                max_len
+            ));
         }
-        
-        if !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-            return Err("Identifier can only contain alphanumeric characters, hyphens, and underscores".to_string());
+
+        if !id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(
+                "Identifier can only contain alphanumeric characters, hyphens, and underscores"
+                    .to_string(),
+            );
         }
-        
+
         Ok(())
     }
 
     /// Validate required field
     pub fn validate_required(value: &Option<String>, field_name: &str) -> Result<String, String> {
-        value.as_ref()
+        value
+            .as_ref()
             .filter(|s| !s.trim().is_empty())
             .cloned()
             .ok_or_else(|| format!("{} is required", field_name))
@@ -567,7 +609,7 @@ mod tests {
             limit: Some(10),
             page: None,
         };
-        
+
         let pagination = PaginationHelper::calculate_pagination(&params, Some(100), 10);
         assert_eq!(pagination.offset, 20);
         assert_eq!(pagination.limit, 10);
@@ -594,17 +636,17 @@ mod tests {
     #[test]
     fn test_query_helper_parse_sort() {
         let valid_fields = &["name", "created_time", "status"];
-        
+
         assert_eq!(
             QueryHelper::parse_sort("name", valid_fields),
             Ok(("name".to_string(), SortOrder::Asc))
         );
-        
+
         assert_eq!(
             QueryHelper::parse_sort("-created_time", valid_fields),
             Ok(("created_time".to_string(), SortOrder::Desc))
         );
-        
+
         assert!(QueryHelper::parse_sort("invalid", valid_fields).is_err());
     }
 
@@ -613,7 +655,7 @@ mod tests {
         let mut params = HashMap::new();
         params.insert("q".to_string(), "test query".to_string());
         params.insert("limit".to_string(), "10".to_string());
-        
+
         let url = UrlHelper::build_url("/api/search", &params);
         assert!(url.contains("q=test%20query"));
         assert!(url.contains("limit=10"));
@@ -623,18 +665,33 @@ mod tests {
     fn test_validation_helper() {
         assert!(ValidationHelper::validate_email("test@example.com").is_ok());
         assert!(ValidationHelper::validate_email("invalid").is_err());
-        
+
         assert!(ValidationHelper::validate_identifier("valid-id", 1, 20).is_ok());
         assert!(ValidationHelper::validate_identifier("invalid id", 1, 20).is_err());
     }
 
     #[test]
     fn test_content_type_helper() {
-        assert_eq!(ContentTypeHelper::from_extension("test.json"), ContentType::Json);
-        assert_eq!(ContentTypeHelper::from_extension("test.html"), ContentType::Html);
-        assert_eq!(ContentTypeHelper::from_extension("test.diff"), ContentType::TextDiff);
-        
-        assert_eq!(ContentTypeHelper::to_mime_type(&ContentType::Json), "application/json");
-        assert_eq!(ContentTypeHelper::to_mime_type(&ContentType::Html), "text/html");
+        assert_eq!(
+            ContentTypeHelper::from_extension("test.json"),
+            ContentType::Json
+        );
+        assert_eq!(
+            ContentTypeHelper::from_extension("test.html"),
+            ContentType::Html
+        );
+        assert_eq!(
+            ContentTypeHelper::from_extension("test.diff"),
+            ContentType::TextDiff
+        );
+
+        assert_eq!(
+            ContentTypeHelper::to_mime_type(&ContentType::Json),
+            "application/json"
+        );
+        assert_eq!(
+            ContentTypeHelper::to_mime_type(&ContentType::Html),
+            "text/html"
+        );
     }
 }
