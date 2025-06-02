@@ -19,6 +19,7 @@ anyhow = "1.0"
 bytes = "1.0"
 tempfile = "3.0"
 async-stream = "0.3"
+async-trait = "0.1"
 num_cpus = "1.0"
 
 # Database integration
@@ -26,3 +27,6 @@ sqlx = { workspace = true, features = ["postgres", "chrono", "uuid", "migrate", 
 
 # Artifact management  
 janitor = { path = ".." }
+
+# APT repository generation
+apt-repository = { path = "../apt-repository" }
