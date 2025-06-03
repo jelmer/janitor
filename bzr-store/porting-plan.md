@@ -1,436 +1,531 @@
 # BZR Store Service Porting Plan
 
-> **Status**: 🚧 **IN PROGRESS** - Minimal Rust implementation exists, needs complete Bazaar hosting service implementation.
+> **Status**: 🔄 **IN PROGRESS** - Creating PyO3-based Rust implementation
 > 
 > 📋 **Master Plan**: See [`../porting-plan.md`](../porting-plan.md) for overall project coordination and dependencies.
 
 ## Overview
 
-This document outlines the detailed plan for porting the Janitor bzr-store service from Python to Rust. The bzr-store service provides HTTP-accessible Bazaar repositories with both administrative and public interfaces, Bazaar smart protocol support, and integration with the Janitor platform's VCS management.
+This document outlines the detailed plan for porting the Janitor bzr-store service from Python to Rust using PyO3 for Bazaar library integration. The bzr-store service provides HTTP-accessible Bazaar repositories with administrative and public interfaces, Bazaar smart protocol support, and integration with the Janitor platform's VCS management.
 
 ### Current State Analysis
 
 **Python Implementation (`py/janitor/bzr_store.py`)**: ~455 lines
 - Complete Bazaar hosting service with dual HTTP interfaces (admin + public)
-- Bazaar smart protocol support via Breezy library integration
-- Repository auto-creation and management with shared repositories
-- Bzr diff and revision info APIs
-- Campaign and role-based branch organization
+- Bazaar smart protocol support via Breezy library
+- Repository auto-creation with shared repository support
+- Campaign and role-based repository organization
+- Bazaar diff and revision info APIs
 - Worker authentication and permission management
 - Database integration for codebase validation
-- Comprehensive error handling and monitoring
 
-**Rust Implementation (`bzr-store/`)**: ~5 lines (minimal)
+**Rust Implementation (`bzr-store/`)**: ~5 lines (minimal skeleton)
 - Only contains basic library structure
-- Missing: Bazaar protocol, HTTP server, repository management, APIs
+- Missing: Bazaar protocol, HTTP server, repository management, PyO3 integration
 
-## Technical Architecture Analysis
+## Technical Architecture Strategy
 
-### Current Python Stack
-- **Web Framework**: aiohttp with dual applications (admin + public)
-- **Bazaar Protocol**: Breezy library for Bazaar smart protocol implementation
-- **Repository Management**: Breezy for Bazaar operations and shared repositories
-- **Database**: AsyncPG for codebase validation and worker authentication
-- **Process Management**: asyncio subprocess for `bzr` command operations
-- **Templates**: Jinja2 for HTML rendering
-- **Monitoring**: aiozipkin tracing and Prometheus metrics
+### PyO3 Hybrid Approach
 
-### Target Rust Architecture
-- **Web Framework**: Axum for HTTP server with dual applications
-- **Bazaar Protocol**: 
-  - Subprocess integration with `brz` (Breezy) commands
-  - Alternative: Research pure Rust Bazaar implementation (limited availability)
-- **Repository Management**: Subprocess-based Bazaar operations
-- **Database**: sqlx for PostgreSQL operations
-- **Process Management**: tokio::process for Bazaar subprocess operations
-- **Templates**: Tera for HTML templating
-- **Monitoring**: tracing ecosystem with opentelemetry
+Given the complexity of the Bazaar protocol and the mature Python Breezy library, we'll use a hybrid approach:
 
-## Key Functionality Analysis
-
-### Core Components to Port
-
-1. **Bzr Diff and Revision Info APIs** (Lines 51-133)
-   - Bzr diff generation via subprocess using `brz diff`
-   - Revision walking and commit information extraction
-   - RevisionId validation and error handling
-   - JSON response formatting for revision info
-
-2. **Repository Management** (Lines 154-171)
-   - Auto-creation of missing repositories with shared repositories
-   - Repository path management with campaign and role organization
-   - Database validation for codebase existence
-   - Shared repository initialization using Breezy ControlDir
-
-3. **Bazaar Smart Protocol Handler** (Lines 173-232)
-   - Breezy smart protocol implementation
-   - Transport-based repository access with readonly wrapper
-   - Campaign and role-based directory structure
-   - Protocol factory and request handling
-
-4. **Administrative APIs** (Lines 136-152, 235-270)
-   - Bzr remote configuration management (parent branch setting)
-   - Repository listing with content negotiation
-   - Health and readiness endpoints
-   - Repository existence validation
-
-5. **Dual Web Applications** (Lines 272-348)
-   - Admin interface with full write access
-   - Public interface with controlled access via worker authentication
-   - Route configuration for smart protocol endpoints
-   - Middleware setup and database integration
-
-## Porting Strategy
-
-### Phase 1: Core Infrastructure (2-3 weeks)
-
-#### 1.1 Project Setup and Dependencies (0.5 weeks)
-- Configure Cargo.toml with web and subprocess dependencies
-- Set up basic Axum application structure
-- Add logging, tracing, and error handling
-- Implement configuration management
-
-**Effort Estimate**: ~100 lines
-**Complexity**: Low - project setup and basic structure
-
-**Deliverables:**
-- Project structure with dependencies
-- Basic Axum application
-- Configuration management
-- Logging infrastructure
-
-#### 1.2 Repository Management Core (1 week)
-- Implement repository path management with campaign/role structure
-- Add repository auto-creation logic using subprocess calls
-- Create shared repository initialization
-- Add validation utilities
-
-**Effort Estimate**: ~150 lines
-**Complexity**: Medium - subprocess operations and file management
-
-**Deliverables:**
-- Repository management functions
-- Auto-creation with shared repositories
-- Path utilities with campaign/role support
-- Subprocess wrapper functions
-
-#### 1.3 Database Integration (0.5 weeks)
-- Set up sqlx with PostgreSQL connection pooling
-- Port codebase existence validation
-- Add worker authentication queries
-- Implement connection error handling
-
-**Effort Estimate**: ~80 lines
-**Complexity**: Low - basic database operations
-
-**Deliverables:**
-- Database connection setup
-- Codebase validation functions
-- Authentication queries
-- Error handling
-
-#### 1.4 Basic HTTP Server (1 week)
-- Set up dual Axum applications (admin + public)
-- Implement basic routing structure
-- Add health and readiness endpoints
-- Configure middleware and error handling
-
-**Effort Estimate**: ~150 lines
-**Complexity**: Medium - dual application setup
-
-**Deliverables:**
-- Dual HTTP applications
-- Basic routing
-- Health endpoints
-- Middleware configuration
-
-### Phase 2: Bazaar Protocol Implementation (4-5 weeks)
-
-#### 2.1 Subprocess Integration Foundation (1 week)
-- Implement Breezy/bzr command subprocess wrapper
-- Add process management and error handling
-- Create environment setup for Bazaar operations
-- Implement timeout and cancellation handling
-
-**Effort Estimate**: ~200 lines
-**Complexity**: Medium - subprocess management
-
-**Deliverables:**
-- Breezy command wrapper
-- Process lifecycle management
-- Environment configuration
-- Error handling and timeouts
-
-#### 2.2 Bazaar Smart Protocol Handler (2-3 weeks)
-- Research and implement Bazaar smart protocol in Rust
-- Create protocol message parsing and handling
-- Implement transport abstraction for repository access
-- Add readonly transport wrapper for public access
-
-**Effort Estimate**: ~300-400 lines (major component)
-**Complexity**: Very High - custom protocol implementation
-
-**Note**: This is the most challenging part as there's no existing Rust Bazaar library.
-**Options**:
-1. Implement minimal smart protocol subset
-2. Use subprocess calls to `brz serve` with protocol bridging
-3. Research existing protocol implementations
-
-**Deliverables:**
-- Bazaar smart protocol implementation
-- Transport abstraction
-- Protocol message handling
-- Repository access control
-
-#### 2.3 Repository Access and Security (1 week)
-- Implement worker authentication integration
-- Add repository permission checking
-- Create readonly transport enforcement
-- Add security validation and access control
-
-**Effort Estimate**: ~150 lines
-**Complexity**: Medium - security and access control
-
-**Deliverables:**
-- Authentication integration
-- Permission checking
-- Access control enforcement
-- Security validation
-
-### Phase 3: API Endpoints (2-3 weeks)
-
-#### 3.1 Bzr Diff and Revision APIs (1.5 weeks)
-- Port bzr diff generation using subprocess
-- Implement revision walking and commit extraction
-- Add RevisionId validation and parsing
-- Create JSON response formatting
-
-**Effort Estimate**: ~200 lines
-**Complexity**: High - Bazaar operations and JSON APIs
-
-**Deliverables:**
-- Bzr diff API endpoint
-- Revision info API
-- JSON response handling
-- RevisionId validation
-
-#### 3.2 Repository Management APIs (1 week)
-- Port remote configuration management
-- Implement repository listing with content negotiation
-- Add repository creation and validation
-- Create administrative endpoints
-
-**Effort Estimate**: ~150 lines
-**Complexity**: Medium - CRUD operations and content negotiation
-
-**Deliverables:**
-- Remote management API
-- Repository listing
-- Content negotiation
-- Admin endpoints
-
-#### 3.3 Campaign and Role Support (0.5 weeks)
-- Implement campaign-based repository organization
-- Add role-based branch management
-- Create directory structure validation
-- Add configuration validation
-
-**Effort Estimate**: ~80 lines
-**Complexity**: Low - directory management
-
-**Deliverables:**
-- Campaign organization
-- Role-based branches
-- Directory validation
-- Configuration support
-
-### Phase 4: Testing and Integration (2-3 weeks)
-
-#### 4.1 Protocol Testing (1.5 weeks)
-- Create comprehensive test suite for Bazaar operations
-- Test smart protocol compatibility with Bazaar clients
-- Add performance benchmarks
-- Create mock repository testing
-
-**Effort Estimate**: ~250 lines of test code
-**Complexity**: Medium - protocol testing
-
-**Deliverables:**
-- Bazaar protocol tests
-- Client compatibility tests
-- Performance benchmarks
-- Mock testing utilities
-
-#### 4.2 Integration Testing (1 week)
-- Test dual application setup
-- Validate authentication and authorization
-- Add end-to-end workflow testing
-- Create error scenario testing
-
-**Deliverables:**
-- Integration test suite
-- Authentication testing
-- Workflow validation
-- Error handling tests
-
-#### 4.3 Production Readiness (0.5 weeks)
-- Add comprehensive monitoring and logging
-- Create deployment documentation
-- Add operational runbooks
-- Implement graceful shutdown
-
-**Deliverables:**
-- Production monitoring
-- Deployment guides
-- Operational documentation
-- Service management
-
-## Implementation Details
-
-### Key Dependencies
-
-**Rust Crates:**
-```toml
-[dependencies]
-axum = "0.7"                    # Web framework
-tokio = { version = "1.0", features = ["full"] }
-serde = "1.0"                   # Serialization
-sqlx = "0.7"                    # Database toolkit
-tera = "1.19"                   # Template engine
-tower = "0.4"                   # Service middleware
-tower-http = "0.5"              # HTTP utilities
-tracing = "0.1"                 # Logging/tracing
-uuid = "1.6"                    # ID generation
-mime = "0.3"                    # MIME type handling
-percent-encoding = "2.3"        # URL encoding
-chrono = "0.4"                  # Date/time handling
-bytes = "1.5"                   # Byte manipulation
-futures = "0.3"                 # Async utilities
+```
+┌─────────────────────────┐
+│   Axum Web Server       │  ← Pure Rust (HTTP, routing, middleware)
+│  (Pure Rust)            │
+└───────────┬─────────────┘
+            │
+┌───────────▼─────────────┐
+│  Business Logic         │  ← Mixed (auth, config in Rust, 
+│  (Pure Rust + PyO3)     │    Bazaar ops via PyO3)
+└───────────┬─────────────┘
+            │
+┌───────────▼─────────────┐
+│  PyO3 Bridge Layer      │  ← Rust-Python interop
+│  (Rust-Python interop)  │
+└───────────┬─────────────┘
+            │
+┌───────────▼─────────────┐
+│  Breezy Library         │  ← Python (mature Bazaar implementation)
+│  (Python - Bazaar impl) │
+└─────────────────────────┘
 ```
 
-### Critical Migration Patterns
+### Component Distribution
 
-1. **Bazaar Subprocess Operations**:
-   ```python
-   # Python (asyncio subprocess)
-   args = [sys.executable, "-m", "breezy", "diff", f"-rrevid:{old_revid}..revid:{new_revid}"]
-   p = await asyncio.create_subprocess_exec(*args, stdout=PIPE, stderr=PIPE)
-   stdout, stderr = await p.communicate()
-   ```
-   
-   ```rust
-   // Rust (tokio process)
-   let mut cmd = Command::new("brz")
-       .args(["diff", &format!("-rrevid:{}..revid:{}", old_revid, new_revid)])
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped())
-       .spawn()?;
-   
-   let output = cmd.wait_with_output().await?;
-   ```
+1. **Pure Rust Components** (no Python dependencies):
+   - Web server infrastructure (Axum)
+   - Authentication and database operations
+   - Repository path management and validation
+   - Configuration management and logging
+   - Health/ready endpoints
+   - Repository listing and basic file operations
 
-2. **Bazaar Smart Protocol Handling**:
-   ```python
-   # Python (Breezy library)
-   protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(request_data)
-   smart_protocol_request = protocol_factory(backing_transport, out_buffer.write, ".")
-   smart_protocol_request.accept_bytes(unused_bytes)
-   ```
-   
-   ```rust
-   // Rust (custom implementation or subprocess bridge)
-   let protocol_handler = BazaarProtocolHandler::new(transport, jail_root);
-   let response = protocol_handler.handle_request(&request_data).await?;
-   ```
+2. **PyO3 Integration Required** (Python Breezy library):
+   - Bazaar smart protocol handling (bzr://, bzr+ssh://)
+   - Repository creation with shared repository support
+   - Complex revision operations and diff generation
+   - Branch and transport management
+   - Bazaar-specific metadata operations
 
-3. **Repository Management**:
-   ```python
-   # Python (Breezy)
-   try:
-       repo = Repository.open(repo_path)
-   except NotBranchError:
-       controldir = ControlDir.create(repo_path)
-       repo = controldir.create_repository(shared=True)
-   ```
-   
-   ```rust
-   // Rust (subprocess)
-   match check_repository_exists(&repo_path).await {
-       Ok(repo) => repo,
-       Err(_) => {
-           std::fs::create_dir_all(&repo_path)?;
-           create_shared_repository(&repo_path).await?
-       }
-   }
-   ```
+3. **Subprocess Fallback** (for simple operations):
+   - Basic diff generation (`brz diff`)
+   - Repository information queries
+   - Remote configuration setup
 
-### Risk Mitigation
+## Implementation Phases
 
-1. **Bazaar Protocol Complexity**: Consider subprocess bridge to `brz serve` as fallback
-2. **Limited Rust Ecosystem**: Bazaar has minimal Rust support compared to Git
-3. **Performance**: Profile subprocess vs potential native implementation
-4. **Compatibility**: Ensure compatibility with existing Bazaar clients
+### Phase 1: Foundation and Subprocess MVP (1-2 weeks)
 
-## Timeline and Effort Estimates
+#### 1.1 Project Setup and Core Infrastructure (3-4 days)
+**Target**: Basic Rust project with PyO3 and web server setup
 
-### Total Effort: 10-14 weeks (2.5-3.5 months)
+- **Dependencies Setup**:
+  ```toml
+  [dependencies]
+  axum = "0.7"
+  tokio = { version = "1.0", features = ["full"] }
+  sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls"] }
+  pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+  tera = "1.19"
+  serde = { version = "1.0", features = ["derive"] }
+  tracing = "0.1"
+  url = "2.4"
+  ```
 
-| Phase | Duration | Effort Level | Risk Level |
-|-------|----------|--------------|------------|
-| 1. Core Infrastructure | 2-3 weeks | Medium | Low |
-| 2. Bazaar Protocol Implementation | 4-5 weeks | Very High | Very High |
-| 3. API Endpoints | 2-3 weeks | High | Medium |
-| 4. Testing and Integration | 2-3 weeks | Medium | Medium |
+- **Project Structure**:
+  ```
+  bzr-store/
+  ├── Cargo.toml
+  ├── src/
+  │   ├── main.rs          # Service entry point
+  │   ├── lib.rs           # Library exports
+  │   ├── config.rs        # Configuration management
+  │   ├── database.rs      # PostgreSQL integration
+  │   ├── error.rs         # Error handling
+  │   ├── repository.rs    # Repository management
+  │   ├── pyo3_bridge.rs   # PyO3 integration layer
+  │   ├── subprocess.rs    # Subprocess fallback operations
+  │   └── web.rs           # HTTP server and routes
+  ```
 
-### Critical Dependencies
+- **Basic Configuration**:
+  ```rust
+  #[derive(Debug, Deserialize)]
+  pub struct Config {
+      pub database_url: String,
+      pub repository_path: PathBuf,
+      pub admin_bind: SocketAddr,  // e.g., 127.0.0.1:9929
+      pub public_bind: SocketAddr, // e.g., 127.0.0.1:9930
+      pub python_path: Option<String>,
+  }
+  ```
 
-- **Breezy/Bazaar**: Must be available for subprocess operations
-- **Database Schema**: Requires stable codebase and worker tables
-- **Authentication System**: Worker credential validation
-- **File System**: Local repository storage with proper permissions
+#### 1.2 Subprocess-based Basic Operations (3-4 days)
+**Target**: Basic repository operations using `brz` subprocess
 
-### Success Metrics
+- **Repository Management**:
+  ```rust
+  pub struct BzrRepositoryManager {
+      base_path: PathBuf,
+      database: DatabaseManager,
+  }
+  
+  impl BzrRepositoryManager {
+      pub async fn ensure_repository(&self, codebase: &str, campaign: &str, role: &str) -> Result<PathBuf> {
+          // Create shared repository structure if needed
+          // Campaign-based organization: base_path/campaign/codebase/role
+      }
+      
+      pub async fn get_diff_subprocess(&self, old_revid: &str, new_revid: &str) -> Result<Vec<u8>> {
+          // Use `brz diff -r old..new` subprocess
+      }
+  }
+  ```
 
-1. **Protocol Compatibility**: 100% Bazaar client compatibility
-2. **Performance**: Repository operations ≤ Python implementation
-3. **Feature Parity**: All administrative and smart protocol features working
-4. **Security**: Proper authentication and access control
-5. **Reliability**: Stable subprocess handling and error recovery
+- **Basic HTTP Endpoints**:
+  ```rust
+  // Health and readiness
+  GET /health
+  GET /ready
+  
+  // Basic repository operations
+  GET /{codebase}/diff?old={old}&new={new}
+  GET /{codebase}/revision-info?old={old}&new={new}
+  GET /repositories
+  ```
 
-## Major Technical Challenges
+#### 1.3 Database Integration and Authentication (2-3 days)
+**Target**: Worker authentication and codebase validation
 
-### Bazaar Smart Protocol Implementation
-The biggest challenge is implementing the Bazaar smart protocol in Rust. Unlike Git, Bazaar has very limited Rust ecosystem support.
+- **Database Operations**:
+  ```rust
+  impl DatabaseManager {
+      pub async fn validate_codebase(&self, codebase: &str) -> Result<bool>;
+      pub async fn authenticate_worker(&self, username: &str, password: &str) -> Result<bool>;
+      pub async fn get_worker_permissions(&self, username: &str) -> Result<WorkerPermissions>;
+  }
+  ```
 
-**Options**:
-1. **Minimal Implementation**: Implement only the smart protocol subset needed by Janitor
-2. **Subprocess Bridge**: Use `brz serve` with protocol bridging (lower performance, higher compatibility)
-3. **Research Alternative**: Investigate if any Rust Bazaar libraries exist or are in development
+- **Authentication Middleware**:
+  ```rust
+  pub async fn auth_middleware(
+      req: Request<Body>,
+      next: Next<Body>,
+  ) -> Result<Response<Body>, AuthError> {
+      // HTTP Basic Auth for workers
+      // Admin vs public interface detection
+  }
+  ```
 
-**Recommendation**: Start with subprocess bridge approach for compatibility, then evaluate native implementation.
+### Phase 2: PyO3 Integration and Smart Protocol (2-3 weeks)
 
-## Integration Considerations
+#### 2.1 PyO3 Bridge Layer Setup (1 week)
+**Target**: Basic Python-Rust interop for Breezy operations
 
-### Service Dependencies
-- **Runner/Worker Services**: Use bzr-store for repository access
-- **Site Service**: Links to repository browsing (if implemented)
-- **Database**: Requires read access to codebase and worker tables
-- **File System**: Shared repository storage with proper permissions
+- **PyO3 Bridge Module**:
+  ```rust
+  use pyo3::prelude::*;
+  
+  pub struct BreezyBridge {
+      python: Python<'static>,
+      breezy_module: PyObject,
+  }
+  
+  impl BreezyBridge {
+      pub fn new() -> PyResult<Self> {
+          // Initialize Python interpreter
+          // Import breezy modules
+      }
+      
+      pub async fn create_shared_repository(&self, path: &Path) -> PyResult<()> {
+          // Call breezy.repository.Repository.init_shared()
+      }
+      
+      pub async fn get_transport(&self, url: &str) -> PyResult<PyObject> {
+          // Get breezy transport for URL
+      }
+  }
+  ```
 
-### Bazaar Client Compatibility
-- Standard Bazaar clients must work without modification
-- HTTP(S) branch, pull, and push operations
-- Authentication via HTTP basic auth for workers
-- Proper Bazaar protocol error handling and responses
+- **Python Environment Setup**:
+  - Embed Python interpreter in Rust binary
+  - Import required Breezy modules on startup
+  - Handle Python GIL management for async operations
 
-## Related Porting Plans
+#### 2.2 Repository Operations via PyO3 (1-2 weeks)
+**Target**: Core repository management using Breezy library
+
+- **Repository Creation**:
+  ```rust
+  impl BzrRepositoryManager {
+      pub async fn create_repository_pyo3(&self, path: &Path) -> Result<()> {
+          self.breezy_bridge.create_shared_repository(path).await
+      }
+      
+      pub async fn init_branch_pyo3(&self, branch_path: &Path, repository_path: &Path) -> Result<()> {
+          // Use breezy to create branch in shared repository
+      }
+  }
+  ```
+
+- **Diff and Revision Operations**:
+  ```rust
+  impl BzrRepositoryManager {
+      pub async fn get_diff_pyo3(&self, repo_path: &Path, old_revid: &str, new_revid: &str) -> Result<Vec<u8>> {
+          // Use breezy diff functionality
+      }
+      
+      pub async fn get_revision_info_pyo3(&self, repo_path: &Path, old_revid: &str, new_revid: &str) -> Result<Vec<RevisionInfo>> {
+          // Walk revision history using breezy
+      }
+  }
+  ```
+
+#### 2.3 Smart Protocol Integration (1 week)
+**Target**: Bazaar smart protocol support for clone/pull/push operations
+
+- **Smart Server Setup**:
+  ```rust
+  pub async fn handle_smart_protocol(
+      path: Path<String>,
+      headers: HeaderMap,
+      body: Bytes,
+  ) -> Result<Response<Body>, BzrError> {
+      // Parse bzr smart protocol requests
+      // Delegate to breezy smart server implementation
+      // Stream responses back to client
+  }
+  ```
+
+- **Protocol Endpoints**:
+  ```
+  POST /{codebase}/.bzr/smart  # Smart protocol endpoint
+  GET /{codebase}/.bzr/*       # Repository metadata
+  ```
+
+### Phase 3: Full Feature Parity (1-2 weeks)
+
+#### 3.1 Advanced Repository Features (1 week)
+**Target**: Complete repository management functionality
+
+- **Campaign and Role Support**:
+  ```rust
+  pub struct RepositoryPath {
+      pub campaign: String,
+      pub codebase: String,
+      pub role: String,
+  }
+  
+  impl BzrRepositoryManager {
+      pub fn get_repository_path(&self, campaign: &str, codebase: &str, role: &str) -> PathBuf {
+          self.base_path.join(campaign).join(codebase).join(role)
+      }
+      
+      pub async fn ensure_campaign_structure(&self, campaign: &str) -> Result<()> {
+          // Create campaign directory and shared repository
+      }
+  }
+  ```
+
+- **Repository Listing and Management**:
+  ```rust
+  impl BzrRepositoryManager {
+      pub async fn list_repositories(&self) -> Result<Vec<RepositoryInfo>>;
+      pub async fn get_repository_info(&self, path: &RepositoryPath) -> Result<RepositoryInfo>;
+      pub async fn configure_remote(&self, path: &RepositoryPath, remote_url: &str) -> Result<()>;
+  }
+  ```
+
+#### 3.2 Complete API Implementation (1 week)
+**Target**: All HTTP endpoints with full functionality
+
+- **Admin Interface** (port 9929):
+  ```rust
+  // Repository management
+  GET /repositories
+  POST /repositories/{campaign}/{codebase}/{role}
+  GET /{campaign}/{codebase}/{role}/info
+  
+  // Remote configuration
+  POST /{campaign}/{codebase}/{role}/remotes
+  GET /{campaign}/{codebase}/{role}/remotes
+  
+  // Health and admin operations
+  GET /health
+  GET /ready
+  ```
+
+- **Public Interface** (port 9930):
+  ```rust
+  // Read-only repository access
+  GET /{campaign}/{codebase}/{role}/diff
+  GET /{campaign}/{codebase}/{role}/revision-info
+  POST /{campaign}/{codebase}/{role}/.bzr/smart  # Smart protocol
+  GET /{campaign}/{codebase}/{role}/.bzr/*       # Repository files
+  ```
+
+### Phase 4: Testing and Optimization (1 week)
+
+#### 4.1 Integration Testing (3-4 days)
+**Target**: Comprehensive test suite
+
+- **Bazaar Client Testing**:
+  ```rust
+  #[tokio::test]
+  async fn test_bzr_clone() {
+      // Test bzr clone from service
+  }
+  
+  #[tokio::test]
+  async fn test_bzr_push() {
+      // Test bzr push to service
+  }
+  ```
+
+- **API Compatibility Testing**:
+  ```rust
+  #[tokio::test]
+  async fn test_python_compatibility() {
+      // Compare outputs with Python implementation
+  }
+  ```
+
+#### 4.2 Performance Optimization (2-3 days)
+**Target**: Optimize PyO3 integration
+
+- **GIL Management**: Optimize Python GIL usage for concurrent operations
+- **Connection Pooling**: Reuse Python objects where possible
+- **Memory Management**: Proper cleanup of PyO3 objects
+- **Caching**: Cache frequently accessed Python objects
+
+#### 4.3 Production Readiness (1-2 days)
+**Target**: Deployment preparation
+
+- **Configuration**: Complete configuration options
+- **Logging**: Comprehensive logging and tracing
+- **Monitoring**: Health checks and metrics
+- **Documentation**: Deployment and operation guides
+
+## Error Handling Strategy
+
+### Error Types
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum BzrError {
+    #[error("Python error: {0}")]
+    Python(#[from] pyo3::PyErr),
+    
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+    
+    #[error("Repository error: {message}")]
+    Repository { message: String },
+    
+    #[error("Authentication failed")]
+    AuthenticationFailed,
+    
+    #[error("Subprocess error: {0}")]
+    Subprocess(String),
+}
+```
+
+### Error Conversion
+```rust
+impl From<BzrError> for Response<Body> {
+    fn from(error: BzrError) -> Self {
+        match error {
+            BzrError::AuthenticationFailed => (StatusCode::UNAUTHORIZED, "Authentication required").into_response(),
+            BzrError::Repository { .. } => (StatusCode::NOT_FOUND, "Repository not found").into_response(),
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
+        }
+    }
+}
+```
+
+## Performance Considerations
+
+### PyO3 Optimization
+1. **GIL Management**: Use `Python::allow_threads()` for I/O operations
+2. **Object Caching**: Cache frequently used Python objects
+3. **Batch Operations**: Group multiple Python calls when possible
+4. **Memory Management**: Explicit cleanup of PyO3 objects
+
+### Subprocess Fallback
+- Use subprocess for operations that don't require complex Python integration
+- Implement timeout and resource limits for subprocess calls
+- Cache subprocess results where appropriate
+
+## Testing Strategy
+
+### Unit Tests
+- Pure Rust components (config, auth, path management)
+- PyO3 bridge layer with mocked Python objects
+- Error handling and edge cases
+
+### Integration Tests
+- Full bzr client operations (clone, pull, push)
+- HTTP API endpoints with real bzr client
+- Database integration and authentication
+- Performance benchmarks vs Python implementation
+
+### Compatibility Tests
+- Compare output with Python implementation
+- Verify protocol compatibility with various bzr client versions
+- Test edge cases and error conditions
+
+## Security Considerations
+
+### Python Integration Security
+- Limit Python code execution to Breezy library only
+- Validate all inputs before passing to Python
+- Handle Python exceptions safely
+- Resource limits for Python operations
+
+### Repository Security
+- Validate repository paths to prevent directory traversal
+- Secure worker authentication
+- Audit logging for administrative operations
+- Rate limiting for resource-intensive operations
+
+## Migration Strategy
+
+### Deployment Phases
+1. **Development**: PyO3-based implementation with fallback to Python service
+2. **Staging**: Side-by-side testing with Python implementation
+3. **Production**: Gradual rollout with monitoring and rollback capability
+
+### Compatibility
+- Maintain HTTP API compatibility with Python implementation
+- Ensure bzr client compatibility across versions
+- Preserve repository structure and metadata
+
+## Success Criteria
+
+### Functional Requirements
+- ✅ 100% bzr client compatibility (clone, pull, push operations)
+- ✅ All HTTP API endpoints functional with identical responses
+- ✅ Repository management preserves campaign/role structure
+- ✅ Worker authentication and permission system working
+- ✅ Database integration maintains data consistency
+
+### Performance Requirements
+- 🎯 HTTP response times ≤ Python implementation + 20%
+- 🎯 bzr operations performance within 30% of Python implementation
+- 🎯 Memory usage ≤ Python implementation
+- 🎯 Concurrent connections support ≥ Python implementation
+
+### Quality Requirements
+- ✅ Comprehensive test coverage (>90% for critical paths)
+- ✅ Integration tests verify bzr client compatibility
+- ✅ Error handling provides clear feedback
+- ✅ Logging and monitoring for production operations
+- ✅ Documentation for deployment and operations
+
+## Implementation Timeline
+
+| Phase | Duration | Focus Area | Risk Level |
+|-------|----------|------------|------------|
+| 1 | 1-2 weeks | Foundation and subprocess MVP | Low |
+| 2 | 2-3 weeks | PyO3 integration and smart protocol | High |
+| 3 | 1-2 weeks | Full feature parity | Medium |
+| 4 | 1 week | Testing and optimization | Low |
+
+**Total Estimated Duration: 5-8 weeks**
+
+## Risk Assessment
+
+### High Risk Areas
+1. **PyO3 Integration Complexity**: First major PyO3 integration in the project
+2. **Bazaar Smart Protocol**: Complex protocol with many edge cases
+3. **Python-Rust Async Integration**: Managing async operations across language boundary
+4. **Performance Impact**: PyO3 overhead compared to pure Python
+
+### Mitigation Strategies
+1. **Incremental Implementation**: Start with subprocess fallback for core functionality
+2. **Extensive Testing**: Comprehensive test suite with real bzr clients
+3. **Performance Monitoring**: Continuous benchmarking during development
+4. **Fallback Options**: Maintain subprocess operations as backup
+
+## Dependencies and Integration
+
+### External Dependencies
+- **Breezy Library**: Python library for Bazaar operations
+- **PyO3**: Rust-Python integration
+- **Database**: PostgreSQL for worker authentication and codebase validation
+
+### Service Integration
+- **Runner/Worker Services**: Use bzr-store for Bazaar repository access
+- **Site Service**: Links to repository browsing interfaces
+- **Database**: Shared tables for workers and codebases
+
+## Related Plans
 
 - 📋 **Master Plan**: [`../porting-plan.md`](../porting-plan.md) - Overall project coordination
-- ✅ **Runner**: [`../runner/porting-plan.md`](../runner/porting-plan.md) - Already completed (uses bzr-store)
-- ✅ **Publisher**: [`../publish/porting-plan.md`](../publish/porting-plan.md) - Already completed
-- 🚧 **Git Store**: [`../git-store/porting-plan.md`](../git-store/porting-plan.md) - In progress (similar VCS hosting)
-- 🚧 **Site**: [`../site/porting-plan.md`](../site/porting-plan.md) - In progress
+- ✅ **Git Store**: [`../git-store/porting-plan.md`](../git-store/porting-plan.md) - Parallel VCS service
+- ✅ **Site**: [`../site/porting-plan.md`](../site/porting-plan.md) - Web interface integration
+- ✅ **Runner**: [`../runner/porting-plan.md`](../runner/porting-plan.md) - VCS operations integration
 
 ---
 
-*This plan will be updated as implementation progresses and requirements evolve.*
+*This plan leverages PyO3 to provide a practical migration path that maintains Bazaar functionality while achieving Rust migration goals. The hybrid approach balances implementation complexity with performance requirements.*

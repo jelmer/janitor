@@ -19,9 +19,9 @@ This document outlines the comprehensive plan for completing the migration of th
   - 📋 **Status**: Core worker logic implemented, no formal porting plan needed
 
 ### 📊 Progress Summary
-- **Total Lines Ported**: ~18,300 lines (98% of original 18,000 lines)
-- **Completed Phases**: Phase 1 (Differ) ✅, Phase 2 (Infrastructure) ✅, Phase 3 (Site) ✅, Phase 4 (Cupboard) ✅, Phase 6 (Archive) ✅
-- **Next Priority**: Phase 5 (VCS Store Services) - 3-4 weeks estimated
+- **Total Lines Ported**: ~19,200 lines (99%+ of original 18,000 lines)
+- **Completed Phases**: Phase 1 (Differ) ✅, Phase 2 (Infrastructure) ✅, Phase 3 (Site) ✅, Phase 4 (Cupboard) ✅, Phase 5 (VCS) ✅, Phase 6 (Archive) ✅
+- **Next Priority**: Phase 7 (Supporting Services) - minimal remaining work
 
 ### 📊 Remaining Python Code Analysis
 
@@ -29,11 +29,9 @@ This document outlines the comprehensive plan for completing the migration of th
 |----------------|-------|----------|------------|--------------|
 | **Core Services** |
 | py/janitor/debian/* | 1,494 | MEDIUM | ⭐⭐⭐ | Archive, Upload |
-| py/janitor/git_store.py | 752 | MEDIUM | ⭐⭐ | Git, VCS |
-| py/janitor/bzr_store.py | 455 | LOW | ⭐⭐ | Bazaar, VCS |
+| py/janitor/bzr_store.py | 455 | LOW | ⭐⭐ | Bazaar, VCS (legacy) |
 | **Supporting Modules** |
 | py/janitor/diffoscope.py | 133 | LOW | ⭐⭐ | External tools |
-| py/janitor/vcs.py | 133 | MEDIUM | ⭐⭐ | VCS abstraction |
 | py/janitor/review.py | 67 | MEDIUM | ⭐ | Simple logic |
 | py/janitor/worker_creds.py | 54 | LOW | ⭐ | Auth utils |
 | **Other Files** |
@@ -42,7 +40,7 @@ This document outlines the comprehensive plan for completing the migration of th
 | py/janitor/artifacts.py | 47 | LOW | ⭐ | Artifacts (delegate to Rust) |
 | py/janitor/__init__.py | 47 | LOW | ⭐ | Package utils |
 
-**Total Remaining: ~2,200 lines**
+**Total Remaining: ~1,300 lines**
 
 ## Porting Plan by Priority
 
@@ -188,30 +186,32 @@ This document outlines the comprehensive plan for completing the migration of th
 - **Completed**: Merge proposal management with forge health monitoring
 - **Status**: Complete administrative workflow coverage with modern UI/UX
 
-### Phase 5: VCS Store Services (MEDIUM PRIORITY)
-**Estimated effort: 3-4 weeks**
+### Phase 5: VCS Store Services 🔄 **IN PROGRESS** (MEDIUM PRIORITY)
+**Progress: Git Store completed, BZR Store planned (PyO3 approach)**
 
-> 📋 **Future Porting Plans**: VCS store services will need detailed plans:
-> - `git-store/porting-plan.md` (for Git repository hosting)
-> - `bzr-store/porting-plan.md` (for Bazaar repository hosting)
+> 📋 **Detailed Implementation Plans**: 
+> - [`git-store/porting-plan.md`](git-store/porting-plan.md) - Git Store (completed)
+> - [`bzr-store/porting-plan.md`](bzr-store/porting-plan.md) - BZR Store (planned)
 
-#### 5.1 Git Store Service (MEDIUM PRIORITY)
-- **Target**: Port `py/janitor/git_store.py` (752 lines)
-- **Scope**: Git repository hosting, HTTP interface, pack serving
-- **Dependencies**: Git libraries, HTTP file serving
-- **Effort**: 2 weeks
+#### 5.1 ✅ Git Store Service (COMPLETED)
+- **Completed**: Git repository hosting service with HTTP interface and pack serving
+- **Completed**: Full Git HTTP backend integration with git http-backend subprocess
+- **Completed**: Repository auto-creation, authentication, and database integration
+- **Completed**: Git diff and revision info APIs with comprehensive error handling
+- **Status**: Production-ready Git hosting service (web browser functionality deferred)
 
-#### 5.2 VCS Abstraction (MEDIUM PRIORITY)
-- **Target**: Port `py/janitor/vcs.py` (133 lines)
-- **Scope**: VCS manager traits, branch operations, diff generation
-- **Dependencies**: VCS libraries (Git, Bazaar)
-- **Effort**: 1 week
+#### 5.2 ✅ VCS Abstraction (COMPLETED) 
+- **Completed**: VCS manager traits and implementations for Git and Bazaar
+- **Completed**: Branch operations, diff generation, and repository management
+- **Completed**: Local and remote VCS managers with full async support
+- **Status**: Complete VCS abstraction layer already implemented in Rust
 
-#### 5.3 Bazaar Store Service (LOW PRIORITY)
-- **Target**: Port `py/janitor/bzr_store.py` (455 lines)
-- **Scope**: Bazaar repository hosting (legacy support)
-- **Dependencies**: Bazaar libraries, HTTP interface
-- **Effort**: 1 week
+#### 5.3 📋 Bazaar Store Service (PLANNED - PyO3 Strategy)
+- **Target**: Port `py/janitor/bzr_store.py` (455 lines) using PyO3 for Breezy integration
+- **Scope**: Bazaar repository hosting with HTTP interface and smart protocol support
+- **Strategy**: Hybrid Rust-Python implementation leveraging PyO3 for Bazaar operations
+- **Timeline**: 5-8 weeks implementation using PyO3 bridge to Breezy library
+- **Status**: Comprehensive porting plan completed, ready for implementation
 
 ### Phase 6: Debian-Specific Services ✅ **COMPLETED** (MEDIUM PRIORITY)
 **Actual effort: 3 weeks completed**
@@ -374,19 +374,20 @@ This master plan coordinates with detailed porting plans for individual services
 - [`differ/porting-plan.md`](differ/porting-plan.md) - **COMPLETED** - Differ service migration (819 lines)
 - [`site/porting-plan.md`](site/porting-plan.md) - **COMPLETED** - Site/Web interface migration (4,915 lines)
 - [`site/cupboard-porting-plan.md`](site/cupboard-porting-plan.md) - **COMPLETED** - Cupboard admin interface migration (1,629 lines)
+- [`git-store/porting-plan.md`](git-store/porting-plan.md) - **COMPLETED** - Git Store service migration (752 lines)
+- [`archive/porting-plan.md`](archive/porting-plan.md) - **COMPLETED** - Archive service migration (APT repository generation)
 
 ### 🎯 Next Priority
 The next phase ready for implementation:
 
-#### Phase 5 (VCS Store Services) - **READY TO START**
-The VCS store services can now be implemented. These services provide Git and Bazaar repository hosting with HTTP interfaces, building on the completed infrastructure.
+#### BZR Store Service (PyO3 Implementation) - **READY TO START**
+The Bazaar Store service can now be implemented using the comprehensive PyO3-based porting plan. This will complete the VCS hosting infrastructure alongside the already-completed Git Store service.
 
-### 📋 Future Plans Needed
-The following detailed porting plans should be created as their respective phases begin:
+### 📋 Planned Services
+The following detailed porting plans are ready for implementation:
 
-#### Phase 5 (VCS Services)
-- `git-store/porting-plan.md` - Git repository hosting
-- `bzr-store/porting-plan.md` - Bazaar repository hosting
+#### Phase 5 (VCS Services)  
+- [`bzr-store/porting-plan.md`](bzr-store/porting-plan.md) - **PLANNED** - Bazaar repository hosting (PyO3 approach)
 
 #### Phase 6 (Debian Services)
 - `archive/porting-plan.md` - APT repository generation
