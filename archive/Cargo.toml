@@ -3,6 +3,10 @@ name = "janitor-archive"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "janitor-archive"
+path = "src/main.rs"
+
 [dependencies]
 futures = "0.3.31"
 tokio = { workspace = true, features = ["full"] }
@@ -41,3 +45,7 @@ tokio-util = "0.7"
 # Background services dependencies
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# CLI dependencies
+clap = { version = "4.4", features = ["derive", "env"] }
+tracing-subscriber = "0.3"

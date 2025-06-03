@@ -3783,6 +3783,7 @@ dependencies = [
  "axum 0.7.9",
  "bytes",
  "chrono",
+ "clap",
  "deb822-lossless",
  "debian-control",
  "futures",
@@ -3800,6 +3801,7 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
