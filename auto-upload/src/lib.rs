@@ -4,8 +4,11 @@
 
 #![deny(missing_docs)]
 
+pub mod artifacts;
 pub mod config;
 pub mod error;
+pub mod process;
+pub mod upload;
 pub mod utils;
 pub mod web;
 
