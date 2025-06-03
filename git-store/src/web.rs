@@ -9,8 +9,8 @@ use crate::{
 };
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    http::{header, StatusCode},
+    response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -99,13 +99,66 @@ async fn ready_check(State(state): State<AppState>) -> Result<&'static str> {
     Ok("OK")
 }
 
-/// List repositories
-async fn list_repositories(State(state): State<AppState>) -> Result<Response> {
+/// Content negotiation helper
+fn negotiate_content_type(accept_header: Option<&str>) -> ContentType {
+    let accept = accept_header.unwrap_or("*/*");
+    
+    // Simple content negotiation - check for specific types
+    if accept.contains("application/json") || accept.contains("*/json") {
+        ContentType::Json
+    } else if accept.contains("text/html") || accept.contains("text/*") && !accept.contains("text/plain") {
+        ContentType::Html
+    } else if accept.contains("text/plain") {
+        ContentType::Plain
+    } else if accept == "*/*" {
+        ContentType::Html // Default to HTML
+    } else {
+        ContentType::Json // Fallback to JSON
+    }
+}
+
+#[derive(Debug)]
+enum ContentType {
+    Json,
+    Html,
+    Plain,
+}
+
+/// List repositories with content negotiation
+async fn list_repositories(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Response> {
     let repos = state.repo_manager.list_repositories()?;
     
-    // Check Accept header for content negotiation
-    // For now, just return JSON
-    Ok(Json(repos).into_response())
+    let accept_header = headers.get(header::ACCEPT)
+        .and_then(|h| h.to_str().ok());
+    
+    let content_type = negotiate_content_type(accept_header);
+    
+    match content_type {
+        ContentType::Json => {
+            Ok(Json(repos).into_response())
+        }
+        ContentType::Plain => {
+            let text = repos.join("\n") + "\n";
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/plain")
+                .body(axum::body::Body::from(text))
+                .unwrap())
+        }
+        ContentType::Html => {
+            let mut context = tera::Context::new();
+            context.insert("vcs", "git");
+            context.insert("repositories", &repos);
+            
+            let html = state.tera.render("index.html", &context)
+                .map_err(|e| crate::error::GitStoreError::Other(anyhow::anyhow!("Template error: {}", e)))?;
+            
+            Ok(Html(html).into_response())
+        }
+    }
 }
 
 /// Get repository info
