@@ -44,6 +44,13 @@ pub enum UploadError {
     /// Configuration error
     #[error("Configuration error: {0}")]
     Config(String),
+    
+    /// Invalid request error
+    #[error("Invalid request: {message}")]
+    InvalidRequest { 
+        /// Error message
+        message: String 
+    },
 }
 
 /// Result type alias for upload operations
