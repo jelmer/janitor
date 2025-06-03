@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::pyo3_bridge::{BreezyOperations, BreezyRepositoryInfo, BreezyBranchInfo};
+use crate::pyo3_bridge::{BreezyOperations, BreezyRepositoryInfo, BreezyBranchInfo, BreezyRevisionInfo};
 
 /// Repository path structure for campaign/codebase/role organization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -370,7 +370,20 @@ impl RepositoryManager for PyO3RepositoryManager {
     async fn get_diff(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<u8>> {
         let repo_path = self.get_repository_path(path);
         
-        // Use subprocess for diff generation (complex operation)
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::get_diff(&repo_path, old_revid, new_revid).await {
+                Ok(diff_bytes) => {
+                    info!("Generated diff using PyO3: {} bytes", diff_bytes.len());
+                    return Ok(diff_bytes);
+                }
+                Err(e) => {
+                    warn!("PyO3 diff generation failed, falling back to subprocess: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to subprocess for diff generation
         let output = Command::new("brz")
             .args(["diff", "-r", &format!("{}..{}", old_revid, new_revid)])
             .current_dir(&repo_path)
@@ -387,13 +400,35 @@ impl RepositoryManager for PyO3RepositoryManager {
             )));
         }
         
+        info!("Generated diff using subprocess: {} bytes", output.stdout.len());
         Ok(output.stdout)
     }
     
     async fn get_revision_info(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<RevisionInfo>> {
         let repo_path = self.get_repository_path(path);
         
-        // Use subprocess for revision info (complex operation)
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::get_revision_info(&repo_path, old_revid, new_revid).await {
+                Ok(breezy_revisions) => {
+                    // Convert BreezyRevisionInfo to RevisionInfo
+                    let revisions: Vec<RevisionInfo> = breezy_revisions.into_iter().map(|br| RevisionInfo {
+                        revision_id: br.revision_id,
+                        message: br.message,
+                        committer: br.committer,
+                        timestamp: br.timestamp,
+                    }).collect();
+                    
+                    info!("Retrieved revision info using PyO3: {} revisions", revisions.len());
+                    return Ok(revisions);
+                }
+                Err(e) => {
+                    warn!("PyO3 revision info failed, falling back to subprocess: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to subprocess for revision info
         let output = Command::new("brz")
             .args(["log", "--format=json", "-r", &format!("{}..{}", old_revid, new_revid)])
             .current_dir(&repo_path)
@@ -415,13 +450,27 @@ impl RepositoryManager for PyO3RepositoryManager {
         let revisions: Vec<RevisionInfo> = serde_json::from_str(&stdout)
             .map_err(|e| BzrError::subprocess(format!("Failed to parse revision info: {}", e)))?;
         
+        info!("Retrieved revision info using subprocess: {} revisions", revisions.len());
         Ok(revisions)
     }
     
     async fn configure_remote(&self, path: &RepositoryPath, remote_url: &str) -> Result<()> {
         let repo_path = self.get_repository_path(path);
         
-        // Use subprocess for remote configuration
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::configure_remote(&repo_path, remote_url).await {
+                Ok(_) => {
+                    info!("Configured remote URL using PyO3: {}", remote_url);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("PyO3 remote configuration failed, falling back to subprocess: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to subprocess for remote configuration
         let output = Command::new("brz")
             .args(["config", &format!("parent_location={}", remote_url)])
             .current_dir(&repo_path)
@@ -438,8 +487,110 @@ impl RepositoryManager for PyO3RepositoryManager {
             )));
         }
         
-        info!("Configured remote URL for repository: {}", remote_url);
+        info!("Configured remote URL using subprocess: {}", remote_url);
         Ok(())
+    }
+    
+}
+
+impl PyO3RepositoryManager {
+    /// Clone a repository from a remote URL
+    pub async fn clone_repository(&self, source_url: &str, path: &RepositoryPath) -> Result<()> {
+        // Ensure campaign structure exists
+        self.ensure_campaign_structure(&path.campaign).await?;
+        
+        let repo_path = self.get_repository_path(path);
+        
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::clone_repository(source_url, &repo_path).await {
+                Ok(_) => {
+                    info!("Cloned repository using PyO3 from: {}", source_url);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("PyO3 clone failed, falling back to subprocess: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to subprocess for cloning
+        let output = Command::new("brz")
+            .args(["branch", source_url, &repo_path.to_string_lossy()])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BzrError::subprocess(format!(
+                "Failed to clone repository: {}",
+                stderr
+            )));
+        }
+        
+        info!("Cloned repository using subprocess from: {}", source_url);
+        Ok(())
+    }
+    
+    /// Check if repository has uncommitted changes
+    pub async fn has_uncommitted_changes(&self, path: &RepositoryPath) -> Result<bool> {
+        let repo_path = self.get_repository_path(path);
+        
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::has_uncommitted_changes(&repo_path).await {
+                Ok(has_changes) => {
+                    debug!("Checked for uncommitted changes using PyO3: {}", has_changes);
+                    return Ok(has_changes);
+                }
+                Err(e) => {
+                    warn!("PyO3 status check failed, falling back to subprocess: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to subprocess for status check
+        let output = Command::new("brz")
+            .args(["status", "--short"])
+            .current_dir(&repo_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BzrError::subprocess(format!(
+                "Failed to check repository status: {}",
+                stderr
+            )));
+        }
+        
+        let has_changes = !output.stdout.is_empty();
+        debug!("Checked for uncommitted changes using subprocess: {}", has_changes);
+        Ok(has_changes)
+    }
+    
+    /// Get transport base URL for a repository
+    pub async fn get_transport_base(&self, url: &str) -> Result<String> {
+        // Try PyO3 first if preferred
+        if self.prefer_pyo3 {
+            match BreezyOperations::get_transport(url).await {
+                Ok(base_url) => {
+                    debug!("Got transport base using PyO3: {}", base_url);
+                    return Ok(base_url);
+                }
+                Err(e) => {
+                    warn!("PyO3 transport failed, falling back to simple URL: {}", e);
+                }
+            }
+        }
+        
+        // Simple fallback - just return the URL as is
+        debug!("Using URL as transport base: {}", url);
+        Ok(url.to_string())
     }
 }
 
