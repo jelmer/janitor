@@ -7,15 +7,37 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     response::Response,
 };
+use base64::prelude::*;
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Stdio;
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt}, process::Command};
 use tokio_util::io::StreamReader;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
-const GIT_BACKEND_CHUNK_SIZE: usize = 4096;
+// Removed unused constant
+
+/// Authentication context for Git operations
+#[derive(Debug, Clone)]
+pub struct AuthContext {
+    /// Worker username (if authenticated)
+    pub worker_name: Option<String>,
+    /// Whether write operations are allowed
+    pub allow_writes: bool,
+    /// Whether this is an admin request
+    pub is_admin: bool,
+}
+
+impl Default for AuthContext {
+    fn default() -> Self {
+        Self {
+            worker_name: None,
+            allow_writes: false,
+            is_admin: false,
+        }
+    }
+}
 
 /// Query parameters for git diff
 #[derive(Debug, Deserialize)]
@@ -143,6 +165,164 @@ pub async fn revision_info(
         .unwrap())
 }
 
+/// Extract authentication from HTTP headers
+async fn extract_auth_context(
+    headers: &HeaderMap,
+    state: &crate::web::AppState,
+    is_admin_interface: bool,
+) -> Result<AuthContext> {
+    let mut auth_context = AuthContext {
+        is_admin: is_admin_interface,
+        allow_writes: is_admin_interface, // Admin interface allows writes by default
+        ..Default::default()
+    };
+
+    // Check for Basic Authentication
+    if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if let Some(credentials) = auth_str.strip_prefix("Basic ") {
+                if let Ok(decoded) = BASE64_STANDARD.decode(credentials) {
+                    if let Ok(decoded_str) = String::from_utf8(decoded) {
+                        if let Some((username, password)) = decoded_str.split_once(':') {
+                            debug!("Attempting worker authentication for: {}", username);
+                            
+                            // Authenticate worker against database
+                            match state.db_manager.authenticate_worker(username, password).await {
+                                Ok(true) => {
+                                    info!("Worker authentication successful: {}", username);
+                                    auth_context.worker_name = Some(username.to_string());
+                                    auth_context.allow_writes = true;
+                                    return Ok(auth_context);
+                                }
+                                Ok(false) => {
+                                    warn!("Worker authentication failed for: {}", username);
+                                    return Err(GitStoreError::AuthenticationFailed);
+                                }
+                                Err(e) => {
+                                    warn!("Worker authentication error for {}: {}", username, e);
+                                    return Err(GitStoreError::AuthenticationFailed);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // For admin interface without authentication, allow limited access
+    if is_admin_interface {
+        debug!("Admin interface access without authentication");
+        return Ok(auth_context);
+    }
+
+    // Public interface - read-only access
+    debug!("Public interface access - read-only");
+    auth_context.allow_writes = false;
+    Ok(auth_context)
+}
+
+/// Validate repository access for the given context
+async fn validate_repository_access(
+    codebase: &str,
+    auth_context: &AuthContext,
+    state: &crate::web::AppState,
+) -> Result<()> {
+    // Check if codebase exists in database
+    match state.db_manager.codebase_exists(codebase).await {
+        Ok(true) => {
+            debug!("Codebase {} exists in database", codebase);
+        }
+        Ok(false) => {
+            warn!("Codebase {} not found in database", codebase);
+            return Err(GitStoreError::RepositoryNotFound(codebase.to_string()));
+        }
+        Err(e) => {
+            warn!("Database error checking codebase {}: {}", codebase, e);
+            return Err(e.into());
+        }
+    }
+
+    // Additional access control based on worker permissions
+    if let Some(worker_name) = &auth_context.worker_name {
+        debug!("Worker {} accessing codebase {}", worker_name, codebase);
+        // TODO: Implement worker-specific repository permissions if needed
+    }
+
+    Ok(())
+}
+
+/// Validate Git command parameters for security
+fn validate_git_command(
+    service: Option<&String>,
+    path_info: &str,
+    auth_context: &AuthContext,
+) -> Result<()> {
+    // Validate path doesn't contain dangerous sequences
+    if path_info.contains("..") || path_info.contains("//") || path_info.starts_with('/') {
+        warn!("Dangerous path detected: {}", path_info);
+        return Err(GitStoreError::HttpError("Invalid path".to_string()));
+    }
+
+    // Validate service parameter with enhanced security
+    if let Some(service) = service {
+        validate_git_service_enhanced(service, auth_context)?;
+    }
+
+    Ok(())
+}
+
+/// Enhanced validation with additional security checks
+fn validate_git_service_enhanced(service: &str, auth_context: &AuthContext) -> Result<()> {
+    match service {
+        "git-upload-pack" => {
+            // Read operation - always allowed
+            debug!("Git upload-pack service requested");
+            Ok(())
+        }
+        "git-receive-pack" => {
+            // Write operation - check permissions
+            if auth_context.allow_writes {
+                info!(
+                    "Git receive-pack service allowed for {}",
+                    auth_context.worker_name.as_deref().unwrap_or("admin")
+                );
+                Ok(())
+            } else {
+                warn!("Git receive-pack service denied - insufficient permissions");
+                Err(GitStoreError::PermissionDenied)
+            }
+        }
+        _ => {
+            warn!("Unknown Git service requested: {}", service);
+            Err(GitStoreError::HttpError(format!("Unknown Git service: {}", service)))
+        }
+    }
+}
+
+/// Determine if this is an admin interface request based on request context
+fn is_admin_interface_request(headers: &HeaderMap, host: Option<&str>) -> bool {
+    // Check for admin-specific headers or host patterns
+    if let Some(host_header) = headers.get(header::HOST) {
+        if let Ok(host_str) = host_header.to_str() {
+            // Admin interface typically runs on a different port
+            if host_str.contains(":9421") || host_str.contains("admin") {
+                return true;
+            }
+        }
+    }
+    
+    // Check for specific host override
+    if let Some(host) = host {
+        if host.contains(":9421") || host.contains("admin") {
+            return true;
+        }
+    }
+    
+    // Default to public interface
+    false
+}
+
 /// Git HTTP backend using git http-backend subprocess
 pub async fn git_backend(
     State(state): State<crate::web::AppState>,
@@ -171,10 +351,20 @@ pub async fn git_backend(
     debug!("Git HTTP backend request for codebase: {}, subpath: {}, method: {}", 
            codebase, subpath, method);
 
-    // Check if repository exists and get path
+    // Extract authentication context
+    let is_admin_interface = is_admin_interface_request(&headers, uri.host());
+    let auth_context = extract_auth_context(&headers, &state, is_admin_interface).await?;
+
+    debug!("Authentication context: {:?}", auth_context);
+
+    // Validate repository access
+    validate_repository_access(codebase, &auth_context, &state).await?;
+
+    // Get repository path and ensure it exists (auto-create if needed)
     let repo_path = state.repo_manager.repo_path(codebase);
     if !repo_path.exists() {
-        return Err(GitStoreError::RepositoryNotFound(codebase.to_string()));
+        info!("Auto-creating repository for codebase: {}", codebase);
+        state.repo_manager.open_or_create(codebase)?;
     }
 
     // Extract request information
@@ -192,18 +382,12 @@ pub async fn git_backend(
     
     let service = query_params.get("service");
 
-    // For now, allow writes for admin interface, deny for public
-    // TODO: Implement proper worker authentication
-    let allow_writes = true; // This should be determined by authentication
-
-    // Validate Git service if specified
-    if let Some(service) = service {
-        validate_git_service(service, allow_writes)?;
-    }
+    // Validate Git command with enhanced security checks
+    validate_git_command(service, &subpath, &auth_context)?;
 
     // Setup Git HTTP backend process
     let mut cmd = Command::new("git");
-    if allow_writes {
+    if auth_context.allow_writes {
         cmd.args(["-c", "http.receivepack=1"]);
     }
     cmd.arg("http-backend");
@@ -341,30 +525,7 @@ pub async fn git_backend(
     }
 }
 
-/// Validate Git service parameter
-fn validate_git_service(service: &str, allow_writes: bool) -> Result<()> {
-    match service {
-        "git-upload-pack" => {
-            // This is a read operation (clone, fetch)
-            debug!("Git upload-pack service requested");
-            Ok(())
-        }
-        "git-receive-pack" => {
-            // This is a write operation (push)
-            if allow_writes {
-                debug!("Git receive-pack service requested (writes allowed)");
-                Ok(())
-            } else {
-                warn!("Git receive-pack service denied (writes not allowed)");
-                Err(GitStoreError::PermissionDenied)
-            }
-        }
-        _ => {
-            warn!("Unknown Git service requested: {}", service);
-            Err(GitStoreError::HttpError(format!("Unknown Git service: {}", service)))
-        }
-    }
-}
+// Removed old validate_git_service function - replaced with enhanced version
 
 #[cfg(test)]
 mod tests {
