@@ -11,7 +11,7 @@ use thiserror::Error;
 pub enum BzrError {
     /// Python/PyO3 related errors
     #[error("Python error: {0}")]
-    Python(#[from] pyo3::PyErr),
+    Python(String),
     
     /// Database errors
     #[error("Database error: {0}")]
