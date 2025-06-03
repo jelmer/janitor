@@ -30,7 +30,7 @@ This document outlines the comprehensive plan for completing the migration of th
 |----------------|-------|----------|------------|--------------|
 | **Core Services** |
 | py/janitor/debian/auto_upload.py | 295 | MEDIUM | ⭐⭐⭐ | Package signing, upload |
-| py/janitor/bzr_store.py | 455 | PLANNED | ⭐⭐⭐⭐ | PyO3 strategy defined |
+| py/janitor/bzr_store.py | 455 | IN PROGRESS | ⭐⭐⭐⭐ | PyO3 Phase 1 ✅ COMPLETE |
 | **Supporting Modules** |
 | py/janitor/debian/__init__.py | 108 | LOW | ⭐ | Debian utilities |
 | py/janitor/diffoscope.py | 133 | LOW | ⭐⭐ | External tool wrapper |
@@ -384,14 +384,14 @@ This master plan coordinates with detailed porting plans for individual services
 ### 🎯 Next Priority
 The next phase ready for implementation:
 
-#### BZR Store Service (PyO3 Implementation) - **READY TO START**
-The Bazaar Store service can now be implemented using the comprehensive PyO3-based porting plan. This will complete the VCS hosting infrastructure alongside the already-completed Git Store service.
+#### BZR Store Service (PyO3 Implementation) - **IN PROGRESS**
+The Bazaar Store service is being implemented using the comprehensive PyO3-based porting plan. Phase 1 (Foundation and subprocess MVP) is now complete with full documentation. This will complete the VCS hosting infrastructure alongside the already-completed Git Store service.
 
 ### 📋 Planned Services
 The following detailed porting plans are ready for implementation:
 
 #### Phase 5 (VCS Services)  
-- [`bzr-store/porting-plan.md`](bzr-store/porting-plan.md) - **PLANNED** - Bazaar repository hosting (PyO3 approach)
+- [`bzr-store/porting-plan.md`](bzr-store/porting-plan.md) - **IN PROGRESS** - Bazaar repository hosting (PyO3 Phase 1 ✅ COMPLETE)
 
 #### Phase 6 (Debian Services)
 - `archive/porting-plan.md` - APT repository generation
