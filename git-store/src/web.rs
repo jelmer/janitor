@@ -46,8 +46,11 @@ pub fn create_admin_app(state: AppState) -> Router {
         .route("/:codebase/diff", get(git_diff))
         .route("/:codebase/revision", get(revision_info))
         
-        // Git HTTP backend (placeholder)
-        .route("/:codebase/git/*path", get(git_backend).post(git_backend))
+        // Git HTTP backend - handles Git clone/fetch/push operations
+        .route("/:codebase/git-upload-pack", get(git_backend).post(git_backend))
+        .route("/:codebase/git-receive-pack", get(git_backend).post(git_backend))
+        .route("/:codebase/info/refs", get(git_backend))
+        .route("/:codebase/*path", get(git_backend).post(git_backend))
         
         // Middleware
         .layer(CompressionLayer::new())
@@ -70,8 +73,10 @@ pub fn create_public_app(state: AppState) -> Router {
         .route("/:codebase/diff", get(git_diff))
         .route("/:codebase/revision", get(revision_info))
         
-        // Git HTTP backend (placeholder)
-        .route("/:codebase/git/*path", get(git_backend).post(git_backend))
+        // Git HTTP backend - read-only for public interface
+        .route("/:codebase/git-upload-pack", get(git_backend).post(git_backend))
+        .route("/:codebase/info/refs", get(git_backend))
+        .route("/:codebase/*path", get(git_backend))
         
         // Middleware
         .layer(CompressionLayer::new())

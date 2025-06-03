@@ -49,6 +49,10 @@ pub enum GitStoreError {
     #[error("Template error: {0}")]
     TemplateError(#[from] tera::Error),
 
+    /// HTTP error
+    #[error("HTTP error: {0}")]
+    HttpLibError(#[from] http::Error),
+
     /// Other error
     #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
@@ -79,6 +83,9 @@ impl axum::response::IntoResponse for GitStoreError {
             }
             GitStoreError::TemplateError(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Template error".to_string())
+            }
+            GitStoreError::HttpLibError(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "HTTP library error".to_string())
             }
             GitStoreError::Other(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
