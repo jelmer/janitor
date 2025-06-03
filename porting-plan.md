@@ -395,7 +395,7 @@ The following detailed porting plans are ready for implementation:
 
 #### Phase 6 (Debian Services)
 - `archive/porting-plan.md` - ✅ **COMPLETED** - APT repository generation
-- [`auto-upload/porting-plan.md`](auto-upload/porting-plan.md) - **IN PROGRESS** - Automated package uploads (Phase 3 ✅ COMPLETE)
+- [`auto-upload/porting-plan.md`](auto-upload/porting-plan.md) - **IN PROGRESS** - Automated package uploads (Phase 4 ✅ COMPLETE)
 
 #### Phase 7 (Supporting Services)
 - `mail-filter/porting-plan.md` - Email processing (if needed)
@@ -423,7 +423,7 @@ The Janitor platform migration from Python to Rust is **99%+ complete**, far exc
 - **Type safety** and memory safety throughout the platform
 
 **Remaining Work** (~700-800 lines):
-- Auto-upload service (295 lines) - **IN PROGRESS** - Phase 3 complete, Redis integration and messaging ready
+- Auto-upload service (295 lines) - **IN PROGRESS** - Phase 4 complete, database integration and backfill ready
 - BZR Store (455 lines) - **IN PROGRESS** - PyO3 Phase 1 complete, subprocess MVP functional
 - Small utilities and wrappers - Low priority, minimal impact
 
