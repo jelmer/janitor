@@ -5,4 +5,50 @@ edition.workspace = true
 
 [lib]
 
+[[bin]]
+name = "git-store"
+path = "src/main.rs"
+
 [dependencies]
+axum = { version = "0.7", features = ["http2", "json", "query", "macros"] }
+tokio = { version = "1.0", features = ["full"] }
+git2 = "0.18"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls", "chrono", "uuid"] }
+tera = "1.19"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "trace", "compression-gzip", "cors", "timeout"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+mime = "0.3"
+percent-encoding = "2.3"
+chrono = { version = "0.4", features = ["serde"] }
+bytes = "1.5"
+futures = "0.3"
+anyhow = "1.0"
+thiserror = "1.0"
+config = "0.14"
+url = "2.5"
+http = "1.1"
+http-body-util = "0.1"
+hyper = "1.0"
+async-trait = "0.1"
+base64 = "0.22"
+bcrypt = "0.15"
+
+# For process management and streaming
+tokio-util = { version = "0.7", features = ["io", "codec"] }
+futures-util = "0.3"
+
+# For monitoring
+prometheus = { version = "0.13", features = ["process"] }
+opentelemetry = "0.21"
+opentelemetry-otlp = "0.14"
+tracing-opentelemetry = "0.22"
+
+[dev-dependencies]
+tempfile = "3.19"
+tokio-test = "0.4"
+serde_urlencoded = "0.7"
