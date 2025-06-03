@@ -29,7 +29,7 @@ This document outlines the comprehensive plan for completing the migration of th
 | Module/Service | Lines | Priority | Complexity | Dependencies |
 |----------------|-------|----------|------------|--------------|
 | **Core Services** |
-| py/janitor/debian/auto_upload.py | 295 | MEDIUM | ⭐⭐⭐ | Package signing, upload |
+| py/janitor/debian/auto_upload.py | 295 | IN PROGRESS | ⭐⭐⭐ | Phase 1 ✅ COMPLETE |
 | py/janitor/bzr_store.py | 455 | IN PROGRESS | ⭐⭐⭐⭐ | PyO3 Phase 1 ✅ COMPLETE |
 | **Supporting Modules** |
 | py/janitor/debian/__init__.py | 108 | LOW | ⭐ | Debian utilities |
@@ -394,8 +394,8 @@ The following detailed porting plans are ready for implementation:
 - [`bzr-store/porting-plan.md`](bzr-store/porting-plan.md) - **IN PROGRESS** - Bazaar repository hosting (PyO3 Phase 1 ✅ COMPLETE)
 
 #### Phase 6 (Debian Services)
-- `archive/porting-plan.md` - APT repository generation
-- `auto-upload/porting-plan.md` - Automated package uploads
+- `archive/porting-plan.md` - ✅ **COMPLETED** - APT repository generation
+- [`auto-upload/porting-plan.md`](auto-upload/porting-plan.md) - **IN PROGRESS** - Automated package uploads (Phase 1 ✅ COMPLETE)
 
 #### Phase 7 (Supporting Services)
 - `mail-filter/porting-plan.md` - Email processing (if needed)
@@ -423,8 +423,8 @@ The Janitor platform migration from Python to Rust is **99%+ complete**, far exc
 - **Type safety** and memory safety throughout the platform
 
 **Remaining Work** (~700-800 lines):
-- Auto-upload service (295 lines) - Debian package upload automation
-- BZR Store (455 lines) - Has comprehensive PyO3 porting plan ready
+- Auto-upload service (295 lines) - **IN PROGRESS** - Phase 1 complete, core infrastructure ready
+- BZR Store (455 lines) - **IN PROGRESS** - PyO3 Phase 1 complete, subprocess MVP functional
 - Small utilities and wrappers - Low priority, minimal impact
 
 ### Platform Status

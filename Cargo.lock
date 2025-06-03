@@ -3836,10 +3836,30 @@ dependencies = [
 name = "janitor-auto-upload"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "chrono",
+ "clap",
  "futures",
+ "janitor",
+ "lazy_static",
+ "libc",
+ "prometheus 0.13.4",
+ "redis 0.27.6",
+ "serde",
+ "serde_json",
  "silver-platter",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.12",
  "tokio",
+ "toml 0.8.22",
+ "tower 0.5.2",
+ "tower-http 0.5.2",
  "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

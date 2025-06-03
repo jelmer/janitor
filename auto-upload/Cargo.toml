@@ -3,8 +3,57 @@ name = "janitor-auto-upload"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "janitor-auto-upload"
+path = "src/main.rs"
+
 [dependencies]
-futures = "0.3.31"
+# Async runtime and utilities
 tokio = { workspace = true, features = ["full"] }
-tracing = "0.1.41"
+futures = "0.3.31"
+async-trait = "0.1"
+
+# Web framework
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "trace"] }
+
+# Database and Redis
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+redis = { workspace = true, features = ["tokio-comp"] }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+toml = "0.8"
+
+# Command line and configuration
+clap = { workspace = true, features = ["derive", "env"] }
+
+# Logging and tracing
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = "1.0"
+
+# Metrics
+prometheus = { version = "0.13", features = ["process"] }
+
+# File operations
+tempfile = { workspace = true }
+
+# Debian package operations
 silver-platter = { workspace = true, features = ["debian"] }
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4"] }
+
+# Import janitor core for shared functionality
+janitor = { path = "..", features = ["debian"] }
+
+# Additional utilities
+lazy_static = "1.4"
+libc = "0.2"
+chrono = { workspace = true }
