@@ -1100,6 +1100,33 @@ dependencies = [
 [[package]]
 name = "bzr-store"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "bcrypt",
+ "bytes",
+ "chrono",
+ "futures",
+ "mime",
+ "pyo3",
+ "pyo3-async-runtimes",
+ "reqwest 0.12.15",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tera",
+ "thiserror 2.0.12",
+ "tokio",
+ "toml 0.8.22",
+ "tower 0.5.2",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
 
 [[package]]
 name = "castaway"

@@ -3,6 +3,60 @@ name = "bzr-store"
 version = "0.1.0"
 edition.workspace = true
 
+[[bin]]
+name = "bzr-store"
+path = "src/main.rs"
+
 [lib]
 
 [dependencies]
+# Web framework
+axum = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tower = { workspace = true }
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "trace"] }
+
+# Database
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+
+# PyO3 for Python integration  
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py38"] }
+pyo3-async-runtimes = { workspace = true, features = ["tokio"] }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Configuration and logging
+toml = "0.8"
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP and networking
+reqwest = { workspace = true, features = ["json", "stream"] }
+url = { workspace = true }
+mime = "0.3"
+bytes = "1.5"
+
+# Template engine
+tera = "1.19"
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = "1.0"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Path and file utilities
+tempfile = { workspace = true }
+
+# Authentication
+bcrypt = "0.15"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4"] }
+
+# Date/time
+chrono = { workspace = true, features = ["serde"] }
