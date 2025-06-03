@@ -1,6 +1,6 @@
 # Auto-Upload Service Porting Plan
 
-> **Status**: 🚧 **IN PROGRESS** - Phase 3 (Redis Integration and Messaging) ✅ COMPLETE | Phase 4 starting
+> **Status**: 🚧 **IN PROGRESS** - Phase 4 (Database Integration and Backfill) ✅ COMPLETE | Phase 5 ready
 > 
 > 📋 **Master Plan**: See [`../porting-plan.md`](../porting-plan.md) for overall project coordination and dependencies.
 
@@ -222,49 +222,52 @@ This document outlines the detailed plan for porting the Janitor auto-upload ser
 - Error scenario validation
 - Performance testing
 
-### Phase 4: Database Integration and Backfill (1-2 weeks)
+### Phase 4: Database Integration and Backfill (1-2 weeks) ✅ **COMPLETE**
 
-#### 4.1 Database Query Implementation (1 week)
-- Port backfill database queries using sqlx
-- Implement distribution filtering
-- Add source package deduplication
-- Create connection pool management
+#### 4.1 ✅ Database Query Implementation (COMPLETED)
+- **Completed**: Port backfill database queries using sqlx
+- **Completed**: Implement distribution filtering with optional parameters
+- **Completed**: Add source package deduplication with DISTINCT ON queries
+- **Completed**: Create connection pool management with health checks
 
-**Effort Estimate**: ~80 lines
+**Effort**: ~280 lines (database.rs)
 **Complexity**: Medium - SQL queries and connection management
 
 **Deliverables:**
-- Database query functions
-- Connection pool setup
-- Query optimization
-- Result processing
+- ✅ Database query functions with error handling
+- ✅ Connection pool setup with configurable limits  
+- ✅ Query optimization with filtered results
+- ✅ Result processing with proper type mapping
 
-#### 4.2 Backfill Functionality (0.5 weeks)
-- Port backfill main loop
-- Implement batch processing
-- Add progress reporting
-- Create error handling for failed uploads
+#### 4.2 ✅ Backfill Functionality (COMPLETED)
+- **Completed**: Port backfill main loop with async processing
+- **Completed**: Implement batch processing with configurable batch sizes
+- **Completed**: Add progress reporting with real-time statistics
+- **Completed**: Create error handling for failed uploads with retry logic
 
-**Effort Estimate**: ~60 lines
-**Complexity**: Low - iteration and batch processing
-
-**Deliverables:**
-- Backfill processing loop
-- Batch upload handling
-- Progress reporting
-- Error recovery
-
-#### 4.3 CLI Integration (0.5 weeks)
-- Add backfill command-line options
-- Implement mode switching
-- Add validation and error messages
-- Test backfill functionality
+**Effort**: ~470 lines (backfill.rs)
+**Complexity**: Medium - async coordination and retry logic
 
 **Deliverables:**
-- CLI backfill options
-- Mode switching logic
-- Input validation
-- Functional testing
+- ✅ Backfill processing loop with concurrent task management
+- ✅ Batch upload handling with rate limiting
+- ✅ Progress reporting with atomic counters
+- ✅ Error recovery with exponential backoff
+
+#### 4.3 ✅ CLI Integration (COMPLETED)
+- **Completed**: Add backfill command-line options with clap subcommands
+- **Completed**: Implement mode switching between serve and backfill
+- **Completed**: Add validation and error messages with structured logging
+- **Completed**: Test backfill functionality with comprehensive test suite
+
+**Effort**: ~160 lines (main.rs updates)
+**Complexity**: Low - CLI argument parsing and command routing
+
+**Deliverables:**
+- ✅ CLI backfill options with extensive configuration
+- ✅ Mode switching logic with proper error handling
+- ✅ Input validation with helpful error messages
+- ✅ Functional testing with 19 passing tests
 
 ### Phase 5: Service Orchestration and Testing (1-2 weeks)
 
