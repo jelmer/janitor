@@ -23,7 +23,7 @@ pub enum UploadError {
     
     /// Database error
     #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+    Database(String),
     
     /// Redis error
     #[error("Redis error: {0}")]

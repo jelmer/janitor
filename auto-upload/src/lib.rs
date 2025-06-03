@@ -5,7 +5,9 @@
 #![deny(missing_docs)]
 
 pub mod artifacts;
+pub mod backfill;
 pub mod config;
+pub mod database;
 pub mod error;
 pub mod message_handler;
 pub mod process;
