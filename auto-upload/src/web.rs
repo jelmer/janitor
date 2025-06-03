@@ -14,17 +14,25 @@ use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::info;
 
 use crate::config::Config;
+use crate::service::ServiceHealth;
 
 /// Application state shared between handlers
 #[derive(Clone)]
 pub struct AppState {
     /// Service configuration
     pub config: Arc<Config>,
+    /// Service health status
+    pub health_status: Option<Arc<ServiceHealth>>,
 }
 
 /// Create the web application
 pub fn create_app(config: Arc<Config>) -> Router {
-    let state = AppState { config };
+    create_app_with_health(config, None)
+}
+
+/// Create the web application with health status
+pub fn create_app_with_health(config: Arc<Config>, health_status: Option<Arc<ServiceHealth>>) -> Router {
+    let state = AppState { config, health_status };
     
     Router::new()
         .route("/health", get(health_handler))
@@ -38,13 +46,38 @@ pub fn create_app(config: Arc<Config>) -> Router {
 }
 
 /// Health check handler
-async fn health_handler() -> Response {
-    Json(json!({
-        "status": "healthy",
+async fn health_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Response {
+    use std::sync::atomic::Ordering;
+    
+    let (status, status_code) = if let Some(ref health_status) = state.health_status {
+        let healthy = health_status.is_healthy();
+        let status = if healthy { "healthy" } else { "unhealthy" };
+        let code = if healthy { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+        (status, code)
+    } else {
+        ("healthy", StatusCode::OK)
+    };
+    
+    let mut response = json!({
+        "status": status,
         "service": "janitor-auto-upload",
         "timestamp": chrono::Utc::now().to_rfc3339(),
-    }))
-    .into_response()
+    });
+    
+    if let Some(ref health_status) = state.health_status {
+        if let Some(components) = response.as_object_mut() {
+            components.insert("components".to_string(), json!({
+                "web": health_status.web_healthy.load(Ordering::SeqCst),
+                "redis": health_status.redis_healthy.load(Ordering::SeqCst),
+            }));
+            components.insert("uptime_seconds".to_string(), json!(health_status.uptime().as_secs()));
+            components.insert("messages_processed".to_string(), json!(health_status.messages_processed.load(Ordering::SeqCst)));
+        }
+    }
+    
+    (status_code, Json(response)).into_response()
 }
 
 /// Metrics handler for Prometheus
