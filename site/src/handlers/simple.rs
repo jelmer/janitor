@@ -370,26 +370,25 @@ async fn fetch_campaign_statistics(
     state: &AppState,
     campaign: &str,
 ) -> anyhow::Result<HashMap<String, i64>> {
-    let mut stats = HashMap::new();
-
-    // Fetch campaign-specific stats from database
-    if let Ok(count) = state.database.count_candidates(campaign, None).await {
-        stats.insert("total_candidates".to_string(), count);
+    // Use optimized single-query method to eliminate N+1 pattern
+    match state.database.get_campaign_statistics(campaign).await {
+        Ok(stats) => {
+            let mut result = HashMap::new();
+            result.insert("total_candidates".to_string(), stats.total_candidates);
+            result.insert("successful_runs".to_string(), stats.successful_runs);
+            result.insert("failed_runs".to_string(), stats.failed_runs);
+            result.insert("pending_publishes".to_string(), stats.pending_publishes);
+            result.insert("total_runs".to_string(), stats.total_runs);
+            result.insert("queued_items".to_string(), stats.queued_items);
+            result.insert("avg_run_time_seconds".to_string(), stats.avg_run_time_seconds as i64);
+            Ok(result)
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch campaign statistics: {}", e);
+            // Return empty stats on error rather than failing completely
+            Ok(HashMap::new())
+        }
     }
-
-    if let Ok(count) = state
-        .database
-        .count_runs_by_result(campaign, "success")
-        .await
-    {
-        stats.insert("successful_runs".to_string(), count);
-    }
-
-    if let Ok(count) = state.database.count_pending_publishes(campaign).await {
-        stats.insert("pending_publishes".to_string(), count);
-    }
-
-    Ok(stats)
 }
 
 async fn fetch_candidates(

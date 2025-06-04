@@ -1381,6 +1381,82 @@ impl DatabaseManager {
         }))
     }
 
+    /// Get comprehensive run context data in a single optimized query
+    /// Combines run details, statistics, reviews, binary packages in one call
+    pub async fn get_run_context(&self, run_id: &str, campaign: &str, codebase: &str) -> Result<RunContext, DatabaseError> {
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                -- Run statistics
+                (SELECT COUNT(*) FROM run WHERE suite = $2 AND codebase = $3) as total_runs,
+                (SELECT COUNT(*) FROM run WHERE suite = $2 AND codebase = $3 AND result_code = 'success') as successful_runs,
+                -- Binary packages
+                (SELECT binary_packages FROM debian_build WHERE run_id = $1) as binary_packages,
+                -- Review count
+                (SELECT COUNT(*) FROM review WHERE run_id = $1) as review_count,
+                -- Queue position for this codebase/campaign
+                (SELECT COUNT(*) + 1 FROM queue q2 WHERE q2.suite = $2 
+                 AND q2.priority > COALESCE((SELECT priority FROM queue WHERE suite = $2 AND codebase = $3), 0)) as queue_position
+            "#,
+        )
+        .bind(run_id)
+        .bind(campaign)
+        .bind(codebase)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(row) => {
+                Ok(RunContext {
+                    total_runs: row.get("total_runs"),
+                    successful_runs: row.get("successful_runs"),
+                    binary_packages: row.get::<Option<Vec<String>>, _>("binary_packages").unwrap_or_default(),
+                    review_count: row.get("review_count"),
+                    queue_position: row.get::<i64, _>("queue_position") as i32,
+                })
+            }
+            None => Ok(RunContext::default()),
+        }
+    }
+
+    /// Get comprehensive campaign statistics in a single optimized query
+    /// Eliminates N+1 pattern from multiple separate count queries
+    pub async fn get_campaign_statistics(&self, campaign: &str) -> Result<CampaignStatistics, DatabaseError> {
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                -- Total candidates for this campaign
+                (SELECT COUNT(*) FROM candidate WHERE suite = $1) as total_candidates,
+                -- Successful runs for this campaign
+                (SELECT COUNT(*) FROM run WHERE suite = $1 AND result_code = 'success') as successful_runs,
+                -- Failed runs for this campaign
+                (SELECT COUNT(*) FROM run WHERE suite = $1 AND result_code != 'success') as failed_runs,
+                -- Pending publishes for this campaign
+                (SELECT COUNT(*) FROM publish_ready WHERE suite = $1) as pending_publishes,
+                -- Total runs for this campaign
+                (SELECT COUNT(*) FROM run WHERE suite = $1) as total_runs,
+                -- Active queue items for this campaign
+                (SELECT COUNT(*) FROM queue WHERE suite = $1) as queued_items,
+                -- Average run time in seconds
+                (SELECT EXTRACT(EPOCH FROM AVG(finish_time - start_time)) 
+                 FROM run WHERE suite = $1 AND finish_time IS NOT NULL AND start_time IS NOT NULL) as avg_run_time_seconds
+            "#,
+        )
+        .bind(campaign)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(CampaignStatistics {
+            total_candidates: row.get("total_candidates"),
+            successful_runs: row.get("successful_runs"),
+            failed_runs: row.get("failed_runs"),
+            pending_publishes: row.get("pending_publishes"),
+            total_runs: row.get("total_runs"),
+            queued_items: row.get("queued_items"),
+            avg_run_time_seconds: row.get::<Option<f64>, _>("avg_run_time_seconds").unwrap_or(0.0),
+        })
+    }
+
     /// Fetch comprehensive codebase context in a single optimized query
     /// This eliminates N+1 query patterns by combining multiple related queries
     pub async fn get_codebase_context(
@@ -1525,4 +1601,24 @@ pub struct RunStatistics {
     pub total: i64,
     pub successful: i64,
     pub failed: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CampaignStatistics {
+    pub total_candidates: i64,
+    pub successful_runs: i64,
+    pub failed_runs: i64,
+    pub pending_publishes: i64,
+    pub total_runs: i64,
+    pub queued_items: i64,
+    pub avg_run_time_seconds: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RunContext {
+    pub total_runs: i64,
+    pub successful_runs: i64,
+    pub binary_packages: Vec<String>,
+    pub review_count: i64,
+    pub queue_position: i32,
 }
