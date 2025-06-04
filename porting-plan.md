@@ -426,7 +426,14 @@ The Janitor platform migration from Python to Rust is **100% complete** for all 
 **Remaining Work** (minimal):
 - ✅ BZR Store (455 lines) - **COMPLETED** - Full PyO3 implementation with smart protocol support
 - ✅ All critical utilities ported - `dpkg_vendor`, `artifacts`, `worker_creds`, `diffoscope`, `review` all have Rust implementations
-- Minor legacy utilities (≤50 lines) - Non-critical, legacy code with minimal impact
+- Helper scripts in `helpers/` directory - Mix of migration tools and operational utilities
+
+### Helper Scripts Status
+| Script | Status | Type | Priority |
+|--------|--------|------|----------|
+| `cleanup-repositories.py` | ❌ No Rust equivalent | Operational (repo cleanup) | Medium |
+| `migrate-logs.py` | ⚡ Partial (core functions exist) | Migration utility | Low |
+| `render-publish-template.py` | ✅ Migrated to Rust | Development utility | N/A |
 
 **Latest Milestone**: 🎉 **BZR Store Service COMPLETED** - Full PyO3-powered Bazaar repository hosting with smart protocol support, comprehensive HTTP API, and production-ready deployment!
 
@@ -444,6 +451,7 @@ The Janitor platform is now a **modern Rust-based system** with:
 1. ✅ **BZR Store implementation complete** - PyO3-powered Bazaar hosting 
 2. ✅ **Auto-upload service complete** - Debian package upload automation
 3. ✅ **All critical utilities migrated** - Core functionality complete
-4. **Deprecate Python codebase** after full validation
+4. Consider porting `cleanup-repositories.py` if needed for production environments with many repositories
+5. **Deprecate Python codebase** after full validation
 
 The migration has been an overwhelming success, transforming Janitor into a high-performance, type-safe platform ready for the future! 🚀
