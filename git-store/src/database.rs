@@ -20,7 +20,7 @@ impl DatabaseManager {
             codebase_table,
         }
     }
-    
+
     /// Get a reference to the database pool for backward compatibility
     pub fn pool(&self) -> &PgPool {
         self.shared_db.pool()

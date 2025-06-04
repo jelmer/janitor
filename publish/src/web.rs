@@ -505,8 +505,8 @@ async fn update_merge_proposal(
     .bind(&request.url)
     .bind(&request.status)
     .bind(&request.merged_by)
-    .bind(&request.merged_at)
-    .bind(&request.can_be_merged)
+    .bind(request.merged_at)
+    .bind(request.can_be_merged)
     .execute(&state.conn)
     .await;
 
@@ -933,7 +933,7 @@ async fn get_credentials(State(state): State<Arc<AppState>>) -> impl IntoRespons
         };
         let current_user_url = current_user
             .as_ref()
-            .map(|current_user| instance.get_user_url(&current_user).unwrap());
+            .map(|current_user| instance.get_user_url(current_user).unwrap());
         let forge = ForgeCredentials {
             kind: instance.forge_kind(),
             name: instance.forge_name(),
@@ -1077,10 +1077,10 @@ async fn refresh_status(
             Err(crate::CheckMpError::BranchRateLimited { retry_after }) => {
                 log::info!("Rate-limited accessing {}, skipping", url);
             }
-            Err(crate::CheckMpError::UnexpectedHttpStatus {}) => {
+            Err(crate::CheckMpError::UnexpectedHttpStatus) => {
                 log::info!("Unexpected HTTP status {} for {}, skipping", status, url);
             }
-            Err(crate::CheckMpError::ForgeLoginRequired {}) => {
+            Err(crate::CheckMpError::ForgeLoginRequired) => {
                 log::info!("Forge login required for {}, skipping", url);
             }
         }

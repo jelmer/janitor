@@ -24,6 +24,12 @@ pub struct SmartProtocolHandler {
     smart_server: Arc<Mutex<Option<PyObject>>>,
 }
 
+impl Default for SmartProtocolHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SmartProtocolHandler {
     /// Create a new smart protocol handler
     pub fn new() -> Self {
@@ -209,8 +215,8 @@ pub async fn smart_protocol_subprocess_handler(
 
     // Write request to stdin
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(&body).await.map_err(|e| BzrError::Io(e))?;
-        stdin.shutdown().await.map_err(|e| BzrError::Io(e))?;
+        stdin.write_all(&body).await.map_err(BzrError::Io)?;
+        stdin.shutdown().await.map_err(BzrError::Io)?;
     }
 
     // Read response from stdout
@@ -219,7 +225,7 @@ pub async fn smart_protocol_subprocess_handler(
         stdout
             .read_to_end(&mut response_bytes)
             .await
-            .map_err(|e| BzrError::Io(e))?;
+            .map_err(BzrError::Io)?;
     }
 
     // Wait for process to complete

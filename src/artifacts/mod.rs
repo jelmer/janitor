@@ -100,27 +100,51 @@ pub async fn upload_backup_artifacts(
     backup_artifact_manager: &dyn ArtifactManager,
     artifact_manager: &dyn ArtifactManager,
 ) -> Result<Vec<String>, Error> {
+    use futures::stream::{self, StreamExt};
+    
+    // Process artifacts in parallel with a concurrency limit
+    const MAX_CONCURRENT: usize = 3;
+    
+    let ids: Vec<_> = backup_artifact_manager.iter_ids().await.collect();
+    
+    let results = stream::iter(ids)
+        .map(|id| async move {
+            let result = process_single_backup_artifact(&id, backup_artifact_manager, artifact_manager).await;
+            (id, result)
+        })
+        .buffer_unordered(MAX_CONCURRENT)
+        .collect::<Vec<_>>()
+        .await;
+    
     let mut done = vec![];
-    // TODO: Do a few in parallel?
-    for id in backup_artifact_manager.iter_ids().await {
-        let td = tempfile::NamedTempFile::new()?;
-        backup_artifact_manager
-            .retrieve_artifacts(&id, td.path(), None)
-            .await?;
-
-        match artifact_manager.store_artifacts(&id, td.path(), None).await {
-            Ok(_) => {
-                backup_artifact_manager.delete_artifacts(&id).await?;
-                done.push(id);
-            }
-            Err(Error::ArtifactsMissing) => unreachable!(),
-            Err(e) => {
-                log::warn!("Unable to upload backup artifacts for {}: {}", id, e);
-                continue;
-            }
+    for (id, result) in results {
+        match result {
+            Ok(_) => done.push(id),
+            Err(e) => log::warn!("Unable to upload backup artifacts for {}: {}", id, e),
         }
     }
+    
     Ok(done)
+}
+
+async fn process_single_backup_artifact(
+    id: &str,
+    backup_artifact_manager: &dyn ArtifactManager,
+    artifact_manager: &dyn ArtifactManager,
+) -> Result<(), Error> {
+    let td = tempfile::NamedTempFile::new()?;
+    backup_artifact_manager
+        .retrieve_artifacts(id, td.path(), None)
+        .await?;
+
+    match artifact_manager.store_artifacts(id, td.path(), None).await {
+        Ok(_) => {
+            backup_artifact_manager.delete_artifacts(id).await?;
+            Ok(())
+        }
+        Err(Error::ArtifactsMissing) => unreachable!(),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn store_artifacts_with_backup(

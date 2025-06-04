@@ -164,7 +164,7 @@ impl ProposalInfoManager {
             tokio::task::spawn_blocking(move || {
                 let merged_by = mp.get_merged_by().unwrap();
                 let merged_by_url = if let Some(mb) = merged_by.clone().as_ref() {
-                    crate::get_merged_by_user_url(&mp.url().unwrap(), &mb).unwrap()
+                    crate::get_merged_by_user_url(&mp.url().unwrap(), mb).unwrap()
                 } else {
                     None
                 };

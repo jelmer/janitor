@@ -22,7 +22,7 @@ use tracing::{debug, info, warn};
 // Removed unused constant
 
 /// Authentication context for Git operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AuthContext {
     /// Worker username (if authenticated)
     pub worker_name: Option<String>,
@@ -30,16 +30,6 @@ pub struct AuthContext {
     pub allow_writes: bool,
     /// Whether this is an admin request
     pub is_admin: bool,
-}
-
-impl Default for AuthContext {
-    fn default() -> Self {
-        Self {
-            worker_name: None,
-            allow_writes: false,
-            is_admin: false,
-        }
-    }
 }
 
 /// Query parameters for git diff
@@ -248,7 +238,7 @@ async fn validate_repository_access(
         }
         Err(e) => {
             warn!("Database error checking codebase {}: {}", codebase, e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -510,11 +500,9 @@ pub async fn git_backend(
                 if let Ok(header_value) = value.parse::<http::HeaderValue>() {
                     response_headers.insert(header::CONTENT_LENGTH, header_value);
                 }
-            } else {
-                if let Ok(header_name) = key.parse::<http::HeaderName>() {
-                    if let Ok(header_value) = value.parse::<http::HeaderValue>() {
-                        response_headers.insert(header_name, header_value);
-                    }
+            } else if let Ok(header_name) = key.parse::<http::HeaderName>() {
+                if let Ok(header_value) = value.parse::<http::HeaderValue>() {
+                    response_headers.insert(header_name, header_value);
                 }
             }
         }

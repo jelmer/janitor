@@ -536,9 +536,7 @@ async fn execute_bulk_review_action(
                 completed_at: now,
             })
         }
-        _ => {
-            return Err(anyhow::anyhow!("Unknown review action: {}", action.action));
-        }
+        _ => Err(anyhow::anyhow!("Unknown review action: {}", action.action)),
     }
 }
 

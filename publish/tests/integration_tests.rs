@@ -7,7 +7,6 @@ use chrono::{DateTime, Duration, Utc};
 use janitor_publish::{
     calculate_next_try_time, AppState, CheckMpError, PublishError, PublishWorker,
 };
-use std::collections::HashMap;
 
 /// Tests for the calculate_next_try_time function.
 ///
@@ -177,7 +176,6 @@ mod data_structure_tests {
 /// These tests verify that key functions have the same signatures as the Python versions.
 #[cfg(test)]
 mod signature_compatibility_tests {
-    use super::*;
 
     #[test]
     fn test_consider_publish_run_signature() {
@@ -277,7 +275,6 @@ mod error_handling_tests {
 /// These verify that rate limiting behavior matches the Python implementation.
 #[cfg(test)]
 mod rate_limiting_tests {
-    use super::*;
 
     #[test]
     #[ignore = "RateLimiter trait not yet implemented"]

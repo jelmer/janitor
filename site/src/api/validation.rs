@@ -1,13 +1,11 @@
 use axum::{
-    extract::{FromRequest, Request}, Json,
+    extract::{FromRequest, Request},
+    Json,
 };
 use serde::de::DeserializeOwned;
 use validator::{Validate, ValidationErrors};
 
-use super::{
-    error::ValidationError as ApiValidationError,
-    types::ApiError,
-};
+use super::{error::ValidationError as ApiValidationError, types::ApiError};
 
 /// Validated JSON extractor that automatically validates incoming JSON data
 #[derive(Debug)]
@@ -39,9 +37,7 @@ where
             .await
             .map_err(|_| ApiError::bad_request("Invalid JSON format".to_string()))?;
 
-        value
-            .validate()
-            .map_err(|e| validation_errors_to_api_error(e))?;
+        value.validate().map_err(validation_errors_to_api_error)?;
 
         Ok(ValidatedJson(value))
     }
@@ -185,7 +181,7 @@ impl ValidationHelper {
     /// Validate offset parameter (for pagination and queue positioning)
     pub fn validate_offset(offset: i32) -> Result<(), ApiValidationError> {
         // Allow reasonable range for queue positioning
-        if offset < -10000 || offset > 10000 {
+        if !(-10000..=10000).contains(&offset) {
             return Err(ApiValidationError::OutOfRange {
                 field: "offset".to_string(),
                 min: -10000,
@@ -198,7 +194,7 @@ impl ValidationHelper {
 
     /// Validate limit parameter (for pagination)
     pub fn validate_limit(limit: i64) -> Result<(), ApiValidationError> {
-        if limit < 1 || limit > 1000 {
+        if !(1..=1000).contains(&limit) {
             return Err(ApiValidationError::OutOfRange {
                 field: "limit".to_string(),
                 min: 1,
@@ -306,16 +302,10 @@ mod tests {
 
     #[test]
     fn test_validation_helper_bool_string() {
-        assert_eq!(ValidationHelper::validate_bool_string("0").unwrap(), false);
-        assert_eq!(ValidationHelper::validate_bool_string("1").unwrap(), true);
-        assert_eq!(
-            ValidationHelper::validate_bool_string("true").unwrap(),
-            true
-        );
-        assert_eq!(
-            ValidationHelper::validate_bool_string("false").unwrap(),
-            false
-        );
+        assert!(!ValidationHelper::validate_bool_string("0").unwrap());
+        assert!(ValidationHelper::validate_bool_string("1").unwrap());
+        assert!(ValidationHelper::validate_bool_string("true").unwrap());
+        assert!(!ValidationHelper::validate_bool_string("false").unwrap());
         assert!(ValidationHelper::validate_bool_string("invalid").is_err());
     }
 

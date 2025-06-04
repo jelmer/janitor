@@ -2,11 +2,11 @@ use breezyshim::RevisionId;
 
 use pyo3::basic::CompareOp;
 use pyo3::create_exception;
-use pyo3::exceptions::{PyNotImplementedError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[pyclass]
@@ -80,22 +80,19 @@ impl VcsManager {
         let z = self.0.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let infos = z.get_revision_info(&codebase, &old_revid, &new_revid).await;
-            Ok(infos
-                .into_iter()
-                .map(|info| RevisionInfo(info))
-                .collect::<Vec<_>>())
+            Ok(infos.into_iter().map(RevisionInfo).collect::<Vec<_>>())
         })
     }
 
-    fn get_repository<'a>(&self, py: Python<'a>, codebase: String) -> PyResult<PyObject> {
+    fn get_repository(&self, py: Python<'_>, codebase: String) -> PyResult<PyObject> {
         let repo = self.0.get_repository(&codebase)?;
 
         Ok(repo.to_object(py))
     }
 
-    fn get_branch<'a>(
+    fn get_branch(
         &self,
-        py: Python<'a>,
+        py: Python<'_>,
         codebase: String,
         branch_name: String,
     ) -> PyResult<Option<PyObject>> {
@@ -176,7 +173,7 @@ impl RemoteGitVcsManager {
     }
 
     fn __repr__(&self) -> String {
-        format!("<RemoteGitVcsManager({})>", self.0.base_url().to_string())
+        format!("<RemoteGitVcsManager({})>", self.0.base_url())
     }
 }
 
@@ -251,7 +248,7 @@ impl RemoteBzrVcsManager {
     }
 
     fn __repr__(&self) -> String {
-        format!("<RemoteBzrVcsManager({})>", self.0.base_url().to_string())
+        format!("<RemoteBzrVcsManager({})>", self.0.base_url())
     }
 }
 
@@ -260,12 +257,10 @@ pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyRes
     match name {
         "bzr" => Ok(Py::new(py, LocalBzrVcsManager::new(location).unwrap())?.to_object(py)),
         "git" => Ok(Py::new(py, LocalGitVcsManager::new(location).unwrap())?.to_object(py)),
-        _ => {
-            return Err(UnsupportedVcs::new_err((
-                name.to_string(),
-                location.to_string_lossy().to_string(),
-            )));
-        }
+        _ => Err(UnsupportedVcs::new_err((
+            name.to_string(),
+            location.to_string_lossy().to_string(),
+        ))),
     }
 }
 
@@ -274,12 +269,10 @@ pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResul
     match name {
         "bzr" => Ok(Py::new(py, RemoteBzrVcsManager::new(location).unwrap())?.to_object(py)),
         "git" => Ok(Py::new(py, RemoteGitVcsManager::new(location).unwrap())?.to_object(py)),
-        _ => {
-            return Err(UnsupportedVcs::new_err((
-                name.to_string(),
-                location.to_string(),
-            )));
-        }
+        _ => Err(UnsupportedVcs::new_err((
+            name.to_string(),
+            location.to_string(),
+        ))),
     }
 }
 

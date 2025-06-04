@@ -1244,9 +1244,9 @@ async fn finish_run_internal(
     }
 
     // Process any existing files for this run (stored outside of multipart upload)
-    let mut uploaded_filenames = Vec::new();
+    let uploaded_filenames = Vec::new();
     let mut log_filenames = Vec::new();
-    let mut artifact_filenames = Vec::new();
+    let artifact_filenames = Vec::new();
 
     // If worker_result is provided, extract file information from it
     if let Some(ref wr) = worker_result {
@@ -1517,7 +1517,7 @@ async fn finish_run_multipart_internal(
                 continue;
             }
         };
-        
+
         if let Err(e) = state
             .log_manager
             .import_log(
@@ -1885,7 +1885,7 @@ async fn public_finish(
     // Verify that this worker is authorized to finish this specific run
     match state.database.get_active_run(&id).await {
         Ok(Some(active_run)) => {
-            if &active_run.worker_name != &worker_name {
+            if active_run.worker_name != worker_name {
                 log::warn!(
                     "Worker {} attempted to finish run {} assigned to worker {}",
                     worker_name,
@@ -1927,7 +1927,7 @@ async fn public_finish_multipart(
     // Verify that this worker is authorized to finish this specific run
     match state.database.get_active_run(&id).await {
         Ok(Some(active_run)) => {
-            if &active_run.worker_name != &worker_name {
+            if active_run.worker_name != worker_name {
                 log::warn!(
                     "Worker {} attempted to finish run {} assigned to worker {}",
                     worker_name,

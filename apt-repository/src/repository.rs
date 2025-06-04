@@ -1,6 +1,5 @@
 //! Main repository generation functionality.
 
-use crate::hash::MultiHasher;
 use crate::{
     AptRepositoryError, Compression, HashAlgorithm, HashedFile, PackageFile, Release,
     ReleaseBuilder, Result, SourceFile, DEFAULT_COMPRESSIONS, DEFAULT_HASH_ALGORITHMS,
@@ -223,7 +222,7 @@ impl Repository {
 
             let mut entries: Vec<_> = fs::read_dir(&by_hash_dir)?
                 .filter_map(|entry| entry.ok())
-                .filter(|entry| entry.file_type().map_or(false, |ft| ft.is_file()))
+                .filter(|entry| entry.file_type().is_ok_and(|ft| ft.is_file()))
                 .collect();
 
             // Sort by modification time (newest first)

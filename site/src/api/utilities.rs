@@ -496,7 +496,7 @@ impl ContentTypeHelper {
     pub fn from_extension(filename: &str) -> ContentType {
         match filename
             .split('.')
-            .last()
+            .next_back()
             .unwrap_or("")
             .to_lowercase()
             .as_str()

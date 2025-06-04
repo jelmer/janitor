@@ -38,11 +38,11 @@ create_exception!(
 );
 
 #[pyfunction]
-fn run_debdiff<'a>(
-    py: Python<'a>,
+fn run_debdiff(
+    py: Python<'_>,
     old_binaries: Vec<String>,
     new_binaries: Vec<String>,
-) -> PyResult<Bound<'a, PyAny>> {
+) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let r = janitor::debdiff::run_debdiff(
             old_binaries.iter().map(|x| x.as_str()).collect::<Vec<_>>(),

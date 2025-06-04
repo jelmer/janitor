@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
-use redis::{aio::ConnectionManager, AsyncCommands, Client, RedisError};
+use redis::{aio::ConnectionManager, AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -223,7 +223,7 @@ impl RedisSubscriber {
         channels: &[String],
         mut shutdown_rx: Option<&mut mpsc::Receiver<()>>,
     ) -> ArchiveResult<()> {
-        let mut conn = client
+        let conn = client
             .get_async_connection()
             .await
             .map_err(|e| ArchiveError::Redis(format!("Failed to get connection: {}", e)))?;

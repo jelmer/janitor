@@ -3,14 +3,14 @@ use pyo3::prelude::*;
 
 #[pyfunction]
 #[pyo3(signature = (old_binaries, new_binaries, timeout = None, memory_limit = None, diffoscope_command = None))]
-fn run_diffoscope<'a>(
-    py: Python<'a>,
+fn run_diffoscope(
+    py: Python<'_>,
     old_binaries: Vec<(String, String)>,
     new_binaries: Vec<(String, String)>,
     timeout: Option<f64>,
     memory_limit: Option<u64>,
     diffoscope_command: Option<String>,
-) -> PyResult<Bound<'a, PyAny>> {
+) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let old_binaries = old_binaries
             .iter()

@@ -66,7 +66,7 @@ pub async fn get_assignment_raw(
     } else {
         serde_json::json![null]
     };
-    if let Some(url) = jenkins_build_url.or_else(|| my_url) {
+    if let Some(url) = jenkins_build_url.or(my_url) {
         json["worker_link"] = serde_json::Value::String(url.to_string());
     }
     async fn send_assignment_request(

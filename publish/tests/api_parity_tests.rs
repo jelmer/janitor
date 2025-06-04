@@ -3,10 +3,6 @@
 //! These tests verify that the Rust web API endpoints match the behavior
 //! of the Python aiohttp handlers in py/janitor/publish.py.
 
-use axum::http::StatusCode;
-use serde_json::Value;
-use std::collections::HashMap;
-
 /// Tests for API endpoint parity with Python implementation.
 ///
 /// Each test verifies that a Rust endpoint has the same:
@@ -16,7 +12,6 @@ use std::collections::HashMap;
 /// - Business logic
 #[cfg(test)]
 mod api_endpoint_tests {
-    use super::*;
 
     #[test]
     fn test_merge_proposals_endpoints_exist() {
@@ -113,7 +108,6 @@ mod api_endpoint_tests {
 /// These verify that the data structures match between Python and Rust.
 #[cfg(test)]
 mod request_response_format_tests {
-    use super::*;
 
     #[test]
     fn test_merge_proposal_response_format() {
@@ -187,7 +181,6 @@ mod request_response_format_tests {
 /// These verify that the core business logic matches the Python implementation.
 #[cfg(test)]
 mod business_logic_tests {
-    use super::*;
 
     #[test]
     fn test_publish_decision_logic_structure() {
@@ -256,7 +249,6 @@ mod business_logic_tests {
 /// These verify that Redis pub/sub behavior matches the Python implementation.
 #[cfg(test)]
 mod redis_integration_tests {
-    use super::*;
 
     #[test]
     fn test_redis_message_format() {
@@ -303,7 +295,6 @@ mod redis_integration_tests {
 /// These verify that database operations match the Python implementation.
 #[cfg(test)]
 mod database_compatibility_tests {
-    use super::*;
 
     #[test]
     fn test_database_query_compatibility() {

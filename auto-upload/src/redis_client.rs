@@ -55,7 +55,7 @@ impl RedisClient {
     pub async fn new(redis_url: &str) -> Result<Self> {
         info!("Connecting to Redis: {}", redis_url);
 
-        let client = Client::open(redis_url).map_err(|e| UploadError::Redis(e))?;
+        let client = Client::open(redis_url).map_err(UploadError::Redis)?;
 
         let mut redis_client = Self {
             client,
@@ -74,7 +74,7 @@ impl RedisClient {
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| UploadError::Redis(e))?;
+            .map_err(UploadError::Redis)?;
 
         self.connection = Some(connection);
 
@@ -111,19 +111,19 @@ impl RedisClient {
             .client
             .get_async_pubsub()
             .await
-            .map_err(|e| UploadError::Redis(e))?;
+            .map_err(UploadError::Redis)?;
 
         pubsub
             .subscribe("result")
             .await
-            .map_err(|e| UploadError::Redis(e))?;
+            .map_err(UploadError::Redis)?;
 
         let mut stream = pubsub.into_on_message();
 
         info!("Listening for Redis messages...");
 
         while let Some(msg) = stream.next().await {
-            let payload: String = msg.get_payload().map_err(|e| UploadError::Redis(e))?;
+            let payload: String = msg.get_payload().map_err(UploadError::Redis)?;
 
             debug!("Received Redis message: {}", payload);
 
@@ -161,7 +161,7 @@ impl RedisClient {
 
     /// Parse a Redis message into a BuildResultMessage
     async fn parse_message(&self, payload: &str) -> Result<BuildResultMessage> {
-        serde_json::from_str(payload).map_err(|e| UploadError::Json(e))
+        serde_json::from_str(payload).map_err(UploadError::Json)
     }
 
     /// Check Redis connection health

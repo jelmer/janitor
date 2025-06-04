@@ -887,8 +887,7 @@ pub async fn get_mp_status(mp: &breezyshim::forge::MergeProposal) -> Result<Stri
         move || mp.is_merged()
     })
     .await
-    .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))?
-    .map_err(|e| e)?;
+    .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))??;
 
     if is_merged {
         return Ok("merged".to_string());
@@ -899,8 +898,7 @@ pub async fn get_mp_status(mp: &breezyshim::forge::MergeProposal) -> Result<Stri
         move || mp.is_closed()
     })
     .await
-    .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))?
-    .map_err(|e| e)?;
+    .map_err(|_| BrzError::Other(PyErr::new::<PyRuntimeError, _>("Task join error")))??;
 
     if is_closed {
         Ok("closed".to_string())
@@ -1356,10 +1354,10 @@ async fn check_existing_mp(
             codebase = EXCLUDED.codebase
         "#
     )
-    .bind(&mp_url.to_string())
+    .bind(mp_url.to_string())
     .bind(db_status)
     .bind(revision.to_string())
-    .bind(&source_branch_url.as_ref().map(|u| u.to_string()).unwrap_or_default())
+    .bind(source_branch_url.as_ref().map(|u| u.to_string()).unwrap_or_default())
     .bind(&run_codebase)
     .execute(conn)
     .await

@@ -896,10 +896,7 @@ impl DatabaseManager {
                 "codebase": row.try_get::<String, _>("codebase")?
             });
 
-            grouped_proposals
-                .entry(status)
-                .or_insert_with(Vec::new)
-                .push(proposal);
+            grouped_proposals.entry(status).or_default().push(proposal);
         }
 
         Ok(grouped_proposals)
@@ -1383,7 +1380,12 @@ impl DatabaseManager {
 
     /// Get comprehensive run context data in a single optimized query
     /// Combines run details, statistics, reviews, binary packages in one call
-    pub async fn get_run_context(&self, run_id: &str, campaign: &str, codebase: &str) -> Result<RunContext, DatabaseError> {
+    pub async fn get_run_context(
+        &self,
+        run_id: &str,
+        campaign: &str,
+        codebase: &str,
+    ) -> Result<RunContext, DatabaseError> {
         let row = sqlx::query(
             r#"
             SELECT 
@@ -1406,22 +1408,25 @@ impl DatabaseManager {
         .await?;
 
         match row {
-            Some(row) => {
-                Ok(RunContext {
-                    total_runs: row.get("total_runs"),
-                    successful_runs: row.get("successful_runs"),
-                    binary_packages: row.get::<Option<Vec<String>>, _>("binary_packages").unwrap_or_default(),
-                    review_count: row.get("review_count"),
-                    queue_position: row.get::<i64, _>("queue_position") as i32,
-                })
-            }
+            Some(row) => Ok(RunContext {
+                total_runs: row.get("total_runs"),
+                successful_runs: row.get("successful_runs"),
+                binary_packages: row
+                    .get::<Option<Vec<String>>, _>("binary_packages")
+                    .unwrap_or_default(),
+                review_count: row.get("review_count"),
+                queue_position: row.get::<i64, _>("queue_position") as i32,
+            }),
             None => Ok(RunContext::default()),
         }
     }
 
     /// Get comprehensive campaign statistics in a single optimized query
     /// Eliminates N+1 pattern from multiple separate count queries
-    pub async fn get_campaign_statistics(&self, campaign: &str) -> Result<CampaignStatistics, DatabaseError> {
+    pub async fn get_campaign_statistics(
+        &self,
+        campaign: &str,
+    ) -> Result<CampaignStatistics, DatabaseError> {
         let row = sqlx::query(
             r#"
             SELECT 
@@ -1453,7 +1458,9 @@ impl DatabaseManager {
             pending_publishes: row.get("pending_publishes"),
             total_runs: row.get("total_runs"),
             queued_items: row.get("queued_items"),
-            avg_run_time_seconds: row.get::<Option<f64>, _>("avg_run_time_seconds").unwrap_or(0.0),
+            avg_run_time_seconds: row
+                .get::<Option<f64>, _>("avg_run_time_seconds")
+                .unwrap_or(0.0),
         })
     }
 

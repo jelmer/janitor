@@ -60,7 +60,7 @@ impl RunnerDatabase {
     pub fn pool(&self) -> &PgPool {
         self.shared_db.pool()
     }
-    
+
     /// Get a reference to the Redis client if available.
     pub fn redis(&self) -> Option<&redis::Client> {
         self.shared_db.redis()
@@ -153,10 +153,10 @@ impl RunnerDatabase {
             "#,
         )
         .bind(&active_run.log_id)
-        .bind(&active_run.queue_id)
+        .bind(active_run.queue_id)
         .bind(&active_run.worker_name)
         .bind(&active_run.worker_link)
-        .bind(&active_run.start_time)
+        .bind(active_run.start_time)
         .bind(active_run.estimated_duration.map(|d| d.as_secs() as i64))
         .bind(&active_run.campaign)
         .bind(&active_run.change_set)
@@ -939,7 +939,7 @@ impl RunnerDatabase {
                     redis::SetOptions::default()
                         .conditional_set(redis::ExistenceCheck::NX)
                         .get(true)
-                        .with_expiration(redis::SetExpiry::EX(ttl_seconds as u64)),
+                        .with_expiration(redis::SetExpiry::EX(ttl_seconds)),
                 )
                 .await?;
 
@@ -2035,7 +2035,6 @@ pub struct DistributionConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_database_module_compiles() {

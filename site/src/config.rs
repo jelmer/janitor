@@ -103,7 +103,7 @@ pub struct SiteConfig {
 }
 
 /// Combined configuration that includes both site and janitor configs
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     pub site: SiteConfig,
     pub janitor: Option<janitor::config::Config>,
@@ -194,7 +194,7 @@ impl SiteConfig {
         let log_level = env::var("LOG_LEVEL")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or_else(|| {
+            .unwrap_or({
                 if debug {
                     LogLevel::Debug
                 } else {
@@ -500,16 +500,6 @@ impl Default for SiteConfig {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            site: SiteConfig::default(),
-            janitor: None,
-            campaigns: HashMap::new(),
-        }
-    }
-}
-
 impl Environment {
     /// Detect environment from environment variables
     pub fn detect() -> Self {
@@ -582,14 +572,12 @@ impl ConfigBuilder {
         }
 
         // Load site configuration
-        let mut site = self
-            .site_config
-            .unwrap_or_else(|| {
-                SiteConfig::from_env().unwrap_or_else(|e| {
-                    eprintln!("ERROR: Failed to load site configuration: {}", e);
-                    std::process::exit(1);
-                })
-            });
+        let mut site = self.site_config.unwrap_or_else(|| {
+            SiteConfig::from_env().unwrap_or_else(|e| {
+                eprintln!("ERROR: Failed to load site configuration: {}", e);
+                std::process::exit(1);
+            })
+        });
 
         // Override janitor config path if specified
         if let Some(path) = self.janitor_config_path {

@@ -449,7 +449,7 @@ impl Default for ReleaseBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{HashAlgorithm, HashSet};
+    use crate::HashAlgorithm;
 
     #[test]
     fn test_release_builder() {

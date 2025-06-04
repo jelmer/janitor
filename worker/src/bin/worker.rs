@@ -132,16 +132,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Ok(my_ip) = std::env::var("MY_IP") {
         Some(format!("http://{}:{}", my_ip, site_port).parse().unwrap())
     } else if janitor_worker::is_gce_instance().await {
-        if let Some(external_ip) = janitor_worker::gce_external_ip().await.unwrap() {
-            Some(
+        janitor_worker::gce_external_ip()
+            .await
+            .unwrap()
+            .map(|external_ip| {
                 format!("http://{}:{}", external_ip, site_port)
                     .parse()
-                    .unwrap(),
-            )
-        } else {
-            // TODO(jelmer): Find out kubernetes IP?
-            None
-        }
+                    .unwrap()
+            })
     } else {
         None
     };

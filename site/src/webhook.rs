@@ -549,6 +549,12 @@ pub struct WebhookRegistration {
     http_client: reqwest::Client,
 }
 
+impl Default for WebhookRegistration {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WebhookRegistration {
     /// Create a new webhook registration client
     pub fn new() -> Self {

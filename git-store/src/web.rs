@@ -7,7 +7,6 @@ use crate::{
     repository::RepositoryManager,
     Config,
 };
-use tracing;
 use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
@@ -18,6 +17,7 @@ use axum::{
 use std::sync::Arc;
 use tera::Tera;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
+use tracing;
 // use tracing::info; // Will be used later
 
 /// Application state

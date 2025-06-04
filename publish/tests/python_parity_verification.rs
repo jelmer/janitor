@@ -6,7 +6,6 @@
 use chrono::{DateTime, Duration, Utc};
 use janitor_publish::*;
 use serde_json::json;
-use std::collections::HashMap;
 
 /// Verification tests that compare Rust behavior directly against expected Python behavior.
 ///
@@ -126,7 +125,7 @@ mod python_behavior_verification {
         // Verify our mode constants match the Python implementation
 
         // Python publish.py defines these modes:
-        let python_modes = vec![
+        let python_modes = [
             "skip",
             "build-only",
             "push",
@@ -310,7 +309,7 @@ mod python_behavior_verification {
         // Verify each route pattern
         for (method, path) in &expected_routes {
             // Check that method is valid HTTP method
-            assert!(["GET", "POST", "PUT", "DELETE"].contains(&method));
+            assert!(["GET", "POST", "PUT", "DELETE"].contains(method));
 
             // Check that path starts with /
             assert!(path.starts_with('/'));
@@ -332,7 +331,6 @@ mod python_behavior_verification {
 /// as the Python implementation would.
 #[cfg(test)]
 mod integration_verification {
-    use super::*;
 
     #[test]
     fn test_publish_decision_workflow_structure() {

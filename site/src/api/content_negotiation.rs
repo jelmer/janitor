@@ -156,7 +156,7 @@ fn extract_file_extension(path: &str) -> Option<&str> {
     let path = path.split('?').next().unwrap_or(path);
 
     // Get filename part
-    let filename = path.split('/').last()?;
+    let filename = path.split('/').next_back()?;
 
     // Extract extension
     if let Some((_, extension)) = filename.rsplit_once('.') {

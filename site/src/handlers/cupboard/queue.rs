@@ -449,12 +449,10 @@ async fn execute_bulk_queue_operation(
                 completed_at: now,
             })
         }
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unknown queue operation: {}",
-                operation.operation
-            ));
-        }
+        _ => Err(anyhow::anyhow!(
+            "Unknown queue operation: {}",
+            operation.operation
+        )),
     }
 }
 

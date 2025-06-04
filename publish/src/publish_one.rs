@@ -394,7 +394,7 @@ pub fn publish_one(
         Some(&request.revision_id),
         request.extra_context.clone(),
         request.derived_owner.clone(),
-        request.auto_merge.clone(),
+        request.auto_merge,
     )?;
 
     if let Some(temp_sprout) = temp_sprout {

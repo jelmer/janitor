@@ -1,11 +1,9 @@
 //! Tests to verify Rust implementation behaves identically to Python implementation.
 
-use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::time::Duration;
 
-use breezyshim::RevisionId;
 use janitor_runner::{committer_env, is_log_filename, JanitorResult, QueueItem, VcsInfo};
 
 /// Test that committer_env produces identical output to Python implementation.
@@ -125,7 +123,7 @@ fn test_queue_item_json_compatibility() {
     assert_eq!(queue_item.id, 12345);
     assert_eq!(queue_item.command, "lintian-fixes");
     assert_eq!(queue_item.campaign, "lintian-fixes");
-    assert_eq!(queue_item.refresh, true);
+    assert!(queue_item.refresh);
     assert_eq!(queue_item.requester, Some("automated".to_string()));
     assert_eq!(queue_item.change_set, Some("cs-123".to_string()));
     assert_eq!(queue_item.codebase, "example-package");
@@ -264,7 +262,7 @@ fn test_database_row_compatibility() {
     assert_eq!(row_data["id"].as_i64().unwrap(), 12345);
     assert_eq!(row_data["command"].as_str().unwrap(), "lintian-fixes");
     assert_eq!(row_data["campaign"].as_str().unwrap(), "lintian-fixes");
-    assert_eq!(row_data["refresh"].as_bool().unwrap(), false);
+    assert!(!row_data["refresh"].as_bool().unwrap());
     assert!(row_data["requester"].is_null());
     assert_eq!(row_data["change_set"].as_str().unwrap(), "cs-123");
     assert_eq!(row_data["codebase"].as_str().unwrap(), "example-package");
@@ -309,7 +307,7 @@ fn test_campaign_config_compatibility() {
 
     for campaign in valid_campaigns {
         // Must match: [a-z0-9][a-z0-9+-.]+
-        assert!(campaign.chars().nth(0).unwrap().is_ascii_alphanumeric());
+        assert!(campaign.chars().next().unwrap().is_ascii_alphanumeric());
         assert!(campaign
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "+-".contains(c)));
@@ -325,7 +323,7 @@ fn test_campaign_config_compatibility() {
 
     for campaign in invalid_campaigns {
         // These should be rejected by domain validation
-        let first_char = campaign.chars().nth(0);
+        let first_char = campaign.chars().next();
         if let Some(c) = first_char {
             if campaign.contains(' ') || campaign.contains('_') || c == '-' || c.is_uppercase() {
                 // This would be invalid in Python
@@ -386,7 +384,6 @@ fn test_error_handling_compatibility() {
 #[cfg(test)]
 mod async_compatibility_tests {
     use super::*;
-    use tokio;
 
     /// Test async patterns match Python asyncio behavior.
     #[tokio::test]

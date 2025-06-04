@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_flash_messages() {
-        let messages = vec![
+        let messages = [
             FlashMessage::success("Operation completed"),
             FlashMessage::error("Something went wrong"),
         ];

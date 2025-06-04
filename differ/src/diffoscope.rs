@@ -276,15 +276,15 @@ async fn _run_diffoscope(
 
         // Other exit codes indicate errors
         if let Some(code) = output.status.code() {
-            return Err(DiffoscopeError::new(&format!(
+            Err(DiffoscopeError::new(&format!(
                 "Diffoscope failed with exit code {}: {}",
                 code, stderr
-            )));
+            )))
         } else {
-            return Err(DiffoscopeError::new(&format!(
+            Err(DiffoscopeError::new(&format!(
                 "Diffoscope terminated by signal: {}",
                 stderr
-            )));
+            )))
         }
     } else {
         // Exit code 0 means no differences found

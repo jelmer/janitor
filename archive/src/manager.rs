@@ -198,7 +198,7 @@ impl GeneratorManager {
 
             campaign_mapping
                 .entry(campaign_name)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(repo_config.clone());
 
             debug!(
@@ -407,7 +407,7 @@ impl GeneratorManager {
 
     /// Cancel a job by ID.
     pub async fn cancel_job(&self, job_id: Uuid) -> ArchiveResult<()> {
-        let mut active_jobs = self.active_jobs.write().await;
+        let active_jobs = self.active_jobs.write().await;
 
         for (repo_name, active_job) in active_jobs.iter() {
             if active_job.info.id == job_id {

@@ -2,7 +2,7 @@
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use janitor_differ::{DifferError, DifferResult};
+use janitor_differ::DifferError;
 use serde_json::Value;
 use std::error::Error;
 

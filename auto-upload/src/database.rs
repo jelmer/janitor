@@ -27,19 +27,18 @@ impl DatabaseClient {
     pub async fn new(database_url: &str) -> Result<Self> {
         info!(
             "Connecting to database: {}",
-            database_url.split('@').last().unwrap_or("***")
+            database_url.split('@').next_back().unwrap_or("***")
         );
 
-        let config = janitor::database::DatabaseConfig::new(database_url)
-            .with_max_connections(5);
-        
+        let config = janitor::database::DatabaseConfig::new(database_url).with_max_connections(5);
+
         let shared_db = janitor::database::Database::connect_with_config(config)
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
 
         Ok(Self { shared_db })
     }
-    
+
     /// Get a reference to the database pool for backward compatibility
     pub fn pool(&self) -> &PgPool {
         self.shared_db.pool()

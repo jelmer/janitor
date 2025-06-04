@@ -46,7 +46,7 @@ impl PackageScanner {
         let artifact_manager = get_artifact_manager("dummy://location")
             .await
             .map_err(|e| ArchiveError::ArtifactRetrieval(e.to_string()))?;
-        let temp_dir = tempfile::TempDir::new().map_err(|e| ArchiveError::Io(e))?;
+        let temp_dir = tempfile::TempDir::new().map_err(ArchiveError::Io)?;
 
         Ok(Self {
             artifact_manager: Arc::from(artifact_manager),
@@ -108,7 +108,7 @@ impl PackageScanner {
         let artifact_dir = temp_path.join(format!("build-{}", build_id));
         tokio::fs::create_dir_all(&artifact_dir)
             .await
-            .map_err(|e| ArchiveError::Io(e))?;
+            .map_err(ArchiveError::Io)?;
 
         debug!(
             "Downloading artifacts for build {} to {:?}",
@@ -145,14 +145,10 @@ impl PackageScanner {
         // Verify that we actually downloaded some artifacts
         let entries = tokio::fs::read_dir(&artifact_dir)
             .await
-            .map_err(|e| ArchiveError::Io(e))?;
+            .map_err(ArchiveError::Io)?;
         let mut entry_count = 0;
         let mut entries = entries;
-        while let Some(_entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| ArchiveError::Io(e))?
-        {
+        while let Some(_entry) = entries.next_entry().await.map_err(ArchiveError::Io)? {
             entry_count += 1;
         }
 
@@ -213,7 +209,7 @@ async fn scan_packages_in_directory(td: &Path, arch: Option<&str>) -> ArchiveRes
     stdout_reader
         .read_to_end(&mut stdout)
         .await
-        .map_err(|e| ArchiveError::Io(e))?;
+        .map_err(ArchiveError::Io)?;
 
     // Parse stdout paragraphs
     let paragraphs = deb822_lossless::lossy::Deb822::from_reader(&stdout[..])
@@ -275,7 +271,7 @@ async fn scan_sources_in_directory(td: &Path) -> ArchiveResult<Vec<Source>> {
     stdout_reader
         .read_to_end(&mut stdout)
         .await
-        .map_err(|e| ArchiveError::Io(e))?;
+        .map_err(ArchiveError::Io)?;
 
     let paragraphs = deb822_lossless::lossy::Deb822::from_reader(&stdout[..])
         .map_err(|e| ArchiveError::SourceScanning(format!("Failed to parse deb822: {}", e)))?;
@@ -320,7 +316,6 @@ fn handle_log_line(line: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test]
     async fn test_scan_packages() {

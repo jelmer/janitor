@@ -337,57 +337,55 @@ fn get_cpu_usage() -> Result<f64, Box<dyn std::error::Error>> {
 }
 
 /// Tracing middleware for HTTP requests.
-pub fn http_tracing_middleware(
+pub async fn http_tracing_middleware(
     request: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
-) -> impl std::future::Future<Output = axum::response::Response> + Send {
-    async move {
-        let method = request.method().clone();
-        let uri = request.uri().clone();
-        let user_agent = request
-            .headers()
-            .get(axum::http::header::USER_AGENT)
-            .and_then(|h| h.to_str().ok())
-            .unwrap_or("unknown")
-            .to_string();
+) -> axum::response::Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    let user_agent = request
+        .headers()
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
 
-        let start = std::time::Instant::now();
+    let start = std::time::Instant::now();
 
-        // Create a span for this request
-        let span = tracing::info_span!(
-            "http_request",
-            method = %method,
-            uri = %uri,
-            user_agent = %user_agent,
-        );
+    // Create a span for this request
+    let span = tracing::info_span!(
+        "http_request",
+        method = %method,
+        uri = %uri,
+        user_agent = %user_agent,
+    );
 
-        let response = tracing::instrument::Instrument::instrument(next.run(request), span).await;
+    let response = tracing::instrument::Instrument::instrument(next.run(request), span).await;
 
-        let duration = start.elapsed();
-        let status = response.status();
+    let duration = start.elapsed();
+    let status = response.status();
 
-        // Log the request
-        tracing::info!(
+    // Log the request
+    tracing::info!(
+        method = ?method,
+        uri = ?uri,
+        status = %status,
+        duration_ms = duration.as_millis(),
+        user_agent = %user_agent,
+        "HTTP request completed"
+    );
+
+    // Log slow requests
+    if duration.as_millis() > 1000 {
+        tracing::warn!(
             method = ?method,
             uri = ?uri,
-            status = %status,
             duration_ms = duration.as_millis(),
-            user_agent = %user_agent,
-            "HTTP request completed"
+            "Slow HTTP request detected"
         );
-
-        // Log slow requests
-        if duration.as_millis() > 1000 {
-            tracing::warn!(
-                method = ?method,
-                uri = ?uri,
-                duration_ms = duration.as_millis(),
-                "Slow HTTP request detected"
-            );
-        }
-
-        response
     }
+
+    response
 }
 
 /// Database operation tracing.
@@ -516,16 +514,16 @@ mod tests {
     fn test_tracing_config_default() {
         let config = TracingConfig::default();
         assert_eq!(config.log_level, "info");
-        assert_eq!(config.console_output, true);
-        assert_eq!(config.json_format, false);
+        assert!(config.console_output);
+        assert!(!config.json_format);
     }
 
     #[test]
     fn test_structured_logging_config() {
         let config = StructuredLoggingConfig::default();
-        assert_eq!(config.include_process_info, true);
-        assert_eq!(config.include_hostname, true);
-        assert_eq!(config.include_source_location, false);
+        assert!(config.include_process_info);
+        assert!(config.include_hostname);
+        assert!(!config.include_source_location);
     }
 
     #[tokio::test]

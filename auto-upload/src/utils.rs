@@ -65,7 +65,7 @@ pub async fn fix_file_permissions(dir: &Path) -> Result<()> {
 /// Extract run ID from a path or string
 pub fn extract_run_id(s: &str) -> &str {
     // Handle both full paths and just IDs
-    s.split('/').last().unwrap_or(s)
+    s.split('/').next_back().unwrap_or(s)
 }
 
 #[cfg(test)]

@@ -20,9 +20,7 @@ use tracing::{info, warn};
 use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::repository::{
-    PyO3RepositoryManager, RepositoryManager, RepositoryPath, SubprocessRepositoryManager,
-};
+use crate::repository::{PyO3RepositoryManager, RepositoryManager, RepositoryPath};
 use crate::smart_protocol::{serve_bzr_file_handler, smart_protocol_handler};
 
 /// Application state shared between handlers

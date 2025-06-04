@@ -75,7 +75,7 @@ impl CopyOutput {
 
     /// Set up redirection through the `tee` command
     fn setup_tee_redirection(&mut self, output_log: &std::path::Path) -> io::Result<()> {
-        let mut process = Command::new("tee")
+        let process = Command::new("tee")
             .arg(output_log)
             .stdin(Stdio::piped())
             .spawn()

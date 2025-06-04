@@ -127,7 +127,7 @@ pub fn debian_make_changes(
     let dist_command = if !dist_env.is_empty() {
         format!("{} {}", dist_env, dist_command)
     } else {
-        format!("{}", dist_command)
+        dist_command.to_string()
     };
 
     let mut extra_env = HashMap::new();

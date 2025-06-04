@@ -1,12 +1,9 @@
 //! Integration tests for the differ service endpoints.
 
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::Response;
-use axum::{body::Body, http::Request};
+use axum::http::StatusCode;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tempfile::TempDir;
-use tower::ServiceExt;
 
 /// Mock artifact manager for testing
 #[derive(Clone, Debug)]
@@ -121,7 +118,7 @@ async fn test_content_negotiation_json() {
 #[tokio::test]
 async fn test_content_negotiation_html() {
     // Test that HTML content type is supported
-    let supported_types = vec![
+    let supported_types = [
         "application/json",
         "text/html",
         "text/plain",
@@ -345,7 +342,7 @@ async fn test_accept_header_parsing() {
         ("image/png", false),       // Not supported
     ];
 
-    let supported_types = vec![
+    let supported_types = [
         "application/json",
         "text/html",
         "text/plain",

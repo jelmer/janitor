@@ -27,7 +27,7 @@ impl ArtifactProcessor {
     pub async fn retrieve_artifacts(&self, run_id: &str) -> Result<TempDir> {
         info!("Retrieving artifacts for run {}", run_id);
 
-        let temp_dir = TempDir::new().map_err(|e| UploadError::Io(e))?;
+        let temp_dir = TempDir::new().map_err(UploadError::Io)?;
 
         match self
             .artifact_manager
@@ -53,14 +53,11 @@ impl ArtifactProcessor {
             Err(_) => return false,
         };
 
-        match self
+        (self
             .artifact_manager
             .retrieve_artifacts(run_id, temp_dir.path(), None)
-            .await
-        {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+            .await)
+            .is_ok()
     }
 }
 
@@ -115,7 +112,7 @@ impl ArtifactValidator {
             if in_files_section {
                 if line.starts_with(' ') || line.starts_with('\t') {
                     // Format: <md5> <size> <section> <priority> <filename>
-                    let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                    let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 5 {
                         let filename = parts[4];
                         let file_path = changes_path

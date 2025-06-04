@@ -1,9 +1,7 @@
 //! Tests to verify configuration compatibility with Python implementation.
 
-use janitor_runner::config::{ApplicationConfig, DatabaseConfig, RunnerConfig, WebConfig};
-use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use janitor_runner::config::{DatabaseConfig, RunnerConfig, WebConfig};
+use serde_json::json;
 
 /// Test that configuration files can be read in Python-compatible format.
 #[test]
@@ -88,8 +86,8 @@ fn test_default_config_values() {
 
     // Application defaults should match Python
     assert_eq!(config.application.environment, "development");
-    assert_eq!(config.application.debug, false);
-    assert_eq!(config.application.enable_graceful_shutdown, true);
+    assert!(!config.application.debug);
+    assert!(config.application.enable_graceful_shutdown);
     assert_eq!(config.application.shutdown_timeout_seconds, 30);
 }
 
@@ -124,7 +122,7 @@ fn test_campaign_config_structure() {
 
     // Test that campaign name follows Python domain constraint
     let name = campaign_json["name"].as_str().unwrap();
-    assert!(name.chars().nth(0).unwrap().is_ascii_alphanumeric());
+    assert!(name.chars().next().unwrap().is_ascii_alphanumeric());
     assert!(name
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "+-".contains(c)));
@@ -208,7 +206,7 @@ fn test_logging_config_compatibility() {
     assert!(logging_config["handlers"].is_object());
 
     // Test log levels match Python
-    let valid_levels = vec!["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
+    let valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
     let level = logging_config["level"].as_str().unwrap();
     assert!(valid_levels.contains(&level));
 }

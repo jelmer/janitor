@@ -6,7 +6,6 @@
 //! metadata with proper compression and hashing.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use apt_repository::{
@@ -24,7 +23,7 @@ use tracing::{debug, error, info, warn};
 use crate::config::AptRepositoryConfig;
 use crate::database::BuildManager;
 use crate::error::{ArchiveError, ArchiveResult};
-use crate::scanner::{BuildInfo, PackageScanner};
+use crate::scanner::PackageScanner;
 
 /// Convert a debian-control Package to an apt-repository Package.
 fn convert_package(debian_pkg: DebianPackage) -> ArchiveResult<AptPackage> {
@@ -451,7 +450,7 @@ impl RepositoryGenerator {
         // Ensure the base path exists
         fs::create_dir_all(&repo_config.base_path)
             .await
-            .map_err(|e| ArchiveError::Io(e))?;
+            .map_err(ArchiveError::Io)?;
 
         info!(
             "Generating repository files in: {:?}",
@@ -542,7 +541,7 @@ impl RepositoryGenerator {
             info!("Removing existing repository files: {:?}", suite_path);
             fs::remove_dir_all(&suite_path)
                 .await
-                .map_err(|e| ArchiveError::Io(e))?;
+                .map_err(ArchiveError::Io)?;
         }
 
         Ok(())

@@ -1268,8 +1268,8 @@ mod tests {
     use breezyshim::controldir;
     use janitor::api::worker::*;
     use serial_test::serial;
-    use std::path::{Path, PathBuf};
-    use std::str::FromStr;
+    use std::path::Path;
+
     use test_log::test;
 
     #[test]

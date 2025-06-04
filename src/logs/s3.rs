@@ -170,9 +170,36 @@ impl LogFileManager for S3LogFileManager {
         run_id: &str,
         name: &str,
     ) -> Result<DateTime<Utc>, Error> {
-        // S3 HEAD request doesn't reliably return creation time
-        // Would need to implement GetObject with metadata
-        Err(Error::Other("get_ctime not implemented for S3".to_string()))
+        let url = self.get_url(codebase, run_id, name);
+        
+        // Use HEAD request to get object metadata including last-modified
+        let response = self
+            .client
+            .head(&url)
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|_| Error::ServiceUnavailable)?;
+
+        if !response.status().is_success() {
+            match response.status().as_u16() {
+                404 => return Err(Error::NotFound),
+                _ => return Err(Error::ServiceUnavailable),
+            }
+        }
+
+        // Try to get last-modified header as creation time approximation
+        if let Some(last_modified) = response.headers().get("last-modified") {
+            if let Ok(date_str) = last_modified.to_str() {
+                // Parse RFC 2822 format (HTTP date format)
+                if let Ok(datetime) = DateTime::parse_from_rfc2822(date_str) {
+                    return Ok(datetime.with_timezone(&Utc));
+                }
+            }
+        }
+
+        // If no reliable creation time is available, return an error
+        Err(Error::Other("Creation time not available for S3 object".to_string()))
     }
 
     async fn health_check(&self) -> Result<(), Error> {

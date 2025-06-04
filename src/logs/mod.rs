@@ -252,7 +252,7 @@ pub async fn import_log(
         std::fs::metadata(path)
             .ok()
             .and_then(|metadata| metadata.modified().ok())
-            .map(|time| DateTime::<Utc>::from(time))
+            .map(DateTime::<Utc>::from)
     };
 
     // Attempt with primary log manager

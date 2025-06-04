@@ -3,16 +3,10 @@
 use axum::{
     body::{to_bytes, Body},
     http::{Method, Request, StatusCode},
-    response::Response,
     Json,
 };
-use chrono;
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tower::ServiceExt;
-
-use janitor_runner::{database::RunnerDatabase, AppState};
 
 /// Helper to create a test app with mock state.
 async fn create_test_app() -> axum::Router {

@@ -80,7 +80,7 @@ pub fn spawn_cleanup_task_with_interval(
 
 #[cfg(test)]
 mod tests {
-    
+
     use std::time::Duration;
 
     #[test]

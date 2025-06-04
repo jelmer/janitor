@@ -193,8 +193,27 @@ async fn health_check(
         }
     }
 
-    // TODO: Add Redis health check when available
-    services.insert("redis", "unknown");
+    // Check Redis connectivity if available
+    if let Some(ref redis_client) = app_state.redis {
+        match redis_client.get_async_connection().await {
+            Ok(mut conn) => {
+                use redis::AsyncCommands;
+                match conn.ping().await {
+                    Ok(_) => {
+                        services.insert("redis", "healthy");
+                    }
+                    Err(_) => {
+                        services.insert("redis", "unhealthy");
+                    }
+                }
+            }
+            Err(_) => {
+                services.insert("redis", "unhealthy");
+            }
+        }
+    } else {
+        services.insert("redis", "not_configured");
+    }
 
     let status = serde_json::json!({
         "status": "healthy",
@@ -256,9 +275,9 @@ async fn get_queue_status(
     match app_state.database.get_stats().await {
         Ok(stats) => {
             let queue_status = QueueStatus {
-                total_candidates: stats.get("total_codebases").unwrap_or(&0).clone(),
-                pending_candidates: stats.get("queue_size").unwrap_or(&0).clone(),
-                active_runs: stats.get("active_runs").unwrap_or(&0).clone(),
+                total_candidates: *stats.get("total_codebases").unwrap_or(&0),
+                pending_candidates: *stats.get("queue_size").unwrap_or(&0),
+                active_runs: *stats.get("active_runs").unwrap_or(&0),
                 campaigns: vec![], // TODO: Implement campaign listing
             };
 
@@ -360,9 +379,8 @@ async fn get_active_run(
         Some(format!("Run {} not found", run_id)),
     );
 
-    let response = negotiate_response(error_response, &headers, "/api/active-runs/{id}");
     // Set status to 404 - this would be handled by the error system in real implementation
-    response
+    negotiate_response(error_response, &headers, "/api/active-runs/{id}")
 }
 
 /// Get run logs

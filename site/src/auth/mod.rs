@@ -10,9 +10,6 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-pub use middleware::{
-    require_admin, OptionalUser, UserContext,
-};
+pub use middleware::{require_admin, OptionalUser, UserContext};
 pub use oidc::AuthError;
-pub use session::SessionManager;
 pub use types::User;

@@ -221,7 +221,7 @@ mod tests {
         let data = b"hello world";
         let compressed = Compression::Gzip.compress(data)?;
         assert_ne!(compressed, data);
-        assert!(compressed.len() > 0);
+        assert!(!compressed.is_empty());
 
         let decompressed = Compression::Gzip.decompress(&compressed)?;
         assert_eq!(decompressed, data);
@@ -234,7 +234,7 @@ mod tests {
         let data = b"hello world";
         let compressed = Compression::Bzip2.compress(data)?;
         assert_ne!(compressed, data);
-        assert!(compressed.len() > 0);
+        assert!(!compressed.is_empty());
 
         let decompressed = Compression::Bzip2.decompress(&compressed)?;
         assert_eq!(decompressed, data);

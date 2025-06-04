@@ -192,7 +192,7 @@ fn main() -> Result<(), i32> {
         project.internal_path(),
         &target_dir,
         log_manager.as_mut(),
-        version.as_deref().as_deref(),
+        version.as_deref(),
         !args.logging.debug,
     ) {
         Ok(t) => {

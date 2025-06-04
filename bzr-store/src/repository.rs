@@ -11,9 +11,7 @@ use tracing::{debug, info, warn};
 
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::pyo3_bridge::{
-    BreezyBranchInfo, BreezyOperations, BreezyRepositoryInfo, BreezyRevisionInfo,
-};
+use crate::pyo3_bridge::{BreezyBranchInfo, BreezyOperations, BreezyRepositoryInfo};
 
 /// Repository path structure for campaign/codebase/role organization
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 //! Tests to verify database operations are compatible with Python implementation.
 
 use chrono::{DateTime, Utc};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::time::Duration;
 
 // Note: These tests verify the data structures and SQL compatibility.
@@ -135,7 +135,7 @@ fn test_codebase_table_structure() {
 
     for name in valid_names {
         // First character must be alphanumeric
-        let first_char = name.chars().nth(0).unwrap();
+        let first_char = name.chars().next().unwrap();
         assert!(first_char.is_ascii_alphanumeric());
 
         // Rest must be alphanumeric, +, -, or .
@@ -154,7 +154,7 @@ fn test_codebase_table_structure() {
     ];
 
     for name in invalid_names {
-        if let Some(first_char) = name.chars().nth(0) {
+        if let Some(first_char) = name.chars().next() {
             // Should violate domain constraint
             assert!(
                 first_char == '-'

@@ -49,7 +49,7 @@ impl SessionManager {
 
         sqlx::query("INSERT INTO site_session (id, timestamp, userinfo) VALUES ($1, $2, $3)")
             .bind(&session_id)
-            .bind(&session_info.created_at)
+            .bind(session_info.created_at)
             .bind(&userinfo_json)
             .execute(&self.pool)
             .await?;

@@ -67,11 +67,10 @@ fn main() {
     let mut template_env = load_template_env(&templates_dir);
     template_env.add_global(
         "external_url",
-        if let Some(external_url) = request.external_url.as_ref() {
-            Some(external_url.to_string().trim_end_matches('/').to_string())
-        } else {
-            None
-        },
+        request
+            .external_url
+            .as_ref()
+            .map(|external_url| external_url.to_string().trim_end_matches('/').to_string()),
     );
 
     let publish_result: janitor_publish::PublishOneResult =
