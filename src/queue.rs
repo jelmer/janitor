@@ -268,47 +268,35 @@ impl<'a> Queue<'a> {
         limit: Option<i64>,
         campaign: Option<&str>,
     ) -> Result<Vec<QueueItem>, Error> {
-        let mut query = r#"
+        let query = if campaign.is_some() {
+            r#"
             SELECT queue.id, queue.context, queue.command, queue.estimated_duration,
                    queue.suite AS campaign, queue.refresh, queue.requester, 
                    queue.change_set, queue.codebase
             FROM queue
-        "#
-        .to_string();
+            WHERE queue.suite = $1
+            ORDER BY bucket ASC, priority ASC, queue.id ASC
+            LIMIT $2
+            "#
+        } else {
+            r#"
+            SELECT queue.id, queue.context, queue.command, queue.estimated_duration,
+                   queue.suite AS campaign, queue.refresh, queue.requester, 
+                   queue.change_set, queue.codebase
+            FROM queue
+            ORDER BY bucket ASC, priority ASC, queue.id ASC
+            LIMIT $1
+            "#
+        };
 
-        let mut conditions = Vec::new();
-        let mut bind_count = 0;
-
-        // Add campaign filter if provided
-        if campaign.is_some() {
-            bind_count += 1;
-            conditions.push(format!("queue.suite = ${}", bind_count));
-        }
-
-        // Add WHERE clause if we have conditions
-        if !conditions.is_empty() {
-            query.push_str(" WHERE ");
-            query.push_str(&conditions.join(" AND "));
-        }
-
-        // Add ordering (same as next_item)
-        query.push_str(" ORDER BY bucket ASC, priority ASC, queue.id ASC");
-
-        // Add limit if provided
-        if limit.is_some() {
-            bind_count += 1;
-            query.push_str(&format!(" LIMIT ${}", bind_count));
-        }
-
-        let mut sqlx_query = sqlx::query_as::<_, QueueItem>(&query);
-
-        // Bind parameters in the order they were added
-        if let Some(campaign) = campaign {
-            sqlx_query = sqlx_query.bind(campaign);
-        }
-        if let Some(limit) = limit {
-            sqlx_query = sqlx_query.bind(limit);
-        }
+        let sqlx_query = if let Some(campaign) = campaign {
+            sqlx::query_as::<_, QueueItem>(query)
+                .bind(campaign)
+                .bind(limit.unwrap_or(i64::MAX))
+        } else {
+            sqlx::query_as::<_, QueueItem>(query)
+                .bind(limit.unwrap_or(i64::MAX))
+        };
 
         sqlx_query.fetch_all(self.pool).await
     }

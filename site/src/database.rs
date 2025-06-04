@@ -160,27 +160,21 @@ impl DatabaseManager {
         offset: Option<i64>,
         search: Option<&str>,
     ) -> Result<Vec<Codebase>, DatabaseError> {
-        let mut query = "SELECT name, url, branch FROM codebase WHERE NOT inactive".to_string();
+        let mut query = sqlx::query(
+            "SELECT name, url, branch FROM codebase 
+             WHERE NOT inactive 
+             AND ($1::text IS NULL OR (name ILIKE '%' || $1 || '%' OR url ILIKE '%' || $1 || '%'))
+             ORDER BY name
+             LIMIT $2
+             OFFSET $3"
+        );
+        
+        query = query
+            .bind(search)
+            .bind(limit.unwrap_or(i64::MAX))
+            .bind(offset.unwrap_or(0));
 
-        if let Some(search_term) = search {
-            query.push_str(&format!(
-                " AND (name ILIKE '%{}%' OR url ILIKE '%{}%')",
-                search_term.replace("%", "\\%").replace("_", "\\_"),
-                search_term.replace("%", "\\%").replace("_", "\\_")
-            ));
-        }
-
-        query.push_str(" ORDER BY name");
-
-        if let Some(limit) = limit {
-            query.push_str(&format!(" LIMIT {}", limit));
-        }
-
-        if let Some(offset) = offset {
-            query.push_str(&format!(" OFFSET {}", offset));
-        }
-
-        let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
+        let rows = query.fetch_all(&self.pool).await?;
 
         let mut codebases = Vec::new();
         for row in rows {

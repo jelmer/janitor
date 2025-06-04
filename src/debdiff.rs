@@ -219,17 +219,41 @@ pub async fn run_debdiff(
     old_binaries: Vec<&str>,
     new_binaries: Vec<&str>,
 ) -> Result<Vec<u8>, DebdiffError> {
-    let args = ["debdiff", "--from"]
-        .iter()
-        .chain(old_binaries.iter())
-        .chain(["--to"].iter())
-        .chain(new_binaries.iter())
-        .collect::<Vec<_>>();
-    let mut p = tokio::process::Command::new(args[0]);
-    for arg in args.iter().skip(1) {
-        p.arg(arg);
+    // Validate all file paths to prevent command injection
+    for path in old_binaries.iter().chain(new_binaries.iter()) {
+        // Check for shell metacharacters and path traversal
+        if path.contains("..") || 
+           path.chars().any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\n' | '\r' | '\0')) {
+            return Err(DebdiffError {
+                message: format!("Invalid file path: {}", path),
+            });
+        }
+        
+        // Verify the path exists and is a regular file
+        let path_obj = std::path::Path::new(path);
+        if !path_obj.exists() {
+            return Err(DebdiffError {
+                message: format!("File not found: {}", path),
+            });
+        }
+        if !path_obj.is_file() {
+            return Err(DebdiffError {
+                message: format!("Not a regular file: {}", path),
+            });
+        }
     }
-    let output = p.output().await?;
+    
+    let mut cmd = tokio::process::Command::new("debdiff");
+    cmd.arg("--from");
+    for path in old_binaries {
+        cmd.arg(path);
+    }
+    cmd.arg("--to");
+    for path in new_binaries {
+        cmd.arg(path);
+    }
+    
+    let output = cmd.output().await?;
     if !output.status.success() {
         return Err(DebdiffError {
             message: String::from_utf8_lossy(&output.stderr).to_string(),
