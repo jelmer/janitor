@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
 use thiserror::Error;
+use pyo3::PyErr;
 
 /// Main error type for the BZR Store service
 #[derive(Debug, Error)]
@@ -12,6 +13,10 @@ pub enum BzrError {
     /// Python/PyO3 related errors
     #[error("Python error: {0}")]
     Python(String),
+    
+    /// PyO3 errors
+    #[error("PyO3 error: {0}")]
+    PyO3(#[from] PyErr),
     
     /// Database errors
     #[error("Database error: {0}")]
@@ -111,6 +116,7 @@ impl IntoResponse for BzrError {
             BzrError::Repository { .. } => (StatusCode::NOT_FOUND, "Repository error"),
             BzrError::Subprocess(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Operation failed"),
             BzrError::Python(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Python error"),
+            BzrError::PyO3(_) => (StatusCode::INTERNAL_SERVER_ERROR, "PyO3 error"),
             BzrError::Database(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Database error"),
             BzrError::Config(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Configuration error"),
             BzrError::Io(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IO error"),

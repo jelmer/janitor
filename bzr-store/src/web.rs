@@ -21,6 +21,7 @@ use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
 use crate::repository::{RepositoryManager, RepositoryPath, SubprocessRepositoryManager};
+use crate::smart_protocol::{smart_protocol_handler, serve_bzr_file_handler};
 
 /// Application state shared between handlers
 #[derive(Clone)]
@@ -170,8 +171,11 @@ async fn create_public_app(state: AppState) -> Router {
         .route("/repositories", get(list_repositories_handler))
         .route("/:campaign/:codebase/:role/info", get(repository_info_handler))
         
-        // TODO: Bazaar smart protocol endpoint
-        // .route("/:campaign/:codebase/:role/.bzr/smart", post(smart_protocol_handler))
+        // Bazaar smart protocol endpoint
+        .route("/:campaign/:codebase/:role/.bzr/smart", post(smart_protocol_handler))
+        
+        // Repository file access (.bzr directory)
+        .route("/:campaign/:codebase/:role/*file_path", get(serve_bzr_file_handler))
         
         .layer(
             ServiceBuilder::new()
