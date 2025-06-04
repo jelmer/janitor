@@ -1380,9 +1380,118 @@ impl DatabaseManager {
             "idle_workers": idle_workers
         }))
     }
+
+    /// Fetch comprehensive codebase context in a single optimized query
+    /// This eliminates N+1 query patterns by combining multiple related queries
+    pub async fn get_codebase_context(
+        &self,
+        campaign: &str,
+        codebase: &str,
+    ) -> Result<CodebaseContext, DatabaseError> {
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                -- Candidate info
+                c.codebase,
+                c.suite,
+                c.command,
+                c.publish_policy,
+                c.priority,
+                c.value,
+                -- VCS info
+                cb.url as vcs_url,
+                cb.vcs_type,
+                cb.branch_url,
+                -- Last run info
+                lr.id as last_run_id,
+                lr.result_code as last_result_code,
+                lr.description as last_description,
+                lr.start_time as last_start_time,
+                lr.finish_time as last_finish_time,
+                lr.worker as last_worker,
+                -- Queue position (subquery)
+                (
+                    SELECT COUNT(*) + 1 
+                    FROM queue q2 
+                    WHERE q2.suite = $1 
+                    AND q2.priority > COALESCE(
+                        (SELECT priority FROM queue WHERE suite = $1 AND codebase = $2), 0
+                    )
+                ) as queue_position
+            FROM candidate c
+            LEFT JOIN codebase cb ON c.codebase = cb.name
+            LEFT JOIN LATERAL (
+                SELECT * FROM run 
+                WHERE codebase = $2 AND suite = $1 
+                ORDER BY start_time DESC 
+                LIMIT 1
+            ) lr ON true
+            WHERE c.suite = $1 AND c.codebase = $2
+            "#,
+        )
+        .bind(campaign)
+        .bind(codebase)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        match row {
+            Some(row) => {
+                Ok(CodebaseContext {
+                    // Candidate info
+                    codebase: row.get("codebase"),
+                    suite: row.get("suite"),
+                    command: row.get("command"),
+                    publish_policy: row.get("publish_policy"),
+                    priority: row.get("priority"),
+                    value: row.get("value"),
+                    // VCS info
+                    vcs_url: row.get("vcs_url"),
+                    vcs_type: row.get("vcs_type"),
+                    branch_url: row.get("branch_url"),
+                    // Last run info
+                    last_run_id: row.get("last_run_id"),
+                    last_result_code: row.get("last_result_code"),
+                    last_description: row.get("last_description"),
+                    last_start_time: row.get("last_start_time"),
+                    last_finish_time: row.get("last_finish_time"),
+                    last_worker: row.get("last_worker"),
+                    // Queue info
+                    queue_position: row.get::<i64, _>("queue_position") as i32,
+                })
+            }
+            None => Err(DatabaseError::NotFound(format!(
+                "Codebase {} not found in campaign {}",
+                codebase, campaign
+            ))),
+        }
+    }
 }
 
 // Additional types for database results
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodebaseContext {
+    // Candidate info
+    pub codebase: String,
+    pub suite: String,
+    pub command: Option<String>,
+    pub publish_policy: Option<String>,
+    pub priority: Option<i32>,
+    pub value: Option<i64>,
+    // VCS info
+    pub vcs_url: Option<String>,
+    pub vcs_type: Option<String>,
+    pub branch_url: Option<String>,
+    // Last run info
+    pub last_run_id: Option<String>,
+    pub last_result_code: Option<String>,
+    pub last_description: Option<String>,
+    pub last_start_time: Option<DateTime<Utc>>,
+    pub last_finish_time: Option<DateTime<Utc>>,
+    pub last_worker: Option<String>,
+    // Queue info
+    pub queue_position: i32,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VcsInfo {

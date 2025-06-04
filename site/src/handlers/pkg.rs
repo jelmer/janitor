@@ -651,55 +651,57 @@ async fn generate_codebase_context(
 ) -> anyhow::Result<HashMap<String, serde_json::Value>> {
     let mut context = HashMap::new();
 
-    // Fetch candidate info
-    let candidate = state.database.get_candidate(campaign, codebase).await?;
-    context.insert("candidate".to_string(), serde_json::to_value(&candidate)?);
+    // Fetch all core codebase context in a single optimized query
+    let codebase_context = state.database.get_codebase_context(campaign, codebase).await?;
+    
+    // Convert codebase context to the expected format
+    context.insert("candidate".to_string(), serde_json::json!({
+        "codebase": codebase_context.codebase,
+        "suite": codebase_context.suite,
+        "command": codebase_context.command,
+        "publish_policy": codebase_context.publish_policy,
+        "priority": codebase_context.priority,
+        "value": codebase_context.value
+    }));
 
-    // Fetch VCS info
-    if let Ok(vcs_info) = state.database.get_vcs_info(codebase).await {
-        context.insert("vcs_url".to_string(), serde_json::to_value(&vcs_info.url)?);
-        context.insert(
-            "vcs_type".to_string(),
-            serde_json::to_value(&vcs_info.vcs_type)?,
-        );
-        context.insert(
-            "branch_url".to_string(),
-            serde_json::to_value(&vcs_info.branch_url)?,
-        );
-    }
+    // VCS info
+    context.insert("vcs_url".to_string(), serde_json::to_value(&codebase_context.vcs_url)?);
+    context.insert("vcs_type".to_string(), serde_json::to_value(&codebase_context.vcs_type)?);
+    context.insert("branch_url".to_string(), serde_json::to_value(&codebase_context.branch_url)?);
 
-    // Fetch last unabsorbed run
-    match state
-        .database
-        .get_last_unabsorbed_run(campaign, codebase)
-        .await
-    {
-        Ok(run) => {
-            context.insert("run".to_string(), serde_json::to_value(&run)?);
-            context.insert("run_id".to_string(), serde_json::to_value(&run.id)?);
-            context.insert(
-                "result_code".to_string(),
-                serde_json::to_value(&run.result_code)?,
-            );
+    // Last run info
+    if let Some(run_id) = &codebase_context.last_run_id {
+        // Construct run object from context data
+        let run_data = serde_json::json!({
+            "id": run_id,
+            "codebase": &codebase_context.codebase,
+            "suite": &codebase_context.suite,
+            "result_code": codebase_context.last_result_code,
+            "description": codebase_context.last_description,
+            "start_time": codebase_context.last_start_time,
+            "finish_time": codebase_context.last_finish_time,
+            "worker": codebase_context.last_worker
+        });
+        context.insert("run".to_string(), run_data);
+        context.insert("run_id".to_string(), serde_json::to_value(run_id)?);
+        context.insert("result_code".to_string(), serde_json::to_value(&codebase_context.last_result_code)?);
 
-            // Check if we should show diff
-            if query.show_diff.unwrap_or(false) && run.result_code == Some("success".to_string()) {
-                if let Ok(diff) = fetch_diff(&state, &run.id).await {
-                    context.insert("diff".to_string(), serde_json::to_value(&diff)?);
-                }
-            }
-
-            // Check if we should show debdiff
-            if query.show_debdiff.unwrap_or(false) {
-                if let Ok(debdiff) = fetch_debdiff(&state, &run.id).await {
-                    context.insert("debdiff".to_string(), serde_json::to_value(&debdiff)?);
-                }
+        // Check if we should show diff
+        if query.show_diff.unwrap_or(false) && codebase_context.last_result_code == Some("success".to_string()) {
+            if let Ok(diff) = fetch_diff(&state, run_id).await {
+                context.insert("diff".to_string(), serde_json::to_value(&diff)?);
             }
         }
-        Err(_) => {
-            // No unabsorbed run found
-            context.insert("run".to_string(), serde_json::Value::Null);
+
+        // Check if we should show debdiff
+        if query.show_debdiff.unwrap_or(false) {
+            if let Ok(debdiff) = fetch_debdiff(&state, run_id).await {
+                context.insert("debdiff".to_string(), serde_json::to_value(&debdiff)?);
+            }
         }
+    } else {
+        // No unabsorbed run found
+        context.insert("run".to_string(), serde_json::Value::Null);
     }
 
     // Fetch previous runs
@@ -726,35 +728,31 @@ async fn generate_codebase_context(
         );
     }
 
-    // Check queue position
-    if let Ok(queue_position) = state.database.get_queue_position(campaign, codebase).await {
-        context.insert(
-            "queue_position".to_string(),
-            serde_json::to_value(&queue_position)?,
-        );
+    // Queue position is already included in the optimized query
+    context.insert(
+        "queue_position".to_string(),
+        serde_json::to_value(&codebase_context.queue_position)?,
+    );
 
-        // Estimate wait time
-        if queue_position > 0 {
-            if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
-                let wait_seconds = queue_position as i64 * avg_time;
-                let wait_duration = Duration::seconds(wait_seconds);
-                context.insert(
-                    "queue_wait_time".to_string(),
-                    serde_json::to_value(&wait_duration)?,
-                );
-            }
+    // Estimate wait time
+    if codebase_context.queue_position > 0 {
+        if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
+            let wait_seconds = codebase_context.queue_position as i64 * avg_time;
+            let wait_duration = Duration::seconds(wait_seconds);
+            context.insert(
+                "queue_wait_time".to_string(),
+                serde_json::to_value(&wait_duration)?,
+            );
         }
     }
 
-    // Add publish policy
-    if let Ok(publish_policy) = state.database.get_publish_policy(campaign, codebase).await {
-        context.insert(
-            "publish_policy".to_string(),
-            serde_json::to_value(&publish_policy)?,
-        );
-    }
+    // Publish policy is already included in the optimized query
+    context.insert(
+        "publish_policy".to_string(),
+        serde_json::to_value(&codebase_context.publish_policy)?,
+    );
 
-    // Add changelog policy
+    // Add changelog policy (this is usually derived from publish policy or config)
     if let Ok(changelog_policy) = state
         .database
         .get_changelog_policy(campaign, codebase)

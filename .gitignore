@@ -1,5 +1,6 @@
 .coverage
 *.swp
+*.swo
 build/
 __pycache__
 .plugins
@@ -30,3 +31,4 @@ Cargo.lock
 target
 .testrepository
 py/janitor/_*.cpython-*.so
+.claude/settings.local.json
