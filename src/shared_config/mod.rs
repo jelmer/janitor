@@ -5,13 +5,17 @@
 
 pub mod database;
 pub mod env;
+pub mod external;
 pub mod logging;
+pub mod redis;
 pub mod validation;
 pub mod web;
 
 pub use database::DatabaseConfig;
 pub use env::{EnvParser, FromEnv};
+pub use external::{ExternalService, ExternalServiceConfig};
 pub use logging::{init_logging, LoggingConfig};
+pub use redis::RedisConfig;
 pub use validation::{ConfigError, ValidationError};
 pub use web::WebConfig;
 
