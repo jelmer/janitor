@@ -416,7 +416,13 @@ pub async fn view_diff(
 
             match content_type {
                 ContentType::Json => {
-                    Json(serde_json::to_value(&diff_info).unwrap()).into_response()
+                    match serde_json::to_value(&diff_info) {
+                        Ok(json) => Json(json).into_response(),
+                        Err(e) => {
+                            tracing::error!("JSON serialization error: {}", e);
+                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
+                        }
+                    }
                 }
                 _ => match state.templates.render("diff-viewer.html", &context) {
                     Ok(html) => Html(html).into_response(),
@@ -469,7 +475,13 @@ pub async fn view_debdiff(
 
             match content_type {
                 ContentType::Json => {
-                    Json(serde_json::to_value(&diff_info).unwrap()).into_response()
+                    match serde_json::to_value(&diff_info) {
+                        Ok(json) => Json(json).into_response(),
+                        Err(e) => {
+                            tracing::error!("JSON serialization error: {}", e);
+                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
+                        }
+                    }
                 }
                 _ => match state.templates.render("debdiff-viewer.html", &context) {
                     Ok(html) => Html(html).into_response(),
@@ -1395,7 +1407,7 @@ fn find_build_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usiz
 
     if !error_lines.is_empty() {
         // Include context around the last error
-        let last_error = *error_lines.last().unwrap();
+        let last_error = error_lines.last().copied().unwrap_or(1);
         let start = last_error.saturating_sub(FAIL_BUILD_LOG_LEN);
         let end = (last_error + FAIL_BUILD_LOG_LEN).min(lines.len());
         (Some((start, end)), error_lines)
@@ -1421,7 +1433,7 @@ fn find_dist_failure_lines(lines: &[&str]) -> (Option<(usize, usize)>, Vec<usize
     }
 
     if !error_lines.is_empty() {
-        let last_error = *error_lines.last().unwrap();
+        let last_error = error_lines.last().copied().unwrap_or(1);
         let start = last_error.saturating_sub(FAIL_BUILD_LOG_LEN);
         let end = (last_error + FAIL_BUILD_LOG_LEN).min(lines.len());
         (Some((start, end)), error_lines)
