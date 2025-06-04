@@ -10,6 +10,7 @@ pub mod database;
 pub mod error;
 pub mod pyo3_bridge;
 pub mod repository;
+pub mod smart_protocol;
 pub mod web;
 
 pub use config::Config;
