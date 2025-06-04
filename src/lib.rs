@@ -10,6 +10,7 @@ pub mod publish;
 pub mod queue;
 pub mod reprocess_logs;
 pub mod schedule;
+pub mod security;
 pub mod state;
 pub mod vcs;
 

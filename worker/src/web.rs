@@ -158,21 +158,24 @@ async fn get_log_file(
     State(state): State<Arc<RwLock<AppState>>>,
     Path(filename): Path<String>,
 ) -> Response {
-    // filenames should only contain characters that are safe to use in URLs
-    if filename.contains('/') || filename.contains('\\') {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body("Invalid filename".into())
-            .unwrap();
-    }
+    let output_directory = match state.read().unwrap().output_directory.as_ref() {
+        Some(dir) => dir.clone(),
+        None => {
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("Log directory not created yet".into())
+                .unwrap();
+        }
+    };
 
-    let p = if let Some(output_directory) = state.read().unwrap().output_directory.as_ref() {
-        output_directory.join(filename)
-    } else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Log directory not created yet".into())
-            .unwrap();
+    let p = match janitor::security::safe_path_join(&output_directory, &filename) {
+        Ok(path) => path,
+        Err(err) => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(format!("Invalid filename: {}", err).into())
+                .unwrap();
+        }
     };
 
     let file = match tokio::fs::File::open(&p).await {
@@ -208,21 +211,24 @@ async fn get_artifact_file(
     State(state): State<Arc<RwLock<AppState>>>,
     Path(filename): Path<String>,
 ) -> Response {
-    // filenames should only contain characters that are safe to use in URLs
-    if filename.contains('/') || filename.contains('\\') {
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body("Invalid filename".into())
-            .unwrap();
-    }
+    let output_directory = match state.read().unwrap().output_directory.as_ref() {
+        Some(dir) => dir.clone(),
+        None => {
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("Artifact directory not created yet".into())
+                .unwrap();
+        }
+    };
 
-    let p = if let Some(output_directory) = state.read().unwrap().output_directory.as_ref() {
-        output_directory.join(filename)
-    } else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Artifact directory not created yet".into())
-            .unwrap();
+    let p = match janitor::security::safe_path_join(&output_directory, &filename) {
+        Ok(path) => path,
+        Err(err) => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(format!("Invalid filename: {}", err).into())
+                .unwrap();
+        }
     };
 
     let file = match tokio::fs::File::open(&p).await {
