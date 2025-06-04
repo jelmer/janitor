@@ -302,13 +302,19 @@ pub async fn bundle_results<'a>(
 
         while let Some(entry) = dir.next_entry().await? {
             if entry.file_type().await?.is_file() {
-                let mut file = tokio::fs::File::open(entry.path()).await?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer).await?;
-
-                let part = Part::bytes(buffer)
-                    .file_name(entry.file_name().to_string_lossy().into_owned())
+                let file_path = entry.path();
+                let file_name = entry.file_name().to_string_lossy().into_owned();
+                
+                // Always use streaming - more memory efficient and simpler code
+                let file = tokio::fs::File::open(&file_path).await?;
+                let file_size = file.metadata().await?.len();
+                let stream = tokio_util::io::ReaderStream::new(file);
+                let body = reqwest::Body::wrap_stream(stream);
+                
+                let part = Part::stream_with_length(body, file_size)
+                    .file_name(file_name)
                     .mime_str("application/octet-stream")?;
+                
                 form = form.part("file", part);
             }
         }
