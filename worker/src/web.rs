@@ -28,13 +28,18 @@ pub struct LogIndexTemplate {
 }
 
 async fn index(State(state): State<Arc<RwLock<AppState>>>) -> Response {
-    let state = state.read().unwrap();
+    let state = match state.read() {
+        Ok(state) => state,
+        Err(_) => {
+            log::error!("Worker state lock poisoned");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
     let lognames: Option<Vec<String>> =
         if let Some(output_directory) = state.output_directory.as_ref() {
-            Some(
-                output_directory
-                    .read_dir()
-                    .unwrap()
+            match output_directory.read_dir() {
+                Ok(read_dir) => Some(
+                    read_dir
                     .filter_map(|entry| {
                         let entry = entry.ok()?;
                         let filename = entry.file_name();
@@ -45,8 +50,13 @@ async fn index(State(state): State<Arc<RwLock<AppState>>>) -> Response {
                             None
                         }
                     })
-                    .collect(),
-            )
+                    .collect()
+                ),
+                Err(e) => {
+                    log::warn!("Failed to read output directory: {}", e);
+                    None
+                }
+            }
         } else {
             None
         };
@@ -63,12 +73,24 @@ async fn health() -> String {
     "ok".to_string()
 }
 
-async fn assignment(State(state): State<Arc<RwLock<AppState>>>) -> Json<Option<Assignment>> {
-    Json(state.read().unwrap().assignment.clone())
+async fn assignment(State(state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    match state.read() {
+        Ok(state) => Json(state.assignment.clone()).into_response(),
+        Err(_) => {
+            log::error!("Worker state lock poisoned in assignment endpoint");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+        }
+    }
 }
 
 async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
-    let output_directory = &state.read().unwrap().output_directory;
+    let output_directory = match state.read() {
+        Ok(state) => &state.output_directory,
+        Err(_) => {
+            log::error!("Worker state lock poisoned in get_logs");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
     if output_directory.is_none() {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -106,7 +128,13 @@ async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap
 }
 
 async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
-    let output_directory = &state.read().unwrap().output_directory;
+    let output_directory = match state.read() {
+        Ok(state) => &state.output_directory,
+        Err(_) => {
+            log::error!("Worker state lock poisoned in get_artifacts");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
     if output_directory.is_none() {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -158,13 +186,19 @@ async fn get_log_file(
     State(state): State<Arc<RwLock<AppState>>>,
     Path(filename): Path<String>,
 ) -> Response {
-    let output_directory = match state.read().unwrap().output_directory.as_ref() {
-        Some(dir) => dir.clone(),
-        None => {
-            return Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body("Log directory not created yet".into())
-                .unwrap();
+    let output_directory = match state.read() {
+        Ok(state) => match state.output_directory.as_ref() {
+            Some(dir) => dir.clone(),
+            None => {
+                return Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body("Log directory not created yet".into())
+                    .unwrap();
+            }
+        },
+        Err(_) => {
+            log::error!("Worker state lock poisoned in get_log_file");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
         }
     };
 
@@ -211,7 +245,23 @@ async fn get_artifact_file(
     State(state): State<Arc<RwLock<AppState>>>,
     Path(filename): Path<String>,
 ) -> Response {
-    let output_directory = match state.read().unwrap().output_directory.as_ref() {
+    let output_directory = match state.read() {
+        Ok(state) => match state.output_directory.as_ref() {
+            Some(dir) => dir.clone(),
+            None => {
+                return Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body("Log directory not created yet".into())
+                    .unwrap();
+            }
+        },
+        Err(_) => {
+            log::error!("Worker state lock poisoned in get_log_file");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
+        }
+    };
+    
+    let _output_directory_for_match = match Some(&output_directory) {
         Some(dir) => dir.clone(),
         None => {
             return Response::builder()

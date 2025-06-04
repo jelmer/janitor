@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use tracing::{debug, warn};
 
+// Import shared database utilities
+use janitor::database::{Database as SharedDatabase, DatabaseConfig, DatabaseError};
+use janitor::error::JanitorError;
+
 use crate::error::{ArchiveError, ArchiveResult};
 use crate::scanner::BuildInfo;
 
@@ -59,13 +63,40 @@ pub struct CampaignInfo {
 
 /// Database manager for archive operations.
 pub struct ArchiveDatabase {
-    pool: PgPool,
+    shared_db: SharedDatabase,
 }
 
 impl ArchiveDatabase {
-    /// Create a new archive database manager.
+    /// Create a new archive database manager from existing pool.
+    /// 
+    /// # Deprecated
+    /// Use `connect` or `connect_with_config` for new code.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { 
+            shared_db: SharedDatabase::from_pool(pool) 
+        }
+    }
+
+    /// Create a new archive database manager.
+    pub async fn connect(database_url: &str) -> Result<Self, DatabaseError> {
+        let shared_db = SharedDatabase::connect(database_url).await?;
+        Ok(Self { shared_db })
+    }
+
+    /// Create a new archive database manager with custom configuration.
+    pub async fn connect_with_config(config: DatabaseConfig) -> Result<Self, DatabaseError> {
+        let shared_db = SharedDatabase::connect_with_config(config).await?;
+        Ok(Self { shared_db })
+    }
+
+    /// Get a reference to the database pool for backward compatibility.
+    pub fn pool(&self) -> &PgPool {
+        self.shared_db.pool()
+    }
+
+    /// Perform a health check on the database connection.
+    pub async fn health_check(&self) -> Result<bool, DatabaseError> {
+        self.shared_db.health_check().await
     }
 
     /// Get all successful builds for a specific suite.
@@ -97,7 +128,7 @@ impl ArchiveDatabase {
 
         let rows = sqlx::query(query)
             .bind(suite_name)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await
             .map_err(|e| ArchiveError::Database(e))?;
 
@@ -172,7 +203,7 @@ impl ArchiveDatabase {
 
         let rows = sqlx::query(query)
             .bind(changeset_id)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await
             .map_err(|e| ArchiveError::Database(e))?;
 
@@ -208,7 +239,7 @@ impl ArchiveDatabase {
 
         let rows = sqlx::query(query)
             .bind(run_id)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await
             .map_err(|e| ArchiveError::Database(e))?;
 
@@ -262,7 +293,7 @@ impl ArchiveDatabase {
 
         let rows = sqlx::query(query)
             .bind(suite_name)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await
             .map_err(|e| ArchiveError::Database(e))?;
 
