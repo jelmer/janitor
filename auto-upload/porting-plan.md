@@ -468,6 +468,121 @@ uuid = "1.6"                    # ID generation
 - **File Permissions**: Correct umask and permission handling
 - **Audit Logging**: Comprehensive logging of all upload operations
 
+## ⚠️ Critical Behavioral Compatibility Analysis
+
+### High-Impact Breaking Changes 🚨
+
+#### 1. Command Execution Differences (**BREAKING**)
+**Python Implementation:**
+```python
+# Uses silver-platter library functions directly
+from silver_platter import debsign, dput_changes
+await debsign(td, changes_filename, debsign_keyid)
+await dput_changes(td, changes_filename, dput_host)
+```
+
+**Rust Implementation:**
+```rust
+// Direct subprocess calls to system commands  
+let mut cmd = Command::new("debsign");
+cmd.current_dir(working_dir)
+    .arg("--no-conf")
+    .arg(changes_file);
+let output = cmd.output().await?;
+```
+
+**Impact:** **CRITICAL** - Different command arguments and error handling
+**Resolution Needed:** Ensure exact argument compatibility with Python silver-platter
+
+#### 2. Error Response Structure Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Specific exception types from silver-platter
+except DebsignFailure as e:
+    logging.error("Error (exit code %d) signing %s: %s", 
+                  e.returncode, changes_filename, e.reason)
+except DputFailure as e:
+    logging.error("Error (exit code %d) uploading %s: %s",
+                  e.returncode, changes_filename, e.reason)
+```
+
+**Rust Implementation:**
+```rust
+// Generic error enum with different structure
+pub enum UploadError {
+    DebsignFailure(String),
+    DputFailure(String),
+    IoError(std::io::Error),
+}
+// Different error information available
+```
+
+**Impact:** **CRITICAL** - Error details and logging format different
+**Resolution Needed:** Match Python error structure and logging format
+
+#### 3. File Permission Handling Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Explicit umask handling for signing compatibility
+umask = os.umask(0)
+os.umask(umask)
+for entry in os.scandir(td):
+    os.chmod(entry.path, 0o644 & ~umask)
+```
+
+**Rust Implementation:**
+```rust
+// No explicit umask handling in current implementation
+// File permissions handled by default tokio/std behavior
+```
+
+**Impact:** **CRITICAL** - GPG signing may fail due to incorrect file permissions
+**Resolution Needed:** Implement identical umask and permission handling
+
+### Medium-Impact Changes ⚠️
+
+#### 4. Redis Message Processing
+**Python:** Uses redis-py with direct JSON parsing and message handling
+**Rust:** Uses redis-rs with serde deserialization
+**Impact:** Potential message format compatibility issues
+**Status:** Requires validation of message structure compatibility
+
+#### 5. Temporary Directory Management
+**Python:** Uses Python tempfile with specific prefix "janitor-auto-upload"
+**Rust:** Uses tempfile crate with different naming patterns
+**Impact:** Different temporary directory structure
+**Status:** Cosmetic difference, no functional impact
+
+#### 6. Logging and Metrics Format
+**Python:** Uses Python logging with specific format and run_id extra
+**Rust:** Uses tracing with different structured logging format
+**Impact:** Log aggregation and monitoring may need updates
+**Status:** Requires log format compatibility validation
+
+### Enhanced Features in Rust (Non-breaking) ✅
+- Better async performance with tokio
+- Type-safe JSON handling with serde
+- Improved error handling with structured types
+- Enhanced metrics with prometheus integration
+- Better resource management and cleanup
+
+### Compatibility Recommendations
+
+**Priority 1 (Critical):**
+1. Implement exact silver-platter command compatibility for debsign/dput
+2. Add Python-compatible file permission and umask handling
+3. Match Python error structure and logging format exactly
+
+**Priority 2 (High):**
+1. Validate Redis message format compatibility
+2. Test upload workflows with real GPG keys and dput hosts
+3. Verify metrics compatibility with existing monitoring
+
+**Priority 3 (Medium):**
+1. Validate temporary directory naming compatibility
+2. Test backfill functionality against production database
+3. Verify concurrent upload handling matches Python behavior
+
 ## Related Porting Plans
 
 - 📋 **Master Plan**: [`../porting-plan.md`](../porting-plan.md) - Overall project coordination

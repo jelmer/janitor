@@ -2,7 +2,90 @@
 
 This document outlines the plan for completing the port of the differ service from Python (`py/janitor/differ.py`) to Rust (`differ/`).
 
-## ✅ **MIGRATION COMPLETED** 
+## ✅ **MIGRATION COMPLETED**
+
+## ⚠️ Behavioral Compatibility Analysis
+
+### Critical Compatibility Issues Found
+
+#### 1. Error Response Format (**BREAKING CHANGE** 🚨)
+**Python Format:**
+```
+HTTP/1.1 400 Bad Request
+Content-Type: text/plain
+
+Run not found: 12345
+```
+
+**Rust Format:**
+```json
+HTTP/1.1 400 Bad Request  
+Content-Type: application/json
+
+{
+    "error": "Run not found",
+    "details": "12345", 
+    "run_id": "12345"
+}
+```
+
+**Impact:** **CRITICAL** - Existing clients parsing error responses as plain text will break
+**Resolution Needed:** Implement backward compatibility mode or update all clients
+
+#### 2. Content Type Negotiation Differences ⚠️
+**Python:** Uses `mimeparse.best_match()` with specific ordering
+**Rust:** Uses `accept_header::Accept::negotiate()` with different algorithm
+**Impact:** Different content types may be selected for ambiguous Accept headers
+**Status:** Requires validation with real-world Accept headers
+
+#### 3. Memory Management Enhancement ✅
+**Python:** Basic memory limits via `RLIMIT_AS`
+**Rust:** Comprehensive limits (`RLIMIT_AS`, `RLIMIT_RSS`, `RLIMIT_CPU`, `RLIMIT_NOFILE`)
+**Impact:** More robust resource management, but potentially different failure modes
+**Status:** Enhancement - should be compatible
+
+### Additional Rust Features (Non-breaking)
+- Enhanced process cleanup with proper signal handling
+- Streaming endpoint `/debdiff/{old_id}/{new_id}/stream`
+- More sophisticated Redis event processing
+- Better timeout handling with process group management
+- PyO3 integration for diffoscope formatting
+
+### Compatibility Areas ✅
+
+#### API Endpoints
+- **✅ Identical Endpoints** - Same URL patterns and HTTP methods
+- **✅ Same Parameters** - Compatible query parameter handling
+- **✅ Custom Headers** - `unavailable_run_id` header preserved
+
+#### Content Generation
+- **✅ Diffoscope Output** - Same JSON structure and formatting
+- **✅ HTML/Markdown** - Compatible rendering via PyO3 bridge
+- **✅ Cache Paths** - Identical cache key generation
+
+#### Redis Integration
+- **✅ Event Listening** - Compatible pub/sub message handling
+- **✅ Precaching Logic** - Same automatic precaching triggers
+
+### Migration Risk Assessment
+
+**High Risk 🔴:**
+- Error response format changes will break existing clients
+
+**Medium Risk 🟡:**
+- Content type negotiation differences may affect some clients
+- Enhanced memory limits could change process termination behavior
+
+**Low Risk 🟢:**
+- All core functionality maintains behavioral compatibility
+- Cache behavior and content generation are identical
+
+### Mitigation Strategies
+
+1. **Error Response Compatibility Layer:** Implement query parameter for response format selection
+2. **Content Negotiation Testing:** Validate with production Accept headers  
+3. **Gradual Migration:** Deploy with feature flags for error format compatibility
+4. **Client Testing:** Test all known client integrations before full deployment 
 
 ### Python Implementation Analysis (`py/janitor/differ.py`)
 - **Web Framework**: Flask with error handling and CORS support ✅ **PORTED**

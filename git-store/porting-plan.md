@@ -494,6 +494,118 @@ futures = "0.3"                 # Async utilities
 - Authentication via HTTP basic auth for workers
 - Proper Git protocol error handling and responses
 
+## ⚠️ Critical Behavioral Compatibility Analysis
+
+### High-Impact Breaking Changes 🚨
+
+#### 1. Content Negotiation Algorithm Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Uses mimeparse library for sophisticated content negotiation
+best_match = mimeparse.best_match(
+    ["text/html", "application/json", "text/plain"],
+    request.headers.get("Accept", "*/*"),
+)
+```
+
+**Rust Implementation:**
+```rust
+// Simple string matching for content negotiation
+if accept.contains("application/json") || accept.contains("*/json") {
+    ContentType::Json
+} else if accept.contains("text/html") || accept.contains("text/*") {
+    ContentType::Html
+}
+```
+
+**Impact:** **CRITICAL** - Different Accept header parsing leads to different response formats
+**Resolution Needed:** Implement mimeparse-compatible algorithm
+
+#### 2. Git Backend Error Response Format (**BREAKING**)
+**Python Implementation:**
+```python
+# HTTP status-based error responses
+HTTPBadRequest(text="need both old and new")
+HTTPServiceUnavailable(text="Local VCS repository temporarily inaccessible")
+HTTPUnauthorized(text="git-receive-pack requires login")
+```
+
+**Rust Implementation:**
+```rust
+// Structured error enum with different response format
+GitError::InvalidRevision(message) -> JSON error response
+GitError::RepositoryNotFound -> Different status codes and format
+```
+
+**Impact:** **CRITICAL** - Git clients and API consumers expect specific error formats
+**Resolution Needed:** Match Python HTTP error response format exactly
+
+#### 3. Repository URL Structure Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Git HTTP endpoints support multiple URL patterns
+/{codebase}/git-upload-pack
+/{codebase}/git-receive-pack
+/{codebase}/info/refs
+/{codebase}/diff
+/{codebase}/revision-info
+```
+
+**Rust Implementation:**
+```rust
+// Similar URL structure but different path handling
+/{codebase}/git-upload-pack  // Same
+/{codebase}/diff            // Same
+/{codebase}/revision        // Different! (revision vs revision-info)
+```
+
+**Impact:** **CRITICAL** - URL path inconsistency breaks API clients
+**Resolution Needed:** Match exact Python URL patterns
+
+### Medium-Impact Changes ⚠️
+
+#### 4. Repository Auto-Creation Timing
+**Python:** Creates repository on first Git operation or browse request
+**Rust:** Creates repository through explicit API calls
+**Impact:** Different repository lifecycle behavior
+**Status:** Requires validation of creation timing
+
+#### 5. Git HTTP Protocol Implementation
+**Python:** Mixed approach (git http-backend subprocess + Dulwich pure Python)
+**Rust:** Primarily subprocess-based with git http-backend
+**Impact:** Potential protocol compatibility differences
+**Status:** Requires Git client compatibility testing
+
+#### 6. Klaus Web Browser Replacement
+**Python:** Full Klaus Flask-based repository browser with complex templating
+**Rust:** Basic repository listing only, no file browsing
+**Impact:** Missing web browsing functionality
+**Status:** Functionality gap - deferred to external tools
+
+### Enhanced Features in Rust (Non-breaking) ✅
+- Better async performance with tokio
+- Improved error handling with structured types
+- Enhanced logging and tracing
+- More secure subprocess handling
+- Better resource management and cleanup
+
+### Compatibility Recommendations
+
+**Priority 1 (Critical):**
+1. Implement mimeparse-compatible content negotiation algorithm
+2. Match Python HTTP error response format exactly  
+3. Fix URL path inconsistencies (revision-info vs revision)
+
+**Priority 2 (High):**
+1. Test Git protocol compatibility with standard Git clients
+2. Validate repository auto-creation behavior matches Python
+3. Test authentication flows with worker credentials
+
+**Priority 3 (Medium):**
+1. Consider implementing Klaus-compatible web browser
+2. Validate repository management API compatibility
+3. Test edge cases in Git operations (large repos, concurrent access)
+
 ## Related Porting Plans
 
 - 📋 **Master Plan**: [`../porting-plan.md`](../porting-plan.md) - Overall project coordination

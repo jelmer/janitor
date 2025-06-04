@@ -10,6 +10,66 @@ This document outlines the plan for porting the remaining functionality from `py
 
 **FINAL STATUS**: All planned functionality has been successfully implemented and tested.
 
+## ⚠️ Behavioral Compatibility Analysis
+
+### Critical Compatibility Issues Found
+
+#### 1. Work Assignment Response Format (**BREAKING**)
+**Python Format:**
+```json
+{
+  "queue_id": 123,
+  "codebase": "example-package", 
+  "campaign": "lintian-fixes",
+  "change_set": "fix-typos",
+  "build_config": {...}
+}
+```
+
+**Rust Format:**
+```json
+{
+  "assignment": {
+    "queue_id": 123,
+    "assignment_id": "uuid-here",
+    "codebase": "example-package",
+    "suite": "lintian-fixes", 
+    "command": ["fix-command"],
+    "build_config": {...}
+  },
+  "estimated_duration": 1800
+}
+```
+
+**Impact:** **CRITICAL** - Existing workers will fail to parse assignments
+**Resolution Needed:** Implement compatibility layer or migrate workers
+
+#### 2. Error Response Format Inconsistency
+**Python:** Uses simple string messages or plain text
+**Rust:** Uses structured JSON error responses
+**Impact:** Client error handling may break
+**Status:** Monitor during deployment
+
+#### 3. Rate Limiting Headers
+**Python:** Inconsistent rate limit header inclusion  
+**Rust:** Enhanced rate limiting with consistent headers
+**Impact:** Clients depending on headers may behave differently
+**Status:** Monitor during deployment
+
+### Enhanced Features in Rust (Non-breaking)
+- Resume functionality for interrupted runs
+- Enhanced metrics and monitoring endpoints  
+- Structured configuration validation
+- Improved error categorization
+- Administrative bulk operations
+- Enhanced security headers and logging
+
+### Compatibility Recommendations
+1. **Priority 1:** Implement work assignment compatibility layer
+2. **Priority 2:** Test with existing worker implementations
+3. **Priority 3:** Gradual migration with feature flags
+4. **Priority 4:** Monitor error response handling in production
+
 ## Current State
 
 ### Already Ported (Rust)
