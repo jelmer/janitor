@@ -41,22 +41,24 @@ pub fn create_admin_app(state: AppState) -> Router {
         .route("/", get(list_repositories))
         .route("/:codebase", get(repository_info))
         .route("/:codebase/remote/:name", post(set_remote))
-        
         // Git operations
         .route("/:codebase/diff", get(git_diff))
         .route("/:codebase/revision", get(revision_info))
-        
         // Git HTTP backend - handles Git clone/fetch/push operations
-        .route("/:codebase/git-upload-pack", get(git_backend).post(git_backend))
-        .route("/:codebase/git-receive-pack", get(git_backend).post(git_backend))
+        .route(
+            "/:codebase/git-upload-pack",
+            get(git_backend).post(git_backend),
+        )
+        .route(
+            "/:codebase/git-receive-pack",
+            get(git_backend).post(git_backend),
+        )
         .route("/:codebase/info/refs", get(git_backend))
         .route("/:codebase/*path", get(git_backend).post(git_backend))
-        
         // Middleware
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        
         // State
         .with_state(state)
 }
@@ -68,21 +70,20 @@ pub fn create_public_app(state: AppState) -> Router {
         .route("/health", get(health_check))
         .route("/", get(list_repositories))
         .route("/:codebase", get(repository_info))
-        
         // Git operations (read-only)
         .route("/:codebase/diff", get(git_diff))
         .route("/:codebase/revision", get(revision_info))
-        
         // Git HTTP backend - read-only for public interface
-        .route("/:codebase/git-upload-pack", get(git_backend).post(git_backend))
+        .route(
+            "/:codebase/git-upload-pack",
+            get(git_backend).post(git_backend),
+        )
         .route("/:codebase/info/refs", get(git_backend))
         .route("/:codebase/*path", get(git_backend))
-        
         // Middleware
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-        
         // State
         .with_state(state)
 }
@@ -102,11 +103,13 @@ async fn ready_check(State(state): State<AppState>) -> Result<&'static str> {
 /// Content negotiation helper
 fn negotiate_content_type(accept_header: Option<&str>) -> ContentType {
     let accept = accept_header.unwrap_or("*/*");
-    
+
     // Simple content negotiation - check for specific types
     if accept.contains("application/json") || accept.contains("*/json") {
         ContentType::Json
-    } else if accept.contains("text/html") || accept.contains("text/*") && !accept.contains("text/plain") {
+    } else if accept.contains("text/html")
+        || accept.contains("text/*") && !accept.contains("text/plain")
+    {
         ContentType::Html
     } else if accept.contains("text/plain") {
         ContentType::Plain
@@ -130,16 +133,13 @@ async fn list_repositories(
     headers: axum::http::HeaderMap,
 ) -> Result<Response> {
     let repos = state.repo_manager.list_repositories()?;
-    
-    let accept_header = headers.get(header::ACCEPT)
-        .and_then(|h| h.to_str().ok());
-    
+
+    let accept_header = headers.get(header::ACCEPT).and_then(|h| h.to_str().ok());
+
     let content_type = negotiate_content_type(accept_header);
-    
+
     match content_type {
-        ContentType::Json => {
-            Ok(Json(repos).into_response())
-        }
+        ContentType::Json => Ok(Json(repos).into_response()),
         ContentType::Plain => {
             let text = repos.join("\n") + "\n";
             Ok(Response::builder()
@@ -152,10 +152,11 @@ async fn list_repositories(
             let mut context = tera::Context::new();
             context.insert("vcs", "git");
             context.insert("repositories", &repos);
-            
-            let html = state.tera.render("index.html", &context)
-                .map_err(|e| crate::error::GitStoreError::Other(anyhow::anyhow!("Template error: {}", e)))?;
-            
+
+            let html = state.tera.render("index.html", &context).map_err(|e| {
+                crate::error::GitStoreError::Other(anyhow::anyhow!("Template error: {}", e))
+            })?;
+
             Ok(Html(html).into_response())
         }
     }
@@ -188,7 +189,7 @@ pub fn init_templates(templates_path: Option<&std::path::Path>) -> Result<Tera> 
     } else {
         // Use embedded templates
         let mut tera = Tera::default();
-        
+
         // Add basic templates
         tera.add_raw_template(
             "base.html",
@@ -209,7 +210,7 @@ pub fn init_templates(templates_path: Option<&std::path::Path>) -> Result<Tera> 
 </body>
 </html>"#,
         )?;
-        
+
         tera.add_raw_template(
             "index.html",
             r#"{% extends "base.html" %}
@@ -225,10 +226,10 @@ pub fn init_templates(templates_path: Option<&std::path::Path>) -> Result<Tera> 
     </ul>
 {% endblock %}"#,
         )?;
-        
+
         tera
     };
-    
+
     Ok(tera)
 }
 

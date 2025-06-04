@@ -5,8 +5,8 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use janitor_auto_upload::backfill::{BackfillConfig, BackfillProcessor};
 use janitor_auto_upload::{run_service, Config};
-use janitor_auto_upload::backfill::{BackfillProcessor, BackfillConfig};
 use std::time::Duration;
 use tracing::{error, info};
 
@@ -113,10 +113,8 @@ async fn main() -> Result<()> {
     } else {
         "janitor_auto_upload=info,warn"
     };
-    
-    tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .init();
+
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     // Load configuration
     let config = Config::load(&args.config).await?;
@@ -218,12 +216,8 @@ async fn run_backfill_operation(
     use janitor_auto_upload::upload::UploadConfig;
 
     // Create upload configuration
-    let upload_config = UploadConfig::new(
-        dput_host,
-        debsign_keyid,
-        source_only,
-        distributions.clone(),
-    );
+    let upload_config =
+        UploadConfig::new(dput_host, debsign_keyid, source_only, distributions.clone());
 
     // Create backfill processor
     let processor = BackfillProcessor::new(
@@ -249,7 +243,7 @@ async fn run_backfill_operation(
         Ok(summary) => {
             info!("Backfill completed successfully");
             info!("{}", summary);
-            
+
             if summary.failed_uploads > 0 {
                 error!("Some uploads failed during backfill");
                 std::process::exit(1);

@@ -69,27 +69,32 @@ impl axum::response::IntoResponse for GitStoreError {
         let (status, message) = match &self {
             GitStoreError::GitError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             GitStoreError::IoError(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
-            GitStoreError::DatabaseError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string())
-            }
+            GitStoreError::DatabaseError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Database error".to_string(),
+            ),
             GitStoreError::HttpError(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
             GitStoreError::RepositoryNotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             GitStoreError::InvalidSha(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             GitStoreError::Timeout => (StatusCode::REQUEST_TIMEOUT, self.to_string()),
             GitStoreError::AuthenticationFailed => (StatusCode::UNAUTHORIZED, self.to_string()),
             GitStoreError::PermissionDenied => (StatusCode::FORBIDDEN, self.to_string()),
-            GitStoreError::ConfigError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Configuration error".to_string())
-            }
-            GitStoreError::TemplateError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Template error".to_string())
-            }
-            GitStoreError::HttpLibError(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "HTTP library error".to_string())
-            }
-            GitStoreError::Other(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-            }
+            GitStoreError::ConfigError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Configuration error".to_string(),
+            ),
+            GitStoreError::TemplateError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Template error".to_string(),
+            ),
+            GitStoreError::HttpLibError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "HTTP library error".to_string(),
+            ),
+            GitStoreError::Other(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
         };
 
         Response::builder()

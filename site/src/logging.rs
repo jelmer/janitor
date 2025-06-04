@@ -1,5 +1,4 @@
 use anyhow::Result;
-use tracing::Level;
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
     fmt::{self, writer::MakeWriterExt},

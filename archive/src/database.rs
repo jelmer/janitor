@@ -68,12 +68,12 @@ pub struct ArchiveDatabase {
 
 impl ArchiveDatabase {
     /// Create a new archive database manager from existing pool.
-    /// 
+    ///
     /// # Deprecated
     /// Use `connect` or `connect_with_config` for new code.
     pub fn new(pool: PgPool) -> Self {
-        Self { 
-            shared_db: SharedDatabase::from_pool(pool) 
+        Self {
+            shared_db: SharedDatabase::from_pool(pool),
         }
     }
 

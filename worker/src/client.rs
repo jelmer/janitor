@@ -5,7 +5,6 @@ use reqwest::multipart::{Form, Part};
 use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use std::error::Error;
 use std::path::Path;
-use tokio::io::AsyncReadExt;
 
 #[derive(Debug)]
 pub enum AssignmentError {
@@ -216,10 +215,15 @@ impl Credentials {
 }
 
 impl Client {
-    pub fn new(base_url: Url, credentials: Credentials, user_agent: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new(
+        base_url: Url,
+        credentials: Credentials,
+        user_agent: &str,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = reqwest::Client::builder();
         builder = builder.user_agent(user_agent);
-        let client = builder.build()
+        let client = builder
+            .build()
             .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
         Ok(Self {
             client,
@@ -306,17 +310,17 @@ pub async fn bundle_results<'a>(
             if entry.file_type().await?.is_file() {
                 let file_path = entry.path();
                 let file_name = entry.file_name().to_string_lossy().into_owned();
-                
+
                 // Always use streaming - more memory efficient and simpler code
                 let file = tokio::fs::File::open(&file_path).await?;
                 let file_size = file.metadata().await?.len();
                 let stream = tokio_util::io::ReaderStream::new(file);
                 let body = reqwest::Body::wrap_stream(stream);
-                
+
                 let part = Part::stream_with_length(body, file_size)
                     .file_name(file_name)
                     .mime_str("application/octet-stream")?;
-                
+
                 form = form.part("file", part);
             }
         }

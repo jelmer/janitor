@@ -1,8 +1,8 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
+    http::{header, HeaderValue},
+    response::Response,
 };
 use std::collections::HashMap;
 use std::path::Path;

@@ -5,52 +5,43 @@
 pub enum JanitorError {
     /// Database-related errors
     Database(sqlx::Error),
-    
+
     /// I/O errors
     Io(std::io::Error),
-    
+
     /// JSON parsing errors
     Json(serde_json::Error),
-    
+
     /// HTTP client errors
     Http(reqwest::Error),
-    
+
     /// Configuration errors
     Config(String),
-    
+
     /// Authentication/authorization errors
     Auth(String),
-    
+
     /// Validation errors for user input
     Validation(String),
-    
+
     /// External service errors (VCS, build tools, etc.)
-    ExternalService {
-        service: String,
-        message: String,
-    },
-    
+    ExternalService { service: String, message: String },
+
     /// Rate limiting errors
     RateLimit(String),
-    
+
     /// Timeout errors
     Timeout(String),
-    
+
     /// Resource not found
-    NotFound {
-        resource: String,
-        id: String,
-    },
-    
+    NotFound { resource: String, id: String },
+
     /// Resource already exists
-    AlreadyExists {
-        resource: String, 
-        id: String,
-    },
-    
+    AlreadyExists { resource: String, id: String },
+
     /// Permission denied
     PermissionDenied(String),
-    
+
     /// Internal server errors
     Internal(String),
 }
@@ -65,11 +56,15 @@ impl std::fmt::Display for JanitorError {
             Self::Config(msg) => write!(f, "Configuration error: {}", msg),
             Self::Auth(msg) => write!(f, "Authentication error: {}", msg),
             Self::Validation(msg) => write!(f, "Validation error: {}", msg),
-            Self::ExternalService { service, message } => write!(f, "External service error: {}: {}", service, message),
+            Self::ExternalService { service, message } => {
+                write!(f, "External service error: {}: {}", service, message)
+            }
             Self::RateLimit(msg) => write!(f, "Rate limited: {}", msg),
             Self::Timeout(msg) => write!(f, "Operation timed out: {}", msg),
             Self::NotFound { resource, id } => write!(f, "Not found: {} '{}'", resource, id),
-            Self::AlreadyExists { resource, id } => write!(f, "Already exists: {} '{}'", resource, id),
+            Self::AlreadyExists { resource, id } => {
+                write!(f, "Already exists: {} '{}'", resource, id)
+            }
             Self::PermissionDenied(msg) => write!(f, "Permission denied: {}", msg),
             Self::Internal(msg) => write!(f, "Internal error: {}", msg),
         }
@@ -107,17 +102,17 @@ impl JanitorError {
     pub fn config(msg: impl Into<String>) -> Self {
         Self::Config(msg.into())
     }
-    
+
     /// Create an authentication error
     pub fn auth(msg: impl Into<String>) -> Self {
         Self::Auth(msg.into())
     }
-    
+
     /// Create a validation error
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Validation(msg.into())
     }
-    
+
     /// Create an external service error
     pub fn external_service(service: impl Into<String>, message: impl Into<String>) -> Self {
         Self::ExternalService {
@@ -125,7 +120,7 @@ impl JanitorError {
             message: message.into(),
         }
     }
-    
+
     /// Create a not found error
     pub fn not_found(resource: impl Into<String>, id: impl Into<String>) -> Self {
         Self::NotFound {
@@ -133,7 +128,7 @@ impl JanitorError {
             id: id.into(),
         }
     }
-    
+
     /// Create an already exists error
     pub fn already_exists(resource: impl Into<String>, id: impl Into<String>) -> Self {
         Self::AlreadyExists {
@@ -141,17 +136,17 @@ impl JanitorError {
             id: id.into(),
         }
     }
-    
+
     /// Create a permission denied error
     pub fn permission_denied(msg: impl Into<String>) -> Self {
         Self::PermissionDenied(msg.into())
     }
-    
+
     /// Create an internal error
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
-    
+
     /// Check if the error is transient (worth retrying)
     pub fn is_transient(&self) -> bool {
         match self {
@@ -164,7 +159,7 @@ impl JanitorError {
             _ => false,
         }
     }
-    
+
     /// Get the appropriate HTTP status code for this error
     pub fn http_status(&self) -> u16 {
         match self {
@@ -190,14 +185,13 @@ impl From<url::ParseError> for JanitorError {
     }
 }
 
-
 /// Error conversion utilities
 pub trait ErrorContext<T> {
     /// Add context to an error
     fn with_context<F>(self, f: F) -> Result<T>
     where
         F: FnOnce() -> String;
-    
+
     /// Add simple string context to an error
     fn context(self, msg: &str) -> Result<T>;
 }
@@ -218,7 +212,7 @@ where
             }
         })
     }
-    
+
     fn context(self, msg: &str) -> Result<T> {
         self.with_context(|| msg.to_string())
     }
@@ -242,35 +236,39 @@ pub fn internal_error(msg: impl Into<String>) -> JanitorError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_error_creation() {
         let err = JanitorError::not_found("run", "test-123");
         assert_eq!(err.to_string(), "Not found: run 'test-123'");
         assert_eq!(err.http_status(), 404);
     }
-    
+
     #[test]
     fn test_transient_errors() {
         assert!(JanitorError::RateLimit("test".to_string()).is_transient());
         assert!(JanitorError::Timeout("test".to_string()).is_transient());
-        assert!(!JanitorError::NotFound { resource: "test".to_string(), id: "123".to_string() }.is_transient());
+        assert!(!JanitorError::NotFound {
+            resource: "test".to_string(),
+            id: "123".to_string()
+        }
+        .is_transient());
     }
-    
+
     #[test]
     fn test_http_status_codes() {
         assert_eq!(JanitorError::not_found("test", "123").http_status(), 404);
         assert_eq!(JanitorError::validation("test").http_status(), 400);
         assert_eq!(JanitorError::permission_denied("test").http_status(), 403);
     }
-    
+
     #[test]
     fn test_error_context() {
         let result: std::result::Result<(), std::io::Error> = Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "file not found"
+            "file not found",
         ));
-        
+
         let err = result.context("Failed to read config").unwrap_err();
         assert!(err.to_string().contains("Failed to read config"));
     }

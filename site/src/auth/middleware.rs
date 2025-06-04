@@ -246,4 +246,3 @@ pub fn require_qa_reviewer_layer() -> axum::middleware::FromFnLayer<impl Clone, 
 #[derive(Clone)]
 pub struct AuthMiddleware;
 
-pub use self::UserContext as AuthContext;

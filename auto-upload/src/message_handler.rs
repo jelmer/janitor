@@ -18,18 +18,15 @@ pub struct MessageHandler {
 
 impl MessageHandler {
     /// Create a new message handler
-    pub async fn new(
-        artifact_location: &str,
-        upload_config: UploadConfig,
-    ) -> Result<Self> {
+    pub async fn new(artifact_location: &str, upload_config: UploadConfig) -> Result<Self> {
         let artifact_processor = ArtifactProcessor::new(artifact_location).await?;
-        
+
         Ok(Self {
             artifact_processor,
             upload_config,
         })
     }
-    
+
     /// Process a build result message
     pub async fn handle_message(&self, message: BuildResultMessage) -> Result<()> {
         info!(
@@ -39,7 +36,7 @@ impl MessageHandler {
             result = %message.result,
             "Received build result message"
         );
-        
+
         // Apply filters before processing
         if !self.should_process_message(&message).await? {
             debug!(
@@ -48,7 +45,7 @@ impl MessageHandler {
             );
             return Ok(());
         }
-        
+
         // Check if this is a successful build
         if !self.is_successful_build(&message) {
             debug!(
@@ -58,13 +55,15 @@ impl MessageHandler {
             );
             return Ok(());
         }
-        
+
         // Process the upload
         match upload_build_result(
             &message.log_id,
             &self.artifact_processor,
             &self.upload_config,
-        ).await {
+        )
+        .await
+        {
             Ok(_) => {
                 info!(
                     log_id = %message.log_id,
@@ -83,7 +82,7 @@ impl MessageHandler {
             }
         }
     }
-    
+
     /// Check if a message should be processed based on filters
     async fn should_process_message(&self, message: &BuildResultMessage) -> Result<bool> {
         // Check target name filter (only process "debian" targets)
@@ -94,28 +93,35 @@ impl MessageHandler {
             );
             return Ok(false);
         }
-        
+
         // Check distribution filter
-        if !self.upload_config.should_upload_distribution(&message.target.details.build_distribution) {
+        if !self
+            .upload_config
+            .should_upload_distribution(&message.target.details.build_distribution)
+        {
             debug!(
                 distribution = %message.target.details.build_distribution,
                 "Skipping distribution not in allowed list"
             );
             return Ok(false);
         }
-        
+
         // Check if artifacts exist (optional optimization)
-        if !self.artifact_processor.artifacts_exist(&message.log_id).await {
+        if !self
+            .artifact_processor
+            .artifacts_exist(&message.log_id)
+            .await
+        {
             warn!(
                 log_id = %message.log_id,
                 "Artifacts not found for build"
             );
             return Ok(false);
         }
-        
+
         Ok(true)
     }
-    
+
     /// Check if this represents a successful build that should be uploaded
     fn is_successful_build(&self, message: &BuildResultMessage) -> bool {
         // Check common success indicators
@@ -124,7 +130,7 @@ impl MessageHandler {
             "success" | "successful" | "ok" | "passed"
         )
     }
-    
+
     /// Get upload statistics
     pub async fn get_upload_stats(&self) -> UploadStats {
         // In a real implementation, this would track statistics
@@ -176,21 +182,25 @@ impl MessageFilter {
     /// Check if a message passes the filter
     pub fn should_process(&self, message: &BuildResultMessage) -> bool {
         // Check target
-        if !self.allowed_targets.is_empty() && !self.allowed_targets.contains(&message.target.name) {
+        if !self.allowed_targets.is_empty() && !self.allowed_targets.contains(&message.target.name)
+        {
             return false;
         }
-        
+
         // Check distribution
-        if !self.allowed_distributions.is_empty() 
-            && !self.allowed_distributions.contains(&message.target.details.build_distribution) {
+        if !self.allowed_distributions.is_empty()
+            && !self
+                .allowed_distributions
+                .contains(&message.target.details.build_distribution)
+        {
             return false;
         }
-        
+
         // Check result
         if !self.allowed_results.is_empty() && !self.allowed_results.contains(&message.result) {
             return false;
         }
-        
+
         true
     }
 }
@@ -199,7 +209,7 @@ impl MessageFilter {
 mod tests {
     use super::*;
     use crate::redis_client::{BuildTarget, BuildTargetDetails};
-    
+
     fn create_test_message(target: &str, distribution: &str, result: &str) -> BuildResultMessage {
         BuildResultMessage {
             log_id: "test-123".to_string(),
@@ -214,24 +224,24 @@ mod tests {
             metadata: serde_json::Value::Null,
         }
     }
-    
+
     #[test]
     fn test_message_filter_default() {
         let filter = MessageFilter::default();
-        
+
         // Should process debian targets
         let debian_msg = create_test_message("debian", "unstable", "success");
         assert!(filter.should_process(&debian_msg));
-        
+
         // Should not process non-debian targets
         let ubuntu_msg = create_test_message("ubuntu", "focal", "success");
         assert!(!filter.should_process(&ubuntu_msg));
-        
+
         // Should not process failed builds
         let failed_msg = create_test_message("debian", "unstable", "failed");
         assert!(!filter.should_process(&failed_msg));
     }
-    
+
     #[test]
     fn test_message_filter_custom() {
         let filter = MessageFilter {
@@ -239,11 +249,11 @@ mod tests {
             allowed_distributions: vec!["unstable".to_string(), "experimental".to_string()],
             allowed_results: vec!["success".to_string()],
         };
-        
+
         // Should process allowed combination
         let allowed_msg = create_test_message("debian", "unstable", "success");
         assert!(filter.should_process(&allowed_msg));
-        
+
         // Should not process disallowed distribution
         let wrong_dist = create_test_message("debian", "stable", "success");
         assert!(!filter.should_process(&wrong_dist));

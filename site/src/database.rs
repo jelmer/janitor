@@ -166,9 +166,9 @@ impl DatabaseManager {
              AND ($1::text IS NULL OR (name ILIKE '%' || $1 || '%' OR url ILIKE '%' || $1 || '%'))
              ORDER BY name
              LIMIT $2
-             OFFSET $3"
+             OFFSET $3",
         );
-        
+
         query = query
             .bind(search)
             .bind(limit.unwrap_or(i64::MAX))
@@ -882,9 +882,10 @@ impl DatabaseManager {
 
         // Group results by status
         for row in rows {
-            let status = row.try_get::<Option<String>, _>("status")?
+            let status = row
+                .try_get::<Option<String>, _>("status")?
                 .unwrap_or_else(|| "unknown".to_string());
-                
+
             let proposal = serde_json::json!({
                 "url": row.try_get::<String, _>("url")?,
                 "status": Some(status.clone()),

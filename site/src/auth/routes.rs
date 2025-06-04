@@ -1,13 +1,13 @@
 use axum::{
     middleware,
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use std::sync::Arc;
 
 use crate::auth::{
     handlers::{admin_handler, protected_handler, qa_handler, status_handler},
-    middleware::{require_admin, require_login, require_qa_reviewer, AuthState},
+    middleware::{require_admin, require_login, AuthState},
 };
 
 /// Create authentication routes (placeholder for full implementation)
@@ -50,9 +50,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::session::{SessionCookieConfig, SessionManager};
+    
     use crate::config::SiteConfig;
-    use sqlx::PgPool;
+    
 
     fn create_test_auth_state() -> Arc<AuthState> {
         // This is a placeholder for testing - in real tests we'd need a test database

@@ -1,27 +1,22 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::Json,
     routing::{get, post},
     Router,
 };
 use std::sync::Arc;
-use tracing::{debug, info};
-use utoipa::path;
+use tracing::debug;
 
 use super::{
-    content_negotiation::{negotiate_response, ContentType, NegotiatedResponse},
-    error::AppError,
+    content_negotiation::{negotiate_response, ContentType},
     middleware::{
         content_negotiation_middleware, cors_middleware, logging_middleware, metrics_middleware,
     },
     schemas::{MergeProposal, Run},
-    types::{ApiResponse, ApiResult, CommonQuery, QueueStatus},
+    types::{ApiResponse, CommonQuery, QueueStatus},
 };
-use crate::{
-    app::AppState,
-    auth::{require_admin, require_login, require_qa_reviewer, OptionalUser, UserContext},
-};
+use crate::app::AppState;
 
 /// Create the main API router
 pub fn create_api_router() -> Router<Arc<AppState>> {
@@ -260,7 +255,7 @@ async fn get_queue_status(
 
     match app_state.database.get_stats().await {
         Ok(stats) => {
-            let mut queue_status = QueueStatus {
+            let queue_status = QueueStatus {
                 total_candidates: stats.get("total_codebases").unwrap_or(&0).clone(),
                 pending_candidates: stats.get("queue_size").unwrap_or(&0).clone(),
                 active_runs: stats.get("active_runs").unwrap_or(&0).clone(),

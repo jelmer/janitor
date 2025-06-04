@@ -1,7 +1,9 @@
 //! Git Store service main entry point
 
 use anyhow::Result;
-use janitor_git_store::{config::Config, database::DatabaseManager, repository::RepositoryManager, web};
+use janitor_git_store::{
+    config::Config, database::DatabaseManager, repository::RepositoryManager, web,
+};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{error, info};

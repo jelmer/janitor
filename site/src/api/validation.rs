@@ -1,15 +1,12 @@
-use async_trait::async_trait;
 use axum::{
-    body::Body,
-    extract::{FromRequest, Request},
-    http, Json,
+    extract::{FromRequest, Request}, Json,
 };
 use serde::de::DeserializeOwned;
 use validator::{Validate, ValidationErrors};
 
 use super::{
     error::ValidationError as ApiValidationError,
-    types::{ApiError, ApiResponse},
+    types::ApiError,
 };
 
 /// Validated JSON extractor that automatically validates incoming JSON data

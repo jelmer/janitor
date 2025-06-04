@@ -1,5 +1,4 @@
 use crate::auth::types::{SessionInfo, User, UserRole};
-use std::collections::HashSet;
 
 /// Mock user for testing
 fn create_test_user() -> User {

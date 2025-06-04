@@ -32,7 +32,10 @@ async fn main() -> Result<()> {
         match py.import_bound("breezy") {
             Ok(_) => info!("Breezy library available"),
             Err(e) => {
-                warn!("Breezy library not available, falling back to subprocess: {}", e);
+                warn!(
+                    "Breezy library not available, falling back to subprocess: {}",
+                    e
+                );
             }
         }
     });

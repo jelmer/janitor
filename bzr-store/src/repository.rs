@@ -11,7 +11,9 @@ use tracing::{debug, info, warn};
 
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::pyo3_bridge::{BreezyOperations, BreezyRepositoryInfo, BreezyBranchInfo, BreezyRevisionInfo};
+use crate::pyo3_bridge::{
+    BreezyBranchInfo, BreezyOperations, BreezyRepositoryInfo, BreezyRevisionInfo,
+};
 
 /// Repository path structure for campaign/codebase/role organization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,7 +35,7 @@ impl RepositoryPath {
             role,
         }
     }
-    
+
     /// Get the relative path string
     pub fn relative_path(&self) -> String {
         format!("{}/{}/{}", self.campaign, self.codebase, self.role)
@@ -58,19 +60,29 @@ pub struct RepositoryInfo {
 pub trait RepositoryManager: Send + Sync {
     /// Ensure repository exists, creating it if necessary
     async fn ensure_repository(&self, path: &RepositoryPath) -> Result<PathBuf>;
-    
+
     /// Get repository information
     async fn get_repository_info(&self, path: &RepositoryPath) -> Result<RepositoryInfo>;
-    
+
     /// List all repositories
     async fn list_repositories(&self) -> Result<Vec<RepositoryInfo>>;
-    
+
     /// Get diff between two revisions
-    async fn get_diff(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<u8>>;
-    
+    async fn get_diff(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<u8>>;
+
     /// Get revision information
-    async fn get_revision_info(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<RevisionInfo>>;
-    
+    async fn get_revision_info(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<RevisionInfo>>;
+
     /// Configure remote URL for repository
     async fn configure_remote(&self, path: &RepositoryPath, remote_url: &str) -> Result<()>;
 }
@@ -111,13 +123,13 @@ pub struct SubprocessRepositoryManager {
 impl PyO3RepositoryManager {
     /// Create a new PyO3-enhanced repository manager
     pub fn new(base_path: PathBuf, database: DatabaseManager, prefer_pyo3: bool) -> Self {
-        Self { 
-            base_path, 
-            database, 
+        Self {
+            base_path,
+            database,
             prefer_pyo3,
         }
     }
-    
+
     /// Get the full path for a repository
     pub fn get_repository_path(&self, path: &RepositoryPath) -> PathBuf {
         self.base_path
@@ -125,41 +137,51 @@ impl PyO3RepositoryManager {
             .join(&path.codebase)
             .join(&path.role)
     }
-    
+
     /// Get the campaign path
     pub fn get_campaign_path(&self, campaign: &str) -> PathBuf {
         self.base_path.join(campaign)
     }
-    
+
     /// Ensure campaign structure exists using PyO3 operations
     async fn ensure_campaign_structure(&self, campaign: &str) -> Result<()> {
         let campaign_path = self.get_campaign_path(campaign);
-        
+
         if !campaign_path.exists() {
             info!("Creating campaign directory: {}", campaign_path.display());
             fs::create_dir_all(&campaign_path).await?;
-            
+
             // Try PyO3 first if preferred
             if self.prefer_pyo3 {
                 match BreezyOperations::init_shared_repository(&campaign_path).await {
                     Ok(_) => {
-                        info!("Created shared repository for campaign using PyO3: {}", campaign);
+                        info!(
+                            "Created shared repository for campaign using PyO3: {}",
+                            campaign
+                        );
                         return Ok(());
                     }
                     Err(e) => {
-                        warn!("PyO3 repository creation failed, falling back to subprocess: {}", e);
+                        warn!(
+                            "PyO3 repository creation failed, falling back to subprocess: {}",
+                            e
+                        );
                     }
                 }
             }
-            
+
             // Fallback to subprocess
-            self.create_shared_repository_subprocess(&campaign_path).await?;
-            info!("Created shared repository for campaign using subprocess: {}", campaign);
+            self.create_shared_repository_subprocess(&campaign_path)
+                .await?;
+            info!(
+                "Created shared repository for campaign using subprocess: {}",
+                campaign
+            );
         }
-        
+
         Ok(())
     }
-    
+
     /// Create shared repository using subprocess (fallback)
     async fn create_shared_repository_subprocess(&self, path: &Path) -> Result<()> {
         let output = Command::new("brz")
@@ -169,7 +191,7 @@ impl PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -177,14 +199,14 @@ impl PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         Ok(())
     }
-    
+
     /// Initialize branch using PyO3 operations with subprocess fallback
     async fn init_branch(&self, repo_path: &Path, campaign_path: Option<&Path>) -> Result<()> {
         debug!("Initializing branch at: {}", repo_path.display());
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::init_branch(repo_path, campaign_path).await {
@@ -193,17 +215,23 @@ impl PyO3RepositoryManager {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("PyO3 branch initialization failed, falling back to subprocess: {}", e);
+                    warn!(
+                        "PyO3 branch initialization failed, falling back to subprocess: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback to subprocess
         self.init_branch_subprocess(repo_path).await?;
-        info!("Initialized branch using subprocess: {}", repo_path.display());
+        info!(
+            "Initialized branch using subprocess: {}",
+            repo_path.display()
+        );
         Ok(())
     }
-    
+
     /// Initialize branch using subprocess (fallback)
     async fn init_branch_subprocess(&self, path: &Path) -> Result<()> {
         let output = Command::new("brz")
@@ -213,7 +241,7 @@ impl PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -221,22 +249,28 @@ impl PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get repository information using PyO3 with subprocess fallback
-    async fn get_repository_info_enhanced(&self, repo_path: &Path) -> Result<Option<BreezyRepositoryInfo>> {
+    async fn get_repository_info_enhanced(
+        &self,
+        repo_path: &Path,
+    ) -> Result<Option<BreezyRepositoryInfo>> {
         // Try PyO3 first if preferred and repository exists
         if self.prefer_pyo3 && BreezyOperations::is_repository(repo_path).await {
             match BreezyOperations::get_repository_info(repo_path).await {
                 Ok(info) => return Ok(Some(info)),
                 Err(e) => {
-                    warn!("PyO3 repository info failed, falling back to basic checks: {}", e);
+                    warn!(
+                        "PyO3 repository info failed, falling back to basic checks: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback: check if it's a repository directory
         if repo_path.join(".bzr").exists() {
             // Basic repository info without PyO3
@@ -250,7 +284,7 @@ impl PyO3RepositoryManager {
             Ok(None)
         }
     }
-    
+
     /// Get branch information using PyO3 with subprocess fallback
     async fn get_branch_info_enhanced(&self, repo_path: &Path) -> Result<Option<BreezyBranchInfo>> {
         // Try PyO3 first if preferred and branch exists
@@ -258,11 +292,14 @@ impl PyO3RepositoryManager {
             match BreezyOperations::get_branch_info(repo_path).await {
                 Ok(info) => return Ok(Some(info)),
                 Err(e) => {
-                    warn!("PyO3 branch info failed, falling back to basic checks: {}", e);
+                    warn!(
+                        "PyO3 branch info failed, falling back to basic checks: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback: check if it's a branch directory
         if repo_path.join(".bzr").exists() {
             // Basic branch info without PyO3
@@ -283,25 +320,25 @@ impl RepositoryManager for PyO3RepositoryManager {
     async fn ensure_repository(&self, path: &RepositoryPath) -> Result<PathBuf> {
         // Ensure campaign structure exists first
         self.ensure_campaign_structure(&path.campaign).await?;
-        
+
         let repo_path = self.get_repository_path(path);
-        
+
         if !repo_path.exists() {
             info!("Creating repository directory: {}", repo_path.display());
             fs::create_dir_all(&repo_path).await?;
-            
+
             // Initialize branch in the repository
             let campaign_path = self.get_campaign_path(&path.campaign);
             self.init_branch(&repo_path, Some(&campaign_path)).await?;
         }
-        
+
         Ok(repo_path)
     }
-    
+
     async fn get_repository_info(&self, path: &RepositoryPath) -> Result<RepositoryInfo> {
         let repo_path = self.get_repository_path(path);
         let exists = repo_path.exists();
-        
+
         let last_revision = if exists {
             // Try to get last revision using PyO3
             if let Ok(Some(branch_info)) = self.get_branch_info_enhanced(&repo_path).await {
@@ -312,7 +349,7 @@ impl RepositoryManager for PyO3RepositoryManager {
         } else {
             None
         };
-        
+
         Ok(RepositoryInfo {
             path: path.clone(),
             exists,
@@ -320,56 +357,61 @@ impl RepositoryManager for PyO3RepositoryManager {
             branch_count: if exists { 1 } else { 0 },
         })
     }
-    
+
     async fn list_repositories(&self) -> Result<Vec<RepositoryInfo>> {
         let mut repositories = Vec::new();
-        
+
         // Walk through campaign directories
         let mut campaigns = fs::read_dir(&self.base_path).await?;
         while let Some(campaign_entry) = campaigns.next_entry().await? {
             if !campaign_entry.file_type().await?.is_dir() {
                 continue;
             }
-            
+
             let campaign_name = campaign_entry.file_name().to_string_lossy().to_string();
             let campaign_path = campaign_entry.path();
-            
+
             // Walk through codebase directories
             let mut codebases = fs::read_dir(&campaign_path).await?;
             while let Some(codebase_entry) = codebases.next_entry().await? {
                 if !codebase_entry.file_type().await?.is_dir() {
                     continue;
                 }
-                
+
                 let codebase_name = codebase_entry.file_name().to_string_lossy().to_string();
                 let codebase_path = codebase_entry.path();
-                
+
                 // Walk through role directories
                 let mut roles = fs::read_dir(&codebase_path).await?;
                 while let Some(role_entry) = roles.next_entry().await? {
                     if !role_entry.file_type().await?.is_dir() {
                         continue;
                     }
-                    
+
                     let role_name = role_entry.file_name().to_string_lossy().to_string();
                     let repo_path = RepositoryPath::new(
                         campaign_name.clone(),
                         codebase_name.clone(),
                         role_name,
                     );
-                    
+
                     let info = self.get_repository_info(&repo_path).await?;
                     repositories.push(info);
                 }
             }
         }
-        
+
         Ok(repositories)
     }
-    
-    async fn get_diff(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<u8>> {
+
+    async fn get_diff(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<u8>> {
         let repo_path = self.get_repository_path(path);
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::get_diff(&repo_path, old_revid, new_revid).await {
@@ -378,11 +420,14 @@ impl RepositoryManager for PyO3RepositoryManager {
                     return Ok(diff_bytes);
                 }
                 Err(e) => {
-                    warn!("PyO3 diff generation failed, falling back to subprocess: {}", e);
+                    warn!(
+                        "PyO3 diff generation failed, falling back to subprocess: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback to subprocess for diff generation
         let output = Command::new("brz")
             .args(["diff", "-r", &format!("{}..{}", old_revid, new_revid)])
@@ -391,7 +436,7 @@ impl RepositoryManager for PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -399,44 +444,66 @@ impl RepositoryManager for PyO3RepositoryManager {
                 stderr
             )));
         }
-        
-        info!("Generated diff using subprocess: {} bytes", output.stdout.len());
+
+        info!(
+            "Generated diff using subprocess: {} bytes",
+            output.stdout.len()
+        );
         Ok(output.stdout)
     }
-    
-    async fn get_revision_info(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<RevisionInfo>> {
+
+    async fn get_revision_info(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<RevisionInfo>> {
         let repo_path = self.get_repository_path(path);
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::get_revision_info(&repo_path, old_revid, new_revid).await {
                 Ok(breezy_revisions) => {
                     // Convert BreezyRevisionInfo to RevisionInfo
-                    let revisions: Vec<RevisionInfo> = breezy_revisions.into_iter().map(|br| RevisionInfo {
-                        revision_id: br.revision_id,
-                        message: br.message,
-                        committer: br.committer,
-                        timestamp: br.timestamp,
-                    }).collect();
-                    
-                    info!("Retrieved revision info using PyO3: {} revisions", revisions.len());
+                    let revisions: Vec<RevisionInfo> = breezy_revisions
+                        .into_iter()
+                        .map(|br| RevisionInfo {
+                            revision_id: br.revision_id,
+                            message: br.message,
+                            committer: br.committer,
+                            timestamp: br.timestamp,
+                        })
+                        .collect();
+
+                    info!(
+                        "Retrieved revision info using PyO3: {} revisions",
+                        revisions.len()
+                    );
                     return Ok(revisions);
                 }
                 Err(e) => {
-                    warn!("PyO3 revision info failed, falling back to subprocess: {}", e);
+                    warn!(
+                        "PyO3 revision info failed, falling back to subprocess: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback to subprocess for revision info
         let output = Command::new("brz")
-            .args(["log", "--format=json", "-r", &format!("{}..{}", old_revid, new_revid)])
+            .args([
+                "log",
+                "--format=json",
+                "-r",
+                &format!("{}..{}", old_revid, new_revid),
+            ])
             .current_dir(&repo_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -444,19 +511,22 @@ impl RepositoryManager for PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         // Parse JSON output
         let stdout = String::from_utf8_lossy(&output.stdout);
         let revisions: Vec<RevisionInfo> = serde_json::from_str(&stdout)
             .map_err(|e| BzrError::subprocess(format!("Failed to parse revision info: {}", e)))?;
-        
-        info!("Retrieved revision info using subprocess: {} revisions", revisions.len());
+
+        info!(
+            "Retrieved revision info using subprocess: {} revisions",
+            revisions.len()
+        );
         Ok(revisions)
     }
-    
+
     async fn configure_remote(&self, path: &RepositoryPath, remote_url: &str) -> Result<()> {
         let repo_path = self.get_repository_path(path);
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::configure_remote(&repo_path, remote_url).await {
@@ -465,11 +535,14 @@ impl RepositoryManager for PyO3RepositoryManager {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("PyO3 remote configuration failed, falling back to subprocess: {}", e);
+                    warn!(
+                        "PyO3 remote configuration failed, falling back to subprocess: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback to subprocess for remote configuration
         let output = Command::new("brz")
             .args(["config", &format!("parent_location={}", remote_url)])
@@ -478,7 +551,7 @@ impl RepositoryManager for PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -486,11 +559,10 @@ impl RepositoryManager for PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         info!("Configured remote URL using subprocess: {}", remote_url);
         Ok(())
     }
-    
 }
 
 impl PyO3RepositoryManager {
@@ -498,9 +570,9 @@ impl PyO3RepositoryManager {
     pub async fn clone_repository(&self, source_url: &str, path: &RepositoryPath) -> Result<()> {
         // Ensure campaign structure exists
         self.ensure_campaign_structure(&path.campaign).await?;
-        
+
         let repo_path = self.get_repository_path(path);
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::clone_repository(source_url, &repo_path).await {
@@ -513,7 +585,7 @@ impl PyO3RepositoryManager {
                 }
             }
         }
-        
+
         // Fallback to subprocess for cloning
         let output = Command::new("brz")
             .args(["branch", source_url, &repo_path.to_string_lossy()])
@@ -521,7 +593,7 @@ impl PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -529,28 +601,34 @@ impl PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         info!("Cloned repository using subprocess from: {}", source_url);
         Ok(())
     }
-    
+
     /// Check if repository has uncommitted changes
     pub async fn has_uncommitted_changes(&self, path: &RepositoryPath) -> Result<bool> {
         let repo_path = self.get_repository_path(path);
-        
+
         // Try PyO3 first if preferred
         if self.prefer_pyo3 {
             match BreezyOperations::has_uncommitted_changes(&repo_path).await {
                 Ok(has_changes) => {
-                    debug!("Checked for uncommitted changes using PyO3: {}", has_changes);
+                    debug!(
+                        "Checked for uncommitted changes using PyO3: {}",
+                        has_changes
+                    );
                     return Ok(has_changes);
                 }
                 Err(e) => {
-                    warn!("PyO3 status check failed, falling back to subprocess: {}", e);
+                    warn!(
+                        "PyO3 status check failed, falling back to subprocess: {}",
+                        e
+                    );
                 }
             }
         }
-        
+
         // Fallback to subprocess for status check
         let output = Command::new("brz")
             .args(["status", "--short"])
@@ -559,7 +637,7 @@ impl PyO3RepositoryManager {
             .stderr(Stdio::piped())
             .output()
             .await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -567,12 +645,15 @@ impl PyO3RepositoryManager {
                 stderr
             )));
         }
-        
+
         let has_changes = !output.stdout.is_empty();
-        debug!("Checked for uncommitted changes using subprocess: {}", has_changes);
+        debug!(
+            "Checked for uncommitted changes using subprocess: {}",
+            has_changes
+        );
         Ok(has_changes)
     }
-    
+
     /// Get transport base URL for a repository
     pub async fn get_transport_base(&self, url: &str) -> Result<String> {
         // Try PyO3 first if preferred
@@ -587,7 +668,7 @@ impl PyO3RepositoryManager {
                 }
             }
         }
-        
+
         // Simple fallback - just return the URL as is
         debug!("Using URL as transport base: {}", url);
         Ok(url.to_string())
@@ -597,9 +678,12 @@ impl PyO3RepositoryManager {
 impl SubprocessRepositoryManager {
     /// Create a new subprocess repository manager
     pub fn new(base_path: PathBuf, database: DatabaseManager) -> Self {
-        Self { base_path, database }
+        Self {
+            base_path,
+            database,
+        }
     }
-    
+
     /// Get the full path for a repository
     pub fn get_repository_path(&self, path: &RepositoryPath) -> PathBuf {
         self.base_path
@@ -607,20 +691,20 @@ impl SubprocessRepositoryManager {
             .join(&path.codebase)
             .join(&path.role)
     }
-    
+
     /// Get the campaign path
     pub fn get_campaign_path(&self, campaign: &str) -> PathBuf {
         self.base_path.join(campaign)
     }
-    
+
     /// Ensure campaign structure exists
     async fn ensure_campaign_structure(&self, campaign: &str) -> Result<()> {
         let campaign_path = self.get_campaign_path(campaign);
-        
+
         if !campaign_path.exists() {
             info!("Creating campaign directory: {}", campaign_path.display());
             fs::create_dir_all(&campaign_path).await?;
-            
+
             // Initialize shared repository for the campaign
             let output = Command::new("brz")
                 .args(["init-shared-repository", "--format=2a"])
@@ -629,7 +713,7 @@ impl SubprocessRepositoryManager {
                 .stderr(Stdio::piped())
                 .output()
                 .await?;
-            
+
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 return Err(BzrError::subprocess(format!(
@@ -637,33 +721,35 @@ impl SubprocessRepositoryManager {
                     stderr
                 )));
             }
-            
+
             info!("Created shared repository for campaign: {}", campaign);
         }
-        
+
         Ok(())
     }
-    
+
     /// Check if path is a valid Bazaar repository
     async fn is_bzr_repository(&self, path: &Path) -> bool {
         path.join(".bzr").is_dir()
     }
-    
+
     /// Run bzr command and return output
-    async fn run_bzr_command(&self, args: &[&str], working_dir: Option<&Path>) -> Result<std::process::Output> {
+    async fn run_bzr_command(
+        &self,
+        args: &[&str],
+        working_dir: Option<&Path>,
+    ) -> Result<std::process::Output> {
         let mut cmd = Command::new("brz");
-        cmd.args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        
+        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+
         if let Some(dir) = working_dir {
             cmd.current_dir(dir);
         }
-        
+
         debug!("Running bzr command: brz {}", args.join(" "));
-        
+
         let output = cmd.output().await?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(BzrError::subprocess(format!(
@@ -672,7 +758,7 @@ impl SubprocessRepositoryManager {
                 stderr
             )));
         }
-        
+
         Ok(output)
     }
 }
@@ -687,62 +773,66 @@ impl RepositoryManager for SubprocessRepositoryManager {
                 path.codebase
             )));
         }
-        
+
         // Ensure campaign structure exists
         self.ensure_campaign_structure(&path.campaign).await?;
-        
+
         let repo_path = self.get_repository_path(path);
-        
+
         if !repo_path.exists() {
             info!("Creating repository: {}", repo_path.display());
-            
+
             // Create the directory structure
             fs::create_dir_all(&repo_path).await?;
-            
+
             // Initialize the branch in the shared repository
             let campaign_path = self.get_campaign_path(&path.campaign);
             self.run_bzr_command(
                 &["init", "--format=2a", &repo_path.to_string_lossy()],
                 Some(&campaign_path),
-            ).await?;
-            
+            )
+            .await?;
+
             info!("Created Bazaar repository: {}", repo_path.display());
         } else if !self.is_bzr_repository(&repo_path).await {
-            warn!("Directory exists but is not a Bazaar repository: {}", repo_path.display());
+            warn!(
+                "Directory exists but is not a Bazaar repository: {}",
+                repo_path.display()
+            );
             return Err(BzrError::repository(format!(
                 "Path exists but is not a Bazaar repository: {}",
                 repo_path.display()
             )));
         }
-        
+
         Ok(repo_path)
     }
-    
+
     async fn get_repository_info(&self, path: &RepositoryPath) -> Result<RepositoryInfo> {
         let repo_path = self.get_repository_path(path);
         let exists = self.is_bzr_repository(&repo_path).await;
-        
+
         let (last_revision, branch_count) = if exists {
             // Get last revision
-            let last_rev = match self.run_bzr_command(
-                &["log", "--limit=1", "--line"],
-                Some(&repo_path),
-            ).await {
+            let last_rev = match self
+                .run_bzr_command(&["log", "--limit=1", "--line"], Some(&repo_path))
+                .await
+            {
                 Ok(output) => {
                     let output_str = String::from_utf8_lossy(&output.stdout);
                     output_str.lines().next().map(|s| s.to_string())
                 }
                 Err(_) => None,
             };
-            
+
             // Count branches (simplified - just return 1 if repository exists)
             let branch_count = if exists { 1 } else { 0 };
-            
+
             (last_rev, branch_count)
         } else {
             (None, 0)
         };
-        
+
         Ok(RepositoryInfo {
             path: path.clone(),
             exists,
@@ -750,93 +840,116 @@ impl RepositoryManager for SubprocessRepositoryManager {
             branch_count,
         })
     }
-    
+
     async fn list_repositories(&self) -> Result<Vec<RepositoryInfo>> {
         let mut repositories = Vec::new();
-        
+
         if !self.base_path.exists() {
             return Ok(repositories);
         }
-        
+
         // Walk through campaign directories
         let mut campaign_dir = fs::read_dir(&self.base_path).await?;
         while let Some(campaign_entry) = campaign_dir.next_entry().await? {
             if !campaign_entry.file_type().await?.is_dir() {
                 continue;
             }
-            
+
             let campaign_name = campaign_entry.file_name().to_string_lossy().to_string();
             let campaign_path = campaign_entry.path();
-            
+
             // Walk through codebase directories
             let mut codebase_dir = fs::read_dir(&campaign_path).await?;
             while let Some(codebase_entry) = codebase_dir.next_entry().await? {
                 if !codebase_entry.file_type().await?.is_dir() {
                     continue;
                 }
-                
+
                 let codebase_name = codebase_entry.file_name().to_string_lossy().to_string();
                 let codebase_path = codebase_entry.path();
-                
+
                 // Walk through role directories
                 let mut role_dir = fs::read_dir(&codebase_path).await?;
                 while let Some(role_entry) = role_dir.next_entry().await? {
                     if !role_entry.file_type().await?.is_dir() {
                         continue;
                     }
-                    
+
                     let role_name = role_entry.file_name().to_string_lossy().to_string();
                     let repo_path = RepositoryPath::new(
                         campaign_name.clone(),
                         codebase_name.clone(),
                         role_name,
                     );
-                    
+
                     let info = self.get_repository_info(&repo_path).await?;
                     repositories.push(info);
                 }
             }
         }
-        
+
         Ok(repositories)
     }
-    
-    async fn get_diff(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<u8>> {
+
+    async fn get_diff(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<u8>> {
         let repo_path = self.get_repository_path(path);
-        
+
         if !self.is_bzr_repository(&repo_path).await {
             return Err(BzrError::repository("Repository does not exist"));
         }
-        
-        let output = self.run_bzr_command(
-            &["diff", "-r", &format!("{}..{}", old_revid, new_revid)],
-            Some(&repo_path),
-        ).await?;
-        
+
+        let output = self
+            .run_bzr_command(
+                &["diff", "-r", &format!("{}..{}", old_revid, new_revid)],
+                Some(&repo_path),
+            )
+            .await?;
+
         Ok(output.stdout)
     }
-    
-    async fn get_revision_info(&self, path: &RepositoryPath, old_revid: &str, new_revid: &str) -> Result<Vec<RevisionInfo>> {
+
+    async fn get_revision_info(
+        &self,
+        path: &RepositoryPath,
+        old_revid: &str,
+        new_revid: &str,
+    ) -> Result<Vec<RevisionInfo>> {
         let repo_path = self.get_repository_path(path);
-        
+
         if !self.is_bzr_repository(&repo_path).await {
             return Err(BzrError::repository("Repository does not exist"));
         }
-        
-        let output = self.run_bzr_command(
-            &["log", "-r", &format!("{}..{}", old_revid, new_revid), "--show-ids"],
-            Some(&repo_path),
-        ).await?;
-        
+
+        let output = self
+            .run_bzr_command(
+                &[
+                    "log",
+                    "-r",
+                    &format!("{}..{}", old_revid, new_revid),
+                    "--show-ids",
+                ],
+                Some(&repo_path),
+            )
+            .await?;
+
         // Parse the log output (simplified)
         let log_text = String::from_utf8_lossy(&output.stdout);
         let mut revisions = Vec::new();
-        
+
         // This is a simplified parser - in a real implementation,
         // you'd want more robust parsing
         for line in log_text.lines() {
             if line.starts_with("revision-id:") {
-                let revision_id = line.strip_prefix("revision-id:").unwrap_or("").trim().to_string();
+                let revision_id = line
+                    .strip_prefix("revision-id:")
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
                 revisions.push(RevisionInfo {
                     revision_id,
                     message: "".to_string(),
@@ -845,23 +958,25 @@ impl RepositoryManager for SubprocessRepositoryManager {
                 });
             }
         }
-        
+
         Ok(revisions)
     }
-    
+
     async fn configure_remote(&self, path: &RepositoryPath, remote_url: &str) -> Result<()> {
         let repo_path = self.get_repository_path(path);
-        
+
         if !self.is_bzr_repository(&repo_path).await {
             return Err(BzrError::repository("Repository does not exist"));
         }
-        
-        self.run_bzr_command(
-            &["config", "parent_location", remote_url],
-            Some(&repo_path),
-        ).await?;
-        
-        info!("Configured remote URL for {}: {}", path.relative_path(), remote_url);
+
+        self.run_bzr_command(&["config", "parent_location", remote_url], Some(&repo_path))
+            .await?;
+
+        info!(
+            "Configured remote URL for {}: {}",
+            path.relative_path(),
+            remote_url
+        );
         Ok(())
     }
 }

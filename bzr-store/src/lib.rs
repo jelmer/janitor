@@ -15,7 +15,7 @@ pub mod web;
 
 pub use config::Config;
 pub use error::{BzrError, Result};
-pub use pyo3_bridge::{BreezyOperations, initialize_breezy};
+pub use pyo3_bridge::{initialize_breezy, BreezyOperations};
 
 /// Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -3,17 +3,14 @@ use axum::{
     http::{header, StatusCode},
     response::{Html, IntoResponse, Json, Response},
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tera::Context;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
     app::AppState,
     auth::OptionalUser,
-    database::DatabaseError,
-    templates::{create_base_context, create_request_context, helpers::BaseContext},
+    templates::create_base_context,
 };
 
 #[derive(Debug, Deserialize)]

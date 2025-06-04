@@ -79,7 +79,7 @@ impl BackfillProcessor {
     ) -> Result<Self> {
         let db_client = DatabaseClient::new(database_url).await?;
         let artifact_processor = ArtifactProcessor::new(artifact_location).await?;
-        
+
         Ok(Self {
             db_client,
             artifact_processor,
@@ -87,31 +87,37 @@ impl BackfillProcessor {
             progress: Arc::new(BackfillProgress::default()),
         })
     }
-    
+
     /// Run backfill operation
     pub async fn run_backfill(&self, config: BackfillConfig) -> Result<BackfillSummary> {
         info!("Starting backfill operation");
         info!("Configuration: {:?}", config);
-        
+
         // Query builds from database
         let builds = self.query_builds(&config).await?;
         let total_builds = builds.len() as u64;
-        
-        self.progress.total_builds.store(total_builds, Ordering::SeqCst);
-        
+
+        self.progress
+            .total_builds
+            .store(total_builds, Ordering::SeqCst);
+
         info!("Found {} builds for backfill", total_builds);
-        
+
         if config.dry_run {
             info!("Running in dry-run mode - no actual uploads will be performed");
         }
-        
+
         // Process builds in batches
         let mut processed = 0u64;
         let batch_size = config.batch_size as usize;
-        
+
         for (batch_idx, batch) in builds.chunks(batch_size).enumerate() {
-            info!("Processing batch {} ({} builds)", batch_idx + 1, batch.len());
-            
+            info!(
+                "Processing batch {} ({} builds)",
+                batch_idx + 1,
+                batch.len()
+            );
+
             for build in batch {
                 if let Some(max_builds) = config.max_builds {
                     if processed >= max_builds {
@@ -119,10 +125,12 @@ impl BackfillProcessor {
                         break;
                     }
                 }
-                
+
                 match self.process_build(build, &config).await {
                     Ok(ProcessResult::Uploaded) => {
-                        self.progress.successful_uploads.fetch_add(1, Ordering::SeqCst);
+                        self.progress
+                            .successful_uploads
+                            .fetch_add(1, Ordering::SeqCst);
                         info!(
                             run_id = %build.run_id,
                             distribution = %build.distribution,
@@ -147,32 +155,32 @@ impl BackfillProcessor {
                         );
                     }
                 }
-                
+
                 processed += 1;
-                
+
                 // Progress reporting
                 if processed % 10 == 0 {
                     self.log_progress(processed, total_builds);
                 }
-                
+
                 // Rate limiting
                 if config.upload_delay > Duration::ZERO {
                     sleep(config.upload_delay).await;
                 }
             }
-            
+
             // Brief pause between batches
             if batch_idx < builds.len() / batch_size {
                 sleep(Duration::from_millis(100)).await;
             }
         }
-        
+
         let summary = self.create_summary();
         info!("Backfill operation completed: {:?}", summary);
-        
+
         Ok(summary)
     }
-    
+
     /// Query builds based on configuration
     async fn query_builds(&self, config: &BackfillConfig) -> Result<Vec<DebianBuild>> {
         let distributions = if config.distributions.is_empty() {
@@ -180,37 +188,44 @@ impl BackfillProcessor {
         } else {
             Some(config.distributions.as_slice())
         };
-        
+
         let mut builds = self.db_client.get_backfill_builds(distributions).await?;
-        
+
         // Filter by source packages if specified
         if !config.source_packages.is_empty() {
             builds.retain(|build| config.source_packages.contains(&build.source));
         }
-        
+
         // Apply limit if specified
         if let Some(max_builds) = config.max_builds {
             builds.truncate(max_builds as usize);
         }
-        
+
         Ok(builds)
     }
-    
+
     /// Process a single build
-    async fn process_build(&self, build: &DebianBuild, config: &BackfillConfig) -> Result<ProcessResult> {
+    async fn process_build(
+        &self,
+        build: &DebianBuild,
+        config: &BackfillConfig,
+    ) -> Result<ProcessResult> {
         // Check if artifacts exist
         if !self.artifact_processor.artifacts_exist(&build.run_id).await {
             return Ok(ProcessResult::Skipped("No artifacts found".to_string()));
         }
-        
+
         // Check distribution filter
-        if !self.upload_config.should_upload_distribution(&build.distribution) {
+        if !self
+            .upload_config
+            .should_upload_distribution(&build.distribution)
+        {
             return Ok(ProcessResult::Skipped(format!(
-                "Distribution {} not in allowed list", 
+                "Distribution {} not in allowed list",
                 build.distribution
             )));
         }
-        
+
         if config.dry_run {
             info!(
                 run_id = %build.run_id,
@@ -218,14 +233,12 @@ impl BackfillProcessor {
             );
             return Ok(ProcessResult::Uploaded);
         }
-        
+
         // Attempt upload with retries
         for attempt in 1..=config.max_retries {
-            match upload_build_result(
-                &build.run_id,
-                &self.artifact_processor,
-                &self.upload_config,
-            ).await {
+            match upload_build_result(&build.run_id, &self.artifact_processor, &self.upload_config)
+                .await
+            {
                 Ok(_) => return Ok(ProcessResult::Uploaded),
                 Err(e) => {
                     warn!(
@@ -235,7 +248,7 @@ impl BackfillProcessor {
                         error = %e,
                         "Upload attempt failed"
                     );
-                    
+
                     if attempt < config.max_retries {
                         let delay = Duration::from_secs(2u64.pow(attempt));
                         sleep(delay).await;
@@ -245,28 +258,28 @@ impl BackfillProcessor {
                 }
             }
         }
-        
+
         unreachable!()
     }
-    
+
     /// Log progress information
     fn log_progress(&self, processed: u64, total: u64) {
         let successful = self.progress.successful_uploads.load(Ordering::SeqCst);
         let failed = self.progress.failed_uploads.load(Ordering::SeqCst);
         let skipped = self.progress.skipped_builds.load(Ordering::SeqCst);
-        
+
         let percentage = if total > 0 {
             (processed as f64 / total as f64) * 100.0
         } else {
             0.0
         };
-        
+
         info!(
             "Progress: {}/{} ({:.1}%) - Success: {}, Failed: {}, Skipped: {}",
             processed, total, percentage, successful, failed, skipped
         );
     }
-    
+
     /// Create backfill summary
     fn create_summary(&self) -> BackfillSummary {
         BackfillSummary {
@@ -276,12 +289,12 @@ impl BackfillProcessor {
             skipped_builds: self.progress.skipped_builds.load(Ordering::SeqCst),
         }
     }
-    
+
     /// Get current progress
     pub fn get_progress(&self) -> BackfillSummary {
         self.create_summary()
     }
-    
+
     /// Check database connection health
     pub async fn health_check(&self) -> Result<()> {
         self.db_client.health_check().await
@@ -320,12 +333,12 @@ impl BackfillSummary {
             0.0
         }
     }
-    
+
     /// Check if backfill was successful
     pub fn is_successful(&self) -> bool {
         self.failed_uploads == 0 && self.total_builds > 0
     }
-    
+
     /// Get total processed builds
     pub fn total_processed(&self) -> u64 {
         self.successful_uploads + self.failed_uploads + self.skipped_builds
@@ -349,7 +362,7 @@ impl std::fmt::Display for BackfillSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_backfill_config_default() {
         let config = BackfillConfig::default();
@@ -359,7 +372,7 @@ mod tests {
         assert_eq!(config.batch_size, 100);
         assert!(!config.dry_run);
     }
-    
+
     #[test]
     fn test_backfill_summary_success_rate() {
         let summary = BackfillSummary {
@@ -368,11 +381,11 @@ mod tests {
             failed_uploads: 20,
             skipped_builds: 0,
         };
-        
+
         assert_eq!(summary.success_rate(), 80.0);
         assert!(!summary.is_successful());
     }
-    
+
     #[test]
     fn test_backfill_summary_perfect_success() {
         let summary = BackfillSummary {
@@ -381,11 +394,11 @@ mod tests {
             failed_uploads: 0,
             skipped_builds: 10,
         };
-        
+
         assert_eq!(summary.success_rate(), 100.0);
         assert!(summary.is_successful());
     }
-    
+
     #[test]
     fn test_backfill_summary_display() {
         let summary = BackfillSummary {
@@ -394,7 +407,7 @@ mod tests {
             failed_uploads: 15,
             skipped_builds: 10,
         };
-        
+
         let display = format!("{}", summary);
         assert!(display.contains("100 total"));
         assert!(display.contains("75 uploaded"));
