@@ -1,3 +1,17 @@
+// BEHAVIORAL COMPATIBILITY ANALYSIS WITH PYTHON
+//
+// ⚠️ Critical Notes: The Worker service appears to be implemented entirely in Rust 
+// using PyO3 for breezyshim integration. There is no equivalent Python implementation
+// to compare against - the Python codebase only contains worker_creds.py for 
+// authentication helpers. The Worker is a pure Rust service that integrates with
+// the Python breezy library via PyO3.
+//
+// Key Compatibility Considerations:
+// 1. PyO3 Integration: Uses breezyshim for VCS operations
+// 2. API Compatibility: Interfaces with runner/site services via HTTP APIs
+// 3. Authentication: Uses worker credentials for service authentication
+// 4. Metadata Format: Must match expected JSON structure for other services
+
 use breezyshim::controldir::ControlDirFormat;
 use breezyshim::error::Error as BrzError;
 use breezyshim::transport::Transport;

@@ -454,6 +454,125 @@ tempfile = "3.8"                # Temporary files
 - HTTP headers and status codes must match exactly
 - GPG signatures must validate with existing keys
 
+## ⚠️ Critical Behavioral Compatibility Analysis
+
+### High-Impact Breaking Changes 🚨
+
+#### 1. Package Scanning Implementation Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Generator-based async scanning with apt_pkg integration
+async def scan_packages(td, arch=None):
+    proc = await asyncio.create_subprocess_exec("dpkg-scanpackages", td, *args)
+    stdout, stderr = await proc.communicate()
+    for para in Packages.iter_paragraphs(stdout, use_apt_pkg=False):
+        yield para  # Generator yields one package at a time
+```
+
+**Rust Implementation:**
+```rust
+// Stream-based scanning that loads all packages into memory first
+async fn scan_packages_in_directory(td: &Path, arch: Option<&str>) -> Vec<Package> {
+    // Reads entire output into memory before parsing
+    let packages: Result<Vec<Package>, _> = paragraphs
+        .into_iter()
+        .map(|p| Package::from_paragraph(&p))
+        .collect();  // Collects all packages at once
+}
+```
+
+**Impact:** **CRITICAL** - Memory usage and streaming behavior completely different
+**Resolution Needed:** Implement async generator pattern to match Python
+
+#### 2. Error Response Format Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# HTTP-based error responses for web endpoints
+@routes.get('/publish')
+async def handle_publish(request):
+    if validation_fails:
+        raise web.HTTPBadRequest(text="Invalid suite name")
+    return web.json_response({"status": "success"})
+```
+
+**Rust Implementation:**
+```rust
+// Structured error enum with different response format
+pub enum ArchiveError {
+    ArtifactsMissing { build_id: String, message: String },
+    PackageScanning(String),
+    SourceScanning(String),
+}
+// Results in different error response structure
+```
+
+**Impact:** **CRITICAL** - API clients expect specific HTTP error format
+**Resolution Needed:** Implement HTTP-compatible error responses
+
+#### 3. Missing Web Service Infrastructure (**BREAKING**)
+**Python Implementation:**
+```python
+# Complete web service with multiple endpoints
+routes.get('/publish', handle_publish)
+routes.get('/last-publish', handle_last_publish)  
+routes.get('/health', handle_health)
+routes.get('/ready', handle_ready)
+routes.get('/dists/{dist}/{component}/binary-{arch}/Packages', serve_packages)
+```
+
+**Rust Implementation:**
+```rust
+// Only scanner module - no web service implemented
+// Missing all HTTP endpoints and web server infrastructure
+```
+
+**Impact:** **CRITICAL** - No web service means no API compatibility
+**Resolution Needed:** Implement complete Axum web service
+
+### Medium-Impact Changes ⚠️
+
+#### 4. GPG Signing Integration
+**Python:** Uses python-gnupg with established GPG context management
+**Rust:** Currently no GPG integration - planned to use gpgme-rs
+**Impact:** Repository signing completely missing
+**Status:** Requires implementation before production use
+
+#### 5. Artifact Management Integration 
+**Python:** Direct integration with janitor artifact management system
+**Rust:** Uses dummy artifact manager for testing only
+**Impact:** Cannot retrieve real build artifacts
+**Status:** Requires real artifact manager integration
+
+#### 6. Database Integration
+**Python:** Comprehensive database queries for build results and metadata
+**Rust:** No database integration implemented yet
+**Impact:** Cannot retrieve build information from database
+**Status:** Requires sqlx integration with existing schema
+
+### Enhanced Features in Rust (Non-breaking) ✅
+- Async streams for better memory management (once implemented properly)
+- Type-safe Debian package parsing with deb822-lossless
+- Better error handling with structured error types
+- Enhanced logging with tracing
+- Improved async performance with tokio
+
+### Compatibility Recommendations
+
+**Priority 1 (Critical):**
+1. Implement complete Axum web service with all Python endpoints
+2. Add async generator pattern for package scanning to match memory usage
+3. Convert error types to HTTP-compatible responses
+
+**Priority 2 (High):**
+1. Implement GPG signing with gpgme-rs
+2. Add real database integration with sqlx
+3. Integrate with real artifact management system
+
+**Priority 3 (Medium):**
+1. Implement repository generation and file management
+2. Add Redis pub/sub integration for triggering
+3. Test package scanning compatibility with various package types
+
 ## Related Porting Plans
 
 - 📋 **Master Plan**: [`../porting-plan.md`](../porting-plan.md) - Overall project coordination

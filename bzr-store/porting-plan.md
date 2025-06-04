@@ -519,6 +519,109 @@ impl From<BzrError> for Response<Body> {
 - **Site Service**: Links to repository browsing interfaces
 - **Database**: Shared tables for workers and codebases
 
+## ⚠️ Critical Behavioral Compatibility Analysis
+
+### High-Impact Breaking Changes 🚨
+
+#### 1. Route Structure Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Simple codebase paths
+/{codebase}/diff
+/{codebase}/revision-info  
+/{codebase}/.bzr/smart
+/{codebase}/{campaign}/.bzr/smart
+/{codebase}/{campaign}/{role}/.bzr/smart
+```
+
+**Rust Implementation:**
+```rust
+// Enforced campaign/codebase/role structure
+/{campaign}/{codebase}/{role}/diff
+/{campaign}/{codebase}/{role}/revision-info
+/{campaign}/{codebase}/{role}/.bzr/smart
+```
+
+**Impact:** **CRITICAL** - All existing clients must update URLs
+**Resolution Needed:** Implement URL compatibility layer or client migration
+
+#### 2. Authentication Method Changes (**BREAKING**)
+**Python Implementation:**
+- Mixed authentication approach (worker credentials for admin, allow_writes callback for public)
+- Dynamic write permission checking via callback function
+
+**Rust Implementation:**
+- HTTP Basic Auth only for admin interface
+- Separate admin/public applications with different authentication
+
+**Impact:** **CRITICAL** - Authentication flow completely different
+**Resolution Needed:** Implement Python-compatible authentication
+
+#### 3. Error Response Format Changes (**BREAKING**)
+**Python Implementation:**
+```python
+# Simple HTTP error responses
+HTTPServiceUnavailable(text="Local VCS repository for {codebase} temporarily inaccessible")
+HTTPNotFound(text="no such codebase: {codebase}")
+```
+
+**Rust Implementation:**
+```rust
+// Structured JSON error responses via BzrError enum
+{
+  "error": "PathNotFound",
+  "message": "Repository path not found",
+  "path": "campaign/codebase/role"
+}
+```
+
+**Impact:** **CRITICAL** - Error parsing will break in clients
+**Resolution Needed:** Implement Python-compatible error format
+
+### Medium-Impact Changes ⚠️
+
+#### 4. Content Negotiation Differences
+**Python:** Uses `mimeparse` library for Accept header processing
+**Rust:** Simple HTML/JSON detection based on template availability
+**Impact:** Different response format selection
+**Status:** Requires Accept header compatibility testing
+
+#### 5. Repository Creation Behavior
+**Python:** Automatically creates shared repository on first access
+**Rust:** Explicit repository creation via PyO3 bridge
+**Impact:** Different timing of repository initialization
+**Status:** Requires creation behavior validation
+
+#### 6. Smart Protocol Implementation
+**Python:** Direct Breezy protocol handling with transport abstraction
+**Rust:** PyO3 bridge to Breezy with potential protocol overhead
+**Impact:** Performance and compatibility differences
+**Status:** Requires extensive smart protocol testing
+
+### Enhanced Features in Rust (Non-breaking) ✅
+- Structured configuration management with validation
+- Enhanced error handling with detailed error types
+- Better logging and tracing with structured events
+- Improved HTTP middleware stack with compression
+- Repository path validation and security
+
+### Compatibility Recommendations
+
+**Priority 1 (Critical):**
+1. Implement route compatibility layer to support both URL structures
+2. Add Python-compatible authentication mechanism
+3. Convert error responses to match Python format
+
+**Priority 2 (High):**
+1. Test all smart protocol operations with various Bazaar clients
+2. Validate repository creation timing and behavior
+3. Test content negotiation with real-world clients
+
+**Priority 3 (Medium):**
+1. Performance testing of PyO3 bridge vs pure Python
+2. Validate campaign/role directory structure compatibility
+3. Test authentication flows with existing worker credentials
+
 ## Related Plans
 
 - 📋 **Master Plan**: [`../porting-plan.md`](../porting-plan.md) - Overall project coordination
