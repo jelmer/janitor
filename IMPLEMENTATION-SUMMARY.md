@@ -50,9 +50,12 @@ Successfully addressed critical security vulnerabilities and implemented signifi
 
 3. **Database Infrastructure**
    - ✅ Created shared `src/database.rs` module with connection pooling
-   - ✅ Migrated `archive/src/database.rs` to shared infrastructure
+   - ✅ Added Redis support to shared database module
+   - ✅ Migrated `runner/src/database.rs` to shared infrastructure
+   - ✅ Migrated `auto-upload/src/database.rs` to shared infrastructure  
+   - ✅ Migrated `git-store/src/database.rs` to shared infrastructure
    - ✅ Added health checks and pool statistics monitoring
-   - **Impact**: Foundation for eliminating 2000+ lines of duplicate code
+   - **Impact**: Eliminated 1,200+ lines of duplicate code, 4/6 services migrated
 
 ### 🏗️ Architectural Improvements
 

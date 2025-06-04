@@ -4,9 +4,9 @@ use crate::error::{GitStoreError, Result};
 use sqlx::{PgPool, Row};
 use tracing::{debug, error};
 
-/// Database manager for git-store operations
+/// Database manager for git-store operations using shared infrastructure
 pub struct DatabaseManager {
-    pool: PgPool,
+    shared_db: janitor::database::Database,
     worker_table: String,
     codebase_table: String,
 }
@@ -15,10 +15,15 @@ impl DatabaseManager {
     /// Create a new database manager
     pub fn new(pool: PgPool, worker_table: String, codebase_table: String) -> Self {
         Self {
-            pool,
+            shared_db: janitor::database::Database::from_pool(pool),
             worker_table,
             codebase_table,
         }
+    }
+    
+    /// Get a reference to the database pool for backward compatibility
+    pub fn pool(&self) -> &PgPool {
+        self.shared_db.pool()
     }
 
     /// Check if a codebase exists in the database
@@ -32,7 +37,7 @@ impl DatabaseManager {
 
         let result = sqlx::query(&query)
             .bind(codebase)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
         Ok(result.is_some())
@@ -49,7 +54,7 @@ impl DatabaseManager {
 
         let row = sqlx::query(&query)
             .bind(username)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
         if let Some(row) = row {
@@ -90,7 +95,7 @@ impl DatabaseManager {
 
         let row = sqlx::query(&query)
             .bind(username)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
         if let Some(row) = row {
@@ -119,7 +124,7 @@ impl DatabaseManager {
 
         debug!("Listing codebases with limit: {:?}", limit);
 
-        let rows = sqlx::query(&query).fetch_all(&self.pool).await?;
+        let rows = sqlx::query(&query).fetch_all(self.pool()).await?;
 
         let codebases = rows
             .into_iter()
@@ -133,7 +138,7 @@ impl DatabaseManager {
     /// Check database connectivity
     pub async fn health_check(&self) -> Result<()> {
         sqlx::query("SELECT 1")
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool())
             .await
             .map_err(GitStoreError::from)?;
         Ok(())
@@ -150,7 +155,7 @@ impl DatabaseManager {
 
         let row = sqlx::query(&query)
             .bind(codebase)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
         if let Some(row) = row {

@@ -5,10 +5,10 @@ use tracing::{debug, info};
 
 use crate::error::{Result, UploadError};
 
-/// Database client for backfill operations
+/// Database client for backfill operations using shared infrastructure
 pub struct DatabaseClient {
-    /// PostgreSQL connection pool
-    pool: PgPool,
+    /// Shared database connection
+    shared_db: janitor::database::Database,
 }
 
 /// Debian build information from the database
@@ -30,13 +30,19 @@ impl DatabaseClient {
             database_url.split('@').last().unwrap_or("***")
         );
 
-        let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(5)
-            .connect(database_url)
+        let config = janitor::database::DatabaseConfig::new(database_url)
+            .with_max_connections(5);
+        
+        let shared_db = janitor::database::Database::connect_with_config(config)
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
 
-        Ok(Self { pool })
+        Ok(Self { shared_db })
+    }
+    
+    /// Get a reference to the database pool for backward compatibility
+    pub fn pool(&self) -> &PgPool {
+        self.shared_db.pool()
     }
 
     /// Get distinct Debian builds for backfill
@@ -59,7 +65,7 @@ impl DatabaseClient {
 
             sqlx::query(query)
                 .bind(distributions)
-                .fetch_all(&self.pool)
+                .fetch_all(self.pool())
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         } else {
@@ -73,7 +79,7 @@ impl DatabaseClient {
             ";
 
             sqlx::query(query)
-                .fetch_all(&self.pool)
+                .fetch_all(self.pool())
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         };
@@ -108,7 +114,7 @@ impl DatabaseClient {
 
         let rows = sqlx::query(query)
             .bind(distribution)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
 
@@ -148,7 +154,7 @@ impl DatabaseClient {
             sqlx::query(query)
                 .bind(source)
                 .bind(distributions)
-                .fetch_all(&self.pool)
+                .fetch_all(self.pool())
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         } else {
@@ -161,7 +167,7 @@ impl DatabaseClient {
 
             sqlx::query(query)
                 .bind(source)
-                .fetch_all(&self.pool)
+                .fetch_all(self.pool())
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         };
@@ -182,7 +188,7 @@ impl DatabaseClient {
     /// Test database connection
     pub async fn health_check(&self) -> Result<()> {
         sqlx::query("SELECT 1")
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool())
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
 
@@ -193,8 +199,8 @@ impl DatabaseClient {
     /// Get connection pool statistics
     pub async fn get_pool_stats(&self) -> PoolStats {
         PoolStats {
-            size: self.pool.size(),
-            idle: self.pool.num_idle(),
+            size: self.pool().size(),
+            idle: self.pool().num_idle(),
         }
     }
 }

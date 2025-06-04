@@ -12,24 +12,24 @@ use std::time::Duration;
 use crate::{QueueAssignment, QueueItem};
 pub use janitor::state::{create_pool, Run};
 
-/// Database manager for runner operations.
+/// Database manager for runner operations using shared infrastructure.
 #[derive(Clone)]
 pub struct RunnerDatabase {
-    pool: PgPool,
-    redis: Option<redis::Client>,
+    shared_db: janitor::database::Database,
 }
 
 impl RunnerDatabase {
-    /// Create a new database manager.
+    /// Create a new database manager from shared database.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool, redis: None }
+        Self {
+            shared_db: janitor::database::Database::from_pool(pool),
+        }
     }
 
     /// Create a new database manager with Redis support.
     pub fn new_with_redis(pool: PgPool, redis: redis::Client) -> Self {
         Self {
-            pool,
-            redis: Some(redis),
+            shared_db: janitor::database::Database::from_pool_with_redis(pool, redis),
         }
     }
 
@@ -38,24 +38,32 @@ impl RunnerDatabase {
         pool: PgPool,
         redis_url: Option<String>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let redis = if let Some(url) = redis_url {
-            Some(redis::Client::open(url)?)
+        let shared_db = if let Some(url) = redis_url {
+            let redis = redis::Client::open(url)?;
+            janitor::database::Database::from_pool_with_redis(pool, redis)
         } else {
-            None
+            janitor::database::Database::from_pool(pool)
         };
 
-        Ok(Self { pool, redis })
+        Ok(Self { shared_db })
     }
 
     /// Perform a health check on the database connection.
     pub async fn health_check(&self) -> Result<(), sqlx::Error> {
-        sqlx::query("SELECT 1").execute(&self.pool).await?;
-        Ok(())
+        self.shared_db.test_connection().await.map_err(|e| match e {
+            janitor::database::DatabaseError::Connection(e) => e,
+            _ => sqlx::Error::Configuration("Database configuration error".into()),
+        })
     }
 
     /// Get a reference to the database pool.
     pub fn pool(&self) -> &PgPool {
-        &self.pool
+        self.shared_db.pool()
+    }
+    
+    /// Get a reference to the Redis client if available.
+    pub fn redis(&self) -> Option<&redis::Client> {
+        self.shared_db.redis()
     }
 
     /// Convert a database Run to JanitorResult.
@@ -114,7 +122,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(run_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         Ok(run.map(|r| self.run_to_janitor_result(r)))
@@ -168,7 +176,7 @@ impl RunnerDatabase {
         .bind(&active_run.codebase)
         .bind(&active_run.instigated_context)
         .bind(&active_run.resume_from)
-        .execute(&self.pool)
+        .execute(self.pool())
         .await?;
 
         Ok(())
@@ -185,7 +193,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(run_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -224,7 +232,7 @@ impl RunnerDatabase {
             FROM active_runs ORDER BY start_time ASC
             "#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut active_runs = Vec::new();
@@ -258,7 +266,7 @@ impl RunnerDatabase {
     pub async fn remove_active_run(&self, run_id: &str) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM active_runs WHERE id = $1")
             .bind(run_id)
-            .execute(&self.pool)
+            .execute(self.pool())
             .await?;
 
         Ok(())
@@ -275,7 +283,7 @@ impl RunnerDatabase {
                 'active' as key, COUNT(*) as value FROM active_runs
             "#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut stats = HashMap::new();
@@ -292,7 +300,7 @@ impl RunnerDatabase {
     pub async fn run_exists(&self, run_id: &str) -> Result<bool, sqlx::Error> {
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM run WHERE id = $1")
             .bind(run_id)
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool())
             .await?;
 
         Ok(count > 0)
@@ -325,7 +333,7 @@ impl RunnerDatabase {
         .bind(failure_details)
         .bind(failure_transient)
         .bind(finish_time)
-        .execute(&self.pool)
+        .execute(self.pool())
         .await?;
 
         Ok(())
@@ -368,7 +376,7 @@ impl RunnerDatabase {
                 .bind(build_distribution)
                 .bind(lintian_result)
                 .bind(binary_packages)
-                .execute(&self.pool)
+                .execute(self.pool())
                 .await?;
             }
         }
@@ -472,7 +480,7 @@ impl RunnerDatabase {
             sqlx_query = sqlx_query.bind(exclude_hosts);
         }
 
-        let row = sqlx_query.fetch_optional(&self.pool).await?;
+        let row = sqlx_query.fetch_optional(self.pool()).await?;
 
         if let Some(row) = row {
             let queue_item = QueueItem {
@@ -533,7 +541,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(queue_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -566,7 +574,7 @@ impl RunnerDatabase {
         )
         .bind(codebase)
         .bind(campaign)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -592,7 +600,7 @@ impl RunnerDatabase {
         )
         .bind(run_id)
         .bind(publish_status)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -608,7 +616,7 @@ impl RunnerDatabase {
         host: &str,
         retry_after: DateTime<Utc>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let _: () = conn
                 .hset("rate-limit-hosts", host, retry_after.to_rfc3339())
@@ -623,7 +631,7 @@ impl RunnerDatabase {
     ) -> Result<HashMap<String, DateTime<Utc>>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = HashMap::new();
 
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await?;
 
@@ -647,7 +655,7 @@ impl RunnerDatabase {
     ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
 
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let items: Vec<String> = conn.hkeys("assigned-queue-items").await?;
 
@@ -668,7 +676,7 @@ impl RunnerDatabase {
         worker_name: &str,
         log_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             // Check if already assigned to prevent double assignment
@@ -710,7 +718,7 @@ impl RunnerDatabase {
     ) -> Result<Vec<(i64, String, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
 
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let assignments: HashMap<String, String> = conn.hgetall("assigned-queue-items").await?;
 
@@ -745,7 +753,7 @@ impl RunnerDatabase {
     ) -> Result<Vec<i64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = Vec::new();
 
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let queue_ids: Vec<String> = conn
                 .smembers(format!("worker-queue-items:{}", worker_name))
@@ -766,7 +774,7 @@ impl RunnerDatabase {
         &self,
         queue_id: i64,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let exists: bool = conn
                 .hexists("assigned-queue-items", queue_id.to_string())
@@ -782,7 +790,7 @@ impl RunnerDatabase {
         &self,
         queue_id: i64,
     ) -> Result<Option<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             if let Ok(assignment_info_str) = conn
@@ -810,7 +818,7 @@ impl RunnerDatabase {
         &self,
         queue_id: i64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             // Get worker name before removing assignment
@@ -848,7 +856,7 @@ impl RunnerDatabase {
         status: &str,
         current_run: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             let health_info = serde_json::json!({
@@ -873,7 +881,7 @@ impl RunnerDatabase {
         &self,
         worker_name: &str,
     ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             match conn
@@ -899,7 +907,7 @@ impl RunnerDatabase {
     ) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
         let mut result = HashMap::new();
 
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
             let workers: HashMap<String, String> = conn.hgetall("worker-health").await?;
 
@@ -920,7 +928,7 @@ impl RunnerDatabase {
         holder: &str,
         ttl_seconds: u64,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             // Use SET with NX (only if not exists) and EX (expiration)
@@ -948,7 +956,7 @@ impl RunnerDatabase {
         lock_name: &str,
         holder: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             let mut conn = redis_client.get_async_connection().await?;
 
             // Lua script to atomically check holder and delete
@@ -1105,7 +1113,7 @@ impl RunnerDatabase {
             sqlx_query = sqlx_query.bind(exclude_hosts);
         }
 
-        let row = sqlx_query.fetch_optional(&self.pool).await?;
+        let row = sqlx_query.fetch_optional(self.pool()).await?;
 
         if let Some(row) = row {
             let queue_item = QueueItem {
@@ -1165,7 +1173,7 @@ impl RunnerDatabase {
             query.push_bind(suite);
         }
 
-        let result = query.build().execute(&self.pool).await?;
+        let result = query.build().execute(self.pool()).await?;
         Ok(result.rows_affected() as i64)
     }
 
@@ -1190,7 +1198,7 @@ impl RunnerDatabase {
             query.push_bind(result_code);
         }
 
-        let result = query.build().execute(&self.pool).await?;
+        let result = query.build().execute(self.pool()).await?;
         Ok(result.rows_affected() as i64)
     }
 
@@ -1210,7 +1218,7 @@ impl RunnerDatabase {
             query.push_bind(suite);
         }
 
-        let result = query.build().execute(&self.pool).await?;
+        let result = query.build().execute(self.pool()).await?;
         Ok(result.rows_affected() as i64)
     }
 
@@ -1251,7 +1259,7 @@ impl RunnerDatabase {
         query.push(" LIMIT ");
         query.push_bind(limit);
 
-        let result = query.build().execute(&self.pool).await?;
+        let result = query.build().execute(self.pool()).await?;
         Ok(result.rows_affected() as i64)
     }
 
@@ -1289,7 +1297,7 @@ impl RunnerDatabase {
         query.push(" LIMIT ");
         query.push_bind(limit);
 
-        let result = query.build().execute(&self.pool).await?;
+        let result = query.build().execute(self.pool()).await?;
         Ok(result.rows_affected() as i64)
     }
 
@@ -1327,7 +1335,7 @@ impl RunnerDatabase {
                 "#,
             )
             .bind(id)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
             Ok(position)
@@ -1362,7 +1370,7 @@ impl RunnerDatabase {
             )
             .bind(cb)
             .bind(camp)
-            .fetch_optional(&self.pool)
+            .fetch_optional(self.pool())
             .await?;
 
             Ok(position)
@@ -1371,7 +1379,7 @@ impl RunnerDatabase {
             let count: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM queue WHERE schedule_time IS NOT NULL AND schedule_time <= NOW()"
             )
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool())
             .await?;
 
             Ok(Some(count))
@@ -1401,7 +1409,7 @@ impl RunnerDatabase {
               AND queue.schedule_time <= NOW()
             "#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut positions = HashMap::new();
@@ -1420,7 +1428,7 @@ impl RunnerDatabase {
 
         let stale_runs = sqlx::query("SELECT log_id FROM active_run WHERE start_time < $1")
             .bind(cutoff_time)
-            .fetch_all(&self.pool)
+            .fetch_all(self.pool())
             .await?;
 
         let mut cleaned_count = 0;
@@ -1485,7 +1493,7 @@ impl RunnerDatabase {
         )
         .bind(retry_cutoff)
         .bind(max_retries)
-        .execute(&self.pool)
+        .execute(self.pool())
         .await?;
 
         Ok(result.rows_affected() as i64)
@@ -1495,17 +1503,17 @@ impl RunnerDatabase {
     pub async fn maintenance_cleanup(&self) -> Result<(), sqlx::Error> {
         // Remove active runs that don't have corresponding run records
         sqlx::query("DELETE FROM active_run WHERE log_id NOT IN (SELECT id FROM run)")
-            .execute(&self.pool)
+            .execute(self.pool())
             .await?;
 
         // Clean up old rate limit entries from Redis
-        if let Some(redis_client) = &self.redis {
+        if let Some(redis_client) = self.redis() {
             if let Ok(mut conn) = redis_client.get_async_connection().await {
                 let hosts: HashMap<String, String> =
                     conn.hgetall("rate-limit-hosts").await.unwrap_or_default();
                 let now = Utc::now();
 
-                for (host, time_str) in hosts {
+                for (host, time_str) in hosts.into_iter() {
                     if let Ok(retry_time) = DateTime::parse_from_rfc3339(&time_str) {
                         let retry_time = retry_time.with_timezone(&Utc);
                         if retry_time <= now {
@@ -1542,7 +1550,7 @@ impl RunnerDatabase {
             WHERE COALESCE(retry_count, 0) > 0
             "#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut stats = HashMap::new();
@@ -1560,7 +1568,7 @@ impl RunnerDatabase {
         let rows = sqlx::query(
             "SELECT name, branch_url, url, branch, subpath, vcs_type, web_url, vcs_last_revision, value FROM codebase"
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut codebases = Vec::new();
@@ -1587,7 +1595,7 @@ impl RunnerDatabase {
         &self,
         codebases: &[serde_json::Value],
     ) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool().begin().await?;
 
         for codebase in codebases {
             // Parse URL parameters if branch_url is provided
@@ -1650,7 +1658,7 @@ impl RunnerDatabase {
         let rows = sqlx::query(
             "SELECT id, codebase, suite, command, publish_policy, change_set, context, value, success_chance FROM candidate"
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         let mut candidates = Vec::new();
@@ -1677,7 +1685,7 @@ impl RunnerDatabase {
         &self,
         candidates: &[serde_json::Value],
     ) -> Result<Vec<String>, sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool().begin().await?;
         let mut errors = Vec::new();
 
         for candidate in candidates {
@@ -1752,7 +1760,7 @@ impl RunnerDatabase {
 
     /// Delete a candidate by ID.
     pub async fn delete_candidate(&self, candidate_id: i64) -> Result<bool, sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool().begin().await?;
 
         // Delete followups first
         sqlx::query("DELETE FROM followup WHERE candidate = $1")
@@ -1807,7 +1815,7 @@ impl RunnerDatabase {
         .bind(codebase)
         .bind(campaign)
         .bind(run_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = resume_run {
@@ -1833,7 +1841,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(codebase_name)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -1871,7 +1879,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(campaign_name)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -1899,7 +1907,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(run_id)
-        .fetch_all(&self.pool)
+        .fetch_all(self.pool())
         .await?;
 
         if rows.is_empty() {
@@ -1942,7 +1950,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(run_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {
@@ -1978,7 +1986,7 @@ impl RunnerDatabase {
             "#,
         )
         .bind(run_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(self.pool())
         .await?;
 
         if let Some(row) = row {

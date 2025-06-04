@@ -47,6 +47,7 @@ prometheus = { version = "0.14.0", features = ["reqwest", "push"] }
 buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+redis = { workspace = true }
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.1" }

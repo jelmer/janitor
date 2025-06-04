@@ -1510,12 +1510,20 @@ async fn finish_run_multipart_internal(
     }
 
     for log_file in &uploaded_result.log_files {
+        let path_str = match log_file.stored_path.to_str() {
+            Some(path) => path,
+            None => {
+                log::warn!("Invalid UTF-8 in log file path: {:?}", log_file.stored_path);
+                continue;
+            }
+        };
+        
         if let Err(e) = state
             .log_manager
             .import_log(
                 &active_run.codebase,
                 &run_id,
-                log_file.stored_path.to_str().unwrap(),
+                path_str,
                 None,
                 Some(&log_file.filename),
             )

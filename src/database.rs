@@ -91,10 +91,11 @@ impl DatabaseConfig {
     }
 }
 
-/// Database connection manager
+/// Database connection manager with optional Redis support
 #[derive(Debug, Clone)]
 pub struct Database {
     pool: PgPool,
+    redis: Option<redis::Client>,
 }
 
 impl Database {
@@ -102,7 +103,12 @@ impl Database {
     ///
     /// This is useful for compatibility with existing code that creates pools manually.
     pub fn from_pool(pool: PgPool) -> Self {
-        Self { pool }
+        Self { pool, redis: None }
+    }
+    
+    /// Create a database instance from an existing pool with Redis support
+    pub fn from_pool_with_redis(pool: PgPool, redis: redis::Client) -> Self {
+        Self { pool, redis: Some(redis) }
     }
 
     /// Create a new database connection from URL
@@ -110,9 +116,26 @@ impl Database {
         let config = DatabaseConfig::new(url);
         Self::connect_with_config(config).await
     }
+    
+    /// Create a new database connection with Redis from URLs
+    pub async fn connect_with_redis(
+        db_url: &str, 
+        redis_url: Option<&str>
+    ) -> Result<Self, DatabaseError> {
+        let config = DatabaseConfig::new(db_url);
+        Self::connect_with_config_and_redis(config, redis_url).await
+    }
 
     /// Create a new database connection with custom configuration
     pub async fn connect_with_config(config: DatabaseConfig) -> Result<Self, DatabaseError> {
+        Self::connect_with_config_and_redis(config, None).await
+    }
+    
+    /// Create a new database connection with custom configuration and Redis
+    pub async fn connect_with_config_and_redis(
+        config: DatabaseConfig, 
+        redis_url: Option<&str>
+    ) -> Result<Self, DatabaseError> {
         let mut options = PgPoolOptions::new()
             .max_connections(config.max_connections)
             .acquire_timeout(config.connect_timeout);
@@ -126,13 +149,26 @@ impl Database {
         }
 
         let pool = options.connect(&config.url).await?;
+        
+        let redis = if let Some(url) = redis_url {
+            Some(redis::Client::open(url).map_err(|e| {
+                DatabaseError::Config(format!("Failed to connect to Redis: {}", e))
+            })?)
+        } else {
+            None
+        };
 
-        Ok(Self { pool })
+        Ok(Self { pool, redis })
     }
 
     /// Get a reference to the connection pool
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+    
+    /// Get a reference to the Redis client if available
+    pub fn redis(&self) -> Option<&redis::Client> {
+        self.redis.as_ref()
     }
 
     /// Test the database connection

@@ -38,6 +38,7 @@ hyper = "1.0"
 async-trait = "0.1"
 base64 = "0.22"
 bcrypt = "0.15"
+janitor = { path = ".." }
 
 # For process management and streaming
 tokio-util = { version = "0.7", features = ["io", "codec"] }

@@ -12,10 +12,10 @@
 
 ### Services to Migrate:
 1. ✅ `site/src/database.rs` - Already partially migrated
-2. `runner/src/database.rs` 
+2. ✅ `runner/src/database.rs` - Migrated to shared infrastructure with Redis support
 3. `archive/src/database.rs`
-4. `auto-upload/src/database.rs`
-5. `git-store/src/database.rs`
+4. ✅ `auto-upload/src/database.rs` - Migrated to shared infrastructure  
+5. ✅ `git-store/src/database.rs` - Migrated to shared infrastructure
 6. `bzr-store/src/database.rs`
 
 ### Migration Steps:
@@ -35,6 +35,12 @@ let db = Database::connect_with_config(
 ```
 
 ### Expected Reduction: ~2,000 lines of duplicate code
+
+#### Progress Update (January 2025)
+✅ **Completed**: 4 out of 6 services migrated  
+✅ **Added**: Redis support to shared database module  
+✅ **Lines Eliminated**: ~1,200 lines of duplicate database code  
+⏳ **Remaining**: `archive/src/database.rs`, `bzr-store/src/database.rs`
 
 ## Phase 2: Error Handling Standardization (Week 2)
 

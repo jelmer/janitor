@@ -662,8 +662,8 @@ impl VcsManager for RemoteGitVcsManager {
         }
         let url = self.get_diff_url(codebase, old_revid, new_revid);
         let client = reqwest::Client::new();
-        let resp = client.get(url).send().await.unwrap();
-        resp.bytes().await.unwrap().to_vec()
+        let resp = client.get(url).send().await.expect("Git VCS manager should be able to fetch diff");
+        resp.bytes().await.expect("Git VCS manager should be able to read diff bytes").to_vec()
     }
 
     async fn get_revision_info(
