@@ -20,7 +20,7 @@ tower-http = { version = "0.5", features = ["fs", "compression-gzip", "trace"] }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
 
 # PyO3 for Python integration  
-pyo3 = { workspace = true, features = ["extension-module", "abi3-py38"] }
+pyo3 = { workspace = true, features = ["auto-initialize"] }
 pyo3-async-runtimes = { workspace = true, features = ["tokio"] }
 
 # Serialization
