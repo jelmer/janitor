@@ -157,7 +157,13 @@ async fn serve_result_file(
                     format!("inline; filename=\"{}\"", safe_filename),
                 )
                 .body(Body::from(content))
-                .unwrap();
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to build HTTP response: {}", e);
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from("Internal server error"))
+                        .unwrap_or_default()
+                });
 
             response.into_response()
         }

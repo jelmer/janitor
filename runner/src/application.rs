@@ -358,10 +358,20 @@ impl Application {
 
         // Spawn signal handler
         tokio::spawn(async move {
-            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("Failed to install SIGTERM handler");
-            let mut sigint = signal::unix::signal(signal::unix::SignalKind::interrupt())
-                .expect("Failed to install SIGINT handler");
+            let mut sigterm = match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+                Ok(signal) => signal,
+                Err(e) => {
+                    log::error!("Failed to install SIGTERM handler: {}", e);
+                    return;
+                }
+            };
+            let mut sigint = match signal::unix::signal(signal::unix::SignalKind::interrupt()) {
+                Ok(signal) => signal,
+                Err(e) => {
+                    log::error!("Failed to install SIGINT handler: {}", e);
+                    return;
+                }
+            };
 
             tokio::select! {
                 _ = sigterm.recv() => {
