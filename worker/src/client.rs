@@ -216,14 +216,16 @@ impl Credentials {
 }
 
 impl Client {
-    pub fn new(base_url: Url, credentials: Credentials, user_agent: &str) -> Self {
+    pub fn new(base_url: Url, credentials: Credentials, user_agent: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = reqwest::Client::builder();
         builder = builder.user_agent(user_agent);
-        Self {
-            client: builder.build().unwrap(),
+        let client = builder.build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        Ok(Self {
+            client,
             base_url,
             credentials,
-        }
+        })
     }
 
     pub async fn get_assignment(
@@ -349,7 +351,11 @@ pub async fn upload_results(
         log::info!("Uploading results to {}", &finish_url);
         let builder = client.post(finish_url).timeout(std::time::Duration::from_secs(60));
         let builder = credentials.set_credentials(builder);
-        log::debug!("Uploading results: {}", serde_json::to_string(metadata).unwrap());
+        if let Ok(metadata_str) = serde_json::to_string(metadata) {
+            log::debug!("Uploading results: {}", metadata_str);
+        } else {
+            log::debug!("Uploading results: <serialization failed>");
+        }
         let bundle: Form = bundle_results(metadata, output_directory)
             .await
             .map_err(|e| {

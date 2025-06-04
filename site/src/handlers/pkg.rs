@@ -1014,15 +1014,36 @@ async fn fetch_merge_proposals(
 ) -> anyhow::Result<HashMap<String, Vec<serde_json::Value>>> {
     let mut proposals = HashMap::new();
 
-    // Fetch proposals by status
-    for status in ["open", "merged", "closed", "abandoned", "rejected"] {
-        if let Ok(props) = state
-            .database
-            .get_merge_proposals_by_status(suite, status)
-            .await
-        {
-            proposals.insert(status.to_string(), props);
+    // Optimize: Single query instead of N+1 pattern (one query per status)
+    // Fetch all proposals for all statuses in one database call
+    match state
+        .database
+        .get_merge_proposals_by_statuses(
+            suite, 
+            &["open", "merged", "closed", "abandoned", "rejected"]
+        )
+        .await 
+    {
+        Ok(grouped_proposals) => {
+            proposals = grouped_proposals;
         }
+        Err(_) => {
+            // Fallback to individual queries if batch method not available
+            for status in ["open", "merged", "closed", "abandoned", "rejected"] {
+                if let Ok(props) = state
+                    .database
+                    .get_merge_proposals_by_status(suite, status)
+                    .await
+                {
+                    proposals.insert(status.to_string(), props);
+                }
+            }
+        }
+    }
+
+    // Ensure all statuses have entries (empty vectors for statuses with no proposals)
+    for status in ["open", "merged", "closed", "abandoned", "rejected"] {
+        proposals.entry(status.to_string()).or_insert_with(Vec::new);
     }
 
     Ok(proposals)

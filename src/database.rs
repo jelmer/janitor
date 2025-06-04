@@ -98,6 +98,13 @@ pub struct Database {
 }
 
 impl Database {
+    /// Create a database instance from an existing pool
+    /// 
+    /// This is useful for compatibility with existing code that creates pools manually.
+    pub fn from_pool(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
     /// Create a new database connection from URL
     pub async fn connect(url: &str) -> Result<Self, DatabaseError> {
         let config = DatabaseConfig::new(url);

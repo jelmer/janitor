@@ -153,8 +153,16 @@ impl RunnerDatabase {
         .bind(&active_run.campaign)
         .bind(&active_run.change_set)
         .bind(&active_run.command)
-        .bind(serde_json::to_value(&active_run.backchannel).unwrap())
-        .bind(serde_json::to_value(&active_run.vcs_info).unwrap())
+        .bind(serde_json::to_value(&active_run.backchannel)
+            .map_err(|e| sqlx::Error::ColumnDecode { 
+                index: "backchannel".to_string(), 
+                source: Box::new(e) 
+            })?)
+        .bind(serde_json::to_value(&active_run.vcs_info)
+            .map_err(|e| sqlx::Error::ColumnDecode { 
+                index: "vcs_info".to_string(), 
+                source: Box::new(e) 
+            })?)
         .bind(&active_run.codebase)
         .bind(&active_run.instigated_context)
         .bind(&active_run.resume_from)

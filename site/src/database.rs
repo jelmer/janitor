@@ -854,6 +854,56 @@ impl DatabaseManager {
         Ok(proposals)
     }
 
+    /// Optimized batch method to fetch merge proposals for multiple statuses in one query
+    /// Eliminates N+1 query pattern when fetching proposals for all statuses
+    pub async fn get_merge_proposals_by_statuses(
+        &self,
+        suite: &str,
+        statuses: &[&str],
+    ) -> Result<HashMap<String, Vec<serde_json::Value>>, DatabaseError> {
+        let rows = sqlx::query(
+            "SELECT mp.url, mp.status, mp.revision, mp.merged_by, mp.merged_at, mp.can_be_merged, r.codebase 
+             FROM merge_proposal mp 
+             INNER JOIN run r ON mp.revision = r.revision 
+             WHERE r.suite = $1 AND mp.status = ANY($2::text[]) 
+             ORDER BY mp.status, mp.merged_at DESC NULLS LAST"
+        )
+        .bind(suite)
+        .bind(statuses)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut grouped_proposals: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+
+        // Initialize empty vectors for all requested statuses
+        for status in statuses {
+            grouped_proposals.insert(status.to_string(), Vec::new());
+        }
+
+        // Group results by status
+        for row in rows {
+            let status = row.try_get::<Option<String>, _>("status")?
+                .unwrap_or_else(|| "unknown".to_string());
+                
+            let proposal = serde_json::json!({
+                "url": row.try_get::<String, _>("url")?,
+                "status": Some(status.clone()),
+                "revision": row.try_get::<Option<String>, _>("revision")?,
+                "merged_by": row.try_get::<Option<String>, _>("merged_by")?,
+                "merged_at": row.try_get::<Option<DateTime<Utc>>, _>("merged_at")?,
+                "can_be_merged": row.try_get::<Option<bool>, _>("can_be_merged")?,
+                "codebase": row.try_get::<String, _>("codebase")?
+            });
+
+            grouped_proposals
+                .entry(status)
+                .or_insert_with(Vec::new)
+                .push(proposal);
+        }
+
+        Ok(grouped_proposals)
+    }
+
     /// Search codebase names for typeahead functionality
     pub async fn search_codebase_names(
         &self,

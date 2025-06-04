@@ -976,7 +976,15 @@ async fn admin_delete_worker(
 /// Admin endpoint to get security statistics.
 async fn admin_security_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.security_service.get_security_stats().await {
-        Ok(stats) => Json(serde_json::to_value(stats).unwrap()),
+        Ok(stats) => {
+            match serde_json::to_value(stats) {
+                Ok(value) => Json(value),
+                Err(e) => {
+                    log::error!("Failed to serialize security stats: {}", e);
+                    Json(json!({"error": "Failed to serialize stats"}))
+                }
+            }
+        }
         Err(e) => {
             log::error!("Failed to get security stats: {}", e);
             Json(json!({"error": "Failed to get security stats"}))
@@ -1306,10 +1314,13 @@ async fn finish_run_internal(
         result: janitor_result.to_json(),
     };
 
-    (
-        StatusCode::CREATED,
-        Json(serde_json::to_value(response).unwrap()),
-    )
+    match serde_json::to_value(response) {
+        Ok(json) => (StatusCode::CREATED, Json(json)),
+        Err(e) => {
+            log::error!("Failed to serialize finish response: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Serialization failed"})))
+        }
+    }
 }
 
 async fn finish_run_multipart_internal(
@@ -1559,10 +1570,13 @@ async fn finish_run_multipart_internal(
         "Successfully processed multipart upload for run {}",
         response.id
     );
-    (
-        StatusCode::CREATED,
-        Json(serde_json::to_value(response).unwrap()),
-    )
+    match serde_json::to_value(response) {
+        Ok(json) => (StatusCode::CREATED, Json(json)),
+        Err(e) => {
+            log::error!("Failed to serialize finish response: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Serialization failed"})))
+        }
+    }
 }
 
 async fn public_root() -> impl IntoResponse {
@@ -1838,10 +1852,13 @@ async fn assign_work_internal(state: Arc<AppState>, request: AssignRequest) -> i
         build_config,
     };
 
-    (
-        StatusCode::OK,
-        Json(serde_json::to_value(response).unwrap()),
-    )
+    match serde_json::to_value(response) {
+        Ok(json) => (StatusCode::OK, Json(json)),
+        Err(e) => {
+            log::error!("Failed to serialize assignment response: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Serialization failed"})))
+        }
+    }
 }
 
 async fn public_finish(
