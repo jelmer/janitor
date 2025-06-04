@@ -182,7 +182,8 @@ impl SiteConfig {
             if cfg!(debug_assertions) {
                 "debug-secret-key-not-for-production-use-only".to_string()
             } else {
-                panic!("SESSION_SECRET environment variable is required in production")
+                eprintln!("ERROR: SESSION_SECRET environment variable is required in production");
+                std::process::exit(1);
             }
         });
 
@@ -583,7 +584,12 @@ impl ConfigBuilder {
         // Load site configuration
         let mut site = self
             .site_config
-            .unwrap_or_else(|| SiteConfig::from_env().expect("Failed to load site configuration"));
+            .unwrap_or_else(|| {
+                SiteConfig::from_env().unwrap_or_else(|e| {
+                    eprintln!("ERROR: Failed to load site configuration: {}", e);
+                    std::process::exit(1);
+                })
+            });
 
         // Override janitor config path if specified
         if let Some(path) = self.janitor_config_path {

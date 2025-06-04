@@ -308,7 +308,15 @@ pub async fn view_log(
             let content_type = negotiate_content_type(&headers, "log");
 
             match content_type {
-                ContentType::Json => Json(serde_json::to_value(&log_info).unwrap()).into_response(),
+                ContentType::Json => {
+                    match serde_json::to_value(&log_info) {
+                        Ok(json) => Json(json).into_response(),
+                        Err(e) => {
+                            tracing::error!("Failed to serialize log info to JSON: {}", e);
+                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
+                        }
+                    }
+                }
                 _ => {
                     // HTML view with syntax highlighting
                     match state.templates.render("log-viewer.html", &context) {

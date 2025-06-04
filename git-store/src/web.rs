@@ -7,6 +7,7 @@ use crate::{
     repository::RepositoryManager,
     Config,
 };
+use tracing;
 use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
@@ -146,7 +147,13 @@ async fn list_repositories(
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, "text/plain")
                 .body(axum::body::Body::from(text))
-                .unwrap())
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to build HTTP response: {}", e);
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(axum::body::Body::from("Internal server error"))
+                        .unwrap_or_default()
+                }))
         }
         ContentType::Html => {
             let mut context = tera::Context::new();
