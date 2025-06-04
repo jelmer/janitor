@@ -55,7 +55,7 @@ impl ArtifactManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.store_artifacts(&run_id, &local_path, names.as_deref())
                 .await
-                .map_err(|e| artifact_err_to_py_err(e))
+                .map_err(artifact_err_to_py_err)
         })
     }
 
@@ -77,7 +77,7 @@ impl ArtifactManager {
             )
             .await
             .map_err(|_| PyTimeoutError::new_err("Timeout"))?
-            .map_err(|e| artifact_err_to_py_err(e))?;
+            .map_err(artifact_err_to_py_err)?;
 
             Ok(Readable::new(r))
         })
@@ -94,7 +94,7 @@ impl ArtifactManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.delete_artifacts(&run_id)
                 .await
-                .map_err(|e| artifact_err_to_py_err(e))
+                .map_err(artifact_err_to_py_err)
         })
     }
 
@@ -114,7 +114,7 @@ impl ArtifactManager {
                 move |x: &str| -> bool {
                     Python::with_gil(|py| {
                         let r = f.call1(py, (x,))?;
-                        Ok::<bool, PyErr>(r.is_truthy(py)?)
+                        r.is_truthy(py)
                     })
                     .unwrap()
                 }
@@ -123,7 +123,7 @@ impl ArtifactManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.retrieve_artifacts(&run_id, &local_path, filter_fn.as_deref())
                 .await
-                .map_err(|e| artifact_err_to_py_err(e))
+                .map_err(artifact_err_to_py_err)
         })
     }
 
@@ -170,7 +170,7 @@ fn list_ids<'a>(py: Python<'a>, artifact_manager: &ArtifactManager) -> PyResult<
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         janitor::artifacts::list_ids(z.as_ref())
             .await
-            .map_err(|e| artifact_err_to_py_err(e))
+            .map_err(artifact_err_to_py_err)
     })
 }
 
@@ -179,7 +179,7 @@ fn get_artifact_manager(location: &str) -> PyResult<ArtifactManager> {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let artifact_manager = runtime
         .block_on(janitor::artifacts::get_artifact_manager(location))
-        .map_err(|e| artifact_err_to_py_err(e))?;
+        .map_err(artifact_err_to_py_err)?;
     Ok(ArtifactManager(Arc::from(artifact_manager)))
 }
 
@@ -200,7 +200,7 @@ fn upload_backup_artifacts<'a>(
         )
         .await
         .map_err(|_| PyTimeoutError::new_err("Timeout"))?
-        .map_err(|e| artifact_err_to_py_err(e))?;
+        .map_err(artifact_err_to_py_err)?;
 
         Ok(r.into_iter().collect::<Vec<_>>())
     })
@@ -223,13 +223,13 @@ fn store_artifacts_with_backup<'a>(
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         janitor::artifacts::store_artifacts_with_backup(
             z.as_ref(),
-            y.as_ref().map(|v| &**v),
+            y.as_deref(),
             &from_dir,
             &run_id,
             names.as_deref(),
         )
         .await
-        .map_err(|e| artifact_err_to_py_err(e))
+        .map_err(artifact_err_to_py_err)
     })
 }
 

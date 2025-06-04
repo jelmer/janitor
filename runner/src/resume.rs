@@ -279,7 +279,6 @@ impl ResumeService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::RunnerDatabase;
 
     #[tokio::test]
     async fn test_resume_info_serialization() {

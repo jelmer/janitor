@@ -1,11 +1,5 @@
 use anyhow::Result;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-    routing::get,
-    Router,
-};
+use axum::{extract::State, http::StatusCode, response::Json, routing::get, Router};
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
@@ -44,7 +38,7 @@ async fn main() -> Result<()> {
         config.site().debug
     );
 
-    if let Some(ref janitor_config) = config.janitor() {
+    if let Some(janitor_config) = config.janitor() {
         info!(
             "Loaded janitor configuration with {} campaigns",
             janitor_config.campaign.len()
@@ -117,11 +111,41 @@ async fn api_health() -> Json<Value> {
 }
 
 async fn api_status(State(state): State<AppState>) -> Json<Value> {
-    // TODO: Add actual status checks (database, redis, etc.)
-    Json(json!({
+    let mut status = json!({
         "status": "ok",
-        "database": "connected",
-        "redis": "connected",
-        "uptime": state.start_time.elapsed().as_secs()
-    }))
+        "uptime": state.start_time.elapsed().as_secs(),
+        "timestamp": chrono::Utc::now(),
+        "version": env!("CARGO_PKG_VERSION")
+    });
+    
+    // Check database connectivity
+    let db_status = match state.database.health_check().await {
+        Ok(_) => "healthy",
+        Err(_) => "unhealthy"
+    };
+    status["database"] = json!(db_status);
+    
+    // Check Redis connectivity if available
+    let redis_status = if let Some(ref redis_client) = state.redis {
+        match redis_client.get_async_connection().await {
+            Ok(mut conn) => {
+                use redis::AsyncCommands;
+                match conn.ping().await {
+                    Ok(_) => "healthy",
+                    Err(_) => "unhealthy"
+                }
+            }
+            Err(_) => "unhealthy"
+        }
+    } else {
+        "not_configured"
+    };
+    status["redis"] = json!(redis_status);
+    
+    // Overall status based on critical services
+    if db_status == "unhealthy" {
+        status["status"] = json!("degraded");
+    }
+    
+    Json(status)
 }

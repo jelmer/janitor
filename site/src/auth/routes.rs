@@ -1,8 +1,4 @@
-use axum::{
-    middleware,
-    routing::get,
-    Router,
-};
+use axum::{middleware, routing::get, Router};
 use std::sync::Arc;
 
 use crate::auth::{
@@ -50,9 +46,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use crate::config::SiteConfig;
-    
 
     fn create_test_auth_state() -> Arc<AuthState> {
         // This is a placeholder for testing - in real tests we'd need a test database

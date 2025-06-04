@@ -618,7 +618,6 @@ async fn serve_component_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_health_check() {

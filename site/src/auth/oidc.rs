@@ -295,7 +295,7 @@ impl OidcClient {
                     }
                     serde_json::Value::String(s) => {
                         // Some providers return space or comma-separated strings
-                        for group in s.split(|c| c == ' ' || c == ',') {
+                        for group in s.split([' ', ',']) {
                             let group = group.trim();
                             if !group.is_empty() {
                                 groups.insert(group.to_string());

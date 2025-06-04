@@ -571,11 +571,9 @@ async fn execute_emergency_publish_action(
         _ => 0,
     };
 
-    let resume_at = if let Some(duration) = params.duration {
-        Some(Utc::now() + chrono::Duration::minutes(duration))
-    } else {
-        None
-    };
+    let resume_at = params
+        .duration
+        .map(|duration| Utc::now() + chrono::Duration::minutes(duration));
 
     Ok(EmergencyStopResult {
         action: params.action.clone(),

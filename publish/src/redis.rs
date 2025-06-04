@@ -167,7 +167,7 @@ impl RedisSubscriber {
     /// # Returns
     /// Ok(()) when the listener is shut down, or an error
     pub async fn listen_to_runner(
-        mut self,
+        self,
         state: Arc<crate::AppState>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         log::info!("Starting Redis listener for runner messages");
@@ -375,7 +375,7 @@ impl RedisSubscriber {
 /// A future that resolves when the listener is shut down
 pub async fn listen_to_runner(
     state: Arc<crate::AppState>,
-    mut shutdown_rx: mpsc::Receiver<()>,
+    shutdown_rx: mpsc::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let redis = match &state.redis {
         Some(redis) => redis.clone(),

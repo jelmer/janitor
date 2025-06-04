@@ -44,7 +44,7 @@ fn default_artifact_backend() -> String {
 }
 
 /// Complete runner configuration combining all subsystem configurations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RunnerConfig {
     /// Database configuration.
     pub database: DatabaseConfig,
@@ -433,24 +433,6 @@ fn default_upload_storage_dir() -> PathBuf {
     PathBuf::from("/tmp/janitor-uploads")
 }
 
-impl Default for RunnerConfig {
-    fn default() -> Self {
-        Self {
-            database: DatabaseConfig::default(),
-            redis: None,
-            vcs: VcsConfig::default(),
-            logs: LogConfig::default(),
-            artifacts: ArtifactConfig::default(),
-            performance: PerformanceConfig::default(),
-            error_tracking: ErrorTrackingConfig::default(),
-            tracing: TracingConfig::default(),
-            web: WebConfig::default(),
-            worker: WorkerConfig::default(),
-            application: ApplicationConfig::default(),
-        }
-    }
-}
-
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
@@ -534,7 +516,7 @@ impl RunnerConfig {
     /// Load configuration from a file with enhanced error reporting.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io(e))?;
+        let content = std::fs::read_to_string(path).map_err(ConfigError::Io)?;
 
         Self::from_content(&content, path)
     }
@@ -777,9 +759,6 @@ impl RunnerConfig {
         }
         if self.web.port == self.web.public_port {
             errors.push("Web port and public port cannot be the same".to_string());
-        }
-        if self.web.port > 65535 || self.web.public_port > 65535 {
-            errors.push("Ports must be in the range 1-65535".to_string());
         }
         if self.web.request_timeout_seconds == 0 {
             errors.push("Web request timeout must be greater than 0".to_string());
@@ -1041,7 +1020,7 @@ mod tests {
 
         let merged = base_config.merge_with(override_config);
         assert_eq!(merged.web.port, 8080);
-        assert_eq!(merged.application.debug, true);
+        assert!(merged.application.debug);
         assert_eq!(merged.database.url, "postgresql://localhost/janitor"); // Should retain base value
     }
 
@@ -1084,7 +1063,7 @@ mod tests {
 
         assert_eq!(config.database.url, "postgresql://test:5432/test");
         assert_eq!(config.web.port, 8080);
-        assert_eq!(config.application.debug, true);
+        assert!(config.application.debug);
 
         // Cleanup
         std::env::remove_var("DATABASE_URL");
@@ -1096,12 +1075,12 @@ mod tests {
     fn test_profile_loading() {
         let dev_config = RunnerConfig::for_profile("development").unwrap();
         assert_eq!(dev_config.application.environment, "development");
-        assert_eq!(dev_config.application.debug, true);
+        assert!(dev_config.application.debug);
 
         let prod_config = RunnerConfig::for_profile("production").unwrap();
         assert_eq!(prod_config.application.environment, "production");
-        assert_eq!(prod_config.application.debug, false);
-        assert_eq!(prod_config.worker.rate_limiting.enabled, true);
+        assert!(!prod_config.application.debug);
+        assert!(prod_config.worker.rate_limiting.enabled);
 
         // Test invalid profile
         assert!(RunnerConfig::for_profile("invalid").is_err());

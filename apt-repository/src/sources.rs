@@ -95,7 +95,7 @@ impl SourceFileEntry {
 
     /// Parse a file entry from a checksum line.
     pub fn from_checksum_line(line: &str) -> Result<Self> {
-        let parts: Vec<&str> = line.trim().split_whitespace().collect();
+        let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() != 3 {
             return Err(AptRepositoryError::invalid_source(format!(
                 "Invalid checksum line format: {}",

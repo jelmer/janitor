@@ -245,4 +245,3 @@ pub fn require_qa_reviewer_layer() -> axum::middleware::FromFnLayer<impl Clone, 
 /// Middleware layer for session management  
 #[derive(Clone)]
 pub struct AuthMiddleware;
-

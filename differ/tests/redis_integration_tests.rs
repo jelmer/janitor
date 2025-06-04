@@ -35,7 +35,7 @@ async fn test_redis_pubsub_run_completion() {
     let subscriber_client = redis::Client::open(redis_url.as_str()).unwrap();
 
     let mut publisher_conn = publisher_client.get_async_connection().await.unwrap();
-    let mut subscriber_conn = subscriber_client.get_async_connection().await.unwrap();
+    let subscriber_conn = subscriber_client.get_async_connection().await.unwrap();
 
     // Set up subscriber
     let mut pubsub = subscriber_conn.into_pubsub();

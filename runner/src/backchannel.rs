@@ -106,10 +106,13 @@ impl JenkinsBackchannel {
     }
 
     async fn get_job(&self, session: reqwest::Client) -> Result<serde_json::Value, reqwest::Error> {
-        let url = self.my_url.join("api/json").expect("Jenkins URL should be valid");
+        let url = self
+            .my_url
+            .join("api/json")
+            .expect("Jenkins URL should be valid");
         log::info!("Fetching Jenkins URL {}", url);
         let resp = session.get(url).send().await?;
-        Ok(resp.json().await?)
+        resp.json().await
     }
 }
 
@@ -127,8 +130,9 @@ impl Backchannel for JenkinsBackchannel {
             my_url: url::Url::parse(
                 js["my_url"]
                     .as_str()
-                    .expect("Jenkins JSON should contain valid my_url string")
-            ).expect("Jenkins my_url should be valid URL"),
+                    .expect("Jenkins JSON should contain valid my_url string"),
+            )
+            .expect("Jenkins my_url should be valid URL"),
             metadata: js["metadata"].clone(),
         }
     }
@@ -172,7 +176,9 @@ impl Backchannel for JenkinsBackchannel {
             return Err(Error::NotFound);
         }
 
-        let url = self.my_url.join("logText/progressiveText")
+        let url = self
+            .my_url
+            .join("logText/progressiveText")
             .map_err(|e| Error::FatalFailure(format!("Invalid Jenkins URL join: {}", e)))?;
         let resp = reqwest::get(url)
             .await
@@ -270,20 +276,26 @@ impl PollingBackchannel {
     }
 
     async fn get_log_id(&self, session: reqwest::Client) -> Result<String, reqwest::Error> {
-        let url = self.my_url.join("log-id").expect("Worker URL should be valid");
+        let url = self
+            .my_url
+            .join("log-id")
+            .expect("Worker URL should be valid");
         log::info!("Fetching log ID from URL {}", url);
         let resp = session.get(url).send().await?;
-        Ok(resp.text().await?)
+        resp.text().await
     }
 
     async fn get_status_info(
         &self,
         session: reqwest::Client,
     ) -> Result<serde_json::Value, reqwest::Error> {
-        let url = self.my_url.join("status").expect("Worker URL should be valid");
+        let url = self
+            .my_url
+            .join("status")
+            .expect("Worker URL should be valid");
         log::info!("Fetching status from URL {}", url);
         let resp = session.get(url).send().await?;
-        Ok(resp.json().await?)
+        resp.json().await
     }
 }
 
@@ -300,14 +312,17 @@ impl Backchannel for PollingBackchannel {
             my_url: url::Url::parse(
                 js["my_url"]
                     .as_str()
-                    .expect("Worker JSON should contain valid my_url string")
-            ).expect("Worker my_url should be valid URL"),
+                    .expect("Worker JSON should contain valid my_url string"),
+            )
+            .expect("Worker my_url should be valid URL"),
         }
     }
 
     async fn kill(&self) -> Result<(), Error> {
         let session = reqwest::Client::new();
-        let url = self.my_url.join("kill")
+        let url = self
+            .my_url
+            .join("kill")
             .map_err(|e| Error::FatalFailure(format!("Invalid URL join: {}", e)))?;
 
         log::info!("Killing worker at URL {}", url);
@@ -322,7 +337,9 @@ impl Backchannel for PollingBackchannel {
 
     async fn terminate(&self, log_id: &str) -> Result<(), Error> {
         let session = reqwest::Client::new();
-        let url = self.my_url.join("terminate")
+        let url = self
+            .my_url
+            .join("terminate")
             .map_err(|e| Error::FatalFailure(format!("Invalid URL join: {}", e)))?;
 
         log::info!("Terminating worker at URL {} for log {}", url, log_id);
@@ -344,7 +361,9 @@ impl Backchannel for PollingBackchannel {
 
     async fn list_log_files(&self) -> Result<Vec<String>, Error> {
         let session = reqwest::Client::new();
-        let url = self.my_url.join("logs")
+        let url = self
+            .my_url
+            .join("logs")
             .map_err(|e| Error::FatalFailure(format!("Invalid URL join: {}", e)))?;
 
         log::info!("Listing log files at URL {}", url);
@@ -359,9 +378,12 @@ impl Backchannel for PollingBackchannel {
 
     async fn get_log_file(&self, name: &str) -> Result<Vec<u8>, Error> {
         let session = reqwest::Client::new();
-        let logs_url = self.my_url.join("logs")
+        let logs_url = self
+            .my_url
+            .join("logs")
             .map_err(|e| Error::FatalFailure(format!("Invalid URL join: {}", e)))?;
-        let url = logs_url.join(name)
+        let url = logs_url
+            .join(name)
             .map_err(|e| Error::FatalFailure(format!("Invalid log file URL join: {}", e)))?;
 
         log::info!("Fetching log file at URL {}", url);

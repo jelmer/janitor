@@ -52,7 +52,7 @@ pub struct GpgConfig {
 }
 
 /// Archive service configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ArchiveConfig {
     /// Repositories to manage.
     pub repositories: HashMap<String, AptRepositoryConfig>,
@@ -116,19 +116,6 @@ pub struct ServerConfig {
     pub workers: usize,
     /// Request timeout (seconds).
     pub request_timeout: u64,
-}
-
-impl Default for ArchiveConfig {
-    fn default() -> Self {
-        Self {
-            repositories: HashMap::new(),
-            gpg: None,
-            artifact_manager: ArtifactManagerConfig::default(),
-            database: DatabaseConfig::default(),
-            cache: CacheConfig::default(),
-            server: ServerConfig::default(),
-        }
-    }
 }
 
 impl Default for ArtifactManagerConfig {

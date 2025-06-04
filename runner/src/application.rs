@@ -57,6 +57,12 @@ pub struct ApplicationBuilder {
     config: RunnerConfig,
 }
 
+impl Default for ApplicationBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ApplicationBuilder {
     /// Create a new application builder with default configuration.
     pub fn new() -> Self {

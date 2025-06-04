@@ -6,20 +6,12 @@
 use axum::{
     body::{to_bytes, Body},
     http::{Method, Request, StatusCode},
-    response::Response,
-    Json,
 };
-use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tower::ServiceExt;
-use uuid::Uuid;
 
-use janitor_runner::{
-    database::RunnerDatabase, web::app, ActiveRun, AppState, JanitorResult, QueueAssignment,
-    WorkerResult,
-};
+use janitor_runner::{web::app, AppState};
 
 /// Mock database for testing.
 struct MockDatabase;

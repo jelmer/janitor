@@ -89,7 +89,7 @@ async fn already_published(
 ) -> Result<bool, sqlx::Error> {
     let modes = modes.iter().map(|m| m.to_string()).collect::<Vec<_>>();
     let row = sqlx::query(
-        "SELECT * FROM publish WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND target_branch_url = $3 AND branch_name = $4").bind(modes).bind(revision.to_string()).bind(target_branch_url.to_string()).bind(branch_name).fetch_optional(&*conn).await?;
+        "SELECT * FROM publish WHERE mode = ANY($1::publish_mode[]) AND revision = $2 AND target_branch_url = $3 AND branch_name = $4").bind(modes).bind(revision.to_string()).bind(target_branch_url.to_string()).bind(branch_name).fetch_optional(conn).await?;
     Ok(row.is_some())
 }
 
@@ -115,7 +115,7 @@ ORDER BY timestamp DESC
     )
     .bind(codebase)
     .bind(branch_name)
-    .fetch_optional(&*conn)
+    .fetch_optional(conn)
     .await?;
 
     Ok(row.map(|(revision, url)| {
@@ -174,7 +174,7 @@ ORDER BY length(branch_url) DESC
     let result = query
         .bind(url.to_string())
         .bind(repo_url.to_string().trim_end_matches('/'))
-        .fetch_optional(&*conn)
+        .fetch_optional(conn)
         .await?;
 
     if result.is_none() {
@@ -282,7 +282,7 @@ LIMIT 1
     )
     .bind(codebase)
     .bind(campaign)
-    .fetch_optional(&*conn)
+    .fetch_optional(conn)
     .await
 }
 
@@ -297,7 +297,7 @@ pub async fn get_publish_attempt_count(
     )
     .bind(revision)
     .bind(transient_result_codes)
-    .fetch_one(&*conn)
+    .fetch_one(conn)
     .await? as usize)
 }
 

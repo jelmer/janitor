@@ -126,15 +126,9 @@ impl RateLimiter {
     }
 
     fn set_mps_per_bucket(&mut self, mps_per_bucket: HashMap<String, HashMap<String, usize>>) {
-        use std::str::FromStr;
         let mps_per_bucket = mps_per_bucket
             .into_iter()
-            .map(|(k, v)| {
-                (
-                    k.parse().unwrap(),
-                    v.into_iter().map(|(k, v)| (k, v)).collect(),
-                )
-            })
+            .map(|(k, v)| (k.parse().unwrap(), v.into_iter().collect()))
             .collect();
         self.0.set_mps_per_bucket(&mps_per_bucket)
     }

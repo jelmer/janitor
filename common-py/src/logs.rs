@@ -49,7 +49,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| convert_logs_error_to_py(e))
+            r.map_err(convert_logs_error_to_py)
                 .map(|r| Python::with_gil(|py| r.into_py(py)))
         })
     }
@@ -73,7 +73,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            let readable = r.map_err(|e| convert_logs_error_to_py(e))?;
+            let readable = r.map_err(convert_logs_error_to_py)?;
             Ok(Readable::new(readable))
         })
     }
@@ -99,7 +99,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| convert_logs_error_to_py(e))?;
+            r.map_err(convert_logs_error_to_py)?;
             Ok(Python::with_gil(|py| py.None()))
         })
     }
@@ -117,7 +117,7 @@ impl LogFileManager {
             let r = z
                 .get_ctime(&codebase, &run_id, &name)
                 .await
-                .map_err(|e| convert_logs_error_to_py(e))?;
+                .map_err(convert_logs_error_to_py)?;
             Ok(Python::with_gil(|py| r.into_py(py)))
         })
     }

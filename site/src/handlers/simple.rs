@@ -339,10 +339,10 @@ async fn fetch_index_statistics(state: &AppState) -> anyhow::Result<IndexStatist
 
     // Fetch from database
     if let Ok(db_stats) = state.database.get_stats().await {
-        stats.total_packages = *db_stats.get("total_codebases").unwrap_or(&0) as i64;
-        stats.active_runs = *db_stats.get("active_runs").unwrap_or(&0) as i64;
-        stats.queue_size = *db_stats.get("queue_size").unwrap_or(&0) as i64;
-        stats.recent_successful_runs = *db_stats.get("recent_successful_runs").unwrap_or(&0) as i64;
+        stats.total_packages = *db_stats.get("total_codebases").unwrap_or(&0);
+        stats.active_runs = *db_stats.get("active_runs").unwrap_or(&0);
+        stats.queue_size = *db_stats.get("queue_size").unwrap_or(&0);
+        stats.recent_successful_runs = *db_stats.get("recent_successful_runs").unwrap_or(&0);
     }
 
     // Fetch worker stats from runner service
@@ -380,7 +380,10 @@ async fn fetch_campaign_statistics(
             result.insert("pending_publishes".to_string(), stats.pending_publishes);
             result.insert("total_runs".to_string(), stats.total_runs);
             result.insert("queued_items".to_string(), stats.queued_items);
-            result.insert("avg_run_time_seconds".to_string(), stats.avg_run_time_seconds as i64);
+            result.insert(
+                "avg_run_time_seconds".to_string(),
+                stats.avg_run_time_seconds as i64,
+            );
             Ok(result)
         }
         Err(e) => {

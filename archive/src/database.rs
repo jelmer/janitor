@@ -10,7 +10,6 @@ use tracing::{debug, warn};
 
 // Import shared database utilities
 use janitor::database::{Database as SharedDatabase, DatabaseConfig, DatabaseError};
-use janitor::error::JanitorError;
 
 use crate::error::{ArchiveError, ArchiveResult};
 use crate::scanner::BuildInfo;
@@ -130,7 +129,7 @@ impl ArchiveDatabase {
             .bind(suite_name)
             .fetch_all(self.pool())
             .await
-            .map_err(|e| ArchiveError::Database(e))?;
+            .map_err(ArchiveError::Database)?;
 
         let mut builds = Vec::new();
 
@@ -205,7 +204,7 @@ impl ArchiveDatabase {
             .bind(changeset_id)
             .fetch_all(self.pool())
             .await
-            .map_err(|e| ArchiveError::Database(e))?;
+            .map_err(ArchiveError::Database)?;
 
         self.parse_build_records(rows).await
     }
@@ -241,7 +240,7 @@ impl ArchiveDatabase {
             .bind(run_id)
             .fetch_all(self.pool())
             .await
-            .map_err(|e| ArchiveError::Database(e))?;
+            .map_err(ArchiveError::Database)?;
 
         self.parse_build_records(rows).await
     }
@@ -295,7 +294,7 @@ impl ArchiveDatabase {
             .bind(suite_name)
             .fetch_all(self.pool())
             .await
-            .map_err(|e| ArchiveError::Database(e))?;
+            .map_err(ArchiveError::Database)?;
 
         self.parse_build_records(rows).await
     }
@@ -387,6 +386,23 @@ impl ArchiveDatabase {
     }
 }
 
+/// Type alias for compatibility with repository module.
+pub type BuildManager = ArchiveDatabase;
+
+impl From<BuildRecord> for BuildInfo {
+    fn from(record: BuildRecord) -> Self {
+        Self {
+            id: record.id,
+            codebase: record.codebase,
+            suite: record.suite,
+            architecture: record.architecture,
+            component: record.component,
+            binary_files: record.binary_files,
+            source_files: record.source_files,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,22 +443,5 @@ mod tests {
         assert_eq!(record.id, "build-123");
         assert_eq!(record.architecture, "amd64");
         assert_eq!(record.binary_files.len(), 1);
-    }
-}
-
-/// Type alias for compatibility with repository module.
-pub type BuildManager = ArchiveDatabase;
-
-impl From<BuildRecord> for BuildInfo {
-    fn from(record: BuildRecord) -> Self {
-        Self {
-            id: record.id,
-            codebase: record.codebase,
-            suite: record.suite,
-            architecture: record.architecture,
-            component: record.component,
-            binary_files: record.binary_files,
-            source_files: record.source_files,
-        }
     }
 }

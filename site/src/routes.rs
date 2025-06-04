@@ -1,8 +1,4 @@
-use axum::{
-    response::IntoResponse,
-    routing::get,
-    Router,
-};
+use axum::{response::IntoResponse, routing::get, Router};
 use tower_http::services::ServeDir;
 
 use crate::{
@@ -133,7 +129,7 @@ async fn serve_result_file(
             }
             let content = buffer;
             // Determine content type based on file extension
-            let content_type = match safe_filename.split('.').last() {
+            let content_type = match safe_filename.split('.').next_back() {
                 Some("log") | Some("txt") => "text/plain; charset=utf-8",
                 Some("html") | Some("htm") => "text/html; charset=utf-8",
                 Some("json") => "application/json",

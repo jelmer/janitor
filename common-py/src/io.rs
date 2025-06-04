@@ -17,10 +17,7 @@ impl Readable {
     #[pyo3(signature = (size=None))]
     fn read(&mut self, py: Python, size: Option<usize>) -> PyResult<PyObject> {
         let mut buf = vec![0; size.unwrap_or(4096)];
-        let n = self
-            .0
-            .read(&mut buf)
-            .map_err(|e| PyRuntimeError::new_err(e))?;
+        let n = self.0.read(&mut buf).map_err(PyRuntimeError::new_err)?;
         buf.truncate(n);
         Ok(PyBytes::new_bound(py, &buf).into())
     }

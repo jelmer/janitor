@@ -7,12 +7,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, warn};
 
-use crate::error::{ArchiveError, ArchiveResult};
+use crate::error::ArchiveResult;
 use crate::manager::GeneratorManager;
 use crate::redis::{ArchiveEvent, RedisManager};
 

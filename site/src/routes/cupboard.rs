@@ -3,11 +3,7 @@ use axum::{
     Router,
 };
 
-use crate::{
-    app::AppState,
-    auth::require_admin,
-    handlers::cupboard,
-};
+use crate::{app::AppState, auth::require_admin, handlers::cupboard};
 
 /// Create cupboard (admin) routes
 pub fn cupboard_routes() -> Router<AppState> {

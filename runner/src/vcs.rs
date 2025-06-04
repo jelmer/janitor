@@ -370,7 +370,6 @@ impl MetricsCollector {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use url::Url;
 
     #[test]
     fn test_runner_vcs_manager_creation() {

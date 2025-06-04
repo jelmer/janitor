@@ -4,7 +4,6 @@ use janitor_runner::{
     application::Application,
     config::{ApplicationConfig, DatabaseConfig, RunnerConfig, WebConfig},
 };
-use serde_json::json;
 use std::time::Duration;
 use tokio::time::timeout;
 

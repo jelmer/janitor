@@ -43,9 +43,9 @@ impl fmt::Display for ConfigError {
                 write!(f, "Configuration validation error: {}", err)
             }
             ConfigError::Multiple(errors) => {
-                write!(f, "Multiple configuration errors:\n")?;
+                writeln!(f, "Multiple configuration errors:")?;
                 for (i, error) in errors.iter().enumerate() {
-                    write!(f, "  {}: {}\n", i + 1, error)?;
+                    writeln!(f, "  {}: {}", i + 1, error)?;
                 }
                 Ok(())
             }
@@ -102,9 +102,9 @@ impl fmt::Display for ValidationError {
                 write!(f, "Constraint '{}' violated: {}", constraint, message)
             }
             ValidationError::Multiple(errors) => {
-                write!(f, "Multiple validation errors:\n")?;
+                writeln!(f, "Multiple validation errors:")?;
                 for (i, error) in errors.iter().enumerate() {
-                    write!(f, "  {}: {}\n", i + 1, error)?;
+                    writeln!(f, "  {}: {}", i + 1, error)?;
                 }
                 Ok(())
             }

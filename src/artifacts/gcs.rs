@@ -219,7 +219,7 @@ impl ArtifactManager for GCSArtifactManager {
         for object in objects {
             let name = object.name;
             let file_name = name.trim_start_matches(&prefix);
-            if filter_fn.map_or(true, |f| f(file_name)) {
+            if filter_fn.is_none_or(|f| f(file_name)) {
                 let mut content = self.get_artifact(run_id, file_name).await?;
                 let mut file = File::create(local_path.join(file_name))?;
                 std::io::copy(&mut content, &mut file)?;

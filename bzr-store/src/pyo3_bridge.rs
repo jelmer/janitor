@@ -596,7 +596,6 @@ mod tests {
         // Note: This test requires Breezy to be installed
         if let Err(e) = initialize_breezy() {
             eprintln!("Breezy not available for testing: {}", e);
-            return;
         }
     }
 
@@ -660,26 +659,23 @@ mod tests {
         if BreezyOperations::init_shared_repository(&repo_path)
             .await
             .is_ok()
+            && BreezyOperations::init_branch(&repo_path, None)
+                .await
+                .is_ok()
         {
-            if BreezyOperations::init_branch(&repo_path, None)
+            // Test uncommitted changes check
+            if let Ok(has_changes) = BreezyOperations::has_uncommitted_changes(&repo_path).await {
+                // Should have no changes in a fresh repository
+                assert!(!has_changes);
+            }
+
+            // Test remote configuration
+            let remote_url = "bzr://example.com/test";
+            if BreezyOperations::configure_remote(&repo_path, remote_url)
                 .await
                 .is_ok()
             {
-                // Test uncommitted changes check
-                if let Ok(has_changes) = BreezyOperations::has_uncommitted_changes(&repo_path).await
-                {
-                    // Should have no changes in a fresh repository
-                    assert!(!has_changes);
-                }
-
-                // Test remote configuration
-                let remote_url = "bzr://example.com/test";
-                if BreezyOperations::configure_remote(&repo_path, remote_url)
-                    .await
-                    .is_ok()
-                {
-                    println!("Successfully configured remote: {}", remote_url);
-                }
+                println!("Successfully configured remote: {}", remote_url);
             }
         }
     }

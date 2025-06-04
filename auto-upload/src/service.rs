@@ -426,7 +426,7 @@ impl ServiceOrchestrator {
         tasks: Vec<TaskHandle>,
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
-        let mut handles: Vec<_> = tasks.into_iter().map(|t| t.handle).collect();
+        let handles: Vec<_> = tasks.into_iter().map(|t| t.handle).collect();
 
         // Just wait for the shutdown signal and then wait for tasks
         tokio::select! {

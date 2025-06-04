@@ -314,9 +314,9 @@ pub fn api_middleware_stack() -> axum::middleware::FromFnLayer<
     axum::middleware::from_fn(|req, next| {
         Box::pin(async move {
             // Apply middleware in order
-            let req = security_headers_middleware(req, next).await;
+
             // Additional middleware would be chained here
-            req
+            security_headers_middleware(req, next).await
         })
     })
 }

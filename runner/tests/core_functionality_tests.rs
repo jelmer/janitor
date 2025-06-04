@@ -3,17 +3,16 @@
 //! These tests verify that individual components work correctly
 //! and maintain compatibility with Python behavior.
 
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use serde_json::json;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 use janitor_runner::{
-    backchannel::{Backchannel, HealthStatus, JenkinsBackchannel, PollingBackchannel},
+    backchannel::{Backchannel, JenkinsBackchannel, PollingBackchannel},
     builder::{get_builder, CampaignConfig, DebianBuildConfig, GenericBuildConfig},
     committer_env,
-    watchdog::{TerminationReason, Watchdog, WatchdogConfig},
-    ActiveRun, JanitorResult, QueueAssignment, WorkerResult,
+    watchdog::WatchdogConfig,
+    ActiveRun, JanitorResult, WorkerResult,
 };
 
 /// Test committer_env function compatibility with Python version.

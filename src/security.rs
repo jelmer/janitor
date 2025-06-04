@@ -124,7 +124,6 @@ pub fn validate_db_identifier(identifier: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_validate_filename_valid() {

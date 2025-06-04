@@ -289,7 +289,7 @@ impl PerformanceMonitor {
             .collect::<Vec<_>>();
 
         let load_average = [
-            load_avg.get(0).copied().unwrap_or(0.0),
+            load_avg.first().copied().unwrap_or(0.0),
             load_avg.get(1).copied().unwrap_or(0.0),
             load_avg.get(2).copied().unwrap_or(0.0),
         ];
@@ -314,7 +314,6 @@ impl PerformanceMonitor {
         for line in meminfo.lines() {
             if let Some((key, value)) = line.split_once(':') {
                 let value = value
-                    .trim()
                     .split_whitespace()
                     .next()
                     .unwrap_or("0")

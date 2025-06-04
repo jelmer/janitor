@@ -308,15 +308,13 @@ pub async fn view_log(
             let content_type = negotiate_content_type(&headers, "log");
 
             match content_type {
-                ContentType::Json => {
-                    match serde_json::to_value(&log_info) {
-                        Ok(json) => Json(json).into_response(),
-                        Err(e) => {
-                            tracing::error!("Failed to serialize log info to JSON: {}", e);
-                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
-                        }
+                ContentType::Json => match serde_json::to_value(&log_info) {
+                    Ok(json) => Json(json).into_response(),
+                    Err(e) => {
+                        tracing::error!("Failed to serialize log info to JSON: {}", e);
+                        (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
                     }
-                }
+                },
                 _ => {
                     // HTML view with syntax highlighting
                     match state.templates.render("log-viewer.html", &context) {
@@ -415,15 +413,13 @@ pub async fn view_diff(
             let content_type = negotiate_content_type(&headers, "diff");
 
             match content_type {
-                ContentType::Json => {
-                    match serde_json::to_value(&diff_info) {
-                        Ok(json) => Json(json).into_response(),
-                        Err(e) => {
-                            tracing::error!("JSON serialization error: {}", e);
-                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
-                        }
+                ContentType::Json => match serde_json::to_value(&diff_info) {
+                    Ok(json) => Json(json).into_response(),
+                    Err(e) => {
+                        tracing::error!("JSON serialization error: {}", e);
+                        (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
                     }
-                }
+                },
                 _ => match state.templates.render("diff-viewer.html", &context) {
                     Ok(html) => Html(html).into_response(),
                     Err(e) => {
@@ -474,15 +470,13 @@ pub async fn view_debdiff(
             let content_type = negotiate_content_type(&headers, "debdiff");
 
             match content_type {
-                ContentType::Json => {
-                    match serde_json::to_value(&diff_info) {
-                        Ok(json) => Json(json).into_response(),
-                        Err(e) => {
-                            tracing::error!("JSON serialization error: {}", e);
-                            (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
-                        }
+                ContentType::Json => match serde_json::to_value(&diff_info) {
+                    Ok(json) => Json(json).into_response(),
+                    Err(e) => {
+                        tracing::error!("JSON serialization error: {}", e);
+                        (StatusCode::INTERNAL_SERVER_ERROR, "Serialization error").into_response()
                     }
-                }
+                },
                 _ => match state.templates.render("debdiff-viewer.html", &context) {
                     Ok(html) => Html(html).into_response(),
                     Err(e) => {
@@ -664,22 +658,37 @@ async fn generate_codebase_context(
     let mut context = HashMap::new();
 
     // Fetch all core codebase context in a single optimized query
-    let codebase_context = state.database.get_codebase_context(campaign, codebase).await?;
-    
+    let codebase_context = state
+        .database
+        .get_codebase_context(campaign, codebase)
+        .await?;
+
     // Convert codebase context to the expected format
-    context.insert("candidate".to_string(), serde_json::json!({
-        "codebase": codebase_context.codebase,
-        "suite": codebase_context.suite,
-        "command": codebase_context.command,
-        "publish_policy": codebase_context.publish_policy,
-        "priority": codebase_context.priority,
-        "value": codebase_context.value
-    }));
+    context.insert(
+        "candidate".to_string(),
+        serde_json::json!({
+            "codebase": codebase_context.codebase,
+            "suite": codebase_context.suite,
+            "command": codebase_context.command,
+            "publish_policy": codebase_context.publish_policy,
+            "priority": codebase_context.priority,
+            "value": codebase_context.value
+        }),
+    );
 
     // VCS info
-    context.insert("vcs_url".to_string(), serde_json::to_value(&codebase_context.vcs_url)?);
-    context.insert("vcs_type".to_string(), serde_json::to_value(&codebase_context.vcs_type)?);
-    context.insert("branch_url".to_string(), serde_json::to_value(&codebase_context.branch_url)?);
+    context.insert(
+        "vcs_url".to_string(),
+        serde_json::to_value(&codebase_context.vcs_url)?,
+    );
+    context.insert(
+        "vcs_type".to_string(),
+        serde_json::to_value(&codebase_context.vcs_type)?,
+    );
+    context.insert(
+        "branch_url".to_string(),
+        serde_json::to_value(&codebase_context.branch_url)?,
+    );
 
     // Last run info
     if let Some(run_id) = &codebase_context.last_run_id {
@@ -696,18 +705,23 @@ async fn generate_codebase_context(
         });
         context.insert("run".to_string(), run_data);
         context.insert("run_id".to_string(), serde_json::to_value(run_id)?);
-        context.insert("result_code".to_string(), serde_json::to_value(&codebase_context.last_result_code)?);
+        context.insert(
+            "result_code".to_string(),
+            serde_json::to_value(&codebase_context.last_result_code)?,
+        );
 
         // Check if we should show diff
-        if query.show_diff.unwrap_or(false) && codebase_context.last_result_code == Some("success".to_string()) {
-            if let Ok(diff) = fetch_diff(&state, run_id).await {
+        if query.show_diff.unwrap_or(false)
+            && codebase_context.last_result_code == Some("success".to_string())
+        {
+            if let Ok(diff) = fetch_diff(state, run_id).await {
                 context.insert("diff".to_string(), serde_json::to_value(&diff)?);
             }
         }
 
         // Check if we should show debdiff
         if query.show_debdiff.unwrap_or(false) {
-            if let Ok(debdiff) = fetch_debdiff(&state, run_id).await {
+            if let Ok(debdiff) = fetch_debdiff(state, run_id).await {
                 context.insert("debdiff".to_string(), serde_json::to_value(&debdiff)?);
             }
         }
@@ -743,7 +757,7 @@ async fn generate_codebase_context(
     // Queue position is already included in the optimized query
     context.insert(
         "queue_position".to_string(),
-        serde_json::to_value(&codebase_context.queue_position)?,
+        serde_json::to_value(codebase_context.queue_position)?,
     );
 
     // Estimate wait time
@@ -753,7 +767,7 @@ async fn generate_codebase_context(
             let wait_duration = Duration::seconds(wait_seconds);
             context.insert(
                 "queue_wait_time".to_string(),
-                serde_json::to_value(&wait_duration)?,
+                serde_json::to_value(wait_duration)?,
             );
         }
     }
@@ -822,7 +836,11 @@ async fn generate_run_file(
     }
 
     // Get comprehensive run context in a single optimized query
-    if let Ok(run_context) = state.database.get_run_context(run_id, campaign, codebase).await {
+    if let Ok(run_context) = state
+        .database
+        .get_run_context(run_id, campaign, codebase)
+        .await
+    {
         let success_probability = if run_context.total_runs > 0 {
             run_context.successful_runs as f64 / run_context.total_runs as f64
         } else {
@@ -830,11 +848,11 @@ async fn generate_run_file(
         };
         context.insert(
             "success_probability".to_string(),
-            serde_json::to_value(&success_probability)?,
+            serde_json::to_value(success_probability)?,
         );
         context.insert(
             "total_previous_runs".to_string(),
-            serde_json::to_value(&run_context.total_runs)?,
+            serde_json::to_value(run_context.total_runs)?,
         );
 
         // Binary packages are included in the optimized query
@@ -843,10 +861,10 @@ async fn generate_run_file(
             serde_json::to_value(&run_context.binary_packages)?,
         );
 
-        // Queue position is included in the optimized query  
+        // Queue position is included in the optimized query
         context.insert(
             "queue_position".to_string(),
-            serde_json::to_value(&run_context.queue_position)?,
+            serde_json::to_value(run_context.queue_position)?,
         );
 
         if run_context.queue_position > 0 {
@@ -854,7 +872,7 @@ async fn generate_run_file(
                 let wait_seconds = run_context.queue_position as i64 * avg_time;
                 context.insert(
                     "queue_wait_time".to_string(),
-                    serde_json::to_value(&wait_seconds)?,
+                    serde_json::to_value(wait_seconds)?,
                 );
             }
         }

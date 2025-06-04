@@ -553,10 +553,7 @@ impl Watchdog {
             let termination_reason = self.check_worker_health(&run, now).await?;
 
             // Get current health status
-            let health_status = match run.backchannel.get_health_status(&run.log_id).await {
-                Ok(health) => Some(health),
-                Err(_) => None,
-            };
+            let health_status = (run.backchannel.get_health_status(&run.log_id).await).ok();
 
             let failure_count = self.health_failures.get(&run.log_id).copied().unwrap_or(0);
 

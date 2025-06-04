@@ -69,10 +69,12 @@ async fn main() -> ArchiveResult<()> {
         .subcommand(Command::new("cleanup").about("Clean up old repository files"))
         .get_matches();
 
-    let config_path = matches.get_one::<String>("config")
+    let config_path = matches
+        .get_one::<String>("config")
         .map(PathBuf::from)
         .ok_or_else(|| anyhow::anyhow!("Config path argument is required"))?;
-    let bind_address = matches.get_one::<String>("bind")
+    let bind_address = matches
+        .get_one::<String>("bind")
         .ok_or_else(|| anyhow::anyhow!("Bind address argument is required"))?;
 
     // Load configuration

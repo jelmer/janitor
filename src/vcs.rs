@@ -662,8 +662,15 @@ impl VcsManager for RemoteGitVcsManager {
         }
         let url = self.get_diff_url(codebase, old_revid, new_revid);
         let client = reqwest::Client::new();
-        let resp = client.get(url).send().await.expect("Git VCS manager should be able to fetch diff");
-        resp.bytes().await.expect("Git VCS manager should be able to read diff bytes").to_vec()
+        let resp = client
+            .get(url)
+            .send()
+            .await
+            .expect("Git VCS manager should be able to fetch diff");
+        resp.bytes()
+            .await
+            .expect("Git VCS manager should be able to read diff bytes")
+            .to_vec()
     }
 
     async fn get_revision_info(
@@ -726,7 +733,26 @@ impl VcsManager for RemoteGitVcsManager {
     }
 
     fn list_repositories(&self) -> Vec<String> {
-        todo!()
+        // For remote Git VCS manager, try to query the repository list endpoint
+        let list_url = match self.base_url.join("repositories") {
+            Ok(url) => url,
+            Err(_) => return Vec::new(),
+        };
+        
+        // Use blocking HTTP request since this is a sync method
+        if let Ok(rt) = tokio::runtime::Runtime::new() {
+            let client = reqwest::Client::new();
+            if let Ok(response) = rt.block_on(client.get(list_url).send()) {
+                if response.status().is_success() {
+                    if let Ok(repos) = rt.block_on(response.json::<Vec<String>>()) {
+                        return repos;
+                    }
+                }
+            }
+        }
+        
+        // Return empty list if API call fails
+        Vec::new()
     }
 }
 
@@ -825,7 +851,26 @@ impl VcsManager for RemoteBzrVcsManager {
     }
 
     fn list_repositories(&self) -> Vec<String> {
-        todo!()
+        // For remote Bzr VCS manager, try to query the repository list endpoint
+        let list_url = match self.base_url.join("repositories") {
+            Ok(url) => url,
+            Err(_) => return Vec::new(),
+        };
+        
+        // Use blocking HTTP request since this is a sync method
+        if let Ok(rt) = tokio::runtime::Runtime::new() {
+            let client = reqwest::Client::new();
+            if let Ok(response) = rt.block_on(client.get(list_url).send()) {
+                if response.status().is_success() {
+                    if let Ok(repos) = rt.block_on(response.json::<Vec<String>>()) {
+                        return repos;
+                    }
+                }
+            }
+        }
+        
+        // Return empty list if API call fails
+        Vec::new()
     }
 }
 

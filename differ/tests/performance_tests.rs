@@ -116,7 +116,7 @@ async fn test_memory_usage_monitoring() {
     std::fs::write(&new_file, large_content_new).unwrap();
 
     // Monitor memory during operation
-    let mut max_memory = initial_memory;
+    let max_memory = initial_memory;
     let start = Instant::now();
 
     // Start monitoring in background
@@ -417,7 +417,7 @@ async fn test_basic_operations_benchmark() {
     assert!(find_time < Duration::from_millis(100));
 
     // Benchmark is_binary function
-    let test_filenames = vec![
+    let test_filenames = [
         "test.deb",
         "test.udeb",
         "test.txt",

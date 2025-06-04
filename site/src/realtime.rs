@@ -227,7 +227,7 @@ impl RealtimeManager {
                     let channel = event.channel();
                     let broadcasters_guard = broadcasters.read().await;
                     if let Some(broadcaster) = broadcasters_guard.get(&channel) {
-                        if let Err(_) = broadcaster.send(event) {
+                        if broadcaster.send(event).is_err() {
                             debug!("No active subscribers for channel: {}", channel);
                         }
                     }
