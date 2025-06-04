@@ -1,0 +1,29 @@
+diff --git a/janitor/worker.py b/janitor/worker.py
+index 9d241fbe..36dc6797 100644
+--- a/janitor/worker.py
++++ b/janitor/worker.py
+@@ -371,20 +371,20 @@ def import_branches_git(
+     def get_changed_refs(refs):
+         changed_refs: dict[bytes, tuple[bytes, Optional[bytes]]] = {}
+         for (fn, _n, _br, r) in (branches or []):
+-            tagname = ("refs/tags/run/{}/{}".format(log_id, fn)).encode("utf-8")
++            tagname = ().encode("utf-8")
+             if r is None:
+                 changed_refs[tagname] = (ZERO_SHA, r)
+             else:
+                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+             if update_current:
+-                branchname = ("refs/heads/{}/{}".format(campaign, fn)).encode("utf-8")
++                branchname = ().encode("utf-8")
+                 # TODO(jelmer): Ideally this would be a symref:
+                 changed_refs[branchname] = changed_refs[tagname]
+         for n, r in (tags or []):
+-            tagname = ("refs/tags/{}/{}".format(log_id, n)).encode("utf-8")
++            tagname = ().encode("utf-8")
+             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+             if update_current:
+-                tagname = ("refs/tags/{}".format(n)).encode("utf-8")
++                tagname = ().encode("utf-8")
+                 changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+         return changed_refs
+ 
