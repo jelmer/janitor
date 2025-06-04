@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::{header, StatusCode},
     response::{IntoResponse, Json, Response},
 };
@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{app::AppState, auth::UserContext, database::DatabaseError};
+use crate::{app::AppState, auth::UserContext};
 
 use super::{log_admin_action, AdminUser, Permission};
 

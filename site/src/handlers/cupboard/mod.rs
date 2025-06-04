@@ -1,18 +1,16 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::State,
     http::{header, StatusCode},
     response::{Html, IntoResponse, Json, Response},
 };
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use tera::Context;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
     app::AppState,
-    auth::{require_admin, require_qa_reviewer, UserContext},
-    database::DatabaseError,
+    auth::UserContext,
     templates::create_base_context,
 };
 

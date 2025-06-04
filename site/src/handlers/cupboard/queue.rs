@@ -5,14 +5,11 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
     app::AppState,
     auth::UserContext,
-    database::DatabaseError,
-    templates::create_base_context,
 };
 
 use super::{create_admin_context, log_admin_action, AdminUser, Permission};

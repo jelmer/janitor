@@ -25,27 +25,30 @@ pub struct DebianBuild {
 impl DatabaseClient {
     /// Create a new database client
     pub async fn new(database_url: &str) -> Result<Self> {
-        info!("Connecting to database: {}", database_url.split('@').last().unwrap_or("***"));
-        
+        info!(
+            "Connecting to database: {}",
+            database_url.split('@').last().unwrap_or("***")
+        );
+
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
             .connect(database_url)
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
-        
+
         Ok(Self { pool })
     }
-    
+
     /// Get distinct Debian builds for backfill
     pub async fn get_backfill_builds(
         &self,
         distributions: Option<&[String]>,
     ) -> Result<Vec<DebianBuild>> {
         info!("Querying backfill builds from database");
-        
+
         let rows = if let Some(distributions) = distributions {
             debug!("Filtering by distributions: {:?}", distributions);
-            
+
             let query = "
                 SELECT DISTINCT ON (distribution, source) 
                        distribution, source, run_id 
@@ -53,7 +56,7 @@ impl DatabaseClient {
                 WHERE distribution = ANY($1::text[])
                 ORDER BY distribution, source, version DESC
             ";
-            
+
             sqlx::query(query)
                 .bind(distributions)
                 .fetch_all(&self.pool)
@@ -61,20 +64,20 @@ impl DatabaseClient {
                 .map_err(|e| UploadError::Database(e.to_string()))?
         } else {
             debug!("No distribution filter applied");
-            
+
             let query = "
                 SELECT DISTINCT ON (distribution, source) 
                        distribution, source, run_id 
                 FROM debian_build 
                 ORDER BY distribution, source, version DESC
             ";
-            
+
             sqlx::query(query)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         };
-        
+
         let builds: Vec<DebianBuild> = rows
             .into_iter()
             .map(|row| DebianBuild {
@@ -83,18 +86,18 @@ impl DatabaseClient {
                 run_id: row.get("run_id"),
             })
             .collect();
-        
+
         info!("Found {} builds for backfill", builds.len());
         Ok(builds)
     }
-    
+
     /// Get builds for a specific distribution
     pub async fn get_builds_for_distribution(
         &self,
         distribution: &str,
     ) -> Result<Vec<DebianBuild>> {
         debug!("Getting builds for distribution: {}", distribution);
-        
+
         let query = "
             SELECT DISTINCT ON (source) 
                    distribution, source, run_id 
@@ -102,13 +105,13 @@ impl DatabaseClient {
             WHERE distribution = $1
             ORDER BY source, version DESC
         ";
-        
+
         let rows = sqlx::query(query)
             .bind(distribution)
             .fetch_all(&self.pool)
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
-        
+
         let builds: Vec<DebianBuild> = rows
             .into_iter()
             .map(|row| DebianBuild {
@@ -117,11 +120,15 @@ impl DatabaseClient {
                 run_id: row.get("run_id"),
             })
             .collect();
-        
-        debug!("Found {} builds for distribution {}", builds.len(), distribution);
+
+        debug!(
+            "Found {} builds for distribution {}",
+            builds.len(),
+            distribution
+        );
         Ok(builds)
     }
-    
+
     /// Get builds for a specific source package
     pub async fn get_builds_for_source(
         &self,
@@ -129,7 +136,7 @@ impl DatabaseClient {
         distributions: Option<&[String]>,
     ) -> Result<Vec<DebianBuild>> {
         debug!("Getting builds for source package: {}", source);
-        
+
         let rows = if let Some(distributions) = distributions {
             let query = "
                 SELECT distribution, source, run_id 
@@ -137,7 +144,7 @@ impl DatabaseClient {
                 WHERE source = $1 AND distribution = ANY($2::text[])
                 ORDER BY distribution, version DESC
             ";
-            
+
             sqlx::query(query)
                 .bind(source)
                 .bind(distributions)
@@ -151,14 +158,14 @@ impl DatabaseClient {
                 WHERE source = $1
                 ORDER BY distribution, version DESC
             ";
-            
+
             sqlx::query(query)
                 .bind(source)
                 .fetch_all(&self.pool)
                 .await
                 .map_err(|e| UploadError::Database(e.to_string()))?
         };
-        
+
         let builds: Vec<DebianBuild> = rows
             .into_iter()
             .map(|row| DebianBuild {
@@ -167,22 +174,22 @@ impl DatabaseClient {
                 run_id: row.get("run_id"),
             })
             .collect();
-        
+
         debug!("Found {} builds for source {}", builds.len(), source);
         Ok(builds)
     }
-    
+
     /// Test database connection
     pub async fn health_check(&self) -> Result<()> {
         sqlx::query("SELECT 1")
             .fetch_one(&self.pool)
             .await
             .map_err(|e| UploadError::Database(e.to_string()))?;
-        
+
         debug!("Database health check passed");
         Ok(())
     }
-    
+
     /// Get connection pool statistics
     pub async fn get_pool_stats(&self) -> PoolStats {
         PoolStats {
@@ -220,24 +227,29 @@ impl BackfillQueryBuilder {
             parameters: Vec::new(),
         }
     }
-    
+
     /// Add distribution filter
     pub fn filter_distributions(mut self, distributions: Vec<String>) -> Self {
         if !distributions.is_empty() {
-            self.conditions.push("distribution = ANY(${}::text[])".to_string());
+            self.conditions
+                .push("distribution = ANY(${}::text[])".to_string());
             // Note: In a real implementation, we'd need to handle parameter placeholders properly
         }
         self
     }
-    
+
     /// Add source package filter
     pub fn filter_source(mut self, source: String) -> Self {
         self.conditions.push("source = ${}".to_string());
         self
     }
-    
+
     /// Add date range filter
-    pub fn filter_date_range(mut self, start_date: Option<String>, end_date: Option<String>) -> Self {
+    pub fn filter_date_range(
+        mut self,
+        start_date: Option<String>,
+        end_date: Option<String>,
+    ) -> Self {
         if start_date.is_some() {
             self.conditions.push("created_at >= ${}".to_string());
         }
@@ -246,16 +258,16 @@ impl BackfillQueryBuilder {
         }
         self
     }
-    
+
     /// Build the final query
     pub fn build(self) -> String {
         let mut query = self.base_query;
-        
+
         if !self.conditions.is_empty() {
             query.push_str(" WHERE ");
             query.push_str(&self.conditions.join(" AND "));
         }
-        
+
         query.push_str(" ORDER BY distribution, source, version DESC");
         query
     }
@@ -270,26 +282,26 @@ impl Default for BackfillQueryBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_query_builder_basic() {
         let query = BackfillQueryBuilder::new().build();
         assert!(query.contains("SELECT DISTINCT ON"));
         assert!(query.contains("ORDER BY"));
     }
-    
+
     #[test]
     fn test_query_builder_with_filters() {
         let query = BackfillQueryBuilder::new()
             .filter_distributions(vec!["unstable".to_string()])
             .filter_source("hello".to_string())
             .build();
-        
+
         assert!(query.contains("WHERE"));
         assert!(query.contains("distribution"));
         assert!(query.contains("source"));
     }
-    
+
     #[test]
     fn test_debian_build_creation() {
         let build = DebianBuild {
@@ -297,19 +309,16 @@ mod tests {
             source: "hello".to_string(),
             run_id: "test-123".to_string(),
         };
-        
+
         assert_eq!(build.distribution, "unstable");
         assert_eq!(build.source, "hello");
         assert_eq!(build.run_id, "test-123");
     }
-    
+
     #[test]
     fn test_pool_stats() {
-        let stats = PoolStats {
-            size: 5,
-            idle: 3,
-        };
-        
+        let stats = PoolStats { size: 5, idle: 3 };
+
         assert_eq!(stats.size, 5);
         assert_eq!(stats.idle, 3);
     }

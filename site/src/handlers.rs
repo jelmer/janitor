@@ -8,7 +8,6 @@ use axum::{
     response::{Html, Result as AxumResult},
 };
 use serde::Deserialize;
-use tera::Context;
 
 use crate::app::AppState;
 use crate::database::DatabaseError;

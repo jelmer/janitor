@@ -65,25 +65,25 @@ impl DatabaseConfig {
             ..Default::default()
         }
     }
-    
+
     /// Set maximum connections
     pub fn with_max_connections(mut self, max_connections: u32) -> Self {
         self.max_connections = max_connections;
         self
     }
-    
+
     /// Set connection timeout
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = timeout;
         self
     }
-    
+
     /// Set idle timeout
     pub fn with_idle_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.idle_timeout = timeout;
         self
     }
-    
+
     /// Set max lifetime
     pub fn with_max_lifetime(mut self, lifetime: Option<Duration>) -> Self {
         self.max_lifetime = lifetime;
@@ -99,7 +99,7 @@ pub struct Database {
 
 impl Database {
     /// Create a database instance from an existing pool
-    /// 
+    ///
     /// This is useful for compatibility with existing code that creates pools manually.
     pub fn from_pool(pool: PgPool) -> Self {
         Self { pool }
@@ -110,39 +110,37 @@ impl Database {
         let config = DatabaseConfig::new(url);
         Self::connect_with_config(config).await
     }
-    
+
     /// Create a new database connection with custom configuration
     pub async fn connect_with_config(config: DatabaseConfig) -> Result<Self, DatabaseError> {
         let mut options = PgPoolOptions::new()
             .max_connections(config.max_connections)
             .acquire_timeout(config.connect_timeout);
-            
+
         if let Some(idle_timeout) = config.idle_timeout {
             options = options.idle_timeout(idle_timeout);
         }
-        
+
         if let Some(max_lifetime) = config.max_lifetime {
             options = options.max_lifetime(max_lifetime);
         }
-        
+
         let pool = options.connect(&config.url).await?;
-        
+
         Ok(Self { pool })
     }
-    
+
     /// Get a reference to the connection pool
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
-    
+
     /// Test the database connection
     pub async fn test_connection(&self) -> Result<(), DatabaseError> {
-        sqlx::query("SELECT 1")
-            .fetch_one(&self.pool)
-            .await?;
+        sqlx::query("SELECT 1").fetch_one(&self.pool).await?;
         Ok(())
     }
-    
+
     /// Execute a health check query
     pub async fn health_check(&self) -> Result<bool, DatabaseError> {
         match sqlx::query("SELECT 1 as health")
@@ -156,12 +154,12 @@ impl Database {
             Err(_) => Ok(false),
         }
     }
-    
+
     /// Close the database connection pool
     pub async fn close(&self) {
         self.pool.close().await;
     }
-    
+
     /// Get pool statistics
     pub fn pool_stats(&self) -> PoolStats {
         PoolStats {
@@ -189,7 +187,7 @@ impl Database {
             .await?;
         Ok(count)
     }
-    
+
     /// Check if a record exists with simple query
     pub async fn exists_simple(&self, query: &str) -> Result<bool, DatabaseError> {
         let count = self.count_simple(query).await?;
@@ -200,18 +198,18 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_database_config_builder() {
         let config = DatabaseConfig::new("postgresql://localhost/test")
             .with_max_connections(20)
             .with_connect_timeout(Duration::from_secs(10));
-            
+
         assert_eq!(config.url, "postgresql://localhost/test");
         assert_eq!(config.max_connections, 20);
         assert_eq!(config.connect_timeout, Duration::from_secs(10));
     }
-    
+
     #[tokio::test]
     async fn test_database_config_defaults() {
         let config = DatabaseConfig::default();

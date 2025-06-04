@@ -3,9 +3,9 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use pyo3::PyErr;
 use serde_json::json;
 use thiserror::Error;
-use pyo3::PyErr;
 
 /// Main error type for the BZR Store service
 #[derive(Debug, Error)]
@@ -13,67 +13,67 @@ pub enum BzrError {
     /// Python/PyO3 related errors
     #[error("Python error: {0}")]
     Python(String),
-    
+
     /// PyO3 errors
     #[error("PyO3 error: {0}")]
     PyO3(#[from] PyErr),
-    
+
     /// Database errors
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    
+
     /// Repository operation errors
     #[error("Repository error: {message}")]
     Repository {
         /// Error message describing the repository operation failure
-        message: String
+        message: String,
     },
-    
+
     /// Authentication failures
     #[error("Authentication failed")]
     AuthenticationFailed,
-    
+
     /// Subprocess operation errors
     #[error("Subprocess error: {0}")]
     Subprocess(String),
-    
+
     /// Configuration errors
     #[error("Configuration error: {0}")]
     Config(#[from] anyhow::Error),
-    
+
     /// IO errors
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     /// Template rendering errors
     #[error("Template error: {0}")]
     Template(#[from] tera::Error),
-    
+
     /// HTTP client errors
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
-    
+
     /// Path not found
     #[error("Path not found: {path}")]
     PathNotFound {
         /// The path that was not found
-        path: String
+        path: String,
     },
-    
+
     /// Invalid request
     #[error("Invalid request: {message}")]
     InvalidRequest {
         /// Error message describing why the request was invalid
-        message: String
+        message: String,
     },
-    
+
     /// Internal server error
     #[error("Internal server error: {message}")]
     Internal {
         /// Error message describing the internal failure
-        message: String
+        message: String,
     },
-    
+
     /// JSON serialization error
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
@@ -86,19 +86,19 @@ impl BzrError {
             message: message.into(),
         }
     }
-    
+
     /// Create a subprocess error
     pub fn subprocess<S: Into<String>>(message: S) -> Self {
         Self::Subprocess(message.into())
     }
-    
+
     /// Create an invalid request error
     pub fn invalid_request<S: Into<String>>(message: S) -> Self {
         Self::InvalidRequest {
             message: message.into(),
         }
     }
-    
+
     /// Create an internal error
     pub fn internal<S: Into<String>>(message: S) -> Self {
         Self::Internal {

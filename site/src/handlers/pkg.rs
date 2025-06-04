@@ -7,15 +7,12 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use std::collections::HashMap;
-use tera::Context;
 use tracing::instrument;
-use url::Url;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
     app::AppState,
     auth::OptionalUser,
-    database::{DatabaseError, RunDetails, VcsInfo},
     templates::create_base_context,
 };
 
@@ -1019,10 +1016,10 @@ async fn fetch_merge_proposals(
     match state
         .database
         .get_merge_proposals_by_statuses(
-            suite, 
-            &["open", "merged", "closed", "abandoned", "rejected"]
+            suite,
+            &["open", "merged", "closed", "abandoned", "rejected"],
         )
-        .await 
+        .await
     {
         Ok(grouped_proposals) => {
             proposals = grouped_proposals;

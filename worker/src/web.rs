@@ -40,17 +40,17 @@ async fn index(State(state): State<Arc<RwLock<AppState>>>) -> Response {
             match output_directory.read_dir() {
                 Ok(read_dir) => Some(
                     read_dir
-                    .filter_map(|entry| {
-                        let entry = entry.ok()?;
-                        let filename = entry.file_name();
-                        let name = filename.to_str()?;
-                        if name.ends_with(".log") {
-                            Some(name.to_owned())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
+                        .filter_map(|entry| {
+                            let entry = entry.ok()?;
+                            let filename = entry.file_name();
+                            let name = filename.to_str()?;
+                            if name.ends_with(".log") {
+                                Some(name.to_owned())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
                 ),
                 Err(e) => {
                     log::warn!("Failed to read output directory: {}", e);
@@ -85,7 +85,7 @@ async fn assignment(State(state): State<Arc<RwLock<AppState>>>) -> impl IntoResp
 
 async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
     let output_directory = match state.read() {
-        Ok(state) => &state.output_directory,
+        Ok(state) => state.output_directory.clone(),
         Err(_) => {
             log::error!("Worker state lock poisoned in get_logs");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
@@ -129,7 +129,7 @@ async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap
 
 async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap) -> Response {
     let output_directory = match state.read() {
-        Ok(state) => &state.output_directory,
+        Ok(state) => state.output_directory.clone(),
         Err(_) => {
             log::error!("Worker state lock poisoned in get_artifacts");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
@@ -260,7 +260,7 @@ async fn get_artifact_file(
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response();
         }
     };
-    
+
     let _output_directory_for_match = match Some(&output_directory) {
         Some(dir) => dir.clone(),
         None => {

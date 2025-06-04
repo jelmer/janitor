@@ -294,8 +294,7 @@ impl<'a> Queue<'a> {
                 .bind(campaign)
                 .bind(limit.unwrap_or(i64::MAX))
         } else {
-            sqlx::query_as::<_, QueueItem>(query)
-                .bind(limit.unwrap_or(i64::MAX))
+            sqlx::query_as::<_, QueueItem>(query).bind(limit.unwrap_or(i64::MAX))
         };
 
         sqlx_query.fetch_all(self.pool).await

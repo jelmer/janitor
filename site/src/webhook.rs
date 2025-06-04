@@ -1,16 +1,14 @@
 use anyhow::{Context, Result};
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::State,
     http::{HeaderMap, StatusCode},
     response::{Html, Json},
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use url::Url;
 

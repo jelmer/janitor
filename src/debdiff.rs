@@ -222,13 +222,16 @@ pub async fn run_debdiff(
     // Validate all file paths to prevent command injection
     for path in old_binaries.iter().chain(new_binaries.iter()) {
         // Check for shell metacharacters and path traversal
-        if path.contains("..") || 
-           path.chars().any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\n' | '\r' | '\0')) {
+        if path.contains("..")
+            || path
+                .chars()
+                .any(|c| matches!(c, ';' | '&' | '|' | '$' | '`' | '\n' | '\r' | '\0'))
+        {
             return Err(DebdiffError {
                 message: format!("Invalid file path: {}", path),
             });
         }
-        
+
         // Verify the path exists and is a regular file
         let path_obj = std::path::Path::new(path);
         if !path_obj.exists() {
@@ -242,7 +245,7 @@ pub async fn run_debdiff(
             });
         }
     }
-    
+
     let mut cmd = tokio::process::Command::new("debdiff");
     cmd.arg("--from");
     for path in old_binaries {
@@ -252,7 +255,7 @@ pub async fn run_debdiff(
     for path in new_binaries {
         cmd.arg(path);
     }
-    
+
     let output = cmd.output().await?;
     if !output.status.success() {
         return Err(DebdiffError {

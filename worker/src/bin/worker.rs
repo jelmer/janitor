@@ -155,7 +155,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = janitor_worker::web::app(state.clone());
     let state = state.clone();
     tokio::spawn(async move {
-        let client = match janitor_worker::client::Client::new(base_url, auth, janitor_worker::DEFAULT_USER_AGENT) {
+        let client = match janitor_worker::client::Client::new(
+            base_url,
+            auth,
+            janitor_worker::DEFAULT_USER_AGENT,
+        ) {
             Ok(client) => client,
             Err(e) => {
                 log::error!("Failed to create HTTP client: {}", e);

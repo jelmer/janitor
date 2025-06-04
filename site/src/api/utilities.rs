@@ -1,8 +1,4 @@
-use axum::{
-    extract::{Path, Query},
-    http::{HeaderMap, Uri},
-    response::Json,
-};
+use axum::http::{HeaderMap, Uri};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;

@@ -20,8 +20,10 @@ use tracing::{info, warn};
 use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::repository::{RepositoryManager, RepositoryPath, PyO3RepositoryManager, SubprocessRepositoryManager};
-use crate::smart_protocol::{smart_protocol_handler, serve_bzr_file_handler};
+use crate::repository::{
+    PyO3RepositoryManager, RepositoryManager, RepositoryPath, SubprocessRepositoryManager,
+};
+use crate::smart_protocol::{serve_bzr_file_handler, smart_protocol_handler};
 
 /// Application state shared between handlers
 #[derive(Clone)]
@@ -67,21 +69,26 @@ pub struct RepositoryListResponse {
 pub async fn create_applications(config: Config) -> Result<(Router, Router)> {
     // Initialize database
     let database = DatabaseManager::new(&config).await?;
-    
+
     // Initialize repository manager - prefer PyO3 with subprocess fallback
-    let repository_manager: Arc<dyn RepositoryManager> = Arc::new(
-        PyO3RepositoryManager::new(config.repository_path.clone(), database.clone(), true)
-    );
-    
+    let repository_manager: Arc<dyn RepositoryManager> = Arc::new(PyO3RepositoryManager::new(
+        config.repository_path.clone(),
+        database.clone(),
+        true,
+    ));
+
     // Initialize templates
     let mut templates = Tera::new("templates/**/*").unwrap_or_else(|_| {
         warn!("Template directory not found, using empty template engine");
         Tera::default()
     });
-    
+
     // Add basic templates programmatically if directory doesn't exist
     if templates.get_template_names().count() == 0 {
-        templates.add_raw_template("health.html", r#"
+        templates
+            .add_raw_template(
+                "health.html",
+                r#"
 <!DOCTYPE html>
 <html>
 <head><title>BZR Store Health</title></head>
@@ -91,9 +98,14 @@ pub async fn create_applications(config: Config) -> Result<(Router, Router)> {
     <p>Timestamp: {{ timestamp }}</p>
 </body>
 </html>
-"#).expect("Failed to add health template");
+"#,
+            )
+            .expect("Failed to add health template");
 
-        templates.add_raw_template("repositories.html", r#"
+        templates
+            .add_raw_template(
+                "repositories.html",
+                r#"
 <!DOCTYPE html>
 <html>
 <head><title>BZR Repositories</title></head>
@@ -108,22 +120,24 @@ pub async fn create_applications(config: Config) -> Result<(Router, Router)> {
     <p>Total: {{ repositories | length }}</p>
 </body>
 </html>
-"#).expect("Failed to add repositories template");
+"#,
+            )
+            .expect("Failed to add repositories template");
     }
-    
+
     let app_state = AppState {
         config: config.clone(),
         database,
         repository_manager,
         templates,
     };
-    
+
     // Create admin application (full access)
     let admin_app = create_admin_app(app_state.clone()).await;
-    
+
     // Create public application (read-only)
     let public_app = create_public_app(app_state).await;
-    
+
     Ok((admin_app, public_app))
 }
 
@@ -133,25 +147,39 @@ async fn create_admin_app(state: AppState) -> Router {
         // Health endpoints
         .route("/health", get(health_handler))
         .route("/ready", get(ready_handler))
-        
         // Repository management
         .route("/repositories", get(list_repositories_handler))
-        .route("/repositories/:campaign/:codebase/:role", post(create_repository_handler))
-        .route("/:campaign/:codebase/:role/info", get(repository_info_handler))
-        
+        .route(
+            "/repositories/:campaign/:codebase/:role",
+            post(create_repository_handler),
+        )
+        .route(
+            "/:campaign/:codebase/:role/info",
+            get(repository_info_handler),
+        )
         // Repository operations
         .route("/:campaign/:codebase/:role/diff", get(diff_handler))
-        .route("/:campaign/:codebase/:role/revision-info", get(revision_info_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/revision-info",
+            get(revision_info_handler),
+        )
         // Remote configuration
-        .route("/:campaign/:codebase/:role/remotes", post(configure_remote_handler))
-        .route("/:campaign/:codebase/:role/remotes", get(list_remotes_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/remotes",
+            post(configure_remote_handler),
+        )
+        .route(
+            "/:campaign/:codebase/:role/remotes",
+            get(list_remotes_handler),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(CompressionLayer::new())
-                .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                )),
         )
         .with_state(state)
 }
@@ -162,25 +190,32 @@ async fn create_public_app(state: AppState) -> Router {
         // Health endpoints
         .route("/health", get(health_handler))
         .route("/ready", get(ready_handler))
-        
         // Read-only repository operations
         .route("/:campaign/:codebase/:role/diff", get(diff_handler))
-        .route("/:campaign/:codebase/:role/revision-info", get(revision_info_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/revision-info",
+            get(revision_info_handler),
+        )
         // Repository browsing
         .route("/repositories", get(list_repositories_handler))
-        .route("/:campaign/:codebase/:role/info", get(repository_info_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/info",
+            get(repository_info_handler),
+        )
         // Bazaar smart protocol endpoint
-        .route("/:campaign/:codebase/:role/.bzr/smart", post(smart_protocol_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/.bzr/smart",
+            post(smart_protocol_handler),
+        )
         // Repository file access (.bzr directory)
-        .route("/:campaign/:codebase/:role/*file_path", get(serve_bzr_file_handler))
-        
+        .route(
+            "/:campaign/:codebase/:role/*file_path",
+            get(serve_bzr_file_handler),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
-                .layer(CompressionLayer::new())
+                .layer(CompressionLayer::new()),
         )
         .with_state(state)
 }
@@ -199,7 +234,11 @@ async fn auth_middleware(
                 if let Ok(decoded) = base64::decode(&auth_str[6..]) {
                     if let Ok(auth_string) = String::from_utf8(decoded) {
                         if let Some((username, password)) = auth_string.split_once(':') {
-                            if state.database.authenticate_worker(username, password).await? {
+                            if state
+                                .database
+                                .authenticate_worker(username, password)
+                                .await?
+                            {
                                 info!("Authenticated worker: {}", username);
                                 return Ok(next.run(request).await);
                             }
@@ -209,7 +248,7 @@ async fn auth_middleware(
             }
         }
     }
-    
+
     // Authentication failed
     Err(BzrError::AuthenticationFailed)
 }
@@ -218,14 +257,16 @@ async fn auth_middleware(
 async fn health_handler(State(state): State<AppState>) -> Result<Response> {
     // Check database health
     state.database.health_check().await?;
-    
+
     let mut context = Context::new();
     context.insert("status", "healthy");
     context.insert("timestamp", &chrono::Utc::now().to_rfc3339());
-    
-    let html = state.templates.render("health.html", &context)
+
+    let html = state
+        .templates
+        .render("health.html", &context)
         .unwrap_or_else(|_| "OK".to_string());
-    
+
     Ok(Html(html).into_response())
 }
 
@@ -233,7 +274,7 @@ async fn health_handler(State(state): State<AppState>) -> Result<Response> {
 async fn ready_handler(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
     // Check if service is ready to serve traffic
     state.database.health_check().await?;
-    
+
     Ok(Json(json!({
         "status": "ready",
         "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -244,14 +285,16 @@ async fn ready_handler(State(state): State<AppState>) -> Result<Json<serde_json:
 /// List repositories handler
 async fn list_repositories_handler(State(state): State<AppState>) -> Result<Response> {
     let repositories = state.repository_manager.list_repositories().await?;
-    
+
     // Check if request accepts HTML
     let mut context = Context::new();
     context.insert("repositories", &repositories);
-    
-    let html = state.templates.render("repositories.html", &context)
+
+    let html = state
+        .templates
+        .render("repositories.html", &context)
         .unwrap_or_else(|e| format!("Template error: {}", e));
-    
+
     Ok(Html(html).into_response())
 }
 
@@ -261,8 +304,11 @@ async fn create_repository_handler(
     Path((campaign, codebase, role)): Path<(String, String, String)>,
 ) -> Result<Json<serde_json::Value>> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    let path = state.repository_manager.ensure_repository(&repo_path).await?;
-    
+    let path = state
+        .repository_manager
+        .ensure_repository(&repo_path)
+        .await?;
+
     Ok(Json(json!({
         "status": "created",
         "path": repo_path.relative_path(),
@@ -276,8 +322,11 @@ async fn repository_info_handler(
     Path((campaign, codebase, role)): Path<(String, String, String)>,
 ) -> Result<Json<serde_json::Value>> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    let info = state.repository_manager.get_repository_info(&repo_path).await?;
-    
+    let info = state
+        .repository_manager
+        .get_repository_info(&repo_path)
+        .await?;
+
     Ok(Json(serde_json::to_value(info)?))
 }
 
@@ -288,13 +337,17 @@ async fn diff_handler(
     Query(query): Query<DiffQuery>,
 ) -> Result<Response> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    let diff = state.repository_manager.get_diff(&repo_path, &query.old, &query.new).await?;
-    
+    let diff = state
+        .repository_manager
+        .get_diff(&repo_path, &query.old, &query.new)
+        .await?;
+
     Ok((
         StatusCode::OK,
         [("content-type", "text/plain; charset=utf-8")],
         diff,
-    ).into_response())
+    )
+        .into_response())
 }
 
 /// Revision info handler
@@ -304,8 +357,11 @@ async fn revision_info_handler(
     Query(query): Query<RevisionInfoQuery>,
 ) -> Result<Json<serde_json::Value>> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    let revisions = state.repository_manager.get_revision_info(&repo_path, &query.old, &query.new).await?;
-    
+    let revisions = state
+        .repository_manager
+        .get_revision_info(&repo_path, &query.old, &query.new)
+        .await?;
+
     Ok(Json(json!({
         "revisions": revisions
     })))
@@ -318,13 +374,17 @@ async fn configure_remote_handler(
     Json(payload): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    
-    let remote_url = payload.get("remote_url")
+
+    let remote_url = payload
+        .get("remote_url")
         .and_then(|v| v.as_str())
         .ok_or_else(|| BzrError::invalid_request("remote_url is required"))?;
-    
-    state.repository_manager.configure_remote(&repo_path, remote_url).await?;
-    
+
+    state
+        .repository_manager
+        .configure_remote(&repo_path, remote_url)
+        .await?;
+
     Ok(Json(json!({
         "status": "configured",
         "remote_url": remote_url
@@ -337,7 +397,9 @@ async fn list_remotes_handler(
     Path((campaign, codebase, role)): Path<(String, String, String)>,
 ) -> Result<Json<serde_json::Value>> {
     let repo_path = RepositoryPath::new(campaign, codebase, role);
-    let fs_path = state.config.repository_path
+    let fs_path = state
+        .config
+        .repository_path
         .join(&repo_path.campaign)
         .join(&repo_path.codebase)
         .join(&repo_path.role);
@@ -381,30 +443,31 @@ async fn list_remotes_handler(
 mod base64 {
     pub fn decode(input: &str) -> Result<Vec<u8>, &'static str> {
         use std::collections::HashMap;
-        
-        let chars: HashMap<char, u8> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-            .chars()
-            .enumerate()
-            .map(|(i, c)| (c, i as u8))
-            .collect();
-        
+
+        let chars: HashMap<char, u8> =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+                .chars()
+                .enumerate()
+                .map(|(i, c)| (c, i as u8))
+                .collect();
+
         let mut result = Vec::new();
         let input = input.trim_end_matches('=');
         let mut temp = 0u32;
         let mut bits = 0;
-        
+
         for c in input.chars() {
             let val = chars.get(&c).ok_or("Invalid character")?;
             temp = (temp << 6) | (*val as u32);
             bits += 6;
-            
+
             if bits >= 8 {
                 result.push((temp >> (bits - 8)) as u8);
                 bits -= 8;
                 temp &= (1 << bits) - 1;
             }
         }
-        
+
         Ok(result)
     }
 }

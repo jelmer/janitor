@@ -15,38 +15,38 @@ pub async fn sign_package(
     keyid: Option<&str>,
 ) -> Result<()> {
     info!("Signing package: {}", changes_file);
-    
+
     let mut cmd = Command::new("debsign");
     cmd.current_dir(working_dir)
         .arg("--no-conf")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    
+
     if let Some(key) = keyid {
         cmd.arg("-k").arg(key);
     }
-    
+
     cmd.arg(changes_file);
-    
+
     debug!("Running command: {:?}", cmd);
-    
+
     let output = cmd.output().await?;
-    
+
     if output.status.success() {
         info!("Successfully signed {}", changes_file);
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let exit_code = output.status.code().unwrap_or(-1);
-        
+
         error!(
             "Failed to sign {} (exit code {}): {}",
             changes_file, exit_code, stderr
         );
-        
+
         DEBSIGN_FAILED_COUNT.inc();
-        
+
         Err(UploadError::DebsignFailure(format!(
             "debsign failed with exit code {}: {}",
             exit_code, stderr
@@ -55,13 +55,9 @@ pub async fn sign_package(
 }
 
 /// Upload a Debian package using dput
-pub async fn upload_package(
-    working_dir: &Path,
-    changes_file: &str,
-    dput_host: &str,
-) -> Result<()> {
+pub async fn upload_package(working_dir: &Path, changes_file: &str, dput_host: &str) -> Result<()> {
     info!("Uploading package: {} to {}", changes_file, dput_host);
-    
+
     let mut cmd = Command::new("dput");
     cmd.current_dir(working_dir)
         .arg("--no-upload-log")
@@ -71,11 +67,11 @@ pub async fn upload_package(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    
+
     debug!("Running command: {:?}", cmd);
-    
+
     let output = cmd.output().await?;
-    
+
     if output.status.success() {
         info!("Successfully uploaded {} to {}", changes_file, dput_host);
         Ok(())
@@ -83,14 +79,14 @@ pub async fn upload_package(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         let exit_code = output.status.code().unwrap_or(-1);
-        
+
         error!(
             "Failed to upload {} to {} (exit code {}): {} {}",
             changes_file, dput_host, exit_code, stdout, stderr
         );
-        
+
         UPLOAD_FAILED_COUNT.inc();
-        
+
         Err(UploadError::DputFailure(format!(
             "dput failed with exit code {}: {} {}",
             exit_code, stdout, stderr
@@ -154,7 +150,7 @@ impl UploadConfig {
             distributions,
         }
     }
-    
+
     /// Check if a distribution should be uploaded
     pub fn should_upload_distribution(&self, distribution: &str) -> bool {
         if self.distributions.is_empty() {
@@ -168,7 +164,7 @@ impl UploadConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_upload_config_distribution_filter() {
         let config = UploadConfig::new(
@@ -177,19 +173,14 @@ mod tests {
             false,
             vec!["unstable".to_string(), "experimental".to_string()],
         );
-        
+
         assert!(config.should_upload_distribution("unstable"));
         assert!(config.should_upload_distribution("experimental"));
         assert!(!config.should_upload_distribution("stable"));
-        
+
         // Empty distributions means upload all
-        let config_all = UploadConfig::new(
-            "test-host".to_string(),
-            None,
-            false,
-            vec![],
-        );
-        
+        let config_all = UploadConfig::new("test-host".to_string(), None, false, vec![]);
+
         assert!(config_all.should_upload_distribution("unstable"));
         assert!(config_all.should_upload_distribution("stable"));
         assert!(config_all.should_upload_distribution("any-dist"));

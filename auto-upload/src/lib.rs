@@ -29,10 +29,10 @@ lazy_static::lazy_static! {
         "debsign_failed_total",
         "Number of packages for which signing failed"
     ).unwrap();
-    
+
     /// Counter for failed package uploads
     pub static ref UPLOAD_FAILED_COUNT: Counter = register_counter!(
-        "upload_failed_total", 
+        "upload_failed_total",
         "Number of packages for which uploading failed"
     ).unwrap();
 }
@@ -49,7 +49,7 @@ pub async fn run_service(
     backfill: bool,
 ) -> Result<()> {
     use service::ServiceOrchestrator;
-    
+
     // Create and run service orchestrator
     let orchestrator = ServiceOrchestrator::new(
         config,
@@ -61,7 +61,6 @@ pub async fn run_service(
         distributions,
         backfill,
     );
-    
+
     orchestrator.run().await.map_err(Into::into)
 }
-

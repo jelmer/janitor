@@ -54,14 +54,17 @@ impl DatabaseManager {
 
         if let Some(row) = row {
             let stored_hash: String = row.try_get("password_hash")?;
-            
+
             // Use bcrypt to verify password
             match bcrypt::verify(password, &stored_hash) {
                 Ok(valid) => {
                     if valid {
                         debug!("Worker authentication successful: {}", username);
                     } else {
-                        debug!("Worker authentication failed - invalid password: {}", username);
+                        debug!(
+                            "Worker authentication failed - invalid password: {}",
+                            username
+                        );
                     }
                     Ok(valid)
                 }
@@ -106,7 +109,10 @@ impl DatabaseManager {
     /// List all codebases
     pub async fn list_codebases(&self, limit: Option<i64>) -> Result<Vec<String>> {
         let query = if let Some(limit) = limit {
-            format!("SELECT name FROM {} ORDER BY name LIMIT {}", self.codebase_table, limit)
+            format!(
+                "SELECT name FROM {} ORDER BY name LIMIT {}",
+                self.codebase_table, limit
+            )
         } else {
             format!("SELECT name FROM {} ORDER BY name", self.codebase_table)
         };

@@ -24,7 +24,7 @@ impl RepositoryManager {
     /// Open a repository, creating it if it doesn't exist
     pub fn open_or_create(&self, codebase: &str) -> Result<Repository> {
         let repo_path = self.repo_path(codebase);
-        
+
         match Repository::open(&repo_path) {
             Ok(repo) => {
                 debug!("Opened existing repository: {}", codebase);
@@ -108,7 +108,7 @@ impl RepositoryManager {
     /// Set repository remote
     pub fn set_remote(&self, codebase: &str, name: &str, url: &str) -> Result<()> {
         let repo = self.open_or_create(codebase)?;
-        
+
         // Remove existing remote if it exists
         if repo.find_remote(name).is_ok() {
             repo.remote_delete(name)?;
@@ -116,7 +116,7 @@ impl RepositoryManager {
 
         repo.remote(name, url)?;
         info!("Set remote '{}' to '{}' for {}", name, url, codebase);
-        
+
         Ok(())
     }
 
@@ -131,7 +131,7 @@ impl RepositoryManager {
         for entry in std::fs::read_dir(&self.base_path)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_dir() {
                 // Check if it's a git repository
                 if Repository::open(&path).is_ok() {
@@ -172,25 +172,22 @@ mod tests {
     #[test]
     fn test_validate_sha() {
         // Valid SHA
-        assert!(RepositoryManager::validate_sha(
-            "1234567890abcdef1234567890abcdef12345678"
-        )
-        .is_ok());
+        assert!(
+            RepositoryManager::validate_sha("1234567890abcdef1234567890abcdef12345678").is_ok()
+        );
 
         // Too short
         assert!(RepositoryManager::validate_sha("123456").is_err());
 
         // Too long
-        assert!(RepositoryManager::validate_sha(
-            "1234567890abcdef1234567890abcdef123456789"
-        )
-        .is_err());
+        assert!(
+            RepositoryManager::validate_sha("1234567890abcdef1234567890abcdef123456789").is_err()
+        );
 
         // Invalid characters
-        assert!(RepositoryManager::validate_sha(
-            "1234567890abcdef1234567890abcdef1234567g"
-        )
-        .is_err());
+        assert!(
+            RepositoryManager::validate_sha("1234567890abcdef1234567890abcdef1234567g").is_err()
+        );
     }
 
     #[test]

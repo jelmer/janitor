@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use tracing::{error, info, warn};
 
 use janitor_archive::{
-    config::{ArchiveConfig, AptRepositoryConfig, GpgConfig},
+    config::{AptRepositoryConfig, ArchiveConfig, GpgConfig},
     database::ArchiveDatabase,
     error::ArchiveResult,
     repository::{RepositoryGenerationConfig, RepositoryGenerator},
@@ -48,27 +48,23 @@ async fn main() -> ArchiveResult<()> {
                 .env("DATABASE_URL"),
         )
         .subcommand(
-            Command::new("generate")
-                .about("Generate repositories")
-                .arg(
-                    Arg::new("suite")
-                        .short('s')
-                        .long("suite")
-                        .value_name("SUITE")
-                        .help("Suite to generate (optional, generates all if not specified)"),
-                ),
+            Command::new("generate").about("Generate repositories").arg(
+                Arg::new("suite")
+                    .short('s')
+                    .long("suite")
+                    .value_name("SUITE")
+                    .help("Suite to generate (optional, generates all if not specified)"),
+            ),
         )
         .subcommand(
-            Command::new("serve")
-                .about("Start web server")
-                .arg(
-                    Arg::new("bind")
-                        .short('b')
-                        .long("bind")
-                        .value_name("ADDRESS")
-                        .help("Bind address")
-                        .default_value("0.0.0.0:8080"),
-                ),
+            Command::new("serve").about("Start web server").arg(
+                Arg::new("bind")
+                    .short('b')
+                    .long("bind")
+                    .value_name("ADDRESS")
+                    .help("Bind address")
+                    .default_value("0.0.0.0:8080"),
+            ),
         )
         .subcommand(Command::new("cleanup").about("Clean up old repository files"))
         .get_matches();
@@ -146,7 +142,9 @@ async fn generate_repositories(
     } else {
         // Generate all repositories
         info!("Generating all repositories...");
-        generator.generate_repositories(&config.repositories).await?;
+        generator
+            .generate_repositories(&config.repositories)
+            .await?;
     }
 
     info!("Repository generation completed");

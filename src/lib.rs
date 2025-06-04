@@ -3,7 +3,6 @@ pub mod api;
 pub mod artifacts;
 pub mod config;
 pub mod database;
-pub mod shared_config;
 pub mod debdiff;
 pub mod error;
 pub mod logging;
@@ -14,6 +13,7 @@ pub mod queue;
 pub mod reprocess_logs;
 pub mod schedule;
 pub mod security;
+pub mod shared_config;
 pub mod state;
 pub mod vcs;
 

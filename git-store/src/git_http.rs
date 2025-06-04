@@ -12,7 +12,10 @@ use futures_util::TryStreamExt;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Stdio;
-use tokio::{io::{AsyncBufReadExt, AsyncReadExt}, process::Command};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt},
+    process::Command,
+};
 use tokio_util::io::StreamReader;
 use tracing::{debug, info, warn};
 
@@ -58,7 +61,7 @@ pub async fn git_diff(
     crate::repository::RepositoryManager::validate_sha(&params.new)?;
 
     let repo_path = state.repo_manager.repo_path(&codebase);
-    
+
     if !repo_path.exists() {
         return Err(GitStoreError::RepositoryNotFound(codebase));
     }
@@ -107,7 +110,7 @@ pub async fn revision_info(
     Query(params): Query<RevisionQuery>,
 ) -> Result<Response> {
     let repo_path = state.repo_manager.repo_path(&codebase);
-    
+
     if !repo_path.exists() {
         return Err(GitStoreError::RepositoryNotFound(codebase));
     }
@@ -161,7 +164,9 @@ pub async fn revision_info(
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_string(&info).map_err(|e| GitStoreError::Other(e.into()))?))
+        .body(Body::from(
+            serde_json::to_string(&info).map_err(|e| GitStoreError::Other(e.into()))?,
+        ))
         .unwrap())
 }
 
@@ -185,9 +190,13 @@ async fn extract_auth_context(
                     if let Ok(decoded_str) = String::from_utf8(decoded) {
                         if let Some((username, password)) = decoded_str.split_once(':') {
                             debug!("Attempting worker authentication for: {}", username);
-                            
+
                             // Authenticate worker against database
-                            match state.db_manager.authenticate_worker(username, password).await {
+                            match state
+                                .db_manager
+                                .authenticate_worker(username, password)
+                                .await
+                            {
                                 Ok(true) => {
                                     info!("Worker authentication successful: {}", username);
                                     auth_context.worker_name = Some(username.to_string());
@@ -295,7 +304,10 @@ fn validate_git_service_enhanced(service: &str, auth_context: &AuthContext) -> R
         }
         _ => {
             warn!("Unknown Git service requested: {}", service);
-            Err(GitStoreError::HttpError(format!("Unknown Git service: {}", service)))
+            Err(GitStoreError::HttpError(format!(
+                "Unknown Git service: {}",
+                service
+            )))
         }
     }
 }
@@ -311,14 +323,14 @@ fn is_admin_interface_request(headers: &HeaderMap, host: Option<&str>) -> bool {
             }
         }
     }
-    
+
     // Check for specific host override
     if let Some(host) = host {
         if host.contains(":9421") || host.contains("admin") {
             return true;
         }
     }
-    
+
     // Default to public interface
     false
 }
@@ -336,11 +348,13 @@ pub async fn git_backend(
     // Extract codebase from path
     let path = uri.path();
     let path_segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
-    
+
     if path_segments.is_empty() {
-        return Err(GitStoreError::HttpError("Missing codebase in path".to_string()));
+        return Err(GitStoreError::HttpError(
+            "Missing codebase in path".to_string(),
+        ));
     }
-    
+
     let codebase = path_segments[0];
     let subpath = if path_segments.len() > 1 {
         path_segments[1..].join("/")
@@ -348,8 +362,10 @@ pub async fn git_backend(
         String::new()
     };
 
-    debug!("Git HTTP backend request for codebase: {}, subpath: {}, method: {}", 
-           codebase, subpath, method);
+    debug!(
+        "Git HTTP backend request for codebase: {}, subpath: {}, method: {}",
+        codebase, subpath, method
+    );
 
     // Extract authentication context
     let is_admin_interface = is_admin_interface_request(&headers, uri.host());
@@ -369,17 +385,18 @@ pub async fn git_backend(
 
     // Extract request information
     let method_str = method.as_str();
-    
-    let content_type = headers.get(header::CONTENT_TYPE)
+
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    
+
     let query_string = uri.query().unwrap_or("");
 
     // Parse query for service parameter
-    let query_params: HashMap<String, String> = serde_urlencoded::from_str(query_string)
-        .unwrap_or_default();
-    
+    let query_params: HashMap<String, String> =
+        serde_urlencoded::from_str(query_string).unwrap_or_default();
+
     let service = query_params.get("service");
 
     // Validate Git command with enhanced security checks
@@ -398,11 +415,17 @@ pub async fn git_backend(
     env_vars.insert("REQUEST_METHOD".to_string(), method_str.to_string());
     env_vars.insert("CONTENT_TYPE".to_string(), content_type.to_string());
     env_vars.insert("QUERY_STRING".to_string(), query_string.to_string());
-    
+
     // Set the repository path
     let full_path = repo_path.join(subpath.trim_start_matches('/'));
-    env_vars.insert("PATH_TRANSLATED".to_string(), full_path.display().to_string());
-    env_vars.insert("GIT_PROJECT_ROOT".to_string(), repo_path.display().to_string());
+    env_vars.insert(
+        "PATH_TRANSLATED".to_string(),
+        full_path.display().to_string(),
+    );
+    env_vars.insert(
+        "GIT_PROJECT_ROOT".to_string(),
+        repo_path.display().to_string(),
+    );
 
     // Add HTTP headers as environment variables
     for (name, value) in headers.iter() {
@@ -423,7 +446,8 @@ pub async fn git_backend(
         .kill_on_drop(true);
 
     debug!("Starting git http-backend process");
-    let mut process = cmd.spawn()
+    let mut process = cmd
+        .spawn()
         .map_err(|e| GitStoreError::Other(anyhow::anyhow!("Failed to spawn git process: {}", e)))?;
 
     // Handle request body (stdin to git process)
@@ -448,30 +472,32 @@ pub async fn git_backend(
     }
 
     // Handle stdout (response to client)
-    let stdout = process.stdout.take()
-        .ok_or_else(|| GitStoreError::Other(anyhow::anyhow!("Failed to capture git process stdout")))?;
+    let stdout = process.stdout.take().ok_or_else(|| {
+        GitStoreError::Other(anyhow::anyhow!("Failed to capture git process stdout"))
+    })?;
 
     // Parse HTTP response from git http-backend
     let mut reader = tokio::io::BufReader::new(stdout);
-    
+
     // Read headers until empty line
     let mut response_headers = HeaderMap::new();
     let mut status_code = StatusCode::OK;
     let mut content_length: Option<usize> = None;
-    
+
     loop {
         let mut line = String::new();
-        reader.read_line(&mut line).await
-            .map_err(|e| GitStoreError::Other(anyhow::anyhow!("Failed to read git response: {}", e)))?;
-        
+        reader.read_line(&mut line).await.map_err(|e| {
+            GitStoreError::Other(anyhow::anyhow!("Failed to read git response: {}", e))
+        })?;
+
         if line.trim().is_empty() {
             break; // End of headers
         }
-        
+
         if let Some((key, value)) = line.trim().split_once(':') {
             let key = key.trim().to_string();
             let value = value.trim().to_string();
-            
+
             if key.eq_ignore_ascii_case("status") {
                 // Parse status line: "200 OK" or "404 Not Found"
                 if let Some(code_str) = value.split_whitespace().next() {
@@ -494,33 +520,38 @@ pub async fn git_backend(
         }
     }
 
-    debug!("Git response status: {}, content-length: {:?}", status_code, content_length);
+    debug!(
+        "Git response status: {}, content-length: {:?}",
+        status_code, content_length
+    );
 
     // Create response based on whether we have content-length
     if let Some(length) = content_length {
         // Fixed-length response
         let mut body_data = vec![0u8; length];
-        reader.read_exact(&mut body_data).await
-            .map_err(|e| GitStoreError::Other(anyhow::anyhow!("Failed to read git response body: {}", e)))?;
-        
+        reader.read_exact(&mut body_data).await.map_err(|e| {
+            GitStoreError::Other(anyhow::anyhow!("Failed to read git response body: {}", e))
+        })?;
+
         let mut response = Response::builder().status(status_code);
         for (name, value) in response_headers.iter() {
             response = response.header(name, value);
         }
-        
+
         Ok(response.body(Body::from(body_data))?)
     } else {
         // Streaming response - for now, read all data into memory
         // TODO: Implement proper streaming when axum supports it better
         let mut body_data = Vec::new();
-        reader.read_to_end(&mut body_data).await
-            .map_err(|e| GitStoreError::Other(anyhow::anyhow!("Failed to read git response body: {}", e)))?;
-        
+        reader.read_to_end(&mut body_data).await.map_err(|e| {
+            GitStoreError::Other(anyhow::anyhow!("Failed to read git response body: {}", e))
+        })?;
+
         let mut response = Response::builder().status(status_code);
         for (name, value) in response_headers.iter() {
             response = response.header(name, value);
         }
-        
+
         Ok(response.body(Body::from(body_data))?)
     }
 }

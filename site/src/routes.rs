@@ -1,9 +1,8 @@
 use axum::{
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
     Router,
 };
-use std::io::Read;
 use tower_http::services::ServeDir;
 
 use crate::{

@@ -2,17 +2,15 @@ use anyhow::Result;
 use axum::{
     extract::State,
     http::StatusCode,
-    response::{Html, Json},
-    routing::{get, post},
+    response::Json,
+    routing::get,
     Router,
 };
 use serde_json::{json, Value};
-use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::info;
 
 mod analyze;
 mod api;

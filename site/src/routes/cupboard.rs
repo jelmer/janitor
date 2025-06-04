@@ -5,7 +5,7 @@ use axum::{
 
 use crate::{
     app::AppState,
-    auth::{require_admin, require_qa_reviewer},
+    auth::require_admin,
     handlers::cupboard,
 };
 

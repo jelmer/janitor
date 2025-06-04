@@ -1,16 +1,15 @@
 use axum::{
-    extract::{Request, State},
-    http::{header, HeaderMap, Method, StatusCode},
+    extract::Request,
+    http::{header, HeaderMap, Method},
     middleware::Next,
     response::Response,
 };
 use metrics::{counter, histogram};
-use std::{sync::Arc, time::Instant};
-use tracing::{debug, info, warn, Span};
+use std::time::Instant;
+use tracing::{debug, Span};
 use uuid::Uuid;
 
 use super::content_negotiation::{negotiate_content_type, ContentType};
-use crate::config::SiteConfig;
 
 /// Request context for logging and metrics
 #[derive(Debug, Clone)]

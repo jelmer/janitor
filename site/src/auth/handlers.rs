@@ -9,12 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use crate::auth::{
-    middleware::{AuthState, OptionalUser, UserContext},
-    oidc::OidcClient,
-    session::SessionManager,
-};
-use crate::config::SiteConfig;
+use crate::auth::middleware::{AuthState, OptionalUser, UserContext};
 
 /// Query parameters for login redirect
 #[derive(Debug, Deserialize)]

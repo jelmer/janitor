@@ -8,48 +8,48 @@ pub enum UploadError {
     /// Failed to sign package with debsign
     #[error("Failed to sign package: {0}")]
     DebsignFailure(String),
-    
+
     /// Failed to upload package with dput
     #[error("Failed to upload package: {0}")]
     DputFailure(String),
-    
+
     /// Artifacts are missing or inaccessible
     #[error("Artifacts missing for run {0}")]
     ArtifactsMissing(String),
-    
+
     /// No changes files found in artifacts
     #[error("No changes files found in artifacts")]
     NoChangesFiles,
-    
+
     /// Database error
     #[error("Database error: {0}")]
     Database(String),
-    
+
     /// Redis error
     #[error("Redis error: {0}")]
     Redis(#[from] redis::RedisError),
-    
+
     /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     /// JSON parsing error
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    
+
     /// Artifact manager error
     #[error("Artifact manager error: {0}")]
     ArtifactManager(String),
-    
+
     /// Configuration error
     #[error("Configuration error: {0}")]
     Config(String),
-    
+
     /// Invalid request error
     #[error("Invalid request: {message}")]
-    InvalidRequest { 
+    InvalidRequest {
         /// Error message
-        message: String 
+        message: String,
     },
 }
 

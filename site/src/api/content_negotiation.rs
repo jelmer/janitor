@@ -1,5 +1,4 @@
 use axum::{
-    extract::Request,
     http::{header, HeaderMap, HeaderValue},
     response::{Html, IntoResponse, Response},
     Json,
