@@ -3,6 +3,7 @@ pub mod api;
 pub mod artifacts;
 pub mod config;
 pub mod database;
+pub mod shared_config;
 pub mod debdiff;
 pub mod error;
 pub mod logging;
