@@ -809,10 +809,10 @@ async fn generate_run_file(
         context.insert("is_admin".to_string(), serde_json::to_value(false)?);
     }
 
-    // Calculate success probability and stats (matches Python logic)
-    if let Ok(stats) = state.database.get_run_statistics(campaign, codebase).await {
-        let success_probability = if stats.total > 0 {
-            stats.successful as f64 / stats.total as f64
+    // Get comprehensive run context in a single optimized query
+    if let Ok(run_context) = state.database.get_run_context(run_id, campaign, codebase).await {
+        let success_probability = if run_context.total_runs > 0 {
+            run_context.successful_runs as f64 / run_context.total_runs as f64
         } else {
             0.0
         };
@@ -822,8 +822,30 @@ async fn generate_run_file(
         );
         context.insert(
             "total_previous_runs".to_string(),
-            serde_json::to_value(&stats.total)?,
+            serde_json::to_value(&run_context.total_runs)?,
         );
+
+        // Binary packages are included in the optimized query
+        context.insert(
+            "binary_packages".to_string(),
+            serde_json::to_value(&run_context.binary_packages)?,
+        );
+
+        // Queue position is included in the optimized query  
+        context.insert(
+            "queue_position".to_string(),
+            serde_json::to_value(&run_context.queue_position)?,
+        );
+
+        if run_context.queue_position > 0 {
+            if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
+                let wait_seconds = run_context.queue_position as i64 * avg_time;
+                context.insert(
+                    "queue_wait_time".to_string(),
+                    serde_json::to_value(&wait_seconds)?,
+                );
+            }
+        }
     }
 
     // Analyze logs and determine primary log (matches Python logic)
@@ -913,36 +935,12 @@ async fn generate_run_file(
         }
     }
 
-    // Reviews
+    // Reviews - still needs separate query for full review details
     if let Ok(reviews) = state.database.get_reviews(run_id).await {
         context.insert("reviews".to_string(), serde_json::to_value(&reviews)?);
     }
 
-    // Queue position and wait time
-    if let Ok(queue_position) = state.database.get_queue_position(campaign, codebase).await {
-        context.insert(
-            "queue_position".to_string(),
-            serde_json::to_value(&queue_position)?,
-        );
-
-        if queue_position > 0 {
-            if let Ok(avg_time) = state.database.get_average_run_time(campaign).await {
-                let wait_seconds = queue_position as i64 * avg_time;
-                context.insert(
-                    "queue_wait_time".to_string(),
-                    serde_json::to_value(&wait_seconds)?,
-                );
-            }
-        }
-    }
-
-    // Binary packages and lintian results
-    if let Ok(binary_packages) = state.database.get_binary_packages(run_id).await {
-        context.insert(
-            "binary_packages".to_string(),
-            serde_json::to_value(&binary_packages)?,
-        );
-    }
+    // Queue position, binary packages already included in optimized run context above
 
     if let Ok(lintian_result) = fetch_lintian_result(state, run_id).await {
         context.insert(
