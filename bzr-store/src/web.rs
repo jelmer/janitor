@@ -20,7 +20,7 @@ use tracing::{info, warn};
 use crate::config::Config;
 use crate::database::DatabaseManager;
 use crate::error::{BzrError, Result};
-use crate::repository::{RepositoryManager, RepositoryPath, SubprocessRepositoryManager};
+use crate::repository::{RepositoryManager, RepositoryPath, PyO3RepositoryManager, SubprocessRepositoryManager};
 use crate::smart_protocol::{smart_protocol_handler, serve_bzr_file_handler};
 
 /// Application state shared between handlers
@@ -68,9 +68,9 @@ pub async fn create_applications(config: Config) -> Result<(Router, Router)> {
     // Initialize database
     let database = DatabaseManager::new(&config).await?;
     
-    // Initialize repository manager
+    // Initialize repository manager - prefer PyO3 with subprocess fallback
     let repository_manager: Arc<dyn RepositoryManager> = Arc::new(
-        SubprocessRepositoryManager::new(config.repository_path.clone(), database.clone())
+        PyO3RepositoryManager::new(config.repository_path.clone(), database.clone(), true)
     );
     
     // Initialize templates
@@ -331,14 +331,49 @@ async fn configure_remote_handler(
     })))
 }
 
-/// List remotes handler (placeholder)
+/// List remotes handler
 async fn list_remotes_handler(
+    State(state): State<AppState>,
     Path((campaign, codebase, role)): Path<(String, String, String)>,
 ) -> Result<Json<serde_json::Value>> {
-    // TODO: Implement actual remote listing
+    let repo_path = RepositoryPath::new(campaign, codebase, role);
+    let fs_path = state.config.repository_path
+        .join(&repo_path.campaign)
+        .join(&repo_path.codebase)
+        .join(&repo_path.role);
+
+    if !fs_path.exists() {
+        return Err(BzrError::PathNotFound {
+            path: repo_path.relative_path(),
+        });
+    }
+
+    // Try to get remote information using subprocess
+    let output = tokio::process::Command::new("brz")
+        .args(["config", "parent_location"])
+        .current_dir(&fs_path)
+        .output()
+        .await;
+
+    let parent_location = match output {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.trim().to_string()
+        }
+        _ => String::new(),
+    };
+
+    let mut remotes = Vec::new();
+    if !parent_location.is_empty() {
+        remotes.push(json!({
+            "name": "parent",
+            "url": parent_location
+        }));
+    }
+
     Ok(Json(json!({
-        "repository": format!("{}/{}/{}", campaign, codebase, role),
-        "remotes": []
+        "repository": repo_path.relative_path(),
+        "remotes": remotes
     })))
 }
 
