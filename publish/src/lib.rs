@@ -10,6 +10,7 @@ use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use janitor::config::Campaign;
 use janitor::publish::{MergeProposalStatus, Mode};
+use janitor::state::Run;
 use janitor::vcs::{VcsManager, VcsType};
 use reqwest::header::HeaderMap;
 use serde::ser::SerializeStruct;
@@ -1797,8 +1798,14 @@ async fn consider_publish_run(
 
     // Check if we should skip due to binary diff requirement
     if require_binary_diff {
-        // TODO: Implement actual binary diff check
-        // For now, assume we have binary diff capability
+        // Basic binary diff availability check
+        if !has_binary_diff_capability(run, campaign_config).await {
+            log::info!(
+                "Skipping run {} due to lack of binary diff capability",
+                run.id
+            );
+            return Ok(results);
+        }
         log::debug!("Binary diff check passed for run {}", run.id);
     }
 
@@ -2237,4 +2244,67 @@ async fn try_publish_branch(
     // 4. Update the publish record with results
 
     Ok(format!("publish_{}", publish_id))
+}
+
+/// Check if binary diff capability is available for a run
+async fn has_binary_diff_capability(
+    run: &Run,
+    _campaign_config: &Campaign,
+) -> bool {
+    // Basic heuristics for binary diff availability:
+    // 1. Check if the run has target details that indicate binary artifacts
+    // 2. Check for specific build targets that produce binary outputs
+    // 3. For Debian packages, check if .deb files are available
+    
+    if let Some(result) = &run.result {
+        if let Some(result_obj) = result.as_object() {
+            // Check if there's target information in the result
+            if let Some(target_details) = result_obj.get("target") {
+                if let Some(target_obj) = target_details.as_object() {
+                    // Check target name
+                    if let Some(target_name) = target_obj.get("name").and_then(|n| n.as_str()) {
+                        if target_name == "debian" {
+                            // Check for binary package artifacts in Debian builds
+                            if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
+                                if let Some(artifacts) = details.get("binary_packages") {
+                                    if artifacts.as_array().map_or(false, |arr| !arr.is_empty()) {
+                                        log::debug!("Binary diff available: Debian binary packages found");
+                                        return true;
+                                    }
+                                }
+                                
+                                // Check for .deb files in build artifacts
+                                if let Some(artifacts) = details.get("artifacts") {
+                                    if let Some(files) = artifacts.as_array() {
+                                        for file in files {
+                                            if let Some(filename) = file.as_str() {
+                                                if filename.ends_with(".deb") || filename.ends_with(".udeb") {
+                                                    log::debug!("Binary diff available: .deb file found");
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // For other build targets, check for binary artifacts
+                        if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
+                            if let Some(artifacts) = details.get("binary_artifacts") {
+                                if artifacts.as_array().map_or(false, |arr| !arr.is_empty()) {
+                                    log::debug!("Binary diff available: Binary artifacts found");
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // If no binary artifacts are detected, binary diff is not needed
+    log::debug!("No binary artifacts detected, binary diff not required");
+    false
 }
