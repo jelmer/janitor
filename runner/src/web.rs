@@ -1638,7 +1638,7 @@ async fn assign_work_internal(state: Arc<AppState>, request: AssignRequest) -> i
     // Use enhanced Redis integration for queue management
 
     // Get next available queue item with rate limiting and Redis integration
-    let excluded_hosts: &Vec<String> = &vec![]; // TODO: Get from proper config
+    let excluded_hosts = &state.config.worker.avoid_hosts;
     let assignment = match state
         .database
         .next_queue_item_with_rate_limiting(

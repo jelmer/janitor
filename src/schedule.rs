@@ -145,11 +145,12 @@ async fn estimate_success_probability_and_duration(
     campaign: &str,
     context: Option<&str>,
 ) -> Result<(f64, chrono::Duration, usize), sqlx::Error> {
-    // TODO(jelmer): Bias this towards recent runs?
-    let mut total = 0;
-    let mut success = 0;
+    // Bias calculations towards recent runs by using weighted counts
+    let mut total_weight = 0.0;
+    let mut success_weight = 0.0;
     let mut same_context_multiplier = if context.is_none() { 0.5 } else { 1.0 };
     let mut durations = vec![];
+    let now = chrono::Utc::now();
     #[derive(sqlx::FromRow)]
     struct Run {
         result_code: String,
@@ -193,9 +194,15 @@ ORDER BY start_time DESC
         }
 
         durations.push(run.duration.microseconds / (1000 * 1000));
-        total += 1;
+        
+        // Calculate time-based weight: recent runs get higher weight
+        // Weight decreases exponentially with age (half-life of 30 days)
+        let days_ago = (now - run.start_time).num_days() as f64;
+        let weight = 0.5_f64.powf(days_ago / 30.0);
+        
+        total_weight += weight;
         if run.result_code == "success" {
-            success += 1;
+            success_weight += weight;
         }
         let mut same_context = context != Some("")
             && context.is_some()
@@ -212,7 +219,7 @@ ORDER BY start_time DESC
                 .parse()
                 .unwrap();
             if deps_satisfied(conn, campaign, &relations).await? {
-                success += 1;
+                success_weight += weight;
                 same_context = false;
             }
         }
@@ -221,7 +228,7 @@ ORDER BY start_time DESC
         }
     }
 
-    let estimated_duration = if total == 0 {
+    let estimated_duration = if total_weight == 0.0 {
         // If there were no previous runs, then it doesn't really matter that we don't know the context.
         same_context_multiplier = 1.0;
 
@@ -231,9 +238,9 @@ ORDER BY start_time DESC
     };
 
     Ok((
-        (((success * 10 + 1) / (total * 10 + 1)) as f64 * same_context_multiplier),
+        (((success_weight * 10.0 + 1.0) / (total_weight * 10.0 + 1.0)) * same_context_multiplier),
         estimated_duration,
-        total,
+        total_weight as usize,
     ))
 }
 
