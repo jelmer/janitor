@@ -109,6 +109,78 @@ impl RunnerDatabase {
         }
     }
 
+    /// Convert a Run to JanitorResult with async database calls for related data.
+    pub async fn run_to_janitor_result_async(&self, run: Run) -> Result<JanitorResult, sqlx::Error> {
+        // Fetch related data asynchronously
+        let remotes_data = self.get_run_remotes(&run.id).await?;
+        let resume = self.get_resume_info(&run.id, &run.codebase, &run.suite).await?;
+        let target_data = self.get_run_target(&run.id).await?;
+        let builder_result_data = self.get_run_builder_result(&run.id).await?;
+        
+        // Convert JSON data to proper structs
+        let remotes = remotes_data.map(|data| {
+            data.into_iter()
+                .map(|(name, remote_info)| {
+                    let url = remote_info.get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    (name, crate::ResultRemote { url })
+                })
+                .collect()
+        });
+        
+        let target = target_data.and_then(|data| {
+            let name = data.get("name")?.as_str()?.to_string();
+            let details = data.get("details")?.clone();
+            Some(crate::ResultTarget { name, details })
+        });
+        
+        let builder_result = builder_result_data.and_then(|data| {
+            serde_json::from_value(data).ok()
+        });
+
+        Ok(JanitorResult {
+            log_id: run.id,
+            branch_url: run.branch_url,
+            subpath: None, // Not stored in run table currently
+            code: run.result_code,
+            transient: run.failure_transient,
+            codebase: run.codebase,
+            campaign: run.suite,
+            description: run.description,
+            codemod: run.result,
+            value: run.value.map(|v| v as u64),
+            logfilenames: run.logfilenames.unwrap_or_default(),
+            start_time: run.start_time,
+            finish_time: run.finish_time,
+            revision: run.revision,
+            main_branch_revision: run.main_branch_revision,
+            change_set: Some(run.change_set),
+            tags: run.result_tags.map(|tags| {
+                tags.into_iter()
+                    .map(|(name, rev)| (name, Some(RevisionId::from(rev.as_bytes()))))
+                    .collect()
+            }),
+            remotes,
+            branches: run.result_branches.map(|branches| {
+                branches
+                    .into_iter()
+                    .map(|(fn_name, name, br, r)| (Some(fn_name), Some(name), br, r))
+                    .collect()
+            }),
+            failure_details: run.failure_details,
+            failure_stage: run.failure_stage.map(|s| vec![s]),
+            resume,
+            target,
+            worker_name: run.worker_name,
+            vcs_type: Some(run.vcs_type),
+            target_branch_url: run.target_branch_url,
+            context: run.context.and_then(|s| serde_json::from_str(&s).ok()),
+            builder_result,
+        })
+    }
+
     /// Get a run by ID.
     pub async fn get_run(&self, run_id: &str) -> Result<Option<JanitorResult>, sqlx::Error> {
         let run: Option<Run> = sqlx::query_as(
@@ -125,7 +197,13 @@ impl RunnerDatabase {
         .fetch_optional(self.pool())
         .await?;
 
-        Ok(run.map(|r| self.run_to_janitor_result(r)))
+        match run {
+            Some(r) => {
+                let result = self.run_to_janitor_result_async(r).await?;
+                Ok(Some(result))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Store an active run.
