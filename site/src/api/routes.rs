@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use super::{
     content_negotiation::{negotiate_response, ContentType},
@@ -612,18 +612,27 @@ async fn get_merge_proposals(
     )
 )]
 async fn get_runner_status(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Runner status requested");
 
-    // TODO: Implement actual runner status retrieval
-    let status = serde_json::json!({
-        "status": "healthy",
-        "workers": 5,
-        "active_runs": 3,
-        "queue_length": 10
-    });
+    // Get runner URL from configuration
+    let runner_url = &app_state.config.site().runner_url;
+    
+    // Attempt to query the runner service
+    let status = match fetch_runner_status(&app_state.http_client, runner_url).await {
+        Ok(runner_status) => runner_status,
+        Err(e) => {
+            warn!("Failed to fetch runner status from {}: {}", runner_url, e);
+            // Return error status when runner is unreachable
+            serde_json::json!({
+                "status": "unhealthy",
+                "error": "Runner service unreachable",
+                "runner_url": runner_url
+            })
+        }
+    };
 
     negotiate_response(ApiResponse::success(status), &headers, "/api/runner/status")
 }
@@ -1200,11 +1209,7 @@ async fn admin_system_status(
                     "queue_size": stats.get("queue_size").unwrap_or(&0),
                     "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
                 },
-                "services": {
-                    "runner": "unknown", // TODO: Check runner service
-                    "publisher": "unknown", // TODO: Check publisher service
-                    "worker_pool": "unknown", // TODO: Check worker pool
-                },
+                "services": fetch_service_health_status(&app_state).await,
                 "resources": {
                     "memory_usage": "unknown", // TODO: Add memory monitoring
                     "cpu_usage": "unknown", // TODO: Add CPU monitoring
@@ -1562,21 +1567,32 @@ async fn admin_publish_scan(
     )
 )]
 async fn admin_get_workers(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin workers list requested");
 
-    // TODO: Implement actual worker status retrieval
-    let workers = serde_json::json!({
-        "workers": [],
-        "total_workers": 0,
-        "active_workers": 0,
-        "idle_workers": 0,
-        "status": "not_implemented",
-        "message": "Worker monitoring requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Get runner URL from configuration
+    let runner_url = &app_state.config.site().runner_url;
+    
+    // Attempt to fetch worker list from runner service
+    let workers = match fetch_workers_from_runner(&app_state.http_client, runner_url).await {
+        Ok(worker_data) => worker_data,
+        Err(e) => {
+            warn!("Failed to fetch workers from runner {}: {}", runner_url, e);
+            // Return fallback data when runner is unreachable
+            serde_json::json!({
+                "workers": [],
+                "total_workers": 0,
+                "active_workers": 0,
+                "idle_workers": 0,
+                "status": "error",
+                "error": "Runner service unreachable",
+                "runner_url": runner_url,
+                "timestamp": chrono::Utc::now()
+            })
+        }
+    };
 
     negotiate_response(
         ApiResponse::success(workers),
@@ -3805,4 +3821,114 @@ async fn cupboard_reviews_verdicts(
         &headers,
         "/cupboard/reviews/verdicts",
     )
+}
+
+// ============================================================================
+// Helper Functions for Service Communication
+// ============================================================================
+
+/// Fetch runner status from the runner service
+async fn fetch_runner_status(
+    client: &reqwest::Client,
+    runner_url: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    let status_url = format!("{}/status", runner_url.trim_end_matches('/'));
+    
+    let response = client
+        .get(&status_url)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await?;
+    
+    if response.status().is_success() {
+        let status: serde_json::Value = response.json().await?;
+        Ok(status)
+    } else {
+        Err(format!("Runner returned status {}", response.status()).into())
+    }
+}
+
+/// Fetch worker list from the runner service
+async fn fetch_workers_from_runner(
+    client: &reqwest::Client,
+    runner_url: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    let workers_url = format!("{}/workers", runner_url.trim_end_matches('/'));
+    
+    let response = client
+        .get(&workers_url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await?;
+    
+    if response.status().is_success() {
+        let workers_data: serde_json::Value = response.json().await?;
+        Ok(workers_data)
+    } else {
+        Err(format!("Runner returned status {} for workers endpoint", response.status()).into())
+    }
+}
+
+/// Check health status of all external services
+async fn fetch_service_health_status(app_state: &AppState) -> serde_json::Value {
+    let mut services = serde_json::Map::new();
+    
+    // Check runner service
+    let runner_status = match fetch_runner_status(&app_state.http_client, &app_state.config.site().runner_url).await {
+        Ok(_) => "healthy",
+        Err(_) => "unhealthy"
+    };
+    services.insert("runner".to_string(), serde_json::Value::String(runner_status.to_string()));
+    
+    // Check publisher service if configured
+    if let Some(publisher_url) = &app_state.config.site().publisher_url {
+        let publisher_status = match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+            Ok(_) => "healthy",
+            Err(_) => "unhealthy"
+        };
+        services.insert("publisher".to_string(), serde_json::Value::String(publisher_status.to_string()));
+    } else {
+        services.insert("publisher".to_string(), serde_json::Value::String("not_configured".to_string()));
+    }
+    
+    // Check archiver service if configured
+    if let Some(archiver_url) = &app_state.config.site().archiver_url {
+        let archiver_status = match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
+            Ok(_) => "healthy",
+            Err(_) => "unhealthy"
+        };
+        services.insert("archiver".to_string(), serde_json::Value::String(archiver_status.to_string()));
+    } else {
+        services.insert("archiver".to_string(), serde_json::Value::String("not_configured".to_string()));
+    }
+    
+    // Check differ service
+    let differ_status = match check_service_health(&app_state.http_client, &app_state.config.site().differ_url, "differ").await {
+        Ok(_) => "healthy",
+        Err(_) => "unhealthy"
+    };
+    services.insert("differ".to_string(), serde_json::Value::String(differ_status.to_string()));
+    
+    serde_json::Value::Object(services)
+}
+
+/// Generic service health check
+async fn check_service_health(
+    client: &reqwest::Client,
+    service_url: &str,
+    service_name: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let health_url = format!("{}/health", service_url.trim_end_matches('/'));
+    
+    let response = client
+        .get(&health_url)
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await?;
+    
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("{} service returned status {}", service_name, response.status()).into())
+    }
 }
