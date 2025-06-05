@@ -124,10 +124,10 @@ pub fn get_debdiff(
             "/debdiff/{}/{}?filter_boring=1",
             unchanged_id, log_id
         ))
-        .unwrap();
+        .map_err(|_e| DebdiffError::Unavailable("Invalid URL format".to_string()))?;
 
     let mut headers = HeaderMap::new();
-    headers.insert("Accept", "text/plain".parse().unwrap());
+    headers.insert("Accept", "text/plain".parse().expect("Invalid header value"));
 
     let client = reqwest::blocking::Client::new();
     let response = client.get(debdiff_url).headers(headers).send()?;
@@ -138,9 +138,8 @@ pub fn get_debdiff(
             let run_id = response
                 .headers()
                 .get("unavailable_run_id")
-                .unwrap()
-                .to_str()
-                .unwrap();
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("unknown");
             Err(DebdiffError::MissingRun(run_id.to_string()))
         }
         reqwest::StatusCode::BAD_REQUEST
@@ -148,7 +147,10 @@ pub fn get_debdiff(
         | reqwest::StatusCode::BAD_GATEWAY
         | reqwest::StatusCode::SERVICE_UNAVAILABLE
         | reqwest::StatusCode::GATEWAY_TIMEOUT => {
-            Err(DebdiffError::Unavailable(response.text().unwrap()))
+            let error_text = response
+                .text()
+                .unwrap_or_else(|_| "Failed to read error response".to_string());
+            Err(DebdiffError::Unavailable(error_text))
         }
         _e => Err(DebdiffError::Http(response.error_for_status().unwrap_err())),
     }
@@ -439,26 +441,31 @@ async fn run_worker_process(
         .spawn()?;
 
     use tokio::io::AsyncWriteExt;
-    p.stdin
-        .as_mut()
-        .unwrap()
-        .write_all(serde_json::to_string(&request).unwrap().as_bytes())
-        .await?;
+    if let Some(stdin) = p.stdin.as_mut() {
+        let request_json = serde_json::to_string(&request)
+            .map_err(|e| WorkerInvalidResponse::Serde(e))?;
+        stdin.write_all(request_json.as_bytes()).await?;
+    } else {
+        return Err(WorkerInvalidResponse::from("Failed to get stdin handle".to_string()));
+    }
 
     let status = p.wait().await?;
 
     if status.success() {
-        let mut stdout = p.stdout.take().unwrap();
-        let _stderr = p.stderr.take().unwrap();
+        let mut stdout = p.stdout.take()
+            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stdout handle".to_string()))?;
+        let _stderr = p.stderr.take();
         let mut output = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
 
         let response =
             serde_json::from_reader(&mut output.as_slice()).map_err(WorkerInvalidResponse::from)?;
-        Ok((status.code().unwrap(), response))
+        Ok((status.code().unwrap_or(-1), response))
     } else if status.code() == Some(1) {
-        let mut stdout = p.stdout.take().unwrap();
-        let mut stderr = p.stderr.take().unwrap();
+        let mut stdout = p.stdout.take()
+            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stdout handle".to_string()))?;
+        let mut stderr = p.stderr.take()
+            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stderr handle".to_string()))?;
         let mut output = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
         let response =
@@ -467,14 +474,15 @@ async fn run_worker_process(
         tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut error).await?;
         use std::io::Write;
         std::io::stderr().write_all(&error)?;
-        return Ok((status.code().unwrap(), response));
+        return Ok((status.code().unwrap_or(1), response));
     } else {
-        let mut stderr = p.stderr.take().unwrap();
+        let mut stderr = p.stderr.take()
+            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stderr handle".to_string()))?;
         let mut error = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut error).await?;
-        return Err(WorkerInvalidResponse::from(
-            String::from_utf8(error).unwrap(),
-        ));
+        let error_string = String::from_utf8(error)
+            .unwrap_or_else(|_| "Failed to decode error output".to_string());
+        return Err(WorkerInvalidResponse::from(error_string));
     }
 }
 
@@ -632,11 +640,11 @@ impl PublishWorker {
                     description: e.to_string(),
                 })?;
 
-            if result.proposal_url.is_some() && result.is_new.unwrap() {
+            if result.proposal_url.is_some() && result.is_new.unwrap_or(false) {
                 // Publish merge proposal event to Redis
                 if let Some(redis) = self.redis.as_mut() {
                     let event = crate::redis::MergeProposalEvent {
-                        url: result.proposal_url.as_ref().unwrap().to_string(),
+                        url: result.proposal_url.as_ref().expect("proposal_url just checked to be Some").to_string(),
                         web_url: result.proposal_web_url.as_ref().map(|u| u.to_string()),
                         status: "open".to_string(),
                         codebase: codebase.to_string(),
@@ -699,9 +707,11 @@ pub fn run_sufficient_for_proposal(campaign_config: &Campaign, run_value: Option
 /// The URL for the role branch
 pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url::Url {
     if let Some(remote_branch_name) = remote_branch_name {
-        let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(
-            &url.to_string().trim_end_matches('/').parse().unwrap(),
-        );
+        let parsed_url = match url.to_string().trim_end_matches('/').parse() {
+            Ok(url) => url,
+            Err(_) => return url.clone(), // Return original URL if parsing fails
+        };
+        let (base_url, mut params) = breezyshim::urlutils::split_segment_parameters(&parsed_url);
 
         params.insert(
             "branch".to_owned(),
@@ -762,12 +772,17 @@ pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> boo
     }
     let url_a = url_a.unwrap();
     let url_b = url_b.unwrap();
-    let (base_url_a, _params_a) = breezyshim::urlutils::split_segment_parameters(
-        &url_a.to_string().trim_end_matches('/').parse().unwrap(),
-    );
-    let (base_url_b, _params_b) = breezyshim::urlutils::split_segment_parameters(
-        &url_b.to_string().trim_end_matches('/').parse().unwrap(),
-    );
+    let parsed_url_a = match url_a.to_string().trim_end_matches('/').parse() {
+        Ok(url) => url,
+        Err(_) => return false,
+    };
+    let (base_url_a, _params_a) = breezyshim::urlutils::split_segment_parameters(&parsed_url_a);
+    
+    let parsed_url_b = match url_b.to_string().trim_end_matches('/').parse() {
+        Ok(url) => url,
+        Err(_) => return false,
+    };
+    let (base_url_b, _params_b) = breezyshim::urlutils::split_segment_parameters(&parsed_url_b);
     // Support following redirects by normalizing URLs
     let normalized_url_a = resolve_redirects(&base_url_a);
     let normalized_url_b = resolve_redirects(&base_url_b);
@@ -882,16 +897,20 @@ pub async fn refresh_bucket_mp_counts(state: Arc<AppState>) -> Result<(), sqlx::
     .await?;
 
     for row in rows {
-        per_bucket
-            .entry(row.1.parse().unwrap())
-            .or_default()
-            .insert(row.0, row.2 as usize);
+        if let Ok(status) = row.1.parse() {
+            per_bucket
+                .entry(status)
+                .or_default()
+                .insert(row.0, row.2 as usize);
+        } else {
+            log::warn!("Invalid merge proposal status in database: {}", row.1);
+        }
     }
-    state
-        .bucket_rate_limiter
-        .lock()
-        .unwrap()
-        .set_mps_per_bucket(&per_bucket);
+    if let Ok(mut limiter) = state.bucket_rate_limiter.lock() {
+        limiter.set_mps_per_bucket(&per_bucket);
+    } else {
+        log::error!("Failed to acquire bucket rate limiter lock");
+    }
     Ok(())
 }
 

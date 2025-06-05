@@ -196,6 +196,96 @@ impl SessionManager {
 
         Ok(())
     }
+
+    /// Store temporary data with expiration (for OIDC state, CSRF tokens, etc.)
+    pub async fn store_temporary_data<T: serde::Serialize>(
+        &self,
+        key: &str,
+        data: &T,
+        duration: std::time::Duration,
+    ) -> Result<(), SessionError> {
+        let expires_at = Utc::now() + Duration::from_std(duration).unwrap_or(Duration::hours(1));
+        let data_json = serde_json::to_value(data).map_err(|e| {
+            SessionError::InvalidData(format!("Failed to serialize temporary data: {}", e))
+        })?;
+
+        // Create temporary data table if it doesn't exist
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS site_temporary_data (
+                key text PRIMARY KEY,
+                data jsonb NOT NULL,
+                expires_at timestamptz NOT NULL
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Insert or update the temporary data
+        sqlx::query(
+            "INSERT INTO site_temporary_data (key, data, expires_at) VALUES ($1, $2, $3)
+             ON CONFLICT (key) DO UPDATE SET data = $2, expires_at = $3",
+        )
+        .bind(key)
+        .bind(&data_json)
+        .bind(expires_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get temporary data by key
+    pub async fn get_temporary_data<T: serde::de::DeserializeOwned>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, SessionError> {
+        let row = sqlx::query_as::<_, (serde_json::Value, DateTime<Utc>)>(
+            "SELECT data, expires_at FROM site_temporary_data WHERE key = $1",
+        )
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let (data, expires_at) = match row {
+            Some(row) => row,
+            None => return Ok(None),
+        };
+
+        // Check if data has expired
+        if Utc::now() > expires_at {
+            // Clean up expired data
+            self.delete_temporary_data(key).await?;
+            return Ok(None);
+        }
+
+        let parsed_data: T = serde_json::from_value(data).map_err(|e| {
+            SessionError::InvalidData(format!("Failed to deserialize temporary data: {}", e))
+        })?;
+
+        Ok(Some(parsed_data))
+    }
+
+    /// Delete temporary data by key
+    pub async fn delete_temporary_data(&self, key: &str) -> Result<(), SessionError> {
+        sqlx::query("DELETE FROM site_temporary_data WHERE key = $1")
+            .bind(key)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Clean up expired temporary data
+    pub async fn cleanup_expired_temporary_data(&self) -> Result<u64, SessionError> {
+        let result = sqlx::query("DELETE FROM site_temporary_data WHERE expires_at < $1")
+            .bind(Utc::now())
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected())
+    }
 }
 
 /// Session cookie configuration

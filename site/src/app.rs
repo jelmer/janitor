@@ -96,7 +96,7 @@ impl AppState {
 
         // Check Redis connection if configured
         if let Some(redis_client) = &self.redis {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             redis::cmd("PING").query_async::<String>(&mut conn).await?;
         }
 

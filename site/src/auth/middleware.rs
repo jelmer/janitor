@@ -162,6 +162,7 @@ pub struct AuthState {
     pub cookie_config: SessionCookieConfig,
     pub admin_group: Option<String>,
     pub qa_reviewer_group: Option<String>,
+    pub oidc_client: Option<Arc<crate::auth::oidc::OidcClient>>,
 }
 
 impl AuthState {
@@ -177,6 +178,7 @@ impl AuthState {
             cookie_config,
             admin_group: config.admin_group.clone(),
             qa_reviewer_group: config.qa_reviewer_group.clone(),
+            oidc_client: None, // Initialize as None - will be set during app creation if OIDC is configured
         }
     }
 }
