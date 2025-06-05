@@ -127,10 +127,10 @@ async fn api_status(State(state): State<AppState>) -> Json<Value> {
     
     // Check Redis connectivity if available
     let redis_status = if let Some(ref redis_client) = state.redis {
-        match redis_client.get_async_connection().await {
+        match redis_client.get_multiplexed_async_connection().await {
             Ok(mut conn) => {
                 use redis::AsyncCommands;
-                match conn.ping().await {
+                match redis::cmd("PING").query_async::<String>(&mut conn).await {
                     Ok(_) => "healthy",
                     Err(_) => "unhealthy"
                 }

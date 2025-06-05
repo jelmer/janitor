@@ -195,6 +195,8 @@ impl RealtimeManager {
         stats: &Arc<RwLock<RealtimeStats>>,
         channel_prefix: &str,
     ) -> Result<()> {
+        // Note: PubSub requires a regular connection, not multiplexed
+        #[allow(deprecated)]
         let conn = redis_client
             .get_async_connection()
             .await
@@ -212,27 +214,32 @@ impl RealtimeManager {
         let mut stream = pubsub.on_message();
 
         while let Some(msg) = stream.next().await {
-            if let Ok(payload) = msg.get_payload::<String>() {
-                if let Ok(event) = serde_json::from_str::<RealtimeEvent>(&payload) {
-                    debug!("Received real-time event: {}", event.event_type());
+            match msg.get_payload::<String>() {
+                Ok(payload) => {
+                    if let Ok(event) = serde_json::from_str::<RealtimeEvent>(&payload) {
+                        debug!("Received real-time event: {}", event.event_type());
 
-                    // Update stats
-                    {
-                        let mut stats_guard = stats.write().await;
-                        stats_guard.events_received += 1;
-                        stats_guard.last_event_time = Some(chrono::Utc::now());
-                    }
-
-                    // Broadcast to local subscribers
-                    let channel = event.channel();
-                    let broadcasters_guard = broadcasters.read().await;
-                    if let Some(broadcaster) = broadcasters_guard.get(&channel) {
-                        if broadcaster.send(event).is_err() {
-                            debug!("No active subscribers for channel: {}", channel);
+                        // Update stats
+                        {
+                            let mut stats_guard = stats.write().await;
+                            stats_guard.events_received += 1;
+                            stats_guard.last_event_time = Some(chrono::Utc::now());
                         }
+
+                        // Broadcast to local subscribers
+                        let channel = event.channel();
+                        let broadcasters_guard = broadcasters.read().await;
+                        if let Some(broadcaster) = broadcasters_guard.get(&channel) {
+                            if broadcaster.send(event).is_err() {
+                                debug!("No active subscribers for channel: {}", channel);
+                            }
+                        }
+                    } else {
+                        warn!("Failed to parse real-time event payload: {}", payload);
                     }
-                } else {
-                    warn!("Failed to parse real-time event payload: {}", payload);
+                }
+                Err(e) => {
+                    warn!("Failed to get message payload: {}", e);
                 }
             }
         }
@@ -263,7 +270,7 @@ impl RealtimeManager {
         // Publish to Redis if available
         if let Some(redis_client) = &self.redis_client {
             let mut conn = redis_client
-                .get_async_connection()
+                .get_multiplexed_async_connection()
                 .await
                 .context("Failed to connect to Redis for publishing")?;
 
@@ -361,7 +368,7 @@ impl RealtimeManager {
 
         if let Some(redis_client) = &self.redis_client {
             let mut conn = redis_client
-                .get_async_connection()
+                .get_multiplexed_async_connection()
                 .await
                 .context("Failed to connect to Redis for health check")?;
 

@@ -53,16 +53,31 @@ pub async fn login_handler(
         return Ok(Redirect::to(&redirect_url).into_response());
     }
 
-    // This is a placeholder implementation - the OIDC client needs to be injected
-    // from the main application state when this is integrated
-    //
-    // The proper implementation would:
-    // 1. Create OIDC client from config
-    // 2. Generate authorization URL with state and PKCE
-    // 3. Store auth state in session/cache
-    // 4. Redirect to OIDC provider
+    // Get OIDC client from auth state - if not configured, redirect to error page
+    let oidc_client = match &_auth_state.oidc_client {
+        Some(client) => client,
+        None => {
+            warn!("OIDC not configured, cannot initiate login");
+            return Ok(Redirect::to("/login?error=not_configured").into_response());
+        }
+    };
 
-    Ok(Redirect::to("/login?error=not_configured").into_response())
+    // Generate authorization URL with state and PKCE
+    let (auth_url, auth_state_data) = oidc_client.get_authorization_url(query.redirect);
+    
+    // Store auth state in session storage for verification during callback
+    let auth_state_key = format!("auth_state:{}", auth_state_data.state);
+    if let Err(e) = _auth_state.session_manager.store_temporary_data(
+        &auth_state_key, 
+        &auth_state_data, 
+        std::time::Duration::from_secs(600) // 10 minutes
+    ).await {
+        error!("Failed to store auth state: {}", e);
+        return Ok(Redirect::to("/login?error=session_error").into_response());
+    }
+
+    info!("Redirecting to OIDC provider for authentication");
+    Ok(Redirect::to(auth_url.as_str()).into_response())
 }
 
 /// Handle OAuth callback from OIDC provider
@@ -85,9 +100,86 @@ pub async fn callback_handler(
     let code = query.code.ok_or(StatusCode::BAD_REQUEST)?;
     let state = query.state.ok_or(StatusCode::BAD_REQUEST)?;
 
-    // For now, return a placeholder since we need to retrieve stored auth state
-    // This will be properly implemented when integrated with session storage
-    Ok(StatusCode::NOT_IMPLEMENTED.into_response())
+    // Get OIDC client from auth state
+    let oidc_client = match &_auth_state.oidc_client {
+        Some(client) => client,
+        None => {
+            warn!("OIDC not configured, cannot handle callback");
+            return Ok(Redirect::to("/login?error=not_configured").into_response());
+        }
+    };
+
+    // Retrieve stored auth state for verification
+    let auth_state_key = format!("auth_state:{}", state);
+    let stored_auth_state = match _auth_state.session_manager.get_temporary_data::<crate::auth::oidc::AuthState>(&auth_state_key).await {
+        Ok(Some(state)) => state,
+        Ok(None) => {
+            warn!("Auth state not found for state: {}", state);
+            return Ok(Redirect::to("/login?error=invalid_state").into_response());
+        }
+        Err(e) => {
+            error!("Failed to retrieve auth state: {}", e);
+            return Ok(Redirect::to("/login?error=session_error").into_response());
+        }
+    };
+
+    // Exchange authorization code for user information
+    let user = match oidc_client.handle_callback(&code, &state, &stored_auth_state).await {
+        Ok(user) => user,
+        Err(e) => {
+            error!("OIDC callback failed: {}", e);
+            return Ok(Redirect::to("/login?error=auth_failed").into_response());
+        }
+    };
+
+    // Create user session
+    let user_email = user.email.clone(); // Clone email before moving user
+    let session_id = match _auth_state.session_manager.create_session(user).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!("Failed to create session for user {}: {}", user_email, e);
+            return Ok(Redirect::to("/login?error=session_error").into_response());
+        }
+    };
+
+    // Clean up temporary auth state
+    if let Err(e) = _auth_state.session_manager.delete_temporary_data(&auth_state_key).await {
+        warn!("Failed to clean up auth state: {}", e);
+    }
+
+    // Set session cookie and redirect
+    let session_cookie = format!(
+        "{}={}; Path={}; Max-Age={}; HttpOnly{}{}",
+        _auth_state.cookie_config.name,
+        session_id,
+        _auth_state.cookie_config.path,
+        _auth_state.cookie_config.max_age
+            .map(|d| d.num_seconds())
+            .unwrap_or(86400),
+        if _auth_state.cookie_config.secure {
+            "; Secure"
+        } else {
+            ""
+        },
+        match _auth_state.cookie_config.same_site {
+            crate::auth::session::SameSite::Strict => "; SameSite=Strict",
+            crate::auth::session::SameSite::Lax => "; SameSite=Lax",
+            crate::auth::session::SameSite::None => "; SameSite=None",
+        }
+    );
+
+    let redirect_url = stored_auth_state.redirect_url.unwrap_or_else(|| "/".to_string());
+    let mut response = Redirect::to(&redirect_url).into_response();
+    
+    response.headers_mut().insert(
+        axum::http::header::SET_COOKIE,
+        session_cookie
+            .parse()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+
+    info!("User {} successfully authenticated", user_email);
+    Ok(response)
 }
 
 /// Logout handler - clear session and redirect
