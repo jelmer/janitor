@@ -2,10 +2,9 @@ use crate::publish::Mode;
 use crate::queue::Queue;
 use breezyshim::RevisionId;
 use chrono::Duration;
-use debian_control::lossless::relations::{Relation, Relations};
-use debian_control::relations::VersionConstraint;
+use debian_control::lossless::relations::Relations;
 use sqlx::postgres::types::PgInterval;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 
 pub const FIRST_RUN_BONUS: f64 = 100.0;
@@ -482,55 +481,76 @@ pub async fn bulk_add_to_queue(
     Ok(())
 }
 
-async fn dep_available(conn: &PgPool, rel: &Relation) -> Result<bool, sqlx::Error> {
-    let mut query = sqlx::QueryBuilder::new(
-        r###"
-SELECT
-  1
-FROM
-  all_debian_versions
-WHERE
-  source = "###,
-    );
-    query.push_bind(rel.name());
-
-    if let Some(version) = rel.version() {
-        query.push(" AND version ");
-        query.push(match version.0 {
-            VersionConstraint::Equal => "=",
-            VersionConstraint::GreaterThan => ">",
-            VersionConstraint::GreaterThanEqual => ">=",
-            VersionConstraint::LessThan => "<",
-            VersionConstraint::LessThanEqual => "<=",
-        });
-        query.push_bind(version.1);
-    }
-
-    let query = query.build_query_scalar::<bool>();
-
-    Ok(query.fetch_optional(conn).await?.is_some())
-}
 
 async fn deps_satisfied(
     conn: &PgPool,
     _campaign: &str,
     dependencies: &Relations,
 ) -> Result<bool, sqlx::Error> {
-    for dep in dependencies.entries() {
-        // TODO: This is a bit inefficient, we should be able to do this in a single query.
-        let mut found = false;
-
+    // Optimize dependency checking with a single query instead of multiple individual queries
+    let mut query_parts = Vec::new();
+    let mut bind_values = Vec::new();
+    
+    for (dep_idx, dep) in dependencies.entries().enumerate() {
+        let mut subdep_conditions = Vec::new();
+        
         for subdep in dep.relations() {
-            if dep_available(conn, &subdep).await? {
-                found = true;
-                break;
+            let mut condition = format!("source = ${}", bind_values.len() + 1);
+            bind_values.push(subdep.name().to_string());
+            
+            if let Some(version) = subdep.version() {
+                condition.push_str(&format!(" AND version {} ${}", 
+                    match version.0 {
+                        debian_control::relations::VersionConstraint::Equal => "=",
+                        debian_control::relations::VersionConstraint::GreaterThan => ">",
+                        debian_control::relations::VersionConstraint::GreaterThanEqual => ">=",
+                        debian_control::relations::VersionConstraint::LessThan => "<",
+                        debian_control::relations::VersionConstraint::LessThanEqual => "<=",
+                    },
+                    bind_values.len() + 1
+                ));
+                bind_values.push(version.1.to_string());
             }
+            subdep_conditions.push(format!("({})", condition));
         }
-        if !found {
-            return Ok(false);
+        
+        if !subdep_conditions.is_empty() {
+            query_parts.push(format!(
+                "SELECT {} as dep_group, COUNT(*) as matches FROM all_debian_versions WHERE {} LIMIT 1",
+                dep_idx,
+                subdep_conditions.join(" OR ")
+            ));
         }
     }
-    Ok(true)
+    
+    if query_parts.is_empty() {
+        return Ok(true);
+    }
+    
+    // Combine all dependency group checks into a single UNION query
+    let full_query = query_parts.join(" UNION ALL ");
+    
+    let mut query_builder = sqlx::QueryBuilder::new(&full_query);
+    for value in bind_values {
+        query_builder.push_bind(value);
+    }
+    
+    let rows = query_builder.build().fetch_all(conn).await?;
+    
+    // Check that we have at least one match for each dependency group
+    let expected_groups = dependencies.entries().count();
+    let satisfied_groups = rows.into_iter()
+        .filter_map(|row| {
+            let matches: i64 = row.try_get("matches").unwrap_or(0);
+            if matches > 0 {
+                Some(row.try_get::<i32, _>("dep_group").unwrap_or(-1))
+            } else {
+                None
+            }
+        })
+        .collect::<std::collections::HashSet<_>>();
+    
+    Ok(satisfied_groups.len() == expected_groups)
 }
 
 pub async fn do_schedule_control(

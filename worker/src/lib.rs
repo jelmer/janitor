@@ -1051,6 +1051,7 @@ pub async fn process_single_item(
     .unwrap();
 
     let assignment_ = assignment.clone();
+    let state_clone = state.clone();
 
     let output_directory_ = output_directory.path().to_path_buf();
 
@@ -1063,7 +1064,11 @@ pub async fn process_single_item(
             ..Metadata::default()
         };
 
-        // TODO: Update metadata in appstate while working
+        // Update metadata in appstate while working for real-time monitoring
+        {
+            let mut app_state = state_clone.write().unwrap();
+            app_state.metadata = Some(metadata.clone());
+        }
 
         let result = run_worker(
             &assignment_.codebase,
@@ -1133,6 +1138,12 @@ pub async fn process_single_item(
         let finish_time = chrono::Utc::now();
         metadata.finish_time = Some(finish_time);
         log::info!("Elapsed time: {}", finish_time - start_time);
+
+        // Update final metadata in appstate
+        {
+            let mut app_state = state_clone.write().unwrap();
+            app_state.metadata = Some(metadata.clone());
+        }
 
         metadata
     })
