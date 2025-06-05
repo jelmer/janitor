@@ -714,6 +714,36 @@ pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url:
     }
 }
 
+/// Resolve redirects for a URL to get the canonical URL.
+///
+/// # Arguments
+/// * `url` - The URL to resolve
+///
+/// # Returns
+/// The canonical URL after following redirects, or the original URL if resolution fails
+fn resolve_redirects(url: &url::Url) -> url::Url {
+    // Only attempt redirect resolution for HTTP/HTTPS URLs
+    if !url.scheme().starts_with("http") {
+        return url.clone();
+    }
+    
+    // Use a blocking HTTP client to follow redirects
+    if let Ok(client) = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        if let Ok(response) = client.head(url.as_str()).send() {
+            if let Ok(final_url) = url::Url::parse(response.url().as_str()) {
+                return final_url;
+            }
+        }
+    }
+    
+    // Return original URL if redirect resolution fails
+    url.clone()
+}
+
 /// Check if two branch URLs refer to the same branch.
 ///
 /// # Arguments
@@ -738,8 +768,11 @@ pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> boo
     let (base_url_b, _params_b) = breezyshim::urlutils::split_segment_parameters(
         &url_b.to_string().trim_end_matches('/').parse().unwrap(),
     );
-    // TODO(jelmer): Support following redirects
-    if base_url_a.to_string().trim_end_matches('/') != base_url_b.to_string().trim_end_matches('/')
+    // Support following redirects by normalizing URLs
+    let normalized_url_a = resolve_redirects(&base_url_a);
+    let normalized_url_b = resolve_redirects(&base_url_b);
+    
+    if normalized_url_a.to_string().trim_end_matches('/') != normalized_url_b.to_string().trim_end_matches('/')
     {
         return false;
     }
