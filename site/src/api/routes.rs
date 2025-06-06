@@ -1808,10 +1808,10 @@ async fn admin_system_metrics(
                     "success_rate_24h": "unknown", // TODO: Calculate success rate
                 },
                 "system_resources": {
-                    "memory_used_mb": "unknown", // TODO: Add system monitoring
-                    "memory_total_mb": "unknown",
-                    "cpu_percent": "unknown",
-                    "disk_used_percent": "unknown",
+                    "memory_used_mb": get_memory_usage_mb().unwrap_or_else(|_| 0),
+                    "memory_total_mb": get_total_memory_mb().unwrap_or_else(|_| 0),
+                    "cpu_percent": get_cpu_usage_percent().unwrap_or_else(|_| 0.0),
+                    "disk_used_percent": get_disk_usage_percent().unwrap_or_else(|_| 0.0),
                 },
                 "timestamp": chrono::Utc::now(),
                 "collection_interval_seconds": 60,
@@ -4676,4 +4676,81 @@ async fn get_system_resource_status() -> serde_json::Value {
         "disk": disk_info,
         "timestamp": chrono::Utc::now()
     })
+}
+
+/// Get memory usage in megabytes.
+fn get_memory_usage_mb() -> Result<u64, std::io::Error> {
+    let meminfo = std::fs::read_to_string("/proc/meminfo")?;
+    let mut mem_total = 0u64;
+    let mut mem_available = 0u64;
+    
+    for line in meminfo.lines() {
+        if let Some(rest) = line.strip_prefix("MemTotal:") {
+            if let Some(kb_str) = rest.trim().split_whitespace().next() {
+                mem_total = kb_str.parse::<u64>().unwrap_or(0) / 1024; // Convert KB to MB
+            }
+        } else if let Some(rest) = line.strip_prefix("MemAvailable:") {
+            if let Some(kb_str) = rest.trim().split_whitespace().next() {
+                mem_available = kb_str.parse::<u64>().unwrap_or(0) / 1024; // Convert KB to MB
+            }
+        }
+    }
+    
+    Ok(mem_total.saturating_sub(mem_available))
+}
+
+/// Get total system memory in megabytes.
+fn get_total_memory_mb() -> Result<u64, std::io::Error> {
+    let meminfo = std::fs::read_to_string("/proc/meminfo")?;
+    
+    for line in meminfo.lines() {
+        if let Some(rest) = line.strip_prefix("MemTotal:") {
+            if let Some(kb_str) = rest.trim().split_whitespace().next() {
+                return Ok(kb_str.parse::<u64>().unwrap_or(0) / 1024); // Convert KB to MB
+            }
+        }
+    }
+    
+    Ok(0)
+}
+
+/// Get CPU usage percentage (simplified implementation).
+fn get_cpu_usage_percent() -> Result<f64, std::io::Error> {
+    // This is a simplified implementation that reads /proc/loadavg
+    // For more accurate CPU usage, you'd need to sample /proc/stat over time
+    let loadavg = std::fs::read_to_string("/proc/loadavg")?;
+    
+    if let Some(load_1min) = loadavg.split_whitespace().next() {
+        let load: f64 = load_1min.parse().unwrap_or(0.0);
+        // Convert load average to approximate CPU percentage
+        // This is a rough approximation - load average isn't exactly CPU usage
+        Ok((load * 100.0).min(100.0))
+    } else {
+        Ok(0.0)
+    }
+}
+
+/// Get disk usage percentage for the root filesystem.
+fn get_disk_usage_percent() -> Result<f64, std::io::Error> {
+    use std::process::Command;
+    
+    let output = Command::new("df")
+        .args(["-h", "/"])
+        .output()?;
+    
+    if output.status.success() {
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        // Parse df output: skip header line, get the second line with root filesystem
+        for line in output_str.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 5 {
+                let usage_str = parts[4];
+                if let Some(percent_str) = usage_str.strip_suffix('%') {
+                    return Ok(percent_str.parse::<f64>().unwrap_or(0.0));
+                }
+            }
+        }
+    }
+    
+    Ok(0.0)
 }
