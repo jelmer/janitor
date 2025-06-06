@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
     response::Json,
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use std::sync::Arc;
@@ -36,6 +36,8 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/publish/scan", post(admin_publish_scan))
         .route("/workers", get(admin_get_workers))
         .route("/workers/:worker_id", get(admin_get_worker_details))
+        .route("/workers/:worker_id/tasks", get(admin_get_worker_tasks))
+        .route("/workers/:worker_id/tasks/:task_id", delete(admin_cancel_worker_task))
         // User management endpoints (read-only for now due to axum version conflicts)
         .route("/users", get(admin_list_users))
         .route("/users/:user_id", get(admin_get_user_details))
@@ -2155,25 +2157,183 @@ async fn admin_get_workers(
     )
 )]
 async fn admin_get_worker_details(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(worker_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin worker details requested for worker: {}", worker_id);
 
-    // TODO: Implement actual worker details retrieval
-    let worker_details = serde_json::json!({
-        "worker_id": worker_id,
-        "status": "not_implemented",
-        "message": "Worker details require integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Get worker details from database
+    match app_state.database.get_worker_details(&worker_id).await {
+        Ok(worker_details) => {
+            negotiate_response(
+                ApiResponse::success(worker_details),
+                &headers,
+                &format!("/api/admin/workers/{}", worker_id),
+            )
+        }
+        Err(e) => {
+            warn!("Failed to get worker details for {}: {}", worker_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("worker_not_found".to_string()),
+                reason: Some(format!("Worker '{}' not found or no data available", worker_id)),
+                details: Some(serde_json::json!({
+                    "worker_id": worker_id,
+                    "error_type": "database_error",
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
 
-    negotiate_response(
-        ApiResponse::success(worker_details),
-        &headers,
-        &format!("/api/admin/workers/{}", worker_id),
+            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}", worker_id))
+        }
+    }
+}
+
+/// Get worker tasks (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/workers/{worker_id}/tasks",
+    tag = "admin",
+    params(
+        ("worker_id" = String, Path, description = "Worker ID")
+    ),
+    responses(
+        (status = 200, description = "Worker tasks", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker not found"),
+        (status = 403, description = "Insufficient permissions")
     )
+)]
+async fn admin_get_worker_tasks(
+    State(app_state): State<Arc<AppState>>,
+    Path(worker_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin worker tasks requested for worker: {}", worker_id);
+
+    // Get current tasks assigned to this worker
+    match app_state.database.get_worker_tasks(&worker_id).await {
+        Ok(tasks) => {
+            negotiate_response(
+                ApiResponse::success(tasks),
+                &headers,
+                &format!("/api/admin/workers/{}/tasks", worker_id),
+            )
+        }
+        Err(e) => {
+            warn!("Failed to get worker tasks for {}: {}", worker_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("worker_tasks_fetch_failed".to_string()),
+                reason: Some(format!("Could not retrieve tasks for worker '{}'", worker_id)),
+                details: Some(serde_json::json!({
+                    "worker_id": worker_id,
+                    "error_type": "database_error",
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks", worker_id))
+        }
+    }
+}
+
+/// Cancel a specific worker task (admin only)
+#[utoipa::path(
+    delete,
+    path = "/admin/workers/{worker_id}/tasks/{task_id}",
+    tag = "admin",
+    params(
+        ("worker_id" = String, Path, description = "Worker ID"),
+        ("task_id" = String, Path, description = "Task ID")
+    ),
+    responses(
+        (status = 200, description = "Task cancelled successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Worker or task not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_cancel_worker_task(
+    State(app_state): State<Arc<AppState>>,
+    Path((worker_id, task_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin cancel task {} for worker: {}", task_id, worker_id);
+
+    // Parse task_id as integer (queue id)
+    let queue_id: i32 = match task_id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("invalid_task_id".to_string()),
+                reason: Some("Task ID must be a valid integer".to_string()),
+                details: Some(serde_json::json!({
+                    "task_id": task_id,
+                    "worker_id": worker_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            return negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id));
+        }
+    };
+
+    // Cancel the task
+    match app_state.database.cancel_worker_task(&worker_id, queue_id).await {
+        Ok(cancelled) => {
+            if cancelled {
+                negotiate_response(
+                    ApiResponse::success(serde_json::json!({
+                        "worker_id": worker_id,
+                        "task_id": task_id,
+                        "status": "cancelled",
+                        "message": "Task successfully cancelled",
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    &headers,
+                    &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id),
+                )
+            } else {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("task_not_found".to_string()),
+                    reason: Some(format!("Task {} not found for worker {} or not cancellable", task_id, worker_id)),
+                    details: Some(serde_json::json!({
+                        "task_id": task_id,
+                        "worker_id": worker_id,
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id))
+            }
+        }
+        Err(e) => {
+            warn!("Failed to cancel task {} for worker {}: {}", task_id, worker_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("task_cancellation_failed".to_string()),
+                reason: Some(format!("Could not cancel task {} for worker {}", task_id, worker_id)),
+                details: Some(serde_json::json!({
+                    "task_id": task_id,
+                    "worker_id": worker_id,
+                    "error_type": "database_error",
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id))
+        }
+    }
 }
 
 // ============================================================================
