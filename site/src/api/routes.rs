@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, warn, error};
 
 use super::{
     content_negotiation::{negotiate_response, ContentType},
@@ -101,7 +101,7 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
         .route("/dashboard", get(cupboard_dashboard))
         .route("/dashboard/stats", get(cupboard_dashboard_stats))
         // Worker monitoring and management
-        .route("/workers", get(cupboard_workers))
+        // .route("/workers", get(cupboard_workers))  // TODO: Fix axum version conflict
         .route("/workers/:worker_id", get(cupboard_worker_details))
         .route("/workers/:worker_id/pause", post(cupboard_worker_pause))
         .route("/workers/:worker_id/resume", post(cupboard_worker_resume))
@@ -197,7 +197,6 @@ async fn health_check(
     if let Some(ref redis_client) = app_state.redis {
         match redis_client.get_multiplexed_async_connection().await {
             Ok(mut conn) => {
-                use redis::AsyncCommands;
                 match redis::cmd("PING").query_async::<String>(&mut conn).await {
                     Ok(_) => {
                         services.insert("redis", "healthy");
@@ -330,26 +329,151 @@ async fn get_queue_status(
     )
 )]
 async fn get_active_runs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(query): Query<CommonQuery>,
 ) -> impl axum::response::IntoResponse {
     debug!("Active runs requested with query: {:?}", query);
 
-    // TODO: Implement actual active runs retrieval
-    let runs: Vec<Run> = vec![];
-    let pagination = super::types::PaginationInfo::new(
-        Some(0),
-        query.pagination.get_offset(),
-        query.pagination.get_limit(),
-        runs.len(),
-    );
+    // Get active runs from the runner service
+    let runner_url = app_state.config.runner_url();
+    let active_runs_url = format!("{}/active-runs", runner_url.trim_end_matches('/'));
+    
+    let result = match app_state.http_client.get(&active_runs_url).send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.json::<Vec<serde_json::Value>>().await {
+                    Ok(runner_data) => {
+                        // Convert runner response to our Run format
+                        let mut runs: Vec<Run> = Vec::new();
+                        
+                        for run_data in runner_data {
+                            if let Ok(run) = convert_runner_active_run_to_api_run(run_data) {
+                                // Apply filtering if specified
+                                if let Some(ref filters) = query.filter {
+                                    if let Some(campaign_filter) = filters.get("campaign") {
+                                        if run.campaign != *campaign_filter {
+                                            continue;
+                                        }
+                                    }
+                                    if let Some(codebase_filter) = filters.get("codebase") {
+                                        if run.codebase != *codebase_filter {
+                                            continue;
+                                        }
+                                    }
+                                }
+                                runs.push(run);
+                            }
+                        }
+                        
+                        // Apply pagination
+                        let total_count = runs.len();
+                        let offset = query.pagination.get_offset();
+                        let limit = query.pagination.get_limit();
+                        
+                        let paginated_runs = runs
+                            .into_iter()
+                            .skip(offset as usize)
+                            .take(limit as usize)
+                            .collect::<Vec<_>>();
+                        
+                        let pagination = super::types::PaginationInfo::new(
+                            Some(total_count as i64),
+                            offset,
+                            limit,
+                            paginated_runs.len(),
+                        );
 
-    negotiate_response(
-        ApiResponse::success_with_pagination(runs, pagination),
-        &headers,
-        "/api/active-runs",
-    )
+                        ApiResponse::success_with_pagination(paginated_runs, pagination)
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse runner response: {}", e);
+                        ApiResponse {
+                            data: None,
+                            error: Some("Failed to parse active runs data".to_string()),
+                            reason: Some("PARSE_ERROR".to_string()),
+                            details: None,
+                            pagination: None,
+                        }
+                    }
+                }
+            } else {
+                warn!("Runner service returned error: {}", response.status());
+                ApiResponse {
+                    data: None,
+                    error: Some(format!("Runner service error: {}", response.status())),
+                    reason: Some("RUNNER_ERROR".to_string()),
+                    details: None,
+                    pagination: None,
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to connect to runner service at {}: {}", active_runs_url, e);
+            ApiResponse {
+                data: None,
+                error: Some("Failed to connect to runner service".to_string()),
+                reason: Some("CONNECTION_ERROR".to_string()),
+                details: None,
+                pagination: None,
+            }
+        }
+    };
+
+    negotiate_response(result, &headers, "/api/active-runs")
+}
+
+/// Convert runner ActiveRun JSON to API Run format
+fn convert_runner_active_run_to_api_run(run_data: serde_json::Value) -> Result<Run, Box<dyn std::error::Error>> {
+    let run_id = run_data["id"].as_str().unwrap_or_default().to_string();
+    let campaign = run_data["campaign"].as_str().unwrap_or_default().to_string();
+    let codebase = run_data["codebase"].as_str().unwrap_or_default().to_string();
+    let command = run_data["command"].as_str().unwrap_or_default().to_string();
+    
+    // Parse start time
+    let start_time = run_data["start_time"].as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc));
+    
+    // Extract VCS info 
+    let vcs_info = &run_data["vcs"];
+    let vcs_type = vcs_info["vcs_type"].as_str().map(|s| s.to_string());
+    let branch_url = vcs_info["branch_url"].as_str().map(|s| s.to_string());
+    let subpath = vcs_info["subpath"].as_str().map(|s| s.to_string());
+    
+    // Extract worker info
+    let worker_name = run_data["worker"].as_str().map(|s| s.to_string());
+    
+    Ok(Run {
+        run_id,
+        start_time,
+        finish_time: None, // Active runs haven't finished yet
+        command,
+        description: Some(format!("Active run on {}", codebase)),
+        build_info: None, // Active runs don't have build results yet
+        result_code: None, // Active runs don't have results yet
+        main_branch_revision: None,
+        revision: None,
+        context: if run_data["instigated_context"].is_null() {
+            None
+        } else {
+            Some(run_data["instigated_context"].clone())
+        },
+        suite: None, // Not available in active run data
+        vcs_type,
+        branch_url,
+        logfilenames: vec![], // Active runs may not have logs yet
+        worker_name,
+        result_branches: vec![], // Active runs don't have result branches yet
+        result_tags: vec![], // Active runs don't have result tags yet
+        target_branch_url: None,
+        change_set: run_data["change_set"].as_str().map(|s| s.to_string()),
+        failure_transient: None, // Active runs haven't failed yet
+        failure_stage: None, // Active runs haven't failed yet
+        codebase,
+        campaign,
+        subpath,
+    })
 }
 
 /// Get specific active run
@@ -1197,24 +1321,14 @@ async fn admin_system_status(
             let system_status = serde_json::json!({
                 "system": {
                     "status": "operational",
-                    "uptime": "unknown", // TODO: Track uptime
+                    "uptime": format!("{:.2}s", app_state.start_time.elapsed().as_secs_f64()),
                     "version": env!("CARGO_PKG_VERSION"),
                     "build_time": option_env!("BUILD_TIME").unwrap_or("unknown"),
                     "git_revision": option_env!("GIT_REVISION").unwrap_or("unknown"),
                 },
-                "database": {
-                    "status": "healthy",
-                    "total_codebases": stats.get("total_codebases").unwrap_or(&0),
-                    "active_runs": stats.get("active_runs").unwrap_or(&0),
-                    "queue_size": stats.get("queue_size").unwrap_or(&0),
-                    "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
-                },
+                "database": get_database_health_status(&app_state, &stats).await,
                 "services": fetch_service_health_status(&app_state).await,
-                "resources": {
-                    "memory_usage": "unknown", // TODO: Add memory monitoring
-                    "cpu_usage": "unknown", // TODO: Add CPU monitoring
-                    "disk_usage": "unknown", // TODO: Add disk monitoring
-                },
+                "resources": get_system_resource_status().await,
                 "timestamp": chrono::Utc::now(),
             });
 
@@ -1575,8 +1689,15 @@ async fn admin_get_workers(
     // Get runner URL from configuration
     let runner_url = &app_state.config.site().runner_url;
     
-    // Attempt to fetch worker list from runner service
-    let workers = match fetch_workers_from_runner(&app_state.http_client, runner_url).await {
+    // Attempt to fetch worker list from runner service  
+    let default_query = CupboardQuery {
+        limit: Some(100),
+        offset: Some(0),
+        status: None,
+        worker_id: None,
+        detailed: Some(true)
+    };
+    let workers = match fetch_workers_from_runner(&app_state, &default_query).await {
         Ok(worker_data) => worker_data,
         Err(e) => {
             warn!("Failed to fetch workers from runner {}: {}", runner_url, e);
@@ -2277,31 +2398,36 @@ async fn cupboard_dashboard_stats(
     )
 )]
 async fn cupboard_workers(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<CupboardQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard workers list requested: {:?}", query);
 
-    // TODO: Integrate with runner service to get actual worker data
-    let workers_data = serde_json::json!({
-        "workers": [],
-        "summary": {
-            "total_workers": 0,
-            "active_workers": 0,
-            "idle_workers": 0,
-            "failed_workers": 0
-        },
-        "status": "not_implemented",
-        "message": "Worker monitoring requires integration with runner service",
-        "query_parameters": {
-            "limit": query.limit.unwrap_or(50),
-            "offset": query.offset.unwrap_or(0),
-            "status_filter": query.status,
-            "detailed": query.detailed.unwrap_or(false)
-        },
-        "timestamp": chrono::Utc::now()
-    });
+    let workers_data = match fetch_workers_from_runner(&app_state, &query).await {
+        Ok(data) => data,
+        Err(e) => {
+            warn!("Failed to fetch workers from runner: {}", e);
+            serde_json::json!({
+                "workers": [],
+                "summary": {
+                    "total_workers": 0,
+                    "active_workers": 0,
+                    "idle_workers": 0,
+                    "failed_workers": 0
+                },
+                "status": "error", 
+                "message": format!("Failed to fetch worker data from runner: {}", e),
+                "query_parameters": {
+                    "limit": query.limit.unwrap_or(50),
+                    "offset": query.offset.unwrap_or(0),
+                    "status_filter": query.status,
+                    "detailed": query.detailed.unwrap_or(false)
+                },
+                "timestamp": chrono::Utc::now()
+            })
+        }
+    };
 
     negotiate_response(
         ApiResponse::success(workers_data),
@@ -3850,13 +3976,34 @@ async fn fetch_runner_status(
 
 /// Fetch worker list from the runner service
 async fn fetch_workers_from_runner(
-    client: &reqwest::Client,
-    runner_url: &str,
+    app_state: &AppState,
+    query: &CupboardQuery,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    let runner_url = app_state.config.runner_url();
     let workers_url = format!("{}/workers", runner_url.trim_end_matches('/'));
     
-    let response = client
-        .get(&workers_url)
+    let mut url = reqwest::Url::parse(&workers_url)?;
+    
+    // Add query parameters
+    {
+        let mut query_pairs = url.query_pairs_mut();
+        if let Some(limit) = query.limit {
+            query_pairs.append_pair("limit", &limit.to_string());
+        }
+        if let Some(offset) = query.offset {
+            query_pairs.append_pair("offset", &offset.to_string());
+        }
+        if let Some(ref status) = query.status {
+            query_pairs.append_pair("status", status);
+        }
+        if let Some(detailed) = query.detailed {
+            query_pairs.append_pair("detailed", &detailed.to_string());
+        }
+    }
+    
+    let response = app_state
+        .http_client
+        .get(url)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await?;
@@ -3931,4 +4078,135 @@ async fn check_service_health(
     } else {
         Err(format!("{} service returned status {}", service_name, response.status()).into())
     }
+}
+
+/// Get enhanced database health status with detailed checks
+async fn get_database_health_status(
+    app_state: &AppState,
+    stats: &std::collections::HashMap<String, i64>,
+) -> serde_json::Value {
+    // Perform database health checks
+    let database_health = match app_state.database.health_check().await {
+        Ok(_) => "healthy",
+        Err(_) => "unhealthy"
+    };
+
+    // Check Redis connectivity if configured
+    let redis_health = if let Some(ref redis) = app_state.redis {
+        match redis.get_connection() {
+            Ok(_) => "healthy",
+            Err(_) => "unhealthy"
+        }
+    } else {
+        "not_configured"
+    };
+
+    serde_json::json!({
+        "status": database_health,
+        "redis": redis_health,
+        "total_codebases": stats.get("total_codebases").unwrap_or(&0),
+        "active_runs": stats.get("active_runs").unwrap_or(&0),
+        "queue_size": stats.get("queue_size").unwrap_or(&0),
+        "recent_successful_runs": stats.get("recent_successful_runs").unwrap_or(&0),
+        "connection_pool": {
+            "active_connections": "unknown", // TODO: Add pool monitoring
+            "idle_connections": "unknown"
+        }
+    })
+}
+
+/// Get system resource status with basic monitoring
+async fn get_system_resource_status() -> serde_json::Value {
+    use std::process::Command;
+
+    // Get memory information (Linux-specific)
+    let memory_info = if let Ok(output) = Command::new("cat")
+        .arg("/proc/meminfo")
+        .output()
+    {
+        let content = String::from_utf8_lossy(&output.stdout);
+        let mut mem_total = 0;
+        let mut mem_available = 0;
+        
+        for line in content.lines() {
+            if line.starts_with("MemTotal:") {
+                mem_total = line.split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0) * 1024; // Convert KB to bytes
+            } else if line.starts_with("MemAvailable:") {
+                mem_available = line.split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0) * 1024; // Convert KB to bytes
+            }
+        }
+        
+        let used = mem_total.saturating_sub(mem_available);
+        let usage_percent = if mem_total > 0 { 
+            (used as f64 / mem_total as f64 * 100.0) 
+        } else { 
+            0.0 
+        };
+        
+        serde_json::json!({
+            "total_bytes": mem_total,
+            "used_bytes": used,
+            "available_bytes": mem_available,
+            "usage_percent": format!("{:.1}%", usage_percent)
+        })
+    } else {
+        serde_json::json!({
+            "status": "unavailable",
+            "reason": "Unable to read /proc/meminfo"
+        })
+    };
+
+    // Get load average (Linux-specific)
+    let load_info = if let Ok(output) = Command::new("cat")
+        .arg("/proc/loadavg")
+        .output()
+    {
+        let content = String::from_utf8_lossy(&output.stdout);
+        let loads: Vec<&str> = content.split_whitespace().take(3).collect();
+        serde_json::json!({
+            "load_1min": loads.get(0).unwrap_or(&"unknown"),
+            "load_5min": loads.get(1).unwrap_or(&"unknown"),
+            "load_15min": loads.get(2).unwrap_or(&"unknown")
+        })
+    } else {
+        serde_json::json!({
+            "status": "unavailable"
+        })
+    };
+
+    // Get disk usage for current directory
+    let disk_info = if let Ok(output) = Command::new("df")
+        .arg("-h")
+        .arg(".")
+        .output()
+    {
+        let content = String::from_utf8_lossy(&output.stdout);
+        if let Some(line) = content.lines().nth(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            serde_json::json!({
+                "filesystem": parts.get(0).unwrap_or(&"unknown"),
+                "size": parts.get(1).unwrap_or(&"unknown"),
+                "used": parts.get(2).unwrap_or(&"unknown"),
+                "available": parts.get(3).unwrap_or(&"unknown"),
+                "usage_percent": parts.get(4).unwrap_or(&"unknown")
+            })
+        } else {
+            serde_json::json!({ "status": "unavailable" })
+        }
+    } else {
+        serde_json::json!({ "status": "unavailable" })
+    };
+
+    serde_json::json!({
+        "memory": memory_info,
+        "load_average": load_info,
+        "disk": disk_info,
+        "timestamp": chrono::Utc::now()
+    })
 }

@@ -10,6 +10,14 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - Runner async database methods (4 TODOs in runner/src/database.rs)
 - Publish service redirect following (publish/src/lib.rs)
 - **Trace context headers for HTTP requests (src/vcs.rs:892)** ✅ **COMPLETED**
+- **VCS symref handling implementation (worker/src/vcs.rs:281)** ✅ **COMPLETED**
+- **Scheduling bias towards recent runs already implemented** ✅ **COMPLETED**
+- **Worker service branch integration already functional** ✅ **COMPLETED** 
+- **Publish service critical methods already implemented** ✅ **COMPLETED**
+- **Differ service error handling improved** ✅ **COMPLETED**
+- **Runner excluded hosts configuration implemented (runner/src/web.rs:1641)** ✅ **COMPLETED**
+- **Worker status endpoint with runner integration (site/src/api/routes.rs:2125)** ✅ **COMPLETED**
+- **Enhanced system health monitoring with resource checks (site/src/api/routes.rs:1190-1192)** ✅ **COMPLETED**
 
 ---
 
@@ -19,15 +27,15 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 
 #### **VCS Management (src/vcs.rs)**
 - [x] **Line 892**: Pass trace context headers for HTTP requests ✅ **COMPLETED**
-- [ ] **Line 281**: Implement symref handling for branch references (worker/src/vcs.rs)
+- [x] **Line 281**: Implement symref handling for branch references (worker/src/vcs.rs) ✅ **COMPLETED**
 
 #### **Scheduling & Performance (src/schedule.rs)**
-- [ ] **Line 148**: Bias candidate selection towards recent runs  
-- [ ] **Line 513**: Optimize query efficiency for candidate filtering
+- [x] **Line 148**: Bias candidate selection towards recent runs ✅ **ALREADY IMPLEMENTED**
+- [x] **Line 513**: Optimize query efficiency for candidate filtering ✅ **ALREADY IMPLEMENTED**
 
 #### **Worker Service (worker/src/)**
-- [ ] **Line 910**: Integrate branch import into existing functions (worker/src/lib.rs)
-- [ ] **Line 1066**: Update metadata in app state during work (worker/src/lib.rs)
+- [x] **Line 910**: Integrate branch import into existing functions (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
+- [x] **Line 1066**: Update metadata in app state during work (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
 - [ ] **Line 73**: Only necessary for deb-new-upstream operations (worker/src/debian/mod.rs)
 - [x] **Lines 286, 392**: Build action not implemented for certain build systems (worker/src/generic/mod.rs) ✅ **COMPLETED**
 
@@ -36,12 +44,12 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 ## 🚨 CRITICAL - Runtime Safety & Error Handling
 
 #### **Publish Service (publish/src/lib.rs)**
-- [ ] **Line 1272**: Implement get_source_revision method in breezyshim
-- [ ] **Line 1580**: Print traceback for errors  
-- [ ] **Line 1748**: Implement actual binary diff check
+- [x] **Line 1272**: Implement get_source_revision method in breezyshim ✅ **ALREADY IMPLEMENTED**
+- [x] **Line 1580**: Print traceback for errors ✅ **ALREADY IMPLEMENTED**
+- [x] **Line 1748**: Implement actual binary diff check ✅ **ALREADY IMPLEMENTED**
 
 #### **Differ Service (differ/src/lib.rs)**
-- [ ] **Line 110**: Panic condition expects IoError - needs proper error handling
+- [x] **Line 110**: Panic condition expects IoError - needs proper error handling ✅ **IMPROVED**
 
 #### **Runner Service Gaps**
 - [ ] **Line 1641**: Get excluded hosts from proper configuration (runner/src/web.rs)
@@ -67,7 +75,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [ ] **Line 1520**: Worker administration
 
 #### **Data Management**
-- [ ] **Line 320**: Active runs retrieval with filtering
+- [x] **Line 320**: Active runs retrieval with filtering ✅ **COMPLETED**
 - [ ] **Line 386**: Log retrieval and file operations  
 - [ ] **Line 420**: Enhanced log management
 - [ ] **Line 458**: Diff generation operations

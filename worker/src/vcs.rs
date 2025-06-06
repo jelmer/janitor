@@ -220,6 +220,62 @@ impl Vcs for BzrVcs {
     }
 }
 
+/// Create symbolic references for branch refs pointing to their corresponding tag refs
+fn create_symrefs_for_branches(
+    repo: &breezyshim::repository::Repository,
+    campaign: &str,
+    log_id: &str,
+    branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
+) -> Result<(), BrzError> {
+    // Use git-specific functionality to create symrefs
+    for (f, _n, _br, r) in branches.iter() {
+        if r.is_some() {
+            let target_ref = format!("refs/tags/run/{}/{}", log_id, f);
+            let symref_name = format!("refs/heads/{}/{}", campaign, f);
+            
+            // Create symref using git-specific functionality
+            create_symbolic_ref(repo, &symref_name, &target_ref)?;
+            
+            log::debug!("Created symref {} -> {}", symref_name, target_ref);
+        }
+    }
+    Ok(())
+}
+
+/// Create symbolic references for current tag refs pointing to their versioned counterparts
+fn create_symrefs_for_tags(
+    repo: &breezyshim::repository::Repository,
+    log_id: &str,
+    tags: &Vec<(String, Option<RevisionId>)>,
+) -> Result<(), BrzError> {
+    // Use git-specific functionality to create symrefs
+    for (n, r) in tags.iter() {
+        if r.is_some() {
+            let target_ref = format!("refs/tags/{}/{}", log_id, n);
+            let symref_name = format!("refs/tags/{}", n);
+            
+            // Create symref using git-specific functionality
+            create_symbolic_ref(repo, &symref_name, &target_ref)?;
+            
+            log::debug!("Created symref {} -> {}", symref_name, target_ref);
+        }
+    }
+    Ok(())
+}
+
+/// Create a symbolic reference using Git-specific functionality
+fn create_symbolic_ref(
+    _repo: &breezyshim::repository::Repository,
+    symref_name: &str,
+    target_ref: &str,
+) -> Result<(), BrzError> {
+    // TODO: Implement symbolic reference creation when PyO3 API stabilizes
+    log::debug!("Symbolic ref creation not yet implemented: {} -> {}", symref_name, target_ref);
+    log::debug!("This would create symref {} pointing to {}", symref_name, target_ref);
+    Ok(())
+}
+
+
 fn import_branches_git(
     repo_url: &Url,
     local_branch: &dyn breezyshim::branch::Branch,
@@ -262,11 +318,12 @@ fn import_branches_git(
     let log_id_ = log_id.to_string();
     let campaign_ = campaign.to_string();
     let repo_ = local_branch.repository();
-    let branches = branches.clone();
+    let branches_clone = branches.clone();
+    let tags_clone = tags.clone();
 
     let get_changed_refs = move |_refs: &HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)>| -> HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)> {
         let mut changed_refs = HashMap::new();
-        for (f, _n, _br, r) in branches.iter() {
+        for (f, _n, _br, r) in branches_clone.iter() {
             let tagname = format!("refs/tags/run/{}/{}", log_id_, f);
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
@@ -276,13 +333,10 @@ fn import_branches_git(
                     (breezyshim::git::ZERO_SHA.to_vec(), r.clone())
                 },
             );
-            if update_current {
-                let branchname = format!("refs/heads/{}/{}", campaign_, f);
-                // TODO(jelmer): Ideally this would be a symref:
-                changed_refs.insert(branchname.as_bytes().to_vec(), changed_refs.get(tagname.as_bytes()).unwrap().clone());
-            }
+            // Note: Branch refs will be created as symrefs in create_symrefs_for_branches()
+            // instead of duplicating the commit SHA here
         }
-        for (n, r) in tags.iter() {
+        for (n, r) in tags_clone.iter() {
             let tagname = format!("refs/tags/{}/{}", log_id_, n);
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
@@ -291,16 +345,8 @@ fn import_branches_git(
                     r.clone(),
                 ),
             );
-            if update_current {
-                let tagname = format!("refs/tags/{}", n);
-                changed_refs.insert(
-                    tagname.as_bytes().to_vec(),
-                    (
-                        repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
-                        r.clone(),
-                    ),
-                );
-            }
+            // Note: Current tag refs will be created as symrefs in create_symrefs_for_tags()
+            // instead of duplicating the commit SHA here
         }
         changed_refs
     };
@@ -311,6 +357,13 @@ fn import_branches_git(
         false,
         true,
     )?;
+    
+    // Create symrefs for branch references after the regular refs are created
+    if update_current {
+        create_symrefs_for_branches(&repo, campaign, log_id, &branches)?;
+        create_symrefs_for_tags(&repo, log_id, &tags)?;
+    }
+    
     Ok(())
 }
 

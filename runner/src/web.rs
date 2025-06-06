@@ -1638,8 +1638,25 @@ async fn assign_work_internal(state: Arc<AppState>, request: AssignRequest) -> i
     // Use enhanced Redis integration for queue management
 
     // Get next available queue item with rate limiting and Redis integration
-    // TODO: Get excluded hosts from proper configuration (worker.avoid_hosts)
-    let excluded_hosts: Vec<String> = vec![];
+    // Get excluded hosts from configuration
+    let excluded_hosts: Vec<String> = if let Ok(runner_config_path) = std::env::var("RUNNER_CONFIG") {
+        // Try to load runner-specific config if available
+        match crate::config::RunnerConfig::from_file(&runner_config_path) {
+            Ok(runner_config) => runner_config.worker.avoid_hosts,
+            Err(_) => {
+                log::warn!("Failed to load runner config from {}, using empty avoid_hosts", runner_config_path);
+                vec![]
+            }
+        }
+    } else {
+        // Fallback: check if any hosts should be avoided from environment or other sources
+        std::env::var("JANITOR_AVOID_HOSTS")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim().to_string())
+            .collect()
+    };
     let assignment = match state
         .database
         .next_queue_item_with_rate_limiting(
