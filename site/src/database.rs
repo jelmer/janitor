@@ -1391,6 +1391,178 @@ impl DatabaseManager {
         }))
     }
 
+    /// Get detailed information about a specific worker
+    pub async fn get_worker_details(&self, worker_id: &str) -> Result<serde_json::Value, DatabaseError> {
+        // Get worker basic info from worker table
+        let worker_info = sqlx::query(
+            "SELECT name, password, link FROM worker WHERE name = $1"
+        )
+        .bind(worker_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if worker_info.is_none() {
+            return Err(DatabaseError::NotFound(format!("Worker '{}' not found", worker_id)));
+        }
+
+        let worker_row = worker_info.unwrap();
+        
+        // Get current assignments
+        let current_assignments = sqlx::query(
+            "SELECT id, codebase, suite, command, priority, estimated_duration, bucket, assigned_time
+             FROM queue 
+             WHERE worker = $1 AND status IN ('assigned', 'running')
+             ORDER BY assigned_time DESC"
+        )
+        .bind(worker_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut assignments = Vec::new();
+        for row in current_assignments {
+            assignments.push(serde_json::json!({
+                "queue_id": row.try_get::<i32, _>("id")?,
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "suite": row.try_get::<String, _>("suite")?,
+                "command": row.try_get::<Option<String>, _>("command")?,
+                "priority": row.try_get::<i64, _>("priority")?,
+                "estimated_duration": row.try_get::<Option<String>, _>("estimated_duration")?,
+                "bucket": row.try_get::<String, _>("bucket")?,
+                "assigned_time": row.try_get::<Option<DateTime<Utc>>, _>("assigned_time")?
+            }));
+        }
+
+        // Get recent run history
+        let recent_runs = sqlx::query(
+            "SELECT id, codebase, suite, result_code, start_time, finish_time, duration
+             FROM run 
+             WHERE worker = $1 
+             ORDER BY start_time DESC 
+             LIMIT 10"
+        )
+        .bind(worker_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut runs = Vec::new();
+        for row in recent_runs {
+            runs.push(serde_json::json!({
+                "run_id": row.try_get::<String, _>("id")?,
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "suite": row.try_get::<String, _>("suite")?,
+                "result_code": row.try_get::<String, _>("result_code")?,
+                "start_time": row.try_get::<Option<DateTime<Utc>>, _>("start_time")?,
+                "finish_time": row.try_get::<Option<DateTime<Utc>>, _>("finish_time")?,
+                "duration": row.try_get::<Option<String>, _>("duration")?
+            }));
+        }
+
+        // Get performance statistics
+        let performance_stats = sqlx::query(
+            "SELECT 
+                COUNT(*) as total_runs,
+                COUNT(CASE WHEN result_code = 'success' THEN 1 END) as successful_runs,
+                COUNT(CASE WHEN result_code != 'success' THEN 1 END) as failed_runs,
+                AVG(EXTRACT(EPOCH FROM duration)) as avg_duration_seconds,
+                MIN(start_time) as first_run_time,
+                MAX(finish_time) as last_run_time
+             FROM run 
+             WHERE worker = $1 
+             AND start_time >= NOW() - INTERVAL '30 days'"
+        )
+        .bind(worker_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let total_runs: i64 = performance_stats.try_get("total_runs")?;
+        let success_rate = if total_runs > 0 {
+            let successful_runs: i64 = performance_stats.try_get("successful_runs")?;
+            (successful_runs as f64 / total_runs as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        Ok(serde_json::json!({
+            "worker_id": worker_row.try_get::<String, _>("name")?,
+            "link": worker_row.try_get::<Option<String>, _>("link")?,
+            "password_configured": !worker_row.try_get::<String, _>("password")?.is_empty(),
+            "status": if assignments.is_empty() { "idle" } else { "active" },
+            "current_assignments": assignments,
+            "assignment_count": assignments.len(),
+            "recent_runs": runs,
+            "performance": {
+                "total_runs_30d": total_runs,
+                "successful_runs_30d": performance_stats.try_get::<i64, _>("successful_runs")?,
+                "failed_runs_30d": performance_stats.try_get::<i64, _>("failed_runs")?,
+                "success_rate_30d": format!("{:.1}%", success_rate),
+                "avg_duration_seconds": performance_stats.try_get::<Option<f64>, _>("avg_duration_seconds")?,
+                "first_run_time": performance_stats.try_get::<Option<DateTime<Utc>>, _>("first_run_time")?,
+                "last_run_time": performance_stats.try_get::<Option<DateTime<Utc>>, _>("last_run_time")?
+            },
+            "timestamp": chrono::Utc::now()
+        }))
+    }
+
+    /// Get current tasks assigned to a specific worker
+    pub async fn get_worker_tasks(&self, worker_id: &str) -> Result<serde_json::Value, DatabaseError> {
+        let tasks = sqlx::query(
+            "SELECT 
+                id,
+                codebase,
+                suite,
+                command,
+                priority,
+                estimated_duration,
+                bucket,
+                context,
+                assigned_time,
+                status
+             FROM queue 
+             WHERE worker = $1 
+             ORDER BY assigned_time ASC"
+        )
+        .bind(worker_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut task_list = Vec::new();
+        for row in tasks {
+            task_list.push(serde_json::json!({
+                "queue_id": row.try_get::<i32, _>("id")?,
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "suite": row.try_get::<String, _>("suite")?,
+                "command": row.try_get::<Option<String>, _>("command")?,
+                "priority": row.try_get::<i64, _>("priority")?,
+                "estimated_duration": row.try_get::<Option<String>, _>("estimated_duration")?,
+                "bucket": row.try_get::<String, _>("bucket")?,
+                "context": row.try_get::<Option<String>, _>("context")?,
+                "assigned_time": row.try_get::<Option<DateTime<Utc>>, _>("assigned_time")?,
+                "status": row.try_get::<Option<String>, _>("status")?
+            }));
+        }
+
+        Ok(serde_json::json!({
+            "worker_id": worker_id,
+            "tasks": task_list,
+            "task_count": task_list.len(),
+            "timestamp": chrono::Utc::now()
+        }))
+    }
+
+    /// Cancel a specific task assigned to a worker
+    pub async fn cancel_worker_task(&self, worker_id: &str, queue_id: i32) -> Result<bool, DatabaseError> {
+        let result = sqlx::query(
+            "DELETE FROM queue 
+             WHERE id = $1 AND worker = $2 AND status IN ('assigned', 'pending')"
+        )
+        .bind(queue_id)
+        .bind(worker_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     /// Get comprehensive run context data in a single optimized query
     /// Combines run details, statistics, reviews, binary packages in one call
     pub async fn get_run_context(
