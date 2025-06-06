@@ -40,6 +40,10 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/users", get(admin_list_users))
         .route("/users/:user_id", get(admin_get_user_details))
         .route("/sessions", get(admin_list_sessions))
+        // Campaign management endpoints
+        .route("/campaigns", get(admin_list_campaigns))
+        .route("/campaigns/:campaign_id", get(admin_get_campaign_details))
+        .route("/campaigns/:campaign_id/statistics", get(admin_get_campaign_statistics))
         // Apply admin authentication middleware to all admin routes
         .route_layer(axum::middleware::from_fn(require_admin));
 
@@ -2520,6 +2524,251 @@ async fn admin_revoke_session(
             };
 
             negotiate_response(error_response, &headers, &format!("/api/admin/sessions/{}", session_id))
+        }
+    }
+}
+
+// ============================================================================
+// Admin Campaign Management Endpoints
+// ============================================================================
+
+/// List all campaigns with their status and basic information
+#[utoipa::path(
+    get,
+    path = "/admin/campaigns",
+    tag = "admin",
+    responses(
+        (status = 200, description = "List of campaigns", body = ApiResponse<Vec<serde_json::Value>>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_list_campaigns(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin list campaigns requested");
+
+    match app_state.database.get_campaign_status_list().await {
+        Ok(campaigns) => {
+            let campaign_list: Vec<serde_json::Value> = campaigns.into_iter().map(|campaign| {
+                json!({
+                    "name": campaign.name,
+                    "total_candidates": campaign.total_candidates,
+                    "pending_candidates": campaign.pending_candidates,
+                    "active_runs": campaign.active_runs,
+                    "success_rate": campaign.success_rate,
+                    "last_updated": campaign.last_updated,
+                    "description": campaign.description,
+                    "status": if campaign.active_runs > 0 { "active" } else { "idle" },
+                    "health": if campaign.success_rate.unwrap_or(0.0) > 0.7 { "good" } 
+                             else if campaign.success_rate.unwrap_or(0.0) > 0.3 { "warning" } 
+                             else { "poor" }
+                })
+            }).collect();
+
+            negotiate_response(
+                ApiResponse::success(campaign_list),
+                &headers,
+                "/api/admin/campaigns",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get campaigns: {}", e);
+            let error_response = ApiResponse::<Vec<serde_json::Value>> {
+                data: Some(vec![]),
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve campaigns: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/api/admin/campaigns")
+        }
+    }
+}
+
+/// Get detailed information about a specific campaign
+#[utoipa::path(
+    get,
+    path = "/admin/campaigns/{campaign_id}",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    responses(
+        (status = 200, description = "Campaign details", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_campaign_details(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin campaign details requested for campaign: {}", campaign_id);
+
+    // Get campaign statistics
+    match app_state.database.get_campaign_statistics(&campaign_id).await {
+        Ok(stats) => {
+            // Get campaign status from the status list
+            let campaign_status = app_state.database.get_campaign_status_list().await
+                .unwrap_or_default()
+                .into_iter()
+                .find(|c| c.name == campaign_id);
+
+            let campaign_details = json!({
+                "campaign_id": campaign_id,
+                "name": campaign_id,
+                "description": campaign_status.as_ref().and_then(|c| c.description.clone()),
+                "status": if stats.queued_items > 0 { "active" } else { "idle" },
+                "statistics": {
+                    "total_candidates": stats.total_candidates,
+                    "successful_runs": stats.successful_runs,
+                    "failed_runs": stats.failed_runs,
+                    "total_runs": stats.total_runs,
+                    "pending_publishes": stats.pending_publishes,
+                    "queued_items": stats.queued_items,
+                    "success_rate": if stats.total_runs > 0 {
+                        stats.successful_runs as f64 / stats.total_runs as f64
+                    } else { 0.0 },
+                    "average_run_time_seconds": stats.avg_run_time_seconds
+                },
+                "performance": {
+                    "health_score": if stats.total_runs > 0 {
+                        let success_rate = stats.successful_runs as f64 / stats.total_runs as f64;
+                        if success_rate > 0.8 { "excellent" }
+                        else if success_rate > 0.6 { "good" }
+                        else if success_rate > 0.4 { "fair" }
+                        else { "poor" }
+                    } else { "unknown" },
+                    "throughput": if stats.avg_run_time_seconds > 0.0 {
+                        3600.0 / stats.avg_run_time_seconds // runs per hour
+                    } else { 0.0 }
+                },
+                "last_updated": campaign_status.map(|c| c.last_updated),
+                "management_endpoints": {
+                    "statistics": format!("/api/admin/campaigns/{}/statistics", campaign_id),
+                    "ready_runs": format!("/api/{}/ready", campaign_id),
+                    "merge_proposals": format!("/api/{}/merge-proposals", campaign_id)
+                }
+            });
+
+            negotiate_response(
+                ApiResponse::success(campaign_details),
+                &headers,
+                &format!("/api/admin/campaigns/{}", campaign_id),
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get campaign details: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("not_found".to_string()),
+                reason: Some(format!("Campaign {} not found or failed to retrieve details: {}", campaign_id, e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/campaigns/{}", campaign_id))
+        }
+    }
+}
+
+/// Get comprehensive statistics for a specific campaign
+#[utoipa::path(
+    get,
+    path = "/admin/campaigns/{campaign_id}/statistics",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    responses(
+        (status = 200, description = "Campaign statistics", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_campaign_statistics(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin campaign statistics requested for campaign: {}", campaign_id);
+
+    match app_state.database.get_campaign_statistics(&campaign_id).await {
+        Ok(stats) => {
+            // Calculate additional metrics
+            let total_attempts = stats.successful_runs + stats.failed_runs;
+            let success_rate = if total_attempts > 0 {
+                stats.successful_runs as f64 / total_attempts as f64
+            } else { 0.0 };
+            
+            let failure_rate = if total_attempts > 0 {
+                stats.failed_runs as f64 / total_attempts as f64
+            } else { 0.0 };
+
+            let completion_rate = if stats.total_candidates > 0 {
+                total_attempts as f64 / stats.total_candidates as f64
+            } else { 0.0 };
+
+            let detailed_stats = json!({
+                "campaign_id": campaign_id,
+                "overview": {
+                    "total_candidates": stats.total_candidates,
+                    "total_runs": stats.total_runs,
+                    "successful_runs": stats.successful_runs,
+                    "failed_runs": stats.failed_runs,
+                    "pending_publishes": stats.pending_publishes,
+                    "queued_items": stats.queued_items
+                },
+                "rates": {
+                    "success_rate": success_rate,
+                    "failure_rate": failure_rate,
+                    "completion_rate": completion_rate
+                },
+                "performance": {
+                    "average_run_time_seconds": stats.avg_run_time_seconds,
+                    "estimated_completion_hours": if stats.avg_run_time_seconds > 0.0 && stats.queued_items > 0 {
+                        (stats.queued_items as f64 * stats.avg_run_time_seconds) / 3600.0
+                    } else { 0.0 },
+                    "throughput_per_hour": if stats.avg_run_time_seconds > 0.0 {
+                        3600.0 / stats.avg_run_time_seconds
+                    } else { 0.0 }
+                },
+                "status": {
+                    "active": stats.queued_items > 0,
+                    "health": if success_rate > 0.8 { "excellent" }
+                             else if success_rate > 0.6 { "good" }
+                             else if success_rate > 0.4 { "fair" }
+                             else if total_attempts > 0 { "poor" }
+                             else { "unknown" },
+                    "backlog_size": stats.queued_items,
+                    "publish_backlog": stats.pending_publishes
+                },
+                "timestamps": {
+                    "generated_at": chrono::Utc::now(),
+                    "data_freshness": "real-time"
+                }
+            });
+
+            negotiate_response(
+                ApiResponse::success(detailed_stats),
+                &headers,
+                &format!("/api/admin/campaigns/{}/statistics", campaign_id),
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get campaign statistics: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve statistics for campaign {}: {}", campaign_id, e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/campaigns/{}/statistics", campaign_id))
         }
     }
 }
