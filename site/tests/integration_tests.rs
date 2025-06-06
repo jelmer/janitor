@@ -180,7 +180,7 @@ mod database_integration_tests {
             .expect("Failed to set up test environment");
 
         // Create a session manager for testing
-        let session_manager = janitor_site::auth::SessionManager::new(env.database.pool().clone());
+        let session_manager = janitor_site::auth::session::SessionManager::new(env.database.pool().clone());
 
         // Create a test user
         let mut groups = std::collections::HashSet::new();
