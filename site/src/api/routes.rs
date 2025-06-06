@@ -7,6 +7,7 @@ use axum::{
 };
 use std::sync::Arc;
 use tracing::{debug, warn, error};
+use serde_json::json;
 
 use super::{
     content_negotiation::{negotiate_response, ContentType},
@@ -35,6 +36,10 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/publish/scan", post(admin_publish_scan))
         .route("/workers", get(admin_get_workers))
         .route("/workers/:worker_id", get(admin_get_worker_details))
+        // User management endpoints (read-only for now due to axum version conflicts)
+        .route("/users", get(admin_list_users))
+        .route("/users/:user_id", get(admin_get_user_details))
+        .route("/sessions", get(admin_list_sessions))
         // Apply admin authentication middleware to all admin routes
         .route_layer(axum::middleware::from_fn(require_admin));
 
@@ -2129,6 +2134,394 @@ async fn admin_get_worker_details(
         &headers,
         &format!("/api/admin/workers/{}", worker_id),
     )
+}
+
+// ============================================================================
+// Admin User Management Endpoints  
+// ============================================================================
+
+/// Request for updating user role
+#[derive(Debug, Deserialize)]
+struct UpdateUserRoleRequest {
+    role: String,
+}
+
+/// List all users with their roles and basic information
+#[utoipa::path(
+    get,
+    path = "/admin/users",
+    tag = "admin",
+    responses(
+        (status = 200, description = "List of users", body = ApiResponse<Vec<serde_json::Value>>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_list_users(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin list users requested");
+
+    // Get active sessions to determine current users
+    match app_state.database.get_active_sessions().await {
+        Ok(sessions) => {
+            let users: Vec<serde_json::Value> = sessions.into_iter().map(|session| {
+                json!({
+                    "user_id": session.get("user_id").unwrap_or(&serde_json::Value::Null),
+                    "username": session.get("username").unwrap_or(&serde_json::Value::Null),
+                    "role": session.get("role").unwrap_or(&json!("User")),
+                    "last_active": session.get("last_active").unwrap_or(&serde_json::Value::Null),
+                    "session_count": 1, // Simplified - could aggregate by user
+                    "is_admin": session.get("role").unwrap_or(&json!("User")) == "Admin",
+                    "is_qa_reviewer": session.get("role").unwrap_or(&json!("User")) == "QaReviewer"
+                })
+            }).collect();
+
+            negotiate_response(
+                ApiResponse::success(users),
+                &headers,
+                "/api/admin/users",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get users: {}", e);
+            let error_response = ApiResponse::<Vec<serde_json::Value>> {
+                data: Some(vec![]),
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve users: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/api/admin/users")
+        }
+    }
+}
+
+/// Get detailed information about a specific user
+#[utoipa::path(
+    get,
+    path = "/admin/users/{user_id}",
+    tag = "admin",
+    params(
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User details", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "User not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_user_details(
+    State(app_state): State<Arc<AppState>>,
+    Path(user_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin user details requested for user: {}", user_id);
+
+    // Get user sessions and activity
+    match app_state.database.get_user_sessions(&user_id).await {
+        Ok(sessions) => {
+            if sessions.is_empty() {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("not_found".to_string()),
+                    reason: Some(format!("User {} not found or has no active sessions", user_id)),
+                    details: None,
+                    pagination: None,
+                };
+                negotiate_response(error_response, &headers, &format!("/api/admin/users/{}", user_id))
+            } else {
+                // Extract user details from first session
+                let username = sessions[0].get("username").unwrap_or(&serde_json::Value::Null);
+                let role = sessions[0].get("role").and_then(|v| v.as_str()).unwrap_or("User");
+                let last_login = sessions.iter()
+                    .filter_map(|s| s.get("created_at").and_then(|v| v.as_str()))
+                    .max()
+                    .unwrap_or("");
+                
+                // Calculate permissions
+                let can_admin = role == "Admin";
+                let can_review = ["Admin", "QaReviewer"].contains(&role);
+
+                let user_details = json!({
+                    "user_id": user_id,
+                    "username": username,
+                    "role": role,
+                    "active_sessions": sessions.len(),
+                    "sessions": sessions,
+                    "last_login": last_login,
+                    "permissions": {
+                        "can_admin": can_admin,
+                        "can_review": can_review
+                    }
+                });
+
+                negotiate_response(
+                    ApiResponse::success(user_details),
+                    &headers,
+                    &format!("/api/admin/users/{}", user_id),
+                )
+            }
+        }
+        Err(e) => {
+            debug!("Failed to get user details: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve user details: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}", user_id))
+        }
+    }
+}
+
+/// Update a user's role (Admin, QaReviewer, User)
+#[utoipa::path(
+    put,
+    path = "/admin/users/{user_id}/role",
+    tag = "admin",
+    params(
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    request_body = UpdateUserRoleRequest,
+    responses(
+        (status = 200, description = "Role updated successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "User not found"),
+        (status = 400, description = "Invalid role"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_update_user_role(
+    State(app_state): State<Arc<AppState>>,
+    Path(user_id): Path<String>,
+    Json(request): Json<UpdateUserRoleRequest>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin role update requested for user: {} to role: {}", user_id, request.role);
+
+    // Validate role
+    let valid_roles = ["Admin", "QaReviewer", "User"];
+    if !valid_roles.contains(&request.role.as_str()) {
+        let error_response = ApiResponse::<serde_json::Value> {
+            data: None,
+            error: Some("invalid_role".to_string()),
+            reason: Some(format!("Role '{}' is not valid. Must be one of: {}", request.role, valid_roles.join(", "))),
+            details: None,
+            pagination: None,
+        };
+        return negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id));
+    }
+
+    // Update user role in sessions (simplified implementation)
+    match app_state.database.update_user_role(&user_id, &request.role).await {
+        Ok(updated) => {
+            if updated {
+                let result = json!({
+                    "user_id": user_id,
+                    "new_role": request.role,
+                    "updated_at": chrono::Utc::now(),
+                    "message": "Role updated successfully"
+                });
+
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/api/admin/users/{}/role", user_id),
+                )
+            } else {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("not_found".to_string()),
+                    reason: Some(format!("User {} not found or has no active sessions", user_id)),
+                    details: None,
+                    pagination: None,
+                };
+                negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id))
+            }
+        }
+        Err(e) => {
+            debug!("Failed to update user role: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to update user role: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id))
+        }
+    }
+}
+
+/// Revoke all sessions for a specific user
+#[utoipa::path(
+    delete,
+    path = "/admin/users/{user_id}/sessions",
+    tag = "admin",
+    params(
+        ("user_id" = String, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "Sessions revoked successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "User not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_revoke_user_sessions(
+    State(app_state): State<Arc<AppState>>,
+    Path(user_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin session revocation requested for user: {}", user_id);
+
+    match app_state.database.revoke_user_sessions(&user_id).await {
+        Ok(revoked_count) => {
+            let result = json!({
+                "user_id": user_id,
+                "revoked_sessions": revoked_count,
+                "timestamp": chrono::Utc::now(),
+                "message": format!("Revoked {} session(s) for user", revoked_count)
+            });
+
+            negotiate_response(
+                ApiResponse::success(result),
+                &headers,
+                &format!("/api/admin/users/{}/sessions", user_id),
+            )
+        }
+        Err(e) => {
+            debug!("Failed to revoke user sessions: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to revoke user sessions: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/sessions", user_id))
+        }
+    }
+}
+
+/// List all active sessions across all users
+#[utoipa::path(
+    get,
+    path = "/admin/sessions",
+    tag = "admin",
+    responses(
+        (status = 200, description = "List of active sessions", body = ApiResponse<Vec<serde_json::Value>>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_list_sessions(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin list sessions requested");
+
+    match app_state.database.get_active_sessions().await {
+        Ok(sessions) => {
+            let enhanced_sessions: Vec<serde_json::Value> = sessions.into_iter().map(|mut session| {
+                // Add additional metadata
+                session["session_age_hours"] = if let Some(created_at) = session.get("created_at") {
+                    if let Ok(created) = created_at.as_str().unwrap_or_default().parse::<chrono::DateTime<chrono::Utc>>() {
+                        json!((chrono::Utc::now() - created).num_hours())
+                    } else {
+                        json!(null)
+                    }
+                } else {
+                    json!(null)
+                };
+                session["is_admin_session"] = json!(session.get("role").unwrap_or(&json!("User")) == "Admin");
+                session
+            }).collect();
+
+            negotiate_response(
+                ApiResponse::success(enhanced_sessions),
+                &headers,
+                "/api/admin/sessions",
+            )
+        }
+        Err(e) => {
+            debug!("Failed to get sessions: {}", e);
+            let error_response = ApiResponse::<Vec<serde_json::Value>> {
+                data: Some(vec![]),
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve sessions: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/api/admin/sessions")
+        }
+    }
+}
+
+/// Revoke a specific session
+#[utoipa::path(
+    delete,
+    path = "/admin/sessions/{session_id}",
+    tag = "admin",
+    params(
+        ("session_id" = String, Path, description = "Session ID")
+    ),
+    responses(
+        (status = 200, description = "Session revoked successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Session not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_revoke_session(
+    State(app_state): State<Arc<AppState>>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin session revocation requested for session: {}", session_id);
+
+    match app_state.database.revoke_session(&session_id).await {
+        Ok(revoked) => {
+            if revoked {
+                let result = json!({
+                    "session_id": session_id,
+                    "revoked_at": chrono::Utc::now(),
+                    "message": "Session revoked successfully"
+                });
+
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/api/admin/sessions/{}", session_id),
+                )
+            } else {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("not_found".to_string()),
+                    reason: Some(format!("Session {} not found", session_id)),
+                    details: None,
+                    pagination: None,
+                };
+                negotiate_response(error_response, &headers, &format!("/api/admin/sessions/{}", session_id))
+            }
+        }
+        Err(e) => {
+            debug!("Failed to revoke session: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to revoke session: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/sessions/{}", session_id))
+        }
+    }
 }
 
 // ============================================================================

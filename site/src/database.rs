@@ -2,6 +2,7 @@ use anyhow::Result;
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::collections::HashMap;
 
@@ -1832,6 +1833,134 @@ impl DatabaseManager {
         } else {
             Ok(None)
         }
+    }
+
+    // ============================================================================
+    // User Management Methods
+    // ============================================================================
+
+    /// Get all active sessions with user information
+    pub async fn get_active_sessions(&self) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        let query = r#"
+            SELECT 
+                id, user_id, username, role, created_at, last_active,
+                expires_at, ip_address
+            FROM site_session 
+            WHERE expires_at > NOW()
+            ORDER BY last_active DESC
+        "#;
+
+        let rows = sqlx::query(query)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let sessions: Vec<serde_json::Value> = rows.into_iter().map(|row| {
+            json!({
+                "session_id": row.get::<Option<String>, _>("id").unwrap_or_default(),
+                "user_id": row.get::<Option<String>, _>("user_id").unwrap_or_default(),
+                "username": row.get::<Option<String>, _>("username").unwrap_or_default(),
+                "role": row.get::<Option<String>, _>("role").unwrap_or("User".to_string()),
+                "created_at": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "last_active": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("last_active")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "expires_at": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("expires_at")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "ip_address": row.get::<Option<String>, _>("ip_address").unwrap_or_default()
+            })
+        }).collect();
+
+        Ok(sessions)
+    }
+
+    /// Get sessions for a specific user
+    pub async fn get_user_sessions(&self, user_id: &str) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        let query = r#"
+            SELECT 
+                id, user_id, username, role, created_at, last_active,
+                expires_at, ip_address
+            FROM site_session 
+            WHERE user_id = $1 AND expires_at > NOW()
+            ORDER BY last_active DESC
+        "#;
+
+        let rows = sqlx::query(query)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let sessions: Vec<serde_json::Value> = rows.into_iter().map(|row| {
+            json!({
+                "session_id": row.get::<Option<String>, _>("id").unwrap_or_default(),
+                "user_id": row.get::<Option<String>, _>("user_id").unwrap_or_default(),
+                "username": row.get::<Option<String>, _>("username").unwrap_or_default(),
+                "role": row.get::<Option<String>, _>("role").unwrap_or("User".to_string()),
+                "created_at": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("created_at")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "last_active": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("last_active")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "expires_at": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("expires_at")
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+                "ip_address": row.get::<Option<String>, _>("ip_address").unwrap_or_default()
+            })
+        }).collect();
+
+        Ok(sessions)
+    }
+
+    /// Update a user's role in all their active sessions
+    pub async fn update_user_role(&self, user_id: &str, new_role: &str) -> Result<bool, DatabaseError> {
+        let query = r#"
+            UPDATE site_session 
+            SET role = $2, last_active = NOW()
+            WHERE user_id = $1 AND expires_at > NOW()
+        "#;
+
+        let result = sqlx::query(query)
+            .bind(user_id)
+            .bind(new_role)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Revoke all sessions for a specific user
+    pub async fn revoke_user_sessions(&self, user_id: &str) -> Result<u64, DatabaseError> {
+        let query = r#"
+            UPDATE site_session 
+            SET expires_at = NOW() - INTERVAL '1 second'
+            WHERE user_id = $1 AND expires_at > NOW()
+        "#;
+
+        let result = sqlx::query(query)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// Revoke a specific session
+    pub async fn revoke_session(&self, session_id: &str) -> Result<bool, DatabaseError> {
+        let query = r#"
+            UPDATE site_session 
+            SET expires_at = NOW() - INTERVAL '1 second'
+            WHERE id = $1 AND expires_at > NOW()
+        "#;
+
+        let result = sqlx::query(query)
+            .bind(session_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 }
 
