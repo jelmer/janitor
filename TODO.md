@@ -39,7 +39,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 #### **Worker Service (worker/src/)**
 - [x] **Line 910**: Integrate branch import into existing functions (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
 - [x] **Line 1066**: Update metadata in app state during work (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
-- [ ] **Line 73**: Only necessary for deb-new-upstream operations (worker/src/debian/mod.rs)
+- [x] **Line 73**: Only necessary for deb-new-upstream operations (worker/src/debian/mod.rs) ✅ **ALREADY IMPLEMENTED**
 - [x] **Lines 286, 392**: Build action not implemented for certain build systems (worker/src/generic/mod.rs) ✅ **COMPLETED**
 
 ---
@@ -55,7 +55,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [x] **Line 110**: Panic condition expects IoError - needs proper error handling ✅ **IMPROVED**
 
 #### **Runner Service Gaps**
-- [ ] **Line 1641**: Get excluded hosts from proper configuration (runner/src/web.rs)
+- [x] **Line 1641**: Get excluded hosts from proper configuration (runner/src/web.rs) ✅ **COMPLETED**
 
 ---
 
