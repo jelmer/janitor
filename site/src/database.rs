@@ -1429,6 +1429,65 @@ impl DatabaseManager {
         }
     }
 
+    /// Get a list of all campaigns with their status information
+    pub async fn get_campaign_status_list(&self) -> Result<Vec<super::api::schemas::CampaignStatus>, DatabaseError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                suite as campaign_name,
+                COUNT(*) as total_candidates,
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_candidates,
+                COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as active_runs,
+                MAX(last_update) as last_updated
+            FROM candidate 
+            GROUP BY suite
+            ORDER BY campaign_name
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut campaigns = Vec::new();
+        for row in rows {
+            let campaign_name: String = row.try_get("campaign_name")?;
+            
+            // Get success rate for this campaign
+            let success_stats = sqlx::query(
+                r#"
+                SELECT 
+                    COUNT(*) as total_runs,
+                    COUNT(CASE WHEN result_code = 'success' THEN 1 END) as successful_runs
+                FROM run 
+                WHERE suite = $1
+                "#,
+            )
+            .bind(&campaign_name)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let total_runs: i64 = success_stats.try_get("total_runs")?;
+            let successful_runs: i64 = success_stats.try_get("successful_runs")?;
+            
+            let success_rate = if total_runs > 0 {
+                Some(successful_runs as f64 / total_runs as f64)
+            } else {
+                None
+            };
+
+            campaigns.push(super::api::schemas::CampaignStatus {
+                name: campaign_name,
+                total_candidates: row.try_get("total_candidates")?,
+                pending_candidates: row.try_get("pending_candidates")?,
+                active_runs: row.try_get("active_runs")?,
+                success_rate,
+                last_updated: row.try_get("last_updated")?,
+                description: None, // TODO: Add campaign descriptions if available
+            });
+        }
+
+        Ok(campaigns)
+    }
+
     /// Get comprehensive campaign statistics in a single optimized query
     /// Eliminates N+1 pattern from multiple separate count queries
     pub async fn get_campaign_statistics(
@@ -1470,6 +1529,74 @@ impl DatabaseManager {
                 .get::<Option<f64>, _>("avg_run_time_seconds")
                 .unwrap_or(0.0),
         })
+    }
+
+    /// Get merge proposals for a specific campaign with filtering and pagination
+    pub async fn get_campaign_merge_proposals(
+        &self,
+        campaign: &str,
+        query: &std::collections::HashMap<String, String>,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        let mut sql_query = "SELECT mp.url, mp.status, mp.revision, mp.merged_by, mp.merged_at, mp.can_be_merged, r.codebase FROM merge_proposal mp INNER JOIN run r ON mp.revision = r.revision WHERE r.suite = $1".to_string();
+        let mut bind_count = 1;
+        let mut bind_values: Vec<String> = vec![campaign.to_string()];
+
+        // Add status filter if specified
+        if let Some(status) = query.get("status") {
+            bind_count += 1;
+            sql_query.push_str(&format!(" AND mp.status = ${}", bind_count));
+            bind_values.push(status.clone());
+        }
+
+        // Add codebase filter if specified
+        if let Some(codebase) = query.get("codebase") {
+            bind_count += 1;
+            sql_query.push_str(&format!(" AND r.codebase = ${}", bind_count));
+            bind_values.push(codebase.clone());
+        }
+
+        // Add ordering
+        sql_query.push_str(" ORDER BY mp.merged_at DESC NULLS LAST");
+
+        // Add pagination
+        let limit = query.get("limit")
+            .and_then(|l| l.parse::<i64>().ok())
+            .unwrap_or(50);
+        let offset = query.get("offset")
+            .and_then(|o| o.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        bind_count += 1;
+        sql_query.push_str(&format!(" LIMIT ${}", bind_count));
+        bind_values.push(limit.to_string());
+
+        bind_count += 1;
+        sql_query.push_str(&format!(" OFFSET ${}", bind_count));
+        bind_values.push(offset.to_string());
+
+        // Execute the query
+        let mut query_builder = sqlx::query(&sql_query);
+        for value in &bind_values {
+            query_builder = query_builder.bind(value);
+        }
+
+        let rows = query_builder.fetch_all(&self.pool).await?;
+
+        let mut proposals = Vec::new();
+        for row in rows {
+            let proposal = serde_json::json!({
+                "url": row.try_get::<String, _>("url")?,
+                "status": row.try_get::<Option<String>, _>("status")?,
+                "revision": row.try_get::<Option<String>, _>("revision")?,
+                "merged_by": row.try_get::<Option<String>, _>("merged_by")?,
+                "merged_at": row.try_get::<Option<DateTime<Utc>>, _>("merged_at")?,
+                "can_be_merged": row.try_get::<Option<bool>, _>("can_be_merged")?,
+                "codebase": row.try_get::<String, _>("codebase")?
+            });
+            proposals.push(proposal);
+        }
+
+        Ok(proposals)
     }
 
     /// Fetch comprehensive codebase context in a single optimized query
