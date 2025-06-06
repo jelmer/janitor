@@ -137,8 +137,8 @@ pub struct MergeProposalEvent {
 
 /// Redis subscriber for receiving messages from other services.
 pub struct RedisSubscriber {
-    /// Redis connection manager.
-    redis: ConnectionManager,
+    /// Redis client for creating pubsub connections.
+    redis_client: redis::Client,
     /// Channel for receiving shutdown signals.
     shutdown_rx: mpsc::Receiver<()>,
 }
@@ -147,13 +147,13 @@ impl RedisSubscriber {
     /// Create a new Redis subscriber.
     ///
     /// # Arguments
-    /// * `redis` - Redis connection manager
+    /// * `redis_client` - Redis client for creating connections
     /// * `shutdown_rx` - Channel for receiving shutdown signals
     ///
     /// # Returns
     /// A new RedisSubscriber instance
-    pub fn new(redis: ConnectionManager, shutdown_rx: mpsc::Receiver<()>) -> Self {
-        Self { redis, shutdown_rx }
+    pub fn new(redis_client: redis::Client, shutdown_rx: mpsc::Receiver<()>) -> Self {
+        Self { redis_client, shutdown_rx }
     }
 
     /// Listen to the runner service for new runs to publish.
@@ -167,34 +167,60 @@ impl RedisSubscriber {
     /// # Returns
     /// Ok(()) when the listener is shut down, or an error
     pub async fn listen_to_runner(
-        self,
+        mut self,
         state: Arc<crate::AppState>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         log::info!("Starting Redis listener for runner messages");
 
-        // Create a new connection for pubsub (ConnectionManager can't be used for pubsub)
-        // For now, we'll skip this functionality since we don't have the redis URL
-        // TODO: Pass redis URL to RedisSubscriber constructor
-        Err("PubSub functionality not implemented without redis URL".into())
-
-        // Unreachable code below - will be implemented when redis URL is available
-        /*
-        let mut pubsub = client.get_multiplexed_async_connection().await?.into_pubsub();
+        use futures::StreamExt;
+        
+        // Create a pubsub connection
+        let mut pubsub = self.redis_client.get_async_pubsub().await?;
         pubsub.subscribe("runner").await?;
+        
+        let mut pubsub_stream = pubsub.into_on_message();
 
         loop {
             tokio::select! {
                 // Check for shutdown signal
-                _ = self.shutdown_rx.recv() => {
-                    log::info!("Received shutdown signal, stopping Redis listener");
-                    break;
+                result = self.shutdown_rx.recv() => {
+                    match result {
+                        Some(()) => {
+                            log::info!("Received shutdown signal, stopping Redis listener");
+                            break;
+                        }
+                        None => {
+                            log::warn!("Shutdown channel closed, stopping Redis listener");
+                            break;
+                        }
+                    }
                 }
-
-                // Process incoming messages
-                msg = pubsub.on_message().next() => {
-                    if let Some(msg) = msg {
-                        if let Err(e) = self.process_runner_message(&state, &msg).await {
-                            log::error!("Error processing runner message: {}", e);
+                
+                // Process Redis messages
+                msg_result = pubsub_stream.next() => {
+                    match msg_result {
+                        Some(msg) => {
+                            if let Err(e) = self.process_runner_message(&state, &msg).await {
+                                log::error!("Error processing runner message: {}", e);
+                            }
+                        }
+                        None => {
+                            log::warn!("Redis pubsub stream ended, reconnecting...");
+                            // Attempt to reconnect
+                            match self.redis_client.get_async_pubsub().await {
+                                Ok(mut new_pubsub) => {
+                                    if let Err(e) = new_pubsub.subscribe("runner").await {
+                                        log::error!("Failed to resubscribe to runner channel: {}", e);
+                                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                        continue;
+                                    }
+                                    pubsub_stream = new_pubsub.into_on_message();
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to reconnect to Redis: {}", e);
+                                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                }
+                            }
                         }
                     }
                 }
@@ -203,7 +229,6 @@ impl RedisSubscriber {
 
         log::info!("Redis listener stopped");
         Ok(())
-        */
     }
 
     /// Process a message from the runner service.
@@ -377,15 +402,18 @@ pub async fn listen_to_runner(
     state: Arc<crate::AppState>,
     shutdown_rx: mpsc::Receiver<()>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let redis = match &state.redis {
-        Some(redis) => redis.clone(),
+    let redis_url = match &state.config.redis_location {
+        Some(url) => url,
         None => {
             log::warn!("Redis not configured, runner listener disabled");
             return Ok(());
         }
     };
 
-    let subscriber = RedisSubscriber::new(redis, shutdown_rx);
+    // Create a Redis client for pubsub operations
+    let redis_client = redis::Client::open(redis_url.to_string())?;
+
+    let subscriber = RedisSubscriber::new(redis_client, shutdown_rx);
     subscriber.listen_to_runner(state).await
 }
 
