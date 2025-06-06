@@ -245,7 +245,21 @@ async fn validate_repository_access(
     // Additional access control based on worker permissions
     if let Some(worker_name) = &auth_context.worker_name {
         debug!("Worker {} accessing codebase {}", worker_name, codebase);
-        // TODO: Implement worker-specific repository permissions if needed
+        
+        // Check if worker has permission to access this codebase
+        match state.db_manager.worker_has_codebase_access(worker_name, codebase).await {
+            Ok(true) => {
+                debug!("Worker {} has access to codebase {}", worker_name, codebase);
+            }
+            Ok(false) => {
+                warn!("Worker {} denied access to codebase {}", worker_name, codebase);
+                return Err(GitStoreError::PermissionDenied);
+            }
+            Err(e) => {
+                warn!("Error checking worker permissions for {} on {}: {}", worker_name, codebase, e);
+                return Err(e);
+            }
+        }
     }
 
     Ok(())
