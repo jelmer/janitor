@@ -376,8 +376,16 @@ async fn write_suite_files(
         f.write(signature)
 
 
-// TODO(jelmer): Don't hardcode this
-pub const ARCHES: &[&str] = &["amd64"];
+/// Get supported architectures from configuration
+pub fn get_supported_architectures(config: &crate::config::ArchiveConfig) -> Vec<String> {
+    // Get architectures from the first configured repository, or use defaults
+    if let Some((_, repo_config)) = config.repositories.iter().next() {
+        repo_config.architectures.clone()
+    } else {
+        // Default architectures if no repositories configured
+        vec!["amd64".to_string(), "all".to_string()]
+    }
+}
 
 
 @routes.post("/publish", name="publish")

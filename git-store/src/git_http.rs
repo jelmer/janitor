@@ -542,19 +542,21 @@ pub async fn git_backend(
 
         Ok(response.body(Body::from(body_data))?)
     } else {
-        // Streaming response - for now, read all data into memory
-        // TODO: Implement proper streaming when axum supports it better
-        let mut body_data = Vec::new();
-        reader.read_to_end(&mut body_data).await.map_err(|e| {
-            GitStoreError::Other(anyhow::anyhow!("Failed to read git response body: {}", e))
-        })?;
-
+        // Streaming response using proper async streaming
+        use futures_util::stream::TryStreamExt;
+        use tokio_util::io::ReaderStream;
+        
+        // Create a stream from the reader
+        let stream = ReaderStream::new(reader);
+        let body_stream = stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
+        
         let mut response = Response::builder().status(status_code);
         for (name, value) in response_headers.iter() {
             response = response.header(name, value);
         }
 
-        Ok(response.body(Body::from(body_data))?)
+        // Use axum's Body::from_stream for proper streaming support
+        Ok(response.body(Body::from_stream(body_stream))?)
     }
 }
 
