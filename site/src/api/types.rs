@@ -38,6 +38,30 @@ impl<T> ApiResponse<T> {
             pagination: Some(pagination),
         }
     }
+
+    pub fn error_typed(error: String, reason: Option<String>) -> Self {
+        Self {
+            data: None,
+            error: Some(error),
+            reason,
+            details: None,
+            pagination: None,
+        }
+    }
+
+    pub fn error_typed_with_details(
+        error: String,
+        reason: Option<String>,
+        details: serde_json::Value,
+    ) -> Self {
+        Self {
+            data: None,
+            error: Some(error),
+            reason,
+            details: Some(details),
+            pagination: None,
+        }
+    }
 }
 
 impl ApiResponse<()> {

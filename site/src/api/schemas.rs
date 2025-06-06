@@ -32,7 +32,7 @@ pub struct ScheduleResult {
 }
 
 /// Merge proposal information
-#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema, sqlx::FromRow)]
 pub struct MergeProposal {
     /// Merge proposal URL
     #[validate(url)]
