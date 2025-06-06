@@ -1563,6 +1563,66 @@ impl DatabaseManager {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Get basic run information for log reprocessing
+    pub async fn get_run_for_reprocessing(&self, run_id: &str) -> Result<Option<serde_json::Value>, DatabaseError> {
+        let row = sqlx::query(
+            "SELECT id, codebase, suite, command, result_code, description, 
+                    start_time, finish_time, failure_stage, failure_details, 
+                    main_branch_revision, revision, worker
+             FROM run 
+             WHERE id = $1"
+        )
+        .bind(run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            Ok(Some(serde_json::json!({
+                "id": row.try_get::<String, _>("id")?,
+                "codebase": row.try_get::<String, _>("codebase")?,
+                "suite": row.try_get::<String, _>("suite")?,
+                "command": row.try_get::<Option<String>, _>("command")?,
+                "result_code": row.try_get::<String, _>("result_code")?,
+                "description": row.try_get::<Option<String>, _>("description")?,
+                "start_time": row.try_get::<Option<DateTime<Utc>>, _>("start_time")?,
+                "finish_time": row.try_get::<Option<DateTime<Utc>>, _>("finish_time")?,
+                "failure_stage": row.try_get::<Option<String>, _>("failure_stage")?,
+                "failure_details": row.try_get::<Option<serde_json::Value>, _>("failure_details")?,
+                "main_branch_revision": row.try_get::<Option<String>, _>("main_branch_revision")?,
+                "revision": row.try_get::<Option<String>, _>("revision")?,
+                "worker": row.try_get::<Option<String>, _>("worker")?
+            })))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update run failure details from log analysis
+    pub async fn update_run_failure_details(&self, run_id: &str, failure_details: &serde_json::Value) -> Result<bool, DatabaseError> {
+        let result = sqlx::query(
+            "UPDATE run SET failure_details = $1 WHERE id = $2"
+        )
+        .bind(failure_details)
+        .bind(run_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Update run description from log analysis
+    pub async fn update_run_description(&self, run_id: &str, description: &str) -> Result<bool, DatabaseError> {
+        let result = sqlx::query(
+            "UPDATE run SET description = $1 WHERE id = $2"
+        )
+        .bind(description)
+        .bind(run_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     /// Get comprehensive run context data in a single optimized query
     /// Combines run details, statistics, reviews, binary packages in one call
     pub async fn get_run_context(

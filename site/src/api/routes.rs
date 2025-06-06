@@ -2006,26 +2006,170 @@ async fn admin_mass_reschedule(
     )
 )]
 async fn admin_reprocess_run_logs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin reprocess logs requested for run: {}", run_id);
 
-    // TODO: Implement actual log reprocessing
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "reprocess_logs",
-        "status": "not_implemented",
-        "message": "Log reprocessing requires integration with log management service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Get run details from database
+    match app_state.database.get_run_for_reprocessing(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Start log reprocessing in background task
+            let database = app_state.database.clone();
+            let log_manager = app_state.log_manager.clone();
+            let run_id_clone = run_id.clone();
+            
+            tokio::spawn(async move {
+                match reprocess_run_logs_task(&database, &log_manager, &run_id_clone, &run_details).await {
+                    Ok(_) => {
+                        info!("Log reprocessing completed for run {}", run_id_clone);
+                    }
+                    Err(e) => {
+                        error!("Log reprocessing failed for run {}: {}", run_id_clone, e);
+                    }
+                }
+            });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/admin/runs/{}/reprocess-logs", run_id),
-    )
+            let result = serde_json::json!({
+                "run_id": run_id,
+                "action": "reprocess_logs",
+                "status": "initiated",
+                "message": "Log reprocessing has been started in the background",
+                "run_details": {
+                    "codebase": run_details.get("codebase"),
+                    "suite": run_details.get("suite"),
+                    "result_code": run_details.get("result_code")
+                },
+                "timestamp": chrono::Utc::now()
+            });
+
+            negotiate_response(
+                ApiResponse::success(result),
+                &headers,
+                &format!("/api/admin/runs/{}/reprocess-logs", run_id),
+            )
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("run_not_found".to_string()),
+                reason: Some(format!("Run '{}' not found", run_id)),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/reprocess-logs", run_id))
+        }
+        Err(e) => {
+            warn!("Failed to get run details for {}: {}", run_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to retrieve run details".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "error_type": "database_error",
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/reprocess-logs", run_id))
+        }
+    }
+}
+
+/// Background task for reprocessing run logs
+async fn reprocess_run_logs_task(
+    database: &crate::database::DatabaseManager,
+    log_manager: &Arc<Box<dyn janitor::logs::LogFileManager>>,
+    run_id: &str,
+    run_details: &serde_json::Value,
+) -> anyhow::Result<()> {
+    use janitor::analyze_log::{process_build_log, process_dist_log};
+    
+    let codebase = run_details.get("codebase")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let result_code = run_details.get("result_code")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // Define log analyzers based on result code patterns
+    let log_analyzers: Vec<(&str, &str, fn(Box<dyn std::io::Read + Send + Sync>) -> janitor::analyze_log::AnalyzedLog)> = vec![
+        ("build-", "build.log", |reader| process_build_log(reader)),
+        ("dist-", "build.log", |reader| process_dist_log(reader)),
+    ];
+    
+    // Find appropriate analyzer for this result code
+    for (prefix, logname, analyzer) in log_analyzers.iter() {
+        if result_code.starts_with(prefix) {
+            debug!("Reprocessing {} log for run {} with result code {}", logname, run_id, result_code);
+            
+            // Get log content
+            match log_manager.as_ref().get_log(codebase, run_id, logname).await {
+                Ok(log_reader) => {
+                    // Analyze the log
+                    let analyzed_log = analyzer(log_reader);
+                    
+                    // Update run with new analysis
+                    if let Err(e) = update_run_analysis(database, run_id, &analyzed_log).await {
+                        warn!("Failed to update run analysis for {}: {}", run_id, e);
+                    } else {
+                        info!("Successfully reprocessed logs for run {}", run_id);
+                    }
+                    return Ok(());
+                }
+                Err(janitor::logs::Error::NotFound) => {
+                    debug!("Log {} not found for run {}", logname, run_id);
+                    continue;
+                }
+                Err(e) => {
+                    warn!("Failed to fetch log {} for run {}: {:?}", logname, run_id, e);
+                    continue;
+                }
+            }
+        }
+    }
+    
+    info!("No suitable log analyzer found for run {} with result code {}", run_id, result_code);
+    Ok(())
+}
+
+/// Update run with new log analysis results
+async fn update_run_analysis(
+    database: &crate::database::DatabaseManager,
+    run_id: &str,
+    analyzed_log: &janitor::analyze_log::AnalyzedLog,
+) -> anyhow::Result<()> {
+    // Update failure details if analysis provided new insights
+    if let Some(failure_details) = &analyzed_log.failure_details {
+        match database.update_run_failure_details(run_id, failure_details).await {
+            Ok(_) => {
+                debug!("Updated failure details for run {}", run_id);
+            }
+            Err(e) => {
+                warn!("Failed to update failure details for run {}: {}", run_id, e);
+            }
+        }
+    }
+
+    // Update description 
+    match database.update_run_description(run_id, &analyzed_log.description).await {
+        Ok(_) => {
+            debug!("Updated description for run {}", run_id);
+        }
+        Err(e) => {
+            warn!("Failed to update description for run {}: {}", run_id, e);
+        }
+    }
+
+    Ok(())
 }
 
 /// Trigger autopublish scan (admin only)
