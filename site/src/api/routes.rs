@@ -277,7 +277,7 @@ async fn get_queue_status(
                 total_candidates: *stats.get("total_codebases").unwrap_or(&0),
                 pending_candidates: *stats.get("queue_size").unwrap_or(&0),
                 active_runs: *stats.get("active_runs").unwrap_or(&0),
-                campaigns: vec![], // TODO: Implement campaign listing
+                campaigns: app_state.database.get_campaign_status_list().await.unwrap_or_default(),
             };
 
             // Enhanced response with additional statistics if requested
@@ -1955,15 +1955,37 @@ async fn admin_get_worker_details(
     )
 )]
 async fn get_campaign_merge_proposals(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(campaign): Path<String>,
     Query(query): Query<CommonQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Campaign {} merge proposals requested", campaign);
 
-    // TODO: Implement actual campaign merge proposal retrieval
-    let proposals: Vec<MergeProposal> = vec![];
+    // Convert CommonQuery to HashMap for the database method
+    let mut query_params = std::collections::HashMap::new();
+    if let Some(search) = &query.search {
+        query_params.insert("search".to_string(), search.clone());
+    }
+    
+    // Extract filters if available
+    if let Some(filters) = &query.filter {
+        for (key, value) in filters {
+            query_params.insert(key.clone(), value.clone());
+        }
+    }
+    
+    query_params.insert("limit".to_string(), query.pagination.get_limit().to_string());
+    query_params.insert("offset".to_string(), query.pagination.get_offset().to_string());
+
+    // Get merge proposals for this campaign
+    let proposals = match app_state.database.get_campaign_merge_proposals(&campaign, &query_params).await {
+        Ok(proposals) => proposals,
+        Err(e) => {
+            warn!("Failed to get merge proposals for campaign {}: {}", campaign, e);
+            vec![]
+        }
+    };
     let pagination = super::types::PaginationInfo::new(
         Some(0),
         query.pagination.get_offset(),
@@ -1992,27 +2014,86 @@ async fn get_campaign_merge_proposals(
     )
 )]
 async fn get_campaign_ready_runs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(campaign): Path<String>,
     Query(query): Query<CommonQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Campaign {} ready runs requested", campaign);
 
-    // TODO: Implement actual campaign ready runs retrieval
-    let runs: Vec<Run> = vec![];
-    let pagination = super::types::PaginationInfo::new(
-        Some(0),
-        query.pagination.get_offset(),
-        query.pagination.get_limit(),
-        runs.len(),
-    );
+    let limit = query.pagination.get_limit();
+    let offset = query.pagination.get_offset();
 
-    negotiate_response(
-        ApiResponse::success_with_pagination(runs, pagination),
-        &headers,
-        &format!("/api/{}/ready", campaign),
-    )
+    // Extract result_code from filter if available
+    let result_code = query.filter.as_ref()
+        .and_then(|filters| filters.get("result_code"))
+        .map(|s| s.as_str());
+
+    // Use existing get_ready_runs method with campaign filter
+    match app_state.database.get_ready_runs(
+        &campaign,
+        query.search.as_deref(),
+        result_code,
+        Some(limit),
+        Some(offset),
+    ).await {
+        Ok(runs) => {
+            // Convert database results to API run format
+            let api_runs: Vec<Run> = runs.into_iter().map(|run_data| {
+                Run {
+                    run_id: run_data.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    start_time: run_data.get("start_time").and_then(|v| v.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&chrono::Utc)),
+                    finish_time: run_data.get("finish_time").and_then(|v| v.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&chrono::Utc)),
+                    command: run_data.get("command").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    description: run_data.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    build_info: None,
+                    result_code: run_data.get("result_code").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    main_branch_revision: None,
+                    revision: None,
+                    context: None,
+                    suite: Some(campaign.clone()),
+                    vcs_type: None,
+                    branch_url: None,
+                    logfilenames: vec![],
+                    worker_name: None,
+                    result_branches: vec![],
+                    result_tags: vec![],
+                    target_branch_url: None,
+                    change_set: None,
+                    failure_transient: None,
+                    failure_stage: None,
+                    codebase: run_data.get("codebase").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    campaign: campaign.clone(),
+                    subpath: None,
+                }
+            }).collect();
+
+            let pagination = super::types::PaginationInfo::new(
+                Some(api_runs.len() as i64),
+                offset,
+                limit,
+                api_runs.len(),
+            );
+
+            negotiate_response(
+                ApiResponse::success_with_pagination(api_runs, pagination),
+                &headers,
+                &format!("/api/{}/ready", campaign),
+            )
+        }
+        Err(e) => {
+            warn!("Failed to get ready runs for campaign {}: {}", campaign, e);
+            let error_response = ApiResponse::<Vec<Run>> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some(format!("Failed to retrieve ready runs: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/{}/ready", campaign))
+        }
+    }
 }
 
 /// Get campaign-specific codebase information
@@ -2029,24 +2110,66 @@ async fn get_campaign_ready_runs(
     )
 )]
 async fn get_campaign_codebase(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path((campaign, codebase)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Campaign {} codebase {} requested", campaign, codebase);
 
-    // TODO: Implement actual campaign codebase retrieval
-    let result = serde_json::json!({
-        "campaign": campaign,
-        "codebase": codebase,
-        "status": "not_implemented"
-    });
+    // Get comprehensive codebase context for this campaign/codebase combination
+    match app_state.database.get_codebase_context(&campaign, &codebase).await {
+        Ok(context) => {
+            // Convert to API response format
+            let result = serde_json::json!({
+                "codebase": context.codebase,
+                "campaign": context.suite,
+                "command": context.command,
+                "publish_policy": context.publish_policy,
+                "priority": context.priority,
+                "value": context.value,
+                "vcs_url": context.vcs_url,
+                "vcs_type": context.vcs_type,
+                "branch_url": context.branch_url,
+                "last_run": {
+                    "id": context.last_run_id,
+                    "result_code": context.last_result_code,
+                    "description": context.last_description,
+                    "start_time": context.last_start_time,
+                    "finish_time": context.last_finish_time,
+                    "worker": context.last_worker
+                },
+                "queue_position": context.queue_position
+            });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/{}/c/{}", campaign, codebase),
-    )
+            negotiate_response(
+                ApiResponse::success(result),
+                &headers,
+                &format!("/api/{}/c/{}", campaign, codebase),
+            )
+        }
+        Err(e) => {
+            let (error_code, reason) = match e {
+                crate::database::DatabaseError::NotFound(_) => {
+                    ("not_found", format!("Codebase '{}' not found in campaign '{}'", codebase, campaign))
+                }
+                _ => (
+                    "database_error",
+                    format!("Failed to retrieve codebase context: {}", e),
+                ),
+            };
+
+            debug!("Failed to get campaign codebase {}/{}: {}", campaign, codebase, e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some(error_code.to_string()),
+                reason: Some(reason),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}", campaign, codebase))
+        }
+    }
 }
 
 /// Publish a codebase within a campaign
