@@ -9,6 +9,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - Site API health checks and Redis monitoring
 - Runner async database methods (4 TODOs in runner/src/database.rs)
 - Publish service redirect following (publish/src/lib.rs)
+- **Trace context headers for HTTP requests (src/vcs.rs:892)** ✅ **COMPLETED**
 
 ---
 
@@ -17,7 +18,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 ### Core Services
 
 #### **VCS Management (src/vcs.rs)**
-- [ ] **Line 854**: Pass trace context headers for HTTP requests
+- [x] **Line 892**: Pass trace context headers for HTTP requests ✅ **COMPLETED**
 - [ ] **Line 281**: Implement symref handling for branch references (worker/src/vcs.rs)
 
 #### **Scheduling & Performance (src/schedule.rs)**
@@ -28,7 +29,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [ ] **Line 910**: Integrate branch import into existing functions (worker/src/lib.rs)
 - [ ] **Line 1066**: Update metadata in app state during work (worker/src/lib.rs)
 - [ ] **Line 73**: Only necessary for deb-new-upstream operations (worker/src/debian/mod.rs)
-- [ ] **Lines 286, 392**: Build action not implemented for certain build systems (worker/src/generic/mod.rs)
+- [x] **Lines 286, 392**: Build action not implemented for certain build systems (worker/src/generic/mod.rs) ✅ **COMPLETED**
 
 ---
 
