@@ -4124,26 +4124,141 @@ async fn cupboard_queue_manage(
     )
 )]
 async fn cupboard_queue_bulk_operations(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(operation): Query<BulkOperationQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard bulk operation requested: {:?}", operation);
 
-    // TODO: Implement actual bulk operations
-    let result = serde_json::json!({
-        "operation": operation.operation,
-        "status": "not_implemented",
-        "message": "Bulk operations require integration with runner service",
-        "parameters": {
-            "target": operation.target,
-            "batch_size": operation.batch_size.unwrap_or(100),
-            "requester": operation.requester
-        },
-        "estimated_affected_items": 0,
-        "execution_time_estimate": "unknown",
-        "initiated_at": chrono::Utc::now()
-    });
+    let requester = operation.requester.unwrap_or_else(|| "admin".to_string());
+    
+    // Parse target IDs if provided
+    let target_ids: Vec<String> = if let Some(target) = &operation.target {
+        target.split(',').map(|s| s.trim().to_string()).collect()
+    } else {
+        vec![]
+    };
+
+    if target_ids.is_empty() {
+        let error_response = ApiResponse::<serde_json::Value> {
+            data: None,
+            error: Some("invalid_target".to_string()),
+            reason: Some("No target queue items specified. Provide comma-separated item IDs.".to_string()),
+            details: None,
+            pagination: None,
+        };
+        return negotiate_response(error_response, &headers, "/cupboard/queue/bulk-operations");
+    }
+
+    let result = match operation.operation.as_str() {
+        "reschedule" => {
+            match app_state.database.bulk_reschedule_queue_items(&target_ids, &requester).await {
+                Ok(affected_rows) => {
+                    json!({
+                        "operation": "reschedule",
+                        "status": "success",
+                        "message": format!("Rescheduled {} queue items", affected_rows),
+                        "affected_items": affected_rows,
+                        "target_ids": target_ids,
+                        "requester": requester,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+                Err(e) => {
+                    json!({
+                        "operation": "reschedule",
+                        "status": "error", 
+                        "message": format!("Failed to reschedule items: {}", e),
+                        "affected_items": 0,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+            }
+        }
+        "cancel" => {
+            match app_state.database.bulk_cancel_queue_items(&target_ids, &requester).await {
+                Ok(affected_rows) => {
+                    json!({
+                        "operation": "cancel",
+                        "status": "success",
+                        "message": format!("Cancelled {} queue items", affected_rows),
+                        "affected_items": affected_rows,
+                        "target_ids": target_ids,
+                        "requester": requester,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+                Err(e) => {
+                    json!({
+                        "operation": "cancel",
+                        "status": "error",
+                        "message": format!("Failed to cancel items: {}", e),
+                        "affected_items": 0,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+            }
+        }
+        "priority_up" => {
+            match app_state.database.bulk_adjust_priority(&target_ids, 10, &requester).await {
+                Ok(affected_rows) => {
+                    json!({
+                        "operation": "priority_up",
+                        "status": "success",
+                        "message": format!("Increased priority for {} queue items", affected_rows),
+                        "affected_items": affected_rows,
+                        "priority_adjustment": "+10",
+                        "target_ids": target_ids,
+                        "requester": requester,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+                Err(e) => {
+                    json!({
+                        "operation": "priority_up",
+                        "status": "error",
+                        "message": format!("Failed to adjust priority: {}", e),
+                        "affected_items": 0,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+            }
+        }
+        "priority_down" => {
+            match app_state.database.bulk_adjust_priority(&target_ids, -10, &requester).await {
+                Ok(affected_rows) => {
+                    json!({
+                        "operation": "priority_down",
+                        "status": "success",
+                        "message": format!("Decreased priority for {} queue items", affected_rows),
+                        "affected_items": affected_rows,
+                        "priority_adjustment": "-10",
+                        "target_ids": target_ids,
+                        "requester": requester,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+                Err(e) => {
+                    json!({
+                        "operation": "priority_down",
+                        "status": "error",
+                        "message": format!("Failed to adjust priority: {}", e),
+                        "affected_items": 0,
+                        "executed_at": chrono::Utc::now()
+                    })
+                }
+            }
+        }
+        _ => {
+            json!({
+                "operation": operation.operation,
+                "status": "error",
+                "message": format!("Unsupported operation: {}. Supported: reschedule, cancel, priority_up, priority_down", operation.operation),
+                "supported_operations": ["reschedule", "cancel", "priority_up", "priority_down"],
+                "executed_at": chrono::Utc::now()
+            })
+        }
+    };
 
     negotiate_response(
         ApiResponse::success(result),
