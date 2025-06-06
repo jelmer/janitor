@@ -527,35 +527,164 @@ async fn serve_pool_file(
 
 /// Publish repository endpoint.
 async fn publish_repository(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<PublishRequest>,
 ) -> Result<Json<PublishResponse>, StatusCode> {
     info!("Repository publish request: {:?}", request);
 
-    // TODO: Implement repository publishing logic
-    // For now, return a success response
-    let response = PublishResponse {
-        success: true,
-        message: "Repository publishing queued".to_string(),
-        repositories: vec![],
-    };
-
-    Ok(Json(response))
+    let mut repositories = Vec::new();
+    
+    // Get the suite to process
+    let suite = request.suite.as_deref().unwrap_or("default");
+    
+    // Get campaign configuration for the suite
+    match state.database.get_campaign_info(suite, None).await {
+        Ok(Some(campaign_info)) => {
+            info!("Processing campaign for suite: {}", suite);
+            
+            // Use the campaign info to generate repositories for configured distributions
+            let distributions: Vec<String> = if state.config.repositories.is_empty() {
+                // If no repositories configured, create default for the campaign
+                vec!["debian".to_string()]
+            } else {
+                state.config.repositories.keys().cloned().collect()
+            };
+            
+            for distribution in &distributions {
+                let mut repo_config = state.config.repositories.get(distribution)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        // Create default repository config if not found
+                        crate::config::AptRepositoryConfig {
+                            name: distribution.clone(),
+                            base_path: state.config.archive_path.join(distribution),
+                            origin: format!("Janitor {}", distribution),
+                            label: format!("Janitor {}", distribution),
+                            suite: suite.to_string(),
+                            codename: suite.to_string(),
+                            description: format!("Automated packages for {} - {}", distribution, campaign_info.description),
+                            architectures: campaign_info.architectures.clone(),
+                            components: vec![campaign_info.component.clone()],
+                            base_url: format!("https://janitor.debian.net/apt/{}", distribution),
+                            by_hash: true,
+                        }
+                    });
+                    
+                // Override suite/codename and other details from campaign info
+                repo_config.suite = campaign_info.suite.clone();
+                repo_config.codename = campaign_info.suite.clone();
+                repo_config.architectures = campaign_info.architectures.clone();
+                repo_config.components = vec![campaign_info.component.clone()];
+                
+                match state.generator.generate_repository(&repo_config).await {
+                    Ok(()) => {
+                        info!("Successfully generated repository for {}/{}", distribution, suite);
+                        
+                        // Count packages and sources from build info (simplified for now)
+                        let packages_count = 0; // Would need to query actual build results
+                        let sources_count = 0;  // Would need to query actual build results
+                        
+                        repositories.push(RepositoryInfo {
+                            name: repo_config.name,
+                            suite: campaign_info.suite.clone(),
+                            packages: packages_count,
+                            sources: sources_count,
+                            timestamp: chrono::Utc::now(),
+                        });
+                    }
+                    Err(e) => {
+                        warn!("Failed to generate repository for {}/{}: {}", distribution, suite, e);
+                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                }
+            }
+            
+            let response = PublishResponse {
+                success: true,
+                message: format!("Successfully published {} repositories for suite {}", repositories.len(), suite),
+                repositories,
+            };
+            
+            Ok(Json(response))
+        }
+        Ok(None) => {
+            warn!("No campaign configuration found for suite: {}", suite);
+            let response = PublishResponse {
+                success: false,
+                message: format!("No campaign configuration found for suite: {}", suite),
+                repositories: vec![],
+            };
+            Ok(Json(response))
+        }
+        Err(e) => {
+            warn!("Error getting campaign info for suite {}: {}", suite, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// Last publish status endpoint.
 async fn last_publish_status(
     Query(params): Query<HashMap<String, String>>,
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let suite = params.get("suite");
-
-    // TODO: Implement last publish status tracking
-    // For now, return a placeholder response
+    let suite = params.get("suite").map_or("default", |v| v);
+    
+    // Check if repositories exist and get their status
+    let mut last_publish_time = None;
+    let mut status = "never_published";
+    let mut repository_count = 0;
+    
+    // Look for Release files in each repository to determine last publish status
+    for (distribution, repo_config) in &state.config.repositories {
+        let release_file = repo_config.base_path.join("dists").join(suite).join("Release");
+        
+        match fs::metadata(&release_file).await {
+            Ok(metadata) => {
+                if let Ok(modified) = metadata.modified() {
+                    let publish_time = chrono::DateTime::<chrono::Utc>::from(modified);
+                    
+                    if last_publish_time.map_or(true, |last| publish_time > last) {
+                        last_publish_time = Some(publish_time);
+                    }
+                    
+                    repository_count += 1;
+                    status = "success";
+                }
+            }
+            Err(_) => {
+                debug!("No Release file found for {}/{}", distribution, suite);
+            }
+        }
+    }
+    
+    // If no specific repositories configured, check for any published repositories
+    if repository_count == 0 {
+        let base_dist_path = state.config.archive_path.join("dists").join(suite);
+        
+        if let Ok(mut dir_entries) = fs::read_dir(&base_dist_path).await {
+            while let Ok(Some(entry)) = dir_entries.next_entry().await {
+                if entry.file_name() == "Release" {
+                    if let Ok(metadata) = entry.metadata().await {
+                        if let Ok(modified) = metadata.modified() {
+                            let publish_time = chrono::DateTime::<chrono::Utc>::from(modified);
+                            last_publish_time = Some(publish_time);
+                            status = "success";
+                            repository_count = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     let response = serde_json::json!({
-        "last_publish": chrono::Utc::now(),
-        "status": "success",
-        "suite": suite.map_or("unknown", |v| v)
+        "last_publish": last_publish_time,
+        "status": status,
+        "suite": suite,
+        "repository_count": repository_count,
+        "distributions": state.config.repositories.keys().collect::<Vec<_>>()
     });
 
     Ok(Json(response))
@@ -563,20 +692,52 @@ async fn last_publish_status(
 
 /// Serve GPG public key.
 async fn serve_gpg_key(State(state): State<AppState>) -> Result<Response, StatusCode> {
-    if let Some(_gpg_config) = &state.config.gpg {
-        // TODO: Extract and serve the public key
-        // For now, return a placeholder
-        let key_data =
-            "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...\n-----END PGP PUBLIC KEY BLOCK-----";
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "Content-Type",
-            HeaderValue::from_static("application/pgp-keys"),
-        );
-
-        Ok((headers, key_data).into_response())
+    if let Some(gpg_config) = &state.config.gpg {
+        // Try to export the public key using gpg command
+        let mut cmd = tokio::process::Command::new("gpg");
+        
+        // Set GPG home directory if specified
+        if let Some(gpg_home) = &gpg_config.gpg_home {
+            cmd.arg("--homedir").arg(gpg_home);
+        }
+        
+        // Export the public key in ASCII armor format
+        cmd.args(["--armor", "--export", &gpg_config.key_id]);
+        
+        match cmd.output().await {
+            Ok(output) => {
+                if output.status.success() {
+                    let key_data = String::from_utf8_lossy(&output.stdout);
+                    
+                    if key_data.starts_with("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+                        let mut headers = HeaderMap::new();
+                        headers.insert(
+                            "Content-Type",
+                            HeaderValue::from_static("application/pgp-keys"),
+                        );
+                        headers.insert(
+                            "Cache-Control",
+                            HeaderValue::from_static("public, max-age=86400"), // 24 hours
+                        );
+                        
+                        Ok((headers, key_data.to_string()).into_response())
+                    } else {
+                        warn!("GPG export returned unexpected output for key {}", gpg_config.key_id);
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    }
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    warn!("GPG export failed for key {}: {}", gpg_config.key_id, stderr);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+            Err(e) => {
+                warn!("Failed to execute gpg command: {}", e);
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
     } else {
+        debug!("No GPG configuration available");
         Err(StatusCode::NOT_FOUND)
     }
 }
