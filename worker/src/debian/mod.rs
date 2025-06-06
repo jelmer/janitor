@@ -70,29 +70,35 @@ pub fn debian_make_changes(
 
     log::info!("Running {:?}", argv);
 
-    // TODO(jelmer): This is only necessary for deb-new-upstream
-    let sys_path = pyo3::Python::with_gil(|py| {
-        let sys = py.import_bound("sys").unwrap();
-        Ok::<String, pyo3::PyErr>(
-            sys.getattr("path")
-                .unwrap()
-                .extract::<Vec<String>>()
-                .unwrap()
-                .join(":"),
-        )
-    })
-    .unwrap();
+    // Only set up Python environment variables for deb-new-upstream operations
+    let (sys_path, sys_executable) = if !argv.is_empty() && argv[0] == "deb-new-upstream" {
+        let sys_path = pyo3::Python::with_gil(|py| {
+            let sys = py.import_bound("sys").unwrap();
+            Ok::<String, pyo3::PyErr>(
+                sys.getattr("path")
+                    .unwrap()
+                    .extract::<Vec<String>>()
+                    .unwrap()
+                    .join(":"),
+            )
+        })
+        .unwrap();
 
-    let sys_executable = pyo3::Python::with_gil(|py| {
-        let sys = py.import_bound("sys").unwrap();
-        Ok::<String, pyo3::PyErr>(
-            sys.getattr("executable")
-                .unwrap()
-                .extract::<String>()
-                .unwrap(),
-        )
-    })
-    .unwrap();
+        let sys_executable = pyo3::Python::with_gil(|py| {
+            let sys = py.import_bound("sys").unwrap();
+            Ok::<String, pyo3::PyErr>(
+                sys.getattr("executable")
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap(),
+            )
+        })
+        .unwrap();
+
+        (Some(sys_path), Some(sys_executable))
+    } else {
+        (None, None)
+    };
 
     let mut dist_command = vec![
         "janitor-dist".to_string(),
@@ -132,6 +138,15 @@ pub fn debian_make_changes(
 
     let mut extra_env = HashMap::new();
     extra_env.insert("DIST".to_string(), dist_command);
+    
+    // Add Python environment variables for deb-new-upstream operations
+    if let Some(path) = sys_path {
+        extra_env.insert("PYTHONPATH".to_string(), path);
+    }
+    if let Some(executable) = sys_executable {
+        extra_env.insert("PYTHON_EXECUTABLE".to_string(), executable);
+    }
+    
     for (k, v) in env {
         extra_env.insert(k, v);
     }
