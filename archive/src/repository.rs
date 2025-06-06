@@ -18,6 +18,7 @@ use debian_control::lossy::apt::{Package as DebianPackage, Source as DebianSourc
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, error, info, warn};
 
 use crate::config::AptRepositoryConfig;
@@ -478,7 +479,263 @@ impl RepositoryGenerator {
 
         info!("Successfully generated repository: {}", repo_config.name);
 
+        // Generate Contents files for each architecture
+        self.generate_contents_files(repo_config).await?;
+
         Ok(())
+    }
+
+    /// Generate Contents files for the repository.
+    ///
+    /// Contents files map file paths to the packages that contain them.
+    /// This implementation creates basic Contents files for each architecture.
+    async fn generate_contents_files(&self, repo_config: &AptRepositoryConfig) -> ArchiveResult<()> {
+        info!("Generating Contents files for repository: {}", repo_config.name);
+
+        for component in &repo_config.components {
+            for architecture in &repo_config.architectures {
+                if architecture == "source" {
+                    continue; // Skip source architecture for Contents files
+                }
+
+                let contents_path = repo_config.base_path
+                    .join("dists")
+                    .join(&repo_config.codename)
+                    .join(component)
+                    .join(format!("Contents-{}", architecture));
+
+                info!(
+                    "Generating Contents file: {:?} for {}/{}",
+                    contents_path, component, architecture
+                );
+
+                let contents_data = self.generate_contents_data(
+                    &repo_config.suite,
+                    component,
+                    architecture,
+                ).await?;
+
+                // Ensure the directory exists
+                if let Some(parent) = contents_path.parent() {
+                    fs::create_dir_all(parent).await.map_err(ArchiveError::Io)?;
+                }
+
+                // Write Contents file
+                fs::write(&contents_path, contents_data.as_bytes())
+                    .await
+                    .map_err(ArchiveError::Io)?;
+
+                // Generate compressed versions
+                let compressions = [
+                    apt_repository::Compression::Gzip,
+                    apt_repository::Compression::Bzip2,
+                ];
+
+                for compression in &compressions {
+                    let compressed_path = contents_path.with_extension(
+                        format!("{}.{}", contents_path.extension().unwrap_or_default().to_string_lossy(), compression.extension())
+                    );
+
+                    let compressed_data = compression.compress(contents_data.as_bytes())
+                        .map_err(|e| ArchiveError::RepositoryGeneration(e.to_string()))?;
+
+                    fs::write(compressed_path, compressed_data)
+                        .await
+                        .map_err(ArchiveError::Io)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Generate Contents data for a specific suite/component/architecture.
+    async fn generate_contents_data(
+        &self,
+        suite: &str,
+        component: &str,
+        architecture: &str,
+    ) -> ArchiveResult<String> {
+        debug!(
+            "Generating contents data for suite={}, component={}, arch={}",
+            suite, component, architecture
+        );
+
+        // Get builds for this suite and filter by component
+        let all_builds = self.build_manager.get_builds_for_suite(suite).await?;
+        let builds: Vec<_> = all_builds.into_iter()
+            .filter(|build| build.component == component)
+            .collect();
+
+        let mut contents_entries = Vec::new();
+
+        // Process each build
+        for build_record in builds {
+            let build_info = build_record.into();
+
+            // Scan packages for this build
+            let package_stream = self
+                .scanner
+                .scan_packages_for_build(&build_info, Some(architecture))
+                .await;
+
+            // Collect packages from stream
+            let mut package_stream = Box::pin(package_stream);
+            while let Some(package_result) = package_stream.next().await {
+                match package_result {
+                    Ok(debian_package) => {
+                        // For each package, extract actual file list from .deb package
+                        match self.generate_package_file_list(&debian_package, &build_info).await {
+                            Ok(package_files) => {
+                                for file_path in package_files {
+                                    contents_entries.push(format!(
+                                        "{:<60} {}",
+                                        file_path,
+                                        format!("{}/{}", component, debian_package.name)
+                                    ));
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Failed to extract file list for package {}: {}", debian_package.name, e);
+                                continue;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to scan package from build {}: {}", build_info.id, e);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Sort contents entries for consistent output
+        contents_entries.sort();
+
+        // Add header comment
+        let mut contents_data = String::new();
+        contents_data.push_str(&format!(
+            "FILE                                                         LOCATION\n"
+        ));
+
+        for entry in contents_entries {
+            contents_data.push_str(&entry);
+            contents_data.push('\n');
+        }
+
+        Ok(contents_data)
+    }
+
+    /// Extract the actual file list from a Debian package.
+    ///
+    /// This uses dpkg-deb to extract the file list from the .deb package.
+    async fn generate_package_file_list(&self, package: &DebianPackage, build_info: &crate::scanner::BuildInfo) -> ArchiveResult<Vec<String>> {
+        // First, we need to find the actual .deb file for this package
+        let deb_filename = format!("{}_{}_{}.deb", 
+            package.name, 
+            package.version, 
+            package.architecture
+        );
+
+        // Get the .deb file from artifacts
+        let artifact_manager = janitor::artifacts::get_artifact_manager("dummy://location")
+            .await
+            .map_err(|e| ArchiveError::ArtifactRetrieval(e.to_string()))?;
+
+        // Create a temporary directory for downloading the .deb file
+        let temp_dir = tempfile::TempDir::new().map_err(ArchiveError::Io)?;
+        let temp_path = temp_dir.path();
+
+        // Download the specific .deb file
+        let deb_path = temp_path.join(&deb_filename);
+        
+        // Try to get the .deb file from artifacts
+        match artifact_manager.get_artifact(&build_info.id, &deb_filename).await {
+            Ok(mut reader) => {
+                // Write the artifact data to the temp file
+                let mut file = tokio::fs::File::create(&deb_path)
+                    .await
+                    .map_err(ArchiveError::Io)?;
+                
+                // Copy from reader to file
+                let mut buffer = Vec::new();
+                std::io::Read::read_to_end(&mut *reader, &mut buffer)
+                    .map_err(|e| ArchiveError::ArtifactRetrieval(e.to_string()))?;
+                
+                file.write_all(&buffer)
+                    .await
+                    .map_err(ArchiveError::Io)?;
+                
+                // Extract file list using dpkg-deb
+                self.extract_file_list_from_deb(&deb_path).await
+            }
+            Err(janitor::artifacts::Error::ArtifactsMissing) => {
+                debug!("Package file {} not found in artifacts for build {}", deb_filename, build_info.id);
+                Ok(vec![]) // Return empty list if package not found
+            }
+            Err(e) => {
+                warn!("Failed to retrieve package file {}: {}", deb_filename, e);
+                Ok(vec![]) // Return empty list on error
+            }
+        }
+    }
+
+    /// Extract file list from a .deb package using dpkg-deb.
+    async fn extract_file_list_from_deb(&self, deb_path: &std::path::Path) -> ArchiveResult<Vec<String>> {
+        use tokio::process::Command;
+
+        debug!("Extracting file list from: {:?}", deb_path);
+
+        // Use dpkg-deb -c to list contents
+        let output = Command::new("dpkg-deb")
+            .arg("-c")
+            .arg(deb_path)
+            .output()
+            .await
+            .map_err(|e| ArchiveError::PackageScanning(format!("Failed to run dpkg-deb: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(ArchiveError::PackageScanning(format!(
+                "dpkg-deb failed: {}", stderr
+            )));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut file_paths = Vec::new();
+
+        // Parse dpkg-deb output
+        // Format: drwxr-xr-x root/root         0 2023-01-01 12:00 ./usr/
+        // Format: -rw-r--r-- root/root      1234 2023-01-01 12:00 ./usr/bin/example
+        for line in stdout.lines() {
+            if let Some(file_path) = self.parse_dpkg_deb_line(line) {
+                // Remove leading ./ and only include files (not directories)
+                if !file_path.ends_with('/') && file_path.starts_with("./") {
+                    let cleaned_path = file_path.strip_prefix("./").unwrap_or(&file_path);
+                    if !cleaned_path.is_empty() {
+                        file_paths.push(cleaned_path.to_string());
+                    }
+                }
+            }
+        }
+
+        debug!("Extracted {} files from package", file_paths.len());
+        Ok(file_paths)
+    }
+
+    /// Parse a line from dpkg-deb -c output to extract the file path.
+    fn parse_dpkg_deb_line(&self, line: &str) -> Option<String> {
+        // dpkg-deb -c output format:
+        // drwxr-xr-x root/root         0 2023-01-01 12:00 ./path/to/file
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        
+        if parts.len() >= 6 {
+            // The path is the last part (or parts if it contains spaces)
+            let path_start_idx = parts.len() - 1;
+            Some(parts[path_start_idx].to_string())
+        } else {
+            None
+        }
     }
 
     /// Generate multiple repositories for different suites.
