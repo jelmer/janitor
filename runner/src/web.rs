@@ -916,13 +916,116 @@ async fn metrics() -> impl IntoResponse {
     }
 }
 
+/// Public endpoint to list workers with basic information.
+async fn list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match state.auth_service.list_workers().await {
+        Ok(workers) => {
+            // Get active runs to determine worker status
+            let active_runs = state.database.get_active_runs().await.unwrap_or_default();
+            
+            // Create a map of worker names to their current status
+            let mut worker_status_map = std::collections::HashMap::new();
+            for run in &active_runs {
+                worker_status_map.insert(run.worker_name.clone(), "active");
+            }
+            
+            // Enhance worker information with status
+            let enhanced_workers: Vec<serde_json::Value> = workers.iter().map(|worker| {
+                let status = worker_status_map.get(&worker.name)
+                    .unwrap_or(&"idle")
+                    .to_string();
+                
+                json!({
+                    "name": worker.name,
+                    "status": status,
+                    // Don't expose worker link in public endpoint
+                })
+            }).collect();
+            
+            let active_count = worker_status_map.len();
+            let total_count = workers.len();
+            let idle_count = total_count - active_count;
+            
+            Json(json!({
+                "workers": enhanced_workers,
+                "total_workers": total_count,
+                "active_workers": active_count,
+                "idle_workers": idle_count,
+                "summary": {
+                    "total": total_count,
+                    "active": active_count,
+                    "idle": idle_count,
+                },
+                "timestamp": chrono::Utc::now()
+            }))
+        },
+        Err(e) => {
+            log::error!("Failed to list workers: {}", e);
+            Json(json!({
+                "error": "Failed to list workers",
+                "workers": [],
+                "total_workers": 0,
+                "active_workers": 0,
+                "idle_workers": 0
+            }))
+        }
+    }
+}
+
 /// Admin endpoint to list workers.
 async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.auth_service.list_workers().await {
-        Ok(workers) => Json(json!({"workers": workers})),
+        Ok(workers) => {
+            // Get active runs to determine worker status
+            let active_runs = state.database.get_active_runs().await.unwrap_or_default();
+            
+            // Create a map of worker names to their current status
+            let mut worker_status_map = std::collections::HashMap::new();
+            for run in &active_runs {
+                worker_status_map.insert(run.worker_name.clone(), "active");
+            }
+            
+            // Enhance worker information with status
+            let enhanced_workers: Vec<serde_json::Value> = workers.iter().map(|worker| {
+                let status = worker_status_map.get(&worker.name)
+                    .unwrap_or(&"idle")
+                    .to_string();
+                
+                json!({
+                    "name": worker.name,
+                    "link": worker.link,
+                    "status": status,
+                    "last_seen": chrono::Utc::now(), // TODO: Track actual last seen time
+                })
+            }).collect();
+            
+            let active_count = worker_status_map.len();
+            let total_count = workers.len();
+            let idle_count = total_count - active_count;
+            
+            Json(json!({
+                "workers": enhanced_workers,
+                "total_workers": total_count,
+                "active_workers": active_count,
+                "idle_workers": idle_count,
+                "summary": {
+                    "total": total_count,
+                    "active": active_count,
+                    "idle": idle_count,
+                    "failed": 0 // TODO: Track failed workers
+                },
+                "timestamp": chrono::Utc::now()
+            }))
+        },
         Err(e) => {
             log::error!("Failed to list workers: {}", e);
-            Json(json!({"error": "Failed to list workers"}))
+            Json(json!({
+                "error": "Failed to list workers",
+                "workers": [],
+                "total_workers": 0,
+                "active_workers": 0,
+                "idle_workers": 0
+            }))
         }
     }
 }
@@ -2147,6 +2250,8 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/metrics", get(metrics))
+        // Public worker endpoint with basic info
+        .route("/workers", get(list_workers))
         // Admin endpoints for worker management
         .route("/admin/workers", get(admin_list_workers))
         .route("/admin/workers", post(admin_create_worker))
