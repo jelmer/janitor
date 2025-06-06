@@ -4,6 +4,7 @@
 //! ported from the Python implementation.
 
 use crate::{consider_publish_run, AppState, PublishError};
+use breezyshim::RevisionId;
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
@@ -145,11 +146,12 @@ impl PublishReadyIterator {
                 result_tags: row.get("result_tags"),
             };
 
+            let role: String = row.get("role");
             let branch = crate::state::UnpublishedBranch {
-                role: row.get("role"),
-                revision: row.get("branch_revision"),
+                role: role.clone(),
+                revision: row.get::<Option<String>, _>("branch_revision").map(|s| RevisionId::from(s.as_bytes().to_vec())),
                 remote_name: row.get("branch_name"),
-                base_revision: row.get::<Option<String>, _>("base_revision").unwrap_or(None),
+                base_revision: row.get::<Option<String>, _>("base_revision").map(|s| RevisionId::from(s.as_bytes().to_vec())),
                 publish_mode: Some("propose".to_string()), // Default mode
                 max_frequency_days: self.get_max_frequency_days(&role).await.unwrap_or(None),
                 name: row.get("branch_name"), // Use remote_name as name
