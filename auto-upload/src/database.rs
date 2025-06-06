@@ -213,14 +213,22 @@ pub struct PoolStats {
     pub idle: usize,
 }
 
+/// Represents a complete query with SQL and parameters
+pub struct BackfillQuery {
+    /// The SQL query string with parameter placeholders
+    pub sql: String,
+    /// The parameter values
+    pub parameters: Vec<serde_json::Value>,
+}
+
 /// Backfill query builder for complex filtering
 pub struct BackfillQueryBuilder {
     /// Base query
     base_query: String,
     /// WHERE conditions
     conditions: Vec<String>,
-    /// Query parameters
-    parameters: Vec<Box<dyn sqlx::Encode<'static, sqlx::Postgres> + Send + Sync>>,
+    /// Query parameters as dynamic values
+    parameters: Vec<serde_json::Value>,
 }
 
 impl BackfillQueryBuilder {
@@ -236,16 +244,21 @@ impl BackfillQueryBuilder {
     /// Add distribution filter
     pub fn filter_distributions(mut self, distributions: Vec<String>) -> Self {
         if !distributions.is_empty() {
+            let param_num = self.parameters.len() + 1;
             self.conditions
-                .push("distribution = ANY(${}::text[])".to_string());
-            // Note: In a real implementation, we'd need to handle parameter placeholders properly
+                .push(format!("distribution = ANY(${}::text[])", param_num));
+            self.parameters.push(serde_json::Value::Array(
+                distributions.into_iter().map(serde_json::Value::String).collect()
+            ));
         }
         self
     }
 
     /// Add source package filter
     pub fn filter_source(mut self, source: String) -> Self {
-        self.conditions.push("source = ${}".to_string());
+        let param_num = self.parameters.len() + 1;
+        self.conditions.push(format!("source = ${}", param_num));
+        self.parameters.push(serde_json::Value::String(source));
         self
     }
 
@@ -255,17 +268,21 @@ impl BackfillQueryBuilder {
         start_date: Option<String>,
         end_date: Option<String>,
     ) -> Self {
-        if start_date.is_some() {
-            self.conditions.push("created_at >= ${}".to_string());
+        if let Some(start) = start_date {
+            let param_num = self.parameters.len() + 1;
+            self.conditions.push(format!("created_at >= ${}", param_num));
+            self.parameters.push(serde_json::Value::String(start));
         }
-        if end_date.is_some() {
-            self.conditions.push("created_at <= ${}".to_string());
+        if let Some(end) = end_date {
+            let param_num = self.parameters.len() + 1;
+            self.conditions.push(format!("created_at <= ${}", param_num));
+            self.parameters.push(serde_json::Value::String(end));
         }
         self
     }
 
-    /// Build the final query
-    pub fn build(self) -> String {
+    /// Build the final query with parameters
+    pub fn build(self) -> BackfillQuery {
         let mut query = self.base_query;
 
         if !self.conditions.is_empty() {
@@ -274,7 +291,11 @@ impl BackfillQueryBuilder {
         }
 
         query.push_str(" ORDER BY distribution, source, version DESC");
-        query
+        
+        BackfillQuery {
+            sql: query,
+            parameters: self.parameters,
+        }
     }
 }
 
@@ -291,8 +312,9 @@ mod tests {
     #[test]
     fn test_query_builder_basic() {
         let query = BackfillQueryBuilder::new().build();
-        assert!(query.contains("SELECT DISTINCT ON"));
-        assert!(query.contains("ORDER BY"));
+        assert!(query.sql.contains("SELECT DISTINCT ON"));
+        assert!(query.sql.contains("ORDER BY"));
+        assert!(query.parameters.is_empty());
     }
 
     #[test]
@@ -302,9 +324,45 @@ mod tests {
             .filter_source("hello".to_string())
             .build();
 
-        assert!(query.contains("WHERE"));
-        assert!(query.contains("distribution"));
-        assert!(query.contains("source"));
+        assert!(query.sql.contains("WHERE"));
+        assert!(query.sql.contains("distribution = ANY($1::text[])"));
+        assert!(query.sql.contains("source = $2"));
+        assert_eq!(query.parameters.len(), 2);
+        
+        // Verify parameter values
+        assert_eq!(query.parameters[0], serde_json::Value::Array(vec![serde_json::Value::String("unstable".to_string())]));
+        assert_eq!(query.parameters[1], serde_json::Value::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_query_builder_with_date_range() {
+        let query = BackfillQueryBuilder::new()
+            .filter_date_range(Some("2023-01-01".to_string()), Some("2023-12-31".to_string()))
+            .build();
+
+        assert!(query.sql.contains("WHERE"));
+        assert!(query.sql.contains("created_at >= $1"));
+        assert!(query.sql.contains("created_at <= $2"));
+        assert_eq!(query.parameters.len(), 2);
+        
+        // Verify parameter values
+        assert_eq!(query.parameters[0], serde_json::Value::String("2023-01-01".to_string()));
+        assert_eq!(query.parameters[1], serde_json::Value::String("2023-12-31".to_string()));
+    }
+
+    #[test] 
+    fn test_query_builder_parameter_numbering() {
+        let query = BackfillQueryBuilder::new()
+            .filter_distributions(vec!["unstable".to_string(), "testing".to_string()])
+            .filter_source("hello".to_string())
+            .filter_date_range(Some("2023-01-01".to_string()), None)
+            .build();
+
+        // Should have parameters numbered sequentially
+        assert!(query.sql.contains("distribution = ANY($1::text[])"));
+        assert!(query.sql.contains("source = $2"));
+        assert!(query.sql.contains("created_at >= $3"));
+        assert_eq!(query.parameters.len(), 3);
     }
 
     #[test]
