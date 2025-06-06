@@ -14,6 +14,7 @@ breezyshim = { workspace = true, features = ["sqlx"] }
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 debian-changelog = "0.2.0"
+futures = "0.3"
 janitor = { path = ".." }
 log.workspace = true
 minijinja = { version = "2", features = ["loader"] }
