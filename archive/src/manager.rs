@@ -634,6 +634,7 @@ mod tests {
 
         let archive_config = ArchiveConfig {
             repositories,
+            archive_path: temp_dir.path().to_path_buf(),
             gpg: None,
             artifact_manager: crate::config::ArtifactManagerConfig::default(),
             database: crate::config::DatabaseConfig::default(),
