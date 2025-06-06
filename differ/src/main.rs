@@ -1402,7 +1402,7 @@ pub async fn main() -> Result<(), i8> {
 
     if let Err(e) = axum::serve(listener, app).await {
         error!("Failed to start differ service: {}", e);
-        return Err(anyhow::anyhow!("Server startup failed: {}", e));
+        return Err(1);
     }
 
     Ok(())

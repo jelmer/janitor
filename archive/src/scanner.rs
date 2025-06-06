@@ -1,5 +1,5 @@
-use anyhow::Result;
 /// Module for scanning Debian package archives with enhanced stream-based processing.
+use anyhow::Result;
 use deb822_lossless::FromDeb822Paragraph;
 use debian_control::lossy::apt::{Package, Source};
 use futures::stream::Stream;

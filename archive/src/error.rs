@@ -73,6 +73,10 @@ pub enum ArchiveError {
     /// Resource not found.
     #[error("Resource not found: {0}")]
     NotFound(String),
+
+    /// Generic error from anyhow.
+    #[error("Generic error: {0}")]
+    Anyhow(#[from] anyhow::Error),
 }
 
 /// Result type for archive operations.
