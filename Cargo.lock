@@ -3963,6 +3963,7 @@ dependencies = [
  "chrono",
  "clap",
  "debian-changelog",
+ "futures",
  "janitor",
  "log",
  "maplit",
