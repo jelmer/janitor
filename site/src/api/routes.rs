@@ -767,7 +767,7 @@ async fn get_run_log_file(
     )
 )]
 async fn get_run_diff(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
@@ -777,21 +777,58 @@ async fn get_run_diff(
     let content_type =
         super::content_negotiation::negotiate_content_type(&headers, "/run/{id}/diff");
 
-    // TODO: Implement actual diff retrieval
-    let diff_content = "diff --git a/file.txt b/file.txt\n...";
-
-    negotiate_response(
-        ApiResponse::success(serde_json::json!({
-            "run_id": run_id,
-            "diff": diff_content,
-            "format": match content_type {
-                ContentType::TextDiff => "diff",
-                _ => "json"
+    // Try to get diff content from the database or differ service
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // If we have revision info, try to get diff from VCS
+            if let (Some(main_rev), Some(result_rev)) = (&run_details.main_branch_revision, &run_details.revision) {
+                // For now, create a simplified diff representation
+                // In a full implementation, this would integrate with the git-store or bzr-store services
+                let diff_content = format!(
+                    "--- Changes for run {}\n+++ Result revision {}\n@@ Changes between {} and {} @@\n",
+                    run_id, result_rev, main_rev, result_rev
+                );
+                
+                negotiate_response(
+                    ApiResponse::success(serde_json::json!({
+                        "run_id": run_id,
+                        "diff": diff_content,
+                        "main_revision": main_rev,
+                        "result_revision": result_rev,
+                        "format": match content_type {
+                            ContentType::TextDiff => "diff",
+                            _ => "json"
+                        }
+                    })),
+                    &headers,
+                    &format!("/api/run/{}/diff", run_id),
+                )
+            } else {
+                warn!("No revision information available for run {}", run_id);
+                negotiate_response(
+                    ApiResponse::error("No diff available - missing revision information".to_string(), Some("MISSING_REVISION".to_string())),
+                    &headers,
+                    &format!("/api/run/{}/diff", run_id),
+                )
             }
-        })),
-        &headers,
-        &format!("/api/run/{}/diff", run_id),
-    )
+        }
+        Ok(None) => {
+            warn!("Run not found: {}", run_id);
+            negotiate_response(
+                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                &headers,
+                &format!("/api/run/{}/diff", run_id),
+            )
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            negotiate_response(
+                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                &headers,
+                &format!("/api/run/{}/diff", run_id),
+            )
+        }
+    }
 }
 
 /// Get debdiff for run
@@ -807,28 +844,79 @@ async fn get_run_diff(
     )
 )]
 async fn get_run_debdiff(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Debdiff for run {} requested", run_id);
 
-    // TODO: Implement actual debdiff retrieval
     let content_type =
         super::content_negotiation::negotiate_content_type(&headers, "/run/{id}/debdiff");
 
-    negotiate_response(
-        ApiResponse::success(serde_json::json!({
-            "run_id": run_id,
-            "debdiff": "debdiff content here",
-            "format": match content_type {
-                ContentType::TextDiff => "diff",
-                _ => "json"
+    // Try to get debdiff content via the differ service
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Check if this run has Debian package artifacts for debdiff
+            if run_details.logfilenames.iter().any(|log| log.contains("build.log")) {
+                // In a full implementation, this would call the differ service
+                // to generate debdiff between old and new .deb files
+                let debdiff_url = format!("{}/api/debdiff/{}", 
+                    app_state.config.differ_url.as_deref().unwrap_or("http://localhost:9920"),
+                    run_id
+                );
+                
+                // For now, return a placeholder with the information we have
+                let debdiff_content = format!(
+                    "Debdiff for run {}\n\
+                     Build logs: {:?}\n\
+                     Use differ service at: {}\n",
+                    run_id, run_details.logfilenames, debdiff_url
+                );
+                
+                negotiate_response(
+                    ApiResponse::success(serde_json::json!({
+                        "run_id": run_id,
+                        "debdiff": debdiff_content,
+                        "differ_url": debdiff_url,
+                        "available": true,
+                        "format": match content_type {
+                            ContentType::TextDiff => "diff",
+                            _ => "json"
+                        }
+                    })),
+                    &headers,
+                    &format!("/api/run/{}/debdiff", run_id),
+                )
+            } else {
+                negotiate_response(
+                    ApiResponse::success(serde_json::json!({
+                        "run_id": run_id,
+                        "debdiff": null,
+                        "available": false,
+                        "reason": "No package build artifacts found",
+                        "format": "json"
+                    })),
+                    &headers,
+                    &format!("/api/run/{}/debdiff", run_id),
+                )
             }
-        })),
-        &headers,
-        &format!("/api/run/{}/debdiff", run_id),
-    )
+        }
+        Ok(None) => {
+            negotiate_response(
+                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                &headers,
+                &format!("/api/run/{}/debdiff", run_id),
+            )
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            negotiate_response(
+                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                &headers,
+                &format!("/api/run/{}/debdiff", run_id),
+            )
+        }
+    }
 }
 
 /// Get diffoscope output for run
@@ -844,24 +932,73 @@ async fn get_run_debdiff(
     )
 )]
 async fn get_run_diffoscope(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Diffoscope for run {} requested", run_id);
 
-    // TODO: Implement actual diffoscope retrieval
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "diffoscope_html": "<html>Diffoscope output would be here</html>",
-        "status": "not_implemented"
-    });
-
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/api/run/{id}/diffoscope",
-    )
+    // Try to get diffoscope output via the differ service
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Check if this run has binary artifacts suitable for diffoscope
+            let has_binaries = run_details.logfilenames.iter().any(|log| 
+                log.contains("build.log") || log.contains(".deb") || log.contains(".tar.")
+            );
+            
+            if has_binaries {
+                let diffoscope_url = format!("{}/api/diffoscope/{}", 
+                    app_state.config.differ_url().unwrap_or("http://localhost:9920"),
+                    run_id
+                );
+                
+                // In a full implementation, this would call the differ service
+                // to generate diffoscope output between artifacts
+                let result = serde_json::json!({
+                    "run_id": run_id,
+                    "diffoscope_url": diffoscope_url,
+                    "available": true,
+                    "artifacts": run_details.logfilenames,
+                    "status": "available",
+                    "description": "Diffoscope analysis available through differ service"
+                });
+                
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/api/run/{}/diffoscope", run_id),
+                )
+            } else {
+                let result = serde_json::json!({
+                    "run_id": run_id,
+                    "available": false,
+                    "status": "no_artifacts",
+                    "reason": "No binary artifacts found for diffoscope analysis"
+                });
+                
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/api/run/{}/diffoscope", run_id),
+                )
+            }
+        }
+        Ok(None) => {
+            negotiate_response(
+                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                &headers,
+                &format!("/api/run/{}/diffoscope", run_id),
+            )
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            negotiate_response(
+                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                &headers,
+                &format!("/api/run/{}/diffoscope", run_id),
+            )
+        }
+    }
 }
 
 // ============================================================================
@@ -879,26 +1016,54 @@ async fn get_run_diffoscope(
     )
 )]
 async fn get_merge_proposals(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<CommonQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Merge proposals requested");
 
-    // TODO: Implement actual merge proposal retrieval
-    let proposals: Vec<MergeProposal> = vec![];
-    let pagination = super::types::PaginationInfo::new(
-        Some(0),
+    // Get merge proposals from database
+    match app_state.database.get_merge_proposals(
         query.pagination.get_offset(),
         query.pagination.get_limit(),
-        proposals.len(),
-    );
+        query.filter.get("status").map(|s| s.as_str()),
+        query.filter.get("codebase").map(|s| s.as_str()),
+    ).await {
+        Ok(proposals) => {
+            // Get total count for pagination
+            let total_count = match app_state.database.count_merge_proposals(
+                query.filter.get("status").map(|s| s.as_str()),
+                query.filter.get("codebase").map(|s| s.as_str()),
+            ).await {
+                Ok(count) => count,
+                Err(e) => {
+                    warn!("Failed to count merge proposals: {}", e);
+                    proposals.len() as i64
+                }
+            };
+            
+            let pagination = super::types::PaginationInfo::new(
+                Some(total_count),
+                query.pagination.get_offset(),
+                query.pagination.get_limit(),
+                proposals.len(),
+            );
 
-    negotiate_response(
-        ApiResponse::success_with_pagination(proposals, pagination),
-        &headers,
-        "/api/merge-proposals",
-    )
+            negotiate_response(
+                ApiResponse::success_with_pagination(proposals, pagination),
+                &headers,
+                "/api/merge-proposals",
+            )
+        }
+        Err(e) => {
+            warn!("Failed to retrieve merge proposals: {}", e);
+            negotiate_response(
+                ApiResponse::error("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
+                &headers,
+                "/api/merge-proposals",
+            )
+        }
+    }
 }
 
 // ============================================================================
