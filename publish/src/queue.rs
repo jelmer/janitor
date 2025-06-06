@@ -149,9 +149,9 @@ impl PublishReadyIterator {
                 role: row.get("role"),
                 revision: row.get("branch_revision"),
                 remote_name: row.get("branch_name"),
-                base_revision: None, // TODO: Get from query if available
+                base_revision: row.get::<Option<String>, _>("base_revision").unwrap_or(None),
                 publish_mode: Some("propose".to_string()), // Default mode
-                max_frequency_days: None, // TODO: Get from config if needed
+                max_frequency_days: self.get_max_frequency_days(&role).await.unwrap_or(None),
                 name: row.get("branch_name"), // Use remote_name as name
             };
 
@@ -176,6 +176,26 @@ impl PublishReadyIterator {
         } else {
             Ok(None)
         }
+    }
+
+    /// Get max frequency days for a role from configuration
+    async fn get_max_frequency_days(&self, role: &str) -> Result<Option<i32>, sqlx::Error> {
+        // Query the named_publish_policy table for frequency settings
+        let frequency_days = sqlx::query_scalar::<_, Option<i32>>(
+            r#"
+            SELECT pp.frequency_days
+            FROM named_publish_policy npp
+            CROSS JOIN UNNEST(npp.per_branch_policy) AS pp
+            WHERE pp.role = $1
+            ORDER BY pp.frequency_days DESC NULLS LAST
+            LIMIT 1
+            "#
+        )
+        .bind(role)
+        .fetch_optional(&self.conn)
+        .await?;
+
+        Ok(frequency_days.flatten())
     }
 }
 
