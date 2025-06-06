@@ -18,6 +18,9 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **Runner excluded hosts configuration implemented (runner/src/web.rs:1641)** ✅ **COMPLETED**
 - **Worker status endpoint with runner integration (site/src/api/routes.rs:2125)** ✅ **COMPLETED**
 - **Enhanced system health monitoring with resource checks (site/src/api/routes.rs:1190-1192)** ✅ **COMPLETED**
+- **System monitoring with real metrics implementation (site/src/api/routes.rs:1811)** ✅ **COMPLETED**
+- **Archive Contents file generation already implemented (archive/src/lib.rs:55)** ✅ **COMPLETED**
+- **Publish service queue frequency and configuration improvements** ✅ **COMPLETED**
 
 ---
 
@@ -111,29 +114,29 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 ## 🔧 MEDIUM PRIORITY - Feature Enhancements
 
 ### Archive Service (archive/src/)
-- [ ] **Line 55**: Generate contents file (lib.rs)
-- [ ] **Line 311**: Implement actual campaign configuration queries (database.rs)
-- [ ] **Line 535**: Implement repository publishing logic (web.rs)
-- [ ] **Line 553**: Implement last publish status tracking (web.rs)
-- [ ] **Line 567**: Extract and serve the public key (web.rs)
+- [x] **Line 55**: Generate contents file (lib.rs) ✅ **COMPLETED**
+- [x] **Line 311**: Implement actual campaign configuration queries (database.rs) ✅ **COMPLETED**
+- [x] **Line 535**: Implement repository publishing logic (web.rs) ✅ **COMPLETED**
+- [x] **Line 553**: Implement last publish status tracking (web.rs) ✅ **COMPLETED**
+- [x] **Line 567**: Extract and serve the public key (web.rs) ✅ **COMPLETED**
 - [ ] **Line 379**: Don't hardcode configuration values (rest.rs)
 
 ### Auto-Upload Service (auto-upload/src/)
 - [ ] **Line 241**: Handle parameter placeholders properly in queries (database.rs)
 
 ### Git Store (git-store/src/)
-- [ ] **Line 248**: Implement worker-specific repository permissions (git_http.rs)
-- [ ] **Line 532**: Implement proper streaming when axum supports it better (git_http.rs)
+- [x] **Line 248**: Implement worker-specific repository permissions (git_http.rs) ✅ **COMPLETED**
+- [x] **Line 532**: Implement proper streaming when axum supports it better (git_http.rs) ✅ **COMPLETED**
 
 ### BZR Store (bzr-store/src/)
 - [ ] **Line 322**: Support possible_transports (pyo3_bridge.rs)
 - [ ] **Line 323**: Support probers (pyo3_bridge.rs)
 
 ### Publish Service - Queue & State Management
-- [ ] **Lines 152, 154**: Get base_revision and max_frequency_days from query/config (queue.rs)
-- [ ] **Line 177**: Pass redis URL to RedisSubscriber constructor (redis.rs)
-- [ ] **Line 178**: PubSub functionality not implemented without redis URL (redis.rs)
-- [ ] **Line 77**: Mark change_set as done when nothing left to publish (state.rs)
+- [x] **Lines 152, 154**: Get base_revision and max_frequency_days from query/config (queue.rs) ✅ **COMPLETED**
+- [x] **Line 177**: Pass redis URL to RedisSubscriber constructor (redis.rs) ✅ **COMPLETED**
+- [x] **Line 178**: PubSub functionality not implemented without redis URL (redis.rs) ✅ **COMPLETED**
+- [x] **Line 77**: Mark change_set as done when nothing left to publish (state.rs) ✅ **COMPLETED**
 - [ ] **Line 158**: Use codebase table (state.rs)
 - [ ] **Line 382**: Implement custom decoder for unpublished_branches array (state.rs)
 - [ ] **Line 979**: Keep tombstone when removing entries (web.rs)
