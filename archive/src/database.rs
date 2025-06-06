@@ -299,17 +299,43 @@ impl ArchiveDatabase {
         self.parse_build_records(rows).await
     }
 
-    /// Get campaign information from configuration.
+    /// Get campaign information from janitor configuration.
     pub async fn get_campaign_info(
         &self,
         campaign_name: &str,
+        janitor_config: Option<&janitor::config::Config>,
     ) -> ArchiveResult<Option<CampaignInfo>> {
         debug!("Querying campaign info for: {}", campaign_name);
 
-        // This would query a campaigns table or configuration
-        // For now, return a placeholder implementation
-        // TODO: Implement actual campaign configuration queries
+        // Try to get campaign info from janitor configuration first
+        if let Some(config) = janitor_config {
+            if let Some(campaign) = config.get_campaign(campaign_name) {
+                debug!("Found campaign '{}' in janitor config", campaign_name);
+                
+                // Extract campaign information from janitor config
+                let suite = campaign.name.as_ref().unwrap_or(&campaign_name.to_string()).clone();
+                let description = format!("Campaign: {}", suite);
+                
+                // Use debian_build info if available, otherwise defaults
+                let architectures = if campaign.has_debian_build() {
+                    // For campaigns with debian_build, use common Debian architectures
+                    vec!["amd64".to_string(), "arm64".to_string(), "armhf".to_string(), "i386".to_string()]
+                } else {
+                    // For generic campaigns, use default set
+                    vec!["amd64".to_string(), "arm64".to_string()]
+                };
 
+                return Ok(Some(CampaignInfo {
+                    name: campaign_name.to_string(),
+                    description,
+                    suite,
+                    component: "main".to_string(), // Default component
+                    architectures,
+                }));
+            }
+        }
+
+        // Fallback to hardcoded values for known campaigns if config not available
         match campaign_name {
             "lintian-fixes" => Ok(Some(CampaignInfo {
                 name: campaign_name.to_string(),
@@ -325,7 +351,10 @@ impl ArchiveDatabase {
                 component: "main".to_string(),
                 architectures: vec!["amd64".to_string(), "arm64".to_string()],
             })),
-            _ => Ok(None),
+            _ => {
+                debug!("Campaign '{}' not found in configuration", campaign_name);
+                Ok(None)
+            }
         }
     }
 
