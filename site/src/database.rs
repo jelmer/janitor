@@ -443,6 +443,7 @@ impl DatabaseManager {
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
+            logfilenames: vec![], // TODO: Add logfilenames to query
         })
     }
 
@@ -483,6 +484,7 @@ impl DatabaseManager {
                 failure_stage: row.try_get("failure_stage")?,
                 main_branch_revision: row.try_get("main_branch_revision")?,
                 vcs_type: None, // TODO: Add to query
+                logfilenames: vec![], // TODO: Add logfilenames to query
             });
         }
 
@@ -576,11 +578,15 @@ impl DatabaseManager {
 
     pub async fn get_run(&self, run_id: &str) -> Result<RunDetails, DatabaseError> {
         let row = sqlx::query(
-            "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE id = $1"
+            "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, logfilenames FROM run WHERE id = $1"
         )
         .bind(run_id)
         .fetch_one(&self.pool)
         .await?;
+
+        // Parse logfilenames array from the database
+        let logfilenames: Vec<String> = row.try_get::<Option<Vec<String>>, _>("logfilenames")?
+            .unwrap_or_default();
 
         Ok(RunDetails {
             id: row.try_get("id")?,
@@ -599,6 +605,7 @@ impl DatabaseManager {
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
+            logfilenames,
         })
     }
 
@@ -663,6 +670,7 @@ impl DatabaseManager {
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
+            logfilenames: vec![], // TODO: Add logfilenames to query
         })
     }
 
@@ -1601,6 +1609,7 @@ pub struct RunDetails {
     pub failure_stage: Option<String>,
     pub main_branch_revision: Option<String>,
     pub vcs_type: Option<String>,
+    pub logfilenames: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

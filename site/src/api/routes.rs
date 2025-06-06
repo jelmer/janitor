@@ -520,21 +520,81 @@ async fn get_active_run(
     )
 )]
 async fn get_run_logs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Run logs for {} requested", run_id);
 
-    // TODO: Implement actual log retrieval
-    let logs = serde_json::json!({
+    // Get run details to extract codebase
+    let run_details = match app_state.database.get_run(&run_id).await {
+        Ok(details) => details,
+        Err(e) => {
+            warn!("Failed to get run details for {}: {}", run_id, e);
+            return negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Run not found".to_string()),
+                    reason: Some("RUN_NOT_FOUND".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                "/api/active-runs/{id}/log",
+            );
+        }
+    };
+
+    // Get log filenames from the run details
+    let log_filenames = run_details.logfilenames.clone();
+
+    // For each log filename, check if it exists and get metadata
+    let mut logs = Vec::new();
+    for filename in log_filenames {
+        match app_state.log_manager.has_log(&run_details.codebase, &run_id, &filename).await {
+            Ok(exists) => {
+                if exists {
+                    // Get log creation time if available
+                    let creation_time = app_state.log_manager
+                        .get_ctime(&run_details.codebase, &run_id, &filename)
+                        .await
+                        .unwrap_or_else(|_| chrono::Utc::now());
+                    
+                    logs.push(serde_json::json!({
+                        "filename": filename,
+                        "exists": true,
+                        "creation_time": creation_time,
+                        "download_url": format!("/api/active-runs/{}/log/{}", run_id, filename)
+                    }));
+                } else {
+                    logs.push(serde_json::json!({
+                        "filename": filename,
+                        "exists": false,
+                        "reason": "Log file not found in storage"
+                    }));
+                }
+            }
+            Err(e) => {
+                warn!("Failed to check log existence for {}/{}: {}", run_id, filename, e);
+                logs.push(serde_json::json!({
+                    "filename": filename,
+                    "exists": false,
+                    "error": e.to_string()
+                }));
+            }
+        }
+    }
+
+    let response_data = serde_json::json!({
         "run_id": run_id,
-        "logs": [],
-        "status": "not_implemented"
+        "codebase": run_details.codebase,
+        "logs": logs,
+        "total_logs": logs.len(),
+        "status": "success"
     });
 
     negotiate_response(
-        ApiResponse::success(logs),
+        ApiResponse::success(response_data),
         &headers,
         "/api/active-runs/{id}/log",
     )
@@ -554,25 +614,144 @@ async fn get_run_logs(
     )
 )]
 async fn get_run_log_file(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path((run_id, filename)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Run log file {}/{} requested", run_id, filename);
 
-    // TODO: Implement actual log file retrieval
-    // For log files, we typically want to return plain text or binary content
-    let content_type = super::content_negotiation::negotiate_content_type(&headers, &filename);
+    // Get run details to extract codebase
+    let run_details = match app_state.database.get_run(&run_id).await {
+        Ok(details) => details,
+        Err(e) => {
+            warn!("Failed to get run details for {}: {}", run_id, e);
+            return negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Run not found".to_string()),
+                    reason: Some("RUN_NOT_FOUND".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/active-runs/{}/log/{}", run_id, filename),
+            );
+        }
+    };
 
-    negotiate_response(
-        ApiResponse::success(serde_json::json!({
-            "run_id": run_id,
-            "filename": filename,
-            "content": "Log file content would be here"
-        })),
-        &headers,
-        &format!("/api/active-runs/{}/log/{}", run_id, filename),
-    )
+    // Retrieve the actual log file content
+    match app_state.log_manager.get_log(&run_details.codebase, &run_id, &filename).await {
+        Ok(mut reader) => {
+            // Read the log content
+            let mut content = String::new();
+            match std::io::Read::read_to_string(&mut *reader, &mut content) {
+                Ok(_) => {
+                    // Determine content type based on file extension and client preferences
+                    let is_text_request = headers
+                        .get("accept")
+                        .and_then(|h| h.to_str().ok())
+                        .map(|accept| accept.contains("text/") || accept.contains("application/json"))
+                        .unwrap_or(true);
+
+                    if is_text_request || filename.ends_with(".log") || filename.ends_with(".txt") {
+                        // Return as JSON with text content for API consistency
+                        negotiate_response(
+                            ApiResponse::success(serde_json::json!({
+                                "run_id": run_id,
+                                "filename": filename,
+                                "content": content,
+                                "content_type": "text/plain",
+                                "size_bytes": content.len()
+                            })),
+                            &headers,
+                            &format!("/api/active-runs/{}/log/{}", run_id, filename),
+                        )
+                    } else {
+                        // For non-text files, return a message about binary content
+                        negotiate_response(
+                            ApiResponse::success(serde_json::json!({
+                                "run_id": run_id,
+                                "filename": filename,
+                                "message": "Binary file content not displayed in API",
+                                "content_type": "application/octet-stream",
+                                "size_bytes": content.len(),
+                                "download_note": "Use direct download endpoint for binary content"
+                            })),
+                            &headers,
+                            &format!("/api/active-runs/{}/log/{}", run_id, filename),
+                        )
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to read log content for {}/{}: {}", run_id, filename, e);
+                    negotiate_response(
+                        ApiResponse {
+                            data: None,
+                            error: Some("Failed to read log file content".to_string()),
+                            reason: Some("READ_ERROR".to_string()),
+                            details: None,
+                            pagination: None,
+                        },
+                        &headers,
+                        &format!("/api/active-runs/{}/log/{}", run_id, filename),
+                    )
+                }
+            }
+        }
+        Err(janitor::logs::Error::NotFound) => {
+            negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Log file not found".to_string()),
+                    reason: Some("LOG_NOT_FOUND".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/active-runs/{}/log/{}", run_id, filename),
+            )
+        }
+        Err(janitor::logs::Error::PermissionDenied) => {
+            negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Access denied to log file".to_string()),
+                    reason: Some("ACCESS_DENIED".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/active-runs/{}/log/{}", run_id, filename),
+            )
+        }
+        Err(janitor::logs::Error::ServiceUnavailable) => {
+            negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Log storage service unavailable".to_string()),
+                    reason: Some("SERVICE_UNAVAILABLE".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/active-runs/{}/log/{}", run_id, filename),
+            )
+        }
+        Err(e) => {
+            error!("Failed to retrieve log {}/{}: {}", run_id, filename, e);
+            negotiate_response(
+                ApiResponse {
+                    data: None,
+                    error: Some("Failed to retrieve log file".to_string()),
+                    reason: Some("RETRIEVAL_ERROR".to_string()),
+                    details: None,
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/active-runs/{}/log/{}", run_id, filename),
+            )
+        }
+    }
 }
 
 /// Get VCS diff for run
