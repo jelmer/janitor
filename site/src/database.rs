@@ -1683,6 +1683,152 @@ impl DatabaseManager {
             ))),
         }
     }
+
+    /// Get merge proposals with filtering and pagination
+    pub async fn get_merge_proposals(
+        &self,
+        offset: Option<i64>,
+        limit: Option<i64>,
+        status_filter: Option<&str>,
+        codebase_filter: Option<&str>,
+    ) -> Result<Vec<super::api::schemas::MergeProposal>, DatabaseError> {
+        let mut query = String::from("SELECT url, status, revision, merged_by, merged_at, can_be_merged, codebase FROM merge_proposal");
+        let mut conditions = Vec::new();
+        let mut param_count = 0;
+
+        if let Some(_status) = status_filter {
+            param_count += 1;
+            conditions.push(format!("status = ${}", param_count));
+        }
+
+        if let Some(_codebase) = codebase_filter {
+            param_count += 1;
+            conditions.push(format!("codebase = ${}", param_count));
+        }
+
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        query.push_str(" ORDER BY merged_at DESC NULLS LAST, url");
+
+        if let Some(limit) = limit {
+            param_count += 1;
+            query.push_str(&format!(" LIMIT ${}", param_count));
+        }
+
+        if let Some(offset) = offset {
+            param_count += 1;
+            query.push_str(&format!(" OFFSET ${}", param_count));
+        }
+
+        let mut query_builder = sqlx::query_as::<_, super::api::schemas::MergeProposal>(&query);
+
+        if let Some(status) = status_filter {
+            query_builder = query_builder.bind(status);
+        }
+
+        if let Some(codebase) = codebase_filter {
+            query_builder = query_builder.bind(codebase);
+        }
+
+        if let Some(limit) = limit {
+            query_builder = query_builder.bind(limit);
+        }
+
+        if let Some(offset) = offset {
+            query_builder = query_builder.bind(offset);
+        }
+
+        let merge_proposals = query_builder.fetch_all(&self.pool).await?;
+
+        Ok(merge_proposals)
+    }
+
+    /// Count merge proposals with filtering
+    pub async fn count_merge_proposals(
+        &self,
+        status_filter: Option<&str>,
+        codebase_filter: Option<&str>,
+    ) -> Result<i64, DatabaseError> {
+        let mut query = String::from("SELECT COUNT(*) FROM merge_proposal");
+        let mut conditions = Vec::new();
+        let mut param_count = 0;
+
+        if let Some(_status) = status_filter {
+            param_count += 1;
+            conditions.push(format!("status = ${}", param_count));
+        }
+
+        if let Some(_codebase) = codebase_filter {
+            param_count += 1;
+            conditions.push(format!("codebase = ${}", param_count));
+        }
+
+        if !conditions.is_empty() {
+            query.push_str(" WHERE ");
+            query.push_str(&conditions.join(" AND "));
+        }
+
+        let mut query_builder = sqlx::query_scalar::<_, i64>(&query);
+
+        if let Some(status) = status_filter {
+            query_builder = query_builder.bind(status);
+        }
+
+        if let Some(codebase) = codebase_filter {
+            query_builder = query_builder.bind(codebase);
+        }
+
+        let count = query_builder.fetch_one(&self.pool).await?;
+
+        Ok(count)
+    }
+
+    /// Get detailed information for a specific run
+    pub async fn get_run_details(&self, run_id: &str) -> Result<Option<RunDetails>, DatabaseError> {
+        let query = r#"
+            SELECT r.id, r.codebase, r.suite, r.command, r.result_code, r.description,
+                   r.start_time, r.finish_time, r.worker, r.result_branches, r.result_tags,
+                   r.publish_status, r.failure_stage, r.main_branch_revision, r.vcs_type,
+                   r.logfilenames, r.revision
+            FROM run r
+            WHERE r.id = $1
+        "#;
+
+        let row = sqlx::query(query)
+            .bind(run_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            let run_details = RunDetails {
+                id: row.try_get("id")?,
+                codebase: row.try_get("codebase")?,
+                suite: row.try_get("suite")?,
+                command: row.try_get("command")?,
+                result_code: row.try_get("result_code")?,
+                description: row.try_get("description")?,
+                start_time: row.try_get("start_time")?,
+                finish_time: row.try_get("finish_time")?,
+                worker: row.try_get("worker")?,
+                build_version: None, // Not in the current schema
+                result_branches: row.try_get::<Option<serde_json::Value>, _>("result_branches")?.map(|v| vec![v]).unwrap_or_default(),
+                result_tags: row.try_get::<Option<serde_json::Value>, _>("result_tags")?.map(|v| vec![v]).unwrap_or_default(),
+                publish_status: row.try_get("publish_status")?,
+                failure_stage: row.try_get("failure_stage")?,
+                main_branch_revision: row.try_get("main_branch_revision")?,
+                vcs_type: row.try_get("vcs_type")?,
+                logfilenames: row.try_get::<Vec<String>, _>("logfilenames").unwrap_or_default(),
+                revision: row.try_get("revision")?,
+            };
+
+            Ok(Some(run_details))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 // Additional types for database results
@@ -1737,6 +1883,7 @@ pub struct RunDetails {
     pub main_branch_revision: Option<String>,
     pub vcs_type: Option<String>,
     pub logfilenames: Vec<String>,
+    pub revision: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
