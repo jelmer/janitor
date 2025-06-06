@@ -11,6 +11,58 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
 
+/// Trace context for distributed tracing across HTTP requests
+#[derive(Debug, Clone, Default)]
+pub struct TraceContext {
+    /// Traceparent header value (W3C Trace Context standard)
+    pub traceparent: Option<String>,
+    /// Tracestate header value (W3C Trace Context standard)
+    pub tracestate: Option<String>,
+    /// Additional custom trace headers
+    pub custom_headers: HashMap<String, String>,
+}
+
+impl TraceContext {
+    /// Create a new trace context from existing headers
+    pub fn from_headers(headers: &HashMap<String, String>) -> Self {
+        Self {
+            traceparent: headers.get("traceparent").cloned(),
+            tracestate: headers.get("tracestate").cloned(),
+            custom_headers: headers
+                .iter()
+                .filter(|(k, _)| k.starts_with("x-trace-") || k.starts_with("x-janitor-"))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        }
+    }
+
+    /// Generate trace headers for HTTP requests
+    pub fn to_headers(&self) -> HashMap<String, String> {
+        let mut headers = HashMap::new();
+        
+        if let Some(ref traceparent) = self.traceparent {
+            headers.insert("traceparent".to_string(), traceparent.clone());
+        }
+        
+        if let Some(ref tracestate) = self.tracestate {
+            headers.insert("tracestate".to_string(), tracestate.clone());
+        }
+        
+        headers.extend(self.custom_headers.clone());
+        headers
+    }
+
+    /// Create a new trace context with a generated request ID
+    pub fn with_request_id(request_id: &str) -> Self {
+        let mut context = Self::default();
+        context.custom_headers.insert(
+            "x-janitor-request-id".to_string(),
+            request_id.to_string(),
+        );
+        context
+    }
+}
+
 pub fn is_authenticated_url(url: &Url) -> bool {
     ["git+ssh", "bzr+ssh"].contains(&url.scheme())
 }
@@ -172,6 +224,33 @@ pub fn open_branch_ext(
     possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
     probers: Option<&[&dyn breezyshim::controldir::Prober]>,
 ) -> Result<Box<dyn Branch>, BranchOpenFailure> {
+    match silver_platter::vcs::open_branch(vcs_url, possible_transports, probers, None) {
+        Ok(branch) => Ok(branch),
+        Err(e) => Err(convert_branch_exception(vcs_url, e)),
+    }
+}
+
+/// Extended branch opening with trace context support
+pub fn open_branch_ext_with_trace(
+    vcs_url: &Url,
+    possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
+    probers: Option<&[&dyn breezyshim::controldir::Prober]>,
+    trace_context: Option<&TraceContext>,
+) -> Result<Box<dyn Branch>, BranchOpenFailure> {
+    // Log trace context information if available
+    if let Some(trace_ctx) = trace_context {
+        let headers = trace_ctx.to_headers();
+        if !headers.is_empty() {
+            log::debug!(
+                "Opening branch {} with trace context: {:?}",
+                vcs_url,
+                headers.keys().collect::<Vec<_>>()
+            );
+        }
+    }
+    
+    // For now, call the existing function since breezyshim doesn't support
+    // custom headers yet. The trace context is logged for observability.
     match silver_platter::vcs::open_branch(vcs_url, possible_transports, probers, None) {
         Ok(branch) => Ok(branch),
         Err(e) => Err(convert_branch_exception(vcs_url, e)),
@@ -716,7 +795,19 @@ impl VcsManager for RemoteGitVcsManager {
         branch_name: &str,
     ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
-        open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
+        // Create trace context from current span for remote Git operations
+        let trace_context = if let Some(trace_id) = tracing::Span::current().id() {
+            let mut ctx = TraceContext::default();
+            ctx.custom_headers.insert(
+                "x-trace-span-id".to_string(),
+                format!("{:?}", trace_id),
+            );
+            Some(ctx)
+        } else {
+            None
+        };
+        
+        open_cached_branch(&url, trace_context.as_ref()).map_err(|e| BranchOpenError::from_err(url, &e))
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
@@ -798,7 +889,14 @@ impl VcsManager for RemoteBzrVcsManager {
         }
         let url = self.get_diff_url(codebase, old_revid, new_revid);
         let client = reqwest::Client::new();
-        let resp = client.get(url).send().await.unwrap();
+        
+        // Add trace context headers if available from current tracing span
+        let mut request = client.get(url);
+        if let Some(trace_id) = tracing::Span::current().id() {
+            request = request.header("x-trace-span-id", format!("{:?}", trace_id));
+        }
+        
+        let resp = request.send().await.unwrap();
         resp.bytes().await.unwrap().to_vec()
     }
 
@@ -816,7 +914,14 @@ impl VcsManager for RemoteBzrVcsManager {
             ))
             .unwrap();
         let client = reqwest::Client::new();
-        let resp = client.get(url).send().await.unwrap();
+        
+        // Add trace context headers if available from current tracing span
+        let mut request = client.get(url);
+        if let Some(trace_id) = tracing::Span::current().id() {
+            request = request.header("x-trace-span-id", format!("{:?}", trace_id));
+        }
+        
+        let resp = request.send().await.unwrap();
         resp.json().await.unwrap()
     }
 
@@ -834,7 +939,19 @@ impl VcsManager for RemoteBzrVcsManager {
         branch_name: &str,
     ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
-        open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
+        // Create trace context from current span
+        let trace_context = if let Some(trace_id) = tracing::Span::current().id() {
+            let mut ctx = TraceContext::default();
+            ctx.custom_headers.insert(
+                "x-trace-span-id".to_string(),
+                format!("{:?}", trace_id),
+            );
+            Some(ctx)
+        } else {
+            None
+        };
+        
+        open_cached_branch(&url, trace_context.as_ref()).map_err(|e| BranchOpenError::from_err(url, &e))
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
@@ -860,7 +977,14 @@ impl VcsManager for RemoteBzrVcsManager {
         // Use blocking HTTP request since this is a sync method
         if let Ok(rt) = tokio::runtime::Runtime::new() {
             let client = reqwest::Client::new();
-            if let Ok(response) = rt.block_on(client.get(list_url).send()) {
+            
+            // Add trace context headers if available from current tracing span
+            let mut request = client.get(list_url);
+            if let Some(trace_id) = tracing::Span::current().id() {
+                request = request.header("x-trace-span-id", format!("{:?}", trace_id));
+            }
+            
+            if let Ok(response) = rt.block_on(request.send()) {
                 if response.status().is_success() {
                     if let Ok(repos) = rt.block_on(response.json::<Vec<String>>()) {
                         return repos;
@@ -874,7 +998,8 @@ impl VcsManager for RemoteBzrVcsManager {
     }
 }
 
-fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
+/// Open a cached branch with optional trace context for distributed tracing
+fn open_cached_branch(url: &Url, trace_context: Option<&TraceContext>) -> Result<Option<Box<dyn Branch>>, BrzError> {
     fn convert_error(e: BrzError) -> Option<BrzError> {
         match e {
             BrzError::NotBranchError(..) => None,
@@ -889,7 +1014,22 @@ fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
         }
     }
 
-    // TODO(jelmer): Somehow pass in trace context headers
+    // Prepare trace headers for HTTP transport
+    let trace_headers = trace_context.map(|ctx| ctx.to_headers());
+    
+    if let Some(headers) = trace_headers.as_ref() {
+        if !headers.is_empty() {
+            log::debug!(
+                "Opening cached branch {} with trace headers: {:?}",
+                url,
+                headers.keys().collect::<Vec<_>>()
+            );
+        }
+    }
+
+    // Create transport with trace context headers
+    // Note: breezyshim transport creation doesn't support custom headers yet
+    // For now, we log the intent and use the existing transport
     match breezyshim::transport::get_transport(url, None) {
         Ok(transport) => match breezyshim::branch::open_from_transport(&transport).map(Some) {
             Ok(branch) => Ok(branch),

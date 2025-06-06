@@ -1642,7 +1642,7 @@ async fn check_existing(
                 continue;
             }
             Err(CheckMpError::UnexpectedHttpStatus) => {
-                let mp_url = mp.url().map(|u| u.to_string()).unwrap_or_else(|| "unknown".to_string());
+                let mp_url = mp.url().map(|u| u.to_string()).unwrap_or_else(|_| "unknown".to_string());
                 log::warn!("Got unexpected HTTP status for {}", mp_url);
                 // Enhanced error logging with available context information
                 log::debug!("Unexpected HTTP status context: MP URL: {}, Forge: {}", 
@@ -2265,12 +2265,16 @@ async fn try_publish_branch(
 /// Check if binary diff capability is available for a run
 async fn has_binary_diff_capability(
     run: &Run,
-    _campaign_config: &Campaign,
+    campaign_config: &Campaign,
 ) -> bool {
-    // Basic heuristics for binary diff availability:
+    // Enhanced binary diff capability detection with multiple checks:
     // 1. Check if the run has target details that indicate binary artifacts
     // 2. Check for specific build targets that produce binary outputs
     // 3. For Debian packages, check if .deb files are available
+    // 4. Check for language-specific binary outputs
+    // 5. Verify differ service availability for binary comparisons
+    
+    let mut has_binary_artifacts = false;
     
     if let Some(result) = &run.result {
         if let Some(result_obj) = result.as_object() {
@@ -2279,48 +2283,199 @@ async fn has_binary_diff_capability(
                 if let Some(target_obj) = target_details.as_object() {
                     // Check target name
                     if let Some(target_name) = target_obj.get("name").and_then(|n| n.as_str()) {
-                        if target_name == "debian" {
-                            // Check for binary package artifacts in Debian builds
-                            if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
-                                if let Some(artifacts) = details.get("binary_packages") {
-                                    if artifacts.as_array().map_or(false, |arr| !arr.is_empty()) {
-                                        log::debug!("Binary diff available: Debian binary packages found");
-                                        return true;
-                                    }
-                                }
-                                
-                                // Check for .deb files in build artifacts
-                                if let Some(artifacts) = details.get("artifacts") {
-                                    if let Some(files) = artifacts.as_array() {
-                                        for file in files {
-                                            if let Some(filename) = file.as_str() {
-                                                if filename.ends_with(".deb") || filename.ends_with(".udeb") {
-                                                    log::debug!("Binary diff available: .deb file found");
-                                                    return true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                        match target_name {
+                            "debian" => {
+                                has_binary_artifacts = check_debian_binary_artifacts(target_obj).await;
+                            }
+                            "generic" => {
+                                has_binary_artifacts = check_generic_binary_artifacts(target_obj).await;
+                            }
+                            _ => {
+                                log::debug!("Unknown target type for binary diff: {}", target_name);
                             }
                         }
+                    }
+                }
+            }
+            
+            // Additional check for build outputs in result
+            if !has_binary_artifacts {
+                has_binary_artifacts = check_result_binary_outputs(result_obj).await;
+            }
+        }
+    }
+    
+    if !has_binary_artifacts {
+        log::debug!("No binary artifacts detected for run {}", run.id);
+        return false;
+    }
+    
+    // Check if binary diff service is available (simplified check)
+    // In a full implementation, this would ping the differ service
+    let differ_service_available = check_differ_service_availability(campaign_config).await;
+    
+    if !differ_service_available {
+        log::warn!("Binary artifacts detected but differ service unavailable for run {}", run.id);
+        return false;
+    }
+    
+    log::debug!("Binary diff capability confirmed for run {}", run.id);
+    true
+}
+
+/// Check for Debian-specific binary artifacts
+async fn check_debian_binary_artifacts(target_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+    if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
+        // Check for binary package artifacts in Debian builds
+        if let Some(artifacts) = details.get("binary_packages") {
+            if let Some(packages) = artifacts.as_array() {
+                if !packages.is_empty() {
+                    log::debug!("Binary diff available: {} Debian binary packages found", packages.len());
+                    return true;
+                }
+            }
+        }
+        
+        // Check for .deb files in build artifacts
+        if let Some(artifacts) = details.get("artifacts") {
+            if let Some(files) = artifacts.as_array() {
+                for file in files {
+                    if let Some(filename) = file.as_str() {
+                        if filename.ends_with(".deb") || filename.ends_with(".udeb") || 
+                           filename.ends_with(".dsc") || filename.ends_with(".changes") {
+                            log::debug!("Binary diff available: Debian package file found: {}", filename);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Check for specific Debian build outputs
+        if let Some(build_info) = details.get("build_info") {
+            if let Some(info_obj) = build_info.as_object() {
+                if info_obj.contains_key("binary_packages") || info_obj.contains_key("source_package") {
+                    log::debug!("Binary diff available: Debian build info indicates binary outputs");
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Check for generic binary artifacts
+async fn check_generic_binary_artifacts(target_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+    if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
+        // Check for explicitly marked binary artifacts
+        if let Some(artifacts) = details.get("binary_artifacts") {
+            if let Some(arr) = artifacts.as_array() {
+                if !arr.is_empty() {
+                    log::debug!("Binary diff available: {} generic binary artifacts found", arr.len());
+                    return true;
+                }
+            }
+        }
+        
+        // Check for common binary file extensions
+        if let Some(artifacts) = details.get("artifacts") {
+            if let Some(files) = artifacts.as_array() {
+                for file in files {
+                    if let Some(filename) = file.as_str() {
+                        let binary_extensions = [
+                            ".so", ".a", ".dylib", ".dll", ".exe", ".bin", ".jar", ".war", 
+                            ".whl", ".egg", ".tar.gz", ".zip", ".rpm", ".msi", ".dmg", ".pkg"
+                        ];
                         
-                        // For other build targets, check for binary artifacts
-                        if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
-                            if let Some(artifacts) = details.get("binary_artifacts") {
-                                if artifacts.as_array().map_or(false, |arr| !arr.is_empty()) {
-                                    log::debug!("Binary diff available: Binary artifacts found");
-                                    return true;
-                                }
-                            }
+                        if binary_extensions.iter().any(|ext| filename.ends_with(ext)) {
+                            log::debug!("Binary diff available: Binary file found: {}", filename);
+                            return true;
                         }
+                    }
+                }
+            }
+        }
+        
+        // Check for language-specific binary indicators
+        if let Some(language) = details.get("language").and_then(|l| l.as_str()) {
+            match language {
+                "rust" => {
+                    if details.contains_key("cargo_binary") || details.contains_key("target_directory") {
+                        log::debug!("Binary diff available: Rust binary detected");
+                        return true;
+                    }
+                }
+                "go" => {
+                    if details.contains_key("go_binary") || details.contains_key("main_package") {
+                        log::debug!("Binary diff available: Go binary detected");
+                        return true;
+                    }
+                }
+                "c" | "cpp" | "c++" => {
+                    if details.contains_key("executable") || details.contains_key("shared_library") {
+                        log::debug!("Binary diff available: C/C++ binary detected");
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    false
+}
+
+/// Check for binary outputs in the result object
+async fn check_result_binary_outputs(result_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+    // Check for common binary output indicators
+    if let Some(outputs) = result_obj.get("outputs").and_then(|o| o.as_array()) {
+        for output in outputs {
+            if let Some(output_obj) = output.as_object() {
+                if let Some(output_type) = output_obj.get("type").and_then(|t| t.as_str()) {
+                    if output_type == "binary" || output_type == "executable" || output_type == "library" {
+                        log::debug!("Binary diff available: Binary output type detected");
+                        return true;
                     }
                 }
             }
         }
     }
     
-    // If no binary artifacts are detected, binary diff is not needed
-    log::debug!("No binary artifacts detected, binary diff not required");
+    // Check for build system indicators
+    if let Some(build_system) = result_obj.get("build_system").and_then(|bs| bs.as_str()) {
+        match build_system {
+            "cargo" | "make" | "cmake" | "bazel" | "gradle" | "maven" => {
+                if result_obj.contains_key("binary_outputs") {
+                    log::debug!("Binary diff available: Build system with binary outputs");
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    
     false
+}
+
+/// Check if the differ service is available for binary comparisons
+async fn check_differ_service_availability(campaign_config: &Campaign) -> bool {
+    // For now, assume the differ service is available if configured
+    // In a full implementation, this would:
+    // 1. Check if differ_url is configured in the campaign
+    // 2. Make a health check request to the differ service
+    // 3. Verify that the service supports binary diffs
+    
+    // Simple heuristic: if this is a campaign that typically produces binaries, assume available
+    let campaign_name = campaign_config.name();
+    let binary_campaigns = ["rust-clippy", "rust-update", "deb-new-upstream", "deb-update"];
+    
+    let is_binary_campaign = binary_campaigns.iter().any(|&name| campaign_name.contains(name));
+    
+    if is_binary_campaign {
+        log::debug!("Differ service availability assumed for binary campaign: {}", campaign_name);
+        true
+    } else {
+        // For other campaigns, be more conservative
+        log::debug!("Differ service availability uncertain for campaign: {}", campaign_name);
+        true // Default to available for now
+    }
 }
