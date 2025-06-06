@@ -71,6 +71,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [ ] **Lines 1190-1192**: System health monitoring with detailed checks
 
 #### **Administrative Operations**  
+- [x] **Line 1658**: Add admin authentication middleware to admin API endpoints ✅ **COMPLETED**
 - [ ] **Line 1380**: Admin user management
 - [ ] **Line 1414**: Bulk operations interface
 - [ ] **Line 1457**: Campaign management
@@ -94,6 +95,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 ### Site Service - Other Areas
 
 #### **Authentication System (site/src/auth/)**
+- [x] **Add admin authentication middleware (site/src/api/routes.rs:1658)** ✅ **COMPLETED**
 - [ ] **Complete OIDC integration** - Multiple placeholder implementations
 - [ ] **Line 58**: Test auth state creation with proper mocking (routes.rs)
 
