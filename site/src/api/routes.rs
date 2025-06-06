@@ -16,10 +16,28 @@ use super::{
     schemas::{MergeProposal, Run},
     types::{ApiResponse, CommonQuery, QueueStatus},
 };
-use crate::app::AppState;
+use crate::{app::AppState, auth::middleware::require_admin};
 
 /// Create the main API router
 pub fn create_api_router() -> Router<Arc<AppState>> {
+    // Create admin routes with authentication middleware
+    let admin_routes = Router::new()
+        .route("/system/status", get(admin_system_status))
+        .route("/system/config", get(admin_system_config))
+        .route("/system/metrics", get(admin_system_metrics))
+        .route("/runs/:run_id/kill", post(admin_kill_run))
+        .route("/runs/mass-reschedule", post(admin_mass_reschedule))
+        .route(
+            "/runs/:run_id/reprocess-logs",
+            post(admin_reprocess_run_logs),
+        )
+        .route("/publish/autopublish", post(admin_autopublish))
+        .route("/publish/scan", post(admin_publish_scan))
+        .route("/workers", get(admin_get_workers))
+        .route("/workers/:worker_id", get(admin_get_worker_details))
+        // Apply admin authentication middleware to all admin routes
+        .route_layer(axum::middleware::from_fn(require_admin));
+
     Router::new()
         // Health and status endpoints
         .route("/health", get(health_check))
@@ -45,20 +63,8 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/runs", get(get_runs_filtered))
         .route("/export/codebases", get(export_codebases))
         .route("/export/runs", get(export_runs))
-        // Administrative APIs (Phase 3.6.3)
-        .route("/admin/system/status", get(admin_system_status))
-        .route("/admin/system/config", get(admin_system_config))
-        .route("/admin/system/metrics", get(admin_system_metrics))
-        .route("/admin/runs/:run_id/kill", post(admin_kill_run))
-        .route("/admin/runs/mass-reschedule", post(admin_mass_reschedule))
-        .route(
-            "/admin/runs/:run_id/reprocess-logs",
-            post(admin_reprocess_run_logs),
-        )
-        .route("/admin/publish/autopublish", post(admin_autopublish))
-        .route("/admin/publish/scan", post(admin_publish_scan))
-        .route("/admin/workers", get(admin_get_workers))
-        .route("/admin/workers/:worker_id", get(admin_get_worker_details))
+        // Nest admin routes under /admin
+        .nest("/admin", admin_routes)
         // Campaign endpoints
         .route(
             "/:campaign/merge-proposals",
@@ -1655,7 +1661,6 @@ async fn export_runs(
 async fn admin_system_status(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
-    // TODO: Add admin authentication middleware
 ) -> impl axum::response::IntoResponse {
     debug!("Admin system status requested");
 
