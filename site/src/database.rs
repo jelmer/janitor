@@ -444,6 +444,7 @@ impl DatabaseManager {
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
             logfilenames: vec![], // TODO: Add logfilenames to query
+            revision: row.try_get("revision").ok(), // Add revision field
         })
     }
 
@@ -485,6 +486,7 @@ impl DatabaseManager {
                 main_branch_revision: row.try_get("main_branch_revision")?,
                 vcs_type: None, // TODO: Add to query
                 logfilenames: vec![], // TODO: Add logfilenames to query
+                revision: row.try_get("revision").ok(), // Add revision field
             });
         }
 
@@ -606,6 +608,7 @@ impl DatabaseManager {
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
             logfilenames,
+            revision: row.try_get("revision").ok(), // Add revision field
         })
     }
 
@@ -671,6 +674,7 @@ impl DatabaseManager {
             main_branch_revision: row.try_get("main_branch_revision")?,
             vcs_type: None, // TODO: Add to query
             logfilenames: vec![], // TODO: Add logfilenames to query
+            revision: row.try_get("revision").ok(), // Add revision field
         })
     }
 

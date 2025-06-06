@@ -806,7 +806,7 @@ async fn get_run_diff(
             } else {
                 warn!("No revision information available for run {}", run_id);
                 negotiate_response(
-                    ApiResponse::error("No diff available - missing revision information".to_string(), Some("MISSING_REVISION".to_string())),
+                    ApiResponse::error_typed("No diff available - missing revision information".to_string(), Some("MISSING_REVISION".to_string())),
                     &headers,
                     &format!("/api/run/{}/diff", run_id),
                 )
@@ -815,7 +815,7 @@ async fn get_run_diff(
         Ok(None) => {
             warn!("Run not found: {}", run_id);
             negotiate_response(
-                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
                 &headers,
                 &format!("/api/run/{}/diff", run_id),
             )
@@ -823,7 +823,7 @@ async fn get_run_diff(
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
                 &headers,
                 &format!("/api/run/{}/diff", run_id),
             )
@@ -861,7 +861,7 @@ async fn get_run_debdiff(
                 // In a full implementation, this would call the differ service
                 // to generate debdiff between old and new .deb files
                 let debdiff_url = format!("{}/api/debdiff/{}", 
-                    app_state.config.differ_url.as_deref().unwrap_or("http://localhost:9920"),
+                    app_state.config.differ_url().unwrap_or("http://localhost:9920"),
                     run_id
                 );
                 
@@ -903,7 +903,7 @@ async fn get_run_debdiff(
         }
         Ok(None) => {
             negotiate_response(
-                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
                 &headers,
                 &format!("/api/run/{}/debdiff", run_id),
             )
@@ -911,7 +911,7 @@ async fn get_run_debdiff(
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
                 &headers,
                 &format!("/api/run/{}/debdiff", run_id),
             )
@@ -985,7 +985,7 @@ async fn get_run_diffoscope(
         }
         Ok(None) => {
             negotiate_response(
-                ApiResponse::error("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
                 &headers,
                 &format!("/api/run/{}/diffoscope", run_id),
             )
@@ -993,7 +993,7 @@ async fn get_run_diffoscope(
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
                 &headers,
                 &format!("/api/run/{}/diffoscope", run_id),
             )
@@ -1024,16 +1024,16 @@ async fn get_merge_proposals(
 
     // Get merge proposals from database
     match app_state.database.get_merge_proposals(
-        query.pagination.get_offset(),
-        query.pagination.get_limit(),
-        query.filter.get("status").map(|s| s.as_str()),
-        query.filter.get("codebase").map(|s| s.as_str()),
+        Some(query.pagination.get_offset()),
+        Some(query.pagination.get_limit()),
+        query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
+        query.filter.as_ref().and_then(|f| f.get("codebase")).map(|s| s.as_str()),
     ).await {
         Ok(proposals) => {
             // Get total count for pagination
             let total_count = match app_state.database.count_merge_proposals(
-                query.filter.get("status").map(|s| s.as_str()),
-                query.filter.get("codebase").map(|s| s.as_str()),
+                query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
+                query.filter.as_ref().and_then(|f| f.get("codebase")).map(|s| s.as_str()),
             ).await {
                 Ok(count) => count,
                 Err(e) => {
@@ -1058,7 +1058,7 @@ async fn get_merge_proposals(
         Err(e) => {
             warn!("Failed to retrieve merge proposals: {}", e);
             negotiate_response(
-                ApiResponse::error("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
                 &headers,
                 "/api/merge-proposals",
             )
@@ -4517,7 +4517,7 @@ async fn fetch_service_health_status(app_state: &AppState) -> serde_json::Value 
     }
     
     // Check differ service
-    let differ_status = match check_service_health(&app_state.http_client, &app_state.config.site().differ_url, "differ").await {
+    let differ_status = match check_service_health(&app_state.http_client, app_state.config.differ_url().unwrap_or("http://localhost:9920"), "differ").await {
         Ok(_) => "healthy",
         Err(_) => "unhealthy"
     };
