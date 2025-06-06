@@ -52,12 +52,14 @@ pub struct GpgConfig {
 }
 
 /// Archive service configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchiveConfig {
     /// Repositories to manage.
     pub repositories: HashMap<String, AptRepositoryConfig>,
     /// GPG configuration for signing.
     pub gpg: Option<GpgConfig>,
+    /// Base path for archive storage.
+    pub archive_path: PathBuf,
     /// Artifact manager configuration.
     pub artifact_manager: ArtifactManagerConfig,
     /// Database configuration.
@@ -116,6 +118,20 @@ pub struct ServerConfig {
     pub workers: usize,
     /// Request timeout (seconds).
     pub request_timeout: u64,
+}
+
+impl Default for ArchiveConfig {
+    fn default() -> Self {
+        Self {
+            repositories: HashMap::new(),
+            gpg: None,
+            archive_path: PathBuf::from("/tmp/janitor-archive"),
+            artifact_manager: ArtifactManagerConfig::default(),
+            database: DatabaseConfig::default(),
+            cache: CacheConfig::default(),
+            server: ServerConfig::default(),
+        }
+    }
 }
 
 impl Default for ArtifactManagerConfig {
