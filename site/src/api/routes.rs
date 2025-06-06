@@ -1723,41 +1723,75 @@ async fn admin_system_status(
     )
 )]
 async fn admin_system_config(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<AdminConfigQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin system config requested: {:?}", query);
 
     let include_sensitive = query.include_sensitive.unwrap_or(false);
+    let site_config = &app_state.config.site;
 
-    // Get system configuration (filtered for security)
+    // Get system configuration based on actual config
+    let environment = if site_config.debug { "development" } else { "production" };
+    
     let mut config = serde_json::json!({
         "application": {
             "name": "janitor-site",
             "version": env!("CARGO_PKG_VERSION"),
-            "environment": "production", // TODO: Get from actual config
+            "environment": environment,
+            "user_agent": site_config.user_agent,
+            "external_url": site_config.external_url,
         },
         "features": {
-            "authentication_enabled": true,
-            "rate_limiting_enabled": true,
-            "export_enabled": true,
-            "admin_api_enabled": true,
+            "authentication_enabled": site_config.oidc_client_id.is_some(),
+            "oidc_enabled": site_config.oidc_client_id.is_some(),
+            "websockets_enabled": site_config.enable_websockets,
+            "gpg_support_enabled": site_config.enable_gpg_support,
+            "archive_browsing_enabled": site_config.enable_archive_browsing,
+            "diff_view_enabled": site_config.enable_diff_view,
+            "metrics_enabled": site_config.metrics_enabled,
+            "gcp_logging_enabled": site_config.gcp_logging,
+            "debug_toolbar_enabled": site_config.debug_toolbar,
+            "minified_assets": site_config.minified_assets,
         },
         "limits": {
             "max_page_size": 1000,
             "max_export_size": 10000,
-            "request_timeout_seconds": 30,
+            "request_timeout_seconds": site_config.request_timeout.num_seconds(),
+        },
+        "monitoring": {
+            "zipkin_enabled": site_config.zipkin_address.is_some(),
+            "zipkin_sample_rate": site_config.zipkin_sample_rate,
+            "log_level": format!("{:?}", site_config.log_level).to_lowercase(),
+        },
+        "external_services": {
+            "runner_url": site_config.runner_url,
+            "differ_url": site_config.differ_url,
+            "publisher_url": site_config.publisher_url,
+            "archiver_url": site_config.archiver_url,
+            "git_store_url": site_config.git_store_url,
+            "bzr_store_url": site_config.bzr_store_url,
         }
     });
 
     if include_sensitive {
-        // Add sensitive configuration (would need proper admin auth)
+        // Add sensitive configuration (redacted for security)
         config["sensitive"] = serde_json::json!({
             "database_url": "***REDACTED***",
-            "redis_url": "***REDACTED***",
-            "secret_keys": "***REDACTED***",
+            "redis_url": if site_config.redis_url.is_some() { "***CONFIGURED***" } else { "***NOT CONFIGURED***" },
+            "session_secret": "***REDACTED***",
+            "oidc_client_secret": if site_config.oidc_client_secret.is_some() { "***CONFIGURED***" } else { "***NOT CONFIGURED***" },
+            "zipkin_address": site_config.zipkin_address.clone().unwrap_or("***NOT CONFIGURED***".to_string()),
             "note": "Sensitive values redacted for security"
+        });
+    }
+
+    // Add janitor config section if available
+    if let Some(janitor_config) = &app_state.config.janitor {
+        config["janitor"] = serde_json::json!({
+            "campaigns_count": app_state.config.campaigns.len(),
+            "available_campaigns": app_state.config.campaigns.keys().collect::<Vec<_>>(),
         });
     }
 
@@ -1769,7 +1803,9 @@ async fn admin_system_config(
                 data: None,
                 error: Some("section_not_found".to_string()),
                 reason: Some(format!("Configuration section '{}' not found", section)),
-                details: None,
+                details: Some(serde_json::json!({
+                    "available_sections": ["application", "features", "limits", "monitoring", "external_services", "janitor"]
+                })),
                 pagination: None,
             };
 
