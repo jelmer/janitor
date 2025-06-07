@@ -8,6 +8,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::{debug, warn, error, info};
 use serde_json::json;
+use serde::Deserialize;
 use sqlx::Row;
 
 use super::{
@@ -167,8 +168,8 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
         .route("/reviews/verdicts", get(cupboard_reviews_verdicts))
         // VCS and merge proposal management
         .route("/merge-proposals", get(cupboard_merge_proposals_overview))
-        // .route("/merge-proposals/create", post(cupboard_create_merge_proposal))
-        // .route("/merge-proposals/:proposal_id/status", post(cupboard_update_merge_proposal_status))
+        .route("/merge-proposals/create", post(cupboard_create_merge_proposal))
+        .route("/merge-proposals/:proposal_id/status", post(cupboard_update_merge_proposal_status))
         .route("/merge-proposals/:proposal_id/merge", post(cupboard_merge_proposal))
         // Branch management
         .route("/branches", get(cupboard_branches_overview))
@@ -1195,7 +1196,7 @@ async fn get_runner_status(
 // Search and Discovery
 // ============================================================================
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::IntoParams;
 
 /// Search query parameters
@@ -7300,6 +7301,20 @@ async fn cupboard_reviews_verdicts(
 // VCS and Merge Proposal Management
 // ============================================================================
 
+/// Request for creating a merge proposal
+#[derive(Debug, Deserialize, Serialize)]
+struct CreateMergeProposalRequest {
+    codebase: String,
+    campaign: String,
+    run_id: String,
+}
+
+/// Request for updating merge proposal status  
+#[derive(Debug, Deserialize, Serialize)]
+struct UpdateMergeProposalStatusRequest {
+    status: String,
+}
+
 /// Get merge proposals overview for admin management
 #[utoipa::path(
     get,
@@ -7381,25 +7396,13 @@ async fn cupboard_merge_proposals_overview(
         (status = 200, description = "Merge proposal created", body = ApiResponse<serde_json::Value>)
     )
 )]
+#[axum::debug_handler]
 async fn cupboard_create_merge_proposal(
     State(app_state): State<Arc<AppState>>,
-    Json(payload): Json<serde_json::Value>,
     headers: HeaderMap,
+    Json(request): Json<CreateMergeProposalRequest>,
 ) -> impl axum::response::IntoResponse {
-    debug!("Create merge proposal requested: {:?}", payload);
-
-    // Extract required fields
-    let codebase = payload.get("codebase").and_then(|v| v.as_str());
-    let campaign = payload.get("campaign").and_then(|v| v.as_str());
-    let run_id = payload.get("run_id").and_then(|v| v.as_str());
-
-    if codebase.is_none() || campaign.is_none() || run_id.is_none() {
-        let error_response = ApiResponse::<serde_json::Value>::error_typed(
-            "Missing required fields: codebase, campaign, run_id".to_string(),
-            Some("INVALID_REQUEST".to_string()),
-        );
-        return negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create");
-    }
+    debug!("Create merge proposal requested: {:?}", request);
 
     // Check if publisher service is available
     if let Some(publisher_url) = app_state.config.publisher_url() {
@@ -7407,7 +7410,7 @@ async fn cupboard_create_merge_proposal(
         let create_url = format!("{}/api/merge-proposals", publisher_url);
         
         match client.post(&create_url)
-            .json(&payload)
+            .json(&request)
             .timeout(std::time::Duration::from_secs(30))
             .send()
             .await 
@@ -7417,9 +7420,9 @@ async fn cupboard_create_merge_proposal(
                     let result = serde_json::json!({
                         "status": "success",
                         "message": "Merge proposal creation initiated",
-                        "codebase": codebase,
-                        "campaign": campaign,
-                        "run_id": run_id,
+                        "codebase": request.codebase,
+                        "campaign": request.campaign,
+                        "run_id": request.run_id,
                         "publisher_response": response.status().as_u16(),
                         "timestamp": chrono::Utc::now()
                     });
@@ -7466,28 +7469,20 @@ async fn cupboard_create_merge_proposal(
         (status = 200, description = "Merge proposal status updated", body = ApiResponse<serde_json::Value>)
     )
 )]
+#[axum::debug_handler]
 async fn cupboard_update_merge_proposal_status(
     State(app_state): State<Arc<AppState>>,
     Path(proposal_id): Path<String>,
-    Json(payload): Json<serde_json::Value>,
     headers: HeaderMap,
+    Json(request): Json<UpdateMergeProposalStatusRequest>,
 ) -> impl axum::response::IntoResponse {
-    debug!("Update merge proposal status requested for: {} with {:?}", proposal_id, payload);
-
-    let new_status = payload.get("status").and_then(|v| v.as_str());
-    if new_status.is_none() {
-        let error_response = ApiResponse::<serde_json::Value>::error_typed(
-            "Missing required field: status".to_string(),
-            Some("INVALID_REQUEST".to_string()),
-        );
-        return negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id));
-    }
+    debug!("Update merge proposal status requested for: {} with {:?}", proposal_id, request);
 
     // Update in database
     match app_state.database.pool().acquire().await {
         Ok(mut conn) => {
             match sqlx::query("UPDATE merge_proposal SET status = $1 WHERE url LIKE $2")
-                .bind(new_status.unwrap())
+                .bind(&request.status)
                 .bind(format!("%{}", proposal_id))
                 .execute(&mut *conn)
                 .await 
@@ -7498,7 +7493,7 @@ async fn cupboard_update_merge_proposal_status(
                             "status": "success",
                             "message": "Merge proposal status updated",
                             "proposal_id": proposal_id,
-                            "new_status": new_status,
+                            "new_status": request.status,
                             "rows_affected": result.rows_affected(),
                             "timestamp": chrono::Utc::now()
                         });
