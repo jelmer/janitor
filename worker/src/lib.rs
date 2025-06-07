@@ -1320,12 +1320,14 @@ mod tests {
 
     #[serial]
     #[test]
+    #[ignore = "Requires Git/Breezy system dependencies and permissions"]
     fn test_run_worker_existing_git() {
         test_run_worker_existing(tempfile::tempdir().unwrap().path(), VcsType::Git);
     }
 
     #[serial]
     #[test]
+    #[ignore = "Requires Bazaar/Breezy system dependencies and permissions"]
     fn test_run_worker_existing_bzr() {
         test_run_worker_existing(tempfile::tempdir().unwrap().path(), VcsType::Bzr);
     }

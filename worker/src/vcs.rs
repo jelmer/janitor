@@ -492,6 +492,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires Git/Breezy system dependencies"]
     fn test_import_branches_git() {
         let td = tempfile::tempdir().unwrap();
         let source_tree = breezyshim::controldir::create_standalone_workingtree(
