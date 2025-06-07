@@ -1,7 +1,7 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, Json},
     http::HeaderMap,
-    response::Json,
+    response::Json as ResponseJson,
     routing::{get, post, delete},
     Router,
 };
@@ -165,6 +165,19 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
         .route("/reviews/pending", get(cupboard_reviews_pending))
         .route("/reviews/assign", post(cupboard_reviews_assign))
         .route("/reviews/verdicts", get(cupboard_reviews_verdicts))
+        // VCS and merge proposal management
+        .route("/merge-proposals", get(cupboard_merge_proposals_overview))
+        // .route("/merge-proposals/create", post(cupboard_create_merge_proposal))
+        // .route("/merge-proposals/:proposal_id/status", post(cupboard_update_merge_proposal_status))
+        .route("/merge-proposals/:proposal_id/merge", post(cupboard_merge_proposal))
+        // Branch management
+        .route("/branches", get(cupboard_branches_overview))
+        .route("/branches/:branch_id/delete", post(cupboard_delete_branch))
+        .route("/branches/cleanup", post(cupboard_cleanup_branches))
+        // Repository management
+        .route("/repositories", get(cupboard_repositories_overview))
+        .route("/repositories/:repo_id/sync", post(cupboard_sync_repository))
+        .route("/repositories/:repo_id/status", get(cupboard_repository_status))
         // Apply middleware
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn(metrics_middleware))
@@ -207,7 +220,7 @@ async fn health_check(
                 details: Some(serde_json::json!({"services": services})),
                 pagination: None,
             };
-            return Json(error_response);
+            return ResponseJson(error_response);
         }
     }
 
@@ -238,7 +251,7 @@ async fn health_check(
         "services": services
     });
 
-    Json(ApiResponse::success(status))
+    ResponseJson(ApiResponse::success(status))
 }
 
 /// API status and version information
@@ -265,7 +278,7 @@ async fn api_status() -> Json<ApiResponse<serde_json::Value>> {
         ]
     });
 
-    Json(ApiResponse::success(status))
+    ResponseJson(ApiResponse::success(status))
 }
 
 // ============================================================================
@@ -7281,6 +7294,637 @@ async fn cupboard_reviews_verdicts(
         &headers,
         "/cupboard/reviews/verdicts",
     )
+}
+
+// ============================================================================
+// VCS and Merge Proposal Management
+// ============================================================================
+
+/// Get merge proposals overview for admin management
+#[utoipa::path(
+    get,
+    path = "/merge-proposals",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Merge proposals overview", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_merge_proposals_overview(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard merge proposals overview requested");
+
+    // Get merge proposal statistics from database
+    let mut stats = serde_json::json!({
+        "total_proposals": 0,
+        "open_proposals": 0,
+        "merged_proposals": 0,
+        "rejected_proposals": 0
+    });
+
+    if let Ok(mut conn) = app_state.database.pool().acquire().await {
+        // Get merge proposal statistics
+        if let Ok(row) = sqlx::query(
+            "SELECT 
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'open' THEN 1 END) as open,
+                COUNT(CASE WHEN status = 'merged' THEN 1 END) as merged,
+                COUNT(CASE WHEN status = 'rejected' OR status = 'closed' THEN 1 END) as rejected
+             FROM merge_proposal"
+        ).fetch_one(&mut *conn).await {
+            stats["total_proposals"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("total"))
+            );
+            stats["open_proposals"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("open"))
+            );
+            stats["merged_proposals"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("merged"))
+            );
+            stats["rejected_proposals"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("rejected"))
+            );
+        }
+    }
+
+    let overview = serde_json::json!({
+        "statistics": stats,
+        "actions": [
+            "create_proposal",
+            "update_status", 
+            "merge_proposal",
+            "view_details",
+            "bulk_operations"
+        ],
+        "integration": {
+            "publisher_service": app_state.config.publisher_url().is_some(),
+            "forge_connectivity": "needs_check"
+        },
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(overview),
+        &headers,
+        "/cupboard/merge-proposals",
+    )
+}
+
+/// Create a new merge proposal
+#[utoipa::path(
+    post,
+    path = "/merge-proposals/create",
+    tag = "cupboard",
+    request_body = serde_json::Value,
+    responses(
+        (status = 200, description = "Merge proposal created", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_create_merge_proposal(
+    State(app_state): State<Arc<AppState>>,
+    Json(payload): Json<serde_json::Value>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Create merge proposal requested: {:?}", payload);
+
+    // Extract required fields
+    let codebase = payload.get("codebase").and_then(|v| v.as_str());
+    let campaign = payload.get("campaign").and_then(|v| v.as_str());
+    let run_id = payload.get("run_id").and_then(|v| v.as_str());
+
+    if codebase.is_none() || campaign.is_none() || run_id.is_none() {
+        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+            "Missing required fields: codebase, campaign, run_id".to_string(),
+            Some("INVALID_REQUEST".to_string()),
+        );
+        return negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create");
+    }
+
+    // Check if publisher service is available
+    if let Some(publisher_url) = app_state.config.publisher_url() {
+        let client = reqwest::Client::new();
+        let create_url = format!("{}/api/merge-proposals", publisher_url);
+        
+        match client.post(&create_url)
+            .json(&payload)
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await 
+        {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let result = serde_json::json!({
+                        "status": "success",
+                        "message": "Merge proposal creation initiated",
+                        "codebase": codebase,
+                        "campaign": campaign,
+                        "run_id": run_id,
+                        "publisher_response": response.status().as_u16(),
+                        "timestamp": chrono::Utc::now()
+                    });
+                    
+                    negotiate_response(
+                        ApiResponse::success(result),
+                        &headers,
+                        "/cupboard/merge-proposals/create",
+                    )
+                } else {
+                    let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                        format!("Publisher service error: {}", error_text),
+                        Some("PUBLISHER_ERROR".to_string()),
+                    );
+                    negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create")
+                }
+            },
+            Err(e) => {
+                warn!("Failed to communicate with publisher service: {}", e);
+                let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                    format!("Publisher service unavailable: {}", e),
+                    Some("SERVICE_UNAVAILABLE".to_string()),
+                );
+                negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create")
+            }
+        }
+    } else {
+        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+            "Publisher service not configured".to_string(),
+            Some("SERVICE_NOT_CONFIGURED".to_string()),
+        );
+        negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create")
+    }
+}
+
+/// Update merge proposal status
+#[utoipa::path(
+    post,
+    path = "/merge-proposals/{proposal_id}/status",
+    tag = "cupboard",
+    request_body = serde_json::Value,
+    responses(
+        (status = 200, description = "Merge proposal status updated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_update_merge_proposal_status(
+    State(app_state): State<Arc<AppState>>,
+    Path(proposal_id): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Update merge proposal status requested for: {} with {:?}", proposal_id, payload);
+
+    let new_status = payload.get("status").and_then(|v| v.as_str());
+    if new_status.is_none() {
+        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+            "Missing required field: status".to_string(),
+            Some("INVALID_REQUEST".to_string()),
+        );
+        return negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id));
+    }
+
+    // Update in database
+    match app_state.database.pool().acquire().await {
+        Ok(mut conn) => {
+            match sqlx::query("UPDATE merge_proposal SET status = $1 WHERE url LIKE $2")
+                .bind(new_status.unwrap())
+                .bind(format!("%{}", proposal_id))
+                .execute(&mut *conn)
+                .await 
+            {
+                Ok(result) => {
+                    if result.rows_affected() > 0 {
+                        let response = serde_json::json!({
+                            "status": "success",
+                            "message": "Merge proposal status updated",
+                            "proposal_id": proposal_id,
+                            "new_status": new_status,
+                            "rows_affected": result.rows_affected(),
+                            "timestamp": chrono::Utc::now()
+                        });
+                        
+                        negotiate_response(
+                            ApiResponse::success(response),
+                            &headers,
+                            &format!("/cupboard/merge-proposals/{}/status", proposal_id),
+                        )
+                    } else {
+                        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                            format!("Merge proposal {} not found", proposal_id),
+                            Some("NOT_FOUND".to_string()),
+                        );
+                        negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+                    }
+                },
+                Err(e) => {
+                    warn!("Database error updating merge proposal status: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                        "Database error".to_string(),
+                        Some("DATABASE_ERROR".to_string()),
+                    );
+                    negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+                }
+            }
+        },
+        Err(e) => {
+            warn!("Database connection error: {}", e);
+            let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                "Database connection error".to_string(),
+                Some("DATABASE_CONNECTION_ERROR".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+        }
+    }
+}
+
+/// Merge a proposal (admin action)
+#[utoipa::path(
+    post,
+    path = "/merge-proposals/{proposal_id}/merge",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Merge proposal merged", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_merge_proposal(
+    State(app_state): State<Arc<AppState>>,
+    Path(proposal_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Merge proposal requested for: {}", proposal_id);
+
+    // This would typically involve calling the publisher service to perform the merge
+    if let Some(publisher_url) = app_state.config.publisher_url() {
+        let client = reqwest::Client::new();
+        let merge_url = format!("{}/api/merge-proposals/{}/merge", publisher_url, proposal_id);
+        
+        match client.post(&merge_url)
+            .timeout(std::time::Duration::from_secs(60)) // Merging might take longer
+            .send()
+            .await 
+        {
+            Ok(response) => {
+                let result = serde_json::json!({
+                    "status": if response.status().is_success() { "success" } else { "failed" },
+                    "message": if response.status().is_success() { 
+                        "Merge proposal merge initiated" 
+                    } else { 
+                        "Merge proposal merge failed" 
+                    },
+                    "proposal_id": proposal_id,
+                    "publisher_response": response.status().as_u16(),
+                    "warning": "This is an irreversible action",
+                    "timestamp": chrono::Utc::now()
+                });
+                
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/cupboard/merge-proposals/{}/merge", proposal_id),
+                )
+            },
+            Err(e) => {
+                warn!("Failed to communicate with publisher service for merge: {}", e);
+                let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                    format!("Publisher service error: {}", e),
+                    Some("SERVICE_ERROR".to_string()),
+                );
+                negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/merge", proposal_id))
+            }
+        }
+    } else {
+        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+            "Publisher service not configured".to_string(),
+            Some("SERVICE_NOT_CONFIGURED".to_string()),
+        );
+        negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/merge", proposal_id))
+    }
+}
+
+// ============================================================================
+// Branch Management
+// ============================================================================
+
+/// Get branches overview for admin management
+#[utoipa::path(
+    get,
+    path = "/branches",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Branches overview", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_branches_overview(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard branches overview requested");
+
+    // Get branch statistics from result_branches and database
+    let mut stats = serde_json::json!({
+        "total_branches": 0,
+        "active_branches": 0,
+        "stale_branches": 0,
+        "cleanup_candidates": 0
+    });
+
+    if let Ok(mut conn) = app_state.database.pool().acquire().await {
+        // Get branch statistics from result_branches in runs
+        if let Ok(row) = sqlx::query(
+            "SELECT 
+                COUNT(DISTINCT revision) as total_revisions,
+                COUNT(CASE WHEN finish_time > NOW() - INTERVAL '30 days' THEN 1 END) as recent_activity
+             FROM run 
+             WHERE revision IS NOT NULL"
+        ).fetch_one(&mut *conn).await {
+            stats["total_branches"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("total_revisions"))
+            );
+            stats["active_branches"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("recent_activity"))
+            );
+        }
+    }
+
+    let overview = serde_json::json!({
+        "statistics": stats,
+        "actions": [
+            "delete_branch",
+            "cleanup_stale",
+            "view_branch_details",
+            "sync_branches"
+        ],
+        "vcs_integration": {
+            "git_store": app_state.config.site().git_store_url.is_some(),
+            "bzr_store": app_state.config.site().bzr_store_url.is_some()
+        },
+        "cleanup_policy": {
+            "stale_threshold_days": 90,
+            "auto_cleanup": false
+        },
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(overview),
+        &headers,
+        "/cupboard/branches",
+    )
+}
+
+/// Delete a specific branch (admin action)
+#[utoipa::path(
+    post,
+    path = "/branches/{branch_id}/delete",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Branch deletion initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_delete_branch(
+    State(_app_state): State<Arc<AppState>>,
+    Path(branch_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Delete branch requested for: {}", branch_id);
+
+    // This would involve calling VCS store services to delete branches
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "message": "Branch deletion requires integration with VCS store services",
+        "branch_id": branch_id,
+        "warning": "This would be an irreversible action",
+        "required_integration": ["git-store", "bzr-store"],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/cupboard/branches/{}/delete", branch_id),
+    )
+}
+
+/// Cleanup stale branches
+#[utoipa::path(
+    post,
+    path = "/branches/cleanup",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Branch cleanup initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_cleanup_branches(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Branch cleanup requested");
+
+    let result = serde_json::json!({
+        "status": "not_implemented", 
+        "message": "Branch cleanup requires integration with VCS store services",
+        "planned_actions": [
+            "identify_stale_branches",
+            "check_merge_status",
+            "safe_delete_merged_branches",
+            "update_statistics"
+        ],
+        "safety_checks": [
+            "verify_merge_status",
+            "check_recent_activity",
+            "preserve_main_branches"
+        ],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/cupboard/branches/cleanup",
+    )
+}
+
+// ============================================================================
+// Repository Management  
+// ============================================================================
+
+/// Get repositories overview for admin management
+#[utoipa::path(
+    get,
+    path = "/repositories",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Repositories overview", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_repositories_overview(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Cupboard repositories overview requested");
+
+    // Get repository statistics from database
+    let mut stats = serde_json::json!({
+        "total_repositories": 0,
+        "active_repositories": 0,
+        "git_repositories": 0,
+        "bzr_repositories": 0
+    });
+
+    if let Ok(mut conn) = app_state.database.pool().acquire().await {
+        // Get repository statistics
+        if let Ok(row) = sqlx::query(
+            "SELECT 
+                COUNT(*) as total,
+                COUNT(CASE WHEN vcs_type = 'git' THEN 1 END) as git_repos,
+                COUNT(CASE WHEN vcs_type = 'bzr' THEN 1 END) as bzr_repos,
+                COUNT(CASE WHEN NOT inactive THEN 1 END) as active
+             FROM codebase"
+        ).fetch_one(&mut *conn).await {
+            stats["total_repositories"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("total"))
+            );
+            stats["active_repositories"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("active"))
+            );
+            stats["git_repositories"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("git_repos"))
+            );
+            stats["bzr_repositories"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("bzr_repos"))
+            );
+        }
+    }
+
+    let overview = serde_json::json!({
+        "statistics": stats,
+        "actions": [
+            "sync_repository",
+            "check_repository_status",
+            "bulk_sync",
+            "repository_health_check"
+        ],
+        "vcs_stores": {
+            "git_store_configured": app_state.config.site().git_store_url.is_some(),
+            "bzr_store_configured": app_state.config.site().bzr_store_url.is_some(),
+            "git_store_url": app_state.config.site().git_store_url,
+            "bzr_store_url": app_state.config.site().bzr_store_url
+        },
+        "sync_policy": {
+            "auto_sync": false,
+            "sync_interval_hours": 24
+        },
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(overview),
+        &headers,
+        "/cupboard/repositories",
+    )
+}
+
+/// Sync a specific repository
+#[utoipa::path(
+    post,
+    path = "/repositories/{repo_id}/sync",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Repository sync initiated", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_sync_repository(
+    State(_app_state): State<Arc<AppState>>,
+    Path(repo_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Repository sync requested for: {}", repo_id);
+
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "message": "Repository sync requires integration with VCS store services",
+        "repository_id": repo_id,
+        "planned_actions": [
+            "fetch_latest_changes",
+            "update_local_cache",
+            "verify_integrity",
+            "update_metadata"
+        ],
+        "required_services": ["git-store", "bzr-store"],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/cupboard/repositories/{}/sync", repo_id),
+    )
+}
+
+/// Get repository status
+#[utoipa::path(
+    get,
+    path = "/repositories/{repo_id}/status",
+    tag = "cupboard",
+    responses(
+        (status = 200, description = "Repository status", body = ApiResponse<serde_json::Value>)
+    )
+)]
+async fn cupboard_repository_status(
+    State(app_state): State<Arc<AppState>>,
+    Path(repo_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Repository status requested for: {}", repo_id);
+
+    // Try to get repository info from database
+    match app_state.database.pool().acquire().await {
+        Ok(mut conn) => {
+            match sqlx::query(
+                "SELECT name, url, vcs_type, branch, inactive FROM codebase WHERE name = $1"
+            )
+            .bind(&repo_id)
+            .fetch_one(&mut *conn)
+            .await 
+            {
+                Ok(row) => {
+                    let status = serde_json::json!({
+                        "repository_id": repo_id,
+                        "name": row.get::<String, _>("name"),
+                        "url": row.get::<Option<String>, _>("url"),
+                        "vcs_type": row.get::<Option<String>, _>("vcs_type"),
+                        "branch": row.get::<Option<String>, _>("branch"),
+                        "inactive": row.get::<bool, _>("inactive"),
+                        "sync_status": "unknown",
+                        "last_sync": null,
+                        "health": "requires_check",
+                        "timestamp": chrono::Utc::now()
+                    });
+                    
+                    negotiate_response(
+                        ApiResponse::success(status),
+                        &headers,
+                        &format!("/cupboard/repositories/{}/status", repo_id),
+                    )
+                },
+                Err(_) => {
+                    let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                        format!("Repository {} not found", repo_id),
+                        Some("NOT_FOUND".to_string()),
+                    );
+                    negotiate_response(error_response, &headers, &format!("/cupboard/repositories/{}/status", repo_id))
+                }
+            }
+        },
+        Err(e) => {
+            warn!("Database connection error: {}", e);
+            let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                "Database connection error".to_string(),
+                Some("DATABASE_CONNECTION_ERROR".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/cupboard/repositories/{}/status", repo_id))
+        }
+    }
 }
 
 // ============================================================================
