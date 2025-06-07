@@ -507,21 +507,76 @@ fn convert_runner_active_run_to_api_run(run_data: serde_json::Value) -> Result<R
     )
 )]
 async fn get_active_run(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Active run {} requested", run_id);
 
-    // TODO: Implement actual run retrieval
-    // For now, return not found
-    let error_response = ApiResponse::<()>::error(
-        "not_found".to_string(),
-        Some(format!("Run {} not found", run_id)),
-    );
+    // Get run details from database
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Check if this run is actually active (no result code or result indicates running)
+            if run_details.result_code.is_some() && run_details.result_code.as_ref().unwrap() != "running" {
+                // Run is finished, not active
+                let error_response = ApiResponse::<Run>::error_typed(
+                    format!("Run {} is not active (already finished)", run_id),
+                    Some("NOT_ACTIVE".to_string()),
+                );
+                negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+            } else {
+                // Convert RunDetails to Run schema for API response
+                let suite_name = run_details.suite.clone(); // Clone the suite name to use in multiple places
+                let run = Run {
+                    run_id: run_details.id,
+                    start_time: Some(run_details.start_time),
+                    finish_time: None, // Active runs haven't finished yet
+                    command: run_details.command.unwrap_or_default(),
+                    description: run_details.description,
+                    build_info: None, // Would need to be populated from build data
+                    result_code: run_details.result_code,
+                    main_branch_revision: run_details.main_branch_revision,
+                    revision: run_details.revision,
+                    context: None, // Would need to be derived from run context
+                    suite: Some(suite_name.clone()),
+                    vcs_type: run_details.vcs_type,
+                    branch_url: None, // Would need to be derived from codebase data
+                    logfilenames: run_details.logfilenames,
+                    worker_name: run_details.worker,
+                    result_branches: vec![], // Would need to be converted from run_details.result_branches
+                    result_tags: vec![], // Would need to be converted from run_details.result_tags
+                    target_branch_url: None, // Would need to be derived from other data
+                    change_set: None, // Would need to be derived from other data
+                    failure_transient: None, // Would need to be derived from other data
+                    failure_stage: run_details.failure_stage,
+                    codebase: run_details.codebase,
+                    campaign: suite_name,
+                    subpath: None, // Would need to be derived from other data
+                };
 
-    // Set status to 404 - this would be handled by the error system in real implementation
-    negotiate_response(error_response, &headers, "/api/active-runs/{id}")
+                negotiate_response(
+                    ApiResponse::success(run),
+                    &headers,
+                    &format!("/api/active-runs/{}", run_id),
+                )
+            }
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<Run>::error_typed(
+                format!("Run {} not found", run_id),
+                Some("NOT_FOUND".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            let error_response = ApiResponse::<Run>::error_typed(
+                "Database error".to_string(),
+                Some("DATABASE_ERROR".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+        }
+    }
 }
 
 /// Get run logs
@@ -3364,7 +3419,7 @@ async fn get_campaign_codebase(
     )
 )]
 async fn post_codebase_publish(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path((campaign, codebase)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
@@ -3373,19 +3428,132 @@ async fn post_codebase_publish(
         campaign, codebase
     );
 
-    // TODO: Implement actual publish operation
-    let result = serde_json::json!({
-        "campaign": campaign,
-        "codebase": codebase,
-        "action": "publish",
-        "status": "not_implemented"
-    });
+    // Check if there's a successful run to publish for this codebase/campaign
+    match app_state.database.get_last_unabsorbed_run(&campaign, &codebase).await {
+        Ok(run_details) => {
+            if run_details.result_code.as_ref() == Some(&"success".to_string()) {
+                // Get publish policy for this codebase/campaign
+                let publish_policy = app_state.database.get_publish_policy(&campaign, &codebase)
+                    .await
+                    .unwrap_or_else(|_| "manual".to_string());
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/{}/c/{}/publish", campaign, codebase),
-    )
+                // If publish service URL is configured, forward the request
+                if let Some(publish_url) = app_state.config.publisher_url() {
+                    let publish_request_url = format!("{}/publish/{}/{}", publish_url, campaign, codebase);
+                    
+                    // Use HTTP client to make publish request
+                    let client = reqwest::Client::new();
+                    match client.post(&publish_request_url)
+                        .header("Content-Type", "application/json")
+                        .json(&serde_json::json!({
+                            "run_id": run_details.id,
+                            "publish_policy": publish_policy,
+                            "requester": "site_api"
+                        }))
+                        .timeout(std::time::Duration::from_secs(30))
+                        .send()
+                        .await 
+                    {
+                        Ok(response) => {
+                            let status_code = response.status().as_u16();
+                            let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                            
+                            let result = serde_json::json!({
+                                "campaign": campaign,
+                                "codebase": codebase,
+                                "action": "publish",
+                                "status": if status_code == 200 { "initiated" } else { "failed" },
+                                "run_id": run_details.id,
+                                "publish_policy": publish_policy,
+                                "publish_service_response": {
+                                    "status_code": status_code,
+                                    "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                                        .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                                },
+                                "timestamp": chrono::Utc::now()
+                            });
+
+                            negotiate_response(
+                                ApiResponse::success(result),
+                                &headers,
+                                &format!("/api/{}/c/{}/publish", campaign, codebase),
+                            )
+                        }
+                        Err(e) => {
+                            warn!("Failed to connect to publish service: {}", e);
+                            
+                            let error_response = ApiResponse::<serde_json::Value> {
+                                data: None,
+                                error: Some("publish_service_error".to_string()),
+                                reason: Some("Failed to connect to publish service".to_string()),
+                                details: Some(serde_json::json!({
+                                    "campaign": campaign,
+                                    "codebase": codebase,
+                                    "publish_url": publish_request_url,
+                                    "error": e.to_string(),
+                                    "timestamp": chrono::Utc::now()
+                                })),
+                                pagination: None,
+                            };
+
+                            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+                        }
+                    }
+                } else {
+                    let result = serde_json::json!({
+                        "campaign": campaign,
+                        "codebase": codebase,
+                        "action": "publish",
+                        "status": "no_publish_service",
+                        "run_id": run_details.id,
+                        "publish_policy": publish_policy,
+                        "message": "Publish service URL not configured",
+                        "timestamp": chrono::Utc::now()
+                    });
+
+                    negotiate_response(
+                        ApiResponse::success(result),
+                        &headers,
+                        &format!("/api/{}/c/{}/publish", campaign, codebase),
+                    )
+                }
+            } else {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("no_successful_run".to_string()),
+                    reason: Some("No successful run available for publishing".to_string()),
+                    details: Some(serde_json::json!({
+                        "campaign": campaign,
+                        "codebase": codebase,
+                        "last_run_id": run_details.id,
+                        "last_result_code": run_details.result_code,
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+            }
+        }
+        Err(e) => {
+            warn!("Failed to get last run for {}/{}: {}", campaign, codebase, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("no_run_found".to_string()),
+                reason: Some("No run found for this campaign/codebase combination".to_string()),
+                details: Some(serde_json::json!({
+                    "campaign": campaign,
+                    "codebase": codebase,
+                    "error": e.to_string(),
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+        }
+    }
 }
 
 // ============================================================================
@@ -3589,19 +3757,85 @@ async fn get_codebase_runs(
     )
 )]
 async fn get_run_details(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Run details for {} requested", run_id);
 
-    // TODO: Implement actual run details retrieval
-    let error_response = ApiResponse::<()>::error(
-        "not_found".to_string(),
-        Some(format!("Run {} not found", run_id)),
-    );
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Convert RunDetails to API Run schema
+            let suite_name = run_details.suite.clone();
+            let run = super::schemas::Run {
+                run_id: run_details.id,
+                start_time: Some(run_details.start_time),
+                finish_time: Some(run_details.finish_time),
+                command: run_details.command.unwrap_or_default(),
+                description: run_details.description,
+                build_info: None, // TODO: Build from build_version if available
+                result_code: run_details.result_code,
+                main_branch_revision: run_details.main_branch_revision,
+                revision: run_details.revision,
+                context: None, // TODO: Add context if available in database
+                suite: Some(suite_name.clone()),
+                vcs_type: run_details.vcs_type,
+                branch_url: None, // TODO: Get from VCS info
+                logfilenames: run_details.logfilenames,
+                worker_name: run_details.worker,
+                result_branches: run_details.result_branches.into_iter()
+                    .filter_map(|v| serde_json::from_value::<super::schemas::ResultBranch>(v).ok())
+                    .collect(),
+                result_tags: run_details.result_tags.into_iter()
+                    .filter_map(|v| serde_json::from_value::<super::schemas::ResultTag>(v).ok())
+                    .collect(),
+                target_branch_url: None, // TODO: Get from VCS info
+                change_set: None, // TODO: Add change_set field if available
+                failure_transient: None, // TODO: Determine from failure details
+                failure_stage: run_details.failure_stage,
+                codebase: run_details.codebase,
+                campaign: suite_name,
+                subpath: None, // TODO: Add subpath if available
+            };
 
-    negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+            negotiate_response(
+                ApiResponse::success(run),
+                &headers,
+                &format!("/api/run/{}", run_id),
+            )
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<super::schemas::Run> {
+                data: None,
+                error: Some("not_found".to_string()),
+                reason: Some(format!("Run '{}' not found", run_id)),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            
+            let error_response = ApiResponse::<super::schemas::Run> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to retrieve run details".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "error": e.to_string(),
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+        }
+    }
 }
 
 /// Update run information
@@ -3619,25 +3853,116 @@ async fn get_run_details(
     )
 )]
 async fn post_run_update(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
     body: String,
 ) -> impl axum::response::IntoResponse {
     debug!("Run {} update requested", run_id);
 
-    // TODO: Implement actual run update
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "update",
-        "status": "not_implemented"
-    });
+    // Parse the request body
+    let update_data: Result<serde_json::Value, _> = serde_json::from_str(&body);
+    
+    match update_data {
+        Ok(data) => {
+            // Check if run exists first
+            match app_state.database.get_run_details(&run_id).await {
+                Ok(Some(_)) => {
+                    let mut updates_applied = Vec::new();
+                    let mut update_errors = Vec::<String>::new();
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/run/{}", run_id),
-    )
+                    // Handle description update
+                    if let Some(description) = data.get("description").and_then(|v| v.as_str()) {
+                        match app_state.database.update_run_description(&run_id, description).await {
+                            Ok(true) => {
+                                updates_applied.push("description");
+                                info!("Updated description for run {}", run_id);
+                            }
+                            Ok(false) => update_errors.push("Failed to update description: run not found".to_string()),
+                            Err(e) => update_errors.push(format!("Failed to update description: {}", e)),
+                        }
+                    }
+
+                    // Handle failure details update
+                    if let Some(failure_details) = data.get("failure_details") {
+                        match app_state.database.update_run_failure_details(&run_id, failure_details).await {
+                            Ok(true) => {
+                                updates_applied.push("failure_details");
+                                info!("Updated failure details for run {}", run_id);
+                            }
+                            Ok(false) => update_errors.push("Failed to update failure details: run not found".to_string()),
+                            Err(e) => update_errors.push(format!("Failed to update failure details: {}", e)),
+                        }
+                    }
+
+                    let result = serde_json::json!({
+                        "run_id": run_id,
+                        "action": "update",
+                        "status": if update_errors.is_empty() { "success" } else { "partial" },
+                        "updates_applied": updates_applied,
+                        "errors": update_errors,
+                        "available_fields": ["description", "failure_details"],
+                        "timestamp": chrono::Utc::now()
+                    });
+
+                    negotiate_response(
+                        ApiResponse::success(result),
+                        &headers,
+                        &format!("/api/run/{}", run_id),
+                    )
+                }
+                Ok(None) => {
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("not_found".to_string()),
+                        reason: Some(format!("Run '{}' not found", run_id)),
+                        details: Some(serde_json::json!({
+                            "run_id": run_id,
+                            "timestamp": chrono::Utc::now()
+                        })),
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+                }
+                Err(e) => {
+                    warn!("Database error checking run {}: {}", run_id, e);
+                    
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("database_error".to_string()),
+                        reason: Some("Failed to check run existence".to_string()),
+                        details: Some(serde_json::json!({
+                            "run_id": run_id,
+                            "error": e.to_string(),
+                            "timestamp": chrono::Utc::now()
+                        })),
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Invalid JSON in run update request: {}", e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("invalid_json".to_string()),
+                reason: Some("Request body contains invalid JSON".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "parse_error": e.to_string(),
+                    "expected_fields": ["description", "failure_details"],
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}", run_id))
+        }
+    }
 }
 
 /// Reschedule a run
