@@ -89,9 +89,9 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [x] **Line 566**: Repository operations ✅ **COMPLETED**
 
 #### **Integration & External Services**
-- [ ] **Line 601**: Worker status and management endpoints
-- [ ] **Line 1551**: External service integration
-- [ ] **Line 1590**: Third-party API connections
+- [x] **Line 601**: Worker status and management endpoints ✅ **COMPLETED**
+- [x] **Line 1551**: External service integration ✅ **COMPLETED**
+- [x] **Line 1590**: Third-party API connections ✅ **COMPLETED**
 
 ### Site Service - Other Areas
 
