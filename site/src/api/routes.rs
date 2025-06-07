@@ -5796,35 +5796,67 @@ async fn cupboard_queue_status(
     )
 )]
 async fn cupboard_queue_browse(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<CupboardQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard queue browse requested: {:?}", query);
 
-    // TODO: Implement actual queue browsing from database
-    let queue_items = serde_json::json!({
-        "items": [],
-        "pagination": {
-            "limit": query.limit.unwrap_or(50),
-            "offset": query.offset.unwrap_or(0),
-            "total": 0,
-            "has_more": false
-        },
-        "filtering": {
-            "status_filter": query.status,
-            "available_statuses": ["pending", "running", "failed", "completed"]
-        },
-        "status": "not_implemented",
-        "message": "Queue browsing requires database queries for queue items",
-        "timestamp": chrono::Utc::now()
-    });
+    // Implement actual queue browsing from database
+    match app_state
+        .database
+        .get_queue_items_with_stats(
+            None, // campaign filter not available in CupboardQuery
+            query.status.as_deref(),
+            None, // priority filter
+            query.limit.map(|l| l as i64),
+            query.offset.map(|o| o as i64),
+        )
+        .await
+    {
+        Ok((items, stats)) => {
+            let total_items = stats.get("total_items").unwrap_or(&serde_json::json!(0)).as_i64().unwrap_or(0);
+            let current_offset = query.offset.unwrap_or(0) as i64;
+            let current_limit = query.limit.unwrap_or(50) as i64;
+            let has_more = (current_offset + current_limit) < total_items;
+            
+            let queue_items = serde_json::json!({
+                "items": items,
+                "pagination": {
+                    "limit": query.limit.unwrap_or(50),
+                    "offset": query.offset.unwrap_or(0),
+                    "total": total_items,
+                    "has_more": has_more
+                },
+                "filtering": {
+                    "status_filter": query.status,
+                    "worker_filter": query.worker_id,
+                    "available_statuses": ["pending", "assigned", "running", "completed", "failed"]
+                },
+                "statistics": stats,
+                "status": "success",
+                "timestamp": chrono::Utc::now()
+            });
 
-    negotiate_response(
-        ApiResponse::success(queue_items),
-        &headers,
-        "/cupboard/queue/browse",
-    )
+            negotiate_response(
+                ApiResponse::success(queue_items),
+                &headers,
+                "/cupboard/queue/browse",
+            )
+        }
+        Err(e) => {
+            warn!("Failed to get queue items: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("queue_browse_error".to_string()),
+                reason: Some(format!("Failed to retrieve queue items: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/cupboard/queue/browse")
+        }
+    }
 }
 
 /// Queue management operations interface
@@ -6055,24 +6087,85 @@ async fn cupboard_queue_bulk_operations(
     )
 )]
 async fn cupboard_jobs_pause(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard jobs pause requested");
 
-    // TODO: Implement actual job pause via runner service
-    let result = serde_json::json!({
-        "action": "pause_jobs",
-        "status": "not_implemented",
-        "message": "Job control requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Implement actual job pause via runner service
+    let runner_url = app_state.config.runner_url();
+    let pause_url = format!("{}/api/admin/pause", runner_url);
+    
+    let client = reqwest::Client::new();
+    match client
+        .post(&pause_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "requester": "admin_api",
+            "reason": "Manual pause via admin interface"
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status_code = response.status();
+            match response.text().await {
+                Ok(response_text) => {
+                    if status_code.is_success() {
+                        let result = serde_json::json!({
+                            "action": "pause_jobs",
+                            "status": "success",
+                            "message": "Job processing paused successfully",
+                            "runner_response": response_text,
+                            "timestamp": chrono::Utc::now()
+                        });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/cupboard/jobs/pause",
-    )
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            "/cupboard/jobs/pause",
+                        )
+                    } else {
+                        warn!("Runner service returned error for pause: {} - {}", status_code, response_text);
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_pause_failed".to_string()),
+                            reason: Some(format!("Runner service error: {}", response_text)),
+                            details: Some(serde_json::json!({"status_code": status_code.as_u16()})),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, "/cupboard/jobs/pause")
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read runner pause response: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("runner_response_error".to_string()),
+                        reason: Some(format!("Failed to read runner response: {}", e)),
+                        details: None,
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, "/cupboard/jobs/pause")
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to connect to runner service for pause: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("runner_connection_error".to_string()),
+                reason: Some(format!("Failed to connect to runner service: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/cupboard/jobs/pause")
+        }
+    }
 }
 
 /// Resume job processing
@@ -6085,24 +6178,85 @@ async fn cupboard_jobs_pause(
     )
 )]
 async fn cupboard_jobs_resume(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard jobs resume requested");
 
-    // TODO: Implement actual job resume via runner service
-    let result = serde_json::json!({
-        "action": "resume_jobs",
-        "status": "not_implemented",
-        "message": "Job control requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Implement actual job resume via runner service
+    let runner_url = app_state.config.runner_url();
+    let resume_url = format!("{}/api/admin/resume", runner_url);
+    
+    let client = reqwest::Client::new();
+    match client
+        .post(&resume_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "requester": "admin_api",
+            "reason": "Manual resume via admin interface"
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status_code = response.status();
+            match response.text().await {
+                Ok(response_text) => {
+                    if status_code.is_success() {
+                        let result = serde_json::json!({
+                            "action": "resume_jobs",
+                            "status": "success",
+                            "message": "Job processing resumed successfully",
+                            "runner_response": response_text,
+                            "timestamp": chrono::Utc::now()
+                        });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/cupboard/jobs/resume",
-    )
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            "/cupboard/jobs/resume",
+                        )
+                    } else {
+                        warn!("Runner service returned error for resume: {} - {}", status_code, response_text);
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_resume_failed".to_string()),
+                            reason: Some(format!("Runner service error: {}", response_text)),
+                            details: Some(serde_json::json!({"status_code": status_code.as_u16()})),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, "/cupboard/jobs/resume")
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read runner resume response: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("runner_response_error".to_string()),
+                        reason: Some(format!("Failed to read runner response: {}", e)),
+                        details: None,
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, "/cupboard/jobs/resume")
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to connect to runner service for resume: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("runner_connection_error".to_string()),
+                reason: Some(format!("Failed to connect to runner service: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/cupboard/jobs/resume")
+        }
+    }
 }
 
 /// Cancel specific jobs
@@ -6115,24 +6269,85 @@ async fn cupboard_jobs_resume(
     )
 )]
 async fn cupboard_jobs_cancel(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard jobs cancel requested");
 
-    // TODO: Implement actual job cancellation via runner service
-    let result = serde_json::json!({
-        "action": "cancel_jobs",
-        "status": "not_implemented",
-        "message": "Job control requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Implement actual job cancellation via runner service
+    let runner_url = app_state.config.runner_url();
+    let cancel_url = format!("{}/api/admin/cancel", runner_url);
+    
+    let client = reqwest::Client::new();
+    match client
+        .post(&cancel_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "requester": "admin_api",
+            "reason": "Manual cancellation via admin interface"
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status_code = response.status();
+            match response.text().await {
+                Ok(response_text) => {
+                    if status_code.is_success() {
+                        let result = serde_json::json!({
+                            "action": "cancel_jobs",
+                            "status": "success",
+                            "message": "Job cancellation initiated successfully",
+                            "runner_response": response_text,
+                            "timestamp": chrono::Utc::now()
+                        });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/cupboard/jobs/cancel",
-    )
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            "/cupboard/jobs/cancel",
+                        )
+                    } else {
+                        warn!("Runner service returned error for cancel: {} - {}", status_code, response_text);
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_cancel_failed".to_string()),
+                            reason: Some(format!("Runner service error: {}", response_text)),
+                            details: Some(serde_json::json!({"status_code": status_code.as_u16()})),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, "/cupboard/jobs/cancel")
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read runner cancel response: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("runner_response_error".to_string()),
+                        reason: Some(format!("Failed to read runner response: {}", e)),
+                        details: None,
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, "/cupboard/jobs/cancel")
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to connect to runner service for cancel: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("runner_connection_error".to_string()),
+                reason: Some(format!("Failed to connect to runner service: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/cupboard/jobs/cancel")
+        }
+    }
 }
 
 /// Requeue failed jobs
@@ -6145,24 +6360,85 @@ async fn cupboard_jobs_cancel(
     )
 )]
 async fn cupboard_jobs_requeue(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard jobs requeue requested");
 
-    // TODO: Implement actual job requeue via runner service
-    let result = serde_json::json!({
-        "action": "requeue_jobs",
-        "status": "not_implemented",
-        "message": "Job control requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Implement actual job requeue via runner service
+    let runner_url = app_state.config.runner_url();
+    let requeue_url = format!("{}/api/admin/requeue", runner_url);
+    
+    let client = reqwest::Client::new();
+    match client
+        .post(&requeue_url)
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "requester": "admin_api",
+            "reason": "Manual requeue via admin interface"
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status_code = response.status();
+            match response.text().await {
+                Ok(response_text) => {
+                    if status_code.is_success() {
+                        let result = serde_json::json!({
+                            "action": "requeue_jobs",
+                            "status": "success",
+                            "message": "Job requeue initiated successfully",
+                            "runner_response": response_text,
+                            "timestamp": chrono::Utc::now()
+                        });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/cupboard/jobs/requeue",
-    )
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            "/cupboard/jobs/requeue",
+                        )
+                    } else {
+                        warn!("Runner service returned error for requeue: {} - {}", status_code, response_text);
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_requeue_failed".to_string()),
+                            reason: Some(format!("Runner service error: {}", response_text)),
+                            details: Some(serde_json::json!({"status_code": status_code.as_u16()})),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, "/cupboard/jobs/requeue")
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to read runner requeue response: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("runner_response_error".to_string()),
+                        reason: Some(format!("Failed to read runner response: {}", e)),
+                        details: None,
+                        pagination: None,
+                    };
+
+                    negotiate_response(error_response, &headers, "/cupboard/jobs/requeue")
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Failed to connect to runner service for requeue: {}", e);
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("runner_connection_error".to_string()),
+                reason: Some(format!("Failed to connect to runner service: {}", e)),
+                details: None,
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/cupboard/jobs/requeue")
+        }
+    }
 }
 
 // ============================================================================
