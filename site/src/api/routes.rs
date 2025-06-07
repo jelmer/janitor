@@ -8,6 +8,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::{debug, warn, error, info};
 use serde_json::json;
+use sqlx::Row;
 
 use super::{
     content_negotiation::{negotiate_response, ContentType},
@@ -6456,39 +6457,140 @@ async fn cupboard_jobs_requeue(
     )
 )]
 async fn cupboard_runs(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<CupboardQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard runs requested: {:?}", query);
 
-    // TODO: Implement admin-level runs query with enhanced details
-    let runs_data = serde_json::json!({
-        "runs": [],
-        "summary": {
-            "total_runs": 0,
-            "active_runs": 0,
-            "failed_runs": 0,
-            "completed_runs": 0
+    // Get admin-level runs with enhanced details
+    let limit = query.limit.unwrap_or(50);
+    let offset = query.offset.unwrap_or(0);
+    
+    // Build database query with filters
+    let mut sql_query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, vcs_type, logfilenames FROM run".to_string();
+    let mut conditions = Vec::new();
+    let mut bind_values: Vec<String> = vec![];
+    
+    // Add status filter
+    if let Some(status) = &query.status {
+        match status.as_str() {
+            "active" => conditions.push("finish_time IS NULL".to_string()),
+            "completed" => conditions.push("finish_time IS NOT NULL AND result_code = 'success'".to_string()),
+            "failed" => conditions.push("finish_time IS NOT NULL AND result_code != 'success'".to_string()),
+            _ => {
+                conditions.push("result_code = $1".to_string());
+                bind_values.push(status.clone());
+            }
+        }
+    }
+    
+    if !conditions.is_empty() {
+        sql_query.push_str(" WHERE ");
+        sql_query.push_str(&conditions.join(" AND "));
+    }
+    
+    sql_query.push_str(" ORDER BY start_time DESC");
+    sql_query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+    
+    match app_state.database.pool().acquire().await {
+        Ok(mut conn) => {
+            // Execute the main query
+            let mut query_builder = sqlx::query(&sql_query);
+            for value in &bind_values {
+                query_builder = query_builder.bind(value);
+            }
+            
+            match query_builder.fetch_all(&mut *conn).await {
+                Ok(rows) => {
+                    let mut runs = Vec::new();
+                    for row in rows {
+                        let run = serde_json::json!({
+                            "id": row.get::<String, _>("id"),
+                            "codebase": row.get::<String, _>("codebase"),
+                            "suite": row.get::<String, _>("suite"),
+                            "command": row.get::<Option<String>, _>("command"),
+                            "result_code": row.get::<Option<String>, _>("result_code"),
+                            "description": row.get::<Option<String>, _>("description"),
+                            "start_time": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("start_time"),
+                            "finish_time": row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("finish_time"),
+                            "worker": row.get::<Option<String>, _>("worker"),
+                            "failure_stage": row.get::<Option<String>, _>("failure_stage"),
+                            "main_branch_revision": row.get::<Option<String>, _>("main_branch_revision"),
+                            "vcs_type": row.get::<Option<String>, _>("vcs_type"),
+                            "logfilenames": row.get::<Option<Vec<String>>, _>("logfilenames")
+                        });
+                        runs.push(run);
+                    }
+                    
+                    // Get summary statistics
+                    let stats_query = "SELECT 
+                        COUNT(*) as total_runs,
+                        COUNT(CASE WHEN finish_time IS NULL THEN 1 END) as active_runs,
+                        COUNT(CASE WHEN finish_time IS NOT NULL AND result_code != 'success' THEN 1 END) as failed_runs,
+                        COUNT(CASE WHEN finish_time IS NOT NULL AND result_code = 'success' THEN 1 END) as completed_runs
+                        FROM run";
+                    
+                    let summary = match sqlx::query(stats_query).fetch_one(&mut *conn).await {
+                        Ok(stats_row) => serde_json::json!({
+                            "total_runs": stats_row.get::<i64, _>("total_runs"),
+                            "active_runs": stats_row.get::<i64, _>("active_runs"),
+                            "failed_runs": stats_row.get::<i64, _>("failed_runs"),
+                            "completed_runs": stats_row.get::<i64, _>("completed_runs")
+                        }),
+                        Err(_) => serde_json::json!({
+                            "total_runs": 0,
+                            "active_runs": 0,
+                            "failed_runs": 0,
+                            "completed_runs": 0
+                        })
+                    };
+                    
+                    let runs_data = serde_json::json!({
+                        "runs": runs,
+                        "summary": summary,
+                        "admin_actions": [
+                            "force_finish",
+                            "requeue", 
+                            "cancel",
+                            "view_logs",
+                            "reprocess_logs"
+                        ],
+                        "query_parameters": {
+                            "limit": limit,
+                            "offset": offset,
+                            "status_filter": query.status,
+                            "detailed": query.detailed.unwrap_or(true)
+                        },
+                        "pagination": {
+                            "limit": limit,
+                            "offset": offset,
+                            "has_more": runs.len() == limit as usize
+                        },
+                        "timestamp": chrono::Utc::now()
+                    });
+                    
+                    negotiate_response(ApiResponse::success(runs_data), &headers, "/cupboard/runs")
+                },
+                Err(e) => {
+                    warn!("Database error getting runs: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                        "Database error retrieving runs".to_string(),
+                        Some("DATABASE_ERROR".to_string()),
+                    );
+                    negotiate_response(error_response, &headers, "/cupboard/runs")
+                }
+            }
         },
-        "admin_actions": [
-            "force_finish",
-            "requeue",
-            "cancel",
-            "view_logs"
-        ],
-        "status": "not_implemented",
-        "message": "Admin runs view requires database queries for run details",
-        "query_parameters": {
-            "limit": query.limit.unwrap_or(50),
-            "offset": query.offset.unwrap_or(0),
-            "status_filter": query.status,
-            "detailed": query.detailed.unwrap_or(true)
-        },
-        "timestamp": chrono::Utc::now()
-    });
-
-    negotiate_response(ApiResponse::success(runs_data), &headers, "/cupboard/runs")
+        Err(e) => {
+            warn!("Database connection error: {}", e);
+            let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                "Database connection error".to_string(),
+                Some("DATABASE_CONNECTION_ERROR".to_string()),
+            );
+            negotiate_response(error_response, &headers, "/cupboard/runs")
+        }
+    }
 }
 
 /// Get failed runs for troubleshooting
@@ -6640,27 +6742,88 @@ async fn cupboard_run_details(
     )
 )]
 async fn cupboard_run_force_finish(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard run force finish requested for: {}", run_id);
 
-    // TODO: Implement force finish via runner service
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "force_finish",
-        "status": "not_implemented",
-        "message": "Force finish requires integration with runner service",
-        "warning": "This is an emergency action that may result in data loss",
-        "timestamp": chrono::Utc::now()
-    });
+    // First check if the run exists and is active
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            if run_details.result_code.is_some() && run_details.result_code.as_ref().unwrap() != "running" {
+                let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                    format!("Run {} is already finished", run_id),
+                    Some("RUN_ALREADY_FINISHED".to_string()),
+                );
+                return negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id));
+            }
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/cupboard/runs/{}/force-finish", run_id),
-    )
+            // Make HTTP request to runner service to force finish the run
+            let runner_url = app_state.config.runner_url();
+            let force_finish_url = format!("{}/admin/runs/{}/kill", runner_url, run_id);
+            
+            let client = reqwest::Client::new();
+            match client.post(&force_finish_url)
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await 
+            {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        let result = serde_json::json!({
+                            "run_id": run_id,
+                            "action": "force_finish",
+                            "status": "success",
+                            "message": "Run force finish command sent to runner service",
+                            "warning": "This is an emergency action - run may take a few minutes to terminate",
+                            "runner_response": {
+                                "status": response.status().as_u16(),
+                                "success": true
+                            },
+                            "timestamp": chrono::Utc::now()
+                        });
+                        
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            &format!("/cupboard/runs/{}/force-finish", run_id),
+                        )
+                    } else {
+                        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                        let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                            format!("Runner service rejected force finish request: {}", error_text),
+                            Some("RUNNER_ERROR".to_string()),
+                        );
+                        negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+                    }
+                },
+                Err(e) => {
+                    warn!("Failed to communicate with runner service for force finish: {}", e);
+                    let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                        format!("Failed to communicate with runner service: {}", e),
+                        Some("RUNNER_COMMUNICATION_ERROR".to_string()),
+                    );
+                    negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+                }
+            }
+        },
+        Ok(None) => {
+            let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                format!("Run {} not found", run_id),
+                Some("RUN_NOT_FOUND".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+        },
+        Err(e) => {
+            warn!("Database error checking run {}: {}", run_id, e);
+            let error_response = ApiResponse::<serde_json::Value>::error_typed(
+                "Database error checking run".to_string(),
+                Some("DATABASE_ERROR".to_string()),
+            );
+            negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+        }
+    }
 }
 
 // ============================================================================
@@ -6677,35 +6840,130 @@ async fn cupboard_run_force_finish(
     )
 )]
 async fn cupboard_publish_overview(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Cupboard publish overview requested");
 
-    // TODO: Get publishing statistics and status
+    // Get publishing statistics from database
+    let mut overview_stats = serde_json::json!({
+        "publishing_enabled": true,
+        "auto_publish_enabled": app_state.config.publisher_url().is_some(),
+        "total_published": 0,
+        "pending_publish": 0
+    });
+
+    let mut recent_activity = serde_json::json!({
+        "last_24h_published": 0,
+        "success_rate": 0.0,
+        "failed_publishes": 0
+    });
+
+    // Get statistics from database
+    if let Ok(mut conn) = app_state.database.pool().acquire().await {
+        // Get total published and pending counts
+        if let Ok(row) = sqlx::query(
+            "SELECT 
+                COUNT(CASE WHEN publish_status = 'published' THEN 1 END) as total_published,
+                COUNT(CASE WHEN publish_status = 'pending' THEN 1 END) as pending_publish
+             FROM publish_ready"
+        ).fetch_one(&mut *conn).await {
+            overview_stats["total_published"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("total_published"))
+            );
+            overview_stats["pending_publish"] = serde_json::Value::Number(
+                serde_json::Number::from(row.get::<i64, _>("pending_publish"))
+            );
+        }
+
+        // Get recent activity (last 24 hours)
+        if let Ok(row) = sqlx::query(
+            "SELECT 
+                COUNT(*) as total_attempts,
+                COUNT(CASE WHEN publish_status = 'published' THEN 1 END) as successful,
+                COUNT(CASE WHEN publish_status = 'failed' THEN 1 END) as failed
+             FROM publish_ready 
+             WHERE start_time >= NOW() - INTERVAL '24 hours'"
+        ).fetch_one(&mut *conn).await {
+            let total: i64 = row.get("total_attempts");
+            let successful: i64 = row.get("successful");
+            let failed: i64 = row.get("failed");
+            
+            recent_activity["last_24h_published"] = serde_json::Value::Number(
+                serde_json::Number::from(successful)
+            );
+            recent_activity["failed_publishes"] = serde_json::Value::Number(
+                serde_json::Number::from(failed)
+            );
+            
+            if total > 0 {
+                recent_activity["success_rate"] = serde_json::Value::Number(
+                    serde_json::Number::from_f64((successful as f64 / total as f64) * 100.0).unwrap()
+                );
+            }
+        }
+    }
+
+    // Check publisher service connectivity if configured
+    let mut monitoring = serde_json::json!({
+        "forge_connectivity": "unknown",
+        "merge_proposal_status": "unknown",
+        "publisher_service": "unknown"
+    });
+
+    if let Some(publisher_url) = app_state.config.publisher_url() {
+        // Try to check publisher service health
+        let client = reqwest::Client::new();
+        let health_url = format!("{}/health", publisher_url);
+        
+        monitoring["publisher_service"] = match client.get(&health_url)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await 
+        {
+            Ok(response) if response.status().is_success() => {
+                serde_json::Value::String("healthy".to_string())
+            },
+            Ok(_) => serde_json::Value::String("unhealthy".to_string()),
+            Err(_) => serde_json::Value::String("unreachable".to_string()),
+        };
+        
+        // If publisher is healthy, try to get rate limiting info
+        if monitoring["publisher_service"] == "healthy" {
+            let rate_limit_url = format!("{}/status/rate-limits", publisher_url);
+            if let Ok(response) = client.get(&rate_limit_url)
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await 
+            {
+                if response.status().is_success() {
+                    if let Ok(rate_info) = response.json::<serde_json::Value>().await {
+                        monitoring["forge_connectivity"] = serde_json::Value::String("connected".to_string());
+                        monitoring["merge_proposal_status"] = rate_info.get("status")
+                            .unwrap_or(&serde_json::Value::String("unknown".to_string()))
+                            .clone();
+                    }
+                }
+            }
+        }
+    }
+
     let publish_overview = serde_json::json!({
-        "overview": {
-            "publishing_enabled": true,
-            "auto_publish_enabled": "unknown",
-            "total_published": "unknown",
-            "pending_publish": "unknown"
-        },
+        "overview": overview_stats,
         "rate_limiting": {
-            "current_rate": "unknown",
-            "rate_limit": "unknown",
-            "next_available": "unknown"
+            "status": if app_state.config.publisher_url().is_some() { "configured" } else { "not_configured" },
+            "service_url": app_state.config.publisher_url(),
+            "health_check": monitoring["publisher_service"]
         },
-        "recent_activity": {
-            "last_24h_published": "unknown",
-            "success_rate": "unknown",
-            "failed_publishes": "unknown"
-        },
-        "monitoring": {
-            "forge_connectivity": "unknown",
-            "merge_proposal_status": "unknown"
-        },
-        "status": "not_implemented",
-        "message": "Publishing oversight requires integration with publisher service",
+        "recent_activity": recent_activity,
+        "monitoring": monitoring,
+        "actions": [
+            "trigger_autopublish",
+            "scan_for_publishes", 
+            "view_pending",
+            "view_history",
+            "check_rate_limits"
+        ],
         "timestamp": chrono::Utc::now()
     });
 
