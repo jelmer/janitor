@@ -2136,32 +2136,158 @@ async fn admin_kill_run(
     )
 )]
 async fn admin_mass_reschedule(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Query(query): Query<MassRescheduleQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin mass reschedule requested: {:?}", query);
 
-    // TODO: Implement actual mass rescheduling
-    let result = serde_json::json!({
-        "action": "mass_reschedule",
-        "criteria": {
-            "result_code": query.result_code,
-            "include_transient": query.include_transient.unwrap_or(false),
-            "campaign": query.campaign,
-            "limit": query.limit.unwrap_or(100),
-        },
-        "status": "not_implemented",
-        "message": "Mass rescheduling requires integration with runner service",
-        "estimated_affected_runs": 0,
-        "timestamp": chrono::Utc::now()
-    });
+    let limit = query.limit.unwrap_or(100).min(1000) as i64; // Cap at 1000 for safety
+    let requester = query.requester.unwrap_or_else(|| "admin_api".to_string());
+    
+    // Find runs that match the criteria for rescheduling
+    let mut where_conditions = Vec::new();
+    let mut param_count = 0;
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/api/admin/runs/mass-reschedule",
-    )
+    // Add result code filter
+    if let Some(ref result_code) = query.result_code {
+        param_count += 1;
+        where_conditions.push(format!("result_code = ${}", param_count));
+    }
+
+    // Add campaign filter  
+    if let Some(ref campaign) = query.campaign {
+        param_count += 1;
+        where_conditions.push(format!("suite = ${}", param_count));
+    }
+
+    // Add transient failure filter
+    if !query.include_transient.unwrap_or(false) {
+        where_conditions.push("failure_transient != true OR failure_transient IS NULL".to_string());
+    }
+
+    // Only include finished runs (have finish_time)
+    where_conditions.push("finish_time IS NOT NULL".to_string());
+
+    let where_clause = if where_conditions.is_empty() {
+        "WHERE finish_time IS NOT NULL".to_string()
+    } else {
+        format!("WHERE {}", where_conditions.join(" AND "))
+    };
+
+    // Query to find matching runs
+    let query_sql = format!(
+        "SELECT id FROM run {} ORDER BY finish_time DESC LIMIT {}",
+        where_clause, limit
+    );
+
+    // Build and execute the query manually for better control
+    let mut query_builder = sqlx::query_scalar::<_, String>(&query_sql);
+    
+    // Bind parameters in order
+    if let Some(ref result_code) = query.result_code {
+        query_builder = query_builder.bind(result_code);
+    }
+    if let Some(ref campaign) = query.campaign {
+        query_builder = query_builder.bind(campaign);
+    }
+
+    // Execute the query to get run IDs
+    match query_builder.fetch_all(&app_state.database.pool().clone()).await {
+        Ok(run_ids) => {
+            if run_ids.is_empty() {
+                let result = serde_json::json!({
+                    "action": "mass_reschedule",
+                    "criteria": {
+                        "result_code": query.result_code,
+                        "include_transient": query.include_transient.unwrap_or(false),
+                        "campaign": query.campaign,
+                        "limit": limit,
+                    },
+                    "status": "no_matches",
+                    "message": "No runs found matching the specified criteria",
+                    "affected_runs": 0,
+                    "timestamp": chrono::Utc::now()
+                });
+
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    "/api/admin/runs/mass-reschedule",
+                )
+            } else {
+                // Use database bulk reschedule method
+                match app_state.database.bulk_reschedule_queue_items(&run_ids, &requester).await {
+                    Ok(affected_count) => {
+                        let result = serde_json::json!({
+                            "action": "mass_reschedule",
+                            "criteria": {
+                                "result_code": query.result_code,
+                                "include_transient": query.include_transient.unwrap_or(false),
+                                "campaign": query.campaign,
+                                "limit": limit,
+                            },
+                            "status": "completed",
+                            "message": format!("Successfully rescheduled {} runs", affected_count),
+                            "affected_runs": affected_count,
+                            "run_ids": run_ids,
+                            "requester": requester,
+                            "timestamp": chrono::Utc::now()
+                        });
+
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            "/api/admin/runs/mass-reschedule",
+                        )
+                    }
+                    Err(e) => {
+                        warn!("Database error during mass reschedule: {}", e);
+                        
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("database_error".to_string()),
+                            reason: Some("Failed to reschedule runs".to_string()),
+                            details: Some(serde_json::json!({
+                                "error": e.to_string(),
+                                "run_ids": run_ids,
+                                "criteria": {
+                                    "result_code": query.result_code,
+                                    "campaign": query.campaign,
+                                    "limit": limit,
+                                },
+                                "timestamp": chrono::Utc::now()
+                            })),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, "/api/admin/runs/mass-reschedule")
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Database error querying runs for mass reschedule: {}", e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to query runs for rescheduling".to_string()),
+                details: Some(serde_json::json!({
+                    "error": e.to_string(),
+                    "criteria": {
+                        "result_code": query.result_code,
+                        "campaign": query.campaign,
+                        "limit": limit,
+                    },
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/api/admin/runs/mass-reschedule")
+        }
+    }
 }
 
 /// Reprocess logs for a specific run (admin only)
