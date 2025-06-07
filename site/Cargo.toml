@@ -25,7 +25,7 @@ include_dir = "0.7"
 oauth2 = "4.4"
 jsonwebtoken = "9.0"
 cookie = "0.18"
-axum-extra = { version = "0.9", features = ["cookie"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 
@@ -37,7 +37,7 @@ thiserror = "2.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 utoipa = { version = "4.0", features = ["axum_extras"] }
-utoipa-axum = "0.1"
+utoipa-axum = "0.2"
 validator = { version = "0.18", features = ["derive"] }
 
 # Monitoring & Observability
