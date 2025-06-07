@@ -1984,26 +1984,144 @@ async fn admin_system_metrics(
     )
 )]
 async fn admin_kill_run(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin kill run requested for run: {}", run_id);
 
-    // TODO: Implement actual run killing via runner service
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "kill",
-        "status": "not_implemented",
-        "message": "Run killing requires integration with runner service",
-        "timestamp": chrono::Utc::now()
-    });
+    // First check if the run exists and is active
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Check if run is actually active (no finish time)
+            if run_details.finish_time.timestamp() == 0 {
+                // Try to kill the run via runner service
+                let runner_url = app_state.config.runner_url();
+                if !runner_url.is_empty() {
+                    let kill_url = format!("{}/api/runs/{}/kill", runner_url, run_id);
+                    
+                    let client = reqwest::Client::new();
+                    match client.post(&kill_url)
+                        .header("Content-Type", "application/json")
+                        .json(&serde_json::json!({
+                            "reason": "Administrative kill",
+                            "requester": "admin_api"
+                        }))
+                        .timeout(std::time::Duration::from_secs(30))
+                        .send()
+                        .await
+                    {
+                        Ok(response) => {
+                            let status_code = response.status().as_u16();
+                            let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                            
+                            let result = serde_json::json!({
+                                "run_id": run_id,
+                                "action": "kill",
+                                "status": if status_code == 200 { "killed" } else { "failed" },
+                                "codebase": run_details.codebase,
+                                "campaign": run_details.suite,
+                                "worker": run_details.worker,
+                                "runner_response": {
+                                    "status_code": status_code,
+                                    "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                                        .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                                },
+                                "timestamp": chrono::Utc::now()
+                            });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/admin/runs/{}/kill", run_id),
-    )
+                            negotiate_response(
+                                ApiResponse::success(result),
+                                &headers,
+                                &format!("/api/admin/runs/{}/kill", run_id),
+                            )
+                        }
+                        Err(e) => {
+                            warn!("Failed to connect to runner service for kill: {}", e);
+                            
+                            let error_response = ApiResponse::<serde_json::Value> {
+                                data: None,
+                                error: Some("runner_service_error".to_string()),
+                                reason: Some("Failed to connect to runner service".to_string()),
+                                details: Some(serde_json::json!({
+                                    "run_id": run_id,
+                                    "kill_url": kill_url,
+                                    "error": e.to_string(),
+                                    "timestamp": chrono::Utc::now()
+                                })),
+                                pagination: None,
+                            };
+
+                            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+                        }
+                    }
+                } else {
+                    let result = serde_json::json!({
+                        "run_id": run_id,
+                        "action": "kill",
+                        "status": "no_runner_service",
+                        "message": "Runner service URL not configured",
+                        "codebase": run_details.codebase,
+                        "campaign": run_details.suite,
+                        "timestamp": chrono::Utc::now()
+                    });
+
+                    negotiate_response(
+                        ApiResponse::success(result),
+                        &headers,
+                        &format!("/api/admin/runs/{}/kill", run_id),
+                    )
+                }
+            } else {
+                // Run is already finished
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("run_not_active".to_string()),
+                    reason: Some("Cannot kill a finished run".to_string()),
+                    details: Some(serde_json::json!({
+                        "run_id": run_id,
+                        "result_code": run_details.result_code,
+                        "finish_time": run_details.finish_time,
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+            }
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("not_found".to_string()),
+                reason: Some(format!("Run '{}' not found", run_id)),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to retrieve run details".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "error": e.to_string(),
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+        }
+    }
 }
 
 /// Mass reschedule runs based on criteria (admin only)
