@@ -3456,27 +3456,55 @@ async fn get_codebase(
     )
 )]
 async fn get_codebase_merge_proposals(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(codebase): Path<String>,
     Query(query): Query<CommonQuery>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Codebase {} merge proposals requested", codebase);
 
-    // TODO: Implement actual codebase merge proposal retrieval
-    let proposals: Vec<MergeProposal> = vec![];
-    let pagination = super::types::PaginationInfo::new(
-        Some(0),
-        query.pagination.get_offset(),
-        query.pagination.get_limit(),
-        proposals.len(),
-    );
+    // Get merge proposals for this specific codebase
+    match app_state.database.get_merge_proposals(
+        Some(query.pagination.get_offset()),
+        Some(query.pagination.get_limit()),
+        query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
+        Some(&codebase), // Filter by codebase
+    ).await {
+        Ok(proposals) => {
+            // Get total count for pagination
+            let total_count = match app_state.database.count_merge_proposals(
+                query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
+                Some(&codebase),
+            ).await {
+                Ok(count) => count,
+                Err(e) => {
+                    warn!("Failed to count merge proposals for codebase {}: {}", codebase, e);
+                    proposals.len() as i64
+                }
+            };
+            
+            let pagination = super::types::PaginationInfo::new(
+                Some(total_count),
+                query.pagination.get_offset(),
+                query.pagination.get_limit(),
+                proposals.len(),
+            );
 
-    negotiate_response(
-        ApiResponse::success_with_pagination(proposals, pagination),
-        &headers,
-        &format!("/api/c/{}/merge-proposals", codebase),
-    )
+            negotiate_response(
+                ApiResponse::success_with_pagination(proposals, pagination),
+                &headers,
+                &format!("/api/c/{}/merge-proposals", codebase),
+            )
+        }
+        Err(e) => {
+            warn!("Failed to retrieve merge proposals for codebase {}: {}", codebase, e);
+            negotiate_response(
+                ApiResponse::error_typed("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
+                &headers,
+                &format!("/api/c/{}/merge-proposals", codebase),
+            )
+        }
+    }
 }
 
 /// Get runs for a specific codebase
