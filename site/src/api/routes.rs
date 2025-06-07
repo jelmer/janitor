@@ -3980,24 +3980,161 @@ async fn post_run_update(
     )
 )]
 async fn post_run_reschedule(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Run {} reschedule requested", run_id);
 
-    // TODO: Implement actual run reschedule
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "reschedule",
-        "status": "not_implemented"
-    });
+    // First check if the run exists and get its details
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Check if the run can be rescheduled (should be finished and not successful)
+            if run_details.finish_time.timestamp() > 0 {
+                // Run is finished, can potentially be rescheduled
+                if run_details.result_code.as_ref() == Some(&"success".to_string()) {
+                    let error_response = ApiResponse::<serde_json::Value> {
+                        data: None,
+                        error: Some("cannot_reschedule_success".to_string()),
+                        reason: Some("Successful runs cannot be rescheduled".to_string()),
+                        details: Some(serde_json::json!({
+                            "run_id": run_id,
+                            "result_code": run_details.result_code,
+                            "timestamp": chrono::Utc::now()
+                        })),
+                        pagination: None,
+                    };
+                    negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+                } else {
+                    // Try to communicate with runner service to reschedule
+                    let runner_url = app_state.config.runner_url();
+                    if !runner_url.is_empty() {
+                        let reschedule_url = format!("{}/api/reschedule/{}/{}", 
+                            runner_url, run_details.suite, run_details.codebase);
+                        
+                        let client = reqwest::Client::new();
+                        match client.post(&reschedule_url)
+                            .header("Content-Type", "application/json")
+                            .json(&serde_json::json!({
+                                "run_id": run_id,
+                                "offset": 0, // Add to front of queue
+                                "requester": "site_api"
+                            }))
+                            .timeout(std::time::Duration::from_secs(30))
+                            .send()
+                            .await
+                        {
+                            Ok(response) => {
+                                let status_code = response.status().as_u16();
+                                let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                                
+                                let result = serde_json::json!({
+                                    "run_id": run_id,
+                                    "action": "reschedule",
+                                    "status": if status_code == 200 { "scheduled" } else { "failed" },
+                                    "codebase": run_details.codebase,
+                                    "campaign": run_details.suite,
+                                    "previous_result_code": run_details.result_code,
+                                    "runner_response": {
+                                        "status_code": status_code,
+                                        "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                                            .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                                    },
+                                    "timestamp": chrono::Utc::now()
+                                });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/run/{}/reschedule", run_id),
-    )
+                                negotiate_response(
+                                    ApiResponse::success(result),
+                                    &headers,
+                                    &format!("/api/run/{}/reschedule", run_id),
+                                )
+                            }
+                            Err(e) => {
+                                warn!("Failed to connect to runner service for reschedule: {}", e);
+                                
+                                let error_response = ApiResponse::<serde_json::Value> {
+                                    data: None,
+                                    error: Some("runner_service_error".to_string()),
+                                    reason: Some("Failed to connect to runner service".to_string()),
+                                    details: Some(serde_json::json!({
+                                        "run_id": run_id,
+                                        "runner_url": reschedule_url,
+                                        "error": e.to_string(),
+                                        "timestamp": chrono::Utc::now()
+                                    })),
+                                    pagination: None,
+                                };
+
+                                negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+                            }
+                        }
+                    } else {
+                        let result = serde_json::json!({
+                            "run_id": run_id,
+                            "action": "reschedule",
+                            "status": "no_runner_service",
+                            "codebase": run_details.codebase,
+                            "campaign": run_details.suite,
+                            "message": "Runner service URL not configured",
+                            "timestamp": chrono::Utc::now()
+                        });
+
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            &format!("/api/run/{}/reschedule", run_id),
+                        )
+                    }
+                }
+            } else {
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("run_not_finished".to_string()),
+                    reason: Some("Run is still active and cannot be rescheduled".to_string()),
+                    details: Some(serde_json::json!({
+                        "run_id": run_id,
+                        "start_time": run_details.start_time,
+                        "finish_time": run_details.finish_time,
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+            }
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("not_found".to_string()),
+                reason: Some(format!("Run '{}' not found", run_id)),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to retrieve run details".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "error": e.to_string(),
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+        }
+    }
 }
 
 /// Control run scheduling
@@ -4015,25 +4152,182 @@ async fn post_run_reschedule(
     )
 )]
 async fn post_run_schedule_control(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(run_id): Path<String>,
     headers: HeaderMap,
     query: Query<std::collections::HashMap<String, String>>,
 ) -> impl axum::response::IntoResponse {
     debug!("Run {} schedule control requested", run_id);
 
-    // TODO: Implement actual run schedule control
-    let result = serde_json::json!({
-        "run_id": run_id,
-        "action": "schedule_control",
-        "status": "not_implemented"
-    });
+    // Parse control action from query parameters
+    let action = query.get("action").cloned().unwrap_or_else(|| "status".to_string());
+    let priority = query.get("priority").and_then(|p| p.parse::<i32>().ok());
+    let offset = query.get("offset").and_then(|o| o.parse::<i32>().ok());
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/api/run/{}/schedule-control", run_id),
-    )
+    // Get run details to validate and extract context
+    match app_state.database.get_run_details(&run_id).await {
+        Ok(Some(run_details)) => {
+            // Apply the requested schedule control action
+            match action.as_str() {
+                "pause" => {
+                    // Pause/suspend the run if it's active
+                    if run_details.finish_time.timestamp() == 0 {
+                        // Try to communicate with runner service to pause
+                        let runner_url = app_state.config.runner_url();
+                    if !runner_url.is_empty() {
+                            let pause_url = format!("{}/api/runs/{}/pause", runner_url, run_id);
+                            
+                            let client = reqwest::Client::new();
+                            match client.post(&pause_url)
+                                .timeout(std::time::Duration::from_secs(10))
+                                .send()
+                                .await
+                            {
+                                Ok(response) => {
+                                    let result = serde_json::json!({
+                                        "run_id": run_id,
+                                        "action": "pause",
+                                        "status": if response.status().is_success() { "paused" } else { "failed" },
+                                        "runner_status": response.status().as_u16(),
+                                        "timestamp": chrono::Utc::now()
+                                    });
+
+                                    negotiate_response(
+                                        ApiResponse::success(result),
+                                        &headers,
+                                        &format!("/api/run/{}/schedule-control", run_id),
+                                    )
+                                }
+                                Err(e) => {
+                                    let error_response = ApiResponse::<serde_json::Value> {
+                                        data: None,
+                                        error: Some("runner_service_error".to_string()),
+                                        reason: Some(format!("Failed to pause run: {}", e)),
+                                        details: None,
+                                        pagination: None,
+                                    };
+                                    negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                                }
+                            }
+                        } else {
+                            let result = serde_json::json!({
+                                "run_id": run_id,
+                                "action": "pause",
+                                "status": "no_runner_service",
+                                "message": "Runner service not configured",
+                                "timestamp": chrono::Utc::now()
+                            });
+
+                            negotiate_response(
+                                ApiResponse::success(result),
+                                &headers,
+                                &format!("/api/run/{}/schedule-control", run_id),
+                            )
+                        }
+                    } else {
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("run_finished".to_string()),
+                            reason: Some("Cannot pause a finished run".to_string()),
+                            details: None,
+                            pagination: None,
+                        };
+                        negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                    }
+                }
+                "priority" => {
+                    // Adjust run priority if provided
+                    if let Some(new_priority) = priority {
+                        let result = serde_json::json!({
+                            "run_id": run_id,
+                            "action": "priority",
+                            "status": "not_implemented",
+                            "new_priority": new_priority,
+                            "message": "Priority adjustment requires queue integration",
+                            "timestamp": chrono::Utc::now()
+                        });
+
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            &format!("/api/run/{}/schedule-control", run_id),
+                        )
+                    } else {
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("missing_priority".to_string()),
+                            reason: Some("Priority action requires 'priority' parameter".to_string()),
+                            details: None,
+                            pagination: None,
+                        };
+                        negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                    }
+                }
+                "status" | _ => {
+                    // Return current scheduling status
+                    let queue_position = if run_details.finish_time.timestamp() == 0 {
+                        app_state.database.get_queue_position(&run_details.suite, &run_details.codebase)
+                            .await
+                            .unwrap_or(0)
+                    } else {
+                        0
+                    };
+
+                    let result = serde_json::json!({
+                        "run_id": run_id,
+                        "action": "status",
+                        "status": "retrieved",
+                        "run_status": if run_details.finish_time.timestamp() == 0 { "active" } else { "finished" },
+                        "result_code": run_details.result_code,
+                        "queue_position": queue_position,
+                        "codebase": run_details.codebase,
+                        "campaign": run_details.suite,
+                        "start_time": run_details.start_time,
+                        "finish_time": if run_details.finish_time.timestamp() > 0 { Some(run_details.finish_time) } else { None },
+                        "worker": run_details.worker,
+                        "timestamp": chrono::Utc::now()
+                    });
+
+                    negotiate_response(
+                        ApiResponse::success(result),
+                        &headers,
+                        &format!("/api/run/{}/schedule-control", run_id),
+                    )
+                }
+            }
+        }
+        Ok(None) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("not_found".to_string()),
+                reason: Some(format!("Run '{}' not found", run_id)),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+        }
+        Err(e) => {
+            warn!("Database error retrieving run {}: {}", run_id, e);
+            
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("database_error".to_string()),
+                reason: Some("Failed to retrieve run details".to_string()),
+                details: Some(serde_json::json!({
+                    "run_id": run_id,
+                    "error": e.to_string(),
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+        }
+    }
 }
 
 // ============================================================================
@@ -4330,7 +4624,7 @@ async fn cupboard_worker_details(
     )
 )]
 async fn cupboard_worker_pause(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(worker_id): Path<String>,
     Query(control): Query<WorkerControlQuery>,
     headers: HeaderMap,
@@ -4340,24 +4634,110 @@ async fn cupboard_worker_pause(
         worker_id, control
     );
 
-    // TODO: Implement actual worker pause via runner service
-    let result = serde_json::json!({
-        "worker_id": worker_id,
-        "action": "pause",
-        "status": "not_implemented",
-        "message": "Worker control requires integration with runner service",
-        "parameters": {
-            "reason": control.reason,
-            "force": control.force.unwrap_or(false)
-        },
-        "timestamp": chrono::Utc::now()
-    });
+    // First check if worker exists in the database
+    match app_state.database.get_worker_details(&worker_id).await {
+        Ok(worker_info) => {
+            // Try to communicate with runner service to pause worker
+            let runner_url = app_state.config.runner_url();
+            if !runner_url.is_empty() {
+                let pause_url = format!("{}/api/workers/{}/pause", runner_url, worker_id);
+                
+                let client = reqwest::Client::new();
+                let request_body = serde_json::json!({
+                    "reason": control.reason.clone().unwrap_or_else(|| "Administrative pause".to_string()),
+                    "force": control.force.unwrap_or(false),
+                    "requester": "cupboard_admin"
+                });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/cupboard/workers/{}/pause", worker_id),
-    )
+                match client.post(&pause_url)
+                    .header("Content-Type", "application/json")
+                    .json(&request_body)
+                    .timeout(std::time::Duration::from_secs(30))
+                    .send()
+                    .await
+                {
+                    Ok(response) => {
+                        let status_code = response.status().as_u16();
+                        let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                        
+                        let result = serde_json::json!({
+                            "worker_id": worker_id,
+                            "action": "pause",
+                            "status": if status_code == 200 { "paused" } else { "failed" },
+                            "worker_status": worker_info.get("status").unwrap_or(&serde_json::Value::String("unknown".to_string())),
+                            "assignment_count": worker_info.get("assignment_count").unwrap_or(&serde_json::Value::Number(serde_json::Number::from(0))),
+                            "parameters": {
+                                "reason": control.reason,
+                                "force": control.force.unwrap_or(false)
+                            },
+                            "runner_response": {
+                                "status_code": status_code,
+                                "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                                    .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                            },
+                            "timestamp": chrono::Utc::now()
+                        });
+
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            &format!("/cupboard/workers/{}/pause", worker_id),
+                        )
+                    }
+                    Err(e) => {
+                        warn!("Failed to connect to runner service for worker pause: {}", e);
+                        
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_service_error".to_string()),
+                            reason: Some("Failed to connect to runner service".to_string()),
+                            details: Some(serde_json::json!({
+                                "worker_id": worker_id,
+                                "pause_url": pause_url,
+                                "error": e.to_string(),
+                                "timestamp": chrono::Utc::now()
+                            })),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/pause", worker_id))
+                    }
+                }
+            } else {
+                let result = serde_json::json!({
+                    "worker_id": worker_id,
+                    "action": "pause",
+                    "status": "no_runner_service",
+                    "message": "Runner service URL not configured",
+                    "parameters": {
+                        "reason": control.reason,
+                        "force": control.force.unwrap_or(false)
+                    },
+                    "timestamp": chrono::Utc::now()
+                });
+
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/cupboard/workers/{}/pause", worker_id),
+                )
+            }
+        }
+        Err(e) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("worker_not_found".to_string()),
+                reason: Some(format!("Worker '{}' not found: {}", worker_id, e)),
+                details: Some(serde_json::json!({
+                    "worker_id": worker_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/pause", worker_id))
+        }
+    }
 }
 
 /// Resume a specific worker
@@ -4375,7 +4755,7 @@ async fn cupboard_worker_pause(
     )
 )]
 async fn cupboard_worker_resume(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     Path(worker_id): Path<String>,
     Query(control): Query<WorkerControlQuery>,
     headers: HeaderMap,
@@ -4385,24 +4765,110 @@ async fn cupboard_worker_resume(
         worker_id, control
     );
 
-    // TODO: Implement actual worker resume via runner service
-    let result = serde_json::json!({
-        "worker_id": worker_id,
-        "action": "resume",
-        "status": "not_implemented",
-        "message": "Worker control requires integration with runner service",
-        "parameters": {
-            "reason": control.reason,
-            "force": control.force.unwrap_or(false)
-        },
-        "timestamp": chrono::Utc::now()
-    });
+    // First check if worker exists in the database
+    match app_state.database.get_worker_details(&worker_id).await {
+        Ok(worker_info) => {
+            // Try to communicate with runner service to resume worker
+            let runner_url = app_state.config.runner_url();
+            if !runner_url.is_empty() {
+                let resume_url = format!("{}/api/workers/{}/resume", runner_url, worker_id);
+                
+                let client = reqwest::Client::new();
+                let request_body = serde_json::json!({
+                    "reason": control.reason.clone().unwrap_or_else(|| "Administrative resume".to_string()),
+                    "force": control.force.unwrap_or(false),
+                    "requester": "cupboard_admin"
+                });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        &format!("/cupboard/workers/{}/resume", worker_id),
-    )
+                match client.post(&resume_url)
+                    .header("Content-Type", "application/json")
+                    .json(&request_body)
+                    .timeout(std::time::Duration::from_secs(30))
+                    .send()
+                    .await
+                {
+                    Ok(response) => {
+                        let status_code = response.status().as_u16();
+                        let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                        
+                        let result = serde_json::json!({
+                            "worker_id": worker_id,
+                            "action": "resume",
+                            "status": if status_code == 200 { "resumed" } else { "failed" },
+                            "worker_status": worker_info.get("status").unwrap_or(&serde_json::Value::String("unknown".to_string())),
+                            "assignment_count": worker_info.get("assignment_count").unwrap_or(&serde_json::Value::Number(serde_json::Number::from(0))),
+                            "parameters": {
+                                "reason": control.reason,
+                                "force": control.force.unwrap_or(false)
+                            },
+                            "runner_response": {
+                                "status_code": status_code,
+                                "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                                    .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                            },
+                            "timestamp": chrono::Utc::now()
+                        });
+
+                        negotiate_response(
+                            ApiResponse::success(result),
+                            &headers,
+                            &format!("/cupboard/workers/{}/resume", worker_id),
+                        )
+                    }
+                    Err(e) => {
+                        warn!("Failed to connect to runner service for worker resume: {}", e);
+                        
+                        let error_response = ApiResponse::<serde_json::Value> {
+                            data: None,
+                            error: Some("runner_service_error".to_string()),
+                            reason: Some("Failed to connect to runner service".to_string()),
+                            details: Some(serde_json::json!({
+                                "worker_id": worker_id,
+                                "resume_url": resume_url,
+                                "error": e.to_string(),
+                                "timestamp": chrono::Utc::now()
+                            })),
+                            pagination: None,
+                        };
+
+                        negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/resume", worker_id))
+                    }
+                }
+            } else {
+                let result = serde_json::json!({
+                    "worker_id": worker_id,
+                    "action": "resume",
+                    "status": "no_runner_service",
+                    "message": "Runner service URL not configured",
+                    "parameters": {
+                        "reason": control.reason,
+                        "force": control.force.unwrap_or(false)
+                    },
+                    "timestamp": chrono::Utc::now()
+                });
+
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    &format!("/cupboard/workers/{}/resume", worker_id),
+                )
+            }
+        }
+        Err(e) => {
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some("worker_not_found".to_string()),
+                reason: Some(format!("Worker '{}' not found: {}", worker_id, e)),
+                details: Some(serde_json::json!({
+                    "worker_id": worker_id,
+                    "timestamp": chrono::Utc::now()
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/resume", worker_id))
+        }
+    }
 }
 
 // ============================================================================
