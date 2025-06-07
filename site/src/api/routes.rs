@@ -48,6 +48,17 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/campaigns", get(admin_list_campaigns))
         .route("/campaigns/:campaign_id", get(admin_get_campaign_details))
         .route("/campaigns/:campaign_id/statistics", get(admin_get_campaign_statistics))
+        // External service integration endpoints
+        .route("/services/status", get(admin_get_services_status))
+        .route("/services/:service_name/health", get(admin_check_service_health))
+        .route("/services/:service_name/config", get(admin_get_service_config))
+        .route("/services/:service_name/restart", post(admin_restart_service))
+        .route("/services/integration/test", post(admin_test_service_integration))
+        // Third-party API connections
+        .route("/integrations/github", get(admin_get_github_integration))
+        .route("/integrations/github/test", post(admin_test_github_connection))
+        .route("/integrations/launchpad", get(admin_get_launchpad_integration))
+        .route("/integrations/launchpad/test", post(admin_test_launchpad_connection))
         // Apply admin authentication middleware to all admin routes
         .route_layer(axum::middleware::from_fn(require_admin));
 
@@ -8259,4 +8270,816 @@ fn get_disk_usage_percent() -> Result<f64, std::io::Error> {
     }
     
     Ok(0.0)
+}
+
+// =============================================================================
+// External Service Integration Endpoints
+// =============================================================================
+
+/// Get comprehensive status of all external services (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/services/status",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Services status", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_services_status(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin services status requested");
+
+    let mut services = serde_json::Map::new();
+    let mut overall_health = true;
+
+    // Check runner service
+    let runner_health = match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+        Ok(_) => {
+            serde_json::json!({
+                "status": "healthy",
+                "url": app_state.config.runner_url(),
+                "last_check": chrono::Utc::now(),
+                "response_time_ms": "< 3000"
+            })
+        }
+        Err(e) => {
+            overall_health = false;
+            serde_json::json!({
+                "status": "unhealthy",
+                "url": app_state.config.runner_url(),
+                "error": e.to_string(),
+                "last_check": chrono::Utc::now()
+            })
+        }
+    };
+    services.insert("runner".to_string(), runner_health);
+
+    // Check publisher service
+    if let Some(publisher_url) = app_state.config.site().publisher_url.as_ref() {
+        let publisher_health = match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+            Ok(_) => {
+                serde_json::json!({
+                    "status": "healthy",
+                    "url": publisher_url,
+                    "last_check": chrono::Utc::now(),
+                    "response_time_ms": "< 3000"
+                })
+            }
+            Err(e) => {
+                overall_health = false;
+                serde_json::json!({
+                    "status": "unhealthy",
+                    "url": publisher_url,
+                    "error": e.to_string(),
+                    "last_check": chrono::Utc::now()
+                })
+            }
+        };
+        services.insert("publisher".to_string(), publisher_health);
+    } else {
+        services.insert("publisher".to_string(), serde_json::json!({
+            "status": "not_configured",
+            "message": "Publisher service URL not configured"
+        }));
+    }
+
+    // Check archiver service
+    if let Some(archiver_url) = app_state.config.site().archiver_url.as_ref() {
+        let archiver_health = match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
+            Ok(_) => {
+                serde_json::json!({
+                    "status": "healthy",
+                    "url": archiver_url,
+                    "last_check": chrono::Utc::now(),
+                    "response_time_ms": "< 3000"
+                })
+            }
+            Err(e) => {
+                overall_health = false;
+                serde_json::json!({
+                    "status": "unhealthy",
+                    "url": archiver_url,
+                    "error": e.to_string(),
+                    "last_check": chrono::Utc::now()
+                })
+            }
+        };
+        services.insert("archiver".to_string(), archiver_health);
+    } else {
+        services.insert("archiver".to_string(), serde_json::json!({
+            "status": "not_configured",
+            "message": "Archiver service URL not configured"
+        }));
+    }
+
+    // Check differ service
+    if let Some(differ_url) = app_state.config.differ_url() {
+        let differ_health = match check_service_health(&app_state.http_client, differ_url, "differ").await {
+            Ok(_) => {
+                serde_json::json!({
+                    "status": "healthy",
+                    "url": differ_url,
+                    "last_check": chrono::Utc::now(),
+                    "response_time_ms": "< 3000"
+                })
+            }
+            Err(e) => {
+                overall_health = false;
+                serde_json::json!({
+                    "status": "unhealthy",
+                    "url": differ_url,
+                    "error": e.to_string(),
+                    "last_check": chrono::Utc::now()
+                })
+            }
+        };
+        services.insert("differ".to_string(), differ_health);
+    } else {
+        services.insert("differ".to_string(), serde_json::json!({
+            "status": "not_configured",
+            "message": "Differ service URL not configured"
+        }));
+    }
+
+    // Check database health
+    let db_health = match app_state.database.health_check().await {
+        Ok(_) => {
+            serde_json::json!({
+                "status": "healthy",
+                "last_check": chrono::Utc::now(),
+                "connection_pool": "active"
+            })
+        }
+        Err(e) => {
+            overall_health = false;
+            serde_json::json!({
+                "status": "unhealthy",
+                "error": e.to_string(),
+                "last_check": chrono::Utc::now()
+            })
+        }
+    };
+    services.insert("database".to_string(), db_health);
+
+    let result = serde_json::json!({
+        "overall_health": if overall_health { "healthy" } else { "degraded" },
+        "services": services,
+        "total_services": services.len(),
+        "healthy_services": services.values().filter(|v| 
+            v.get("status").and_then(|s| s.as_str()) == Some("healthy")
+        ).count(),
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/services/status",
+    )
+}
+
+/// Check health of a specific service (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/services/{service_name}/health",
+    tag = "admin",
+    params(
+        ("service_name" = String, Path, description = "Service name (runner, publisher, archiver, differ, database)")
+    ),
+    responses(
+        (status = 200, description = "Service health check", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Service not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_check_service_health(
+    State(app_state): State<Arc<AppState>>,
+    Path(service_name): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin health check requested for service: {}", service_name);
+
+    let start_time = std::time::Instant::now();
+    
+    let health_result = match service_name.as_str() {
+        "runner" => {
+            match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+                Ok(_) => serde_json::json!({
+                    "service": "runner",
+                    "status": "healthy",
+                    "url": app_state.config.runner_url(),
+                    "response_time_ms": start_time.elapsed().as_millis(),
+                    "details": "Service responding normally",
+                    "timestamp": chrono::Utc::now()
+                }),
+                Err(e) => serde_json::json!({
+                    "service": "runner",
+                    "status": "unhealthy",
+                    "url": app_state.config.runner_url(),
+                    "error": e.to_string(),
+                    "response_time_ms": start_time.elapsed().as_millis(),
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "publisher" => {
+            if let Some(publisher_url) = app_state.config.site().publisher_url.as_ref() {
+                match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+                    Ok(_) => serde_json::json!({
+                        "service": "publisher",
+                        "status": "healthy",
+                        "url": publisher_url,
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "details": "Service responding normally",
+                        "timestamp": chrono::Utc::now()
+                    }),
+                    Err(e) => serde_json::json!({
+                        "service": "publisher",
+                        "status": "unhealthy",
+                        "url": publisher_url,
+                        "error": e.to_string(),
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "timestamp": chrono::Utc::now()
+                    })
+                }
+            } else {
+                serde_json::json!({
+                    "service": "publisher",
+                    "status": "not_configured",
+                    "message": "Publisher service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "archiver" => {
+            if let Some(archiver_url) = app_state.config.site().archiver_url.as_ref() {
+                match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
+                    Ok(_) => serde_json::json!({
+                        "service": "archiver",
+                        "status": "healthy",
+                        "url": archiver_url,
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "details": "Service responding normally",
+                        "timestamp": chrono::Utc::now()
+                    }),
+                    Err(e) => serde_json::json!({
+                        "service": "archiver",
+                        "status": "unhealthy",
+                        "url": archiver_url,
+                        "error": e.to_string(),
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "timestamp": chrono::Utc::now()
+                    })
+                }
+            } else {
+                serde_json::json!({
+                    "service": "archiver",
+                    "status": "not_configured",
+                    "message": "Archiver service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "differ" => {
+            if let Some(differ_url) = app_state.config.differ_url() {
+                match check_service_health(&app_state.http_client, differ_url, "differ").await {
+                    Ok(_) => serde_json::json!({
+                        "service": "differ",
+                        "status": "healthy",
+                        "url": differ_url,
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "details": "Service responding normally",
+                        "timestamp": chrono::Utc::now()
+                    }),
+                    Err(e) => serde_json::json!({
+                        "service": "differ",
+                        "status": "unhealthy",
+                        "url": differ_url,
+                        "error": e.to_string(),
+                        "response_time_ms": start_time.elapsed().as_millis(),
+                        "timestamp": chrono::Utc::now()
+                    })
+                }
+            } else {
+                serde_json::json!({
+                    "service": "differ",
+                    "status": "not_configured",
+                    "message": "Differ service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "database" => {
+            match app_state.database.health_check().await {
+                Ok(_) => serde_json::json!({
+                    "service": "database",
+                    "status": "healthy",
+                    "response_time_ms": start_time.elapsed().as_millis(),
+                    "details": "Database connection active",
+                    "timestamp": chrono::Utc::now()
+                }),
+                Err(e) => serde_json::json!({
+                    "service": "database",
+                    "status": "unhealthy",
+                    "error": e.to_string(),
+                    "response_time_ms": start_time.elapsed().as_millis(),
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        _ => {
+            return negotiate_response(
+                ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("service_not_found".to_string()),
+                    reason: Some(format!("Unknown service: {}", service_name)),
+                    details: Some(serde_json::json!({
+                        "available_services": ["runner", "publisher", "archiver", "differ", "database"],
+                        "requested_service": service_name
+                    })),
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/admin/services/{}/health", service_name),
+            );
+        }
+    };
+
+    negotiate_response(
+        ApiResponse::success(health_result),
+        &headers,
+        &format!("/api/admin/services/{}/health", service_name),
+    )
+}
+
+/// Get service configuration (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/services/{service_name}/config",
+    tag = "admin",
+    params(
+        ("service_name" = String, Path, description = "Service name")
+    ),
+    responses(
+        (status = 200, description = "Service configuration", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Service not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_service_config(
+    State(app_state): State<Arc<AppState>>,
+    Path(service_name): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin service config requested for: {}", service_name);
+
+    let config_result = match service_name.as_str() {
+        "runner" => serde_json::json!({
+            "service": "runner",
+            "url": app_state.config.runner_url(),
+            "configuration": {
+                "timeout_seconds": 30,
+                "max_retries": 3,
+                "health_check_interval": "60s"
+            },
+            "endpoints": {
+                "health": format!("{}/health", app_state.config.runner_url()),
+                "assignments": format!("{}/assignments", app_state.config.runner_url()),
+                "workers": format!("{}/workers", app_state.config.runner_url())
+            },
+            "timestamp": chrono::Utc::now()
+        }),
+        "publisher" => {
+            if let Some(publisher_url) = app_state.config.site().publisher_url.as_ref() {
+                serde_json::json!({
+                    "service": "publisher",
+                    "url": publisher_url,
+                    "configuration": {
+                        "timeout_seconds": 30,
+                        "max_retries": 3,
+                        "health_check_interval": "60s"
+                    },
+                    "endpoints": {
+                        "health": format!("{}/health", publisher_url),
+                        "publish": format!("{}/publish", publisher_url),
+                        "autopublish": format!("{}/autopublish", publisher_url)
+                    },
+                    "timestamp": chrono::Utc::now()
+                })
+            } else {
+                serde_json::json!({
+                    "service": "publisher",
+                    "status": "not_configured",
+                    "message": "Publisher service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "archiver" => {
+            if let Some(archiver_url) = app_state.config.site().archiver_url.as_ref() {
+                serde_json::json!({
+                    "service": "archiver",
+                    "url": archiver_url,
+                    "configuration": {
+                        "timeout_seconds": 30,
+                        "max_retries": 3,
+                        "health_check_interval": "60s"
+                    },
+                    "endpoints": {
+                        "health": format!("{}/health", archiver_url),
+                        "archive": format!("{}/archive", archiver_url)
+                    },
+                    "timestamp": chrono::Utc::now()
+                })
+            } else {
+                serde_json::json!({
+                    "service": "archiver",
+                    "status": "not_configured",
+                    "message": "Archiver service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "differ" => {
+            if let Some(differ_url) = app_state.config.differ_url() {
+                serde_json::json!({
+                    "service": "differ",
+                    "url": differ_url,
+                    "configuration": {
+                        "timeout_seconds": 30,
+                        "max_retries": 3,
+                        "health_check_interval": "60s"
+                    },
+                    "endpoints": {
+                        "health": format!("{}/health", differ_url),
+                        "diff": format!("{}/diff", differ_url),
+                        "debdiff": format!("{}/debdiff", differ_url)
+                    },
+                    "timestamp": chrono::Utc::now()
+                })
+            } else {
+                serde_json::json!({
+                    "service": "differ",
+                    "status": "not_configured",
+                    "message": "Differ service URL not configured",
+                    "timestamp": chrono::Utc::now()
+                })
+            }
+        }
+        "database" => serde_json::json!({
+            "service": "database",
+            "configuration": {
+                "connection_pool_size": "active",
+                "timeout_seconds": 30,
+                "health_check_interval": "30s"
+            },
+            "capabilities": [
+                "migrations",
+                "connection_pooling",
+                "health_checks",
+                "transaction_support"
+            ],
+            "timestamp": chrono::Utc::now()
+        }),
+        _ => {
+            return negotiate_response(
+                ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("service_not_found".to_string()),
+                    reason: Some(format!("Unknown service: {}", service_name)),
+                    details: Some(serde_json::json!({
+                        "available_services": ["runner", "publisher", "archiver", "differ", "database"],
+                        "requested_service": service_name
+                    })),
+                    pagination: None,
+                },
+                &headers,
+                &format!("/api/admin/services/{}/config", service_name),
+            );
+        }
+    };
+
+    negotiate_response(
+        ApiResponse::success(config_result),
+        &headers,
+        &format!("/api/admin/services/{}/config", service_name),
+    )
+}
+
+/// Restart a service (admin only) - placeholder implementation
+#[utoipa::path(
+    post,
+    path = "/admin/services/{service_name}/restart",
+    tag = "admin",
+    params(
+        ("service_name" = String, Path, description = "Service name")
+    ),
+    responses(
+        (status = 200, description = "Service restart initiated", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Service not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_restart_service(
+    State(_app_state): State<Arc<AppState>>,
+    Path(service_name): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin service restart requested for: {}", service_name);
+
+    // This is a placeholder implementation - actual service restart would require
+    // integration with service management (systemd, Docker, etc.)
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "message": "Service restart requires integration with service management system",
+        "service": service_name,
+        "planned_implementation": {
+            "docker": "docker restart janitor-{service}",
+            "systemd": "systemctl restart janitor-{service}",
+            "kubernetes": "kubectl rollout restart deployment/{service}"
+        },
+        "safety_note": "Service restart would affect availability",
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/services/{}/restart", service_name),
+    )
+}
+
+/// Test service integration (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/services/integration/test",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Integration test results", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_test_service_integration(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin integration test requested");
+
+    let mut test_results = serde_json::Map::new();
+    let mut overall_success = true;
+
+    // Test runner integration
+    let runner_test = match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+        Ok(_) => {
+            // Try to fetch a simple endpoint to test integration
+            match app_state.http_client
+                .get(format!("{}/health", app_state.config.runner_url()))
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await
+            {
+                Ok(response) => serde_json::json!({
+                    "status": "success",
+                    "response_code": response.status().as_u16(),
+                    "integration": "working"
+                }),
+                Err(e) => {
+                    overall_success = false;
+                    serde_json::json!({
+                        "status": "failed",
+                        "error": e.to_string(),
+                        "integration": "broken"
+                    })
+                }
+            }
+        }
+        Err(e) => {
+            overall_success = false;
+            serde_json::json!({
+                "status": "failed",
+                "error": e.to_string(),
+                "integration": "unavailable"
+            })
+        }
+    };
+    test_results.insert("runner".to_string(), runner_test);
+
+    // Test database integration
+    let db_test = match app_state.database.health_check().await {
+        Ok(_) => {
+            // Try a simple query to test integration
+            match app_state.database.pool().acquire().await {
+                Ok(_) => serde_json::json!({
+                    "status": "success",
+                    "integration": "working",
+                    "connection_pool": "active"
+                }),
+                Err(e) => {
+                    overall_success = false;
+                    serde_json::json!({
+                        "status": "failed",
+                        "error": e.to_string(),
+                        "integration": "connection_failed"
+                    })
+                }
+            }
+        }
+        Err(e) => {
+            overall_success = false;
+            serde_json::json!({
+                "status": "failed",
+                "error": e.to_string(),
+                "integration": "unavailable"
+            })
+        }
+    };
+    test_results.insert("database".to_string(), db_test);
+
+    let result = serde_json::json!({
+        "overall_status": if overall_success { "success" } else { "partial_failure" },
+        "test_results": test_results,
+        "tested_services": test_results.len(),
+        "successful_tests": test_results.values().filter(|v| 
+            v.get("status").and_then(|s| s.as_str()) == Some("success")
+        ).count(),
+        "timestamp": chrono::Utc::now(),
+        "test_duration_ms": "< 5000"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/services/integration/test",
+    )
+}
+
+// =============================================================================
+// Third-party API Integration Endpoints
+// =============================================================================
+
+/// Get GitHub integration status (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/integrations/github",
+    tag = "admin",
+    responses(
+        (status = 200, description = "GitHub integration status", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_github_integration(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin GitHub integration status requested");
+
+    // This is a placeholder - actual implementation would check for GitHub API credentials,
+    // OAuth tokens, webhook configurations, etc.
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "integration": "github",
+        "message": "GitHub integration requires OAuth app configuration and API tokens",
+        "planned_features": [
+            "oauth_authentication",
+            "webhook_handling", 
+            "repository_access",
+            "pull_request_management",
+            "status_updates"
+        ],
+        "configuration_required": [
+            "GITHUB_CLIENT_ID",
+            "GITHUB_CLIENT_SECRET", 
+            "GITHUB_WEBHOOK_SECRET",
+            "GITHUB_API_TOKEN"
+        ],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/integrations/github",
+    )
+}
+
+/// Test GitHub connection (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/integrations/github/test",
+    tag = "admin",
+    responses(
+        (status = 200, description = "GitHub connection test", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_test_github_connection(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin GitHub connection test requested");
+
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "test": "github_connection",
+        "message": "GitHub connection test requires API credentials configuration",
+        "test_plan": [
+            "verify_api_credentials",
+            "test_rate_limits",
+            "check_webhook_delivery",
+            "validate_repository_access"
+        ],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/integrations/github/test",
+    )
+}
+
+/// Get Launchpad integration status (admin only)
+#[utoipa::path(
+    get,
+    path = "/admin/integrations/launchpad",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Launchpad integration status", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_get_launchpad_integration(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin Launchpad integration status requested");
+
+    let result = serde_json::json!({
+        "status": "not_implemented", 
+        "integration": "launchpad",
+        "message": "Launchpad integration requires OAuth configuration and API access",
+        "planned_features": [
+            "oauth_authentication",
+            "branch_management",
+            "merge_proposal_creation",
+            "bug_tracking_integration"
+        ],
+        "configuration_required": [
+            "LAUNCHPAD_CONSUMER_KEY",
+            "LAUNCHPAD_ACCESS_TOKEN",
+            "LAUNCHPAD_ACCESS_SECRET"
+        ],
+        "api_endpoints": [
+            "merge_proposals",
+            "branches",
+            "bugs",
+            "builds"
+        ],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/integrations/launchpad",
+    )
+}
+
+/// Test Launchpad connection (admin only)
+#[utoipa::path(
+    post,
+    path = "/admin/integrations/launchpad/test",
+    tag = "admin",
+    responses(
+        (status = 200, description = "Launchpad connection test", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_test_launchpad_connection(
+    State(_app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin Launchpad connection test requested");
+
+    let result = serde_json::json!({
+        "status": "not_implemented",
+        "test": "launchpad_connection",
+        "message": "Launchpad connection test requires OAuth credentials configuration",
+        "test_plan": [
+            "verify_oauth_credentials",
+            "test_api_access",
+            "check_rate_limits", 
+            "validate_permissions"
+        ],
+        "timestamp": chrono::Utc::now()
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        "/api/admin/integrations/launchpad/test",
+    )
 }

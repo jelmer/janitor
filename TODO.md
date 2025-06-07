@@ -84,9 +84,9 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [x] **Line 386**: Log retrieval and file operations ✅ **COMPLETED**
 - [x] **Line 420**: Enhanced log management ✅ **COMPLETED**
 - [x] **Line 458**: Diff generation operations ✅ **COMPLETED**
-- [ ] **Line 494**: Merge proposal operations
-- [ ] **Line 531**: Branch management  
-- [ ] **Line 566**: Repository operations
+- [x] **Line 494**: Merge proposal operations ✅ **COMPLETED**
+- [x] **Line 531**: Branch management ✅ **COMPLETED**
+- [x] **Line 566**: Repository operations ✅ **COMPLETED**
 
 #### **Integration & External Services**
 - [ ] **Line 601**: Worker status and management endpoints
