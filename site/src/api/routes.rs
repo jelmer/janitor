@@ -2483,24 +2483,84 @@ async fn update_run_analysis(
     )
 )]
 async fn admin_autopublish(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin autopublish scan requested");
 
-    // TODO: Implement actual autopublish trigger
-    let result = serde_json::json!({
-        "action": "autopublish_scan",
-        "status": "not_implemented",
-        "message": "Autopublish scanning requires integration with publisher service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Check if publisher service is configured
+    if let Some(publisher_url) = app_state.config.publisher_url() {
+        let autopublish_url = format!("{}/api/autopublish", publisher_url);
+        
+        let client = reqwest::Client::new();
+        match client.post(&autopublish_url)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "trigger": "admin_manual",
+                "requester": "admin_api"
+            }))
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status_code = response.status().as_u16();
+                let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                
+                let result = serde_json::json!({
+                    "action": "autopublish_scan",
+                    "status": if status_code == 200 { "initiated" } else { "failed" },
+                    "message": if status_code == 200 { 
+                        "Autopublish scan has been initiated" 
+                    } else { 
+                        "Failed to initiate autopublish scan" 
+                    },
+                    "publisher_response": {
+                        "status_code": status_code,
+                        "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                            .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                    },
+                    "timestamp": chrono::Utc::now()
+                });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/api/admin/publish/autopublish",
-    )
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    "/api/admin/publish/autopublish",
+                )
+            }
+            Err(e) => {
+                warn!("Failed to connect to publisher service for autopublish: {}", e);
+                
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("publisher_service_error".to_string()),
+                    reason: Some("Failed to connect to publisher service".to_string()),
+                    details: Some(serde_json::json!({
+                        "autopublish_url": autopublish_url,
+                        "error": e.to_string(),
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, "/api/admin/publish/autopublish")
+            }
+        }
+    } else {
+        let result = serde_json::json!({
+            "action": "autopublish_scan",
+            "status": "no_publisher_service",
+            "message": "Publisher service URL not configured",
+            "timestamp": chrono::Utc::now()
+        });
+
+        negotiate_response(
+            ApiResponse::success(result),
+            &headers,
+            "/api/admin/publish/autopublish",
+        )
+    }
 }
 
 /// Trigger publish scan (admin only)
@@ -2514,24 +2574,85 @@ async fn admin_autopublish(
     )
 )]
 async fn admin_publish_scan(
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
     debug!("Admin publish scan requested");
 
-    // TODO: Implement actual publish scan
-    let result = serde_json::json!({
-        "action": "publish_scan",
-        "status": "not_implemented",
-        "message": "Publish scanning requires integration with publisher service",
-        "timestamp": chrono::Utc::now()
-    });
+    // Check if publisher service is configured
+    if let Some(publisher_url) = app_state.config.publisher_url() {
+        let scan_url = format!("{}/api/publish/scan", publisher_url);
+        
+        let client = reqwest::Client::new();
+        match client.post(&scan_url)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "trigger": "admin_manual",
+                "requester": "admin_api",
+                "rescan": true
+            }))
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status_code = response.status().as_u16();
+                let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
+                
+                let result = serde_json::json!({
+                    "action": "publish_scan",
+                    "status": if status_code == 200 { "initiated" } else { "failed" },
+                    "message": if status_code == 200 { 
+                        "Publish scan has been initiated" 
+                    } else { 
+                        "Failed to initiate publish scan" 
+                    },
+                    "publisher_response": {
+                        "status_code": status_code,
+                        "body": serde_json::from_str::<serde_json::Value>(&response_body)
+                            .unwrap_or_else(|_| serde_json::json!({"raw_body": response_body}))
+                    },
+                    "timestamp": chrono::Utc::now()
+                });
 
-    negotiate_response(
-        ApiResponse::success(result),
-        &headers,
-        "/api/admin/publish/scan",
-    )
+                negotiate_response(
+                    ApiResponse::success(result),
+                    &headers,
+                    "/api/admin/publish/scan",
+                )
+            }
+            Err(e) => {
+                warn!("Failed to connect to publisher service for scan: {}", e);
+                
+                let error_response = ApiResponse::<serde_json::Value> {
+                    data: None,
+                    error: Some("publisher_service_error".to_string()),
+                    reason: Some("Failed to connect to publisher service".to_string()),
+                    details: Some(serde_json::json!({
+                        "scan_url": scan_url,
+                        "error": e.to_string(),
+                        "timestamp": chrono::Utc::now()
+                    })),
+                    pagination: None,
+                };
+
+                negotiate_response(error_response, &headers, "/api/admin/publish/scan")
+            }
+        }
+    } else {
+        let result = serde_json::json!({
+            "action": "publish_scan",
+            "status": "no_publisher_service",
+            "message": "Publisher service URL not configured",
+            "timestamp": chrono::Utc::now()
+        });
+
+        negotiate_response(
+            ApiResponse::success(result),
+            &headers,
+            "/api/admin/publish/scan",
+        )
+    }
 }
 
 /// Get worker information (admin only)
