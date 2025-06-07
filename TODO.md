@@ -21,6 +21,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **System monitoring with real metrics implementation (site/src/api/routes.rs:1811)** ✅ **COMPLETED**
 - **Archive Contents file generation already implemented (archive/src/lib.rs:55)** ✅ **COMPLETED**
 - **Publish service queue frequency and configuration improvements** ✅ **COMPLETED**
+- **Core API endpoints for runs and publishing (site/src/api/routes.rs:509,3431,3653,3684)** ✅ **COMPLETED**
 
 ---
 
@@ -80,9 +81,9 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 
 #### **Data Management**
 - [x] **Line 320**: Active runs retrieval with filtering ✅ **COMPLETED**
-- [ ] **Line 386**: Log retrieval and file operations  
-- [ ] **Line 420**: Enhanced log management
-- [ ] **Line 458**: Diff generation operations
+- [x] **Line 386**: Log retrieval and file operations ✅ **COMPLETED**
+- [x] **Line 420**: Enhanced log management ✅ **COMPLETED**
+- [x] **Line 458**: Diff generation operations ✅ **COMPLETED**
 - [ ] **Line 494**: Merge proposal operations
 - [ ] **Line 531**: Branch management  
 - [ ] **Line 566**: Repository operations
