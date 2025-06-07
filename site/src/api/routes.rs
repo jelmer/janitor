@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
-use tracing::{debug, warn, error};
+use tracing::{debug, warn, error, info};
 use serde_json::json;
 
 use super::{
@@ -2019,9 +2019,10 @@ async fn admin_reprocess_run_logs(
             let database = app_state.database.clone();
             let log_manager = app_state.log_manager.clone();
             let run_id_clone = run_id.clone();
+            let run_details_clone = run_details.clone();
             
             tokio::spawn(async move {
-                match reprocess_run_logs_task(&database, &log_manager, &run_id_clone, &run_details).await {
+                match reprocess_run_logs_task(&database, &log_manager, &run_id_clone, &run_details_clone).await {
                     Ok(_) => {
                         info!("Log reprocessing completed for run {}", run_id_clone);
                     }
