@@ -3988,6 +3988,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serde_yaml",
+ "serial_test",
  "silver-platter",
  "sqlx",
  "sqlx-core",
