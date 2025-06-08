@@ -307,6 +307,11 @@ async fn schedule(
         Some(request.suite.as_str())
     };
 
+    // Convert std::time::Duration to chrono::Duration if present
+    let chrono_duration = request.estimated_duration.map(|d| {
+        chrono::Duration::seconds(d.as_secs() as i64)
+    });
+
     let queue_position = match request.bucket {
         Some(bucket) => {
             match db
@@ -315,7 +320,7 @@ async fn schedule(
                     suite,
                     &bucket,
                     request.refresh,
-                    request.estimated_duration.as_ref(),
+                    chrono_duration.as_ref(),
                     request.offset.unwrap_or(0),
                     request.limit.unwrap_or(100),
                 )
@@ -337,7 +342,7 @@ async fn schedule(
                     &request.campaign,
                     suite,
                     request.refresh,
-                    request.estimated_duration.as_ref(),
+                    chrono_duration.as_ref(),
                     request.offset.unwrap_or(0),
                     request.limit.unwrap_or(100),
                 )
@@ -929,6 +934,13 @@ async fn list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                 worker_status_map.insert(run.worker_name.clone(), "active");
             }
 
+            // Get last seen times for all workers
+            let last_seen_times = state
+                .database
+                .get_workers_last_seen()
+                .await
+                .unwrap_or_default();
+
             // Enhance worker information with status
             let enhanced_workers: Vec<serde_json::Value> = workers
                 .iter()
@@ -938,11 +950,20 @@ async fn list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                         .unwrap_or(&"idle")
                         .to_string();
 
-                    json!({
+                    let last_seen = last_seen_times.get(&worker.name).copied();
+
+                    let mut worker_info = json!({
                         "name": worker.name,
                         "status": status,
                         // Don't expose worker link in public endpoint
-                    })
+                    });
+
+                    // Only include last_seen if we have the data
+                    if let Some(last_seen_time) = last_seen {
+                        worker_info["last_seen"] = json!(last_seen_time);
+                    }
+
+                    worker_info
                 })
                 .collect();
 
@@ -989,27 +1010,50 @@ async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResp
                 worker_status_map.insert(run.worker_name.clone(), "active");
             }
 
+            // Get last seen times for all workers
+            let last_seen_times = state
+                .database
+                .get_workers_last_seen()
+                .await
+                .unwrap_or_default();
+
+            // Get failed workers (not seen in last 30 minutes)
+            let failed_workers = state
+                .database
+                .get_failed_workers(30)
+                .await
+                .unwrap_or_default();
+            let failed_count = failed_workers.len();
+
             // Enhance worker information with status
             let enhanced_workers: Vec<serde_json::Value> = workers
                 .iter()
                 .map(|worker| {
-                    let status = worker_status_map
+                    let status = if failed_workers.contains(&worker.name) {
+                        "failed"
+                    } else if worker_status_map.contains_key(&worker.name) {
+                        "active"
+                    } else {
+                        "idle"
+                    };
+
+                    let last_seen = last_seen_times
                         .get(&worker.name)
-                        .unwrap_or(&"idle")
-                        .to_string();
+                        .copied()
+                        .unwrap_or_else(chrono::Utc::now);
 
                     json!({
                         "name": worker.name,
                         "link": worker.link,
                         "status": status,
-                        "last_seen": chrono::Utc::now(), // TODO: Track actual last seen time
+                        "last_seen": last_seen,
                     })
                 })
                 .collect();
 
             let active_count = worker_status_map.len();
             let total_count = workers.len();
-            let idle_count = total_count - active_count;
+            let idle_count = total_count - active_count - failed_count;
 
             Json(json!({
                 "workers": enhanced_workers,
@@ -1020,7 +1064,7 @@ async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResp
                     "total": total_count,
                     "active": active_count,
                     "idle": idle_count,
-                    "failed": 0 // TODO: Track failed workers
+                    "failed": failed_count
                 },
                 "timestamp": chrono::Utc::now()
             }))
@@ -1722,6 +1766,19 @@ async fn authenticate_worker(
         // Use authenticate_worker which handles both Bearer and Basic auth
         match state.auth_service.authenticate_worker(auth_value).await {
             Ok(worker_auth) => {
+                // Track worker activity
+                if let Err(e) = state
+                    .database
+                    .track_worker_activity(&worker_auth.name)
+                    .await
+                {
+                    log::warn!(
+                        "Failed to track worker activity for {}: {}",
+                        worker_auth.name,
+                        e
+                    );
+                }
+
                 // Add worker name to request extensions
                 req.extensions_mut().insert(worker_auth.name);
                 Ok(next.run(req).await)

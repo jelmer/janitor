@@ -75,7 +75,7 @@ fn test_convert_codemod_script_failed_various_codes() {
 // Tests for serde_json_to_py and py_to_serde_json require PyO3 runtime
 // These would be better as integration tests
 
-#[cfg(feature = "python")]
+#[cfg(feature = "cli")]
 #[test]
 fn test_serde_json_conversions() {
     use pyo3::prelude::*;
@@ -124,7 +124,7 @@ fn test_serde_json_conversions() {
     });
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "cli")]
 #[test]
 fn test_py_to_serde_json_basic() {
     use pyo3::prelude::*;

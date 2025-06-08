@@ -229,12 +229,17 @@ impl AsyncRepository {
             }
 
             // Sort by modification time (newest first)
-            entries.sort_by_key(|entry| {
-                std::time::SystemTime::now() // This is a simplified version
-            });
+            let mut entries_with_metadata = Vec::new();
+            for entry in entries {
+                let metadata = entry.metadata().await?;
+                let modified = metadata.modified()?;
+                entries_with_metadata.push((entry, modified));
+            }
+
+            entries_with_metadata.sort_by(|a, b| b.1.cmp(&a.1));
 
             // Remove old files
-            for entry in entries.iter().skip(keep_count) {
+            for (entry, _) in entries_with_metadata.iter().skip(keep_count) {
                 fs::remove_file(entry.path()).await?;
             }
         }

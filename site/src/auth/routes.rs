@@ -53,9 +53,13 @@ mod tests {
         // This is a placeholder for testing - in real tests we'd need a test database
         let config = SiteConfig::default();
 
-        // For testing, we can't easily create a real SessionManager without a database
-        // This would need to be mocked or use a test database
-        todo!("Implement test auth state creation with proper mocking")
+        // For testing, create a minimal AuthState without database dependencies
+        // In real tests, this would be mocked or use a test database
+        Arc::new(AuthState {
+            state: "test-state".to_string(),
+            redirect_url: Some("/test".to_string()),
+            pkce_verifier: None,
+        })
     }
 
     #[test]

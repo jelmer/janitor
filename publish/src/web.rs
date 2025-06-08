@@ -890,17 +890,30 @@ struct Credentials {
 async fn get_credentials(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mut ssh_keys = vec![];
 
-    let ssh_dir = std::env::home_dir().unwrap().join(".ssh");
+    // Get home directory from HOME environment variable
+    if let Ok(home) = std::env::var("HOME") {
+        let ssh_dir = std::path::PathBuf::from(home).join(".ssh");
 
-    for entry in std::fs::read_dir(ssh_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.extension().unwrap() == "pub" {
-            let f = std::fs::File::open(path).unwrap();
-            use std::io::BufRead;
-            let reader = std::io::BufReader::new(f);
-            let lines = reader.lines();
-            ssh_keys.extend(lines.map(|l| l.unwrap().trim().to_string()));
+        if ssh_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(ssh_dir) {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        if let Some(ext) = path.extension() {
+                            if ext == "pub" {
+                                if let Ok(f) = std::fs::File::open(path) {
+                                    use std::io::BufRead;
+                                    let reader = std::io::BufReader::new(f);
+                                    let lines = reader.lines();
+                                    ssh_keys.extend(
+                                        lines.filter_map(|l| l.ok()).map(|l| l.trim().to_string()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -270,6 +270,7 @@ fn create_symbolic_ref(
     target_ref: &str,
 ) -> Result<(), BrzError> {
     // TODO: Implement symbolic reference creation when PyO3 API stabilizes
+    // See external-todo.md for details on this external dependency
     log::debug!(
         "Symbolic ref creation not yet implemented: {} -> {}",
         symref_name,
@@ -280,6 +281,7 @@ fn create_symbolic_ref(
         symref_name,
         target_ref
     );
+    // Return Ok to allow operations to continue - this is a non-critical feature
     Ok(())
 }
 

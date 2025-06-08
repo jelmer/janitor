@@ -2,11 +2,10 @@
 
 use crate::{ActiveRun, BuilderResult, JanitorResult};
 use breezyshim::RevisionId;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use redis::AsyncCommands;
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
-use std::time::Duration;
 
 // Re-export from main crate
 use crate::{QueueAssignment, QueueItem};
@@ -97,7 +96,7 @@ impl RunnerDatabase {
                     .map(|(name, rev)| (name, Some(RevisionId::from(rev.as_bytes()))))
                     .collect()
             }),
-            remotes: None, // TODO: Add async method to fetch remotes
+            remotes: None, // Use run_to_janitor_result_async() to fetch remotes
             branches: run.result_branches.map(|branches| {
                 branches
                     .into_iter()
@@ -106,13 +105,13 @@ impl RunnerDatabase {
             }),
             failure_details: run.failure_details,
             failure_stage: run.failure_stage.map(|s| vec![s]),
-            resume: None, // TODO: Add async method to fetch resume info
-            target: None, // TODO: Add async method to fetch target
+            resume: None, // Use run_to_janitor_result_async() to fetch resume info
+            target: None, // Use run_to_janitor_result_async() to fetch target
             worker_name: run.worker_name,
             vcs_type: Some(run.vcs_type),
             target_branch_url: run.target_branch_url,
             context: run.context.and_then(|s| serde_json::from_str(&s).ok()),
-            builder_result: None, // TODO: Add async method to fetch builder result
+            builder_result: None, // Use run_to_janitor_result_async() to fetch builder result
         }
     }
 
@@ -1326,7 +1325,7 @@ impl RunnerDatabase {
 
         if let Some(duration) = estimated_duration {
             query.push(", estimated_duration = ");
-            query.push_bind(duration.as_secs() as i64);
+            query.push_bind(duration.num_seconds());
         }
 
         if refresh {
@@ -1366,7 +1365,7 @@ impl RunnerDatabase {
 
         if let Some(duration) = estimated_duration {
             query.push(", estimated_duration = ");
-            query.push_bind(duration.as_secs() as i64);
+            query.push_bind(duration.num_seconds());
         }
 
         if refresh {
@@ -2120,6 +2119,95 @@ pub struct DistributionConfig {
     pub chroot: Option<String>,
     /// Distribution vendor.
     pub vendor: Option<String>,
+}
+
+impl RunnerDatabase {
+    /// Track worker activity by updating last seen time in Redis
+    pub async fn track_worker_activity(
+        &self,
+        worker_name: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(redis) = self.redis() {
+            let mut conn = redis.get_multiplexed_async_connection().await?;
+            let key = format!("worker:last_seen:{}", worker_name);
+            let timestamp = chrono::Utc::now().timestamp();
+            let _: () = redis::cmd("SET")
+                .arg(&key)
+                .arg(timestamp)
+                .arg("EX")
+                .arg(86400) // Expire after 24 hours
+                .query_async(&mut conn)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Get last seen times for all workers
+    pub async fn get_workers_last_seen(
+        &self,
+    ) -> Result<HashMap<String, DateTime<Utc>>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut last_seen_map = HashMap::new();
+
+        if let Some(redis) = self.redis() {
+            let mut conn = redis.get_multiplexed_async_connection().await?;
+
+            // Get all worker last seen keys
+            let keys: Vec<String> = redis::cmd("KEYS")
+                .arg("worker:last_seen:*")
+                .query_async(&mut conn)
+                .await?;
+
+            for key in keys {
+                if let Some(worker_name) = key.strip_prefix("worker:last_seen:") {
+                    let timestamp: Option<i64> =
+                        redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
+
+                    if let Some(ts) = timestamp {
+                        if let Some(datetime) = DateTime::from_timestamp(ts, 0) {
+                            last_seen_map.insert(worker_name.to_string(), datetime);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(last_seen_map)
+    }
+
+    /// Check if a worker is considered failed (not seen for too long)
+    pub async fn get_failed_workers(
+        &self,
+        timeout_minutes: i64,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut failed_workers = Vec::new();
+        let last_seen = self.get_workers_last_seen().await?;
+        let timeout = Duration::minutes(timeout_minutes);
+        let now = Utc::now();
+
+        // Get all known workers
+        let all_workers = sqlx::query("SELECT name FROM worker")
+            .fetch_all(self.pool())
+            .await?;
+
+        for row in all_workers {
+            let worker_name: String = row.get("name");
+
+            // Check if worker has been seen recently
+            match last_seen.get(&worker_name) {
+                Some(last_seen_time) => {
+                    if now.signed_duration_since(*last_seen_time) > timeout {
+                        failed_workers.push(worker_name);
+                    }
+                }
+                None => {
+                    // Worker has never been seen - consider it failed
+                    failed_workers.push(worker_name);
+                }
+            }
+        }
+
+        Ok(failed_workers)
+    }
 }
 
 #[cfg(test)]

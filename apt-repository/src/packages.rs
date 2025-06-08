@@ -122,7 +122,6 @@ impl Package {
                 // New field
                 if let Some(field) = current_field.take() {
                     fields.insert(field, current_value);
-                    current_value = String::new();
                 }
 
                 if let Some((field, value)) = line.split_once(':') {

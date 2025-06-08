@@ -181,7 +181,7 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "cli")]
 pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_json::Value> {
     use pyo3::prelude::*;
     if obj.is_none() {
@@ -215,7 +215,7 @@ pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_
     }
 }
 
-#[cfg(feature = "python")]
+#[cfg(feature = "cli")]
 pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> pyo3::Py<pyo3::PyAny>
 where
     'b: 'a,

@@ -265,8 +265,10 @@ impl GpgConfig {
             std::env::var("GNUPGHOME")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| {
-                    std::env::home_dir()
-                        .unwrap_or_else(|| PathBuf::from("/tmp"))
+                    // Try to get home directory from HOME env var first
+                    std::env::var("HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|_| PathBuf::from("/tmp"))
                         .join(".gnupg")
                 })
         })
