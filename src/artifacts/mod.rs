@@ -101,21 +101,23 @@ pub async fn upload_backup_artifacts(
     artifact_manager: &dyn ArtifactManager,
 ) -> Result<Vec<String>, Error> {
     use futures::stream::{self, StreamExt};
-    
+
     // Process artifacts in parallel with a concurrency limit
     const MAX_CONCURRENT: usize = 3;
-    
+
     let ids: Vec<_> = backup_artifact_manager.iter_ids().await.collect();
-    
+
     let results = stream::iter(ids)
         .map(|id| async move {
-            let result = process_single_backup_artifact(&id, backup_artifact_manager, artifact_manager).await;
+            let result =
+                process_single_backup_artifact(&id, backup_artifact_manager, artifact_manager)
+                    .await;
             (id, result)
         })
         .buffer_unordered(MAX_CONCURRENT)
         .collect::<Vec<_>>()
         .await;
-    
+
     let mut done = vec![];
     for (id, result) in results {
         match result {
@@ -123,7 +125,7 @@ pub async fn upload_backup_artifacts(
             Err(e) => log::warn!("Unable to upload backup artifacts for {}: {}", id, e),
         }
     }
-    
+
     Ok(done)
 }
 

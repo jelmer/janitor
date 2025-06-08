@@ -18,7 +18,7 @@ fn test_app_state_default() {
 fn test_app_state_clone() {
     let mut state = AppState::default();
     state.output_directory = Some(std::path::PathBuf::from("/tmp/output"));
-    
+
     let cloned = state.clone();
     assert_eq!(state.output_directory, cloned.output_directory);
 }
@@ -55,7 +55,10 @@ fn test_convert_codemod_script_failed_killed() {
 fn test_convert_codemod_script_failed_generic() {
     let failure = convert_codemod_script_failed(1, "test-script");
     assert_eq!(failure.code, "command-failed");
-    assert_eq!(failure.description, "Script test-script failed to run with code 1");
+    assert_eq!(
+        failure.description,
+        "Script test-script failed to run with code 1"
+    );
     assert_eq!(failure.stage, vec!["codemod"]);
 }
 
@@ -76,9 +79,9 @@ fn test_convert_codemod_script_failed_various_codes() {
 #[test]
 fn test_serde_json_conversions() {
     use pyo3::prelude::*;
-    
+
     pyo3::prepare_freethreaded_python();
-    
+
     Python::with_gil(|py| {
         // Test null conversion
         let null_val = serde_json::Value::Null;
@@ -111,7 +114,11 @@ fn test_serde_json_conversions() {
         let py_obj = serde_json_to_py(&obj_val);
         let dict = py_obj.bind(py).downcast::<pyo3::types::PyDict>().unwrap();
         assert_eq!(
-            dict.get_item("key").unwrap().unwrap().extract::<String>().unwrap(),
+            dict.get_item("key")
+                .unwrap()
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
             "value"
         );
     });
@@ -121,9 +128,9 @@ fn test_serde_json_conversions() {
 #[test]
 fn test_py_to_serde_json_basic() {
     use pyo3::prelude::*;
-    
+
     pyo3::prepare_freethreaded_python();
-    
+
     Python::with_gil(|py| {
         // Test None
         let py_none = py.None();

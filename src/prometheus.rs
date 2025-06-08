@@ -100,13 +100,13 @@ mod tests {
     #[test]
     fn test_registry_with_multiple_metrics() {
         let registry = Registry::new();
-        
+
         let counter1 = Counter::new("counter_1", "First counter").unwrap();
         let counter2 = Counter::new("counter_2", "Second counter").unwrap();
-        
+
         counter1.inc_by(5.0);
         counter2.inc_by(10.0);
-        
+
         registry.register(Box::new(counter1)).unwrap();
         registry.register(Box::new(counter2)).unwrap();
 

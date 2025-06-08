@@ -149,9 +149,13 @@ impl PublishReadyIterator {
             let role: String = row.get("role");
             let branch = crate::state::UnpublishedBranch {
                 role: role.clone(),
-                revision: row.get::<Option<String>, _>("branch_revision").map(|s| RevisionId::from(s.as_bytes().to_vec())),
+                revision: row
+                    .get::<Option<String>, _>("branch_revision")
+                    .map(|s| RevisionId::from(s.as_bytes().to_vec())),
                 remote_name: row.get("branch_name"),
-                base_revision: row.get::<Option<String>, _>("base_revision").map(|s| RevisionId::from(s.as_bytes().to_vec())),
+                base_revision: row
+                    .get::<Option<String>, _>("base_revision")
+                    .map(|s| RevisionId::from(s.as_bytes().to_vec())),
                 publish_mode: Some("propose".to_string()), // Default mode
                 max_frequency_days: self.get_max_frequency_days(&role).await.unwrap_or(None),
                 name: row.get("branch_name"), // Use remote_name as name
@@ -191,7 +195,7 @@ impl PublishReadyIterator {
             WHERE pp.role = $1
             ORDER BY pp.frequency_days DESC NULLS LAST
             LIMIT 1
-            "#
+            "#,
         )
         .bind(role)
         .fetch_optional(&self.conn)

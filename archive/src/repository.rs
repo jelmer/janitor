@@ -489,8 +489,14 @@ impl RepositoryGenerator {
     ///
     /// Contents files map file paths to the packages that contain them.
     /// This implementation creates basic Contents files for each architecture.
-    async fn generate_contents_files(&self, repo_config: &AptRepositoryConfig) -> ArchiveResult<()> {
-        info!("Generating Contents files for repository: {}", repo_config.name);
+    async fn generate_contents_files(
+        &self,
+        repo_config: &AptRepositoryConfig,
+    ) -> ArchiveResult<()> {
+        info!(
+            "Generating Contents files for repository: {}",
+            repo_config.name
+        );
 
         for component in &repo_config.components {
             for architecture in &repo_config.architectures {
@@ -498,7 +504,8 @@ impl RepositoryGenerator {
                     continue; // Skip source architecture for Contents files
                 }
 
-                let contents_path = repo_config.base_path
+                let contents_path = repo_config
+                    .base_path
                     .join("dists")
                     .join(&repo_config.codename)
                     .join(component)
@@ -509,11 +516,9 @@ impl RepositoryGenerator {
                     contents_path, component, architecture
                 );
 
-                let contents_data = self.generate_contents_data(
-                    &repo_config.suite,
-                    component,
-                    architecture,
-                ).await?;
+                let contents_data = self
+                    .generate_contents_data(&repo_config.suite, component, architecture)
+                    .await?;
 
                 // Ensure the directory exists
                 if let Some(parent) = contents_path.parent() {
@@ -532,11 +537,17 @@ impl RepositoryGenerator {
                 ];
 
                 for compression in &compressions {
-                    let compressed_path = contents_path.with_extension(
-                        format!("{}.{}", contents_path.extension().unwrap_or_default().to_string_lossy(), compression.extension())
-                    );
+                    let compressed_path = contents_path.with_extension(format!(
+                        "{}.{}",
+                        contents_path
+                            .extension()
+                            .unwrap_or_default()
+                            .to_string_lossy(),
+                        compression.extension()
+                    ));
 
-                    let compressed_data = compression.compress(contents_data.as_bytes())
+                    let compressed_data = compression
+                        .compress(contents_data.as_bytes())
                         .map_err(|e| ArchiveError::RepositoryGeneration(e.to_string()))?;
 
                     fs::write(compressed_path, compressed_data)
@@ -563,7 +574,8 @@ impl RepositoryGenerator {
 
         // Get builds for this suite and filter by component
         let all_builds = self.build_manager.get_builds_for_suite(suite).await?;
-        let builds: Vec<_> = all_builds.into_iter()
+        let builds: Vec<_> = all_builds
+            .into_iter()
             .filter(|build| build.component == component)
             .collect();
 
@@ -585,7 +597,10 @@ impl RepositoryGenerator {
                 match package_result {
                     Ok(debian_package) => {
                         // For each package, extract actual file list from .deb package
-                        match self.generate_package_file_list(&debian_package, &build_info).await {
+                        match self
+                            .generate_package_file_list(&debian_package, &build_info)
+                            .await
+                        {
                             Ok(package_files) => {
                                 for file_path in package_files {
                                     contents_entries.push(format!(
@@ -596,7 +611,10 @@ impl RepositoryGenerator {
                                 }
                             }
                             Err(e) => {
-                                warn!("Failed to extract file list for package {}: {}", debian_package.name, e);
+                                warn!(
+                                    "Failed to extract file list for package {}: {}",
+                                    debian_package.name, e
+                                );
                                 continue;
                             }
                         }
@@ -629,12 +647,15 @@ impl RepositoryGenerator {
     /// Extract the actual file list from a Debian package.
     ///
     /// This uses dpkg-deb to extract the file list from the .deb package.
-    async fn generate_package_file_list(&self, package: &DebianPackage, build_info: &crate::scanner::BuildInfo) -> ArchiveResult<Vec<String>> {
+    async fn generate_package_file_list(
+        &self,
+        package: &DebianPackage,
+        build_info: &crate::scanner::BuildInfo,
+    ) -> ArchiveResult<Vec<String>> {
         // First, we need to find the actual .deb file for this package
-        let deb_filename = format!("{}_{}_{}.deb", 
-            package.name, 
-            package.version, 
-            package.architecture
+        let deb_filename = format!(
+            "{}_{}_{}.deb",
+            package.name, package.version, package.architecture
         );
 
         // Get the .deb file from artifacts
@@ -648,29 +669,33 @@ impl RepositoryGenerator {
 
         // Download the specific .deb file
         let deb_path = temp_path.join(&deb_filename);
-        
+
         // Try to get the .deb file from artifacts
-        match artifact_manager.get_artifact(&build_info.id, &deb_filename).await {
+        match artifact_manager
+            .get_artifact(&build_info.id, &deb_filename)
+            .await
+        {
             Ok(mut reader) => {
                 // Write the artifact data to the temp file
                 let mut file = tokio::fs::File::create(&deb_path)
                     .await
                     .map_err(ArchiveError::Io)?;
-                
+
                 // Copy from reader to file
                 let mut buffer = Vec::new();
                 std::io::Read::read_to_end(&mut *reader, &mut buffer)
                     .map_err(|e| ArchiveError::ArtifactRetrieval(e.to_string()))?;
-                
-                file.write_all(&buffer)
-                    .await
-                    .map_err(ArchiveError::Io)?;
-                
+
+                file.write_all(&buffer).await.map_err(ArchiveError::Io)?;
+
                 // Extract file list using dpkg-deb
                 self.extract_file_list_from_deb(&deb_path).await
             }
             Err(janitor::artifacts::Error::ArtifactsMissing) => {
-                debug!("Package file {} not found in artifacts for build {}", deb_filename, build_info.id);
+                debug!(
+                    "Package file {} not found in artifacts for build {}",
+                    deb_filename, build_info.id
+                );
                 Ok(vec![]) // Return empty list if package not found
             }
             Err(e) => {
@@ -681,7 +706,10 @@ impl RepositoryGenerator {
     }
 
     /// Extract file list from a .deb package using dpkg-deb.
-    async fn extract_file_list_from_deb(&self, deb_path: &std::path::Path) -> ArchiveResult<Vec<String>> {
+    async fn extract_file_list_from_deb(
+        &self,
+        deb_path: &std::path::Path,
+    ) -> ArchiveResult<Vec<String>> {
         use tokio::process::Command;
 
         debug!("Extracting file list from: {:?}", deb_path);
@@ -697,7 +725,8 @@ impl RepositoryGenerator {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ArchiveError::PackageScanning(format!(
-                "dpkg-deb failed: {}", stderr
+                "dpkg-deb failed: {}",
+                stderr
             )));
         }
 
@@ -728,7 +757,7 @@ impl RepositoryGenerator {
         // dpkg-deb -c output format:
         // drwxr-xr-x root/root         0 2023-01-01 12:00 ./path/to/file
         let parts: Vec<&str> = line.split_whitespace().collect();
-        
+
         if parts.len() >= 6 {
             // The path is the last part (or parts if it contains spaces)
             let path_start_idx = parts.len() - 1;

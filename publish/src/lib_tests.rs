@@ -56,7 +56,7 @@ fn test_calculate_next_try_time_exponential_backoff() {
 #[test]
 fn test_debdiff_error_display() {
     // Skip testing HTTP error as creating a reqwest::Error requires complex setup
-    
+
     let err = DebdiffError::MissingRun("run-123".to_string());
     assert_eq!(err.to_string(), "Missing run: run-123");
 
@@ -124,7 +124,10 @@ fn test_publish_error_display() {
     );
 
     let err = PublishError::NothingToDo("Nothing to do".to_string());
-    assert_eq!(err.to_string(), "PublishError::PublishNothingToDo: Nothing to do");
+    assert_eq!(
+        err.to_string(),
+        "PublishError::PublishNothingToDo: Nothing to do"
+    );
 
     let err = PublishError::BranchBusy(url::Url::parse("https://example.com").unwrap());
     assert_eq!(
@@ -161,7 +164,7 @@ fn test_role_branch_url_without_branch_name() {
 fn test_role_branch_url_with_branch_name() {
     let base_url = url::Url::parse("https://example.com/repo").unwrap();
     let result = role_branch_url(&base_url, Some("feature-branch"));
-    
+
     // Should add branch parameter
     assert!(result.to_string().contains("branch="));
     assert!(result.to_string().contains("feature-branch"));
@@ -171,7 +174,7 @@ fn test_role_branch_url_with_branch_name() {
 fn test_role_branch_url_with_special_characters() {
     let base_url = url::Url::parse("https://example.com/repo").unwrap();
     let result = role_branch_url(&base_url, Some("feature/branch-name"));
-    
+
     // Should properly escape special characters
     let result_str = result.to_string();
     assert!(result_str.contains("branch="));
@@ -185,10 +188,12 @@ fn test_role_branch_url_with_special_characters() {
 
 #[test]
 fn test_check_mp_error_display() {
-    let err = CheckMpError::NoRunForMergeProposal(
-        url::Url::parse("https://example.com/mp/1").unwrap()
+    let err =
+        CheckMpError::NoRunForMergeProposal(url::Url::parse("https://example.com/mp/1").unwrap());
+    assert_eq!(
+        err.to_string(),
+        "No run for merge proposal: https://example.com/mp/1"
     );
-    assert_eq!(err.to_string(), "No run for merge proposal: https://example.com/mp/1");
 
     let err = CheckMpError::BranchRateLimited { retry_after: None };
     assert_eq!(err.to_string(), "Branch is rate limited");

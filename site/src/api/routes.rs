@@ -1,15 +1,15 @@
 use axum::{
-    extract::{Path, Query, State, Json},
+    extract::{Json, Path, Query, State},
     http::HeaderMap,
     response::Json as ResponseJson,
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Router,
 };
-use std::sync::Arc;
-use tracing::{debug, warn, error, info};
-use serde_json::json;
 use serde::Deserialize;
+use serde_json::json;
 use sqlx::Row;
+use std::sync::Arc;
+use tracing::{debug, error, info, warn};
 
 use super::{
     content_negotiation::{negotiate_response, ContentType},
@@ -39,7 +39,10 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/workers", get(admin_get_workers))
         .route("/workers/:worker_id", get(admin_get_worker_details))
         .route("/workers/:worker_id/tasks", get(admin_get_worker_tasks))
-        .route("/workers/:worker_id/tasks/:task_id", delete(admin_cancel_worker_task))
+        .route(
+            "/workers/:worker_id/tasks/:task_id",
+            delete(admin_cancel_worker_task),
+        )
         // User management endpoints (read-only for now due to axum version conflicts)
         .route("/users", get(admin_list_users))
         .route("/users/:user_id", get(admin_get_user_details))
@@ -47,18 +50,42 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         // Campaign management endpoints
         .route("/campaigns", get(admin_list_campaigns))
         .route("/campaigns/:campaign_id", get(admin_get_campaign_details))
-        .route("/campaigns/:campaign_id/statistics", get(admin_get_campaign_statistics))
+        .route(
+            "/campaigns/:campaign_id/statistics",
+            get(admin_get_campaign_statistics),
+        )
         // External service integration endpoints
         .route("/services/status", get(admin_get_services_status))
-        .route("/services/:service_name/health", get(admin_check_service_health))
-        .route("/services/:service_name/config", get(admin_get_service_config))
-        .route("/services/:service_name/restart", post(admin_restart_service))
-        .route("/services/integration/test", post(admin_test_service_integration))
+        .route(
+            "/services/:service_name/health",
+            get(admin_check_service_health),
+        )
+        .route(
+            "/services/:service_name/config",
+            get(admin_get_service_config),
+        )
+        .route(
+            "/services/:service_name/restart",
+            post(admin_restart_service),
+        )
+        .route(
+            "/services/integration/test",
+            post(admin_test_service_integration),
+        )
         // Third-party API connections
         .route("/integrations/github", get(admin_get_github_integration))
-        .route("/integrations/github/test", post(admin_test_github_connection))
-        .route("/integrations/launchpad", get(admin_get_launchpad_integration))
-        .route("/integrations/launchpad/test", post(admin_test_launchpad_connection))
+        .route(
+            "/integrations/github/test",
+            post(admin_test_github_connection),
+        )
+        .route(
+            "/integrations/launchpad",
+            get(admin_get_launchpad_integration),
+        )
+        .route(
+            "/integrations/launchpad/test",
+            post(admin_test_launchpad_connection),
+        )
         // Apply admin authentication middleware to all admin routes
         .route_layer(axum::middleware::from_fn(require_admin));
 
@@ -179,17 +206,32 @@ pub fn create_cupboard_api_router() -> Router<Arc<AppState>> {
         .route("/reviews/verdicts", get(cupboard_reviews_verdicts))
         // VCS and merge proposal management
         .route("/merge-proposals", get(cupboard_merge_proposals_overview))
-        .route("/merge-proposals/create", post(cupboard_create_merge_proposal))
-        .route("/merge-proposals/:proposal_id/status", post(cupboard_update_merge_proposal_status))
-        .route("/merge-proposals/:proposal_id/merge", post(cupboard_merge_proposal))
+        .route(
+            "/merge-proposals/create",
+            post(cupboard_create_merge_proposal),
+        )
+        .route(
+            "/merge-proposals/:proposal_id/status",
+            post(cupboard_update_merge_proposal_status),
+        )
+        .route(
+            "/merge-proposals/:proposal_id/merge",
+            post(cupboard_merge_proposal),
+        )
         // Branch management
         .route("/branches", get(cupboard_branches_overview))
         .route("/branches/:branch_id/delete", post(cupboard_delete_branch))
         .route("/branches/cleanup", post(cupboard_cleanup_branches))
         // Repository management
         .route("/repositories", get(cupboard_repositories_overview))
-        .route("/repositories/:repo_id/sync", post(cupboard_sync_repository))
-        .route("/repositories/:repo_id/status", get(cupboard_repository_status))
+        .route(
+            "/repositories/:repo_id/sync",
+            post(cupboard_sync_repository),
+        )
+        .route(
+            "/repositories/:repo_id/status",
+            get(cupboard_repository_status),
+        )
         // Apply middleware
         .layer(axum::middleware::from_fn(cors_middleware))
         .layer(axum::middleware::from_fn(metrics_middleware))
@@ -239,16 +281,14 @@ async fn health_check(
     // Check Redis connectivity if available
     if let Some(ref redis_client) = app_state.redis {
         match redis_client.get_multiplexed_async_connection().await {
-            Ok(mut conn) => {
-                match redis::cmd("PING").query_async::<String>(&mut conn).await {
-                    Ok(_) => {
-                        services.insert("redis", "healthy");
-                    }
-                    Err(_) => {
-                        services.insert("redis", "unhealthy");
-                    }
+            Ok(mut conn) => match redis::cmd("PING").query_async::<String>(&mut conn).await {
+                Ok(_) => {
+                    services.insert("redis", "healthy");
                 }
-            }
+                Err(_) => {
+                    services.insert("redis", "unhealthy");
+                }
+            },
             Err(_) => {
                 services.insert("redis", "unhealthy");
             }
@@ -320,7 +360,11 @@ async fn get_queue_status(
                 total_candidates: *stats.get("total_codebases").unwrap_or(&0),
                 pending_candidates: *stats.get("queue_size").unwrap_or(&0),
                 active_runs: *stats.get("active_runs").unwrap_or(&0),
-                campaigns: app_state.database.get_campaign_status_list().await.unwrap_or_default(),
+                campaigns: app_state
+                    .database
+                    .get_campaign_status_list()
+                    .await
+                    .unwrap_or_default(),
             };
 
             // Enhanced response with additional statistics if requested
@@ -381,7 +425,7 @@ async fn get_active_runs(
     // Get active runs from the runner service
     let runner_url = app_state.config.runner_url();
     let active_runs_url = format!("{}/active-runs", runner_url.trim_end_matches('/'));
-    
+
     let result = match app_state.http_client.get(&active_runs_url).send().await {
         Ok(response) => {
             if response.status().is_success() {
@@ -389,7 +433,7 @@ async fn get_active_runs(
                     Ok(runner_data) => {
                         // Convert runner response to our Run format
                         let mut runs: Vec<Run> = Vec::new();
-                        
+
                         for run_data in runner_data {
                             if let Ok(run) = convert_runner_active_run_to_api_run(run_data) {
                                 // Apply filtering if specified
@@ -408,18 +452,18 @@ async fn get_active_runs(
                                 runs.push(run);
                             }
                         }
-                        
+
                         // Apply pagination
                         let total_count = runs.len();
                         let offset = query.pagination.get_offset();
                         let limit = query.pagination.get_limit();
-                        
+
                         let paginated_runs = runs
                             .into_iter()
                             .skip(offset as usize)
                             .take(limit as usize)
                             .collect::<Vec<_>>();
-                        
+
                         let pagination = super::types::PaginationInfo::new(
                             Some(total_count as i64),
                             offset,
@@ -452,7 +496,10 @@ async fn get_active_runs(
             }
         }
         Err(e) => {
-            error!("Failed to connect to runner service at {}: {}", active_runs_url, e);
+            error!(
+                "Failed to connect to runner service at {}: {}",
+                active_runs_url, e
+            );
             ApiResponse {
                 data: None,
                 error: Some("Failed to connect to runner service".to_string()),
@@ -467,33 +514,42 @@ async fn get_active_runs(
 }
 
 /// Convert runner ActiveRun JSON to API Run format
-fn convert_runner_active_run_to_api_run(run_data: serde_json::Value) -> Result<Run, Box<dyn std::error::Error>> {
+fn convert_runner_active_run_to_api_run(
+    run_data: serde_json::Value,
+) -> Result<Run, Box<dyn std::error::Error>> {
     let run_id = run_data["id"].as_str().unwrap_or_default().to_string();
-    let campaign = run_data["campaign"].as_str().unwrap_or_default().to_string();
-    let codebase = run_data["codebase"].as_str().unwrap_or_default().to_string();
+    let campaign = run_data["campaign"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let codebase = run_data["codebase"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     let command = run_data["command"].as_str().unwrap_or_default().to_string();
-    
+
     // Parse start time
-    let start_time = run_data["start_time"].as_str()
+    let start_time = run_data["start_time"]
+        .as_str()
         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
         .map(|dt| dt.with_timezone(&chrono::Utc));
-    
-    // Extract VCS info 
+
+    // Extract VCS info
     let vcs_info = &run_data["vcs"];
     let vcs_type = vcs_info["vcs_type"].as_str().map(|s| s.to_string());
     let branch_url = vcs_info["branch_url"].as_str().map(|s| s.to_string());
     let subpath = vcs_info["subpath"].as_str().map(|s| s.to_string());
-    
+
     // Extract worker info
     let worker_name = run_data["worker"].as_str().map(|s| s.to_string());
-    
+
     Ok(Run {
         run_id,
         start_time,
         finish_time: None, // Active runs haven't finished yet
         command,
         description: Some(format!("Active run on {}", codebase)),
-        build_info: None, // Active runs don't have build results yet
+        build_info: None,  // Active runs don't have build results yet
         result_code: None, // Active runs don't have results yet
         main_branch_revision: None,
         revision: None,
@@ -508,11 +564,11 @@ fn convert_runner_active_run_to_api_run(run_data: serde_json::Value) -> Result<R
         logfilenames: vec![], // Active runs may not have logs yet
         worker_name,
         result_branches: vec![], // Active runs don't have result branches yet
-        result_tags: vec![], // Active runs don't have result tags yet
+        result_tags: vec![],     // Active runs don't have result tags yet
         target_branch_url: None,
         change_set: run_data["change_set"].as_str().map(|s| s.to_string()),
         failure_transient: None, // Active runs haven't failed yet
-        failure_stage: None, // Active runs haven't failed yet
+        failure_stage: None,     // Active runs haven't failed yet
         codebase,
         campaign,
         subpath,
@@ -543,13 +599,19 @@ async fn get_active_run(
     match app_state.database.get_run_details(&run_id).await {
         Ok(Some(run_details)) => {
             // Check if this run is actually active (no result code or result indicates running)
-            if run_details.result_code.is_some() && run_details.result_code.as_ref().unwrap() != "running" {
+            if run_details.result_code.is_some()
+                && run_details.result_code.as_ref().unwrap() != "running"
+            {
                 // Run is finished, not active
                 let error_response = ApiResponse::<Run>::error_typed(
                     format!("Run {} is not active (already finished)", run_id),
                     Some("NOT_ACTIVE".to_string()),
                 );
-                negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/active-runs/{}", run_id),
+                )
             } else {
                 // Convert RunDetails to Run schema for API response
                 let suite_name = run_details.suite.clone(); // Clone the suite name to use in multiple places
@@ -572,7 +634,7 @@ async fn get_active_run(
                     result_branches: vec![], // Would need to be converted from run_details.result_branches
                     result_tags: vec![], // Would need to be converted from run_details.result_tags
                     target_branch_url: None, // Would need to be derived from other data
-                    change_set: None, // Would need to be derived from other data
+                    change_set: None,    // Would need to be derived from other data
                     failure_transient: None, // Would need to be derived from other data
                     failure_stage: run_details.failure_stage,
                     codebase: run_details.codebase,
@@ -592,7 +654,11 @@ async fn get_active_run(
                 format!("Run {} not found", run_id),
                 Some("NOT_FOUND".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/active-runs/{}", run_id),
+            )
         }
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
@@ -600,7 +666,11 @@ async fn get_active_run(
                 "Database error".to_string(),
                 Some("DATABASE_ERROR".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/api/active-runs/{}", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/active-runs/{}", run_id),
+            )
         }
     }
 }
@@ -649,15 +719,20 @@ async fn get_run_logs(
     // For each log filename, check if it exists and get metadata
     let mut logs = Vec::new();
     for filename in log_filenames {
-        match app_state.log_manager.has_log(&run_details.codebase, &run_id, &filename).await {
+        match app_state
+            .log_manager
+            .has_log(&run_details.codebase, &run_id, &filename)
+            .await
+        {
             Ok(exists) => {
                 if exists {
                     // Get log creation time if available
-                    let creation_time = app_state.log_manager
+                    let creation_time = app_state
+                        .log_manager
                         .get_ctime(&run_details.codebase, &run_id, &filename)
                         .await
                         .unwrap_or_else(|_| chrono::Utc::now());
-                    
+
                     logs.push(serde_json::json!({
                         "filename": filename,
                         "exists": true,
@@ -673,7 +748,10 @@ async fn get_run_logs(
                 }
             }
             Err(e) => {
-                warn!("Failed to check log existence for {}/{}: {}", run_id, filename, e);
+                warn!(
+                    "Failed to check log existence for {}/{}: {}",
+                    run_id, filename, e
+                );
                 logs.push(serde_json::json!({
                     "filename": filename,
                     "exists": false,
@@ -738,7 +816,11 @@ async fn get_run_log_file(
     };
 
     // Retrieve the actual log file content
-    match app_state.log_manager.get_log(&run_details.codebase, &run_id, &filename).await {
+    match app_state
+        .log_manager
+        .get_log(&run_details.codebase, &run_id, &filename)
+        .await
+    {
         Ok(mut reader) => {
             // Read the log content
             let mut content = String::new();
@@ -748,7 +830,9 @@ async fn get_run_log_file(
                     let is_text_request = headers
                         .get("accept")
                         .and_then(|h| h.to_str().ok())
-                        .map(|accept| accept.contains("text/") || accept.contains("application/json"))
+                        .map(|accept| {
+                            accept.contains("text/") || accept.contains("application/json")
+                        })
                         .unwrap_or(true);
 
                     if is_text_request || filename.ends_with(".log") || filename.ends_with(".txt") {
@@ -781,7 +865,10 @@ async fn get_run_log_file(
                     }
                 }
                 Err(e) => {
-                    error!("Failed to read log content for {}/{}: {}", run_id, filename, e);
+                    error!(
+                        "Failed to read log content for {}/{}: {}",
+                        run_id, filename, e
+                    );
                     negotiate_response(
                         ApiResponse {
                             data: None,
@@ -796,45 +883,39 @@ async fn get_run_log_file(
                 }
             }
         }
-        Err(janitor::logs::Error::NotFound) => {
-            negotiate_response(
-                ApiResponse {
-                    data: None,
-                    error: Some("Log file not found".to_string()),
-                    reason: Some("LOG_NOT_FOUND".to_string()),
-                    details: None,
-                    pagination: None,
-                },
-                &headers,
-                &format!("/api/active-runs/{}/log/{}", run_id, filename),
-            )
-        }
-        Err(janitor::logs::Error::PermissionDenied) => {
-            negotiate_response(
-                ApiResponse {
-                    data: None,
-                    error: Some("Access denied to log file".to_string()),
-                    reason: Some("ACCESS_DENIED".to_string()),
-                    details: None,
-                    pagination: None,
-                },
-                &headers,
-                &format!("/api/active-runs/{}/log/{}", run_id, filename),
-            )
-        }
-        Err(janitor::logs::Error::ServiceUnavailable) => {
-            negotiate_response(
-                ApiResponse {
-                    data: None,
-                    error: Some("Log storage service unavailable".to_string()),
-                    reason: Some("SERVICE_UNAVAILABLE".to_string()),
-                    details: None,
-                    pagination: None,
-                },
-                &headers,
-                &format!("/api/active-runs/{}/log/{}", run_id, filename),
-            )
-        }
+        Err(janitor::logs::Error::NotFound) => negotiate_response(
+            ApiResponse {
+                data: None,
+                error: Some("Log file not found".to_string()),
+                reason: Some("LOG_NOT_FOUND".to_string()),
+                details: None,
+                pagination: None,
+            },
+            &headers,
+            &format!("/api/active-runs/{}/log/{}", run_id, filename),
+        ),
+        Err(janitor::logs::Error::PermissionDenied) => negotiate_response(
+            ApiResponse {
+                data: None,
+                error: Some("Access denied to log file".to_string()),
+                reason: Some("ACCESS_DENIED".to_string()),
+                details: None,
+                pagination: None,
+            },
+            &headers,
+            &format!("/api/active-runs/{}/log/{}", run_id, filename),
+        ),
+        Err(janitor::logs::Error::ServiceUnavailable) => negotiate_response(
+            ApiResponse {
+                data: None,
+                error: Some("Log storage service unavailable".to_string()),
+                reason: Some("SERVICE_UNAVAILABLE".to_string()),
+                details: None,
+                pagination: None,
+            },
+            &headers,
+            &format!("/api/active-runs/{}/log/{}", run_id, filename),
+        ),
         Err(e) => {
             error!("Failed to retrieve log {}/{}: {}", run_id, filename, e);
             negotiate_response(
@@ -879,14 +960,16 @@ async fn get_run_diff(
     match app_state.database.get_run_details(&run_id).await {
         Ok(Some(run_details)) => {
             // If we have revision info, try to get diff from VCS
-            if let (Some(main_rev), Some(result_rev)) = (&run_details.main_branch_revision, &run_details.revision) {
+            if let (Some(main_rev), Some(result_rev)) =
+                (&run_details.main_branch_revision, &run_details.revision)
+            {
                 // For now, create a simplified diff representation
                 // In a full implementation, this would integrate with the git-store or bzr-store services
                 let diff_content = format!(
                     "--- Changes for run {}\n+++ Result revision {}\n@@ Changes between {} and {} @@\n",
                     run_id, result_rev, main_rev, result_rev
                 );
-                
+
                 negotiate_response(
                     ApiResponse::success(serde_json::json!({
                         "run_id": run_id,
@@ -904,7 +987,10 @@ async fn get_run_diff(
             } else {
                 warn!("No revision information available for run {}", run_id);
                 negotiate_response(
-                    ApiResponse::error_typed("No diff available - missing revision information".to_string(), Some("MISSING_REVISION".to_string())),
+                    ApiResponse::error_typed(
+                        "No diff available - missing revision information".to_string(),
+                        Some("MISSING_REVISION".to_string()),
+                    ),
                     &headers,
                     &format!("/api/run/{}/diff", run_id),
                 )
@@ -913,7 +999,10 @@ async fn get_run_diff(
         Ok(None) => {
             warn!("Run not found: {}", run_id);
             negotiate_response(
-                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+                ApiResponse::error_typed(
+                    "Run not found".to_string(),
+                    Some("NOT_FOUND".to_string()),
+                ),
                 &headers,
                 &format!("/api/run/{}/diff", run_id),
             )
@@ -921,7 +1010,10 @@ async fn get_run_diff(
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed(
+                    "Database error".to_string(),
+                    Some("DATABASE_ERROR".to_string()),
+                ),
                 &headers,
                 &format!("/api/run/{}/diff", run_id),
             )
@@ -955,14 +1047,22 @@ async fn get_run_debdiff(
     match app_state.database.get_run_details(&run_id).await {
         Ok(Some(run_details)) => {
             // Check if this run has Debian package artifacts for debdiff
-            if run_details.logfilenames.iter().any(|log| log.contains("build.log")) {
+            if run_details
+                .logfilenames
+                .iter()
+                .any(|log| log.contains("build.log"))
+            {
                 // In a full implementation, this would call the differ service
                 // to generate debdiff between old and new .deb files
-                let debdiff_url = format!("{}/api/debdiff/{}", 
-                    app_state.config.differ_url().unwrap_or("http://localhost:9920"),
+                let debdiff_url = format!(
+                    "{}/api/debdiff/{}",
+                    app_state
+                        .config
+                        .differ_url()
+                        .unwrap_or("http://localhost:9920"),
                     run_id
                 );
-                
+
                 // For now, return a placeholder with the information we have
                 let debdiff_content = format!(
                     "Debdiff for run {}\n\
@@ -970,7 +1070,7 @@ async fn get_run_debdiff(
                      Use differ service at: {}\n",
                     run_id, run_details.logfilenames, debdiff_url
                 );
-                
+
                 negotiate_response(
                     ApiResponse::success(serde_json::json!({
                         "run_id": run_id,
@@ -999,17 +1099,18 @@ async fn get_run_debdiff(
                 )
             }
         }
-        Ok(None) => {
-            negotiate_response(
-                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
-                &headers,
-                &format!("/api/run/{}/debdiff", run_id),
-            )
-        }
+        Ok(None) => negotiate_response(
+            ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+            &headers,
+            &format!("/api/run/{}/debdiff", run_id),
+        ),
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed(
+                    "Database error".to_string(),
+                    Some("DATABASE_ERROR".to_string()),
+                ),
                 &headers,
                 &format!("/api/run/{}/debdiff", run_id),
             )
@@ -1040,16 +1141,20 @@ async fn get_run_diffoscope(
     match app_state.database.get_run_details(&run_id).await {
         Ok(Some(run_details)) => {
             // Check if this run has binary artifacts suitable for diffoscope
-            let has_binaries = run_details.logfilenames.iter().any(|log| 
+            let has_binaries = run_details.logfilenames.iter().any(|log| {
                 log.contains("build.log") || log.contains(".deb") || log.contains(".tar.")
-            );
-            
+            });
+
             if has_binaries {
-                let diffoscope_url = format!("{}/api/diffoscope/{}", 
-                    app_state.config.differ_url().unwrap_or("http://localhost:9920"),
+                let diffoscope_url = format!(
+                    "{}/api/diffoscope/{}",
+                    app_state
+                        .config
+                        .differ_url()
+                        .unwrap_or("http://localhost:9920"),
                     run_id
                 );
-                
+
                 // In a full implementation, this would call the differ service
                 // to generate diffoscope output between artifacts
                 let result = serde_json::json!({
@@ -1060,7 +1165,7 @@ async fn get_run_diffoscope(
                     "status": "available",
                     "description": "Diffoscope analysis available through differ service"
                 });
-                
+
                 negotiate_response(
                     ApiResponse::success(result),
                     &headers,
@@ -1073,7 +1178,7 @@ async fn get_run_diffoscope(
                     "status": "no_artifacts",
                     "reason": "No binary artifacts found for diffoscope analysis"
                 });
-                
+
                 negotiate_response(
                     ApiResponse::success(result),
                     &headers,
@@ -1081,17 +1186,18 @@ async fn get_run_diffoscope(
                 )
             }
         }
-        Ok(None) => {
-            negotiate_response(
-                ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
-                &headers,
-                &format!("/api/run/{}/diffoscope", run_id),
-            )
-        }
+        Ok(None) => negotiate_response(
+            ApiResponse::error_typed("Run not found".to_string(), Some("NOT_FOUND".to_string())),
+            &headers,
+            &format!("/api/run/{}/diffoscope", run_id),
+        ),
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
             negotiate_response(
-                ApiResponse::error_typed("Database error".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed(
+                    "Database error".to_string(),
+                    Some("DATABASE_ERROR".to_string()),
+                ),
                 &headers,
                 &format!("/api/run/{}/diffoscope", run_id),
             )
@@ -1121,25 +1227,49 @@ async fn get_merge_proposals(
     debug!("Merge proposals requested");
 
     // Get merge proposals from database
-    match app_state.database.get_merge_proposals(
-        Some(query.pagination.get_offset()),
-        Some(query.pagination.get_limit()),
-        query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
-        query.filter.as_ref().and_then(|f| f.get("codebase")).map(|s| s.as_str()),
-    ).await {
+    match app_state
+        .database
+        .get_merge_proposals(
+            Some(query.pagination.get_offset()),
+            Some(query.pagination.get_limit()),
+            query
+                .filter
+                .as_ref()
+                .and_then(|f| f.get("status"))
+                .map(|s| s.as_str()),
+            query
+                .filter
+                .as_ref()
+                .and_then(|f| f.get("codebase"))
+                .map(|s| s.as_str()),
+        )
+        .await
+    {
         Ok(proposals) => {
             // Get total count for pagination
-            let total_count = match app_state.database.count_merge_proposals(
-                query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
-                query.filter.as_ref().and_then(|f| f.get("codebase")).map(|s| s.as_str()),
-            ).await {
+            let total_count = match app_state
+                .database
+                .count_merge_proposals(
+                    query
+                        .filter
+                        .as_ref()
+                        .and_then(|f| f.get("status"))
+                        .map(|s| s.as_str()),
+                    query
+                        .filter
+                        .as_ref()
+                        .and_then(|f| f.get("codebase"))
+                        .map(|s| s.as_str()),
+                )
+                .await
+            {
                 Ok(count) => count,
                 Err(e) => {
                     warn!("Failed to count merge proposals: {}", e);
                     proposals.len() as i64
                 }
             };
-            
+
             let pagination = super::types::PaginationInfo::new(
                 Some(total_count),
                 query.pagination.get_offset(),
@@ -1156,7 +1286,10 @@ async fn get_merge_proposals(
         Err(e) => {
             warn!("Failed to retrieve merge proposals: {}", e);
             negotiate_response(
-                ApiResponse::error_typed("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed(
+                    "Failed to retrieve merge proposals".to_string(),
+                    Some("DATABASE_ERROR".to_string()),
+                ),
                 &headers,
                 "/api/merge-proposals",
             )
@@ -1185,7 +1318,7 @@ async fn get_runner_status(
 
     // Get runner URL from configuration
     let runner_url = &app_state.config.site().runner_url;
-    
+
     // Attempt to query the runner service
     let status = match fetch_runner_status(&app_state.http_client, runner_url).await {
         Ok(runner_status) => runner_status,
@@ -1816,8 +1949,12 @@ async fn admin_system_config(
     let site_config = &app_state.config.site;
 
     // Get system configuration based on actual config
-    let environment = if site_config.debug { "development" } else { "production" };
-    
+    let environment = if site_config.debug {
+        "development"
+    } else {
+        "production"
+    };
+
     let mut config = serde_json::json!({
         "application": {
             "name": "janitor-site",
@@ -1923,13 +2060,13 @@ async fn admin_system_metrics(
         Ok(stats) => {
             // Calculate application uptime
             let uptime_seconds = app_state.start_time.elapsed().as_secs();
-            
+
             // Get database pool metrics
             let pool = app_state.database.pool();
             let pool_size = pool.size();
             let idle_connections = pool.num_idle() as u32;
             let active_connections = pool_size.saturating_sub(idle_connections);
-            
+
             // Calculate success rate from stats
             let total_runs = stats.get("total_runs").unwrap_or(&0);
             let successful_runs = stats.get("recent_successful_runs").unwrap_or(&0);
@@ -1938,11 +2075,15 @@ async fn admin_system_metrics(
             } else {
                 0.0
             };
-            
+
             // Calculate simple performance metrics based on uptime
             let estimated_requests = uptime_seconds * 2; // Rough estimate
-            let requests_per_second = if uptime_seconds > 0 { estimated_requests / uptime_seconds } else { 0 };
-            
+            let requests_per_second = if uptime_seconds > 0 {
+                estimated_requests / uptime_seconds
+            } else {
+                0
+            };
+
             let metrics = serde_json::json!({
                 "performance": {
                     "uptime_seconds": uptime_seconds,
@@ -2025,9 +2166,10 @@ async fn admin_kill_run(
                 let runner_url = app_state.config.runner_url();
                 if !runner_url.is_empty() {
                     let kill_url = format!("{}/api/runs/{}/kill", runner_url, run_id);
-                    
+
                     let client = reqwest::Client::new();
-                    match client.post(&kill_url)
+                    match client
+                        .post(&kill_url)
                         .header("Content-Type", "application/json")
                         .json(&serde_json::json!({
                             "reason": "Administrative kill",
@@ -2039,8 +2181,9 @@ async fn admin_kill_run(
                     {
                         Ok(response) => {
                             let status_code = response.status().as_u16();
-                            let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                            
+                            let response_body =
+                                response.text().await.unwrap_or_else(|_| "{}".to_string());
+
                             let result = serde_json::json!({
                                 "run_id": run_id,
                                 "action": "kill",
@@ -2064,7 +2207,7 @@ async fn admin_kill_run(
                         }
                         Err(e) => {
                             warn!("Failed to connect to runner service for kill: {}", e);
-                            
+
                             let error_response = ApiResponse::<serde_json::Value> {
                                 data: None,
                                 error: Some("runner_service_error".to_string()),
@@ -2078,7 +2221,11 @@ async fn admin_kill_run(
                                 pagination: None,
                             };
 
-                            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+                            negotiate_response(
+                                error_response,
+                                &headers,
+                                &format!("/api/admin/runs/{}/kill", run_id),
+                            )
                         }
                     }
                 } else {
@@ -2113,7 +2260,11 @@ async fn admin_kill_run(
                     pagination: None,
                 };
 
-                negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/admin/runs/{}/kill", run_id),
+                )
             }
         }
         Ok(None) => {
@@ -2128,11 +2279,15 @@ async fn admin_kill_run(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/runs/{}/kill", run_id),
+            )
         }
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -2145,7 +2300,11 @@ async fn admin_kill_run(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/kill", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/runs/{}/kill", run_id),
+            )
         }
     }
 }
@@ -2170,7 +2329,7 @@ async fn admin_mass_reschedule(
 
     let limit = query.limit.unwrap_or(100).min(1000) as i64; // Cap at 1000 for safety
     let requester = query.requester.unwrap_or_else(|| "admin_api".to_string());
-    
+
     // Find runs that match the criteria for rescheduling
     let mut where_conditions = Vec::new();
     let mut param_count = 0;
@@ -2181,7 +2340,7 @@ async fn admin_mass_reschedule(
         where_conditions.push(format!("result_code = ${}", param_count));
     }
 
-    // Add campaign filter  
+    // Add campaign filter
     if let Some(ref campaign) = query.campaign {
         param_count += 1;
         where_conditions.push(format!("suite = ${}", param_count));
@@ -2209,7 +2368,7 @@ async fn admin_mass_reschedule(
 
     // Build and execute the query manually for better control
     let mut query_builder = sqlx::query_scalar::<_, String>(&query_sql);
-    
+
     // Bind parameters in order
     if let Some(ref result_code) = query.result_code {
         query_builder = query_builder.bind(result_code);
@@ -2219,7 +2378,10 @@ async fn admin_mass_reschedule(
     }
 
     // Execute the query to get run IDs
-    match query_builder.fetch_all(&app_state.database.pool().clone()).await {
+    match query_builder
+        .fetch_all(&app_state.database.pool().clone())
+        .await
+    {
         Ok(run_ids) => {
             if run_ids.is_empty() {
                 let result = serde_json::json!({
@@ -2243,7 +2405,11 @@ async fn admin_mass_reschedule(
                 )
             } else {
                 // Use database bulk reschedule method
-                match app_state.database.bulk_reschedule_queue_items(&run_ids, &requester).await {
+                match app_state
+                    .database
+                    .bulk_reschedule_queue_items(&run_ids, &requester)
+                    .await
+                {
                     Ok(affected_count) => {
                         let result = serde_json::json!({
                             "action": "mass_reschedule",
@@ -2269,7 +2435,7 @@ async fn admin_mass_reschedule(
                     }
                     Err(e) => {
                         warn!("Database error during mass reschedule: {}", e);
-                        
+
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("database_error".to_string()),
@@ -2287,14 +2453,18 @@ async fn admin_mass_reschedule(
                             pagination: None,
                         };
 
-                        negotiate_response(error_response, &headers, "/api/admin/runs/mass-reschedule")
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            "/api/admin/runs/mass-reschedule",
+                        )
                     }
                 }
             }
         }
         Err(e) => {
             warn!("Database error querying runs for mass reschedule: {}", e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -2345,9 +2515,16 @@ async fn admin_reprocess_run_logs(
             let log_manager = app_state.log_manager.clone();
             let run_id_clone = run_id.clone();
             let run_details_clone = run_details.clone();
-            
+
             tokio::spawn(async move {
-                match reprocess_run_logs_task(&database, &log_manager, &run_id_clone, &run_details_clone).await {
+                match reprocess_run_logs_task(
+                    &database,
+                    &log_manager,
+                    &run_id_clone,
+                    &run_details_clone,
+                )
+                .await
+                {
                     Ok(_) => {
                         info!("Log reprocessing completed for run {}", run_id_clone);
                     }
@@ -2388,11 +2565,15 @@ async fn admin_reprocess_run_logs(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/reprocess-logs", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/runs/{}/reprocess-logs", run_id),
+            )
         }
         Err(e) => {
             warn!("Failed to get run details for {}: {}", run_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -2405,7 +2586,11 @@ async fn admin_reprocess_run_logs(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/runs/{}/reprocess-logs", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/runs/{}/reprocess-logs", run_id),
+            )
         }
     }
 }
@@ -2418,31 +2603,44 @@ async fn reprocess_run_logs_task(
     run_details: &serde_json::Value,
 ) -> anyhow::Result<()> {
     use janitor::analyze_log::{process_build_log, process_dist_log};
-    
-    let codebase = run_details.get("codebase")
+
+    let codebase = run_details
+        .get("codebase")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let result_code = run_details.get("result_code")
+    let result_code = run_details
+        .get("result_code")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
     // Define log analyzers based on result code patterns
-    let log_analyzers: Vec<(&str, &str, fn(Box<dyn std::io::Read + Send + Sync>) -> janitor::analyze_log::AnalyzedLog)> = vec![
+    let log_analyzers: Vec<(
+        &str,
+        &str,
+        fn(Box<dyn std::io::Read + Send + Sync>) -> janitor::analyze_log::AnalyzedLog,
+    )> = vec![
         ("build-", "build.log", |reader| process_build_log(reader)),
         ("dist-", "build.log", |reader| process_dist_log(reader)),
     ];
-    
+
     // Find appropriate analyzer for this result code
     for (prefix, logname, analyzer) in log_analyzers.iter() {
         if result_code.starts_with(prefix) {
-            debug!("Reprocessing {} log for run {} with result code {}", logname, run_id, result_code);
-            
+            debug!(
+                "Reprocessing {} log for run {} with result code {}",
+                logname, run_id, result_code
+            );
+
             // Get log content
-            match log_manager.as_ref().get_log(codebase, run_id, logname).await {
+            match log_manager
+                .as_ref()
+                .get_log(codebase, run_id, logname)
+                .await
+            {
                 Ok(log_reader) => {
                     // Analyze the log
                     let analyzed_log = analyzer(log_reader);
-                    
+
                     // Update run with new analysis
                     if let Err(e) = update_run_analysis(database, run_id, &analyzed_log).await {
                         warn!("Failed to update run analysis for {}: {}", run_id, e);
@@ -2456,14 +2654,20 @@ async fn reprocess_run_logs_task(
                     continue;
                 }
                 Err(e) => {
-                    warn!("Failed to fetch log {} for run {}: {:?}", logname, run_id, e);
+                    warn!(
+                        "Failed to fetch log {} for run {}: {:?}",
+                        logname, run_id, e
+                    );
                     continue;
                 }
             }
         }
     }
-    
-    info!("No suitable log analyzer found for run {} with result code {}", run_id, result_code);
+
+    info!(
+        "No suitable log analyzer found for run {} with result code {}",
+        run_id, result_code
+    );
     Ok(())
 }
 
@@ -2475,7 +2679,10 @@ async fn update_run_analysis(
 ) -> anyhow::Result<()> {
     // Update failure details if analysis provided new insights
     if let Some(failure_details) = &analyzed_log.failure_details {
-        match database.update_run_failure_details(run_id, failure_details).await {
+        match database
+            .update_run_failure_details(run_id, failure_details)
+            .await
+        {
             Ok(_) => {
                 debug!("Updated failure details for run {}", run_id);
             }
@@ -2485,8 +2692,11 @@ async fn update_run_analysis(
         }
     }
 
-    // Update description 
-    match database.update_run_description(run_id, &analyzed_log.description).await {
+    // Update description
+    match database
+        .update_run_description(run_id, &analyzed_log.description)
+        .await
+    {
         Ok(_) => {
             debug!("Updated description for run {}", run_id);
         }
@@ -2517,9 +2727,10 @@ async fn admin_autopublish(
     // Check if publisher service is configured
     if let Some(publisher_url) = app_state.config.publisher_url() {
         let autopublish_url = format!("{}/api/autopublish", publisher_url);
-        
+
         let client = reqwest::Client::new();
-        match client.post(&autopublish_url)
+        match client
+            .post(&autopublish_url)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({
                 "trigger": "admin_manual",
@@ -2532,14 +2743,14 @@ async fn admin_autopublish(
             Ok(response) => {
                 let status_code = response.status().as_u16();
                 let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                
+
                 let result = serde_json::json!({
                     "action": "autopublish_scan",
                     "status": if status_code == 200 { "initiated" } else { "failed" },
-                    "message": if status_code == 200 { 
-                        "Autopublish scan has been initiated" 
-                    } else { 
-                        "Failed to initiate autopublish scan" 
+                    "message": if status_code == 200 {
+                        "Autopublish scan has been initiated"
+                    } else {
+                        "Failed to initiate autopublish scan"
                     },
                     "publisher_response": {
                         "status_code": status_code,
@@ -2556,8 +2767,11 @@ async fn admin_autopublish(
                 )
             }
             Err(e) => {
-                warn!("Failed to connect to publisher service for autopublish: {}", e);
-                
+                warn!(
+                    "Failed to connect to publisher service for autopublish: {}",
+                    e
+                );
+
                 let error_response = ApiResponse::<serde_json::Value> {
                     data: None,
                     error: Some("publisher_service_error".to_string()),
@@ -2608,9 +2822,10 @@ async fn admin_publish_scan(
     // Check if publisher service is configured
     if let Some(publisher_url) = app_state.config.publisher_url() {
         let scan_url = format!("{}/api/publish/scan", publisher_url);
-        
+
         let client = reqwest::Client::new();
-        match client.post(&scan_url)
+        match client
+            .post(&scan_url)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({
                 "trigger": "admin_manual",
@@ -2624,14 +2839,14 @@ async fn admin_publish_scan(
             Ok(response) => {
                 let status_code = response.status().as_u16();
                 let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                
+
                 let result = serde_json::json!({
                     "action": "publish_scan",
                     "status": if status_code == 200 { "initiated" } else { "failed" },
-                    "message": if status_code == 200 { 
-                        "Publish scan has been initiated" 
-                    } else { 
-                        "Failed to initiate publish scan" 
+                    "message": if status_code == 200 {
+                        "Publish scan has been initiated"
+                    } else {
+                        "Failed to initiate publish scan"
                     },
                     "publisher_response": {
                         "status_code": status_code,
@@ -2649,7 +2864,7 @@ async fn admin_publish_scan(
             }
             Err(e) => {
                 warn!("Failed to connect to publisher service for scan: {}", e);
-                
+
                 let error_response = ApiResponse::<serde_json::Value> {
                     data: None,
                     error: Some("publisher_service_error".to_string()),
@@ -2699,14 +2914,14 @@ async fn admin_get_workers(
 
     // Get runner URL from configuration
     let runner_url = &app_state.config.site().runner_url;
-    
-    // Attempt to fetch worker list from runner service  
+
+    // Attempt to fetch worker list from runner service
     let default_query = CupboardQuery {
         limit: Some(100),
         offset: Some(0),
         status: None,
         worker_id: None,
-        detailed: Some(true)
+        detailed: Some(true),
     };
     let workers = match fetch_workers_from_runner(&app_state, &default_query).await {
         Ok(worker_data) => worker_data,
@@ -2756,20 +2971,21 @@ async fn admin_get_worker_details(
 
     // Get worker details from database
     match app_state.database.get_worker_details(&worker_id).await {
-        Ok(worker_details) => {
-            negotiate_response(
-                ApiResponse::success(worker_details),
-                &headers,
-                &format!("/api/admin/workers/{}", worker_id),
-            )
-        }
+        Ok(worker_details) => negotiate_response(
+            ApiResponse::success(worker_details),
+            &headers,
+            &format!("/api/admin/workers/{}", worker_id),
+        ),
         Err(e) => {
             warn!("Failed to get worker details for {}: {}", worker_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("worker_not_found".to_string()),
-                reason: Some(format!("Worker '{}' not found or no data available", worker_id)),
+                reason: Some(format!(
+                    "Worker '{}' not found or no data available",
+                    worker_id
+                )),
                 details: Some(serde_json::json!({
                     "worker_id": worker_id,
                     "error_type": "database_error",
@@ -2778,7 +2994,11 @@ async fn admin_get_worker_details(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}", worker_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/workers/{}", worker_id),
+            )
         }
     }
 }
@@ -2806,20 +3026,21 @@ async fn admin_get_worker_tasks(
 
     // Get current tasks assigned to this worker
     match app_state.database.get_worker_tasks(&worker_id).await {
-        Ok(tasks) => {
-            negotiate_response(
-                ApiResponse::success(tasks),
-                &headers,
-                &format!("/api/admin/workers/{}/tasks", worker_id),
-            )
-        }
+        Ok(tasks) => negotiate_response(
+            ApiResponse::success(tasks),
+            &headers,
+            &format!("/api/admin/workers/{}/tasks", worker_id),
+        ),
         Err(e) => {
             warn!("Failed to get worker tasks for {}: {}", worker_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("worker_tasks_fetch_failed".to_string()),
-                reason: Some(format!("Could not retrieve tasks for worker '{}'", worker_id)),
+                reason: Some(format!(
+                    "Could not retrieve tasks for worker '{}'",
+                    worker_id
+                )),
                 details: Some(serde_json::json!({
                     "worker_id": worker_id,
                     "error_type": "database_error",
@@ -2828,7 +3049,11 @@ async fn admin_get_worker_tasks(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks", worker_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/workers/{}/tasks", worker_id),
+            )
         }
     }
 }
@@ -2871,12 +3096,20 @@ async fn admin_cancel_worker_task(
                 pagination: None,
             };
 
-            return negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id));
+            return negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id),
+            );
         }
     };
 
     // Cancel the task
-    match app_state.database.cancel_worker_task(&worker_id, queue_id).await {
+    match app_state
+        .database
+        .cancel_worker_task(&worker_id, queue_id)
+        .await
+    {
         Ok(cancelled) => {
             if cancelled {
                 negotiate_response(
@@ -2894,7 +3127,10 @@ async fn admin_cancel_worker_task(
                 let error_response = ApiResponse::<serde_json::Value> {
                     data: None,
                     error: Some("task_not_found".to_string()),
-                    reason: Some(format!("Task {} not found for worker {} or not cancellable", task_id, worker_id)),
+                    reason: Some(format!(
+                        "Task {} not found for worker {} or not cancellable",
+                        task_id, worker_id
+                    )),
                     details: Some(serde_json::json!({
                         "task_id": task_id,
                         "worker_id": worker_id,
@@ -2903,16 +3139,26 @@ async fn admin_cancel_worker_task(
                     pagination: None,
                 };
 
-                negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id),
+                )
             }
         }
         Err(e) => {
-            warn!("Failed to cancel task {} for worker {}: {}", task_id, worker_id, e);
-            
+            warn!(
+                "Failed to cancel task {} for worker {}: {}",
+                task_id, worker_id, e
+            );
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("task_cancellation_failed".to_string()),
-                reason: Some(format!("Could not cancel task {} for worker {}", task_id, worker_id)),
+                reason: Some(format!(
+                    "Could not cancel task {} for worker {}",
+                    task_id, worker_id
+                )),
                 details: Some(serde_json::json!({
                     "task_id": task_id,
                     "worker_id": worker_id,
@@ -2922,13 +3168,17 @@ async fn admin_cancel_worker_task(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/workers/{}/tasks/{}", worker_id, task_id),
+            )
         }
     }
 }
 
 // ============================================================================
-// Admin User Management Endpoints  
+// Admin User Management Endpoints
 // ============================================================================
 
 /// Request for updating user role
@@ -2968,11 +3218,7 @@ async fn admin_list_users(
                 })
             }).collect();
 
-            negotiate_response(
-                ApiResponse::success(users),
-                &headers,
-                "/api/admin/users",
-            )
+            negotiate_response(ApiResponse::success(users), &headers, "/api/admin/users")
         }
         Err(e) => {
             debug!("Failed to get users: {}", e);
@@ -3017,20 +3263,33 @@ async fn admin_get_user_details(
                 let error_response = ApiResponse::<serde_json::Value> {
                     data: None,
                     error: Some("not_found".to_string()),
-                    reason: Some(format!("User {} not found or has no active sessions", user_id)),
+                    reason: Some(format!(
+                        "User {} not found or has no active sessions",
+                        user_id
+                    )),
                     details: None,
                     pagination: None,
                 };
-                negotiate_response(error_response, &headers, &format!("/api/admin/users/{}", user_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/admin/users/{}", user_id),
+                )
             } else {
                 // Extract user details from first session
-                let username = sessions[0].get("username").unwrap_or(&serde_json::Value::Null);
-                let role = sessions[0].get("role").and_then(|v| v.as_str()).unwrap_or("User");
-                let last_login = sessions.iter()
+                let username = sessions[0]
+                    .get("username")
+                    .unwrap_or(&serde_json::Value::Null);
+                let role = sessions[0]
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("User");
+                let last_login = sessions
+                    .iter()
                     .filter_map(|s| s.get("created_at").and_then(|v| v.as_str()))
                     .max()
                     .unwrap_or("");
-                
+
                 // Calculate permissions
                 let can_admin = role == "Admin";
                 let can_review = ["Admin", "QaReviewer"].contains(&role);
@@ -3065,7 +3324,11 @@ async fn admin_get_user_details(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}", user_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/users/{}", user_id),
+            )
         }
     }
 }
@@ -3092,7 +3355,10 @@ async fn admin_update_user_role(
     Json(request): Json<UpdateUserRoleRequest>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
-    debug!("Admin role update requested for user: {} to role: {}", user_id, request.role);
+    debug!(
+        "Admin role update requested for user: {} to role: {}",
+        user_id, request.role
+    );
 
     // Validate role
     let valid_roles = ["Admin", "QaReviewer", "User"];
@@ -3100,15 +3366,27 @@ async fn admin_update_user_role(
         let error_response = ApiResponse::<serde_json::Value> {
             data: None,
             error: Some("invalid_role".to_string()),
-            reason: Some(format!("Role '{}' is not valid. Must be one of: {}", request.role, valid_roles.join(", "))),
+            reason: Some(format!(
+                "Role '{}' is not valid. Must be one of: {}",
+                request.role,
+                valid_roles.join(", ")
+            )),
             details: None,
             pagination: None,
         };
-        return negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id));
+        return negotiate_response(
+            error_response,
+            &headers,
+            &format!("/api/admin/users/{}/role", user_id),
+        );
     }
 
     // Update user role in sessions (simplified implementation)
-    match app_state.database.update_user_role(&user_id, &request.role).await {
+    match app_state
+        .database
+        .update_user_role(&user_id, &request.role)
+        .await
+    {
         Ok(updated) => {
             if updated {
                 let result = json!({
@@ -3127,11 +3405,18 @@ async fn admin_update_user_role(
                 let error_response = ApiResponse::<serde_json::Value> {
                     data: None,
                     error: Some("not_found".to_string()),
-                    reason: Some(format!("User {} not found or has no active sessions", user_id)),
+                    reason: Some(format!(
+                        "User {} not found or has no active sessions",
+                        user_id
+                    )),
                     details: None,
                     pagination: None,
                 };
-                negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/admin/users/{}/role", user_id),
+                )
             }
         }
         Err(e) => {
@@ -3144,7 +3429,11 @@ async fn admin_update_user_role(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/role", user_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/users/{}/role", user_id),
+            )
         }
     }
 }
@@ -3195,7 +3484,11 @@ async fn admin_revoke_user_sessions(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/users/{}/sessions", user_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/users/{}/sessions", user_id),
+            )
         }
     }
 }
@@ -3218,20 +3511,29 @@ async fn admin_list_sessions(
 
     match app_state.database.get_active_sessions().await {
         Ok(sessions) => {
-            let enhanced_sessions: Vec<serde_json::Value> = sessions.into_iter().map(|mut session| {
-                // Add additional metadata
-                session["session_age_hours"] = if let Some(created_at) = session.get("created_at") {
-                    if let Ok(created) = created_at.as_str().unwrap_or_default().parse::<chrono::DateTime<chrono::Utc>>() {
-                        json!((chrono::Utc::now() - created).num_hours())
-                    } else {
-                        json!(null)
-                    }
-                } else {
-                    json!(null)
-                };
-                session["is_admin_session"] = json!(session.get("role").unwrap_or(&json!("User")) == "Admin");
-                session
-            }).collect();
+            let enhanced_sessions: Vec<serde_json::Value> = sessions
+                .into_iter()
+                .map(|mut session| {
+                    // Add additional metadata
+                    session["session_age_hours"] =
+                        if let Some(created_at) = session.get("created_at") {
+                            if let Ok(created) = created_at
+                                .as_str()
+                                .unwrap_or_default()
+                                .parse::<chrono::DateTime<chrono::Utc>>()
+                            {
+                                json!((chrono::Utc::now() - created).num_hours())
+                            } else {
+                                json!(null)
+                            }
+                        } else {
+                            json!(null)
+                        };
+                    session["is_admin_session"] =
+                        json!(session.get("role").unwrap_or(&json!("User")) == "Admin");
+                    session
+                })
+                .collect();
 
             negotiate_response(
                 ApiResponse::success(enhanced_sessions),
@@ -3273,7 +3575,10 @@ async fn admin_revoke_session(
     Path(session_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
-    debug!("Admin session revocation requested for session: {}", session_id);
+    debug!(
+        "Admin session revocation requested for session: {}",
+        session_id
+    );
 
     match app_state.database.revoke_session(&session_id).await {
         Ok(revoked) => {
@@ -3297,7 +3602,11 @@ async fn admin_revoke_session(
                     details: None,
                     pagination: None,
                 };
-                negotiate_response(error_response, &headers, &format!("/api/admin/sessions/{}", session_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/admin/sessions/{}", session_id),
+                )
             }
         }
         Err(e) => {
@@ -3310,7 +3619,11 @@ async fn admin_revoke_session(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/sessions/{}", session_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/sessions/{}", session_id),
+            )
         }
     }
 }
@@ -3337,21 +3650,24 @@ async fn admin_list_campaigns(
 
     match app_state.database.get_campaign_status_list().await {
         Ok(campaigns) => {
-            let campaign_list: Vec<serde_json::Value> = campaigns.into_iter().map(|campaign| {
-                json!({
-                    "name": campaign.name,
-                    "total_candidates": campaign.total_candidates,
-                    "pending_candidates": campaign.pending_candidates,
-                    "active_runs": campaign.active_runs,
-                    "success_rate": campaign.success_rate,
-                    "last_updated": campaign.last_updated,
-                    "description": campaign.description,
-                    "status": if campaign.active_runs > 0 { "active" } else { "idle" },
-                    "health": if campaign.success_rate.unwrap_or(0.0) > 0.7 { "good" } 
-                             else if campaign.success_rate.unwrap_or(0.0) > 0.3 { "warning" } 
-                             else { "poor" }
+            let campaign_list: Vec<serde_json::Value> = campaigns
+                .into_iter()
+                .map(|campaign| {
+                    json!({
+                        "name": campaign.name,
+                        "total_candidates": campaign.total_candidates,
+                        "pending_candidates": campaign.pending_candidates,
+                        "active_runs": campaign.active_runs,
+                        "success_rate": campaign.success_rate,
+                        "last_updated": campaign.last_updated,
+                        "description": campaign.description,
+                        "status": if campaign.active_runs > 0 { "active" } else { "idle" },
+                        "health": if campaign.success_rate.unwrap_or(0.0) > 0.7 { "good" }
+                                 else if campaign.success_rate.unwrap_or(0.0) > 0.3 { "warning" }
+                                 else { "poor" }
+                    })
                 })
-            }).collect();
+                .collect();
 
             negotiate_response(
                 ApiResponse::success(campaign_list),
@@ -3393,13 +3709,23 @@ async fn admin_get_campaign_details(
     Path(campaign_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
-    debug!("Admin campaign details requested for campaign: {}", campaign_id);
+    debug!(
+        "Admin campaign details requested for campaign: {}",
+        campaign_id
+    );
 
     // Get campaign statistics
-    match app_state.database.get_campaign_statistics(&campaign_id).await {
+    match app_state
+        .database
+        .get_campaign_statistics(&campaign_id)
+        .await
+    {
         Ok(stats) => {
             // Get campaign status from the status list
-            let campaign_status = app_state.database.get_campaign_status_list().await
+            let campaign_status = app_state
+                .database
+                .get_campaign_status_list()
+                .await
                 .unwrap_or_default()
                 .into_iter()
                 .find(|c| c.name == campaign_id);
@@ -3452,12 +3778,19 @@ async fn admin_get_campaign_details(
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("not_found".to_string()),
-                reason: Some(format!("Campaign {} not found or failed to retrieve details: {}", campaign_id, e)),
+                reason: Some(format!(
+                    "Campaign {} not found or failed to retrieve details: {}",
+                    campaign_id, e
+                )),
                 details: None,
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/campaigns/{}", campaign_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/campaigns/{}", campaign_id),
+            )
         }
     }
 }
@@ -3481,23 +3814,36 @@ async fn admin_get_campaign_statistics(
     Path(campaign_id): Path<String>,
     headers: HeaderMap,
 ) -> impl axum::response::IntoResponse {
-    debug!("Admin campaign statistics requested for campaign: {}", campaign_id);
+    debug!(
+        "Admin campaign statistics requested for campaign: {}",
+        campaign_id
+    );
 
-    match app_state.database.get_campaign_statistics(&campaign_id).await {
+    match app_state
+        .database
+        .get_campaign_statistics(&campaign_id)
+        .await
+    {
         Ok(stats) => {
             // Calculate additional metrics
             let total_attempts = stats.successful_runs + stats.failed_runs;
             let success_rate = if total_attempts > 0 {
                 stats.successful_runs as f64 / total_attempts as f64
-            } else { 0.0 };
-            
+            } else {
+                0.0
+            };
+
             let failure_rate = if total_attempts > 0 {
                 stats.failed_runs as f64 / total_attempts as f64
-            } else { 0.0 };
+            } else {
+                0.0
+            };
 
             let completion_rate = if stats.total_candidates > 0 {
                 total_attempts as f64 / stats.total_candidates as f64
-            } else { 0.0 };
+            } else {
+                0.0
+            };
 
             let detailed_stats = json!({
                 "campaign_id": campaign_id,
@@ -3550,12 +3896,19 @@ async fn admin_get_campaign_statistics(
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
-                reason: Some(format!("Failed to retrieve statistics for campaign {}: {}", campaign_id, e)),
+                reason: Some(format!(
+                    "Failed to retrieve statistics for campaign {}: {}",
+                    campaign_id, e
+                )),
                 details: None,
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/admin/campaigns/{}/statistics", campaign_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/admin/campaigns/{}/statistics", campaign_id),
+            )
         }
     }
 }
@@ -3590,22 +3943,35 @@ async fn get_campaign_merge_proposals(
     if let Some(search) = &query.search {
         query_params.insert("search".to_string(), search.clone());
     }
-    
+
     // Extract filters if available
     if let Some(filters) = &query.filter {
         for (key, value) in filters {
             query_params.insert(key.clone(), value.clone());
         }
     }
-    
-    query_params.insert("limit".to_string(), query.pagination.get_limit().to_string());
-    query_params.insert("offset".to_string(), query.pagination.get_offset().to_string());
+
+    query_params.insert(
+        "limit".to_string(),
+        query.pagination.get_limit().to_string(),
+    );
+    query_params.insert(
+        "offset".to_string(),
+        query.pagination.get_offset().to_string(),
+    );
 
     // Get merge proposals for this campaign
-    let proposals = match app_state.database.get_campaign_merge_proposals(&campaign, &query_params).await {
+    let proposals = match app_state
+        .database
+        .get_campaign_merge_proposals(&campaign, &query_params)
+        .await
+    {
         Ok(proposals) => proposals,
         Err(e) => {
-            warn!("Failed to get merge proposals for campaign {}: {}", campaign, e);
+            warn!(
+                "Failed to get merge proposals for campaign {}: {}",
+                campaign, e
+            );
             vec![]
         }
     };
@@ -3648,29 +4014,58 @@ async fn get_campaign_ready_runs(
     let offset = query.pagination.get_offset();
 
     // Extract result_code from filter if available
-    let result_code = query.filter.as_ref()
+    let result_code = query
+        .filter
+        .as_ref()
         .and_then(|filters| filters.get("result_code"))
         .map(|s| s.as_str());
 
     // Use existing get_ready_runs method with campaign filter
-    match app_state.database.get_ready_runs(
-        &campaign,
-        query.search.as_deref(),
-        result_code,
-        Some(limit),
-        Some(offset),
-    ).await {
+    match app_state
+        .database
+        .get_ready_runs(
+            &campaign,
+            query.search.as_deref(),
+            result_code,
+            Some(limit),
+            Some(offset),
+        )
+        .await
+    {
         Ok(runs) => {
             // Convert database results to API run format
-            let api_runs: Vec<Run> = runs.into_iter().map(|run_data| {
-                Run {
-                    run_id: run_data.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    start_time: run_data.get("start_time").and_then(|v| v.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&chrono::Utc)),
-                    finish_time: run_data.get("finish_time").and_then(|v| v.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&chrono::Utc)),
-                    command: run_data.get("command").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                    description: run_data.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            let api_runs: Vec<Run> = runs
+                .into_iter()
+                .map(|run_data| Run {
+                    run_id: run_data
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    start_time: run_data
+                        .get("start_time")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc)),
+                    finish_time: run_data
+                        .get("finish_time")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|dt| dt.with_timezone(&chrono::Utc)),
+                    command: run_data
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
+                    description: run_data
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
                     build_info: None,
-                    result_code: run_data.get("result_code").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    result_code: run_data
+                        .get("result_code")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string()),
                     main_branch_revision: None,
                     revision: None,
                     context: None,
@@ -3685,11 +4080,15 @@ async fn get_campaign_ready_runs(
                     change_set: None,
                     failure_transient: None,
                     failure_stage: None,
-                    codebase: run_data.get("codebase").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    codebase: run_data
+                        .get("codebase")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string(),
                     campaign: campaign.clone(),
                     subpath: None,
-                }
-            }).collect();
+                })
+                .collect();
 
             let pagination = super::types::PaginationInfo::new(
                 Some(api_runs.len() as i64),
@@ -3714,7 +4113,11 @@ async fn get_campaign_ready_runs(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/{}/ready", campaign))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/{}/ready", campaign),
+            )
         }
     }
 }
@@ -3740,7 +4143,11 @@ async fn get_campaign_codebase(
     debug!("Campaign {} codebase {} requested", campaign, codebase);
 
     // Get comprehensive codebase context for this campaign/codebase combination
-    match app_state.database.get_codebase_context(&campaign, &codebase).await {
+    match app_state
+        .database
+        .get_codebase_context(&campaign, &codebase)
+        .await
+    {
         Ok(context) => {
             // Convert to API response format
             let result = serde_json::json!({
@@ -3772,16 +4179,23 @@ async fn get_campaign_codebase(
         }
         Err(e) => {
             let (error_code, reason) = match e {
-                crate::database::DatabaseError::NotFound(_) => {
-                    ("not_found", format!("Codebase '{}' not found in campaign '{}'", codebase, campaign))
-                }
+                crate::database::DatabaseError::NotFound(_) => (
+                    "not_found",
+                    format!(
+                        "Codebase '{}' not found in campaign '{}'",
+                        codebase, campaign
+                    ),
+                ),
                 _ => (
                     "database_error",
                     format!("Failed to retrieve codebase context: {}", e),
                 ),
             };
 
-            debug!("Failed to get campaign codebase {}/{}: {}", campaign, codebase, e);
+            debug!(
+                "Failed to get campaign codebase {}/{}: {}",
+                campaign, codebase, e
+            );
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some(error_code.to_string()),
@@ -3790,7 +4204,11 @@ async fn get_campaign_codebase(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}", campaign, codebase))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/{}/c/{}", campaign, codebase),
+            )
         }
     }
 }
@@ -3820,21 +4238,29 @@ async fn post_codebase_publish(
     );
 
     // Check if there's a successful run to publish for this codebase/campaign
-    match app_state.database.get_last_unabsorbed_run(&campaign, &codebase).await {
+    match app_state
+        .database
+        .get_last_unabsorbed_run(&campaign, &codebase)
+        .await
+    {
         Ok(run_details) => {
             if run_details.result_code.as_ref() == Some(&"success".to_string()) {
                 // Get publish policy for this codebase/campaign
-                let publish_policy = app_state.database.get_publish_policy(&campaign, &codebase)
+                let publish_policy = app_state
+                    .database
+                    .get_publish_policy(&campaign, &codebase)
                     .await
                     .unwrap_or_else(|_| "manual".to_string());
 
                 // If publish service URL is configured, forward the request
                 if let Some(publish_url) = app_state.config.publisher_url() {
-                    let publish_request_url = format!("{}/publish/{}/{}", publish_url, campaign, codebase);
-                    
+                    let publish_request_url =
+                        format!("{}/publish/{}/{}", publish_url, campaign, codebase);
+
                     // Use HTTP client to make publish request
                     let client = reqwest::Client::new();
-                    match client.post(&publish_request_url)
+                    match client
+                        .post(&publish_request_url)
                         .header("Content-Type", "application/json")
                         .json(&serde_json::json!({
                             "run_id": run_details.id,
@@ -3843,12 +4269,13 @@ async fn post_codebase_publish(
                         }))
                         .timeout(std::time::Duration::from_secs(30))
                         .send()
-                        .await 
+                        .await
                     {
                         Ok(response) => {
                             let status_code = response.status().as_u16();
-                            let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                            
+                            let response_body =
+                                response.text().await.unwrap_or_else(|_| "{}".to_string());
+
                             let result = serde_json::json!({
                                 "campaign": campaign,
                                 "codebase": codebase,
@@ -3872,7 +4299,7 @@ async fn post_codebase_publish(
                         }
                         Err(e) => {
                             warn!("Failed to connect to publish service: {}", e);
-                            
+
                             let error_response = ApiResponse::<serde_json::Value> {
                                 data: None,
                                 error: Some("publish_service_error".to_string()),
@@ -3887,7 +4314,11 @@ async fn post_codebase_publish(
                                 pagination: None,
                             };
 
-                            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+                            negotiate_response(
+                                error_response,
+                                &headers,
+                                &format!("/api/{}/c/{}/publish", campaign, codebase),
+                            )
                         }
                     }
                 } else {
@@ -3923,12 +4354,19 @@ async fn post_codebase_publish(
                     pagination: None,
                 };
 
-                negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/{}/c/{}/publish", campaign, codebase),
+                )
             }
         }
         Err(e) => {
-            warn!("Failed to get last run for {}/{}: {}", campaign, codebase, e);
-            
+            warn!(
+                "Failed to get last run for {}/{}: {}",
+                campaign, codebase, e
+            );
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("no_run_found".to_string()),
@@ -3942,7 +4380,11 @@ async fn post_codebase_publish(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/{}/c/{}/publish", campaign, codebase))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/{}/c/{}/publish", campaign, codebase),
+            )
         }
     }
 }
@@ -4023,25 +4465,44 @@ async fn get_codebase_merge_proposals(
     debug!("Codebase {} merge proposals requested", codebase);
 
     // Get merge proposals for this specific codebase
-    match app_state.database.get_merge_proposals(
-        Some(query.pagination.get_offset()),
-        Some(query.pagination.get_limit()),
-        query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
-        Some(&codebase), // Filter by codebase
-    ).await {
+    match app_state
+        .database
+        .get_merge_proposals(
+            Some(query.pagination.get_offset()),
+            Some(query.pagination.get_limit()),
+            query
+                .filter
+                .as_ref()
+                .and_then(|f| f.get("status"))
+                .map(|s| s.as_str()),
+            Some(&codebase), // Filter by codebase
+        )
+        .await
+    {
         Ok(proposals) => {
             // Get total count for pagination
-            let total_count = match app_state.database.count_merge_proposals(
-                query.filter.as_ref().and_then(|f| f.get("status")).map(|s| s.as_str()),
-                Some(&codebase),
-            ).await {
+            let total_count = match app_state
+                .database
+                .count_merge_proposals(
+                    query
+                        .filter
+                        .as_ref()
+                        .and_then(|f| f.get("status"))
+                        .map(|s| s.as_str()),
+                    Some(&codebase),
+                )
+                .await
+            {
                 Ok(count) => count,
                 Err(e) => {
-                    warn!("Failed to count merge proposals for codebase {}: {}", codebase, e);
+                    warn!(
+                        "Failed to count merge proposals for codebase {}: {}",
+                        codebase, e
+                    );
                     proposals.len() as i64
                 }
             };
-            
+
             let pagination = super::types::PaginationInfo::new(
                 Some(total_count),
                 query.pagination.get_offset(),
@@ -4056,9 +4517,15 @@ async fn get_codebase_merge_proposals(
             )
         }
         Err(e) => {
-            warn!("Failed to retrieve merge proposals for codebase {}: {}", codebase, e);
+            warn!(
+                "Failed to retrieve merge proposals for codebase {}: {}",
+                codebase, e
+            );
             negotiate_response(
-                ApiResponse::error_typed("Failed to retrieve merge proposals".to_string(), Some("DATABASE_ERROR".to_string())),
+                ApiResponse::error_typed(
+                    "Failed to retrieve merge proposals".to_string(),
+                    Some("DATABASE_ERROR".to_string()),
+                ),
                 &headers,
                 &format!("/api/c/{}/merge-proposals", codebase),
             )
@@ -4174,14 +4641,18 @@ async fn get_run_details(
                 branch_url: None, // TODO: Get from VCS info
                 logfilenames: run_details.logfilenames,
                 worker_name: run_details.worker,
-                result_branches: run_details.result_branches.into_iter()
+                result_branches: run_details
+                    .result_branches
+                    .into_iter()
                     .filter_map(|v| serde_json::from_value::<super::schemas::ResultBranch>(v).ok())
                     .collect(),
-                result_tags: run_details.result_tags.into_iter()
+                result_tags: run_details
+                    .result_tags
+                    .into_iter()
                     .filter_map(|v| serde_json::from_value::<super::schemas::ResultTag>(v).ok())
                     .collect(),
                 target_branch_url: None, // TODO: Get from VCS info
-                change_set: None, // TODO: Add change_set field if available
+                change_set: None,        // TODO: Add change_set field if available
                 failure_transient: None, // TODO: Determine from failure details
                 failure_stage: run_details.failure_stage,
                 codebase: run_details.codebase,
@@ -4211,7 +4682,7 @@ async fn get_run_details(
         }
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
-            
+
             let error_response = ApiResponse::<super::schemas::Run> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -4253,7 +4724,7 @@ async fn post_run_update(
 
     // Parse the request body
     let update_data: Result<serde_json::Value, _> = serde_json::from_str(&body);
-    
+
     match update_data {
         Ok(data) => {
             // Check if run exists first
@@ -4264,25 +4735,39 @@ async fn post_run_update(
 
                     // Handle description update
                     if let Some(description) = data.get("description").and_then(|v| v.as_str()) {
-                        match app_state.database.update_run_description(&run_id, description).await {
+                        match app_state
+                            .database
+                            .update_run_description(&run_id, description)
+                            .await
+                        {
                             Ok(true) => {
                                 updates_applied.push("description");
                                 info!("Updated description for run {}", run_id);
                             }
-                            Ok(false) => update_errors.push("Failed to update description: run not found".to_string()),
-                            Err(e) => update_errors.push(format!("Failed to update description: {}", e)),
+                            Ok(false) => update_errors
+                                .push("Failed to update description: run not found".to_string()),
+                            Err(e) => {
+                                update_errors.push(format!("Failed to update description: {}", e))
+                            }
                         }
                     }
 
                     // Handle failure details update
                     if let Some(failure_details) = data.get("failure_details") {
-                        match app_state.database.update_run_failure_details(&run_id, failure_details).await {
+                        match app_state
+                            .database
+                            .update_run_failure_details(&run_id, failure_details)
+                            .await
+                        {
                             Ok(true) => {
                                 updates_applied.push("failure_details");
                                 info!("Updated failure details for run {}", run_id);
                             }
-                            Ok(false) => update_errors.push("Failed to update failure details: run not found".to_string()),
-                            Err(e) => update_errors.push(format!("Failed to update failure details: {}", e)),
+                            Ok(false) => update_errors.push(
+                                "Failed to update failure details: run not found".to_string(),
+                            ),
+                            Err(e) => update_errors
+                                .push(format!("Failed to update failure details: {}", e)),
                         }
                     }
 
@@ -4318,7 +4803,7 @@ async fn post_run_update(
                 }
                 Err(e) => {
                     warn!("Database error checking run {}: {}", run_id, e);
-                    
+
                     let error_response = ApiResponse::<serde_json::Value> {
                         data: None,
                         error: Some("database_error".to_string()),
@@ -4337,7 +4822,7 @@ async fn post_run_update(
         }
         Err(e) => {
             warn!("Invalid JSON in run update request: {}", e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("invalid_json".to_string()),
@@ -4395,16 +4880,23 @@ async fn post_run_reschedule(
                         })),
                         pagination: None,
                     };
-                    negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+                    negotiate_response(
+                        error_response,
+                        &headers,
+                        &format!("/api/run/{}/reschedule", run_id),
+                    )
                 } else {
                     // Try to communicate with runner service to reschedule
                     let runner_url = app_state.config.runner_url();
                     if !runner_url.is_empty() {
-                        let reschedule_url = format!("{}/api/reschedule/{}/{}", 
-                            runner_url, run_details.suite, run_details.codebase);
-                        
+                        let reschedule_url = format!(
+                            "{}/api/reschedule/{}/{}",
+                            runner_url, run_details.suite, run_details.codebase
+                        );
+
                         let client = reqwest::Client::new();
-                        match client.post(&reschedule_url)
+                        match client
+                            .post(&reschedule_url)
                             .header("Content-Type", "application/json")
                             .json(&serde_json::json!({
                                 "run_id": run_id,
@@ -4417,8 +4909,9 @@ async fn post_run_reschedule(
                         {
                             Ok(response) => {
                                 let status_code = response.status().as_u16();
-                                let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                                
+                                let response_body =
+                                    response.text().await.unwrap_or_else(|_| "{}".to_string());
+
                                 let result = serde_json::json!({
                                     "run_id": run_id,
                                     "action": "reschedule",
@@ -4442,7 +4935,7 @@ async fn post_run_reschedule(
                             }
                             Err(e) => {
                                 warn!("Failed to connect to runner service for reschedule: {}", e);
-                                
+
                                 let error_response = ApiResponse::<serde_json::Value> {
                                     data: None,
                                     error: Some("runner_service_error".to_string()),
@@ -4456,7 +4949,11 @@ async fn post_run_reschedule(
                                     pagination: None,
                                 };
 
-                                negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+                                negotiate_response(
+                                    error_response,
+                                    &headers,
+                                    &format!("/api/run/{}/reschedule", run_id),
+                                )
                             }
                         }
                     } else {
@@ -4491,7 +4988,11 @@ async fn post_run_reschedule(
                     pagination: None,
                 };
 
-                negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/api/run/{}/reschedule", run_id),
+                )
             }
         }
         Ok(None) => {
@@ -4506,11 +5007,15 @@ async fn post_run_reschedule(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/run/{}/reschedule", run_id),
+            )
         }
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -4523,7 +5028,11 @@ async fn post_run_reschedule(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/run/{}/reschedule", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/run/{}/reschedule", run_id),
+            )
         }
     }
 }
@@ -4551,7 +5060,10 @@ async fn post_run_schedule_control(
     debug!("Run {} schedule control requested", run_id);
 
     // Parse control action from query parameters
-    let action = query.get("action").cloned().unwrap_or_else(|| "status".to_string());
+    let action = query
+        .get("action")
+        .cloned()
+        .unwrap_or_else(|| "status".to_string());
     let priority = query.get("priority").and_then(|p| p.parse::<i32>().ok());
     let offset = query.get("offset").and_then(|o| o.parse::<i32>().ok());
 
@@ -4565,11 +5077,12 @@ async fn post_run_schedule_control(
                     if run_details.finish_time.timestamp() == 0 {
                         // Try to communicate with runner service to pause
                         let runner_url = app_state.config.runner_url();
-                    if !runner_url.is_empty() {
+                        if !runner_url.is_empty() {
                             let pause_url = format!("{}/api/runs/{}/pause", runner_url, run_id);
-                            
+
                             let client = reqwest::Client::new();
-                            match client.post(&pause_url)
+                            match client
+                                .post(&pause_url)
                                 .timeout(std::time::Duration::from_secs(10))
                                 .send()
                                 .await
@@ -4597,7 +5110,11 @@ async fn post_run_schedule_control(
                                         details: None,
                                         pagination: None,
                                     };
-                                    negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                                    negotiate_response(
+                                        error_response,
+                                        &headers,
+                                        &format!("/api/run/{}/schedule-control", run_id),
+                                    )
                                 }
                             }
                         } else {
@@ -4623,7 +5140,11 @@ async fn post_run_schedule_control(
                             details: None,
                             pagination: None,
                         };
-                        negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/api/run/{}/schedule-control", run_id),
+                        )
                     }
                 }
                 "priority" => {
@@ -4647,17 +5168,25 @@ async fn post_run_schedule_control(
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("missing_priority".to_string()),
-                            reason: Some("Priority action requires 'priority' parameter".to_string()),
+                            reason: Some(
+                                "Priority action requires 'priority' parameter".to_string(),
+                            ),
                             details: None,
                             pagination: None,
                         };
-                        negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/api/run/{}/schedule-control", run_id),
+                        )
                     }
                 }
                 "status" | _ => {
                     // Return current scheduling status
                     let queue_position = if run_details.finish_time.timestamp() == 0 {
-                        app_state.database.get_queue_position(&run_details.suite, &run_details.codebase)
+                        app_state
+                            .database
+                            .get_queue_position(&run_details.suite, &run_details.codebase)
                             .await
                             .unwrap_or(0)
                     } else {
@@ -4699,11 +5228,15 @@ async fn post_run_schedule_control(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/run/{}/schedule-control", run_id),
+            )
         }
         Err(e) => {
             warn!("Database error retrieving run {}: {}", run_id, e);
-            
+
             let error_response = ApiResponse::<serde_json::Value> {
                 data: None,
                 error: Some("database_error".to_string()),
@@ -4716,7 +5249,11 @@ async fn post_run_schedule_control(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/api/run/{}/schedule-control", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/api/run/{}/schedule-control", run_id),
+            )
         }
     }
 }
@@ -4933,7 +5470,7 @@ async fn cupboard_workers(
                     "idle_workers": 0,
                     "failed_workers": 0
                 },
-                "status": "error", 
+                "status": "error",
                 "message": format!("Failed to fetch worker data from runner: {}", e),
                 "query_parameters": {
                     "limit": query.limit.unwrap_or(50),
@@ -5032,7 +5569,7 @@ async fn cupboard_worker_pause(
             let runner_url = app_state.config.runner_url();
             if !runner_url.is_empty() {
                 let pause_url = format!("{}/api/workers/{}/pause", runner_url, worker_id);
-                
+
                 let client = reqwest::Client::new();
                 let request_body = serde_json::json!({
                     "reason": control.reason.clone().unwrap_or_else(|| "Administrative pause".to_string()),
@@ -5040,7 +5577,8 @@ async fn cupboard_worker_pause(
                     "requester": "cupboard_admin"
                 });
 
-                match client.post(&pause_url)
+                match client
+                    .post(&pause_url)
                     .header("Content-Type", "application/json")
                     .json(&request_body)
                     .timeout(std::time::Duration::from_secs(30))
@@ -5049,8 +5587,9 @@ async fn cupboard_worker_pause(
                 {
                     Ok(response) => {
                         let status_code = response.status().as_u16();
-                        let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                        
+                        let response_body =
+                            response.text().await.unwrap_or_else(|_| "{}".to_string());
+
                         let result = serde_json::json!({
                             "worker_id": worker_id,
                             "action": "pause",
@@ -5076,8 +5615,11 @@ async fn cupboard_worker_pause(
                         )
                     }
                     Err(e) => {
-                        warn!("Failed to connect to runner service for worker pause: {}", e);
-                        
+                        warn!(
+                            "Failed to connect to runner service for worker pause: {}",
+                            e
+                        );
+
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_service_error".to_string()),
@@ -5091,7 +5633,11 @@ async fn cupboard_worker_pause(
                             pagination: None,
                         };
 
-                        negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/pause", worker_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/cupboard/workers/{}/pause", worker_id),
+                        )
                     }
                 }
             } else {
@@ -5126,7 +5672,11 @@ async fn cupboard_worker_pause(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/pause", worker_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/workers/{}/pause", worker_id),
+            )
         }
     }
 }
@@ -5163,7 +5713,7 @@ async fn cupboard_worker_resume(
             let runner_url = app_state.config.runner_url();
             if !runner_url.is_empty() {
                 let resume_url = format!("{}/api/workers/{}/resume", runner_url, worker_id);
-                
+
                 let client = reqwest::Client::new();
                 let request_body = serde_json::json!({
                     "reason": control.reason.clone().unwrap_or_else(|| "Administrative resume".to_string()),
@@ -5171,7 +5721,8 @@ async fn cupboard_worker_resume(
                     "requester": "cupboard_admin"
                 });
 
-                match client.post(&resume_url)
+                match client
+                    .post(&resume_url)
                     .header("Content-Type", "application/json")
                     .json(&request_body)
                     .timeout(std::time::Duration::from_secs(30))
@@ -5180,8 +5731,9 @@ async fn cupboard_worker_resume(
                 {
                     Ok(response) => {
                         let status_code = response.status().as_u16();
-                        let response_body = response.text().await.unwrap_or_else(|_| "{}".to_string());
-                        
+                        let response_body =
+                            response.text().await.unwrap_or_else(|_| "{}".to_string());
+
                         let result = serde_json::json!({
                             "worker_id": worker_id,
                             "action": "resume",
@@ -5207,8 +5759,11 @@ async fn cupboard_worker_resume(
                         )
                     }
                     Err(e) => {
-                        warn!("Failed to connect to runner service for worker resume: {}", e);
-                        
+                        warn!(
+                            "Failed to connect to runner service for worker resume: {}",
+                            e
+                        );
+
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_service_error".to_string()),
@@ -5222,7 +5777,11 @@ async fn cupboard_worker_resume(
                             pagination: None,
                         };
 
-                        negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/resume", worker_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/cupboard/workers/{}/resume", worker_id),
+                        )
                     }
                 }
             } else {
@@ -5257,7 +5816,11 @@ async fn cupboard_worker_resume(
                 pagination: None,
             };
 
-            negotiate_response(error_response, &headers, &format!("/cupboard/workers/{}/resume", worker_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/workers/{}/resume", worker_id),
+            )
         }
     }
 }
@@ -5412,23 +5975,27 @@ async fn cupboard_system_metrics(
         Ok(stats) => {
             // Calculate application uptime
             let uptime_seconds = app_state.start_time.elapsed().as_secs();
-            
+
             // Get database pool metrics
             let pool = app_state.database.pool();
             let pool_size = pool.size();
             let idle_connections = pool.num_idle() as u32;
             let active_connections = pool_size.saturating_sub(idle_connections);
-            
+
             // Get system memory information
             let memory_used_mb = get_memory_usage_mb().unwrap_or(0);
             let memory_total_mb = get_total_memory_mb().unwrap_or(0);
             let memory_used_bytes = memory_used_mb * 1024 * 1024;
             let memory_total_bytes = memory_total_mb * 1024 * 1024;
-            
+
             // Calculate simple request estimates
             let estimated_requests_total = uptime_seconds * 3; // Conservative estimate
-            let requests_per_second = if uptime_seconds > 0 { estimated_requests_total / uptime_seconds } else { 0 };
-            
+            let requests_per_second = if uptime_seconds > 0 {
+                estimated_requests_total / uptime_seconds
+            } else {
+                0
+            };
+
             let metrics = serde_json::json!({
                 "application": {
                     "uptime_seconds": uptime_seconds,
@@ -5841,11 +6408,15 @@ async fn cupboard_queue_browse(
         .await
     {
         Ok((items, stats)) => {
-            let total_items = stats.get("total_items").unwrap_or(&serde_json::json!(0)).as_i64().unwrap_or(0);
+            let total_items = stats
+                .get("total_items")
+                .unwrap_or(&serde_json::json!(0))
+                .as_i64()
+                .unwrap_or(0);
             let current_offset = query.offset.unwrap_or(0) as i64;
             let current_limit = query.limit.unwrap_or(50) as i64;
             let has_more = (current_offset + current_limit) < total_items;
-            
+
             let queue_items = serde_json::json!({
                 "items": items,
                 "pagination": {
@@ -5963,7 +6534,7 @@ async fn cupboard_queue_bulk_operations(
     debug!("Cupboard bulk operation requested: {:?}", operation);
 
     let requester = operation.requester.unwrap_or_else(|| "admin".to_string());
-    
+
     // Parse target IDs if provided
     let target_ids: Vec<String> = if let Some(target) = &operation.target {
         target.split(',').map(|s| s.trim().to_string()).collect()
@@ -5975,7 +6546,9 @@ async fn cupboard_queue_bulk_operations(
         let error_response = ApiResponse::<serde_json::Value> {
             data: None,
             error: Some("invalid_target".to_string()),
-            reason: Some("No target queue items specified. Provide comma-separated item IDs.".to_string()),
+            reason: Some(
+                "No target queue items specified. Provide comma-separated item IDs.".to_string(),
+            ),
             details: None,
             pagination: None,
         };
@@ -5984,7 +6557,11 @@ async fn cupboard_queue_bulk_operations(
 
     let result = match operation.operation.as_str() {
         "reschedule" => {
-            match app_state.database.bulk_reschedule_queue_items(&target_ids, &requester).await {
+            match app_state
+                .database
+                .bulk_reschedule_queue_items(&target_ids, &requester)
+                .await
+            {
                 Ok(affected_rows) => {
                     json!({
                         "operation": "reschedule",
@@ -5999,7 +6576,7 @@ async fn cupboard_queue_bulk_operations(
                 Err(e) => {
                     json!({
                         "operation": "reschedule",
-                        "status": "error", 
+                        "status": "error",
                         "message": format!("Failed to reschedule items: {}", e),
                         "affected_items": 0,
                         "executed_at": chrono::Utc::now()
@@ -6008,7 +6585,11 @@ async fn cupboard_queue_bulk_operations(
             }
         }
         "cancel" => {
-            match app_state.database.bulk_cancel_queue_items(&target_ids, &requester).await {
+            match app_state
+                .database
+                .bulk_cancel_queue_items(&target_ids, &requester)
+                .await
+            {
                 Ok(affected_rows) => {
                     json!({
                         "operation": "cancel",
@@ -6032,7 +6613,11 @@ async fn cupboard_queue_bulk_operations(
             }
         }
         "priority_up" => {
-            match app_state.database.bulk_adjust_priority(&target_ids, 10, &requester).await {
+            match app_state
+                .database
+                .bulk_adjust_priority(&target_ids, 10, &requester)
+                .await
+            {
                 Ok(affected_rows) => {
                     json!({
                         "operation": "priority_up",
@@ -6057,7 +6642,11 @@ async fn cupboard_queue_bulk_operations(
             }
         }
         "priority_down" => {
-            match app_state.database.bulk_adjust_priority(&target_ids, -10, &requester).await {
+            match app_state
+                .database
+                .bulk_adjust_priority(&target_ids, -10, &requester)
+                .await
+            {
                 Ok(affected_rows) => {
                     json!({
                         "operation": "priority_down",
@@ -6121,7 +6710,7 @@ async fn cupboard_jobs_pause(
     // Implement actual job pause via runner service
     let runner_url = app_state.config.runner_url();
     let pause_url = format!("{}/api/admin/pause", runner_url);
-    
+
     let client = reqwest::Client::new();
     match client
         .post(&pause_url)
@@ -6153,7 +6742,10 @@ async fn cupboard_jobs_pause(
                             "/cupboard/jobs/pause",
                         )
                     } else {
-                        warn!("Runner service returned error for pause: {} - {}", status_code, response_text);
+                        warn!(
+                            "Runner service returned error for pause: {} - {}",
+                            status_code, response_text
+                        );
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_pause_failed".to_string()),
@@ -6212,7 +6804,7 @@ async fn cupboard_jobs_resume(
     // Implement actual job resume via runner service
     let runner_url = app_state.config.runner_url();
     let resume_url = format!("{}/api/admin/resume", runner_url);
-    
+
     let client = reqwest::Client::new();
     match client
         .post(&resume_url)
@@ -6244,7 +6836,10 @@ async fn cupboard_jobs_resume(
                             "/cupboard/jobs/resume",
                         )
                     } else {
-                        warn!("Runner service returned error for resume: {} - {}", status_code, response_text);
+                        warn!(
+                            "Runner service returned error for resume: {} - {}",
+                            status_code, response_text
+                        );
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_resume_failed".to_string()),
@@ -6303,7 +6898,7 @@ async fn cupboard_jobs_cancel(
     // Implement actual job cancellation via runner service
     let runner_url = app_state.config.runner_url();
     let cancel_url = format!("{}/api/admin/cancel", runner_url);
-    
+
     let client = reqwest::Client::new();
     match client
         .post(&cancel_url)
@@ -6335,7 +6930,10 @@ async fn cupboard_jobs_cancel(
                             "/cupboard/jobs/cancel",
                         )
                     } else {
-                        warn!("Runner service returned error for cancel: {} - {}", status_code, response_text);
+                        warn!(
+                            "Runner service returned error for cancel: {} - {}",
+                            status_code, response_text
+                        );
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_cancel_failed".to_string()),
@@ -6394,7 +6992,7 @@ async fn cupboard_jobs_requeue(
     // Implement actual job requeue via runner service
     let runner_url = app_state.config.runner_url();
     let requeue_url = format!("{}/api/admin/requeue", runner_url);
-    
+
     let client = reqwest::Client::new();
     match client
         .post(&requeue_url)
@@ -6426,7 +7024,10 @@ async fn cupboard_jobs_requeue(
                             "/cupboard/jobs/requeue",
                         )
                     } else {
-                        warn!("Runner service returned error for requeue: {} - {}", status_code, response_text);
+                        warn!(
+                            "Runner service returned error for requeue: {} - {}",
+                            status_code, response_text
+                        );
                         let error_response = ApiResponse::<serde_json::Value> {
                             data: None,
                             error: Some("runner_requeue_failed".to_string()),
@@ -6491,33 +7092,37 @@ async fn cupboard_runs(
     // Get admin-level runs with enhanced details
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
-    
+
     // Build database query with filters
     let mut sql_query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, vcs_type, logfilenames FROM run".to_string();
     let mut conditions = Vec::new();
     let mut bind_values: Vec<String> = vec![];
-    
+
     // Add status filter
     if let Some(status) = &query.status {
         match status.as_str() {
             "active" => conditions.push("finish_time IS NULL".to_string()),
-            "completed" => conditions.push("finish_time IS NOT NULL AND result_code = 'success'".to_string()),
-            "failed" => conditions.push("finish_time IS NOT NULL AND result_code != 'success'".to_string()),
+            "completed" => {
+                conditions.push("finish_time IS NOT NULL AND result_code = 'success'".to_string())
+            }
+            "failed" => {
+                conditions.push("finish_time IS NOT NULL AND result_code != 'success'".to_string())
+            }
             _ => {
                 conditions.push("result_code = $1".to_string());
                 bind_values.push(status.clone());
             }
         }
     }
-    
+
     if !conditions.is_empty() {
         sql_query.push_str(" WHERE ");
         sql_query.push_str(&conditions.join(" AND "));
     }
-    
+
     sql_query.push_str(" ORDER BY start_time DESC");
     sql_query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
-    
+
     match app_state.database.pool().acquire().await {
         Ok(mut conn) => {
             // Execute the main query
@@ -6525,7 +7130,7 @@ async fn cupboard_runs(
             for value in &bind_values {
                 query_builder = query_builder.bind(value);
             }
-            
+
             match query_builder.fetch_all(&mut *conn).await {
                 Ok(rows) => {
                     let mut runs = Vec::new();
@@ -6547,7 +7152,7 @@ async fn cupboard_runs(
                         });
                         runs.push(run);
                     }
-                    
+
                     // Get summary statistics
                     let stats_query = "SELECT 
                         COUNT(*) as total_runs,
@@ -6555,7 +7160,7 @@ async fn cupboard_runs(
                         COUNT(CASE WHEN finish_time IS NOT NULL AND result_code != 'success' THEN 1 END) as failed_runs,
                         COUNT(CASE WHEN finish_time IS NOT NULL AND result_code = 'success' THEN 1 END) as completed_runs
                         FROM run";
-                    
+
                     let summary = match sqlx::query(stats_query).fetch_one(&mut *conn).await {
                         Ok(stats_row) => serde_json::json!({
                             "total_runs": stats_row.get::<i64, _>("total_runs"),
@@ -6568,15 +7173,15 @@ async fn cupboard_runs(
                             "active_runs": 0,
                             "failed_runs": 0,
                             "completed_runs": 0
-                        })
+                        }),
                     };
-                    
+
                     let runs_data = serde_json::json!({
                         "runs": runs,
                         "summary": summary,
                         "admin_actions": [
                             "force_finish",
-                            "requeue", 
+                            "requeue",
                             "cancel",
                             "view_logs",
                             "reprocess_logs"
@@ -6594,9 +7199,9 @@ async fn cupboard_runs(
                         },
                         "timestamp": chrono::Utc::now()
                     });
-                    
+
                     negotiate_response(ApiResponse::success(runs_data), &headers, "/cupboard/runs")
-                },
+                }
                 Err(e) => {
                     warn!("Database error getting runs: {}", e);
                     let error_response = ApiResponse::<serde_json::Value>::error_typed(
@@ -6606,7 +7211,7 @@ async fn cupboard_runs(
                     negotiate_response(error_response, &headers, "/cupboard/runs")
                 }
             }
-        },
+        }
         Err(e) => {
             warn!("Database connection error: {}", e);
             let error_response = ApiResponse::<serde_json::Value>::error_typed(
@@ -6776,23 +7381,30 @@ async fn cupboard_run_force_finish(
     // First check if the run exists and is active
     match app_state.database.get_run_details(&run_id).await {
         Ok(Some(run_details)) => {
-            if run_details.result_code.is_some() && run_details.result_code.as_ref().unwrap() != "running" {
+            if run_details.result_code.is_some()
+                && run_details.result_code.as_ref().unwrap() != "running"
+            {
                 let error_response = ApiResponse::<serde_json::Value>::error_typed(
                     format!("Run {} is already finished", run_id),
                     Some("RUN_ALREADY_FINISHED".to_string()),
                 );
-                return negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id));
+                return negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/cupboard/runs/{}/force-finish", run_id),
+                );
             }
 
             // Make HTTP request to runner service to force finish the run
             let runner_url = app_state.config.runner_url();
             let force_finish_url = format!("{}/admin/runs/{}/kill", runner_url, run_id);
-            
+
             let client = reqwest::Client::new();
-            match client.post(&force_finish_url)
+            match client
+                .post(&force_finish_url)
                 .timeout(std::time::Duration::from_secs(30))
                 .send()
-                .await 
+                .await
             {
                 Ok(response) => {
                     if response.status().is_success() {
@@ -6808,45 +7420,70 @@ async fn cupboard_run_force_finish(
                             },
                             "timestamp": chrono::Utc::now()
                         });
-                        
+
                         negotiate_response(
                             ApiResponse::success(result),
                             &headers,
                             &format!("/cupboard/runs/{}/force-finish", run_id),
                         )
                     } else {
-                        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
                         let error_response = ApiResponse::<serde_json::Value>::error_typed(
-                            format!("Runner service rejected force finish request: {}", error_text),
+                            format!(
+                                "Runner service rejected force finish request: {}",
+                                error_text
+                            ),
                             Some("RUNNER_ERROR".to_string()),
                         );
-                        negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/cupboard/runs/{}/force-finish", run_id),
+                        )
                     }
-                },
+                }
                 Err(e) => {
-                    warn!("Failed to communicate with runner service for force finish: {}", e);
+                    warn!(
+                        "Failed to communicate with runner service for force finish: {}",
+                        e
+                    );
                     let error_response = ApiResponse::<serde_json::Value>::error_typed(
                         format!("Failed to communicate with runner service: {}", e),
                         Some("RUNNER_COMMUNICATION_ERROR".to_string()),
                     );
-                    negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+                    negotiate_response(
+                        error_response,
+                        &headers,
+                        &format!("/cupboard/runs/{}/force-finish", run_id),
+                    )
                 }
             }
-        },
+        }
         Ok(None) => {
             let error_response = ApiResponse::<serde_json::Value>::error_typed(
                 format!("Run {} not found", run_id),
                 Some("RUN_NOT_FOUND".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
-        },
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/runs/{}/force-finish", run_id),
+            )
+        }
         Err(e) => {
             warn!("Database error checking run {}: {}", run_id, e);
             let error_response = ApiResponse::<serde_json::Value>::error_typed(
                 "Database error checking run".to_string(),
                 Some("DATABASE_ERROR".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/cupboard/runs/{}/force-finish", run_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/runs/{}/force-finish", run_id),
+            )
         }
     }
 }
@@ -6891,13 +7528,16 @@ async fn cupboard_publish_overview(
             "SELECT 
                 COUNT(CASE WHEN publish_status = 'published' THEN 1 END) as total_published,
                 COUNT(CASE WHEN publish_status = 'pending' THEN 1 END) as pending_publish
-             FROM publish_ready"
-        ).fetch_one(&mut *conn).await {
+             FROM publish_ready",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        {
             overview_stats["total_published"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("total_published"))
+                serde_json::Number::from(row.get::<i64, _>("total_published")),
             );
             overview_stats["pending_publish"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("pending_publish"))
+                serde_json::Number::from(row.get::<i64, _>("pending_publish")),
             );
         }
 
@@ -6908,22 +7548,24 @@ async fn cupboard_publish_overview(
                 COUNT(CASE WHEN publish_status = 'published' THEN 1 END) as successful,
                 COUNT(CASE WHEN publish_status = 'failed' THEN 1 END) as failed
              FROM publish_ready 
-             WHERE start_time >= NOW() - INTERVAL '24 hours'"
-        ).fetch_one(&mut *conn).await {
+             WHERE start_time >= NOW() - INTERVAL '24 hours'",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        {
             let total: i64 = row.get("total_attempts");
             let successful: i64 = row.get("successful");
             let failed: i64 = row.get("failed");
-            
-            recent_activity["last_24h_published"] = serde_json::Value::Number(
-                serde_json::Number::from(successful)
-            );
-            recent_activity["failed_publishes"] = serde_json::Value::Number(
-                serde_json::Number::from(failed)
-            );
-            
+
+            recent_activity["last_24h_published"] =
+                serde_json::Value::Number(serde_json::Number::from(successful));
+            recent_activity["failed_publishes"] =
+                serde_json::Value::Number(serde_json::Number::from(failed));
+
             if total > 0 {
                 recent_activity["success_rate"] = serde_json::Value::Number(
-                    serde_json::Number::from_f64((successful as f64 / total as f64) * 100.0).unwrap()
+                    serde_json::Number::from_f64((successful as f64 / total as f64) * 100.0)
+                        .unwrap(),
                 );
             }
         }
@@ -6940,31 +7582,35 @@ async fn cupboard_publish_overview(
         // Try to check publisher service health
         let client = reqwest::Client::new();
         let health_url = format!("{}/health", publisher_url);
-        
-        monitoring["publisher_service"] = match client.get(&health_url)
+
+        monitoring["publisher_service"] = match client
+            .get(&health_url)
             .timeout(std::time::Duration::from_secs(5))
             .send()
-            .await 
+            .await
         {
             Ok(response) if response.status().is_success() => {
                 serde_json::Value::String("healthy".to_string())
-            },
+            }
             Ok(_) => serde_json::Value::String("unhealthy".to_string()),
             Err(_) => serde_json::Value::String("unreachable".to_string()),
         };
-        
+
         // If publisher is healthy, try to get rate limiting info
         if monitoring["publisher_service"] == "healthy" {
             let rate_limit_url = format!("{}/status/rate-limits", publisher_url);
-            if let Ok(response) = client.get(&rate_limit_url)
+            if let Ok(response) = client
+                .get(&rate_limit_url)
                 .timeout(std::time::Duration::from_secs(5))
                 .send()
-                .await 
+                .await
             {
                 if response.status().is_success() {
                     if let Ok(rate_info) = response.json::<serde_json::Value>().await {
-                        monitoring["forge_connectivity"] = serde_json::Value::String("connected".to_string());
-                        monitoring["merge_proposal_status"] = rate_info.get("status")
+                        monitoring["forge_connectivity"] =
+                            serde_json::Value::String("connected".to_string());
+                        monitoring["merge_proposal_status"] = rate_info
+                            .get("status")
                             .unwrap_or(&serde_json::Value::String("unknown".to_string()))
                             .clone();
                     }
@@ -6984,7 +7630,7 @@ async fn cupboard_publish_overview(
         "monitoring": monitoring,
         "actions": [
             "trigger_autopublish",
-            "scan_for_publishes", 
+            "scan_for_publishes",
             "view_pending",
             "view_history",
             "check_rate_limits"
@@ -7357,20 +8003,19 @@ async fn cupboard_merge_proposals_overview(
                 COUNT(CASE WHEN status = 'open' THEN 1 END) as open,
                 COUNT(CASE WHEN status = 'merged' THEN 1 END) as merged,
                 COUNT(CASE WHEN status = 'rejected' OR status = 'closed' THEN 1 END) as rejected
-             FROM merge_proposal"
-        ).fetch_one(&mut *conn).await {
-            stats["total_proposals"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("total"))
-            );
-            stats["open_proposals"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("open"))
-            );
-            stats["merged_proposals"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("merged"))
-            );
-            stats["rejected_proposals"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("rejected"))
-            );
+             FROM merge_proposal",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        {
+            stats["total_proposals"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("total")));
+            stats["open_proposals"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("open")));
+            stats["merged_proposals"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("merged")));
+            stats["rejected_proposals"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("rejected")));
         }
     }
 
@@ -7378,7 +8023,7 @@ async fn cupboard_merge_proposals_overview(
         "statistics": stats,
         "actions": [
             "create_proposal",
-            "update_status", 
+            "update_status",
             "merge_proposal",
             "view_details",
             "bulk_operations"
@@ -7419,12 +8064,13 @@ async fn cupboard_create_merge_proposal(
     if let Some(publisher_url) = app_state.config.publisher_url() {
         let client = reqwest::Client::new();
         let create_url = format!("{}/api/merge-proposals", publisher_url);
-        
-        match client.post(&create_url)
+
+        match client
+            .post(&create_url)
             .json(&request)
             .timeout(std::time::Duration::from_secs(30))
             .send()
-            .await 
+            .await
         {
             Ok(response) => {
                 if response.status().is_success() {
@@ -7437,21 +8083,24 @@ async fn cupboard_create_merge_proposal(
                         "publisher_response": response.status().as_u16(),
                         "timestamp": chrono::Utc::now()
                     });
-                    
+
                     negotiate_response(
                         ApiResponse::success(result),
                         &headers,
                         "/cupboard/merge-proposals/create",
                     )
                 } else {
-                    let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    let error_text = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
                     let error_response = ApiResponse::<serde_json::Value>::error_typed(
                         format!("Publisher service error: {}", error_text),
                         Some("PUBLISHER_ERROR".to_string()),
                     );
                     negotiate_response(error_response, &headers, "/cupboard/merge-proposals/create")
                 }
-            },
+            }
             Err(e) => {
                 warn!("Failed to communicate with publisher service: {}", e);
                 let error_response = ApiResponse::<serde_json::Value>::error_typed(
@@ -7487,7 +8136,10 @@ async fn cupboard_update_merge_proposal_status(
     headers: HeaderMap,
     Json(request): Json<UpdateMergeProposalStatusRequest>,
 ) -> impl axum::response::IntoResponse {
-    debug!("Update merge proposal status requested for: {} with {:?}", proposal_id, request);
+    debug!(
+        "Update merge proposal status requested for: {} with {:?}",
+        proposal_id, request
+    );
 
     // Update in database
     match app_state.database.pool().acquire().await {
@@ -7496,7 +8148,7 @@ async fn cupboard_update_merge_proposal_status(
                 .bind(&request.status)
                 .bind(format!("%{}", proposal_id))
                 .execute(&mut *conn)
-                .await 
+                .await
             {
                 Ok(result) => {
                     if result.rows_affected() > 0 {
@@ -7508,7 +8160,7 @@ async fn cupboard_update_merge_proposal_status(
                             "rows_affected": result.rows_affected(),
                             "timestamp": chrono::Utc::now()
                         });
-                        
+
                         negotiate_response(
                             ApiResponse::success(response),
                             &headers,
@@ -7519,26 +8171,38 @@ async fn cupboard_update_merge_proposal_status(
                             format!("Merge proposal {} not found", proposal_id),
                             Some("NOT_FOUND".to_string()),
                         );
-                        negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+                        negotiate_response(
+                            error_response,
+                            &headers,
+                            &format!("/cupboard/merge-proposals/{}/status", proposal_id),
+                        )
                     }
-                },
+                }
                 Err(e) => {
                     warn!("Database error updating merge proposal status: {}", e);
                     let error_response = ApiResponse::<serde_json::Value>::error_typed(
                         "Database error".to_string(),
                         Some("DATABASE_ERROR".to_string()),
                     );
-                    negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+                    negotiate_response(
+                        error_response,
+                        &headers,
+                        &format!("/cupboard/merge-proposals/{}/status", proposal_id),
+                    )
                 }
             }
-        },
+        }
         Err(e) => {
             warn!("Database connection error: {}", e);
             let error_response = ApiResponse::<serde_json::Value>::error_typed(
                 "Database connection error".to_string(),
                 Some("DATABASE_CONNECTION_ERROR".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/status", proposal_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/merge-proposals/{}/status", proposal_id),
+            )
         }
     }
 }
@@ -7562,40 +8226,51 @@ async fn cupboard_merge_proposal(
     // This would typically involve calling the publisher service to perform the merge
     if let Some(publisher_url) = app_state.config.publisher_url() {
         let client = reqwest::Client::new();
-        let merge_url = format!("{}/api/merge-proposals/{}/merge", publisher_url, proposal_id);
-        
-        match client.post(&merge_url)
+        let merge_url = format!(
+            "{}/api/merge-proposals/{}/merge",
+            publisher_url, proposal_id
+        );
+
+        match client
+            .post(&merge_url)
             .timeout(std::time::Duration::from_secs(60)) // Merging might take longer
             .send()
-            .await 
+            .await
         {
             Ok(response) => {
                 let result = serde_json::json!({
                     "status": if response.status().is_success() { "success" } else { "failed" },
-                    "message": if response.status().is_success() { 
-                        "Merge proposal merge initiated" 
-                    } else { 
-                        "Merge proposal merge failed" 
+                    "message": if response.status().is_success() {
+                        "Merge proposal merge initiated"
+                    } else {
+                        "Merge proposal merge failed"
                     },
                     "proposal_id": proposal_id,
                     "publisher_response": response.status().as_u16(),
                     "warning": "This is an irreversible action",
                     "timestamp": chrono::Utc::now()
                 });
-                
+
                 negotiate_response(
                     ApiResponse::success(result),
                     &headers,
                     &format!("/cupboard/merge-proposals/{}/merge", proposal_id),
                 )
-            },
+            }
             Err(e) => {
-                warn!("Failed to communicate with publisher service for merge: {}", e);
+                warn!(
+                    "Failed to communicate with publisher service for merge: {}",
+                    e
+                );
                 let error_response = ApiResponse::<serde_json::Value>::error_typed(
                     format!("Publisher service error: {}", e),
                     Some("SERVICE_ERROR".to_string()),
                 );
-                negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/merge", proposal_id))
+                negotiate_response(
+                    error_response,
+                    &headers,
+                    &format!("/cupboard/merge-proposals/{}/merge", proposal_id),
+                )
             }
         }
     } else {
@@ -7603,7 +8278,11 @@ async fn cupboard_merge_proposal(
             "Publisher service not configured".to_string(),
             Some("SERVICE_NOT_CONFIGURED".to_string()),
         );
-        negotiate_response(error_response, &headers, &format!("/cupboard/merge-proposals/{}/merge", proposal_id))
+        negotiate_response(
+            error_response,
+            &headers,
+            &format!("/cupboard/merge-proposals/{}/merge", proposal_id),
+        )
     }
 }
 
@@ -7727,7 +8406,7 @@ async fn cupboard_cleanup_branches(
     debug!("Branch cleanup requested");
 
     let result = serde_json::json!({
-        "status": "not_implemented", 
+        "status": "not_implemented",
         "message": "Branch cleanup requires integration with VCS store services",
         "planned_actions": [
             "identify_stale_branches",
@@ -7751,7 +8430,7 @@ async fn cupboard_cleanup_branches(
 }
 
 // ============================================================================
-// Repository Management  
+// Repository Management
 // ============================================================================
 
 /// Get repositories overview for admin management
@@ -7785,20 +8464,19 @@ async fn cupboard_repositories_overview(
                 COUNT(CASE WHEN vcs_type = 'git' THEN 1 END) as git_repos,
                 COUNT(CASE WHEN vcs_type = 'bzr' THEN 1 END) as bzr_repos,
                 COUNT(CASE WHEN NOT inactive THEN 1 END) as active
-             FROM codebase"
-        ).fetch_one(&mut *conn).await {
-            stats["total_repositories"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("total"))
-            );
-            stats["active_repositories"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("active"))
-            );
-            stats["git_repositories"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("git_repos"))
-            );
-            stats["bzr_repositories"] = serde_json::Value::Number(
-                serde_json::Number::from(row.get::<i64, _>("bzr_repos"))
-            );
+             FROM codebase",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        {
+            stats["total_repositories"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("total")));
+            stats["active_repositories"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("active")));
+            stats["git_repositories"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("git_repos")));
+            stats["bzr_repositories"] =
+                serde_json::Value::Number(serde_json::Number::from(row.get::<i64, _>("bzr_repos")));
         }
     }
 
@@ -7887,11 +8565,11 @@ async fn cupboard_repository_status(
     match app_state.database.pool().acquire().await {
         Ok(mut conn) => {
             match sqlx::query(
-                "SELECT name, url, vcs_type, branch, inactive FROM codebase WHERE name = $1"
+                "SELECT name, url, vcs_type, branch, inactive FROM codebase WHERE name = $1",
             )
             .bind(&repo_id)
             .fetch_one(&mut *conn)
-            .await 
+            .await
             {
                 Ok(row) => {
                     let status = serde_json::json!({
@@ -7906,29 +8584,37 @@ async fn cupboard_repository_status(
                         "health": "requires_check",
                         "timestamp": chrono::Utc::now()
                     });
-                    
+
                     negotiate_response(
                         ApiResponse::success(status),
                         &headers,
                         &format!("/cupboard/repositories/{}/status", repo_id),
                     )
-                },
+                }
                 Err(_) => {
                     let error_response = ApiResponse::<serde_json::Value>::error_typed(
                         format!("Repository {} not found", repo_id),
                         Some("NOT_FOUND".to_string()),
                     );
-                    negotiate_response(error_response, &headers, &format!("/cupboard/repositories/{}/status", repo_id))
+                    negotiate_response(
+                        error_response,
+                        &headers,
+                        &format!("/cupboard/repositories/{}/status", repo_id),
+                    )
                 }
             }
-        },
+        }
         Err(e) => {
             warn!("Database connection error: {}", e);
             let error_response = ApiResponse::<serde_json::Value>::error_typed(
                 "Database connection error".to_string(),
                 Some("DATABASE_CONNECTION_ERROR".to_string()),
             );
-            negotiate_response(error_response, &headers, &format!("/cupboard/repositories/{}/status", repo_id))
+            negotiate_response(
+                error_response,
+                &headers,
+                &format!("/cupboard/repositories/{}/status", repo_id),
+            )
         }
     }
 }
@@ -7943,13 +8629,13 @@ async fn fetch_runner_status(
     runner_url: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     let status_url = format!("{}/status", runner_url.trim_end_matches('/'));
-    
+
     let response = client
         .get(&status_url)
         .timeout(std::time::Duration::from_secs(5))
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         let status: serde_json::Value = response.json().await?;
         Ok(status)
@@ -7965,9 +8651,9 @@ async fn fetch_workers_from_runner(
 ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     let runner_url = app_state.config.runner_url();
     let workers_url = format!("{}/workers", runner_url.trim_end_matches('/'));
-    
+
     let mut url = reqwest::Url::parse(&workers_url)?;
-    
+
     // Add query parameters
     {
         let mut query_pairs = url.query_pairs_mut();
@@ -7984,62 +8670,100 @@ async fn fetch_workers_from_runner(
             query_pairs.append_pair("detailed", &detailed.to_string());
         }
     }
-    
+
     let response = app_state
         .http_client
         .get(url)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         let workers_data: serde_json::Value = response.json().await?;
         Ok(workers_data)
     } else {
-        Err(format!("Runner returned status {} for workers endpoint", response.status()).into())
+        Err(format!(
+            "Runner returned status {} for workers endpoint",
+            response.status()
+        )
+        .into())
     }
 }
 
 /// Check health status of all external services
 async fn fetch_service_health_status(app_state: &AppState) -> serde_json::Value {
     let mut services = serde_json::Map::new();
-    
+
     // Check runner service
-    let runner_status = match fetch_runner_status(&app_state.http_client, &app_state.config.site().runner_url).await {
+    let runner_status = match fetch_runner_status(
+        &app_state.http_client,
+        &app_state.config.site().runner_url,
+    )
+    .await
+    {
         Ok(_) => "healthy",
-        Err(_) => "unhealthy"
+        Err(_) => "unhealthy",
     };
-    services.insert("runner".to_string(), serde_json::Value::String(runner_status.to_string()));
-    
+    services.insert(
+        "runner".to_string(),
+        serde_json::Value::String(runner_status.to_string()),
+    );
+
     // Check publisher service if configured
     if let Some(publisher_url) = &app_state.config.site().publisher_url {
-        let publisher_status = match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
-            Ok(_) => "healthy",
-            Err(_) => "unhealthy"
-        };
-        services.insert("publisher".to_string(), serde_json::Value::String(publisher_status.to_string()));
+        let publisher_status =
+            match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+                Ok(_) => "healthy",
+                Err(_) => "unhealthy",
+            };
+        services.insert(
+            "publisher".to_string(),
+            serde_json::Value::String(publisher_status.to_string()),
+        );
     } else {
-        services.insert("publisher".to_string(), serde_json::Value::String("not_configured".to_string()));
+        services.insert(
+            "publisher".to_string(),
+            serde_json::Value::String("not_configured".to_string()),
+        );
     }
-    
+
     // Check archiver service if configured
     if let Some(archiver_url) = &app_state.config.site().archiver_url {
-        let archiver_status = match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
-            Ok(_) => "healthy",
-            Err(_) => "unhealthy"
-        };
-        services.insert("archiver".to_string(), serde_json::Value::String(archiver_status.to_string()));
+        let archiver_status =
+            match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
+                Ok(_) => "healthy",
+                Err(_) => "unhealthy",
+            };
+        services.insert(
+            "archiver".to_string(),
+            serde_json::Value::String(archiver_status.to_string()),
+        );
     } else {
-        services.insert("archiver".to_string(), serde_json::Value::String("not_configured".to_string()));
+        services.insert(
+            "archiver".to_string(),
+            serde_json::Value::String("not_configured".to_string()),
+        );
     }
-    
+
     // Check differ service
-    let differ_status = match check_service_health(&app_state.http_client, app_state.config.differ_url().unwrap_or("http://localhost:9920"), "differ").await {
+    let differ_status = match check_service_health(
+        &app_state.http_client,
+        app_state
+            .config
+            .differ_url()
+            .unwrap_or("http://localhost:9920"),
+        "differ",
+    )
+    .await
+    {
         Ok(_) => "healthy",
-        Err(_) => "unhealthy"
+        Err(_) => "unhealthy",
     };
-    services.insert("differ".to_string(), serde_json::Value::String(differ_status.to_string()));
-    
+    services.insert(
+        "differ".to_string(),
+        serde_json::Value::String(differ_status.to_string()),
+    );
+
     serde_json::Value::Object(services)
 }
 
@@ -8050,17 +8774,22 @@ async fn check_service_health(
     service_name: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let health_url = format!("{}/health", service_url.trim_end_matches('/'));
-    
+
     let response = client
         .get(&health_url)
         .timeout(std::time::Duration::from_secs(3))
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         Ok(())
     } else {
-        Err(format!("{} service returned status {}", service_name, response.status()).into())
+        Err(format!(
+            "{} service returned status {}",
+            service_name,
+            response.status()
+        )
+        .into())
     }
 }
 
@@ -8072,14 +8801,14 @@ async fn get_database_health_status(
     // Perform database health checks
     let database_health = match app_state.database.health_check().await {
         Ok(_) => "healthy",
-        Err(_) => "unhealthy"
+        Err(_) => "unhealthy",
     };
 
     // Check Redis connectivity if configured
     let redis_health = if let Some(ref redis) = app_state.redis {
         match redis.get_connection() {
             Ok(_) => "healthy",
-            Err(_) => "unhealthy"
+            Err(_) => "unhealthy",
         }
     } else {
         "not_configured"
@@ -8104,35 +8833,36 @@ async fn get_system_resource_status() -> serde_json::Value {
     use std::process::Command;
 
     // Get memory information (Linux-specific)
-    let memory_info = if let Ok(output) = Command::new("cat")
-        .arg("/proc/meminfo")
-        .output()
-    {
+    let memory_info = if let Ok(output) = Command::new("cat").arg("/proc/meminfo").output() {
         let content = String::from_utf8_lossy(&output.stdout);
         let mut mem_total = 0;
         let mut mem_available = 0;
-        
+
         for line in content.lines() {
             if line.starts_with("MemTotal:") {
-                mem_total = line.split_whitespace()
+                mem_total = line
+                    .split_whitespace()
                     .nth(1)
                     .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(0) * 1024; // Convert KB to bytes
+                    .unwrap_or(0)
+                    * 1024; // Convert KB to bytes
             } else if line.starts_with("MemAvailable:") {
-                mem_available = line.split_whitespace()
+                mem_available = line
+                    .split_whitespace()
                     .nth(1)
                     .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(0) * 1024; // Convert KB to bytes
+                    .unwrap_or(0)
+                    * 1024; // Convert KB to bytes
             }
         }
-        
+
         let used = mem_total.saturating_sub(mem_available);
-        let usage_percent = if mem_total > 0 { 
-            (used as f64 / mem_total as f64 * 100.0) 
-        } else { 
-            0.0 
+        let usage_percent = if mem_total > 0 {
+            (used as f64 / mem_total as f64 * 100.0)
+        } else {
+            0.0
         };
-        
+
         serde_json::json!({
             "total_bytes": mem_total,
             "used_bytes": used,
@@ -8147,10 +8877,7 @@ async fn get_system_resource_status() -> serde_json::Value {
     };
 
     // Get load average (Linux-specific)
-    let load_info = if let Ok(output) = Command::new("cat")
-        .arg("/proc/loadavg")
-        .output()
-    {
+    let load_info = if let Ok(output) = Command::new("cat").arg("/proc/loadavg").output() {
         let content = String::from_utf8_lossy(&output.stdout);
         let loads: Vec<&str> = content.split_whitespace().take(3).collect();
         serde_json::json!({
@@ -8165,11 +8892,7 @@ async fn get_system_resource_status() -> serde_json::Value {
     };
 
     // Get disk usage for current directory
-    let disk_info = if let Ok(output) = Command::new("df")
-        .arg("-h")
-        .arg(".")
-        .output()
-    {
+    let disk_info = if let Ok(output) = Command::new("df").arg("-h").arg(".").output() {
         let content = String::from_utf8_lossy(&output.stdout);
         if let Some(line) = content.lines().nth(1) {
             let parts: Vec<&str> = line.split_whitespace().collect();
@@ -8200,7 +8923,7 @@ fn get_memory_usage_mb() -> Result<u64, std::io::Error> {
     let meminfo = std::fs::read_to_string("/proc/meminfo")?;
     let mut mem_total = 0u64;
     let mut mem_available = 0u64;
-    
+
     for line in meminfo.lines() {
         if let Some(rest) = line.strip_prefix("MemTotal:") {
             if let Some(kb_str) = rest.trim().split_whitespace().next() {
@@ -8212,14 +8935,14 @@ fn get_memory_usage_mb() -> Result<u64, std::io::Error> {
             }
         }
     }
-    
+
     Ok(mem_total.saturating_sub(mem_available))
 }
 
 /// Get total system memory in megabytes.
 fn get_total_memory_mb() -> Result<u64, std::io::Error> {
     let meminfo = std::fs::read_to_string("/proc/meminfo")?;
-    
+
     for line in meminfo.lines() {
         if let Some(rest) = line.strip_prefix("MemTotal:") {
             if let Some(kb_str) = rest.trim().split_whitespace().next() {
@@ -8227,7 +8950,7 @@ fn get_total_memory_mb() -> Result<u64, std::io::Error> {
             }
         }
     }
-    
+
     Ok(0)
 }
 
@@ -8236,7 +8959,7 @@ fn get_cpu_usage_percent() -> Result<f64, std::io::Error> {
     // This is a simplified implementation that reads /proc/loadavg
     // For more accurate CPU usage, you'd need to sample /proc/stat over time
     let loadavg = std::fs::read_to_string("/proc/loadavg")?;
-    
+
     if let Some(load_1min) = loadavg.split_whitespace().next() {
         let load: f64 = load_1min.parse().unwrap_or(0.0);
         // Convert load average to approximate CPU percentage
@@ -8250,11 +8973,9 @@ fn get_cpu_usage_percent() -> Result<f64, std::io::Error> {
 /// Get disk usage percentage for the root filesystem.
 fn get_disk_usage_percent() -> Result<f64, std::io::Error> {
     use std::process::Command;
-    
-    let output = Command::new("df")
-        .args(["-h", "/"])
-        .output()?;
-    
+
+    let output = Command::new("df").args(["-h", "/"]).output()?;
+
     if output.status.success() {
         let output_str = String::from_utf8_lossy(&output.stdout);
         // Parse df output: skip header line, get the second line with root filesystem
@@ -8268,7 +8989,7 @@ fn get_disk_usage_percent() -> Result<f64, std::io::Error> {
             }
         }
     }
-    
+
     Ok(0.0)
 }
 
@@ -8296,7 +9017,13 @@ async fn admin_get_services_status(
     let mut overall_health = true;
 
     // Check runner service
-    let runner_health = match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+    let runner_health = match check_service_health(
+        &app_state.http_client,
+        &app_state.config.runner_url(),
+        "runner",
+    )
+    .await
+    {
         Ok(_) => {
             serde_json::json!({
                 "status": "healthy",
@@ -8319,89 +9046,101 @@ async fn admin_get_services_status(
 
     // Check publisher service
     if let Some(publisher_url) = app_state.config.site().publisher_url.as_ref() {
-        let publisher_health = match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
-            Ok(_) => {
-                serde_json::json!({
-                    "status": "healthy",
-                    "url": publisher_url,
-                    "last_check": chrono::Utc::now(),
-                    "response_time_ms": "< 3000"
-                })
-            }
-            Err(e) => {
-                overall_health = false;
-                serde_json::json!({
-                    "status": "unhealthy",
-                    "url": publisher_url,
-                    "error": e.to_string(),
-                    "last_check": chrono::Utc::now()
-                })
-            }
-        };
+        let publisher_health =
+            match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+                Ok(_) => {
+                    serde_json::json!({
+                        "status": "healthy",
+                        "url": publisher_url,
+                        "last_check": chrono::Utc::now(),
+                        "response_time_ms": "< 3000"
+                    })
+                }
+                Err(e) => {
+                    overall_health = false;
+                    serde_json::json!({
+                        "status": "unhealthy",
+                        "url": publisher_url,
+                        "error": e.to_string(),
+                        "last_check": chrono::Utc::now()
+                    })
+                }
+            };
         services.insert("publisher".to_string(), publisher_health);
     } else {
-        services.insert("publisher".to_string(), serde_json::json!({
-            "status": "not_configured",
-            "message": "Publisher service URL not configured"
-        }));
+        services.insert(
+            "publisher".to_string(),
+            serde_json::json!({
+                "status": "not_configured",
+                "message": "Publisher service URL not configured"
+            }),
+        );
     }
 
     // Check archiver service
     if let Some(archiver_url) = app_state.config.site().archiver_url.as_ref() {
-        let archiver_health = match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
-            Ok(_) => {
-                serde_json::json!({
-                    "status": "healthy",
-                    "url": archiver_url,
-                    "last_check": chrono::Utc::now(),
-                    "response_time_ms": "< 3000"
-                })
-            }
-            Err(e) => {
-                overall_health = false;
-                serde_json::json!({
-                    "status": "unhealthy",
-                    "url": archiver_url,
-                    "error": e.to_string(),
-                    "last_check": chrono::Utc::now()
-                })
-            }
-        };
+        let archiver_health =
+            match check_service_health(&app_state.http_client, archiver_url, "archiver").await {
+                Ok(_) => {
+                    serde_json::json!({
+                        "status": "healthy",
+                        "url": archiver_url,
+                        "last_check": chrono::Utc::now(),
+                        "response_time_ms": "< 3000"
+                    })
+                }
+                Err(e) => {
+                    overall_health = false;
+                    serde_json::json!({
+                        "status": "unhealthy",
+                        "url": archiver_url,
+                        "error": e.to_string(),
+                        "last_check": chrono::Utc::now()
+                    })
+                }
+            };
         services.insert("archiver".to_string(), archiver_health);
     } else {
-        services.insert("archiver".to_string(), serde_json::json!({
-            "status": "not_configured",
-            "message": "Archiver service URL not configured"
-        }));
+        services.insert(
+            "archiver".to_string(),
+            serde_json::json!({
+                "status": "not_configured",
+                "message": "Archiver service URL not configured"
+            }),
+        );
     }
 
     // Check differ service
     if let Some(differ_url) = app_state.config.differ_url() {
-        let differ_health = match check_service_health(&app_state.http_client, differ_url, "differ").await {
-            Ok(_) => {
-                serde_json::json!({
-                    "status": "healthy",
-                    "url": differ_url,
-                    "last_check": chrono::Utc::now(),
-                    "response_time_ms": "< 3000"
-                })
-            }
-            Err(e) => {
-                overall_health = false;
-                serde_json::json!({
-                    "status": "unhealthy",
-                    "url": differ_url,
-                    "error": e.to_string(),
-                    "last_check": chrono::Utc::now()
-                })
-            }
-        };
+        let differ_health =
+            match check_service_health(&app_state.http_client, differ_url, "differ").await {
+                Ok(_) => {
+                    serde_json::json!({
+                        "status": "healthy",
+                        "url": differ_url,
+                        "last_check": chrono::Utc::now(),
+                        "response_time_ms": "< 3000"
+                    })
+                }
+                Err(e) => {
+                    overall_health = false;
+                    serde_json::json!({
+                        "status": "unhealthy",
+                        "url": differ_url,
+                        "error": e.to_string(),
+                        "last_check": chrono::Utc::now()
+                    })
+                }
+            };
         services.insert("differ".to_string(), differ_health);
     } else {
-        services.insert("differ".to_string(), serde_json::json!({
-            "status": "not_configured",
-            "message": "Differ service URL not configured"
-        }));
+        services.insert(
+            "differ".to_string(),
+            serde_json::json!({
+                "status": "not_configured",
+                "message": "Differ service URL not configured"
+            }),
+        );
     }
 
     // Check database health
@@ -8428,7 +9167,7 @@ async fn admin_get_services_status(
         "overall_health": if overall_health { "healthy" } else { "degraded" },
         "services": services,
         "total_services": services.len(),
-        "healthy_services": services.values().filter(|v| 
+        "healthy_services": services.values().filter(|v|
             v.get("status").and_then(|s| s.as_str()) == Some("healthy")
         ).count(),
         "timestamp": chrono::Utc::now()
@@ -8463,10 +9202,16 @@ async fn admin_check_service_health(
     debug!("Admin health check requested for service: {}", service_name);
 
     let start_time = std::time::Instant::now();
-    
+
     let health_result = match service_name.as_str() {
         "runner" => {
-            match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+            match check_service_health(
+                &app_state.http_client,
+                &app_state.config.runner_url(),
+                "runner",
+            )
+            .await
+            {
                 Ok(_) => serde_json::json!({
                     "service": "runner",
                     "status": "healthy",
@@ -8482,12 +9227,13 @@ async fn admin_check_service_health(
                     "error": e.to_string(),
                     "response_time_ms": start_time.elapsed().as_millis(),
                     "timestamp": chrono::Utc::now()
-                })
+                }),
             }
         }
         "publisher" => {
             if let Some(publisher_url) = app_state.config.site().publisher_url.as_ref() {
-                match check_service_health(&app_state.http_client, publisher_url, "publisher").await {
+                match check_service_health(&app_state.http_client, publisher_url, "publisher").await
+                {
                     Ok(_) => serde_json::json!({
                         "service": "publisher",
                         "status": "healthy",
@@ -8503,7 +9249,7 @@ async fn admin_check_service_health(
                         "error": e.to_string(),
                         "response_time_ms": start_time.elapsed().as_millis(),
                         "timestamp": chrono::Utc::now()
-                    })
+                    }),
                 }
             } else {
                 serde_json::json!({
@@ -8532,7 +9278,7 @@ async fn admin_check_service_health(
                         "error": e.to_string(),
                         "response_time_ms": start_time.elapsed().as_millis(),
                         "timestamp": chrono::Utc::now()
-                    })
+                    }),
                 }
             } else {
                 serde_json::json!({
@@ -8561,7 +9307,7 @@ async fn admin_check_service_health(
                         "error": e.to_string(),
                         "response_time_ms": start_time.elapsed().as_millis(),
                         "timestamp": chrono::Utc::now()
-                    })
+                    }),
                 }
             } else {
                 serde_json::json!({
@@ -8572,24 +9318,22 @@ async fn admin_check_service_health(
                 })
             }
         }
-        "database" => {
-            match app_state.database.health_check().await {
-                Ok(_) => serde_json::json!({
-                    "service": "database",
-                    "status": "healthy",
-                    "response_time_ms": start_time.elapsed().as_millis(),
-                    "details": "Database connection active",
-                    "timestamp": chrono::Utc::now()
-                }),
-                Err(e) => serde_json::json!({
-                    "service": "database",
-                    "status": "unhealthy",
-                    "error": e.to_string(),
-                    "response_time_ms": start_time.elapsed().as_millis(),
-                    "timestamp": chrono::Utc::now()
-                })
-            }
-        }
+        "database" => match app_state.database.health_check().await {
+            Ok(_) => serde_json::json!({
+                "service": "database",
+                "status": "healthy",
+                "response_time_ms": start_time.elapsed().as_millis(),
+                "details": "Database connection active",
+                "timestamp": chrono::Utc::now()
+            }),
+            Err(e) => serde_json::json!({
+                "service": "database",
+                "status": "unhealthy",
+                "error": e.to_string(),
+                "response_time_ms": start_time.elapsed().as_millis(),
+                "timestamp": chrono::Utc::now()
+            }),
+        },
         _ => {
             return negotiate_response(
                 ApiResponse::<serde_json::Value> {
@@ -8832,10 +9576,17 @@ async fn admin_test_service_integration(
     let mut overall_success = true;
 
     // Test runner integration
-    let runner_test = match check_service_health(&app_state.http_client, &app_state.config.runner_url(), "runner").await {
+    let runner_test = match check_service_health(
+        &app_state.http_client,
+        &app_state.config.runner_url(),
+        "runner",
+    )
+    .await
+    {
         Ok(_) => {
             // Try to fetch a simple endpoint to test integration
-            match app_state.http_client
+            match app_state
+                .http_client
                 .get(format!("{}/health", app_state.config.runner_url()))
                 .timeout(std::time::Duration::from_secs(5))
                 .send()
@@ -8902,7 +9653,7 @@ async fn admin_test_service_integration(
         "overall_status": if overall_success { "success" } else { "partial_failure" },
         "test_results": test_results,
         "tested_services": test_results.len(),
-        "successful_tests": test_results.values().filter(|v| 
+        "successful_tests": test_results.values().filter(|v|
             v.get("status").and_then(|s| s.as_str()) == Some("success")
         ).count(),
         "timestamp": chrono::Utc::now(),
@@ -8944,14 +9695,14 @@ async fn admin_get_github_integration(
         "message": "GitHub integration requires OAuth app configuration and API tokens",
         "planned_features": [
             "oauth_authentication",
-            "webhook_handling", 
+            "webhook_handling",
             "repository_access",
             "pull_request_management",
             "status_updates"
         ],
         "configuration_required": [
             "GITHUB_CLIENT_ID",
-            "GITHUB_CLIENT_SECRET", 
+            "GITHUB_CLIENT_SECRET",
             "GITHUB_WEBHOOK_SECRET",
             "GITHUB_API_TOKEN"
         ],
@@ -9018,7 +9769,7 @@ async fn admin_get_launchpad_integration(
     debug!("Admin Launchpad integration status requested");
 
     let result = serde_json::json!({
-        "status": "not_implemented", 
+        "status": "not_implemented",
         "integration": "launchpad",
         "message": "Launchpad integration requires OAuth configuration and API access",
         "planned_features": [
@@ -9071,7 +9822,7 @@ async fn admin_test_launchpad_connection(
         "test_plan": [
             "verify_oauth_credentials",
             "test_api_access",
-            "check_rate_limits", 
+            "check_rate_limits",
             "validate_permissions"
         ],
         "timestamp": chrono::Utc::now()

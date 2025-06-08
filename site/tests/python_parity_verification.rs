@@ -463,7 +463,7 @@ impl ParityTester {
                 if let Some(start) = tag.find(attr) {
                     let value_start = start + attr.len();
                     let tag_chars: Vec<char> = tag.chars().collect();
-                    
+
                     if value_start < tag_chars.len() {
                         let quote_char = tag_chars[value_start];
                         if quote_char == '"' || quote_char == '\'' {
@@ -475,10 +475,15 @@ impl ParityTester {
                                     break;
                                 }
                             }
-                            
+
                             if let Some(end) = end_pos {
-                                let value: String = tag_chars[value_start + 1..end].iter().collect();
-                                attributes.push(format!("ATTR:{}={}", &attr[..attr.len() - 1], value));
+                                let value: String =
+                                    tag_chars[value_start + 1..end].iter().collect();
+                                attributes.push(format!(
+                                    "ATTR:{}={}",
+                                    &attr[..attr.len() - 1],
+                                    value
+                                ));
                             }
                         }
                     }
@@ -512,7 +517,7 @@ impl ParityTester {
                 }
             })
             .collect();
-        
+
         // Sort attributes and certain text patterns to handle reordering
         // This allows HTML with different element order to be considered equivalent
         normalized.sort_by(|a, b| {
@@ -523,7 +528,7 @@ impl ParityTester {
                 _ => a.cmp(b),
             }
         });
-        
+
         normalized
     }
 
@@ -541,9 +546,9 @@ impl ParityTester {
         }
 
         // Normalize UUIDs and long IDs (allow mixed case alphanumeric)
-        if let Ok(uuid_regex) =
-            regex::Regex::new(r"[a-zA-Z0-9]{8,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{12,}")
-        {
+        if let Ok(uuid_regex) = regex::Regex::new(
+            r"[a-zA-Z0-9]{8,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{12,}",
+        ) {
             normalized = uuid_regex.replace_all(&normalized, "UUID").to_string();
         }
 

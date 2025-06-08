@@ -232,10 +232,10 @@ fn create_symrefs_for_branches(
         if r.is_some() {
             let target_ref = format!("refs/tags/run/{}/{}", log_id, f);
             let symref_name = format!("refs/heads/{}/{}", campaign, f);
-            
+
             // Create symref using git-specific functionality
             create_symbolic_ref(repo, &symref_name, &target_ref)?;
-            
+
             log::debug!("Created symref {} -> {}", symref_name, target_ref);
         }
     }
@@ -253,10 +253,10 @@ fn create_symrefs_for_tags(
         if r.is_some() {
             let target_ref = format!("refs/tags/{}/{}", log_id, n);
             let symref_name = format!("refs/tags/{}", n);
-            
+
             // Create symref using git-specific functionality
             create_symbolic_ref(repo, &symref_name, &target_ref)?;
-            
+
             log::debug!("Created symref {} -> {}", symref_name, target_ref);
         }
     }
@@ -270,11 +270,18 @@ fn create_symbolic_ref(
     target_ref: &str,
 ) -> Result<(), BrzError> {
     // TODO: Implement symbolic reference creation when PyO3 API stabilizes
-    log::debug!("Symbolic ref creation not yet implemented: {} -> {}", symref_name, target_ref);
-    log::debug!("This would create symref {} pointing to {}", symref_name, target_ref);
+    log::debug!(
+        "Symbolic ref creation not yet implemented: {} -> {}",
+        symref_name,
+        target_ref
+    );
+    log::debug!(
+        "This would create symref {} pointing to {}",
+        symref_name,
+        target_ref
+    );
     Ok(())
 }
-
 
 fn import_branches_git(
     repo_url: &Url,
@@ -357,13 +364,13 @@ fn import_branches_git(
         false,
         true,
     )?;
-    
+
     // Create symrefs for branch references after the regular refs are created
     if update_current {
         create_symrefs_for_branches(&repo, campaign, log_id, &branches)?;
         create_symrefs_for_tags(&repo, log_id, &tags)?;
     }
-    
+
     Ok(())
 }
 

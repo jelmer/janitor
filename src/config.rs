@@ -118,13 +118,16 @@ mod tests {
                 name: "test-campaign" 
                 branch_name: "feature-branch"
             }"#,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         assert_eq!(
             config.find_campaign_by_branch_name("feature-branch"),
             Some(("test-campaign", "main"))
         );
-        assert!(config.find_campaign_by_branch_name("nonexistent-branch").is_none());
+        assert!(config
+            .find_campaign_by_branch_name("nonexistent-branch")
+            .is_none());
     }
 
     #[test]
@@ -143,13 +146,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_pg_pool_with_database_location() {
-        let config = read_string(r#"database_location: "postgresql://localhost/nonexistent""#).unwrap();
+        let config =
+            read_string(r#"database_location: "postgresql://localhost/nonexistent""#).unwrap();
         // This should fail to connect but not panic
         let result = config.pg_pool().await;
         assert!(result.is_err());
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_pg_pool_without_database_location() {
         let config = read_string("").unwrap();
         // This should try default connection which will likely fail in tests

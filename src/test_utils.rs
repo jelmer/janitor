@@ -4,11 +4,10 @@
 //! mock implementations, and test configuration.
 
 use crate::database::{Database, DatabaseConfig};
+use sqlx::PgPool;
 use std::sync::Once;
 use std::time::Duration;
-use sqlx::PgPool;
 use uuid::Uuid;
-
 
 static INIT: Once = Once::new();
 
@@ -71,7 +70,6 @@ impl TestDatabase {
         }
     }
 
-
     /// Connect to database with retries (useful for containers that need startup time)
     async fn connect_with_retries(
         url: &str,
@@ -83,7 +81,10 @@ impl TestDatabase {
                 Ok(pool) => return Ok(pool),
                 Err(_e) if retries < max_retries => {
                     retries += 1;
-                    eprintln!("Database connection attempt {} failed, retrying...", retries);
+                    eprintln!(
+                        "Database connection attempt {} failed, retrying...",
+                        retries
+                    );
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
                 Err(e) => return Err(Box::new(e)),
@@ -151,7 +152,7 @@ impl TestDatabase {
             idle_timeout: Some(Duration::from_secs(600)),
             max_lifetime: Some(Duration::from_secs(3600)),
         };
-        
+
         Database::from_pool_and_config(self.pool.clone(), config)
     }
 }
@@ -163,14 +164,11 @@ impl Drop for TestDatabase {
             // In practice, test databases are often cleaned up by the test runner
             let admin_pool = self.admin_pool.clone();
             let database_name = self.database_name.clone();
-            
+
             tokio::spawn(async move {
-                let _ = sqlx::query(&format!(
-                    "DROP DATABASE IF EXISTS \"{}\"",
-                    database_name
-                ))
-                .execute(&admin_pool)
-                .await;
+                let _ = sqlx::query(&format!("DROP DATABASE IF EXISTS \"{}\"", database_name))
+                    .execute(&admin_pool)
+                    .await;
             });
         }
     }
@@ -202,7 +200,9 @@ impl crate::artifacts::ArtifactManager for MockArtifactManager {
     }
 
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url {
-        format!("mock://artifacts/{}/{}", run_id, filename).parse().unwrap()
+        format!("mock://artifacts/{}/{}", run_id, filename)
+            .parse()
+            .unwrap()
     }
 
     async fn retrieve_artifacts(
@@ -270,8 +270,16 @@ impl crate::logs::LogFileManager for MockLogFileManager {
     async fn iter_logs(&self) -> Box<dyn Iterator<Item = (String, String, Vec<String>)>> {
         Box::new(
             vec![
-                ("codebase1".to_string(), "run1".to_string(), vec!["build.log".to_string()]),
-                ("codebase2".to_string(), "run2".to_string(), vec!["test.log".to_string()]),
+                (
+                    "codebase1".to_string(),
+                    "run1".to_string(),
+                    vec!["build.log".to_string()],
+                ),
+                (
+                    "codebase2".to_string(),
+                    "run2".to_string(),
+                    vec!["test.log".to_string()],
+                ),
             ]
             .into_iter(),
         )
@@ -335,24 +343,32 @@ impl TestConfigBuilder {
     /// Build a janitor Config
     pub fn build_janitor_config(self) -> crate::config::Config {
         let mut config = crate::config::Config::new();
-        
+
         // Set database location
-        config.database_location = Some(
-            self.database_url.unwrap_or_else(|| {
-                std::env::var("TEST_DATABASE_URL")
-                    .unwrap_or_else(|_| "postgresql://localhost/janitor_test".to_string())
-            })
-        );
-        
+        config.database_location = Some(self.database_url.unwrap_or_else(|| {
+            std::env::var("TEST_DATABASE_URL")
+                .unwrap_or_else(|_| "postgresql://localhost/janitor_test".to_string())
+        }));
+
         // Set logs location to temp directory for tests
-        config.logs_location = Some(std::env::temp_dir().join("janitor_test_logs").to_string_lossy().to_string());
-        
-        // Set artifact location to temp directory for tests  
-        config.artifact_location = Some(std::env::temp_dir().join("janitor_test_artifacts").to_string_lossy().to_string());
-        
+        config.logs_location = Some(
+            std::env::temp_dir()
+                .join("janitor_test_logs")
+                .to_string_lossy()
+                .to_string(),
+        );
+
+        // Set artifact location to temp directory for tests
+        config.artifact_location = Some(
+            std::env::temp_dir()
+                .join("janitor_test_artifacts")
+                .to_string_lossy()
+                .to_string(),
+        );
+
         // Set default committer
         config.committer = Some("Test Runner <test@example.com>".to_string());
-        
+
         config
     }
 }
@@ -366,28 +382,34 @@ mod tests {
     #[tokio::test]
     async fn test_mock_artifact_manager() {
         let manager = MockArtifactManager;
-        
+
         // Test store_artifacts
-        manager.store_artifacts("test_run", std::path::Path::new("/tmp"), None).await.unwrap();
-        
+        manager
+            .store_artifacts("test_run", std::path::Path::new("/tmp"), None)
+            .await
+            .unwrap();
+
         // Test get_artifact
         let mut artifact = manager.get_artifact("test_run", "test.log").await.unwrap();
         let mut content = Vec::new();
         std::io::Read::read_to_end(&mut artifact, &mut content).unwrap();
         assert_eq!(content, b"mock artifact data");
-        
+
         // Test public_artifact_url
         let url = manager.public_artifact_url("test_run", "test.log");
         assert!(url.as_str().contains("test_run"));
         assert!(url.as_str().contains("test.log"));
-        
+
         // Test retrieve_artifacts
-        manager.retrieve_artifacts("test_run", std::path::Path::new("/tmp"), None).await.unwrap();
-        
+        manager
+            .retrieve_artifacts("test_run", std::path::Path::new("/tmp"), None)
+            .await
+            .unwrap();
+
         // Test iter_ids
         let ids: Vec<String> = manager.iter_ids().await.collect();
         assert!(!ids.is_empty());
-        
+
         // Test delete_artifacts
         manager.delete_artifacts("test_run").await.unwrap();
     }
@@ -395,35 +417,50 @@ mod tests {
     #[tokio::test]
     async fn test_mock_log_manager() {
         let manager = MockLogFileManager;
-        
+
         // Test has_log
-        let has_log = manager.has_log("test_codebase", "test_run", "test.log").await.unwrap();
+        let has_log = manager
+            .has_log("test_codebase", "test_run", "test.log")
+            .await
+            .unwrap();
         assert!(has_log);
-        
+
         // Test get_log
-        let mut log = manager.get_log("test_codebase", "test_run", "test.log").await.unwrap();
+        let mut log = manager
+            .get_log("test_codebase", "test_run", "test.log")
+            .await
+            .unwrap();
         let mut content = String::new();
         std::io::Read::read_to_string(&mut log, &mut content).unwrap();
         assert_eq!(content, "mock log content");
-        
+
         // Test import_log
-        manager.import_log(
-            "test_codebase", 
-            "test_run", 
-            "/tmp/test.log", 
-            None, 
-            Some("test.log")
-        ).await.unwrap();
+        manager
+            .import_log(
+                "test_codebase",
+                "test_run",
+                "/tmp/test.log",
+                None,
+                Some("test.log"),
+            )
+            .await
+            .unwrap();
 
         // Test delete_log
-        manager.delete_log("test_codebase", "test_run", "test.log").await.unwrap();
+        manager
+            .delete_log("test_codebase", "test_run", "test.log")
+            .await
+            .unwrap();
 
         // Test iter_logs
         let logs: Vec<_> = manager.iter_logs().await.collect();
         assert!(!logs.is_empty());
 
         // Test get_ctime
-        let ctime = manager.get_ctime("test_codebase", "test_run", "test.log").await.unwrap();
+        let ctime = manager
+            .get_ctime("test_codebase", "test_run", "test.log")
+            .await
+            .unwrap();
         assert!(ctime <= chrono::Utc::now());
 
         // Test health_check

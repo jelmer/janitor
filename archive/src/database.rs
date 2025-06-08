@@ -311,15 +311,24 @@ impl ArchiveDatabase {
         if let Some(config) = janitor_config {
             if let Some(campaign) = config.get_campaign(campaign_name) {
                 debug!("Found campaign '{}' in janitor config", campaign_name);
-                
+
                 // Extract campaign information from janitor config
-                let suite = campaign.name.as_ref().unwrap_or(&campaign_name.to_string()).clone();
+                let suite = campaign
+                    .name
+                    .as_ref()
+                    .unwrap_or(&campaign_name.to_string())
+                    .clone();
                 let description = format!("Campaign: {}", suite);
-                
+
                 // Use debian_build info if available, otherwise defaults
                 let architectures = if campaign.has_debian_build() {
                     // For campaigns with debian_build, use common Debian architectures
-                    vec!["amd64".to_string(), "arm64".to_string(), "armhf".to_string(), "i386".to_string()]
+                    vec![
+                        "amd64".to_string(),
+                        "arm64".to_string(),
+                        "armhf".to_string(),
+                        "i386".to_string(),
+                    ]
                 } else {
                     // For generic campaigns, use default set
                     vec!["amd64".to_string(), "arm64".to_string()]

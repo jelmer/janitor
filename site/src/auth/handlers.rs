@@ -64,14 +64,18 @@ pub async fn login_handler(
 
     // Generate authorization URL with state and PKCE
     let (auth_url, auth_state_data) = oidc_client.get_authorization_url(query.redirect);
-    
+
     // Store auth state in session storage for verification during callback
     let auth_state_key = format!("auth_state:{}", auth_state_data.state);
-    if let Err(e) = _auth_state.session_manager.store_temporary_data(
-        &auth_state_key, 
-        &auth_state_data, 
-        std::time::Duration::from_secs(600) // 10 minutes
-    ).await {
+    if let Err(e) = _auth_state
+        .session_manager
+        .store_temporary_data(
+            &auth_state_key,
+            &auth_state_data,
+            std::time::Duration::from_secs(600), // 10 minutes
+        )
+        .await
+    {
         error!("Failed to store auth state: {}", e);
         return Ok(Redirect::to("/login?error=session_error").into_response());
     }
@@ -111,7 +115,11 @@ pub async fn callback_handler(
 
     // Retrieve stored auth state for verification
     let auth_state_key = format!("auth_state:{}", state);
-    let stored_auth_state = match _auth_state.session_manager.get_temporary_data::<crate::auth::oidc::AuthState>(&auth_state_key).await {
+    let stored_auth_state = match _auth_state
+        .session_manager
+        .get_temporary_data::<crate::auth::oidc::AuthState>(&auth_state_key)
+        .await
+    {
         Ok(Some(state)) => state,
         Ok(None) => {
             warn!("Auth state not found for state: {}", state);
@@ -124,7 +132,10 @@ pub async fn callback_handler(
     };
 
     // Exchange authorization code for user information
-    let user = match oidc_client.handle_callback(&code, &state, &stored_auth_state).await {
+    let user = match oidc_client
+        .handle_callback(&code, &state, &stored_auth_state)
+        .await
+    {
         Ok(user) => user,
         Err(e) => {
             error!("OIDC callback failed: {}", e);
@@ -143,7 +154,11 @@ pub async fn callback_handler(
     };
 
     // Clean up temporary auth state
-    if let Err(e) = _auth_state.session_manager.delete_temporary_data(&auth_state_key).await {
+    if let Err(e) = _auth_state
+        .session_manager
+        .delete_temporary_data(&auth_state_key)
+        .await
+    {
         warn!("Failed to clean up auth state: {}", e);
     }
 
@@ -153,7 +168,9 @@ pub async fn callback_handler(
         _auth_state.cookie_config.name,
         session_id,
         _auth_state.cookie_config.path,
-        _auth_state.cookie_config.max_age
+        _auth_state
+            .cookie_config
+            .max_age
             .map(|d| d.num_seconds())
             .unwrap_or(86400),
         if _auth_state.cookie_config.secure {
@@ -168,9 +185,11 @@ pub async fn callback_handler(
         }
     );
 
-    let redirect_url = stored_auth_state.redirect_url.unwrap_or_else(|| "/".to_string());
+    let redirect_url = stored_auth_state
+        .redirect_url
+        .unwrap_or_else(|| "/".to_string());
     let mut response = Redirect::to(&redirect_url).into_response();
-    
+
     response.headers_mut().insert(
         axum::http::header::SET_COOKIE,
         session_cookie

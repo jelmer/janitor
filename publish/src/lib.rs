@@ -128,7 +128,10 @@ pub fn get_debdiff(
         .map_err(|_e| DebdiffError::Unavailable("Invalid URL format".to_string()))?;
 
     let mut headers = HeaderMap::new();
-    headers.insert("Accept", "text/plain".parse().expect("Invalid header value"));
+    headers.insert(
+        "Accept",
+        "text/plain".parse().expect("Invalid header value"),
+    );
 
     let client = reqwest::blocking::Client::new();
     let response = client.get(debdiff_url).headers(headers).send()?;
@@ -443,18 +446,21 @@ async fn run_worker_process(
 
     use tokio::io::AsyncWriteExt;
     if let Some(stdin) = p.stdin.as_mut() {
-        let request_json = serde_json::to_string(&request)
-            .map_err(|e| WorkerInvalidResponse::Serde(e))?;
+        let request_json =
+            serde_json::to_string(&request).map_err(|e| WorkerInvalidResponse::Serde(e))?;
         stdin.write_all(request_json.as_bytes()).await?;
     } else {
-        return Err(WorkerInvalidResponse::from("Failed to get stdin handle".to_string()));
+        return Err(WorkerInvalidResponse::from(
+            "Failed to get stdin handle".to_string(),
+        ));
     }
 
     let status = p.wait().await?;
 
     if status.success() {
-        let mut stdout = p.stdout.take()
-            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stdout handle".to_string()))?;
+        let mut stdout = p.stdout.take().ok_or_else(|| {
+            WorkerInvalidResponse::from("Failed to get stdout handle".to_string())
+        })?;
         let _stderr = p.stderr.take();
         let mut output = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
@@ -463,10 +469,12 @@ async fn run_worker_process(
             serde_json::from_reader(&mut output.as_slice()).map_err(WorkerInvalidResponse::from)?;
         Ok((status.code().unwrap_or(-1), response))
     } else if status.code() == Some(1) {
-        let mut stdout = p.stdout.take()
-            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stdout handle".to_string()))?;
-        let mut stderr = p.stderr.take()
-            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stderr handle".to_string()))?;
+        let mut stdout = p.stdout.take().ok_or_else(|| {
+            WorkerInvalidResponse::from("Failed to get stdout handle".to_string())
+        })?;
+        let mut stderr = p.stderr.take().ok_or_else(|| {
+            WorkerInvalidResponse::from("Failed to get stderr handle".to_string())
+        })?;
         let mut output = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stdout, &mut output).await?;
         let response =
@@ -477,8 +485,9 @@ async fn run_worker_process(
         std::io::stderr().write_all(&error)?;
         return Ok((status.code().unwrap_or(1), response));
     } else {
-        let mut stderr = p.stderr.take()
-            .ok_or_else(|| WorkerInvalidResponse::from("Failed to get stderr handle".to_string()))?;
+        let mut stderr = p.stderr.take().ok_or_else(|| {
+            WorkerInvalidResponse::from("Failed to get stderr handle".to_string())
+        })?;
         let mut error = Vec::new();
         tokio::io::AsyncReadExt::read_to_end(&mut stderr, &mut error).await?;
         let error_string = String::from_utf8(error)
@@ -645,7 +654,11 @@ impl PublishWorker {
                 // Publish merge proposal event to Redis
                 if let Some(redis) = self.redis.as_mut() {
                     let event = crate::redis::MergeProposalEvent {
-                        url: result.proposal_url.as_ref().expect("proposal_url just checked to be Some").to_string(),
+                        url: result
+                            .proposal_url
+                            .as_ref()
+                            .expect("proposal_url just checked to be Some")
+                            .to_string(),
                         web_url: result.proposal_web_url.as_ref().map(|u| u.to_string()),
                         status: "open".to_string(),
                         codebase: codebase.to_string(),
@@ -737,7 +750,7 @@ fn resolve_redirects(url: &url::Url) -> url::Url {
     if !url.scheme().starts_with("http") {
         return url.clone();
     }
-    
+
     // Use a blocking HTTP client to follow redirects
     if let Ok(client) = reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -750,7 +763,7 @@ fn resolve_redirects(url: &url::Url) -> url::Url {
             }
         }
     }
-    
+
     // Return original URL if redirect resolution fails
     url.clone()
 }
@@ -778,7 +791,7 @@ pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> boo
         Err(_) => return false,
     };
     let (base_url_a, _params_a) = breezyshim::urlutils::split_segment_parameters(&parsed_url_a);
-    
+
     let parsed_url_b = match url_b.to_string().trim_end_matches('/').parse() {
         Ok(url) => url,
         Err(_) => return false,
@@ -787,8 +800,9 @@ pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> boo
     // Support following redirects by normalizing URLs
     let normalized_url_a = resolve_redirects(&base_url_a);
     let normalized_url_b = resolve_redirects(&base_url_b);
-    
-    if normalized_url_a.to_string().trim_end_matches('/') != normalized_url_b.to_string().trim_end_matches('/')
+
+    if normalized_url_a.to_string().trim_end_matches('/')
+        != normalized_url_b.to_string().trim_end_matches('/')
     {
         return false;
     }
@@ -1322,7 +1336,7 @@ async fn check_existing_mp(
     };
 
     // Get source revision from merge proposal
-    // Workaround: Extract revision from MP source branch since get_source_revision 
+    // Workaround: Extract revision from MP source branch since get_source_revision
     // method needs to be implemented in breezyshim
     let revision: Option<breezyshim::RevisionId> = tokio::task::spawn_blocking({
         let mp = mp.clone();
@@ -1341,7 +1355,8 @@ async fn check_existing_mp(
                 }
             }
         }
-    }).await
+    })
+    .await
     .map_err(|_| CheckMpError::UnexpectedHttpStatus)?;
 
     // Get source branch URL
@@ -1642,11 +1657,17 @@ async fn check_existing(
                 continue;
             }
             Err(CheckMpError::UnexpectedHttpStatus) => {
-                let mp_url = mp.url().map(|u| u.to_string()).unwrap_or_else(|_| "unknown".to_string());
+                let mp_url = mp
+                    .url()
+                    .map(|u| u.to_string())
+                    .unwrap_or_else(|_| "unknown".to_string());
                 log::warn!("Got unexpected HTTP status for {}", mp_url);
                 // Enhanced error logging with available context information
-                log::debug!("Unexpected HTTP status context: MP URL: {}, Forge: {}", 
-                    mp_url, forge.forge_name());
+                log::debug!(
+                    "Unexpected HTTP status context: MP URL: {}, Forge: {}",
+                    mp_url,
+                    forge.forge_name()
+                );
                 unexpected += 1;
                 true
             }
@@ -2263,19 +2284,16 @@ async fn try_publish_branch(
 }
 
 /// Check if binary diff capability is available for a run
-async fn has_binary_diff_capability(
-    run: &Run,
-    campaign_config: &Campaign,
-) -> bool {
+async fn has_binary_diff_capability(run: &Run, campaign_config: &Campaign) -> bool {
     // Enhanced binary diff capability detection with multiple checks:
     // 1. Check if the run has target details that indicate binary artifacts
     // 2. Check for specific build targets that produce binary outputs
     // 3. For Debian packages, check if .deb files are available
     // 4. Check for language-specific binary outputs
     // 5. Verify differ service availability for binary comparisons
-    
+
     let mut has_binary_artifacts = false;
-    
+
     if let Some(result) = &run.result {
         if let Some(result_obj) = result.as_object() {
             // Check if there's target information in the result
@@ -2285,10 +2303,12 @@ async fn has_binary_diff_capability(
                     if let Some(target_name) = target_obj.get("name").and_then(|n| n.as_str()) {
                         match target_name {
                             "debian" => {
-                                has_binary_artifacts = check_debian_binary_artifacts(target_obj).await;
+                                has_binary_artifacts =
+                                    check_debian_binary_artifacts(target_obj).await;
                             }
                             "generic" => {
-                                has_binary_artifacts = check_generic_binary_artifacts(target_obj).await;
+                                has_binary_artifacts =
+                                    check_generic_binary_artifacts(target_obj).await;
                             }
                             _ => {
                                 log::debug!("Unknown target type for binary diff: {}", target_name);
@@ -2297,65 +2317,83 @@ async fn has_binary_diff_capability(
                     }
                 }
             }
-            
+
             // Additional check for build outputs in result
             if !has_binary_artifacts {
                 has_binary_artifacts = check_result_binary_outputs(result_obj).await;
             }
         }
     }
-    
+
     if !has_binary_artifacts {
         log::debug!("No binary artifacts detected for run {}", run.id);
         return false;
     }
-    
+
     // Check if binary diff service is available (simplified check)
     // In a full implementation, this would ping the differ service
     let differ_service_available = check_differ_service_availability(campaign_config).await;
-    
+
     if !differ_service_available {
-        log::warn!("Binary artifacts detected but differ service unavailable for run {}", run.id);
+        log::warn!(
+            "Binary artifacts detected but differ service unavailable for run {}",
+            run.id
+        );
         return false;
     }
-    
+
     log::debug!("Binary diff capability confirmed for run {}", run.id);
     true
 }
 
 /// Check for Debian-specific binary artifacts
-async fn check_debian_binary_artifacts(target_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+async fn check_debian_binary_artifacts(
+    target_obj: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
     if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
         // Check for binary package artifacts in Debian builds
         if let Some(artifacts) = details.get("binary_packages") {
             if let Some(packages) = artifacts.as_array() {
                 if !packages.is_empty() {
-                    log::debug!("Binary diff available: {} Debian binary packages found", packages.len());
+                    log::debug!(
+                        "Binary diff available: {} Debian binary packages found",
+                        packages.len()
+                    );
                     return true;
                 }
             }
         }
-        
+
         // Check for .deb files in build artifacts
         if let Some(artifacts) = details.get("artifacts") {
             if let Some(files) = artifacts.as_array() {
                 for file in files {
                     if let Some(filename) = file.as_str() {
-                        if filename.ends_with(".deb") || filename.ends_with(".udeb") || 
-                           filename.ends_with(".dsc") || filename.ends_with(".changes") {
-                            log::debug!("Binary diff available: Debian package file found: {}", filename);
+                        if filename.ends_with(".deb")
+                            || filename.ends_with(".udeb")
+                            || filename.ends_with(".dsc")
+                            || filename.ends_with(".changes")
+                        {
+                            log::debug!(
+                                "Binary diff available: Debian package file found: {}",
+                                filename
+                            );
                             return true;
                         }
                     }
                 }
             }
         }
-        
+
         // Check for specific Debian build outputs
         if let Some(build_info) = details.get("build_info") {
             if let Some(info_obj) = build_info.as_object() {
-                if info_obj.contains_key("binary_packages") || info_obj.contains_key("source_package") {
-                    log::debug!("Binary diff available: Debian build info indicates binary outputs");
+                if info_obj.contains_key("binary_packages")
+                    || info_obj.contains_key("source_package")
+                {
+                    log::debug!(
+                        "Binary diff available: Debian build info indicates binary outputs"
+                    );
                     return true;
                 }
             }
@@ -2365,28 +2403,33 @@ async fn check_debian_binary_artifacts(target_obj: &serde_json::Map<String, serd
 }
 
 /// Check for generic binary artifacts
-async fn check_generic_binary_artifacts(target_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+async fn check_generic_binary_artifacts(
+    target_obj: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
     if let Some(details) = target_obj.get("details").and_then(|d| d.as_object()) {
         // Check for explicitly marked binary artifacts
         if let Some(artifacts) = details.get("binary_artifacts") {
             if let Some(arr) = artifacts.as_array() {
                 if !arr.is_empty() {
-                    log::debug!("Binary diff available: {} generic binary artifacts found", arr.len());
+                    log::debug!(
+                        "Binary diff available: {} generic binary artifacts found",
+                        arr.len()
+                    );
                     return true;
                 }
             }
         }
-        
+
         // Check for common binary file extensions
         if let Some(artifacts) = details.get("artifacts") {
             if let Some(files) = artifacts.as_array() {
                 for file in files {
                     if let Some(filename) = file.as_str() {
                         let binary_extensions = [
-                            ".so", ".a", ".dylib", ".dll", ".exe", ".bin", ".jar", ".war", 
-                            ".whl", ".egg", ".tar.gz", ".zip", ".rpm", ".msi", ".dmg", ".pkg"
+                            ".so", ".a", ".dylib", ".dll", ".exe", ".bin", ".jar", ".war", ".whl",
+                            ".egg", ".tar.gz", ".zip", ".rpm", ".msi", ".dmg", ".pkg",
                         ];
-                        
+
                         if binary_extensions.iter().any(|ext| filename.ends_with(ext)) {
                             log::debug!("Binary diff available: Binary file found: {}", filename);
                             return true;
@@ -2395,12 +2438,14 @@ async fn check_generic_binary_artifacts(target_obj: &serde_json::Map<String, ser
                 }
             }
         }
-        
+
         // Check for language-specific binary indicators
         if let Some(language) = details.get("language").and_then(|l| l.as_str()) {
             match language {
                 "rust" => {
-                    if details.contains_key("cargo_binary") || details.contains_key("target_directory") {
+                    if details.contains_key("cargo_binary")
+                        || details.contains_key("target_directory")
+                    {
                         log::debug!("Binary diff available: Rust binary detected");
                         return true;
                     }
@@ -2412,7 +2457,8 @@ async fn check_generic_binary_artifacts(target_obj: &serde_json::Map<String, ser
                     }
                 }
                 "c" | "cpp" | "c++" => {
-                    if details.contains_key("executable") || details.contains_key("shared_library") {
+                    if details.contains_key("executable") || details.contains_key("shared_library")
+                    {
                         log::debug!("Binary diff available: C/C++ binary detected");
                         return true;
                     }
@@ -2425,13 +2471,18 @@ async fn check_generic_binary_artifacts(target_obj: &serde_json::Map<String, ser
 }
 
 /// Check for binary outputs in the result object
-async fn check_result_binary_outputs(result_obj: &serde_json::Map<String, serde_json::Value>) -> bool {
+async fn check_result_binary_outputs(
+    result_obj: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
     // Check for common binary output indicators
     if let Some(outputs) = result_obj.get("outputs").and_then(|o| o.as_array()) {
         for output in outputs {
             if let Some(output_obj) = output.as_object() {
                 if let Some(output_type) = output_obj.get("type").and_then(|t| t.as_str()) {
-                    if output_type == "binary" || output_type == "executable" || output_type == "library" {
+                    if output_type == "binary"
+                        || output_type == "executable"
+                        || output_type == "library"
+                    {
                         log::debug!("Binary diff available: Binary output type detected");
                         return true;
                     }
@@ -2439,7 +2490,7 @@ async fn check_result_binary_outputs(result_obj: &serde_json::Map<String, serde_
             }
         }
     }
-    
+
     // Check for build system indicators
     if let Some(build_system) = result_obj.get("build_system").and_then(|bs| bs.as_str()) {
         match build_system {
@@ -2452,7 +2503,7 @@ async fn check_result_binary_outputs(result_obj: &serde_json::Map<String, serde_
             _ => {}
         }
     }
-    
+
     false
 }
 
@@ -2463,19 +2514,32 @@ async fn check_differ_service_availability(campaign_config: &Campaign) -> bool {
     // 1. Check if differ_url is configured in the campaign
     // 2. Make a health check request to the differ service
     // 3. Verify that the service supports binary diffs
-    
+
     // Simple heuristic: if this is a campaign that typically produces binaries, assume available
     let campaign_name = campaign_config.name();
-    let binary_campaigns = ["rust-clippy", "rust-update", "deb-new-upstream", "deb-update"];
-    
-    let is_binary_campaign = binary_campaigns.iter().any(|&name| campaign_name.contains(name));
-    
+    let binary_campaigns = [
+        "rust-clippy",
+        "rust-update",
+        "deb-new-upstream",
+        "deb-update",
+    ];
+
+    let is_binary_campaign = binary_campaigns
+        .iter()
+        .any(|&name| campaign_name.contains(name));
+
     if is_binary_campaign {
-        log::debug!("Differ service availability assumed for binary campaign: {}", campaign_name);
+        log::debug!(
+            "Differ service availability assumed for binary campaign: {}",
+            campaign_name
+        );
         true
     } else {
         // For other campaigns, be more conservative
-        log::debug!("Differ service availability uncertain for campaign: {}", campaign_name);
+        log::debug!(
+            "Differ service availability uncertain for campaign: {}",
+            campaign_name
+        );
         true // Default to available for now
     }
 }

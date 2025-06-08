@@ -283,8 +283,10 @@ fn build(
         Err(BsError::Unimplemented) => {
             return Err(WorkerFailure {
                 code: "build-action-unimplemented".to_string(),
-                description: format!("The build action is not implemented for the detected buildsystem(s): {:?}", 
-                    bss.iter().map(|bs| bs.name()).collect::<Vec<_>>()),
+                description: format!(
+                    "The build action is not implemented for the detected buildsystem(s): {:?}",
+                    bss.iter().map(|bs| bs.name()).collect::<Vec<_>>()
+                ),
                 details: Some(serde_json::json!({
                     "detected_buildsystems": bss.iter().map(|bs| bs.name()).collect::<Vec<_>>(),
                     "project_path": project.external_path(),
@@ -392,8 +394,10 @@ fn build(
             });
         }
         Err(BsError::Unimplemented) => {
-            log::warn!("Test action not implemented for buildsystem(s): {:?}, but build succeeded", 
-                bss.iter().map(|bs| bs.name()).collect::<Vec<_>>());
+            log::warn!(
+                "Test action not implemented for buildsystem(s): {:?}, but build succeeded",
+                bss.iter().map(|bs| bs.name()).collect::<Vec<_>>()
+            );
             // For tests, we don't fail the entire build if tests aren't implemented
             // This is different from build actions which are essential
         }

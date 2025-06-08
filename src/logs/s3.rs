@@ -171,7 +171,7 @@ impl LogFileManager for S3LogFileManager {
         name: &str,
     ) -> Result<DateTime<Utc>, Error> {
         let url = self.get_url(codebase, run_id, name);
-        
+
         // Use HEAD request to get object metadata including last-modified
         let response = self
             .client
@@ -199,7 +199,9 @@ impl LogFileManager for S3LogFileManager {
         }
 
         // If no reliable creation time is available, return an error
-        Err(Error::Other("Creation time not available for S3 object".to_string()))
+        Err(Error::Other(
+            "Creation time not available for S3 object".to_string(),
+        ))
     }
 
     async fn health_check(&self) -> Result<(), Error> {

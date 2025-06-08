@@ -117,18 +117,24 @@ impl RunnerDatabase {
     }
 
     /// Convert a Run to JanitorResult with async database calls for related data.
-    pub async fn run_to_janitor_result_async(&self, run: Run) -> Result<JanitorResult, sqlx::Error> {
+    pub async fn run_to_janitor_result_async(
+        &self,
+        run: Run,
+    ) -> Result<JanitorResult, sqlx::Error> {
         // Fetch related data asynchronously
         let remotes_data = self.get_run_remotes(&run.id).await?;
-        let resume = self.get_resume_info(&run.id, &run.codebase, &run.suite).await?;
+        let resume = self
+            .get_resume_info(&run.id, &run.codebase, &run.suite)
+            .await?;
         let target_data = self.get_run_target(&run.id).await?;
         let builder_result_data = self.get_run_builder_result(&run.id).await?;
-        
+
         // Convert JSON data to proper structs
         let remotes = remotes_data.map(|data| {
             data.into_iter()
                 .map(|(name, remote_info)| {
-                    let url = remote_info.get("url")
+                    let url = remote_info
+                        .get("url")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
@@ -136,16 +142,14 @@ impl RunnerDatabase {
                 })
                 .collect()
         });
-        
+
         let target = target_data.and_then(|data| {
             let name = data.get("name")?.as_str()?.to_string();
             let details = data.get("details")?.clone();
             Some(crate::ResultTarget { name, details })
         });
-        
-        let builder_result = builder_result_data.and_then(|data| {
-            serde_json::from_value(data).ok()
-        });
+
+        let builder_result = builder_result_data.and_then(|data| serde_json::from_value(data).ok());
 
         Ok(JanitorResult {
             log_id: run.id,

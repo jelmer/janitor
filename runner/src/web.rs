@@ -922,30 +922,34 @@ async fn list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         Ok(workers) => {
             // Get active runs to determine worker status
             let active_runs = state.database.get_active_runs().await.unwrap_or_default();
-            
+
             // Create a map of worker names to their current status
             let mut worker_status_map = std::collections::HashMap::new();
             for run in &active_runs {
                 worker_status_map.insert(run.worker_name.clone(), "active");
             }
-            
+
             // Enhance worker information with status
-            let enhanced_workers: Vec<serde_json::Value> = workers.iter().map(|worker| {
-                let status = worker_status_map.get(&worker.name)
-                    .unwrap_or(&"idle")
-                    .to_string();
-                
-                json!({
-                    "name": worker.name,
-                    "status": status,
-                    // Don't expose worker link in public endpoint
+            let enhanced_workers: Vec<serde_json::Value> = workers
+                .iter()
+                .map(|worker| {
+                    let status = worker_status_map
+                        .get(&worker.name)
+                        .unwrap_or(&"idle")
+                        .to_string();
+
+                    json!({
+                        "name": worker.name,
+                        "status": status,
+                        // Don't expose worker link in public endpoint
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             let active_count = worker_status_map.len();
             let total_count = workers.len();
             let idle_count = total_count - active_count;
-            
+
             Json(json!({
                 "workers": enhanced_workers,
                 "total_workers": total_count,
@@ -958,7 +962,7 @@ async fn list_workers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                 },
                 "timestamp": chrono::Utc::now()
             }))
-        },
+        }
         Err(e) => {
             log::error!("Failed to list workers: {}", e);
             Json(json!({
@@ -978,31 +982,35 @@ async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResp
         Ok(workers) => {
             // Get active runs to determine worker status
             let active_runs = state.database.get_active_runs().await.unwrap_or_default();
-            
+
             // Create a map of worker names to their current status
             let mut worker_status_map = std::collections::HashMap::new();
             for run in &active_runs {
                 worker_status_map.insert(run.worker_name.clone(), "active");
             }
-            
+
             // Enhance worker information with status
-            let enhanced_workers: Vec<serde_json::Value> = workers.iter().map(|worker| {
-                let status = worker_status_map.get(&worker.name)
-                    .unwrap_or(&"idle")
-                    .to_string();
-                
-                json!({
-                    "name": worker.name,
-                    "link": worker.link,
-                    "status": status,
-                    "last_seen": chrono::Utc::now(), // TODO: Track actual last seen time
+            let enhanced_workers: Vec<serde_json::Value> = workers
+                .iter()
+                .map(|worker| {
+                    let status = worker_status_map
+                        .get(&worker.name)
+                        .unwrap_or(&"idle")
+                        .to_string();
+
+                    json!({
+                        "name": worker.name,
+                        "link": worker.link,
+                        "status": status,
+                        "last_seen": chrono::Utc::now(), // TODO: Track actual last seen time
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             let active_count = worker_status_map.len();
             let total_count = workers.len();
             let idle_count = total_count - active_count;
-            
+
             Json(json!({
                 "workers": enhanced_workers,
                 "total_workers": total_count,
@@ -1016,7 +1024,7 @@ async fn admin_list_workers(State(state): State<Arc<AppState>>) -> impl IntoResp
                 },
                 "timestamp": chrono::Utc::now()
             }))
-        },
+        }
         Err(e) => {
             log::error!("Failed to list workers: {}", e);
             Json(json!({
@@ -1743,25 +1751,30 @@ async fn assign_work_internal(state: Arc<AppState>, request: AssignRequest) -> i
     // Get next available queue item with rate limiting and Redis integration
     // Get excluded hosts from configuration
     // First check environment variable for immediate override
-    let excluded_hosts: Vec<String> = if let Ok(avoid_hosts_env) = std::env::var("JANITOR_AVOID_HOSTS") {
-        avoid_hosts_env
-            .split(',')
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| s.trim().to_string())
-            .collect()
-    } else if let Ok(runner_config_path) = std::env::var("RUNNER_CONFIG") {
-        // Try to load runner-specific config if available
-        match crate::config::RunnerConfig::from_file(&runner_config_path) {
-            Ok(runner_config) => runner_config.worker.avoid_hosts,
-            Err(e) => {
-                log::warn!("Failed to load runner config from {}: {}", runner_config_path, e);
-                vec![]
+    let excluded_hosts: Vec<String> =
+        if let Ok(avoid_hosts_env) = std::env::var("JANITOR_AVOID_HOSTS") {
+            avoid_hosts_env
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect()
+        } else if let Ok(runner_config_path) = std::env::var("RUNNER_CONFIG") {
+            // Try to load runner-specific config if available
+            match crate::config::RunnerConfig::from_file(&runner_config_path) {
+                Ok(runner_config) => runner_config.worker.avoid_hosts,
+                Err(e) => {
+                    log::warn!(
+                        "Failed to load runner config from {}: {}",
+                        runner_config_path,
+                        e
+                    );
+                    vec![]
+                }
             }
-        }
-    } else {
-        // Default to empty list
-        vec![]
-    };
+        } else {
+            // Default to empty list
+            vec![]
+        };
     let assignment = match state
         .database
         .next_queue_item_with_rate_limiting(
