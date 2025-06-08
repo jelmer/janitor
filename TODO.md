@@ -31,36 +31,37 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 
 ## 🔥 HIGH PRIORITY - Critical System Functionality
 
-### Core Services
-
-#### **VCS Management (src/vcs.rs)**
-- [x] **Line 892**: Pass trace context headers for HTTP requests ✅ **COMPLETED**
-- [x] **Line 281**: Implement symref handling for branch references (worker/src/vcs.rs) ✅ **COMPLETED**
-
-#### **Scheduling & Performance (src/schedule.rs)**
-- [x] **Line 148**: Bias candidate selection towards recent runs ✅ **ALREADY IMPLEMENTED**
-- [x] **Line 513**: Optimize query efficiency for candidate filtering ✅ **ALREADY IMPLEMENTED**
+### Core Services - NEW FINDINGS
 
 #### **Worker Service (worker/src/)**
-- [x] **Line 910**: Integrate branch import into existing functions (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
-- [x] **Line 1066**: Update metadata in app state during work (worker/src/lib.rs) ✅ **ALREADY IMPLEMENTED**
-- [x] **Line 73**: Only necessary for deb-new-upstream operations (worker/src/debian/mod.rs) ✅ **ALREADY IMPLEMENTED**
-- [x] **Lines 286, 392**: Build action not implemented for certain build systems (worker/src/generic/mod.rs) ✅ **COMPLETED**
+- [ ] **vcs.rs:272**: Implement symbolic reference creation when PyO3 API stabilizes - currently returns `NotImplemented` error
+- [ ] **lib.rs:5**: Worker service has no Python equivalent - purely Rust implementation with PyO3 bindings
+
+#### **Runner Service (runner/src/)**
+- [ ] **database.rs:100, 109, 110, 115**: Async database methods have TODO comments:
+  - `fetch_remotes_async()` - Add async method to fetch remotes  
+  - `fetch_resume_info_async()` - Add async method to fetch resume info
+  - `fetch_target_async()` - Add async method to fetch target
+  - `fetch_builder_result_async()` - Add async method to fetch builder result
+- [ ] **resume.rs:122**: Query actual VCS forge API instead of placeholder (currently returns None)
+- [ ] **web.rs:1005**: Track actual last seen time for workers (TODO comment)
+- [ ] **web.rs:1023**: Implement tracking for failed workers (missing implementation)
+- [ ] **lib.rs**: Jenkins backchannel implementation has TODO markers for specific features
+
+#### **Publish Service (publish/src/)**
+- [ ] **web.rs:274-276**: `get_merged_by_user_url` requires external API calls - currently returns None
+- [ ] **web.rs:991**: Keep tombstone when removing merge proposal entries (TODO comment)
+- [ ] **web.rs:1500**: Include forge rate limits in blocker information
+- [ ] **publish_one.rs**: Edge case handling noted but not fully implemented in some areas
 
 ---
 
 ## 🚨 CRITICAL - Runtime Safety & Error Handling
 
-#### **Publish Service (publish/src/lib.rs)**
-- [x] **Line 1272**: Implement get_source_revision method in breezyshim ✅ **ALREADY IMPLEMENTED**
-- [x] **Line 1580**: Print traceback for errors ✅ **ALREADY IMPLEMENTED**
-- [x] **Line 1748**: Implement actual binary diff check ✅ **ALREADY IMPLEMENTED**
-
-#### **Differ Service (differ/src/lib.rs)**
-- [x] **Line 110**: Panic condition expects IoError - needs proper error handling ✅ **IMPROVED**
-
-#### **Runner Service Gaps**
-- [x] **Line 1641**: Get excluded hosts from proper configuration (runner/src/web.rs) ✅ **COMPLETED**
+### Test Infrastructure Issues
+- [ ] **runner/resume.rs:302**: Test ignored due to requiring real database
+- [ ] **worker/vcs.rs**: Multiple tests ignored due to system dependencies
+- [ ] **site/auth/routes.rs:58**: Test auth state creation uses `todo!()` macro - WILL PANIC
 
 ---
 
@@ -102,19 +103,55 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 #### **Authentication System (site/src/auth/)**
 - [x] **Add admin authentication middleware (site/src/api/routes.rs:1658)** ✅ **COMPLETED**
 - [ ] **Complete OIDC integration** - Multiple placeholder implementations
-- [ ] **Line 58**: Test auth state creation with proper mocking (routes.rs)
+- [ ] **Line 58**: Test auth state creation with proper mocking (routes.rs) - `todo!()` macro present
 
 #### **Database Operations (site/src/database.rs)**
-- [ ] **Lines 440-442, 485, 596-598, 601, 665**: Add joins and queries for various fields
-- [ ] **Lines 1018, 1090**: Implement proper dynamic query building and filtering  
+- [ ] **Lines 440-443, 446-448**: Missing fields in `get_last_unabsorbed_run()`: build_version, result_branches, result_tags, publish_status, vcs_type, logfilenames, revision
+- [ ] **Lines 488-490**: Missing fields in `get_previous_runs()`: vcs_type, logfilenames, revision  
+- [ ] **Lines 606-608, 611**: Missing fields in `get_run()`: result_branches, result_tags, publish_status, vcs_type
+- [ ] **Lines 677-679**: Missing fields in `get_unchanged_run()`: vcs_type, logfilenames, revision
+- [ ] **Line 1032**: Implement proper dynamic query building for `search_packages_advanced()`
+- [ ] **Lines 1104-1106**: Implement proper filtering in `get_queue_items_with_stats()`
+- [ ] **Line 1742**: Add campaign descriptions in `get_campaign_status_list()`
 
 #### **Templates & UI (site/src/templates.rs)**
-- [ ] **Line 169**: Implement actual URL generation based on routes
-- [ ] **Line 183**: Implement flash message retrieval from session
-- [ ] **Lines 328, 337-339, 342**: Make OpenID, admin status, user info, and database queries dynamic
+- [ ] **Lines 169-171**: Implement actual URL generation based on routes (currently hardcoded)
+- [ ] **Line 183**: Implement flash message retrieval from session (returns empty array)
+- [ ] **Line 328**: Make OpenID configured flag dynamic (hardcoded as false)
+- [ ] **Lines 337-339**: Get is_admin, is_qa_reviewer, and user from session (all hardcoded)
+- [ ] **Lines 342-343**: Load suites and campaigns from database (returns empty arrays)
 
 #### **Configuration Integration (site/src/config.rs)**
-- [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available
+- [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available for service URLs
+
+#### **Cupboard Handlers - Mock Implementations (site/src/handlers/cupboard/)**
+These handlers currently return mock data instead of querying the database:
+
+**Review Handler (review.rs)**
+- [ ] **Lines 393-401**: `fetch_review_queue()` - Returns mock data instead of database queries
+- [ ] **Lines 433-434**: `fetch_run_for_review()` - Returns mock ReviewItem data
+- [ ] **Lines 455-457**: `fetch_run_evaluation()` - Returns hardcoded JSON evaluation
+- [ ] **Lines 470-472**: `store_review_verdict()` - Only logs, doesn't store in database
+- [ ] **Lines 492-494, 504-506, 516-518, 528-530**: Bulk review actions not implemented
+- [ ] **Lines 547-549**: `fetch_review_statistics()` - Returns hardcoded statistics
+- [ ] **Lines 565-567**: `fetch_rejected_runs()` - Returns mock rejected run data
+
+**Publish Handler (publish.rs)**
+- [ ] **Lines 446-448**: `fetch_publish_dashboard_data()` - Returns mock PublishItem and statistics
+- [ ] **Lines 498-500**: `fetch_publish_history()` - Returns mock historical data
+- [ ] **Lines 518-520**: `fetch_publish_details()` - Returns mock PublishItem
+- [ ] **Lines 543-545**: `fetch_ready_runs()` - Returns mock ready run data
+- [ ] **Lines 563-565**: `execute_emergency_publish_action()` - Returns hardcoded counts
+- [ ] **Lines 591-593**: `apply_rate_limit_adjustment()` - Returns mock rate limit config
+- [ ] **Lines 617-619**: `fetch_publish_statistics()` - Returns hardcoded statistics
+
+**Queue Handler (queue.rs)**
+- [ ] **Lines 304-306**: `fetch_queue_item_details()` - Returns placeholder QueueItem
+- [ ] **Lines 326-328, 336-337, 339**: `fetch_queue_statistics()` - Partially implemented with TODOs for failed items, average wait time, worker utilization
+- [ ] **Lines 441-443**: Worker assignment not implemented in `execute_bulk_queue_operation()`
+
+#### **API Middleware (site/src/api/middleware.rs)**
+- [ ] **Lines 270-277**: Rate limiting middleware is a stub that only logs, no actual rate limiting
 
 ---
 
@@ -204,7 +241,53 @@ The Janitor project is actively migrating from Python to Rust. Current status:
 5. **TESTING**: Test infrastructure & mocking
 6. **DOCUMENTATION**: Maintenance & documentation
 
+## 🆕 NEW FINDINGS (January 2025 - Detailed Code Analysis)
+
+### Critical Implementation Gaps Found
+
+#### **Worker Service**
+- **Symbolic Reference Creation**: Not implemented (worker/src/vcs.rs:272) - waiting for PyO3 API stabilization
+- **Pure Rust Service**: No Python equivalent exists - only worker_creds.py for authentication
+- **Test Infrastructure**: Multiple tests ignored due to system dependencies
+
+#### **Runner Service**  
+- **Async Database Methods**: 4 methods with TODO comments need async implementations
+- **Worker Tracking**: Missing implementation for tracking failed workers and last seen time
+- **Resume Logic**: Placeholder returns None instead of querying actual forge API
+- **Jenkins Backchannel**: Has TODO markers for specific Jenkins features
+
+#### **Publish Service**
+- **External API Integration**: `get_merged_by_user_url` placeholder returns None
+- **Forge Rate Limits**: Not included in blocker information
+- **Tombstone Logic**: TODO for keeping tombstones when removing entries
+
+#### **Site Service Authentication**
+- **CRITICAL**: Test contains `todo!()` macro that will panic at runtime (auth/routes.rs:58)
+- **OIDC Integration**: Still needs completion despite basic structure
+
+### Placeholder Implementations Identified
+- **Cupboard Handlers**: ~20 functions returning mock data instead of database queries
+- **Rate Limiting**: Middleware exists but is non-functional (only logs)
+- **Database Queries**: Multiple queries missing critical fields and joins
+- **Template Context**: Session/auth data hardcoded instead of dynamic
+- **URL Generation**: Static mappings instead of dynamic routing
+
+### Key Patterns Found
+1. **Mock Data Returns**: Most cupboard handlers return hardcoded JSON
+2. **Missing Database Fields**: Many Run queries missing 5-10 fields each
+3. **TODO Comments**: 40+ files contain TODO/FIXME markers
+4. **One `todo!()` macro**: CRITICAL - in test code that will panic
+5. **Ignored Tests**: Multiple tests disabled due to database/system requirements
+6. **PyO3 Dependencies**: Some features waiting on PyO3 API stabilization
+
+### Service-Specific Notes
+- **Archive Service**: Core functionality complete, minor config hardcoding
+- **Auto-Upload**: Functional with minor parameter handling TODO
+- **Git/Bzr Stores**: Mostly complete, minor transport/permission gaps
+- **Differ Service**: Functional with improved error handling
+
 ---
 
-*Last updated: December 2024*  
-*Total pending items: ~150+ across all services*
+*Last updated: January 2025*  
+*Total pending items: ~180+ across all services*
+*Critical items: 1 `todo!()` macro, 4+ async methods, multiple ignored tests*
