@@ -84,6 +84,7 @@ axum-test = "17.0"
 serde_json = { workspace = true }
 tempfile = "3.0"
 wiremock = "0.6"
+anyhow = "1.0"
 
 # Integration testing
 testcontainers = "0.23"

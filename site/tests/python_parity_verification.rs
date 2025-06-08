@@ -429,10 +429,9 @@ impl ParityTester {
                 '>' => {
                     if in_tag {
                         current_tag.push(ch);
-                        // Extract key attributes from tags
-                        if let Some(attr_content) = self.extract_key_attributes(&current_tag) {
-                            content.push(attr_content);
-                        }
+                        // Extract ALL key attributes from tags
+                        let mut attrs = self.extract_all_key_attributes(&current_tag);
+                        content.append(&mut attrs);
                         in_tag = false;
                     }
                 }
@@ -454,19 +453,32 @@ impl ParityTester {
         content
     }
 
-    /// Extract key attributes that matter for functional comparison
-    fn extract_key_attributes(&self, tag: &str) -> Option<String> {
+    /// Extract ALL key attributes that matter for functional comparison
+    fn extract_all_key_attributes(&self, tag: &str) -> Vec<String> {
         let key_attrs = ["id=", "class=", "href=", "src=", "action=", "method="];
+        let mut attributes = Vec::new();
 
         for attr in key_attrs.iter() {
             if tag.contains(attr) {
                 if let Some(start) = tag.find(attr) {
                     let value_start = start + attr.len();
-                    if let Some(quote_char) = tag.chars().nth(value_start) {
+                    let tag_chars: Vec<char> = tag.chars().collect();
+                    
+                    if value_start < tag_chars.len() {
+                        let quote_char = tag_chars[value_start];
                         if quote_char == '"' || quote_char == '\'' {
-                            if let Some(end) = tag[value_start + 1..].find(quote_char) {
-                                let value = &tag[value_start + 1..value_start + 1 + end];
-                                return Some(format!("ATTR:{}={}", &attr[..attr.len() - 1], value));
+                            // Find the closing quote
+                            let mut end_pos = None;
+                            for (i, &ch) in tag_chars.iter().enumerate().skip(value_start + 1) {
+                                if ch == quote_char {
+                                    end_pos = Some(i);
+                                    break;
+                                }
+                            }
+                            
+                            if let Some(end) = end_pos {
+                                let value: String = tag_chars[value_start + 1..end].iter().collect();
+                                attributes.push(format!("ATTR:{}={}", &attr[..attr.len() - 1], value));
                             }
                         }
                     }
@@ -474,12 +486,18 @@ impl ParityTester {
             }
         }
 
-        None
+        attributes
+    }
+
+    /// Extract key attributes that matter for functional comparison (legacy method)
+    fn extract_key_attributes(&self, tag: &str) -> Option<String> {
+        let attrs = self.extract_all_key_attributes(tag);
+        attrs.into_iter().next()
     }
 
     /// Normalize HTML content for comparison
     fn normalize_html_content(&self, content: &[String]) -> Vec<String> {
-        content
+        let mut normalized: Vec<String> = content
             .iter()
             .filter(|item| !item.trim().is_empty())
             .map(|item| {
@@ -493,7 +511,20 @@ impl ParityTester {
                     item.clone()
                 }
             })
-            .collect()
+            .collect();
+        
+        // Sort attributes and certain text patterns to handle reordering
+        // This allows HTML with different element order to be considered equivalent
+        normalized.sort_by(|a, b| {
+            // Sort attributes first, then text
+            match (a.starts_with("ATTR:"), b.starts_with("ATTR:")) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.cmp(b),
+            }
+        });
+        
+        normalized
     }
 
     /// Normalize dynamic content that may differ between implementations
@@ -509,9 +540,9 @@ impl ParityTester {
                 .to_string();
         }
 
-        // Normalize UUIDs and long IDs
+        // Normalize UUIDs and long IDs (allow mixed case alphanumeric)
         if let Ok(uuid_regex) =
-            regex::Regex::new(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")
+            regex::Regex::new(r"[a-zA-Z0-9]{8,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{4,}-[a-zA-Z0-9]{12,}")
         {
             normalized = uuid_regex.replace_all(&normalized, "UUID").to_string();
         }

@@ -4,6 +4,7 @@ use janitor_runner::{
     application::Application,
     config::{ApplicationConfig, DatabaseConfig, RunnerConfig, WebConfig},
 };
+use serial_test::serial;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -37,6 +38,7 @@ fn test_config() -> RunnerConfig {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_application_lifecycle() {
     // Test the complete application lifecycle: build, start, health check, shutdown
 
@@ -320,6 +322,7 @@ async fn test_concurrent_operations() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_system_integration() {
     // High-level integration test that exercises multiple systems together
     use janitor_runner::metrics::MetricsCollector;
