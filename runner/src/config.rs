@@ -51,22 +51,31 @@ pub struct RunnerConfig {
     /// Redis configuration.
     pub redis: Option<RedisConfig>,
     /// VCS management configuration.
+    #[serde(default)]
     pub vcs: VcsConfig,
     /// Log management configuration.
+    #[serde(default)]
     pub logs: LogConfig,
     /// Artifact storage configuration.
+    #[serde(default)]
     pub artifacts: ArtifactConfig,
     /// Performance monitoring configuration.
+    #[serde(default)]
     pub performance: PerformanceConfig,
     /// Error tracking configuration.
+    #[serde(default)]
     pub error_tracking: ErrorTrackingConfig,
     /// Tracing and logging configuration.
+    #[serde(default)]
     pub tracing: TracingConfig,
     /// Web server configuration.
+    #[serde(default)]
     pub web: WebConfig,
     /// Worker coordination configuration.
+    #[serde(default)]
     pub worker: WorkerConfig,
     /// General application configuration.
+    #[serde(default)]
     pub application: ApplicationConfig,
 }
 

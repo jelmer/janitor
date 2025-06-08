@@ -48,6 +48,9 @@ buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 redis = { workspace = true }
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.5.1" }

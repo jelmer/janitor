@@ -685,3 +685,7 @@ impl From<(PublishOneResult, String)> for crate::PublishOneResult {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "publish_one_tests.rs"]
+mod tests;

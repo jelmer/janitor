@@ -99,7 +99,7 @@ pub trait LogFileManager: Send + Sync {
         codebase: &str,
         run_id: &str,
         name: &str,
-        timeout: Option<Duration>,
+        _timeout: Option<Duration>,
     ) -> Result<bool, Error> {
         // Default implementation ignores timeout
         self.has_log(codebase, run_id, name).await

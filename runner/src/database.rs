@@ -26,6 +26,13 @@ impl RunnerDatabase {
         }
     }
 
+    /// Create from a janitor Database instance.
+    pub fn from_database(database: janitor::database::Database) -> Self {
+        Self {
+            shared_db: database,
+        }
+    }
+
     /// Create a new database manager with Redis support.
     pub fn new_with_redis(pool: PgPool, redis: redis::Client) -> Self {
         Self {
@@ -695,7 +702,7 @@ impl RunnerDatabase {
         retry_after: DateTime<Utc>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let _: () = conn
                 .hset("rate-limit-hosts", host, retry_after.to_rfc3339())
                 .await?;
@@ -710,7 +717,7 @@ impl RunnerDatabase {
         let mut result = HashMap::new();
 
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let hosts: HashMap<String, String> = conn.hgetall("rate-limit-hosts").await?;
 
             let now = Utc::now();
@@ -734,7 +741,7 @@ impl RunnerDatabase {
         let mut result = Vec::new();
 
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let items: Vec<String> = conn.hkeys("assigned-queue-items").await?;
 
             for item in items {
@@ -755,7 +762,7 @@ impl RunnerDatabase {
         log_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             // Check if already assigned to prevent double assignment
             let existing: Option<String> = conn
@@ -797,7 +804,7 @@ impl RunnerDatabase {
         let mut result = Vec::new();
 
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let assignments: HashMap<String, String> = conn.hgetall("assigned-queue-items").await?;
 
             for (queue_id_str, assignment_info_str) in assignments {
@@ -832,7 +839,7 @@ impl RunnerDatabase {
         let mut result = Vec::new();
 
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let queue_ids: Vec<String> = conn
                 .smembers(format!("worker-queue-items:{}", worker_name))
                 .await?;
@@ -853,7 +860,7 @@ impl RunnerDatabase {
         queue_id: i64,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let exists: bool = conn
                 .hexists("assigned-queue-items", queue_id.to_string())
                 .await?;
@@ -869,7 +876,7 @@ impl RunnerDatabase {
         queue_id: i64,
     ) -> Result<Option<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             if let Ok(assignment_info_str) = conn
                 .hget::<&str, String, String>("assigned-queue-items", queue_id.to_string())
@@ -897,7 +904,7 @@ impl RunnerDatabase {
         queue_id: i64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             // Get worker name before removing assignment
             if let Ok(assignment_info_str) = conn
@@ -935,7 +942,7 @@ impl RunnerDatabase {
         current_run: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             let health_info = serde_json::json!({
                 "status": status,
@@ -960,7 +967,7 @@ impl RunnerDatabase {
         worker_name: &str,
     ) -> Result<Option<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             match conn
                 .hget::<&str, &str, String>("worker-health", worker_name)
@@ -986,7 +993,7 @@ impl RunnerDatabase {
         let mut result = HashMap::new();
 
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
             let workers: HashMap<String, String> = conn.hgetall("worker-health").await?;
 
             for (worker_name, health_str) in workers {
@@ -1007,7 +1014,7 @@ impl RunnerDatabase {
         ttl_seconds: u64,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             // Use SET with NX (only if not exists) and EX (expiration)
             let result: Option<String> = conn
@@ -1035,7 +1042,7 @@ impl RunnerDatabase {
         holder: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         if let Some(redis_client) = self.redis() {
-            let mut conn = redis_client.get_async_connection().await?;
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
 
             // Lua script to atomically check holder and delete
             let script = r#"
@@ -1586,7 +1593,7 @@ impl RunnerDatabase {
 
         // Clean up old rate limit entries from Redis
         if let Some(redis_client) = self.redis() {
-            if let Ok(mut conn) = redis_client.get_async_connection().await {
+            if let Ok(mut conn) = redis_client.get_multiplexed_async_connection().await {
                 let hosts: HashMap<String, String> =
                     conn.hgetall("rate-limit-hosts").await.unwrap_or_default();
                 let now = Utc::now();

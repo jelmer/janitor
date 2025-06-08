@@ -19,8 +19,8 @@ fn test_config() -> RunnerConfig {
         },
         web: WebConfig {
             listen_address: "127.0.0.1".to_string(),
-            port: 0, // Use random port for tests
-            public_port: 0,
+            port: 9999, // Use test port
+            public_port: 9998, // Use different test port
             request_timeout_seconds: 30,
             max_request_size_bytes: 1024 * 1024, // 1MB
             enable_request_logging: false,

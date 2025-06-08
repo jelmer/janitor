@@ -2,7 +2,7 @@
 
 This document tracks unimplemented functionality, placeholder code, and TODO items across the Janitor codebase. Items are organized by priority and service.
 
-## ✅ Recently Completed (2024-12)
+## ✅ Recently Completed (2025-01)
 - VCS repository listing functionality (src/vcs.rs) 
 - S3 logs creation time implementation (src/logs/s3.rs)
 - Parallel artifact processing (src/artifacts/mod.rs)
@@ -22,6 +22,10 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **Archive Contents file generation already implemented (archive/src/lib.rs:55)** ✅ **COMPLETED**
 - **Publish service queue frequency and configuration improvements** ✅ **COMPLETED**
 - **Core API endpoints for runs and publishing (site/src/api/routes.rs:509,3431,3653,3684)** ✅ **COMPLETED**
+- **Deprecated Redis methods updated to use multiplexed connections (runner/src/database.rs)** ✅ **COMPLETED**
+- **Unused variable warnings fixed across codebase** ✅ **COMPLETED**
+- **Comprehensive test database utilities created (src/test_utils.rs, runner/src/test_utils.rs)** ✅ **COMPLETED**
+- **Mock implementations for artifacts and logs managers** ✅ **COMPLETED**
 
 ---
 
@@ -153,7 +157,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 
 ### Runner Service Tests
 - [ ] **Lines 214, 226**: Tests disabled pending LogConfig implementation (integration_tests.rs)
-- [ ] **Line 29**: Test database setup not implemented (comprehensive_api_tests.rs)  
+- [x] **Line 29**: Test database setup implemented with comprehensive utilities (comprehensive_api_tests.rs) ✅ **COMPLETED**
 - [ ] **Lines 260, 262, 266**: Mock database and failure details testing (core_functionality_tests.rs)
 
 ### Publish Service Tests  

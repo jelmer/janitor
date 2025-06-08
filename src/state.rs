@@ -183,3 +183,182 @@ pub fn get_result_branch(
         .map(|(_, n, br, r)| (n.clone(), r.clone(), br.clone()))
         .ok_or_else(|| format!("Role '{}' not found in result branches", role))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use breezyshim::RevisionId;
+    use chrono::{DateTime, Utc};
+
+    fn create_test_run() -> Run {
+        Run {
+            id: "test-run-123".to_string(),
+            command: "test command".to_string(),
+            description: Some("Test run description".to_string()),
+            result_code: "success".to_string(),
+            main_branch_revision: Some(RevisionId::from("main-rev-123".as_bytes())),
+            revision: Some(RevisionId::from("test-rev-456".as_bytes())),
+            context: Some("test context".to_string()),
+            result: Some(serde_json::json!({"status": "ok"})),
+            suite: "test-suite".to_string(),
+            instigated_context: Some("automated".to_string()),
+            vcs_type: "git".to_string(),
+            branch_url: "https://github.com/example/repo".to_string(),
+            logfilenames: Some(vec!["build.log".to_string(), "test.log".to_string()]),
+            worker_name: Some("worker-01".to_string()),
+            result_branches: Some(vec![
+                ("main".to_string(), "master".to_string(), Some(RevisionId::from("base-123".as_bytes())), Some(RevisionId::from("head-456".as_bytes()))),
+                ("feature".to_string(), "feature-branch".to_string(), Some(RevisionId::from("feat-base".as_bytes())), Some(RevisionId::from("feat-head".as_bytes()))),
+            ]),
+            result_tags: Some(vec![("v1.0".to_string(), "release-tag".to_string())]),
+            target_branch_url: Some("https://github.com/example/repo/tree/feature".to_string()),
+            change_set: "test-changeset".to_string(),
+            failure_details: None,
+            failure_transient: None,
+            failure_stage: None,
+            codebase: "test-codebase".to_string(),
+            start_time: DateTime::parse_from_rfc3339("2023-01-01T00:00:00Z").unwrap().with_timezone(&Utc),
+            finish_time: DateTime::parse_from_rfc3339("2023-01-01T01:00:00Z").unwrap().with_timezone(&Utc),
+            value: Some(42),
+        }
+    }
+
+    #[test]
+    fn test_run_equality() {
+        let run1 = create_test_run();
+        let mut run2 = create_test_run();
+        
+        assert_eq!(run1, run2);
+        
+        run2.id = "different-id".to_string();
+        assert_ne!(run1, run2);
+    }
+
+    #[test]
+    fn test_run_duration() {
+        let run = create_test_run();
+        let duration = run.duration();
+        assert_eq!(duration.num_hours(), 1);
+    }
+
+    #[test]
+    fn test_run_get_result_branch() {
+        let run = create_test_run();
+        
+        let main_result = run.get_result_branch("main");
+        assert!(main_result.is_some());
+        let (name, revision, base_revision) = main_result.unwrap();
+        assert_eq!(name, "master");
+        assert_eq!(revision, Some(RevisionId::from("head-456".as_bytes())));
+        assert_eq!(base_revision, Some(RevisionId::from("base-123".as_bytes())));
+        
+        let feature_result = run.get_result_branch("feature");
+        assert!(feature_result.is_some());
+        
+        let nonexistent = run.get_result_branch("nonexistent");
+        assert!(nonexistent.is_none());
+    }
+
+    #[test]
+    fn test_run_campaign_alias() {
+        let run = create_test_run();
+        assert_eq!(run.campaign(), "test-suite");
+    }
+
+    #[test]
+    fn test_run_ordering() {
+        let mut run1 = create_test_run();
+        let mut run2 = create_test_run();
+        
+        run1.start_time = DateTime::parse_from_rfc3339("2023-01-01T00:00:00Z").unwrap().with_timezone(&Utc);
+        run2.start_time = DateTime::parse_from_rfc3339("2023-01-01T01:00:00Z").unwrap().with_timezone(&Utc);
+        
+        assert!(run1 < run2);
+        assert!(run2 > run1);
+        
+        let mut runs = vec![run2.clone(), run1.clone()];
+        runs.sort();
+        assert_eq!(runs[0], run1);
+        assert_eq!(runs[1], run2);
+    }
+
+    #[test]
+    fn test_standalone_get_result_branch() {
+        let result_branches = vec![
+            ("main".to_string(), "master".to_string(), Some(RevisionId::from("base".as_bytes())), Some(RevisionId::from("head".as_bytes()))),
+            ("feature".to_string(), "feat".to_string(), None, Some(RevisionId::from("feat-head".as_bytes()))),
+        ];
+        
+        let main_result = get_result_branch(&result_branches, "main");
+        assert!(main_result.is_ok());
+        let (name, revision, base_revision) = main_result.unwrap();
+        assert_eq!(name, "master");
+        assert_eq!(revision, Some(RevisionId::from("head".as_bytes())));
+        assert_eq!(base_revision, Some(RevisionId::from("base".as_bytes())));
+        
+        let feature_result = get_result_branch(&result_branches, "feature");
+        assert!(feature_result.is_ok());
+        let (name, revision, base_revision) = feature_result.unwrap();
+        assert_eq!(name, "feat");
+        assert_eq!(revision, Some(RevisionId::from("feat-head".as_bytes())));
+        assert_eq!(base_revision, None);
+        
+        let nonexistent = get_result_branch(&result_branches, "nonexistent");
+        assert!(nonexistent.is_err());
+        assert!(nonexistent.unwrap_err().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_create_pool_with_database_url() {
+        let mut config = Config::default();
+        config.database_location = Some("postgresql://localhost/nonexistent".to_string());
+        
+        // This should fail to connect but shouldn't panic
+        let result = create_pool(&config).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_create_pool_without_database_url() {
+        let config = Config::default();
+        
+        // This should try default connection which will likely fail in tests
+        let result = create_pool(&config).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_run_clone() {
+        let run = create_test_run();
+        let cloned = run.clone();
+        assert_eq!(run, cloned);
+        assert_eq!(run.id, cloned.id);
+        assert_eq!(run.suite, cloned.suite);
+    }
+
+    #[test]
+    fn test_run_with_no_result_branches() {
+        let mut run = create_test_run();
+        run.result_branches = None;
+        
+        let result = run.get_result_branch("main");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_run_with_empty_result_branches() {
+        let mut run = create_test_run();
+        run.result_branches = Some(vec![]);
+        
+        let result = run.get_result_branch("main");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_empty_result_branches_standalone() {
+        let result_branches = vec![];
+        let result = get_result_branch(&result_branches, "main");
+        assert!(result.is_err());
+    }
+}

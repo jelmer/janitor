@@ -18,6 +18,7 @@ use breezyshim::transport::Transport;
 use breezyshim::tree::{MutableTree, WorkingTree};
 pub use breezyshim::RevisionId;
 use reqwest::header::{HeaderMap, HeaderValue};
+use silver_platter::CodemodResult;
 use std::collections::HashMap;
 
 use std::net::IpAddr;
@@ -180,6 +181,7 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
+#[cfg(feature = "python")]
 pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_json::Value> {
     use pyo3::prelude::*;
     if obj.is_none() {
@@ -213,6 +215,7 @@ pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_
     }
 }
 
+#[cfg(feature = "python")]
 pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> pyo3::Py<pyo3::PyAny>
 where
     'b: 'a,
@@ -276,6 +279,7 @@ pub fn run_worker(
     metadata.codebase = Some(codebase.to_string());
 
     let build_target: Box<dyn Target> = match target {
+        #[cfg(feature = "debian")]
         "debian" => Box::new(crate::debian::DebianTarget::new(env)),
         "generic" => Box::new(crate::generic::GenericTarget::new(env)),
         n => {
@@ -1609,3 +1613,7 @@ check:
     }
     */
 }
+
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod lib_tests;
