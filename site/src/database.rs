@@ -420,12 +420,18 @@ impl DatabaseManager {
         codebase: &str,
     ) -> Result<RunDetails, DatabaseError> {
         let row = sqlx::query(
-            "SELECT run.id, run.codebase, run.suite, run.command, run.result_code, run.description, run.start_time, run.finish_time, run.worker, run.failure_stage, run.main_branch_revision FROM last_unabsorbed_runs run WHERE run.suite = $1 AND run.codebase = $2"
+            "SELECT run.id, run.codebase, run.suite, run.command, run.result_code, run.description, 
+             run.start_time, run.finish_time, run.worker, run.failure_stage, run.main_branch_revision,
+             run.vcs_type, run.logfilenames, run.revision, run.publish_status, run.result_tags
+             FROM last_unabsorbed_runs run WHERE run.suite = $1 AND run.codebase = $2"
         )
         .bind(campaign)
         .bind(codebase)
         .fetch_one(&self.pool)
         .await?;
+
+        // Get result branches for this run
+        let result_branches = self.get_result_branches(&row.try_get::<String, _>("id")?).await?;
 
         Ok(RunDetails {
             id: row.try_get("id")?,
@@ -437,16 +443,43 @@ impl DatabaseManager {
             start_time: row.try_get("start_time")?,
             finish_time: row.try_get("finish_time")?,
             worker: row.try_get("worker")?,
-            build_version: None,     // Not in schema
-            result_branches: vec![], // TODO: Join with new_result_branch
-            result_tags: vec![],     // TODO: Handle result_tags
-            publish_status: None,    // TODO: Add to query
+            build_version: None, // Not in schema
+            result_branches,
+            result_tags: row.try_get::<Option<Vec<serde_json::Value>>, _>("result_tags")?
+                .unwrap_or_default(),
+            publish_status: row.try_get::<Option<String>, _>("publish_status")?,
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
-            vcs_type: None,                         // TODO: Add to query
-            logfilenames: vec![],                   // TODO: Add logfilenames to query
-            revision: row.try_get("revision").ok(), // Add revision field
+            vcs_type: row.try_get::<Option<String>, _>("vcs_type")?,
+            logfilenames: row.try_get::<Option<Vec<String>>, _>("logfilenames")?
+                .unwrap_or_default(),
+            revision: row.try_get("revision")?,
         })
+    }
+
+    /// Helper method to get result branches for a run
+    async fn get_result_branches(&self, run_id: &str) -> Result<Vec<serde_json::Value>, DatabaseError> {
+        let rows = sqlx::query(
+            "SELECT role, remote_name, base_revision, revision, absorbed 
+             FROM new_result_branch WHERE run_id = $1"
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut result_branches = Vec::new();
+        for row in rows {
+            let branch = serde_json::json!({
+                "role": row.try_get::<String, _>("role")?,
+                "remote_name": row.try_get::<Option<String>, _>("remote_name")?,
+                "base_revision": row.try_get::<Option<String>, _>("base_revision")?,
+                "revision": row.try_get::<Option<String>, _>("revision")?,
+                "absorbed": row.try_get::<Option<bool>, _>("absorbed")?.unwrap_or(false)
+            });
+            result_branches.push(branch);
+        }
+
+        Ok(result_branches)
     }
 
     pub async fn get_previous_runs(
@@ -455,7 +488,7 @@ impl DatabaseManager {
         campaign: &str,
         limit: Option<i64>,
     ) -> Result<Vec<RunDetails>, DatabaseError> {
-        let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE codebase = $1 AND suite = $2 ORDER BY start_time DESC".to_string();
+        let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, vcs_type, logfilenames, revision, publish_status, result_tags FROM run WHERE codebase = $1 AND suite = $2 ORDER BY start_time DESC".to_string();
 
         if let Some(limit) = limit {
             query.push_str(&format!(" LIMIT {}", limit));
@@ -469,8 +502,11 @@ impl DatabaseManager {
 
         let mut runs = Vec::new();
         for row in rows {
+            let run_id = row.try_get::<String, _>("id")?;
+            let result_branches = self.get_result_branches(&run_id).await?;
+
             runs.push(RunDetails {
-                id: row.try_get("id")?,
+                id: run_id,
                 codebase: row.try_get("codebase")?,
                 suite: row.try_get("suite")?,
                 command: row.try_get("command")?,
@@ -479,15 +515,17 @@ impl DatabaseManager {
                 start_time: row.try_get("start_time")?,
                 finish_time: row.try_get("finish_time")?,
                 worker: row.try_get("worker")?,
-                build_version: None,
-                result_branches: vec![],
-                result_tags: vec![],
-                publish_status: None,
+                build_version: None, // Not in schema
+                result_branches,
+                result_tags: row.try_get::<Option<Vec<serde_json::Value>>, _>("result_tags")?
+                    .unwrap_or_default(),
+                publish_status: row.try_get::<Option<String>, _>("publish_status")?,
                 failure_stage: row.try_get("failure_stage")?,
                 main_branch_revision: row.try_get("main_branch_revision")?,
-                vcs_type: None,                         // TODO: Add to query
-                logfilenames: vec![],                   // TODO: Add logfilenames to query
-                revision: row.try_get("revision").ok(), // Add revision field
+                vcs_type: row.try_get::<Option<String>, _>("vcs_type")?,
+                logfilenames: row.try_get::<Option<Vec<String>>, _>("logfilenames")?
+                    .unwrap_or_default(),
+                revision: row.try_get("revision")?,
             });
         }
 
@@ -581,11 +619,14 @@ impl DatabaseManager {
 
     pub async fn get_run(&self, run_id: &str) -> Result<RunDetails, DatabaseError> {
         let row = sqlx::query(
-            "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, logfilenames FROM run WHERE id = $1"
+            "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, logfilenames, vcs_type, revision, publish_status, result_tags FROM run WHERE id = $1"
         )
         .bind(run_id)
         .fetch_one(&self.pool)
         .await?;
+
+        // Get result branches for this run
+        let result_branches = self.get_result_branches(run_id).await?;
 
         // Parse logfilenames array from the database
         let logfilenames: Vec<String> = row
@@ -602,15 +643,16 @@ impl DatabaseManager {
             start_time: row.try_get("start_time")?,
             finish_time: row.try_get("finish_time")?,
             worker: row.try_get("worker")?,
-            build_version: None,
-            result_branches: vec![], // TODO: Join with new_result_branch
-            result_tags: vec![],     // TODO: Handle result_tags array
-            publish_status: None,    // TODO: Add publish_status to query
+            build_version: None, // Not in schema
+            result_branches,
+            result_tags: row.try_get::<Option<Vec<serde_json::Value>>, _>("result_tags")?
+                .unwrap_or_default(),
+            publish_status: row.try_get::<Option<String>, _>("publish_status")?,
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
-            vcs_type: None, // TODO: Add to query
+            vcs_type: row.try_get::<Option<String>, _>("vcs_type")?,
             logfilenames,
-            revision: row.try_get("revision").ok(), // Add revision field
+            revision: row.try_get("revision")?,
         })
     }
 
@@ -640,7 +682,7 @@ impl DatabaseManager {
         codebase: &str,
         before: Option<&DateTime<Utc>>,
     ) -> Result<RunDetails, DatabaseError> {
-        let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision FROM run WHERE suite = 'unchanged' AND codebase = $1".to_string();
+        let mut query = "SELECT id, codebase, suite, command, result_code, description, start_time, finish_time, worker, failure_stage, main_branch_revision, vcs_type, logfilenames, revision, publish_status, result_tags FROM run WHERE suite = 'unchanged' AND codebase = $1".to_string();
 
         let mut bind_count = 1;
         if let Some(before_time) = before {
@@ -658,8 +700,12 @@ impl DatabaseManager {
 
         let row = sql_query.fetch_one(&self.pool).await?;
 
+        // Get result branches for this run
+        let run_id = row.try_get::<String, _>("id")?;
+        let result_branches = self.get_result_branches(&run_id).await?;
+
         Ok(RunDetails {
-            id: row.try_get("id")?,
+            id: run_id,
             codebase: row.try_get("codebase")?,
             suite: row.try_get("suite")?,
             command: row.try_get("command")?,
@@ -668,15 +714,17 @@ impl DatabaseManager {
             start_time: row.try_get("start_time")?,
             finish_time: row.try_get("finish_time")?,
             worker: row.try_get("worker")?,
-            build_version: None,
-            result_branches: vec![],
-            result_tags: vec![],
-            publish_status: None,
+            build_version: None, // Not in schema
+            result_branches,
+            result_tags: row.try_get::<Option<Vec<serde_json::Value>>, _>("result_tags")?
+                .unwrap_or_default(),
+            publish_status: row.try_get::<Option<String>, _>("publish_status")?,
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
-            vcs_type: None,                         // TODO: Add to query
-            logfilenames: vec![],                   // TODO: Add logfilenames to query
-            revision: row.try_get("revision").ok(), // Add revision field
+            vcs_type: row.try_get::<Option<String>, _>("vcs_type")?,
+            logfilenames: row.try_get::<Option<Vec<String>>, _>("logfilenames")?
+                .unwrap_or_default(),
+            revision: row.try_get("revision")?,
         })
     }
 
