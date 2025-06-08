@@ -390,64 +390,151 @@ async fn fetch_review_queue(
     state: &AppState,
     filters: &ReviewFilters,
 ) -> anyhow::Result<(Vec<ReviewItem>, ReviewStatistics)> {
-    // TODO: Implement comprehensive review queue fetching
-    // This would query runs that need review, with filtering and pagination
+    // Query publish_ready view for runs that need review
+    let mut query = "
+        SELECT 
+            pr.id, pr.codebase, pr.suite, pr.result_code, pr.finish_time, 
+            pr.command, pr.description, pr.publish_status, pr.branch_url,
+            pr.value
+        FROM publish_ready pr
+        WHERE pr.publish_status IN ('needs-manual-review', 'unknown')
+    ".to_string();
 
-    // Placeholder implementation - in real implementation, this would:
-    // 1. Query publish_ready table for runs needing review
-    // 2. Join with review table to get existing reviews
-    // 3. Apply filters and pagination
-    // 4. Calculate statistics
+    // Apply filters - using a simpler approach
+    if let Some(campaign) = &filters.campaign {
+        if !campaign.is_empty() {
+            query.push_str(&format!(" AND pr.suite = '{}'", campaign.replace("'", "''")));
+        }
+    }
 
-    let items = vec![ReviewItem {
-        run_id: "run-review-1".to_string(),
-        codebase: "example-package".to_string(),
-        campaign: "lintian-fixes".to_string(),
-        result_code: "success".to_string(),
-        finish_time: Some(Utc::now() - chrono::Duration::hours(1)),
-        value: Some(85),
-        command: Some("fix-lintian-issues".to_string()),
-        description: Some("Fixed multiple lintian issues".to_string()),
-        reviews: vec![],
-        publish_status: Some("needs-manual-review".to_string()),
-        branch_url: Some(
-            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
-        ),
-        needs_review: true,
-    }];
+    // Note: ReviewFilters doesn't have a codebase field, 
+    // filtering by codebase would need to be added to the struct if needed
+
+    // Add ordering and limit
+    query.push_str(" ORDER BY pr.finish_time DESC");
+    let limit = filters.limit.unwrap_or(100);
+    query.push_str(&format!(" LIMIT {}", limit));
+
+    let rows = sqlx::query(&query)
+        .fetch_all(state.database.pool())
+        .await?;
+
+    let mut items = Vec::new();
+    
+    for row in rows {
+        let run_id: String = row.try_get("id")?;
+        
+        // Get existing reviews for this run
+        let review_rows = sqlx::query(
+            "SELECT reviewer, verdict, comment, reviewed_at FROM review WHERE run_id = $1"
+        )
+        .bind(&run_id)
+        .fetch_all(state.database.pool())
+        .await?;
+
+        let reviews: Vec<ReviewRecord> = review_rows.into_iter().map(|r| {
+            ReviewRecord {
+                reviewer: r.try_get("reviewer").unwrap_or_default(),
+                verdict: r.try_get("verdict").unwrap_or_default(),
+                comment: r.try_get("comment").unwrap_or_default(),
+                reviewed_at: r.try_get("reviewed_at").unwrap_or_else(|_| Utc::now()),
+            }
+        }).collect();
+
+        let publish_status: Option<String> = row.try_get("publish_status").ok();
+        let needs_review = publish_status.as_ref()
+            .map(|s| s == "needs-manual-review" || s == "unknown")
+            .unwrap_or(false);
+
+        items.push(ReviewItem {
+            run_id,
+            codebase: row.try_get("codebase")?,
+            campaign: row.try_get("suite")?,
+            result_code: row.try_get("result_code")?,
+            finish_time: row.try_get("finish_time").ok(),
+            value: row.try_get("value").ok(),
+            command: row.try_get("command").ok(),
+            description: row.try_get("description").ok(),
+            reviews,
+            publish_status,
+            branch_url: row.try_get("branch_url").ok(),
+            needs_review,
+        });
+    }
+
+    // Calculate statistics
+    let stats_row = sqlx::query(
+        "SELECT 
+            COUNT(*) FILTER (WHERE publish_status = 'needs-manual-review') as needs_manual_review,
+            COUNT(*) FILTER (WHERE publish_status IN ('approved', 'rejected')) as total_reviewed,
+            COUNT(*) as total_pending,
+            COUNT(*) FILTER (WHERE publish_status = 'approved') as approved_count,
+            COUNT(*) FILTER (WHERE publish_status = 'rejected') as rejected_count
+        FROM publish_ready 
+        WHERE publish_status IN ('needs-manual-review', 'unknown', 'approved', 'rejected')"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
 
     let stats = ReviewStatistics {
-        total_pending: 1,
-        total_reviewed: 0,
-        needs_manual_review: 1,
-        approved_count: 0,
-        rejected_count: 0,
-        average_review_time: 0.0,
-        reviewers_active: 0,
+        total_pending: stats_row.try_get("total_pending")?,
+        total_reviewed: stats_row.try_get("total_reviewed")?,
+        needs_manual_review: stats_row.try_get("needs_manual_review")?,
+        approved_count: stats_row.try_get("approved_count")?,
+        rejected_count: stats_row.try_get("rejected_count")?,
+        average_review_time: 0.0, // TODO: Calculate from review timestamps
+        reviewers_active: 0, // TODO: Calculate active reviewers
     };
 
     Ok((items, stats))
 }
 
 async fn fetch_run_for_review(state: &AppState, run_id: &str) -> anyhow::Result<ReviewItem> {
-    // TODO: Implement detailed run fetching for review
-    // This would get run details, branch information, and existing reviews
+    // Get run details from the database
+    let run_row = sqlx::query(
+        "SELECT id, codebase, suite, result_code, finish_time, value, command, 
+         description, publish_status, branch_url
+         FROM run WHERE id = $1"
+    )
+    .bind(run_id)
+    .fetch_one(state.database.pool())
+    .await?;
+
+    // Get existing reviews for this run
+    let review_rows = sqlx::query(
+        "SELECT reviewer, verdict, comment, reviewed_at FROM review WHERE run_id = $1"
+    )
+    .bind(run_id)
+    .fetch_all(&state.database.pool())
+    .await?;
+
+    let reviews: Vec<ReviewRecord> = review_rows.into_iter().map(|r| {
+        ReviewRecord {
+            reviewer: r.try_get("reviewer").unwrap_or_default(),
+            verdict: r.try_get("verdict").unwrap_or_default(),
+            comment: r.try_get("comment").unwrap_or_default(),
+            reviewed_at: r.try_get("reviewed_at").unwrap_or_else(|_| Utc::now()),
+        }
+    }).collect();
+
+    let publish_status: Option<String> = run_row.try_get("publish_status").ok();
+    let needs_review = publish_status.as_ref()
+        .map(|s| s == "needs-manual-review" || s == "unknown")
+        .unwrap_or(false);
 
     Ok(ReviewItem {
-        run_id: run_id.to_string(),
-        codebase: "example-package".to_string(),
-        campaign: "lintian-fixes".to_string(),
-        result_code: "success".to_string(),
-        finish_time: Some(Utc::now() - chrono::Duration::hours(1)),
-        value: Some(85),
-        command: Some("fix-lintian-issues".to_string()),
-        description: Some("Fixed multiple lintian issues".to_string()),
-        reviews: vec![],
-        publish_status: Some("needs-manual-review".to_string()),
-        branch_url: Some(
-            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
-        ),
-        needs_review: true,
+        run_id: run_row.try_get("id")?,
+        codebase: run_row.try_get("codebase")?,
+        campaign: run_row.try_get("suite")?,
+        result_code: run_row.try_get("result_code")?,
+        finish_time: run_row.try_get("finish_time").ok(),
+        value: run_row.try_get("value").ok(),
+        command: run_row.try_get("command").ok(),
+        description: run_row.try_get("description").ok(),
+        reviews,
+        publish_status,
+        branch_url: run_row.try_get("branch_url").ok(),
+        needs_review,
     })
 }
 
@@ -467,11 +554,48 @@ async fn store_review_verdict(
     review_request: &SubmitReviewRequest,
     reviewer: &str,
 ) -> anyhow::Result<()> {
-    // TODO: Implement review storage in database
-    // This would store the review verdict and comment in the review table
+    // Store the review verdict in the database using UPSERT (INSERT ... ON CONFLICT)
+    sqlx::query(
+        "INSERT INTO review (run_id, reviewer, verdict, comment, reviewed_at) 
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (run_id, reviewer) 
+         DO UPDATE SET 
+             verdict = EXCLUDED.verdict,
+             comment = EXCLUDED.comment,
+             reviewed_at = NOW()"
+    )
+    .bind(&review_request.run_id)
+    .bind(reviewer)
+    .bind(&review_request.verdict)
+    .bind(&review_request.comment)
+    .execute(state.database.pool())
+    .await?;
+
+    // Also update the publish_status in the run table if needed
+    match review_request.verdict.as_str() {
+        "approved" => {
+            sqlx::query("UPDATE run SET publish_status = 'approved' WHERE id = $1")
+                .bind(&review_request.run_id)
+                .execute(state.database.pool())
+                .await?;
+        }
+        "rejected" => {
+            sqlx::query("UPDATE run SET publish_status = 'rejected' WHERE id = $1")
+                .bind(&review_request.run_id)
+                .execute(state.database.pool())
+                .await?;
+        }
+        _ => {
+            // For other verdicts, keep current status or set to needs-manual-review
+            sqlx::query("UPDATE run SET publish_status = 'needs-manual-review' WHERE id = $1 AND publish_status = 'unknown'")
+                .bind(&review_request.run_id)
+                .execute(state.database.pool())
+                .await?;
+        }
+    }
 
     tracing::info!(
-        "Storing review verdict '{}' for run {} by reviewer {}",
+        "Stored review verdict '{}' for run {} by reviewer {}",
         review_request.verdict,
         review_request.run_id,
         reviewer
