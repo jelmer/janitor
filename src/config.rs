@@ -32,13 +32,13 @@ impl Config {
     pub fn get_distribution(&self, name: &str) -> Option<&Distribution> {
         self.distribution
             .iter()
-            .find(|d| d.name.as_ref().unwrap() == name)
+            .find(|d| d.name.as_ref().map_or(false, |n| n == name))
     }
 
     pub fn get_campaign(&self, name: &str) -> Option<&Campaign> {
         self.campaign
             .iter()
-            .find(|c| c.name.as_ref().unwrap() == name)
+            .find(|c| c.name.as_ref().map_or(false, |n| n == name))
     }
 
     pub fn find_campaign_by_branch_name(&self, branch_name: &str) -> Option<(&str, &str)> {

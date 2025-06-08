@@ -140,12 +140,21 @@ ORDER BY timestamp DESC
     .fetch_optional(conn)
     .await?;
 
-    Ok(row.map(|(revision, url)| {
-        (
-            RevisionId::from(revision.as_bytes().to_vec()),
-            Url::parse(&url).unwrap(),
-        )
-    }))
+    match row {
+        Some((revision, url)) => {
+            match Url::parse(&url) {
+                Ok(parsed_url) => Ok(Some((
+                    RevisionId::from(revision.as_bytes().to_vec()),
+                    parsed_url,
+                ))),
+                Err(e) => {
+                    log::error!("Failed to parse URL '{}': {}", url, e);
+                    Ok(None) // Return None instead of crashing on invalid URL
+                }
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 async fn check_last_published(
@@ -172,11 +181,16 @@ async fn guess_codebase_from_branch_url(
     url: &url::Url,
     possible_transports: Option<&mut Vec<Transport>>,
 ) -> Result<Option<String>, sqlx::Error> {
-    let url = url
+    let url = match url
         .to_string()
         .trim_end_matches('/')
-        .parse::<Url>()
-        .unwrap();
+        .parse::<Url>() {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!("Failed to parse URL: {}", e);
+                return Ok(None);
+            }
+        };
     // TODO(jelmer): use codebase table
     let query = sqlx::query_as::<_, (String, String)>(
         r#"""
@@ -203,18 +217,39 @@ ORDER BY length(branch_url) DESC
         return Ok(None);
     }
 
-    let result = result.unwrap();
+    let result = match result {
+        Some(result) => result,
+        None => return Ok(None),
+    };
 
     if &url.to_string() == result.1.trim_end_matches('/') {
         return Ok(Some(result.0));
     }
 
-    let source_branch = tokio::task::spawn_blocking(move || {
-        silver_platter::vcs::open_branch(&result.1.parse().unwrap(), Some(&mut vec![]), None, None)
+    let branch_url = match result.1.parse() {
+        Ok(url) => url,
+        Err(e) => {
+            log::error!("Failed to parse branch URL '{}': {}", result.1, e);
+            return Ok(None);
+        }
+    };
+    
+    let source_branch = match tokio::task::spawn_blocking(move || {
+        silver_platter::vcs::open_branch(&branch_url, Some(&mut vec![]), None, None)
     })
-    .await
-    .unwrap()
-    .unwrap();
+    .await {
+        Ok(branch_result) => match branch_result {
+            Ok(branch) => branch,
+            Err(e) => {
+                log::error!("Failed to open VCS branch: {}", e);
+                return Ok(None);
+            }
+        },
+        Err(e) => {
+            log::error!("Task join error: {}", e);
+            return Ok(None);
+        }
+    };
     if source_branch
         .get_user_url()
         .to_string()

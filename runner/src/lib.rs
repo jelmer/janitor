@@ -110,6 +110,12 @@ pub enum FindChangesError {
     InconsistentDistribution(Vec<String>, String, String),
     /// A required field was missing in the changes file.
     MissingChangesFileFields(&'static str),
+    /// I/O error when accessing the directory or files.
+    IoError(PathBuf, std::io::Error),
+    /// Error parsing a changes file.
+    ParseError(PathBuf, Box<dyn std::error::Error + Send + Sync>),
+    /// Filename cannot be converted to UTF-8.
+    InvalidFilename(PathBuf),
 }
 
 #[cfg(feature = "debian")]
@@ -137,6 +143,15 @@ impl std::fmt::Display for FindChangesError {
             FindChangesError::MissingChangesFileFields(field) => {
                 write!(f, "Missing field {} in changes files", field)
             }
+            FindChangesError::IoError(path, err) => {
+                write!(f, "I/O error accessing {}: {}", path.display(), err)
+            }
+            FindChangesError::ParseError(path, err) => {
+                write!(f, "Error parsing changes file {}: {}", path.display(), err)
+            }
+            FindChangesError::InvalidFilename(path) => {
+                write!(f, "Invalid filename that cannot be converted to UTF-8: {}", path.display())
+            }
         }
     }
 }
@@ -145,7 +160,13 @@ impl std::fmt::Display for FindChangesError {
 impl std::error::Error for FindChangesError {}
 
 #[cfg(feature = "debian")]
+#[cfg(test)]
+#[path = "find_changes_tests.rs"]
+mod find_changes_tests;
+
+#[cfg(feature = "debian")]
 /// Summary of changes files.
+#[derive(Debug)]
 pub struct ChangesSummary {
     /// Names of the changes files.
     pub names: Vec<String>,
@@ -172,19 +193,37 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     let mut version: Option<debversion::Version> = None;
     let mut distribution: Option<String> = None;
     let mut binary_packages: Vec<String> = Vec::new();
-    for entry in std::fs::read_dir(path).unwrap() {
-        let entry = entry.unwrap();
-        if !entry.file_name().to_str().unwrap().ends_with(".changes") {
+    
+    let read_dir = std::fs::read_dir(path)
+        .map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
+    
+    for entry_result in read_dir {
+        let entry = entry_result
+            .map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
+        
+        // Check if filename can be converted to UTF-8 and ends with .changes
+        let file_name = entry.file_name();
+        let file_name_str = file_name.to_str()
+            .ok_or_else(|| FindChangesError::InvalidFilename(entry.path()))?;
+        
+        if !file_name_str.ends_with(".changes") {
             continue;
         }
-        let f = std::fs::File::open(entry.path()).unwrap();
-        let changes = debian_control::changes::Changes::read(&f).unwrap();
+        
+        let file_path = entry.path();
+        let f = std::fs::File::open(&file_path)
+            .map_err(|e| FindChangesError::IoError(file_path.clone(), e))?;
+        
+        let changes = debian_control::changes::Changes::read(&f)
+            .map_err(|e| FindChangesError::ParseError(file_path, e.into()))?;
         names.push(entry.file_name().to_string_lossy().to_string());
         if let Some(version) = &version {
             if changes.version().as_ref() != Some(version) {
+                let found_version = changes.version()
+                    .ok_or_else(|| FindChangesError::MissingChangesFileFields("Version"))?;
                 return Err(FindChangesError::InconsistentVersion(
                     names,
-                    changes.version().unwrap(),
+                    found_version,
                     version.clone(),
                 ));
             }
@@ -192,9 +231,11 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
         version = changes.version();
         if let Some(source) = &source {
             if changes.source().as_ref() != Some(source) {
+                let found_source = changes.source()
+                    .ok_or_else(|| FindChangesError::MissingChangesFileFields("Source"))?;
                 return Err(FindChangesError::InconsistentSource(
                     names,
-                    changes.source().unwrap(),
+                    found_source,
                     source.to_string(),
                 ));
             }
@@ -203,9 +244,11 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
 
         if let Some(distribution) = &distribution {
             if changes.distribution().as_ref() != Some(distribution) {
+                let found_distribution = changes.distribution()
+                    .ok_or_else(|| FindChangesError::MissingChangesFileFields("Distribution"))?;
                 return Err(FindChangesError::InconsistentDistribution(
                     names,
-                    changes.distribution().unwrap(),
+                    found_distribution,
                     distribution.to_string(),
                 ));
             }
@@ -219,7 +262,8 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
                 .iter()
                 .filter_map(|file| {
                     if file.filename.ends_with(".deb") {
-                        Some(file.filename.split('_').next().unwrap().to_string())
+                        // Extract package name from filename (everything before first underscore)
+                        file.filename.split('_').next().map(|s| s.to_string())
                     } else {
                         None
                     }

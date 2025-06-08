@@ -108,7 +108,9 @@ impl Metadata {
     }
 
     pub fn add_tag(&mut self, name: String, revision: Option<RevisionId>) {
-        self.tags.push((name, revision.unwrap()));
+        if let Some(rev) = revision {
+            self.tags.push((name, rev));
+        }
     }
 
     pub fn add_remote(&mut self, name: String, url: Url) {

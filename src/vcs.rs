@@ -11,6 +11,32 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use url::Url;
 
+/// Error types for VCS configuration and setup
+#[derive(Debug)]
+pub enum VcsConfigError {
+    /// URL parsing failed
+    InvalidUrl(url::ParseError),
+    /// File URL could not be converted to file path
+    InvalidFilePath,
+}
+
+impl std::fmt::Display for VcsConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VcsConfigError::InvalidUrl(e) => write!(f, "Invalid VCS URL: {}", e),
+            VcsConfigError::InvalidFilePath => write!(f, "VCS file URL cannot be converted to file path"),
+        }
+    }
+}
+
+impl std::error::Error for VcsConfigError {}
+
+impl From<url::ParseError> for VcsConfigError {
+    fn from(err: url::ParseError) -> Self {
+        VcsConfigError::InvalidUrl(err)
+    }
+}
+
 /// Trace context for distributed tracing across HTTP requests
 #[derive(Debug, Clone, Default)]
 pub struct TraceContext {
@@ -1045,57 +1071,62 @@ fn open_cached_branch(
     }
 }
 
-pub fn get_vcs_managers(location: &str) -> HashMap<VcsType, Box<dyn VcsManager>> {
+pub fn get_vcs_managers(location: &str) -> Result<HashMap<VcsType, Box<dyn VcsManager>>, url::ParseError> {
     if !location.contains("=") {
-        vec![
+        let base_url = Url::parse(location)?;
+        let git_url = base_url.join("git")?;
+        let bzr_url = base_url.join("bzr")?;
+        
+        Ok(vec![
             (
                 VcsType::Git,
-                Box::new(RemoteGitVcsManager::new(
-                    Url::parse(location).unwrap().join("git").unwrap(),
-                )) as Box<dyn VcsManager>,
+                Box::new(RemoteGitVcsManager::new(git_url)) as Box<dyn VcsManager>,
             ),
             (
                 VcsType::Bzr,
-                Box::new(RemoteBzrVcsManager::new(
-                    Url::parse(location).unwrap().join("bzr").unwrap(),
-                )) as Box<dyn VcsManager>,
+                Box::new(RemoteBzrVcsManager::new(bzr_url)) as Box<dyn VcsManager>,
             ),
         ]
         .into_iter()
-        .collect()
+        .collect())
     } else {
         let mut ret: HashMap<VcsType, Box<dyn VcsManager>> = HashMap::new();
         for p in location.split(",") {
             match p.split_once("=") {
                 Some(("git", v)) => {
+                    let url = Url::parse(v)?;
                     ret.insert(
                         VcsType::Git,
-                        Box::new(RemoteGitVcsManager::new(Url::parse(v).unwrap())),
+                        Box::new(RemoteGitVcsManager::new(url)),
                     );
                 }
                 Some(("bzr", v)) => {
+                    let url = Url::parse(v)?;
                     ret.insert(
                         VcsType::Bzr,
-                        Box::new(RemoteBzrVcsManager::new(Url::parse(v).unwrap())),
+                        Box::new(RemoteBzrVcsManager::new(url)),
                     );
                 }
-                _ => panic!("unsupported vcs"),
+                _ => return Err(url::ParseError::EmptyHost), // Better than panic
             }
         }
-        ret
+        Ok(ret)
     }
 }
 
 pub fn get_vcs_managers_from_config(
     config: &crate::config::Config,
-) -> HashMap<VcsType, Box<dyn VcsManager>> {
+) -> Result<HashMap<VcsType, Box<dyn VcsManager>>, VcsConfigError> {
     let mut ret: HashMap<VcsType, Box<dyn VcsManager>> = HashMap::new();
+    
     if let Some(git_location) = config.git_location.as_ref() {
-        let url = Url::parse(git_location).unwrap();
+        let url = Url::parse(git_location)?;
         if url.scheme() == "file" {
+            let file_path = url.to_file_path()
+                .map_err(|_| VcsConfigError::InvalidFilePath)?;
             ret.insert(
                 VcsType::Git,
-                Box::new(LocalGitVcsManager::new(url.to_file_path().unwrap())),
+                Box::new(LocalGitVcsManager::new(file_path)),
             );
         } else {
             ret.insert(
@@ -1104,12 +1135,15 @@ pub fn get_vcs_managers_from_config(
             );
         }
     }
+    
     if let Some(bzr_location) = config.bzr_location.as_ref() {
-        let url = Url::parse(bzr_location).unwrap();
+        let url = Url::parse(bzr_location)?;
         if url.scheme() == "file" {
+            let file_path = url.to_file_path()
+                .map_err(|_| VcsConfigError::InvalidFilePath)?;
             ret.insert(
                 VcsType::Bzr,
-                Box::new(LocalBzrVcsManager::new(url.to_file_path().unwrap())),
+                Box::new(LocalBzrVcsManager::new(file_path)),
             );
         } else {
             ret.insert(
@@ -1118,5 +1152,6 @@ pub fn get_vcs_managers_from_config(
             );
         }
     }
-    ret
+    
+    Ok(ret)
 }

@@ -917,7 +917,11 @@ async fn handle_debdiff_inner(
                 "old_version": old_run.build_version,
                 "new_version": new_run.build_version
             });
-            serde_json::to_string(&json_response).unwrap()
+            serde_json::to_string(&json_response)
+                .unwrap_or_else(|e| {
+                    error!("Failed to serialize JSON response: {}", e);
+                    r#"{"error": "Failed to serialize response"}"#.to_string()
+                })
         }
         _ => {
             return Err(DifferError::ContentNegotiationFailed {
@@ -1216,7 +1220,14 @@ async fn listen_to_runner(mut redis: redis::aio::ConnectionManager, db: sqlx::Pg
 
     loop {
         // Subscribe to run completion events
-        let client = redis::Client::open("redis://localhost:6379").unwrap();
+        let client = match redis::Client::open("redis://localhost:6379") {
+            Ok(client) => client,
+            Err(e) => {
+                error!("Failed to create Redis client: {}", e);
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                continue;
+            }
+        };
         let mut pubsub = match client.get_async_connection().await {
             Ok(conn) => conn.into_pubsub(),
             Err(e) => {

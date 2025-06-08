@@ -102,10 +102,21 @@ impl Write for HashedFileWriter {
 
 impl Drop for HashedFileWriter {
     fn drop(&mut self) {
-        let _ = fs::rename(self.tmpf.path(), self.base.join(&self.path));
-        assert_eq!(
-            self.size,
-            fs::metadata(self.base.join(&self.path)).unwrap().len()
-        );
+        let dest_path = self.base.join(&self.path);
+        let _ = fs::rename(self.tmpf.path(), &dest_path);
+        
+        // Validate file size, but don't panic in Drop if validation fails
+        if let Ok(metadata) = fs::metadata(&dest_path) {
+            if self.size != metadata.len() {
+                eprintln!(
+                    "Warning: File size mismatch for {}: expected {}, got {}",
+                    dest_path.display(),
+                    self.size,
+                    metadata.len()
+                );
+            }
+        } else {
+            eprintln!("Warning: Failed to validate file size for {}", dest_path.display());
+        }
     }
 }

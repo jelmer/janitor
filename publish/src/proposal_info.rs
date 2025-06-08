@@ -101,6 +101,19 @@ impl ProposalInfoManager {
         Ok(())
     }
 
+    /// Mark a proposal as not found (tombstone) instead of deleting it.
+    /// This preserves the record while indicating the proposal no longer exists.
+    pub async fn mark_proposal_as_not_found(&self, url: &url::Url) -> Result<(), sqlx::Error> {
+        // Set status to 'closed' and update last_scanned to indicate we checked it
+        sqlx::query(
+            "UPDATE merge_proposal SET status = 'closed', last_scanned = NOW() WHERE url = $1"
+        )
+        .bind(url.to_string())
+        .execute(&self.conn)
+        .await?;
+        Ok(())
+    }
+
     /// Update the canonical URL for a proposal.
     pub async fn update_canonical_url(
         &self,
@@ -158,17 +171,49 @@ impl ProposalInfoManager {
         if status == MergeProposalStatus::Closed {
             // TODO(jelmer): Check if changes were applied manually and mark as applied rather than closed?
         }
-        let url = mp.url().unwrap();
+        let url = match mp.url() {
+            Ok(url) => url,
+            Err(e) => {
+                log::error!("Failed to get merge proposal URL: {}", e);
+                return Err(sqlx::Error::RowNotFound);
+            }
+        };
         let (merged_by, merged_by_url, merged_at) = if status == MergeProposalStatus::Merged {
             let mp = mp.clone();
             tokio::task::spawn_blocking(move || {
-                let merged_by = mp.get_merged_by().unwrap();
+                let merged_by = match mp.get_merged_by() {
+                    Ok(merged_by) => merged_by,
+                    Err(e) => {
+                        log::error!("Failed to get merged_by from merge proposal: {}", e);
+                        None
+                    }
+                };
                 let merged_by_url = if let Some(mb) = merged_by.clone().as_ref() {
-                    crate::get_merged_by_user_url(&mp.url().unwrap(), mb).unwrap()
+                    match mp.url() {
+                        Ok(mp_url) => {
+                            match crate::get_merged_by_user_url(&mp_url, mb) {
+                                Ok(url) => url,
+                                Err(e) => {
+                                    log::error!("Failed to get merged_by user URL: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to get merge proposal URL for merged_by: {}", e);
+                            None
+                        }
+                    }
                 } else {
                     None
                 };
-                let merged_at = mp.get_merged_at().unwrap();
+                let merged_at = match mp.get_merged_at() {
+                    Ok(merged_at) => merged_at,
+                    Err(e) => {
+                        log::error!("Failed to get merged_at from merge proposal: {}", e);
+                        None
+                    }
+                };
                 (merged_by, merged_by_url, merged_at)
             })
             .await

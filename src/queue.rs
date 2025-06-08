@@ -243,14 +243,16 @@ impl<'a> Queue<'a> {
                 .fetch_all(self.pool)
                 .await?;
 
-        Ok(rows
+        let buckets = rows
             .into_iter()
-            .map(|row| {
-                let bucket: String = row.try_get("bucket").unwrap();
-                let count: i64 = row.try_get("count").unwrap();
-                (bucket, count)
+            .map(|row| -> Result<(String, i64), sqlx::Error> {
+                let bucket: String = row.try_get("bucket")?;
+                let count: i64 = row.try_get("count")?;
+                Ok((bucket, count))
             })
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?;
+        
+        Ok(buckets)
     }
 
     /// Iterator for queue items with filtering and limiting capabilities
