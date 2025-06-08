@@ -117,14 +117,14 @@ async fn api_status(State(state): State<AppState>) -> Json<Value> {
         "timestamp": chrono::Utc::now(),
         "version": env!("CARGO_PKG_VERSION")
     });
-    
+
     // Check database connectivity
     let db_status = match state.database.health_check().await {
         Ok(_) => "healthy",
-        Err(_) => "unhealthy"
+        Err(_) => "unhealthy",
     };
     status["database"] = json!(db_status);
-    
+
     // Check Redis connectivity if available
     let redis_status = if let Some(ref redis_client) = state.redis {
         match redis_client.get_multiplexed_async_connection().await {
@@ -132,20 +132,20 @@ async fn api_status(State(state): State<AppState>) -> Json<Value> {
                 use redis::AsyncCommands;
                 match redis::cmd("PING").query_async::<String>(&mut conn).await {
                     Ok(_) => "healthy",
-                    Err(_) => "unhealthy"
+                    Err(_) => "unhealthy",
                 }
             }
-            Err(_) => "unhealthy"
+            Err(_) => "unhealthy",
         }
     } else {
         "not_configured"
     };
     status["redis"] = json!(redis_status);
-    
+
     // Overall status based on critical services
     if db_status == "unhealthy" {
         status["status"] = json!("degraded");
     }
-    
+
     Json(status)
 }

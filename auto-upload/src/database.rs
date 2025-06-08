@@ -248,7 +248,10 @@ impl BackfillQueryBuilder {
             self.conditions
                 .push(format!("distribution = ANY(${}::text[])", param_num));
             self.parameters.push(serde_json::Value::Array(
-                distributions.into_iter().map(serde_json::Value::String).collect()
+                distributions
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
             ));
         }
         self
@@ -270,12 +273,14 @@ impl BackfillQueryBuilder {
     ) -> Self {
         if let Some(start) = start_date {
             let param_num = self.parameters.len() + 1;
-            self.conditions.push(format!("created_at >= ${}", param_num));
+            self.conditions
+                .push(format!("created_at >= ${}", param_num));
             self.parameters.push(serde_json::Value::String(start));
         }
         if let Some(end) = end_date {
             let param_num = self.parameters.len() + 1;
-            self.conditions.push(format!("created_at <= ${}", param_num));
+            self.conditions
+                .push(format!("created_at <= ${}", param_num));
             self.parameters.push(serde_json::Value::String(end));
         }
         self
@@ -291,7 +296,7 @@ impl BackfillQueryBuilder {
         }
 
         query.push_str(" ORDER BY distribution, source, version DESC");
-        
+
         BackfillQuery {
             sql: query,
             parameters: self.parameters,
@@ -328,29 +333,44 @@ mod tests {
         assert!(query.sql.contains("distribution = ANY($1::text[])"));
         assert!(query.sql.contains("source = $2"));
         assert_eq!(query.parameters.len(), 2);
-        
+
         // Verify parameter values
-        assert_eq!(query.parameters[0], serde_json::Value::Array(vec![serde_json::Value::String("unstable".to_string())]));
-        assert_eq!(query.parameters[1], serde_json::Value::String("hello".to_string()));
+        assert_eq!(
+            query.parameters[0],
+            serde_json::Value::Array(vec![serde_json::Value::String("unstable".to_string())])
+        );
+        assert_eq!(
+            query.parameters[1],
+            serde_json::Value::String("hello".to_string())
+        );
     }
 
     #[test]
     fn test_query_builder_with_date_range() {
         let query = BackfillQueryBuilder::new()
-            .filter_date_range(Some("2023-01-01".to_string()), Some("2023-12-31".to_string()))
+            .filter_date_range(
+                Some("2023-01-01".to_string()),
+                Some("2023-12-31".to_string()),
+            )
             .build();
 
         assert!(query.sql.contains("WHERE"));
         assert!(query.sql.contains("created_at >= $1"));
         assert!(query.sql.contains("created_at <= $2"));
         assert_eq!(query.parameters.len(), 2);
-        
+
         // Verify parameter values
-        assert_eq!(query.parameters[0], serde_json::Value::String("2023-01-01".to_string()));
-        assert_eq!(query.parameters[1], serde_json::Value::String("2023-12-31".to_string()));
+        assert_eq!(
+            query.parameters[0],
+            serde_json::Value::String("2023-01-01".to_string())
+        );
+        assert_eq!(
+            query.parameters[1],
+            serde_json::Value::String("2023-12-31".to_string())
+        );
     }
 
-    #[test] 
+    #[test]
     fn test_query_builder_parameter_numbering() {
         let query = BackfillQueryBuilder::new()
             .filter_distributions(vec!["unstable".to_string(), "testing".to_string()])

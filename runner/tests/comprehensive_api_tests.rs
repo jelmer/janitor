@@ -11,11 +11,13 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt;
 
-use janitor_runner::{web::app, AppState, test_utils};
+use janitor_runner::{test_utils, web::app, AppState};
 
 /// Helper to create test app with full routing.
 async fn create_test_app() -> Option<axum::Router> {
-    test_utils::create_test_app_if_available().await.expect("Failed to check test app availability")
+    test_utils::create_test_app_if_available()
+        .await
+        .expect("Failed to check test app availability")
 }
 
 /// Macro to skip test if no database is available

@@ -533,15 +533,15 @@ async fn publish_repository(
     info!("Repository publish request: {:?}", request);
 
     let mut repositories = Vec::new();
-    
+
     // Get the suite to process
     let suite = request.suite.as_deref().unwrap_or("default");
-    
+
     // Get campaign configuration for the suite
     match state.database.get_campaign_info(suite, None).await {
         Ok(Some(campaign_info)) => {
             info!("Processing campaign for suite: {}", suite);
-            
+
             // Use the campaign info to generate repositories for configured distributions
             let distributions: Vec<String> = if state.config.repositories.is_empty() {
                 // If no repositories configured, create default for the campaign
@@ -549,9 +549,12 @@ async fn publish_repository(
             } else {
                 state.config.repositories.keys().cloned().collect()
             };
-            
+
             for distribution in &distributions {
-                let mut repo_config = state.config.repositories.get(distribution)
+                let mut repo_config = state
+                    .config
+                    .repositories
+                    .get(distribution)
                     .cloned()
                     .unwrap_or_else(|| {
                         // Create default repository config if not found
@@ -562,28 +565,34 @@ async fn publish_repository(
                             label: format!("Janitor {}", distribution),
                             suite: suite.to_string(),
                             codename: suite.to_string(),
-                            description: format!("Automated packages for {} - {}", distribution, campaign_info.description),
+                            description: format!(
+                                "Automated packages for {} - {}",
+                                distribution, campaign_info.description
+                            ),
                             architectures: campaign_info.architectures.clone(),
                             components: vec![campaign_info.component.clone()],
                             base_url: format!("https://janitor.debian.net/apt/{}", distribution),
                             by_hash: true,
                         }
                     });
-                    
+
                 // Override suite/codename and other details from campaign info
                 repo_config.suite = campaign_info.suite.clone();
                 repo_config.codename = campaign_info.suite.clone();
                 repo_config.architectures = campaign_info.architectures.clone();
                 repo_config.components = vec![campaign_info.component.clone()];
-                
+
                 match state.generator.generate_repository(&repo_config).await {
                     Ok(()) => {
-                        info!("Successfully generated repository for {}/{}", distribution, suite);
-                        
+                        info!(
+                            "Successfully generated repository for {}/{}",
+                            distribution, suite
+                        );
+
                         // Count packages and sources from build info (simplified for now)
                         let packages_count = 0; // Would need to query actual build results
-                        let sources_count = 0;  // Would need to query actual build results
-                        
+                        let sources_count = 0; // Would need to query actual build results
+
                         repositories.push(RepositoryInfo {
                             name: repo_config.name,
                             suite: campaign_info.suite.clone(),
@@ -593,18 +602,25 @@ async fn publish_repository(
                         });
                     }
                     Err(e) => {
-                        warn!("Failed to generate repository for {}/{}: {}", distribution, suite, e);
+                        warn!(
+                            "Failed to generate repository for {}/{}: {}",
+                            distribution, suite, e
+                        );
                         return Err(StatusCode::INTERNAL_SERVER_ERROR);
                     }
                 }
             }
-            
+
             let response = PublishResponse {
                 success: true,
-                message: format!("Successfully published {} repositories for suite {}", repositories.len(), suite),
+                message: format!(
+                    "Successfully published {} repositories for suite {}",
+                    repositories.len(),
+                    suite
+                ),
                 repositories,
             };
-            
+
             Ok(Json(response))
         }
         Ok(None) => {
@@ -629,25 +645,29 @@ async fn last_publish_status(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let suite = params.get("suite").map_or("default", |v| v);
-    
+
     // Check if repositories exist and get their status
     let mut last_publish_time = None;
     let mut status = "never_published";
     let mut repository_count = 0;
-    
+
     // Look for Release files in each repository to determine last publish status
     for (distribution, repo_config) in &state.config.repositories {
-        let release_file = repo_config.base_path.join("dists").join(suite).join("Release");
-        
+        let release_file = repo_config
+            .base_path
+            .join("dists")
+            .join(suite)
+            .join("Release");
+
         match fs::metadata(&release_file).await {
             Ok(metadata) => {
                 if let Ok(modified) = metadata.modified() {
                     let publish_time = chrono::DateTime::<chrono::Utc>::from(modified);
-                    
+
                     if last_publish_time.map_or(true, |last| publish_time > last) {
                         last_publish_time = Some(publish_time);
                     }
-                    
+
                     repository_count += 1;
                     status = "success";
                 }
@@ -657,11 +677,11 @@ async fn last_publish_status(
             }
         }
     }
-    
+
     // If no specific repositories configured, check for any published repositories
     if repository_count == 0 {
         let base_dist_path = state.config.archive_path.join("dists").join(suite);
-        
+
         if let Ok(mut dir_entries) = fs::read_dir(&base_dist_path).await {
             while let Ok(Some(entry)) = dir_entries.next_entry().await {
                 if entry.file_name() == "Release" {
@@ -678,7 +698,7 @@ async fn last_publish_status(
             }
         }
     }
-    
+
     let response = serde_json::json!({
         "last_publish": last_publish_time,
         "status": status,
@@ -695,20 +715,20 @@ async fn serve_gpg_key(State(state): State<AppState>) -> Result<Response, Status
     if let Some(gpg_config) = &state.config.gpg {
         // Try to export the public key using gpg command
         let mut cmd = tokio::process::Command::new("gpg");
-        
+
         // Set GPG home directory if specified
         if let Some(gpg_home) = &gpg_config.gpg_home {
             cmd.arg("--homedir").arg(gpg_home);
         }
-        
+
         // Export the public key in ASCII armor format
         cmd.args(["--armor", "--export", &gpg_config.key_id]);
-        
+
         match cmd.output().await {
             Ok(output) => {
                 if output.status.success() {
                     let key_data = String::from_utf8_lossy(&output.stdout);
-                    
+
                     if key_data.starts_with("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
                         let mut headers = HeaderMap::new();
                         headers.insert(
@@ -719,15 +739,21 @@ async fn serve_gpg_key(State(state): State<AppState>) -> Result<Response, Status
                             "Cache-Control",
                             HeaderValue::from_static("public, max-age=86400"), // 24 hours
                         );
-                        
+
                         Ok((headers, key_data.to_string()).into_response())
                     } else {
-                        warn!("GPG export returned unexpected output for key {}", gpg_config.key_id);
+                        warn!(
+                            "GPG export returned unexpected output for key {}",
+                            gpg_config.key_id
+                        );
                         Err(StatusCode::INTERNAL_SERVER_ERROR)
                     }
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    warn!("GPG export failed for key {}: {}", gpg_config.key_id, stderr);
+                    warn!(
+                        "GPG export failed for key {}: {}",
+                        gpg_config.key_id, stderr
+                    );
                     Err(StatusCode::INTERNAL_SERVER_ERROR)
                 }
             }

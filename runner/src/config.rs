@@ -1085,7 +1085,7 @@ mod tests {
         // Clear any environment variables that might interfere with this test
         std::env::remove_var("DEBUG");
         std::env::remove_var("ENVIRONMENT");
-        
+
         let dev_config = RunnerConfig::for_profile("development").unwrap();
         assert_eq!(dev_config.application.environment, "development");
         assert!(dev_config.application.debug);

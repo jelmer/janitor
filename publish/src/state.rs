@@ -74,27 +74,28 @@ async fn store_publish(
             .bind(change_set)
             .execute(&mut *tx)
             .await?;
-        
+
         // Check if there's nothing left to publish for this change_set
         let remaining_unpublished = sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM new_result_branch 
              INNER JOIN run ON new_result_branch.run_id = run.id 
-             WHERE run.change_set = $1 AND NOT COALESCE(new_result_branch.absorbed, false)"
+             WHERE run.change_set = $1 AND NOT COALESCE(new_result_branch.absorbed, false)",
         )
         .bind(change_set)
         .fetch_one(&mut *tx)
         .await?;
-        
+
         if remaining_unpublished == 0 {
             // Mark change_set as done since nothing is left to publish
-            sqlx::query(
-                "UPDATE change_set SET state = 'done' WHERE id = $1 AND state != 'done'"
-            )
-            .bind(change_set)
-            .execute(&mut *tx)
-            .await?;
-            
-            log::info!("Marked change_set {} as done - no unpublished branches remaining", change_set);
+            sqlx::query("UPDATE change_set SET state = 'done' WHERE id = $1 AND state != 'done'")
+                .bind(change_set)
+                .execute(&mut *tx)
+                .await?;
+
+            log::info!(
+                "Marked change_set {} as done - no unpublished branches remaining",
+                change_set
+            );
         }
     }
 

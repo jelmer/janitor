@@ -153,7 +153,10 @@ impl RedisSubscriber {
     /// # Returns
     /// A new RedisSubscriber instance
     pub fn new(redis_client: redis::Client, shutdown_rx: mpsc::Receiver<()>) -> Self {
-        Self { redis_client, shutdown_rx }
+        Self {
+            redis_client,
+            shutdown_rx,
+        }
     }
 
     /// Listen to the runner service for new runs to publish.
@@ -173,11 +176,11 @@ impl RedisSubscriber {
         log::info!("Starting Redis listener for runner messages");
 
         use futures::StreamExt;
-        
+
         // Create a pubsub connection
         let mut pubsub = self.redis_client.get_async_pubsub().await?;
         pubsub.subscribe("runner").await?;
-        
+
         let mut pubsub_stream = pubsub.into_on_message();
 
         loop {
@@ -195,7 +198,7 @@ impl RedisSubscriber {
                         }
                     }
                 }
-                
+
                 // Process Redis messages
                 msg_result = pubsub_stream.next() => {
                     match msg_result {

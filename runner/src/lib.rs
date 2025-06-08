@@ -260,17 +260,17 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
 /// `true` if the filename is a log file, `false` otherwise
 pub fn is_log_filename(name: &str) -> bool {
     let parts = name.split('.').collect::<Vec<_>>();
-    
+
     // Must have at least one extension and filename must not be empty
     if parts.len() < 2 || parts[0].is_empty() {
         return false;
     }
-    
+
     // Handle simple .log files (foo.log)
     if parts.last() == Some(&"log") {
         return true;
     }
-    
+
     // Handle compressed log files (.log.gz, .log.bz2, etc.)
     if parts.len() >= 3 {
         let compression_extensions = ["gz", "bz2", "xz", "lzma", "Z"];
@@ -283,19 +283,19 @@ pub fn is_log_filename(name: &str) -> bool {
             }
         }
     }
-    
+
     // Handle numbered log files (foo.log.1, foo.1.log)
     if parts.len() == 3 {
         let mut rev = parts.iter().rev();
         let last = rev.next().unwrap();
         let middle = rev.next().unwrap();
-        
+
         // foo.log.1 pattern
         if last.chars().all(char::is_numeric) && *middle == "log" {
             return true;
         }
     }
-    
+
     false
 }
 

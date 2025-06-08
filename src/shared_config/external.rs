@@ -157,17 +157,23 @@ impl ExternalServiceConfig {
 
     /// Get prometheus gateway URL as parsed Url, if configured
     pub fn prometheus_gateway_url(&self) -> Option<Url> {
-        self.prometheus_gateway_url.as_ref().and_then(|s| Url::parse(s).ok())
+        self.prometheus_gateway_url
+            .as_ref()
+            .and_then(|s| Url::parse(s).ok())
     }
 
     /// Get log service URL as parsed Url, if configured
     pub fn log_service_url(&self) -> Option<Url> {
-        self.log_service_url.as_ref().and_then(|s| Url::parse(s).ok())
+        self.log_service_url
+            .as_ref()
+            .and_then(|s| Url::parse(s).ok())
     }
 
     /// Get artifact service URL as parsed Url, if configured
     pub fn artifact_service_url(&self) -> Option<Url> {
-        self.artifact_service_url.as_ref().and_then(|s| Url::parse(s).ok())
+        self.artifact_service_url
+            .as_ref()
+            .and_then(|s| Url::parse(s).ok())
     }
 
     /// Check if a specific service is configured and available
@@ -260,11 +266,11 @@ mod tests {
     #[test]
     fn test_external_service_config_parsing() {
         let config = ExternalServiceConfig::default();
-        
+
         // Test URL parsing
         assert!(config.runner_url().is_some());
         assert!(config.differ_url().is_some());
-        
+
         let runner_url = config.runner_url().unwrap();
         assert_eq!(runner_url.scheme(), "http");
         assert_eq!(runner_url.host_str(), Some("localhost"));
@@ -274,7 +280,7 @@ mod tests {
     #[test]
     fn test_has_service() {
         let config = ExternalServiceConfig::default();
-        
+
         assert!(config.has_service(ExternalService::Runner));
         assert!(config.has_service(ExternalService::Differ));
         assert!(!config.has_service(ExternalService::Prometheus)); // Not set by default
@@ -283,15 +289,12 @@ mod tests {
     #[test]
     fn test_get_service_url() {
         let config = ExternalServiceConfig::default();
-        
+
         assert_eq!(
             config.get_service_url(ExternalService::Runner),
             Some("http://localhost:9911/")
         );
-        assert_eq!(
-            config.get_service_url(ExternalService::Prometheus),
-            None
-        );
+        assert_eq!(config.get_service_url(ExternalService::Prometheus), None);
     }
 
     #[test]

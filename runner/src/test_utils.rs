@@ -1,22 +1,25 @@
 //! Test utilities for the runner module
 
-use crate::{AppState, database::RunnerDatabase};
-use janitor::test_utils::{TestDatabase, MockArtifactManager, MockLogFileManager, TestConfigBuilder};
-use std::sync::Arc;
 use crate::{
-    vcs::RunnerVcsManager,
-    performance::PerformanceMonitor,
+    auth::{SecurityService, WorkerAuthService},
     error_tracking::ErrorTracker,
     metrics::MetricsCollector,
+    performance::PerformanceMonitor,
     upload::UploadProcessor,
-    auth::{WorkerAuthService, SecurityService},
+    vcs::RunnerVcsManager,
 };
+use crate::{database::RunnerDatabase, AppState};
+use janitor::test_utils::{
+    MockArtifactManager, MockLogFileManager, TestConfigBuilder, TestDatabase,
+};
+use std::sync::Arc;
 
 /// Create a test AppState with mock dependencies
-/// 
+///
 /// This function will return an error if no database is available.
 /// Use `create_test_app_state_if_available()` for optional database setup.
-pub async fn create_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn create_test_app_state(
+) -> Result<Arc<AppState>, Box<dyn std::error::Error + Send + Sync>> {
     // Create test database
     let test_db = TestDatabase::new().await?;
     let janitor_db = test_db.into_janitor_database();
@@ -31,25 +34,27 @@ pub async fn create_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error
 
     // Create database-dependent components
     let runner_db_arc = Arc::new(runner_db);
-    
+
     // Create other dependencies with minimal/mock implementations
     let vcs_manager = Arc::new(RunnerVcsManager::new(std::collections::HashMap::new()));
     let performance_monitor = Arc::new(PerformanceMonitor::new(std::time::Duration::from_secs(30)));
-    let error_tracker = Arc::new(ErrorTracker::new(crate::error_tracking::ErrorTrackingConfig::default()));
+    let error_tracker = Arc::new(ErrorTracker::new(
+        crate::error_tracking::ErrorTrackingConfig::default(),
+    ));
     let metrics = Arc::new(MetricsCollector);
-    
+
     // Create upload processor with temp directory
     let temp_dir = std::env::temp_dir().join("janitor_test_uploads");
     let upload_processor = Arc::new(UploadProcessor::new(
         temp_dir,
-        1024 * 1024,  // 1MB max file size
-        10 * 1024 * 1024  // 10MB max total size
+        1024 * 1024,      // 1MB max file size
+        10 * 1024 * 1024, // 10MB max total size
     ));
-    
+
     let auth_service = Arc::new(WorkerAuthService::new(runner_db_arc.clone()));
     let security_service = Arc::new(SecurityService::new(
         crate::auth::SecurityConfig::default(),
-        runner_db_arc.clone()
+        runner_db_arc.clone(),
     ));
     let resume_service = Arc::new(crate::resume::ResumeService::new((*runner_db_arc).clone()));
 
@@ -70,7 +75,8 @@ pub async fn create_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error
 }
 
 /// Create a test AppState with mock dependencies, returning None if database unavailable
-pub async fn create_test_app_state_if_available() -> Result<Option<Arc<AppState>>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn create_test_app_state_if_available(
+) -> Result<Option<Arc<AppState>>, Box<dyn std::error::Error + Send + Sync>> {
     match create_test_app_state().await {
         Ok(state) => Ok(Some(state)),
         Err(_) => {
@@ -87,7 +93,8 @@ pub async fn create_test_app() -> Result<axum::Router, Box<dyn std::error::Error
 }
 
 /// Create a test app with mock state, returning None if database unavailable
-pub async fn create_test_app_if_available() -> Result<Option<axum::Router>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn create_test_app_if_available(
+) -> Result<Option<axum::Router>, Box<dyn std::error::Error + Send + Sync>> {
     match create_test_app_state_if_available().await? {
         Some(state) => Ok(Some(crate::web::app(state))),
         None => Ok(None),
@@ -101,12 +108,18 @@ mod tests {
     #[tokio::test]
     async fn test_create_test_app_state() {
         let state = create_test_app_state_if_available().await;
-        assert!(state.is_ok(), "Should be able to create test app state or return None");
+        assert!(
+            state.is_ok(),
+            "Should be able to create test app state or return None"
+        );
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_create_test_app() {
         let app = create_test_app_if_available().await;
-        assert!(app.is_ok(), "Should be able to create test app or return None");
+        assert!(
+            app.is_ok(),
+            "Should be able to create test app or return None"
+        );
     }
 }

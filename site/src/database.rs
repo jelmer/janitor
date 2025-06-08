@@ -443,8 +443,8 @@ impl DatabaseManager {
             publish_status: None,    // TODO: Add to query
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
-            vcs_type: None, // TODO: Add to query
-            logfilenames: vec![], // TODO: Add logfilenames to query
+            vcs_type: None,                         // TODO: Add to query
+            logfilenames: vec![],                   // TODO: Add logfilenames to query
             revision: row.try_get("revision").ok(), // Add revision field
         })
     }
@@ -485,8 +485,8 @@ impl DatabaseManager {
                 publish_status: None,
                 failure_stage: row.try_get("failure_stage")?,
                 main_branch_revision: row.try_get("main_branch_revision")?,
-                vcs_type: None, // TODO: Add to query
-                logfilenames: vec![], // TODO: Add logfilenames to query
+                vcs_type: None,                         // TODO: Add to query
+                logfilenames: vec![],                   // TODO: Add logfilenames to query
                 revision: row.try_get("revision").ok(), // Add revision field
             });
         }
@@ -588,7 +588,8 @@ impl DatabaseManager {
         .await?;
 
         // Parse logfilenames array from the database
-        let logfilenames: Vec<String> = row.try_get::<Option<Vec<String>>, _>("logfilenames")?
+        let logfilenames: Vec<String> = row
+            .try_get::<Option<Vec<String>>, _>("logfilenames")?
             .unwrap_or_default();
 
         Ok(RunDetails {
@@ -673,8 +674,8 @@ impl DatabaseManager {
             publish_status: None,
             failure_stage: row.try_get("failure_stage")?,
             main_branch_revision: row.try_get("main_branch_revision")?,
-            vcs_type: None, // TODO: Add to query
-            logfilenames: vec![], // TODO: Add logfilenames to query
+            vcs_type: None,                         // TODO: Add to query
+            logfilenames: vec![],                   // TODO: Add logfilenames to query
             revision: row.try_get("revision").ok(), // Add revision field
         })
     }
@@ -1392,21 +1393,25 @@ impl DatabaseManager {
     }
 
     /// Get detailed information about a specific worker
-    pub async fn get_worker_details(&self, worker_id: &str) -> Result<serde_json::Value, DatabaseError> {
+    pub async fn get_worker_details(
+        &self,
+        worker_id: &str,
+    ) -> Result<serde_json::Value, DatabaseError> {
         // Get worker basic info from worker table
-        let worker_info = sqlx::query(
-            "SELECT name, password, link FROM worker WHERE name = $1"
-        )
-        .bind(worker_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let worker_info = sqlx::query("SELECT name, password, link FROM worker WHERE name = $1")
+            .bind(worker_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         if worker_info.is_none() {
-            return Err(DatabaseError::NotFound(format!("Worker '{}' not found", worker_id)));
+            return Err(DatabaseError::NotFound(format!(
+                "Worker '{}' not found",
+                worker_id
+            )));
         }
 
         let worker_row = worker_info.unwrap();
-        
+
         // Get current assignments
         let current_assignments = sqlx::query(
             "SELECT id, codebase, suite, command, priority, estimated_duration, bucket, assigned_time
@@ -1438,7 +1443,7 @@ impl DatabaseManager {
              FROM run 
              WHERE worker = $1 
              ORDER BY start_time DESC 
-             LIMIT 10"
+             LIMIT 10",
         )
         .bind(worker_id)
         .fetch_all(&self.pool)
@@ -1468,7 +1473,7 @@ impl DatabaseManager {
                 MAX(finish_time) as last_run_time
              FROM run 
              WHERE worker = $1 
-             AND start_time >= NOW() - INTERVAL '30 days'"
+             AND start_time >= NOW() - INTERVAL '30 days'",
         )
         .bind(worker_id)
         .fetch_one(&self.pool)
@@ -1504,7 +1509,10 @@ impl DatabaseManager {
     }
 
     /// Get current tasks assigned to a specific worker
-    pub async fn get_worker_tasks(&self, worker_id: &str) -> Result<serde_json::Value, DatabaseError> {
+    pub async fn get_worker_tasks(
+        &self,
+        worker_id: &str,
+    ) -> Result<serde_json::Value, DatabaseError> {
         let tasks = sqlx::query(
             "SELECT 
                 id,
@@ -1519,7 +1527,7 @@ impl DatabaseManager {
                 status
              FROM queue 
              WHERE worker = $1 
-             ORDER BY assigned_time ASC"
+             ORDER BY assigned_time ASC",
         )
         .bind(worker_id)
         .fetch_all(&self.pool)
@@ -1550,10 +1558,14 @@ impl DatabaseManager {
     }
 
     /// Cancel a specific task assigned to a worker
-    pub async fn cancel_worker_task(&self, worker_id: &str, queue_id: i32) -> Result<bool, DatabaseError> {
+    pub async fn cancel_worker_task(
+        &self,
+        worker_id: &str,
+        queue_id: i32,
+    ) -> Result<bool, DatabaseError> {
         let result = sqlx::query(
             "DELETE FROM queue 
-             WHERE id = $1 AND worker = $2 AND status IN ('assigned', 'pending')"
+             WHERE id = $1 AND worker = $2 AND status IN ('assigned', 'pending')",
         )
         .bind(queue_id)
         .bind(worker_id)
@@ -1564,13 +1576,16 @@ impl DatabaseManager {
     }
 
     /// Get basic run information for log reprocessing
-    pub async fn get_run_for_reprocessing(&self, run_id: &str) -> Result<Option<serde_json::Value>, DatabaseError> {
+    pub async fn get_run_for_reprocessing(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<serde_json::Value>, DatabaseError> {
         let row = sqlx::query(
             "SELECT id, codebase, suite, command, result_code, description, 
                     start_time, finish_time, failure_stage, failure_details, 
                     main_branch_revision, revision, worker
              FROM run 
-             WHERE id = $1"
+             WHERE id = $1",
         )
         .bind(run_id)
         .fetch_optional(&self.pool)
@@ -1598,27 +1613,31 @@ impl DatabaseManager {
     }
 
     /// Update run failure details from log analysis
-    pub async fn update_run_failure_details(&self, run_id: &str, failure_details: &serde_json::Value) -> Result<bool, DatabaseError> {
-        let result = sqlx::query(
-            "UPDATE run SET failure_details = $1 WHERE id = $2"
-        )
-        .bind(failure_details)
-        .bind(run_id)
-        .execute(&self.pool)
-        .await?;
+    pub async fn update_run_failure_details(
+        &self,
+        run_id: &str,
+        failure_details: &serde_json::Value,
+    ) -> Result<bool, DatabaseError> {
+        let result = sqlx::query("UPDATE run SET failure_details = $1 WHERE id = $2")
+            .bind(failure_details)
+            .bind(run_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }
 
     /// Update run description from log analysis
-    pub async fn update_run_description(&self, run_id: &str, description: &str) -> Result<bool, DatabaseError> {
-        let result = sqlx::query(
-            "UPDATE run SET description = $1 WHERE id = $2"
-        )
-        .bind(description)
-        .bind(run_id)
-        .execute(&self.pool)
-        .await?;
+    pub async fn update_run_description(
+        &self,
+        run_id: &str,
+        description: &str,
+    ) -> Result<bool, DatabaseError> {
+        let result = sqlx::query("UPDATE run SET description = $1 WHERE id = $2")
+            .bind(description)
+            .bind(run_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -1667,7 +1686,9 @@ impl DatabaseManager {
     }
 
     /// Get a list of all campaigns with their status information
-    pub async fn get_campaign_status_list(&self) -> Result<Vec<super::api::schemas::CampaignStatus>, DatabaseError> {
+    pub async fn get_campaign_status_list(
+        &self,
+    ) -> Result<Vec<super::api::schemas::CampaignStatus>, DatabaseError> {
         let rows = sqlx::query(
             r#"
             SELECT 
@@ -1687,7 +1708,7 @@ impl DatabaseManager {
         let mut campaigns = Vec::new();
         for row in rows {
             let campaign_name: String = row.try_get("campaign_name")?;
-            
+
             // Get success rate for this campaign
             let success_stats = sqlx::query(
                 r#"
@@ -1704,7 +1725,7 @@ impl DatabaseManager {
 
             let total_runs: i64 = success_stats.try_get("total_runs")?;
             let successful_runs: i64 = success_stats.try_get("successful_runs")?;
-            
+
             let success_rate = if total_runs > 0 {
                 Some(successful_runs as f64 / total_runs as f64)
             } else {
@@ -1796,10 +1817,12 @@ impl DatabaseManager {
         sql_query.push_str(" ORDER BY mp.merged_at DESC NULLS LAST");
 
         // Add pagination
-        let limit = query.get("limit")
+        let limit = query
+            .get("limit")
             .and_then(|l| l.parse::<i64>().ok())
             .unwrap_or(50);
-        let offset = query.get("offset")
+        let offset = query
+            .get("offset")
             .and_then(|o| o.parse::<i64>().ok())
             .unwrap_or(0);
 
@@ -2051,13 +2074,21 @@ impl DatabaseManager {
                 finish_time: row.try_get("finish_time")?,
                 worker: row.try_get("worker")?,
                 build_version: None, // Not in the current schema
-                result_branches: row.try_get::<Option<serde_json::Value>, _>("result_branches")?.map(|v| vec![v]).unwrap_or_default(),
-                result_tags: row.try_get::<Option<serde_json::Value>, _>("result_tags")?.map(|v| vec![v]).unwrap_or_default(),
+                result_branches: row
+                    .try_get::<Option<serde_json::Value>, _>("result_branches")?
+                    .map(|v| vec![v])
+                    .unwrap_or_default(),
+                result_tags: row
+                    .try_get::<Option<serde_json::Value>, _>("result_tags")?
+                    .map(|v| vec![v])
+                    .unwrap_or_default(),
                 publish_status: row.try_get("publish_status")?,
                 failure_stage: row.try_get("failure_stage")?,
                 main_branch_revision: row.try_get("main_branch_revision")?,
                 vcs_type: row.try_get("vcs_type")?,
-                logfilenames: row.try_get::<Vec<String>, _>("logfilenames").unwrap_or_default(),
+                logfilenames: row
+                    .try_get::<Vec<String>, _>("logfilenames")
+                    .unwrap_or_default(),
                 revision: row.try_get("revision")?,
             };
 
@@ -2082,9 +2113,7 @@ impl DatabaseManager {
             ORDER BY last_active DESC
         "#;
 
-        let rows = sqlx::query(query)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query(query).fetch_all(&self.pool).await?;
 
         let sessions: Vec<serde_json::Value> = rows.into_iter().map(|row| {
             json!({
@@ -2109,7 +2138,10 @@ impl DatabaseManager {
     }
 
     /// Get sessions for a specific user
-    pub async fn get_user_sessions(&self, user_id: &str) -> Result<Vec<serde_json::Value>, DatabaseError> {
+    pub async fn get_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<serde_json::Value>, DatabaseError> {
         let query = r#"
             SELECT 
                 id, user_id, username, role, created_at, last_active,
@@ -2147,7 +2179,11 @@ impl DatabaseManager {
     }
 
     /// Update a user's role in all their active sessions
-    pub async fn update_user_role(&self, user_id: &str, new_role: &str) -> Result<bool, DatabaseError> {
+    pub async fn update_user_role(
+        &self,
+        user_id: &str,
+        new_role: &str,
+    ) -> Result<bool, DatabaseError> {
         let query = r#"
             UPDATE site_session 
             SET role = $2, last_active = NOW()
@@ -2171,10 +2207,7 @@ impl DatabaseManager {
             WHERE user_id = $1 AND expires_at > NOW()
         "#;
 
-        let result = sqlx::query(query)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+        let result = sqlx::query(query).bind(user_id).execute(&self.pool).await?;
 
         Ok(result.rows_affected())
     }

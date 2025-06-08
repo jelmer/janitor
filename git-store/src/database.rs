@@ -136,25 +136,32 @@ impl DatabaseManager {
     }
 
     /// Check if a worker has permission to access a specific codebase
-    pub async fn worker_has_codebase_access(&self, worker_name: &str, codebase: &str) -> Result<bool> {
+    pub async fn worker_has_codebase_access(
+        &self,
+        worker_name: &str,
+        codebase: &str,
+    ) -> Result<bool> {
         // For now, implement a simple permission model:
         // 1. All active workers have read access to all codebases
         // 2. Workers can only write to codebases they are actively working on
         // 3. Future enhancement: Add explicit permission table
-        
-        debug!("Checking codebase access for worker {} to {}", worker_name, codebase);
-        
+
+        debug!(
+            "Checking codebase access for worker {} to {}",
+            worker_name, codebase
+        );
+
         // First check if worker is active
         let worker_query = format!(
             "SELECT active FROM {} WHERE name = $1 LIMIT 1",
             self.worker_table
         );
-        
+
         let worker_row = sqlx::query(&worker_query)
             .bind(worker_name)
             .fetch_optional(self.pool())
             .await?;
-            
+
         let is_active = match worker_row {
             Some(row) => row.try_get::<bool, _>("active")?,
             None => {
@@ -162,12 +169,12 @@ impl DatabaseManager {
                 return Ok(false);
             }
         };
-        
+
         if !is_active {
             debug!("Worker {} is not active", worker_name);
             return Ok(false);
         }
-        
+
         // Check if there are any recent runs by this worker for this codebase
         // This indicates the worker is actively working on this codebase
         let recent_access_query = format!(
@@ -177,21 +184,27 @@ impl DatabaseManager {
              AND start_time > NOW() - INTERVAL '7 days'
              LIMIT 1"
         );
-        
+
         let recent_access = sqlx::query(&recent_access_query)
             .bind(worker_name)
             .bind(codebase)
             .fetch_optional(self.pool())
             .await?;
-            
+
         let has_recent_activity = recent_access.is_some();
-        
+
         if has_recent_activity {
-            debug!("Worker {} has recent activity on codebase {}", worker_name, codebase);
+            debug!(
+                "Worker {} has recent activity on codebase {}",
+                worker_name, codebase
+            );
         } else {
-            debug!("Worker {} has no recent activity on codebase {} - read-only access", worker_name, codebase);
+            debug!(
+                "Worker {} has no recent activity on codebase {} - read-only access",
+                worker_name, codebase
+            );
         }
-        
+
         // For now, allow access if worker is active
         // In the future, this could be enhanced with explicit permission tables
         Ok(true)
@@ -301,25 +314,25 @@ mod tests {
     fn test_worker_permission_logic_design() {
         // This test verifies the permission model design is correct
         // The actual permission checking requires database connectivity
-        
+
         // Test the permission model assumptions:
         // 1. Worker must be active to access any codebase
         // 2. Active workers have read access to all codebases
         // 3. Workers with recent activity have write access to specific codebases
-        
+
         // This structure test ensures the method signature is correct
         let worker_name = "test-worker";
         let codebase = "test-codebase";
-        
+
         // The method should exist and have the correct signature
         // In a real test with database, we would test:
         // - Inactive worker -> false
         // - Active worker without recent activity -> true (read-only)
         // - Active worker with recent activity -> true (read/write)
-        
+
         assert!(worker_name.len() > 0);
         assert!(codebase.len() > 0);
-        
+
         // This ensures our permission model covers the expected use cases
     }
 }

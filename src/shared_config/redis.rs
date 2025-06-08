@@ -1,7 +1,7 @@
 //! Shared Redis configuration for all Janitor services
 
+use redis::Client as RedisClient;
 use serde::{Deserialize, Serialize};
-use redis::{Client as RedisClient};
 use std::time::Duration;
 use url::Url;
 
@@ -109,12 +109,14 @@ impl RedisConfig {
         }
 
         // Validate URL format
-        if !self.url.starts_with("redis://") 
-            && !self.url.starts_with("rediss://") 
-            && !self.url.starts_with("redis+unix://") {
+        if !self.url.starts_with("redis://")
+            && !self.url.starts_with("rediss://")
+            && !self.url.starts_with("redis+unix://")
+        {
             return Err(ValidationError::InvalidValue {
                 field: "url".to_string(),
-                message: "Redis URL must start with redis://, rediss://, or redis+unix://".to_string(),
+                message: "Redis URL must start with redis://, rediss://, or redis+unix://"
+                    .to_string(),
             });
         }
 
@@ -141,32 +143,41 @@ impl RedisConfig {
     pub fn create_client(&self) -> Result<RedisClient, redis::RedisError> {
         // Build the connection URL with authentication and database
         let mut url = self.url.clone();
-        
+
         // If username or password or database is specified, we need to build a complete URL
         if self.username.is_some() || self.password.is_some() || self.database.is_some() {
             let parsed_url = Url::parse(&self.url).map_err(|_| {
-                redis::RedisError::from((redis::ErrorKind::InvalidClientConfig, "Invalid URL format"))
+                redis::RedisError::from((
+                    redis::ErrorKind::InvalidClientConfig,
+                    "Invalid URL format",
+                ))
             })?;
             let mut new_url = parsed_url.clone();
-            
+
             // Set authentication if provided
             if let Some(username) = &self.username {
                 new_url.set_username(username).map_err(|_| {
-                    redis::RedisError::from((redis::ErrorKind::InvalidClientConfig, "Failed to set username"))
+                    redis::RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "Failed to set username",
+                    ))
                 })?;
             }
-            
+
             if let Some(password) = &self.password {
                 new_url.set_password(Some(password)).map_err(|_| {
-                    redis::RedisError::from((redis::ErrorKind::InvalidClientConfig, "Failed to set password"))
+                    redis::RedisError::from((
+                        redis::ErrorKind::InvalidClientConfig,
+                        "Failed to set password",
+                    ))
                 })?;
             }
-            
+
             // Set database if provided (append as path)
             if let Some(database) = self.database {
                 new_url.set_path(&format!("/{}", database));
             }
-            
+
             url = new_url.to_string();
         }
 
@@ -275,7 +286,7 @@ mod tests {
         config_with_auth.username = Some("testuser".to_string());
         config_with_auth.password = Some("testpass".to_string());
         config_with_auth.database = Some(1);
-        
+
         // This will fail to connect but should successfully create the client
         assert!(config_with_auth.create_client().is_ok());
     }

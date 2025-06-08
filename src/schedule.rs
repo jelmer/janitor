@@ -193,12 +193,12 @@ ORDER BY start_time DESC
         }
 
         durations.push(run.duration.microseconds / (1000 * 1000));
-        
+
         // Calculate time-based weight: recent runs get higher weight
         // Weight decreases exponentially with age (half-life of 30 days)
         let days_ago = (now - run.start_time).num_days() as f64;
         let weight = 0.5_f64.powf(days_ago / 30.0);
-        
+
         total_weight += weight;
         if run.result_code == "success" {
             success_weight += weight;
@@ -481,7 +481,6 @@ pub async fn bulk_add_to_queue(
     Ok(())
 }
 
-
 async fn deps_satisfied(
     conn: &PgPool,
     _campaign: &str,
@@ -490,16 +489,17 @@ async fn deps_satisfied(
     // Optimize dependency checking with a single query instead of multiple individual queries
     let mut query_parts = Vec::new();
     let mut bind_values = Vec::new();
-    
+
     for (dep_idx, dep) in dependencies.entries().enumerate() {
         let mut subdep_conditions = Vec::new();
-        
+
         for subdep in dep.relations() {
             let mut condition = format!("source = ${}", bind_values.len() + 1);
             bind_values.push(subdep.name().to_string());
-            
+
             if let Some(version) = subdep.version() {
-                condition.push_str(&format!(" AND version {} ${}", 
+                condition.push_str(&format!(
+                    " AND version {} ${}",
                     match version.0 {
                         debian_control::relations::VersionConstraint::Equal => "=",
                         debian_control::relations::VersionConstraint::GreaterThan => ">",
@@ -513,7 +513,7 @@ async fn deps_satisfied(
             }
             subdep_conditions.push(format!("({})", condition));
         }
-        
+
         if !subdep_conditions.is_empty() {
             query_parts.push(format!(
                 "SELECT {} as dep_group, COUNT(*) as matches FROM all_debian_versions WHERE {} LIMIT 1",
@@ -522,24 +522,25 @@ async fn deps_satisfied(
             ));
         }
     }
-    
+
     if query_parts.is_empty() {
         return Ok(true);
     }
-    
+
     // Combine all dependency group checks into a single UNION query
     let full_query = query_parts.join(" UNION ALL ");
-    
+
     let mut query_builder = sqlx::QueryBuilder::new(&full_query);
     for value in bind_values {
         query_builder.push_bind(value);
     }
-    
+
     let rows = query_builder.build().fetch_all(conn).await?;
-    
+
     // Check that we have at least one match for each dependency group
     let expected_groups = dependencies.entries().count();
-    let satisfied_groups = rows.into_iter()
+    let satisfied_groups = rows
+        .into_iter()
         .filter_map(|row| {
             let matches: i64 = row.try_get("matches").unwrap_or(0);
             if matches > 0 {
@@ -549,7 +550,7 @@ async fn deps_satisfied(
             }
         })
         .collect::<std::collections::HashSet<_>>();
-    
+
     Ok(satisfied_groups.len() == expected_groups)
 }
 

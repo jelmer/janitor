@@ -138,7 +138,7 @@ pub fn debian_make_changes(
 
     let mut extra_env = HashMap::new();
     extra_env.insert("DIST".to_string(), dist_command);
-    
+
     // Add Python environment variables for deb-new-upstream operations
     if let Some(path) = sys_path {
         extra_env.insert("PYTHONPATH".to_string(), path);
@@ -146,7 +146,7 @@ pub fn debian_make_changes(
     if let Some(executable) = sys_executable {
         extra_env.insert("PYTHON_EXECUTABLE".to_string(), executable);
     }
-    
+
     for (k, v) in env {
         extra_env.insert(k, v);
     }
