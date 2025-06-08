@@ -11,34 +11,30 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt;
 
-use janitor_runner::{web::app, AppState};
-
-/// Mock database for testing.
-struct MockDatabase;
-
-impl MockDatabase {
-    fn new() -> Self {
-        Self
-    }
-}
-
-/// Helper to create test app state.
-async fn create_test_state() -> Arc<AppState> {
-    // In production tests, this would connect to a test database
-    // For now, we create a minimal test state
-    todo!("Implement test database setup")
-}
+use janitor_runner::{web::app, AppState, test_utils};
 
 /// Helper to create test app with full routing.
-async fn create_test_app() -> axum::Router {
-    let state = create_test_state().await;
-    app(state)
+async fn create_test_app() -> Option<axum::Router> {
+    test_utils::create_test_app_if_available().await.expect("Failed to check test app availability")
+}
+
+/// Macro to skip test if no database is available
+macro_rules! require_test_app {
+    ($app:ident) => {
+        let $app = match create_test_app().await {
+            Some(app) => app,
+            None => {
+                eprintln!("Skipping test - no database available");
+                return;
+            }
+        };
+    };
 }
 
 /// Test assignment endpoint API compatibility.
 #[tokio::test]
 async fn test_assignment_endpoint_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // Test GET /assignment - should return assignment or 503 No Content
     let request = Request::builder()
@@ -92,7 +88,7 @@ async fn test_assignment_endpoint_compatibility() {
 /// Test result submission endpoint API compatibility.
 #[tokio::test]
 async fn test_result_submission_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     let test_result = json!({
         "code": "success",
@@ -135,7 +131,7 @@ async fn test_result_submission_compatibility() {
 /// Test active runs endpoint API compatibility.
 #[tokio::test]
 async fn test_active_runs_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     let request = Request::builder()
         .method(Method::GET)
@@ -167,7 +163,7 @@ async fn test_active_runs_compatibility() {
 /// Test queue position endpoint API compatibility.
 #[tokio::test]
 async fn test_queue_position_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     let request = Request::builder()
         .method(Method::GET)
@@ -189,7 +185,7 @@ async fn test_queue_position_compatibility() {
 /// Test health endpoint returns detailed Python-compatible health status.
 #[tokio::test]
 async fn test_health_endpoint_detailed() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     let request = Request::builder()
         .method(Method::GET)
@@ -217,7 +213,7 @@ async fn test_health_endpoint_detailed() {
 /// Test schedule control endpoint API compatibility.
 #[tokio::test]
 async fn test_schedule_control_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // Test reschedule action
     let reschedule_request = json!({
@@ -263,7 +259,7 @@ async fn test_schedule_control_compatibility() {
 /// Test metrics endpoint compatibility.
 #[tokio::test]
 async fn test_metrics_endpoint_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     let request = Request::builder()
         .method(Method::GET)
@@ -290,7 +286,7 @@ async fn test_metrics_endpoint_compatibility() {
 /// Test run upload endpoint with multipart form data.
 #[tokio::test]
 async fn test_run_upload_multipart_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // This would test multipart form upload similar to Python implementation
     // Would need to create actual multipart data for full test
@@ -313,7 +309,7 @@ async fn test_run_upload_multipart_compatibility() {
 /// Test error handling compatibility with Python implementation.
 #[tokio::test]
 async fn test_error_handling_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // Test invalid JSON
     let request = Request::builder()
@@ -341,7 +337,7 @@ async fn test_error_handling_compatibility() {
 /// Test rate limiting behavior compatibility.
 #[tokio::test]
 async fn test_rate_limiting_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // Test assignment rate limiting
     for _ in 0..10 {
@@ -370,7 +366,7 @@ async fn test_rate_limiting_compatibility() {
 /// Integration test for complete workflow compatibility.
 #[tokio::test]
 async fn test_complete_workflow_compatibility() {
-    let app = create_test_app().await;
+    require_test_app!(app);
 
     // 1. Get assignment
     let request = Request::builder()

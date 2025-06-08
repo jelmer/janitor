@@ -7,7 +7,6 @@ use prometheus::{
     TextEncoder,
 };
 
-#[allow(missing_docs)]
 lazy_static! {
     /// HTTP request metrics
     pub static ref HTTP_REQUESTS_TOTAL: IntCounterVec = register_int_counter_vec!(

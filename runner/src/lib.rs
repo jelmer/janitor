@@ -65,6 +65,9 @@ pub mod watchdog;
 /// Module for the web interface.
 pub mod web;
 
+/// Test utilities for the runner module.
+pub mod test_utils;
+
 /// Generate environment variables for committing changes.
 ///
 /// # Arguments

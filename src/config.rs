@@ -64,6 +64,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn test_read_file() {
@@ -74,6 +75,23 @@ mod tests {
     }
 
     #[test]
+    fn test_read_string() {
+        let contents = r#"distribution { name: "test" }"#;
+        let config = read_string(contents).unwrap();
+        assert_eq!(config.distribution.len(), 1);
+        assert_eq!(config.distribution[0].name, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_read_readable() {
+        let contents = r#"distribution { name: "test" }"#;
+        let cursor = Cursor::new(contents.as_bytes());
+        let config = read_readable(cursor).unwrap();
+        assert_eq!(config.distribution.len(), 1);
+        assert_eq!(config.distribution[0].name, Some("test".to_string()));
+    }
+
+    #[test]
     fn test_get_distribution() {
         let config = read_string(r#"distribution { name: "test" }"#).unwrap();
         assert_eq!(
@@ -81,5 +99,61 @@ mod tests {
             Some("test".to_string())
         );
         assert!(config.get_distribution("test2").is_none());
+    }
+
+    #[test]
+    fn test_get_campaign() {
+        let config = read_string(r#"campaign { name: "test-campaign" }"#).unwrap();
+        assert_eq!(
+            config.get_campaign("test-campaign").unwrap().name,
+            Some("test-campaign".to_string())
+        );
+        assert!(config.get_campaign("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_find_campaign_by_branch_name() {
+        let config = read_string(
+            r#"campaign { 
+                name: "test-campaign" 
+                branch_name: "feature-branch"
+            }"#,
+        ).unwrap();
+        
+        assert_eq!(
+            config.find_campaign_by_branch_name("feature-branch"),
+            Some(("test-campaign", "main"))
+        );
+        assert!(config.find_campaign_by_branch_name("nonexistent-branch").is_none());
+    }
+
+    #[test]
+    fn test_empty_config() {
+        let config = read_string("").unwrap();
+        assert_eq!(config.distribution.len(), 0);
+        assert_eq!(config.campaign.len(), 0);
+        assert_eq!(config.apt_repository.len(), 0);
+    }
+
+    #[test]
+    fn test_invalid_config() {
+        let result = read_string("invalid { syntax");
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_pg_pool_with_database_location() {
+        let config = read_string(r#"database_location: "postgresql://localhost/nonexistent""#).unwrap();
+        // This should fail to connect but not panic
+        let result = config.pg_pool().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test] 
+    async fn test_pg_pool_without_database_location() {
+        let config = read_string("").unwrap();
+        // This should try default connection which will likely fail in tests
+        let result = config.pg_pool().await;
+        assert!(result.is_err());
     }
 }

@@ -2479,3 +2479,8 @@ async fn check_differ_service_availability(campaign_config: &Campaign) -> bool {
         true // Default to available for now
     }
 }
+
+// Re-export the test module for testing
+#[cfg(test)]
+#[path = "lib_tests.rs"]
+mod lib_tests;

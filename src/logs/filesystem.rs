@@ -76,8 +76,12 @@ impl LogFileManager for FileSystemLogFileManager {
 
         let data = tokio::fs::read(orig_path).await?;
 
-        let basename =
-            basename.unwrap_or_else(|| Path::new(orig_path).file_name().unwrap().to_str().unwrap());
+        let basename = basename.unwrap_or_else(|| {
+            Path::new(orig_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("unknown")
+        });
         let dest_path = dest_dir.join(format!("{}.gz", basename));
 
         // Compress data in a blocking task to avoid blocking the executor
@@ -110,30 +114,50 @@ impl LogFileManager for FileSystemLogFileManager {
 
     async fn iter_logs(&self) -> Box<dyn Iterator<Item = (String, String, Vec<String>)>> {
         let log_dir = self.log_directory.clone();
-        let entries = fs::read_dir(log_dir).unwrap();
+        let entries = match fs::read_dir(log_dir) {
+            Ok(entries) => entries,
+            Err(_) => return Box::new(std::iter::empty()),
+        };
         let mut logs = Vec::new();
 
         for codebase_entry in entries {
-            let codebase_entry = codebase_entry.unwrap();
-            let codebase_name = codebase_entry.file_name().into_string().unwrap();
+            let codebase_entry = match codebase_entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+            let codebase_name = match codebase_entry.file_name().into_string() {
+                Ok(name) => name,
+                Err(_) => continue,
+            };
 
-            let run_entries = fs::read_dir(codebase_entry.path()).unwrap();
+            let run_entries = match fs::read_dir(codebase_entry.path()) {
+                Ok(entries) => entries,
+                Err(_) => continue,
+            };
             for run_entry in run_entries {
-                let run_entry = run_entry.unwrap();
-                let run_name = run_entry.file_name().into_string().unwrap();
+                let run_entry = match run_entry {
+                    Ok(entry) => entry,
+                    Err(_) => continue,
+                };
+                let run_name = match run_entry.file_name().into_string() {
+                    Ok(name) => name,
+                    Err(_) => continue,
+                };
 
-                let log_names = fs::read_dir(run_entry.path())
-                    .unwrap()
-                    .filter_map(|entry| {
-                        let entry = entry.unwrap();
-                        let name = entry.file_name().into_string().unwrap();
-                        if name.ends_with(".gz") {
-                            Some(name[..name.len() - 3].to_string())
-                        } else {
-                            Some(name)
-                        }
-                    })
-                    .collect();
+                let log_names = match fs::read_dir(run_entry.path()) {
+                    Ok(entries) => entries
+                        .filter_map(|entry| {
+                            let entry = entry.ok()?;
+                            let name = entry.file_name().into_string().ok()?;
+                            if name.ends_with(".gz") {
+                                Some(name[..name.len() - 3].to_string())
+                            } else {
+                                Some(name)
+                            }
+                        })
+                        .collect(),
+                    Err(_) => continue,
+                };
 
                 logs.push((codebase_name.clone(), run_name, log_names));
             }
@@ -151,7 +175,8 @@ impl LogFileManager for FileSystemLogFileManager {
         for path in self.get_paths(codebase, run_id, name) {
             if let Ok(metadata) = fs::metadata(&path) {
                 let ctime = metadata.ctime();
-                return Ok(chrono::DateTime::from_timestamp(ctime, 0).unwrap());
+                return Ok(chrono::DateTime::from_timestamp(ctime, 0)
+                    .unwrap_or_else(|| chrono::Utc::now()));
             }
         }
         Err(Error::NotFound)

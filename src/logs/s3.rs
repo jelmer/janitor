@@ -12,7 +12,7 @@ use crate::logs::{Error, LogFileManager};
 
 pub struct S3LogFileManager {
     base_url: String,
-    bucket_name: String,
+    _bucket_name: String,
     client: Client,
 }
 
@@ -28,7 +28,7 @@ impl S3LogFileManager {
 
         Ok(Self {
             base_url,
-            bucket_name: bucket_name.to_string(),
+            _bucket_name: bucket_name.to_string(),
             client,
         })
     }
@@ -57,7 +57,7 @@ impl LogFileManager for S3LogFileManager {
                     status
                 ))),
             },
-            Err(e) => Err(Error::ServiceUnavailable),
+            Err(_e) => Err(Error::ServiceUnavailable),
         }
     }
 
@@ -98,7 +98,7 @@ impl LogFileManager for S3LogFileManager {
         codebase: &str,
         run_id: &str,
         orig_path: &str,
-        mtime: Option<DateTime<Utc>>,
+        _mtime: Option<DateTime<Utc>>,
         basename: Option<&str>,
     ) -> Result<(), Error> {
         let data = tokio::fs::read(orig_path).await?;
