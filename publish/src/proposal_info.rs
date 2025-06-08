@@ -106,7 +106,7 @@ impl ProposalInfoManager {
     pub async fn mark_proposal_as_not_found(&self, url: &url::Url) -> Result<(), sqlx::Error> {
         // Set status to 'closed' and update last_scanned to indicate we checked it
         sqlx::query(
-            "UPDATE merge_proposal SET status = 'closed', last_scanned = NOW() WHERE url = $1"
+            "UPDATE merge_proposal SET status = 'closed', last_scanned = NOW() WHERE url = $1",
         )
         .bind(url.to_string())
         .execute(&self.conn)
@@ -190,15 +190,13 @@ impl ProposalInfoManager {
                 };
                 let merged_by_url = if let Some(mb) = merged_by.clone().as_ref() {
                     match mp.url() {
-                        Ok(mp_url) => {
-                            match crate::get_merged_by_user_url(&mp_url, mb) {
-                                Ok(url) => url,
-                                Err(e) => {
-                                    log::error!("Failed to get merged_by user URL: {}", e);
-                                    None
-                                }
+                        Ok(mp_url) => match crate::get_merged_by_user_url(&mp_url, mb) {
+                            Ok(url) => url,
+                            Err(e) => {
+                                log::error!("Failed to get merged_by user URL: {}", e);
+                                None
                             }
-                        }
+                        },
                         Err(e) => {
                             log::error!("Failed to get merge proposal URL for merged_by: {}", e);
                             None

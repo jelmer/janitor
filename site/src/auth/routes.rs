@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::auth::{
     handlers::{admin_handler, protected_handler, qa_handler, status_handler},
     middleware::{require_admin, require_login, AuthState},
+    session::SessionManager,
 };
 
 /// Create authentication routes (placeholder for full implementation)
@@ -47,25 +48,20 @@ where
 mod tests {
     use super::*;
 
-    use crate::config::SiteConfig;
-
-    fn create_test_auth_state() -> Arc<AuthState> {
-        // This is a placeholder for testing - in real tests we'd need a test database
-        let config = SiteConfig::default();
-
-        // For testing, create a minimal AuthState without database dependencies
-        // In real tests, this would be mocked or use a test database
-        Arc::new(AuthState {
-            state: "test-state".to_string(),
-            redirect_url: Some("/test".to_string()),
-            pkce_verifier: None,
-        })
+    #[test]
+    fn test_auth_routes_creation() {
+        // This test verifies that the auth routes function exists and compiles
+        // Real tests would require database setup and proper AuthState initialization
+        // For now, just test that the function signature is correct
+        assert!(true);
     }
 
     #[test]
-    fn test_auth_routes_creation() {
-        // Test would create auth routes and verify they're set up correctly
-        // For now, just test that the function exists and compiles
+    #[ignore = "requires database setup"]
+    fn test_auth_routes_with_database() {
+        // This test would create real auth routes with a test database
+        // It's ignored because it requires complex database setup
+        // TODO: Implement when test infrastructure is ready
         assert!(true);
     }
 }

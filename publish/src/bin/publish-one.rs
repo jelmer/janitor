@@ -53,8 +53,7 @@ fn main() {
     let args = Args::parse();
 
     let templates_dir = args.template_env_path.unwrap_or_else(|| {
-        let mut path = std::env::current_exe()
-            .expect("Failed to get current executable path");
+        let mut path = std::env::current_exe().expect("Failed to get current executable path");
         path.pop();
         path.push("proposal-templates");
         path
@@ -62,12 +61,11 @@ fn main() {
 
     args.logs.init();
 
-    let request: janitor_publish::PublishOneRequest =
-        serde_json::from_reader(std::io::stdin())
-            .unwrap_or_else(|e| {
-                eprintln!("Failed to parse JSON request from stdin: {}", e);
-                std::process::exit(1);
-            });
+    let request: janitor_publish::PublishOneRequest = serde_json::from_reader(std::io::stdin())
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to parse JSON request from stdin: {}", e);
+            std::process::exit(1);
+        });
 
     let mut template_env = load_template_env(&templates_dir);
     template_env.add_global(

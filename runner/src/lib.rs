@@ -150,7 +150,11 @@ impl std::fmt::Display for FindChangesError {
                 write!(f, "Error parsing changes file {}: {}", path.display(), err)
             }
             FindChangesError::InvalidFilename(path) => {
-                write!(f, "Invalid filename that cannot be converted to UTF-8: {}", path.display())
+                write!(
+                    f,
+                    "Invalid filename that cannot be converted to UTF-8: {}",
+                    path.display()
+                )
             }
         }
     }
@@ -193,33 +197,34 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
     let mut version: Option<debversion::Version> = None;
     let mut distribution: Option<String> = None;
     let mut binary_packages: Vec<String> = Vec::new();
-    
-    let read_dir = std::fs::read_dir(path)
-        .map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
-    
+
+    let read_dir =
+        std::fs::read_dir(path).map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
+
     for entry_result in read_dir {
-        let entry = entry_result
-            .map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
-        
+        let entry = entry_result.map_err(|e| FindChangesError::IoError(path.to_path_buf(), e))?;
+
         // Check if filename can be converted to UTF-8 and ends with .changes
         let file_name = entry.file_name();
-        let file_name_str = file_name.to_str()
+        let file_name_str = file_name
+            .to_str()
             .ok_or_else(|| FindChangesError::InvalidFilename(entry.path()))?;
-        
+
         if !file_name_str.ends_with(".changes") {
             continue;
         }
-        
+
         let file_path = entry.path();
         let f = std::fs::File::open(&file_path)
             .map_err(|e| FindChangesError::IoError(file_path.clone(), e))?;
-        
+
         let changes = debian_control::changes::Changes::read(&f)
             .map_err(|e| FindChangesError::ParseError(file_path, e.into()))?;
         names.push(entry.file_name().to_string_lossy().to_string());
         if let Some(version) = &version {
             if changes.version().as_ref() != Some(version) {
-                let found_version = changes.version()
+                let found_version = changes
+                    .version()
                     .ok_or_else(|| FindChangesError::MissingChangesFileFields("Version"))?;
                 return Err(FindChangesError::InconsistentVersion(
                     names,
@@ -231,7 +236,8 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
         version = changes.version();
         if let Some(source) = &source {
             if changes.source().as_ref() != Some(source) {
-                let found_source = changes.source()
+                let found_source = changes
+                    .source()
                     .ok_or_else(|| FindChangesError::MissingChangesFileFields("Source"))?;
                 return Err(FindChangesError::InconsistentSource(
                     names,
@@ -244,7 +250,8 @@ pub fn find_changes(path: &Path) -> Result<ChangesSummary, FindChangesError> {
 
         if let Some(distribution) = &distribution {
             if changes.distribution().as_ref() != Some(distribution) {
-                let found_distribution = changes.distribution()
+                let found_distribution = changes
+                    .distribution()
                     .ok_or_else(|| FindChangesError::MissingChangesFileFields("Distribution"))?;
                 return Err(FindChangesError::InconsistentDistribution(
                     names,

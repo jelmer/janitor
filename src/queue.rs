@@ -251,7 +251,7 @@ impl<'a> Queue<'a> {
                 Ok((bucket, count))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        
+
         Ok(buckets)
     }
 

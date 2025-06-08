@@ -40,15 +40,25 @@ This document tracks features and implementations that are blocked by external d
 - **Location**: `publish/src/web.rs:274-276`
 - **Function**: `get_merged_by_user_url()`
 - **Blocked by**: Need to implement external forge API calls
-- **Description**: Requires querying GitHub/GitLab/etc APIs to get merge information
-- **Impact**: Cannot display who merged a proposal
+- **Description**: Requires querying GitHub/GitLab/etc APIs to get user profile URL from username
+- **Impact**: Cannot display link to user who merged a proposal
+- **Implementation notes**: Would need to:
+  - Parse merge proposal URL to determine forge type (GitHub, GitLab, etc.)
+  - Use appropriate API client for each forge
+  - Convert username to profile URL (e.g., github.com/username)
+  - Handle authentication and rate limiting for external APIs
 
 ### Forge Rate Limits
-- **Location**: `publish/src/web.rs:1500`
+- **Location**: `publish/src/web.rs:1502`
 - **Function**: Blocker information display
 - **Blocked by**: Need to query forge APIs for current rate limit status
 - **Description**: Should include forge-specific rate limit information in blocker details
 - **Impact**: Incomplete rate limit information shown to users
+- **Implementation notes**: Would need to:
+  - Query GitHub/GitLab/etc API rate limit endpoints
+  - Store rate limit information (remaining requests, reset time)
+  - Include in the blocker response structure
+  - Handle different rate limit structures for different forges
 
 ## Axum Framework Limitations
 

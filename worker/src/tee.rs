@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 /// This struct redirects stdout and stderr to either a file directly
 /// or through the `tee` command for simultaneous console and file output.
 /// File descriptors are properly managed to prevent leaks.
+#[derive(Debug)]
 pub struct CopyOutput {
     old_stdout: Option<RawFd>,
     old_stderr: Option<RawFd>,
@@ -210,3 +211,7 @@ impl Drop for CopyOutput {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tee_tests.rs"]
+mod tee_tests;

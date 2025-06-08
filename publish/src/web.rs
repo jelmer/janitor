@@ -989,9 +989,9 @@ async fn check_straggler(
                     .unwrap();
             }
             if resp.status() == 404 {
-                // TODO(jelmer): Keep it but leave a tumbestone around?
+                // Keep the record but mark it as not found (tombstone)
                 proposal_info_manager
-                    .delete_proposal_info(url)
+                    .mark_proposal_as_not_found(url)
                     .await
                     .unwrap();
             }

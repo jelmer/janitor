@@ -487,3 +487,7 @@ pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, descr
         }
     }
 }
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod client_tests;

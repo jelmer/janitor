@@ -89,17 +89,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             login: String,
             password: String,
         }
-        let credentials_file = File::open(&credentials)
-            .unwrap_or_else(|e| {
-                eprintln!("Failed to open credentials file '{}': {}", credentials.display(), e);
+        let credentials_file = File::open(&credentials).unwrap_or_else(|e| {
+            eprintln!(
+                "Failed to open credentials file '{}': {}",
+                credentials.display(),
+                e
+            );
+            std::process::exit(1);
+        });
+        let creds: JsonCredentials =
+            serde_json::from_reader(credentials_file).unwrap_or_else(|e| {
+                eprintln!("Failed to parse credentials JSON: {}", e);
                 std::process::exit(1);
             });
-        let creds: JsonCredentials =
-            serde_json::from_reader(credentials_file)
-                .unwrap_or_else(|e| {
-                    eprintln!("Failed to parse credentials JSON: {}", e);
-                    std::process::exit(1);
-                });
         janitor_worker::client::Credentials::Basic {
             username: creds.login,
             password: Some(creds.password),
@@ -113,19 +115,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         janitor_worker::client::Credentials::from_url(&base_url)
     };
 
-    let jenkins_build_url: Option<url::Url> =
-        std::env::var("BUILD_URL").ok().and_then(|x| {
-            x.parse().map_err(|e| {
+    let jenkins_build_url: Option<url::Url> = std::env::var("BUILD_URL").ok().and_then(|x| {
+        x.parse()
+            .map_err(|e| {
                 eprintln!("Invalid BUILD_URL environment variable: {}", e);
-            }).ok()
-        });
+            })
+            .ok()
+    });
 
-    let node_name = std::env::var("NODE_NAME")
-        .unwrap_or_else(|_| {
-            gethostname::gethostname().to_str()
-                .unwrap_or("unknown-host")
-                .to_owned()
-        });
+    let node_name = std::env::var("NODE_NAME").unwrap_or_else(|_| {
+        gethostname::gethostname()
+            .to_str()
+            .unwrap_or("unknown-host")
+            .to_owned()
+    });
 
     let addr = SocketAddr::new(args.listen_address, args.port.unwrap_or(0));
     let listener = tokio::net::TcpListener::bind(addr).await?;

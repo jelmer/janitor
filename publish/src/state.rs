@@ -181,16 +181,13 @@ async fn guess_codebase_from_branch_url(
     url: &url::Url,
     possible_transports: Option<&mut Vec<Transport>>,
 ) -> Result<Option<String>, sqlx::Error> {
-    let url = match url
-        .to_string()
-        .trim_end_matches('/')
-        .parse::<Url>() {
-            Ok(url) => url,
-            Err(e) => {
-                log::error!("Failed to parse URL: {}", e);
-                return Ok(None);
-            }
-        };
+    let url = match url.to_string().trim_end_matches('/').parse::<Url>() {
+        Ok(url) => url,
+        Err(e) => {
+            log::error!("Failed to parse URL: {}", e);
+            return Ok(None);
+        }
+    };
     // TODO(jelmer): use codebase table
     let query = sqlx::query_as::<_, (String, String)>(
         r#"""
@@ -233,11 +230,12 @@ ORDER BY length(branch_url) DESC
             return Ok(None);
         }
     };
-    
+
     let source_branch = match tokio::task::spawn_blocking(move || {
         silver_platter::vcs::open_branch(&branch_url, Some(&mut vec![]), None, None)
     })
-    .await {
+    .await
+    {
         Ok(branch_result) => match branch_result {
             Ok(branch) => branch,
             Err(e) => {

@@ -177,7 +177,9 @@ impl ApplicationBuilder {
 
         // Initialize VCS management
         log::info!("Initializing VCS management...");
-        let vcs_manager = Arc::new(RunnerVcsManager::from_config(&janitor_config));
+        let vcs_manager = Arc::new(RunnerVcsManager::from_config(&janitor_config).map_err(|e| {
+            ApplicationError::Configuration(format!("Failed to initialize VCS manager: {}", e))
+        })?);
 
         // Initialize log management
         log::info!("Initializing log management...");

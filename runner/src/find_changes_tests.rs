@@ -8,7 +8,7 @@ mod tests {
     fn test_find_changes_error_handling_nonexistent_directory() {
         let nonexistent_path = std::path::Path::new("/nonexistent/directory");
         let result = find_changes(nonexistent_path);
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             FindChangesError::IoError(path, err) => {
@@ -23,7 +23,7 @@ mod tests {
     fn test_find_changes_error_handling_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             FindChangesError::NoChangesFile(path) => {
@@ -37,12 +37,12 @@ mod tests {
     fn test_find_changes_error_handling_invalid_changes_file() {
         let temp_dir = TempDir::new().unwrap();
         let changes_file = temp_dir.path().join("invalid.changes");
-        
+
         // Create an invalid changes file
         fs::write(&changes_file, "invalid content").unwrap();
-        
+
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             FindChangesError::ParseError(path, _) => {
@@ -56,7 +56,7 @@ mod tests {
     fn test_find_changes_error_handling_permission_denied() {
         let temp_dir = TempDir::new().unwrap();
         let changes_file = temp_dir.path().join("test.changes");
-        
+
         // Create a valid changes file
         let valid_changes = r#"Format: 1.8
 Date: Mon, 01 Jan 2024 00:00:00 +0000
@@ -80,7 +80,7 @@ Files:
  d41d8cd98f00b204e9800998ecf8427e 1234 deb optional test-package_1.0-1.deb
 "#;
         fs::write(&changes_file, valid_changes).unwrap();
-        
+
         // On Unix systems, we can test permission denied by changing file permissions
         #[cfg(unix)]
         {
@@ -88,14 +88,14 @@ Files:
             let mut perms = fs::metadata(&changes_file).unwrap().permissions();
             perms.set_mode(0o000); // Remove all permissions
             fs::set_permissions(&changes_file, perms).unwrap();
-            
+
             let result = find_changes(temp_dir.path());
-            
+
             // Reset permissions for cleanup
             let mut perms = fs::metadata(&changes_file).unwrap().permissions();
             perms.set_mode(0o644);
             fs::set_permissions(&changes_file, perms).unwrap();
-            
+
             assert!(result.is_err());
             match result.unwrap_err() {
                 FindChangesError::IoError(path, err) => {
@@ -111,26 +111,23 @@ Files:
     fn test_find_changes_error_display_formatting() {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_path_buf();
-        
+
         // Test each error variant's display formatting
         let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "File not found");
         let err = FindChangesError::IoError(path.clone(), io_error);
         let display = format!("{}", err);
         assert!(display.contains("I/O error accessing"));
         assert!(display.contains("File not found"));
-        
-        let parse_error = FindChangesError::ParseError(
-            path.clone(), 
-            "Parse error".into()
-        );
+
+        let parse_error = FindChangesError::ParseError(path.clone(), "Parse error".into());
         let display = format!("{}", parse_error);
         assert!(display.contains("Error parsing changes file"));
         assert!(display.contains("Parse error"));
-        
+
         let invalid_filename = FindChangesError::InvalidFilename(path.clone());
         let display = format!("{}", invalid_filename);
         assert!(display.contains("Invalid filename that cannot be converted to UTF-8"));
-        
+
         let no_changes = FindChangesError::NoChangesFile(path);
         let display = format!("{}", no_changes);
         assert!(display.contains("No changes file found in"));
@@ -140,7 +137,7 @@ Files:
     fn test_find_changes_success_case() {
         let temp_dir = TempDir::new().unwrap();
         let changes_file = temp_dir.path().join("test_1.0-1_amd64.changes");
-        
+
         // Create a valid changes file
         let valid_changes = r#"Format: 1.8
 Date: Mon, 01 Jan 2024 00:00:00 +0000
@@ -164,9 +161,9 @@ Files:
  d41d8cd98f00b204e9800998ecf8427e 1234 deb optional test-package_1.0-1_amd64.deb
 "#;
         fs::write(&changes_file, valid_changes).unwrap();
-        
+
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_ok());
         let summary = result.unwrap();
         assert_eq!(summary.names, vec!["test_1.0-1_amd64.changes"]);
@@ -178,7 +175,7 @@ Files:
     #[test]
     fn test_find_changes_inconsistent_versions() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create first changes file
         let changes1 = temp_dir.path().join("test_1.0-1_amd64.changes");
         let valid_changes1 = r#"Format: 1.8
@@ -189,7 +186,7 @@ Checksums-Sha1:
 Files:
 "#;
         fs::write(&changes1, valid_changes1).unwrap();
-        
+
         // Create second changes file with different version
         let changes2 = temp_dir.path().join("test_1.0-2_amd64.changes");
         let valid_changes2 = r#"Format: 1.8
@@ -200,9 +197,9 @@ Checksums-Sha1:
 Files:
 "#;
         fs::write(&changes2, valid_changes2).unwrap();
-        
+
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             FindChangesError::InconsistentVersion(names, found, expected) => {
@@ -219,7 +216,7 @@ Files:
     fn test_find_changes_missing_required_fields() {
         let temp_dir = TempDir::new().unwrap();
         let changes_file = temp_dir.path().join("test.changes");
-        
+
         // Create changes file missing source field
         let incomplete_changes = r#"Format: 1.8
 Distribution: unstable
@@ -227,9 +224,9 @@ Checksums-Sha1:
 Files:
 "#;
         fs::write(&changes_file, incomplete_changes).unwrap();
-        
+
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             FindChangesError::MissingChangesFileFields(field) => {
@@ -243,7 +240,7 @@ Files:
     fn test_find_changes_binary_package_extraction() {
         let temp_dir = TempDir::new().unwrap();
         let changes_file = temp_dir.path().join("test_1.0-1_amd64.changes");
-        
+
         // Create changes file with multiple binary packages
         let valid_changes = r#"Format: 1.8
 Source: test-package
@@ -259,18 +256,18 @@ Files:
  d41d8cd98f00b204e9800998ecf8427e 9012 tar optional test-package.tar.gz
 "#;
         fs::write(&changes_file, valid_changes).unwrap();
-        
+
         let result = find_changes(temp_dir.path());
-        
+
         assert!(result.is_ok());
         let summary = result.unwrap();
-        
+
         // Should extract package names from .deb files only
         let mut expected_packages = vec!["test-package", "test-package-dev"];
         expected_packages.sort();
         let mut actual_packages = summary.binary_packages;
         actual_packages.sort();
-        
+
         assert_eq!(actual_packages, expected_packages);
     }
 }

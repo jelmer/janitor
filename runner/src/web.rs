@@ -308,9 +308,9 @@ async fn schedule(
     };
 
     // Convert std::time::Duration to chrono::Duration if present
-    let chrono_duration = request.estimated_duration.map(|d| {
-        chrono::Duration::seconds(d.as_secs() as i64)
-    });
+    let chrono_duration = request
+        .estimated_duration
+        .map(|d| chrono::Duration::seconds(d.as_secs() as i64));
 
     let queue_position = match request.bucket {
         Some(bucket) => {

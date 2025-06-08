@@ -35,9 +35,9 @@ impl RunnerVcsManager {
     }
 
     /// Create from configuration - delegates to janitor::vcs
-    pub fn from_config(config: &janitor::config::Config) -> Self {
-        let managers = janitor::vcs::get_vcs_managers_from_config(config);
-        Self::new(managers)
+    pub fn from_config(config: &janitor::config::Config) -> Result<Self, janitor::vcs::VcsConfigError> {
+        let managers = janitor::vcs::get_vcs_managers_from_config(config)?;
+        Ok(Self::new(managers))
     }
 
     /// Get VCS manager for a specific type
