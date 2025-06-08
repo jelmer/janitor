@@ -1,15 +1,189 @@
 use axum::{
     extract::Request,
-    http::{header, HeaderMap, Method},
+    http::{header, HeaderMap, Method, StatusCode},
     middleware::Next,
     response::Response,
 };
 use metrics::{counter, histogram};
-use std::time::Instant;
-use tracing::{debug, Span};
+use redis::AsyncCommands;
+use serde_json;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+use tracing::{debug, error, warn, Span};
 use uuid::Uuid;
 
 use super::content_negotiation::{negotiate_content_type, ContentType};
+
+/// Rate limiting configuration
+#[derive(Debug, Clone)]
+pub struct RateLimitConfig {
+    /// Maximum requests per window
+    pub max_requests: u32,
+    /// Window duration in seconds
+    pub window_seconds: u64,
+    /// Key prefix for Redis storage
+    pub key_prefix: String,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            max_requests: 100,      // 100 requests
+            window_seconds: 60,     // per minute
+            key_prefix: "rate_limit".to_string(),
+        }
+    }
+}
+
+/// Rate limiter implementation with Redis backend
+#[derive(Debug)]
+pub struct RateLimiter {
+    redis_client: Option<redis::Client>,
+    memory_store: Arc<Mutex<HashMap<String, (u32, Instant)>>>,
+    config: RateLimitConfig,
+}
+
+impl RateLimiter {
+    /// Create a new rate limiter with Redis backend
+    pub fn new_with_redis(redis_url: &str, config: RateLimitConfig) -> Result<Self, redis::RedisError> {
+        let redis_client = redis::Client::open(redis_url)?;
+        Ok(Self {
+            redis_client: Some(redis_client),
+            memory_store: Arc::new(Mutex::new(HashMap::new())),
+            config,
+        })
+    }
+
+    /// Create a new rate limiter with in-memory backend (for testing/fallback)
+    pub fn new_memory_only(config: RateLimitConfig) -> Self {
+        Self {
+            redis_client: None,
+            memory_store: Arc::new(Mutex::new(HashMap::new())),
+            config,
+        }
+    }
+
+    /// Check if request is allowed and increment counter
+    pub async fn check_rate_limit(&self, client_id: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(ref redis_client) = self.redis_client {
+            self.check_redis_rate_limit(redis_client, client_id).await
+        } else {
+            self.check_memory_rate_limit(client_id).await
+        }
+    }
+
+    /// Redis-based rate limiting using sliding window
+    async fn check_redis_rate_limit(
+        &self,
+        redis_client: &redis::Client,
+        client_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = redis_client.get_multiplexed_async_connection().await?;
+        let key = format!("{}:{}", self.config.key_prefix, client_id);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs();
+
+        // Use Redis sliding window approach with sorted sets
+        let window_start = now - self.config.window_seconds;
+
+        // Remove old entries (use correct Redis command)
+        let _: () = redis::cmd("ZREMRANGEBYSCORE")
+            .arg(&key)
+            .arg(0)
+            .arg(window_start as f64)
+            .query_async(&mut conn)
+            .await?;
+
+        // Count current entries
+        let current_count: u32 = conn.zcard(&key).await?;
+
+        if current_count >= self.config.max_requests {
+            // Rate limit exceeded
+            return Ok(false);
+        }
+
+        // Add current request
+        let _: () = conn.zadd(&key, now, now).await?;
+        
+        // Set expiration for cleanup
+        let _: () = conn.expire(&key, (self.config.window_seconds + 10) as i64).await?;
+
+        Ok(true)
+    }
+
+    /// Memory-based rate limiting for fallback
+    async fn check_memory_rate_limit(
+        &self,
+        client_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut store = self.memory_store.lock().await;
+        let now = Instant::now();
+        let window_duration = Duration::from_secs(self.config.window_seconds);
+
+        // Clean up old entries
+        store.retain(|_, (_, timestamp)| now.duration_since(*timestamp) < window_duration);
+
+        // Check current count for client
+        if let Some((count, timestamp)) = store.get_mut(client_id) {
+            if now.duration_since(*timestamp) < window_duration {
+                if *count >= self.config.max_requests {
+                    return Ok(false);
+                }
+                *count += 1;
+            } else {
+                // Reset window
+                *count = 1;
+                *timestamp = now;
+            }
+        } else {
+            // First request for this client
+            store.insert(client_id.to_string(), (1, now));
+        }
+
+        Ok(true)
+    }
+
+    /// Get current usage for a client (for monitoring)
+    pub async fn get_usage(&self, client_id: &str) -> Result<u32, Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(ref redis_client) = self.redis_client {
+            let mut conn = redis_client.get_multiplexed_async_connection().await?;
+            let key = format!("{}:{}", self.config.key_prefix, client_id);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs();
+            let window_start = now - self.config.window_seconds;
+
+            // Remove old entries first
+            let _: () = redis::cmd("ZREMRANGEBYSCORE")
+                .arg(&key)
+                .arg(0)
+                .arg(window_start as f64)
+                .query_async(&mut conn)
+                .await?;
+            
+            // Get current count
+            let count: u32 = conn.zcard(&key).await?;
+            Ok(count)
+        } else {
+            let store = self.memory_store.lock().await;
+            let now = Instant::now();
+            let window_duration = Duration::from_secs(self.config.window_seconds);
+
+            if let Some((count, timestamp)) = store.get(client_id) {
+                if now.duration_since(*timestamp) < window_duration {
+                    Ok(*count)
+                } else {
+                    Ok(0)
+                }
+            } else {
+                Ok(0)
+            }
+        }
+    }
+}
 
 /// Request context for logging and metrics
 #[derive(Debug, Clone)]
@@ -257,26 +431,226 @@ pub async fn security_headers_middleware(req: Request, next: Next) -> Response {
     response
 }
 
-/// Rate limiting middleware (basic implementation)
+/// Rate limiting middleware with functional implementation
 pub async fn rate_limiting_middleware(req: Request, next: Next) -> Response {
-    // Get client identifier (IP address or user ID)
-    let client_id = req
+    // Use a basic in-memory rate limiter as fallback
+    static RATE_LIMITER: std::sync::OnceLock<Arc<RateLimiter>> = std::sync::OnceLock::new();
+    let limiter = RATE_LIMITER.get_or_init(|| {
+        Arc::new(RateLimiter::new_memory_only(RateLimitConfig::default()))
+    });
+
+    let client_id = get_client_identifier(&req);
+
+    match limiter.check_rate_limit(&client_id).await {
+        Ok(allowed) => {
+            if allowed {
+                debug!("Rate limit check passed for client: {}", client_id);
+                next.run(req).await
+            } else {
+                warn!("Rate limit exceeded for client: {}", client_id);
+                
+                Response::builder()
+                    .status(StatusCode::TOO_MANY_REQUESTS)
+                    .header("content-type", "application/json")
+                    .header("retry-after", "60")
+                    .body(
+                        serde_json::json!({
+                            "error": "too_many_requests",
+                            "message": "Rate limit exceeded. Please try again later.",
+                            "retry_after": 60
+                        })
+                        .to_string()
+                        .into(),
+                    )
+                    .unwrap()
+            }
+        }
+        Err(e) => {
+            error!("Rate limit check failed for client {}: {}", client_id, e);
+            // On error, allow the request through but log the issue
+            next.run(req).await
+        }
+    }
+}
+
+/// Rate limiting middleware with configurable limiter
+pub fn rate_limiting_middleware_with_limiter(
+    limiter: Arc<RateLimiter>,
+) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>> + Clone {
+    move |req: Request, next: Next| {
+        let limiter = limiter.clone();
+        Box::pin(async move {
+            let client_id = get_client_identifier(&req);
+
+            match limiter.check_rate_limit(&client_id).await {
+                Ok(allowed) => {
+                    if allowed {
+                        debug!("Rate limit check passed for client: {}", client_id);
+                        next.run(req).await
+                    } else {
+                        warn!("Rate limit exceeded for client: {}", client_id);
+                        
+                        Response::builder()
+                            .status(StatusCode::TOO_MANY_REQUESTS)
+                            .header("content-type", "application/json")
+                            .header("retry-after", "60")
+                            .body(
+                                serde_json::json!({
+                                    "error": "too_many_requests",
+                                    "message": "Rate limit exceeded. Please try again later.",
+                                    "retry_after": 60
+                                })
+                                .to_string()
+                                .into(),
+                            )
+                            .unwrap()
+                    }
+                }
+                Err(e) => {
+                    error!("Rate limit check failed for client {}: {}", client_id, e);
+                    next.run(req).await
+                }
+            }
+        })
+    }
+}
+
+/// Extract client identifier for rate limiting
+fn get_client_identifier(req: &Request) -> String {
+    // Priority order: API key, user session, forwarded IP, real IP
+    
+    // 1. Check for API key in headers
+    if let Some(api_key) = req.headers().get("x-api-key").and_then(|v| v.to_str().ok()) {
+        return format!("api:{}", api_key);
+    }
+
+    // 2. Check for authenticated user session
+    if let Some(session_id) = req.headers().get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|auth| auth.strip_prefix("Bearer "))
+    {
+        return format!("session:{}", session_id);
+    }
+
+    // 3. Fall back to IP-based identification
+    let ip = req
         .headers()
         .get("x-forwarded-for")
-        .or_else(|| req.headers().get("x-real-ip"))
         .and_then(|v| v.to_str().ok())
+        .and_then(|forwarded| forwarded.split(',').next())
+        .or_else(|| req.headers().get("x-real-ip").and_then(|v| v.to_str().ok()))
         .unwrap_or("unknown");
 
-    // TODO: Implement actual rate limiting logic with Redis or in-memory store
-    // For now, just log and continue
-    debug!("Rate limit check for client: {}", client_id);
+    format!("ip:{}", ip.trim())
+}
 
-    // In a real implementation, you would:
-    // 1. Check current request count for client
-    // 2. If over limit, return 429 Too Many Requests
-    // 3. Otherwise, increment counter and continue
+#[cfg(test)]
+mod rate_limit_tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
-    next.run(req).await
+    #[tokio::test]
+    async fn test_memory_rate_limiter_basic() {
+        let config = RateLimitConfig {
+            max_requests: 5,
+            window_seconds: 1,
+            key_prefix: "test".to_string(),
+        };
+        let limiter = RateLimiter::new_memory_only(config);
+
+        // First 5 requests should be allowed
+        for _ in 0..5 {
+            assert!(limiter.check_rate_limit("client1").await.unwrap());
+        }
+
+        // 6th request should be denied
+        assert!(!limiter.check_rate_limit("client1").await.unwrap());
+
+        // Different client should still be allowed
+        assert!(limiter.check_rate_limit("client2").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_memory_rate_limiter_window_reset() {
+        let config = RateLimitConfig {
+            max_requests: 2,
+            window_seconds: 1,
+            key_prefix: "test".to_string(),
+        };
+        let limiter = RateLimiter::new_memory_only(config);
+
+        // Use up the limit
+        assert!(limiter.check_rate_limit("client1").await.unwrap());
+        assert!(limiter.check_rate_limit("client1").await.unwrap());
+        assert!(!limiter.check_rate_limit("client1").await.unwrap());
+
+        // Wait for window to reset
+        sleep(Duration::from_secs(2)).await;
+
+        // Should be allowed again
+        assert!(limiter.check_rate_limit("client1").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_usage_tracking() {
+        let config = RateLimitConfig {
+            max_requests: 10,
+            window_seconds: 60,
+            key_prefix: "test".to_string(),
+        };
+        let limiter = RateLimiter::new_memory_only(config);
+
+        // Make some requests
+        for _ in 0..3 {
+            limiter.check_rate_limit("client1").await.unwrap();
+        }
+
+        // Check usage
+        let usage = limiter.get_usage("client1").await.unwrap();
+        assert_eq!(usage, 3);
+
+        // Different client should have 0 usage
+        let usage = limiter.get_usage("client2").await.unwrap();
+        assert_eq!(usage, 0);
+    }
+
+    #[test]
+    fn test_get_client_identifier() {
+        use axum::{body::Body, http::Request};
+
+        // Test API key identification
+        let req = Request::builder()
+            .header("x-api-key", "test-api-key")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(get_client_identifier(&req), "api:test-api-key");
+
+        // Test bearer token identification
+        let req = Request::builder()
+            .header("authorization", "Bearer test-session-token")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(get_client_identifier(&req), "session:test-session-token");
+
+        // Test IP identification
+        let req = Request::builder()
+            .header("x-forwarded-for", "192.168.1.1, 10.0.0.1")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(get_client_identifier(&req), "ip:192.168.1.1");
+
+        // Test real IP fallback
+        let req = Request::builder()
+            .header("x-real-ip", "203.0.113.1")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(get_client_identifier(&req), "ip:203.0.113.1");
+
+        // Test unknown fallback
+        let req = Request::builder().body(Body::empty()).unwrap();
+        assert_eq!(get_client_identifier(&req), "ip:unknown");
+    }
 }
 
 /// Helper function to sanitize paths for metrics labels
