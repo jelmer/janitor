@@ -74,6 +74,234 @@ fn validation_errors_to_api_error(errors: ValidationErrors) -> ApiError {
         .with_details(serde_json::Value::Object(error_details))
 }
 
+/// Validated path parameter extractor for security hardening
+#[derive(Debug)]
+pub struct ValidatedPath<T>(pub T);
+
+impl<T> std::ops::Deref for ValidatedPath<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for ValidatedPath<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Secure validated run ID path parameter
+#[derive(Debug)]
+pub struct ValidatedRunId(pub String);
+
+impl std::ops::Deref for ValidatedRunId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedRunId
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(run_id) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing run ID".to_string()))?;
+
+        ValidationHelper::validate_run_id(&run_id)
+            .map_err(|e| ApiError::bad_request(format!("Invalid run ID: {}", e)))?;
+
+        Ok(ValidatedRunId(run_id))
+    }
+}
+
+/// Secure validated codebase name path parameter
+#[derive(Debug)]
+pub struct ValidatedCodebase(pub String);
+
+impl std::ops::Deref for ValidatedCodebase {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedCodebase
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(codebase) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing codebase name".to_string()))?;
+
+        ValidationHelper::validate_codebase_name(&codebase)
+            .map_err(|e| ApiError::bad_request(format!("Invalid codebase name: {}", e)))?;
+
+        Ok(ValidatedCodebase(codebase))
+    }
+}
+
+/// Secure validated campaign name path parameter
+#[derive(Debug)]
+pub struct ValidatedCampaign(pub String);
+
+impl std::ops::Deref for ValidatedCampaign {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedCampaign
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(campaign) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing campaign name".to_string()))?;
+
+        ValidationHelper::validate_campaign_name(&campaign)
+            .map_err(|e| ApiError::bad_request(format!("Invalid campaign name: {}", e)))?;
+
+        Ok(ValidatedCampaign(campaign))
+    }
+}
+
+/// Secure validated filename path parameter
+#[derive(Debug)]
+pub struct ValidatedFilename(pub String);
+
+impl std::ops::Deref for ValidatedFilename {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedFilename
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(filename) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing filename".to_string()))?;
+
+        ValidationHelper::validate_filename(&filename)
+            .map_err(|e| ApiError::bad_request(format!("Invalid filename: {}", e)))?;
+
+        Ok(ValidatedFilename(filename))
+    }
+}
+
+/// Secure validated user ID path parameter
+#[derive(Debug)]
+pub struct ValidatedUserId(pub String);
+
+impl std::ops::Deref for ValidatedUserId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedUserId
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(user_id) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing user ID".to_string()))?;
+
+        ValidationHelper::validate_user_id(&user_id)
+            .map_err(|e| ApiError::bad_request(format!("Invalid user ID: {}", e)))?;
+
+        Ok(ValidatedUserId(user_id))
+    }
+}
+
+/// Secure validated session ID path parameter
+#[derive(Debug)]
+pub struct ValidatedSessionId(pub String);
+
+impl std::ops::Deref for ValidatedSessionId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedSessionId
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(session_id) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing session ID".to_string()))?;
+
+        ValidationHelper::validate_session_id(&session_id)
+            .map_err(|e| ApiError::bad_request(format!("Invalid session ID: {}", e)))?;
+
+        Ok(ValidatedSessionId(session_id))
+    }
+}
+
+/// Secure validated worker ID path parameter
+#[derive(Debug)]
+pub struct ValidatedWorkerId(pub String);
+
+impl std::ops::Deref for ValidatedWorkerId {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<S> FromRequest<S> for ValidatedWorkerId
+where
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let axum::extract::Path(worker_id) = axum::extract::Path::<String>::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("Missing worker ID".to_string()))?;
+
+        ValidationHelper::validate_worker_id(&worker_id)
+            .map_err(|e| ApiError::bad_request(format!("Invalid worker ID: {}", e)))?;
+
+        Ok(ValidatedWorkerId(worker_id))
+    }
+}
+
 /// Validation helper for common patterns
 pub struct ValidationHelper;
 
@@ -249,6 +477,139 @@ impl ValidationHelper {
 
         Ok(())
     }
+
+    /// Validate filename format (security-critical to prevent path traversal)
+    pub fn validate_filename(filename: &str) -> Result<(), ApiValidationError> {
+        if filename.is_empty() {
+            return Err(ApiValidationError::MissingField {
+                field: "filename".to_string(),
+            });
+        }
+
+        if filename.len() > 255 {
+            return Err(ApiValidationError::InvalidField {
+                field: "filename".to_string(),
+                reason: "Filename too long (max 255 characters)".to_string(),
+            });
+        }
+
+        // Security check: prevent path traversal attacks
+        if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+            return Err(ApiValidationError::InvalidField {
+                field: "filename".to_string(),
+                reason: "Filename contains unsafe path characters".to_string(),
+            });
+        }
+
+        // Check for control characters and other unsafe characters
+        if filename.chars().any(|c| c.is_control() || c == '\0') {
+            return Err(ApiValidationError::InvalidField {
+                field: "filename".to_string(),
+                reason: "Filename contains control characters".to_string(),
+            });
+        }
+
+        // Basic filename validation (alphanumeric, dash, underscore, dot)
+        if !filename
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(ApiValidationError::InvalidField {
+                field: "filename".to_string(),
+                reason: "Filename contains invalid characters".to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validate user ID format (UUID or alphanumeric string)
+    pub fn validate_user_id(user_id: &str) -> Result<(), ApiValidationError> {
+        if user_id.is_empty() {
+            return Err(ApiValidationError::MissingField {
+                field: "user_id".to_string(),
+            });
+        }
+
+        if user_id.len() < 3 || user_id.len() > 64 {
+            return Err(ApiValidationError::InvalidField {
+                field: "user_id".to_string(),
+                reason: "Invalid user ID format".to_string(),
+            });
+        }
+
+        // Allow alphanumeric, dash, underscore
+        if !user_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(ApiValidationError::InvalidField {
+                field: "user_id".to_string(),
+                reason: "User ID contains invalid characters".to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validate session ID format
+    pub fn validate_session_id(session_id: &str) -> Result<(), ApiValidationError> {
+        if session_id.is_empty() {
+            return Err(ApiValidationError::MissingField {
+                field: "session_id".to_string(),
+            });
+        }
+
+        // Session IDs should be long enough to be secure
+        if session_id.len() < 16 || session_id.len() > 128 {
+            return Err(ApiValidationError::InvalidField {
+                field: "session_id".to_string(),
+                reason: "Invalid session ID format".to_string(),
+            });
+        }
+
+        // Allow alphanumeric, dash, underscore
+        if !session_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(ApiValidationError::InvalidField {
+                field: "session_id".to_string(),
+                reason: "Session ID contains invalid characters".to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Validate worker ID format
+    pub fn validate_worker_id(worker_id: &str) -> Result<(), ApiValidationError> {
+        if worker_id.is_empty() {
+            return Err(ApiValidationError::MissingField {
+                field: "worker_id".to_string(),
+            });
+        }
+
+        if worker_id.len() < 3 || worker_id.len() > 64 {
+            return Err(ApiValidationError::InvalidField {
+                field: "worker_id".to_string(),
+                reason: "Invalid worker ID format".to_string(),
+            });
+        }
+
+        // Allow alphanumeric, dash, underscore, dot (for hostnames)
+        if !worker_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(ApiValidationError::InvalidField {
+                field: "worker_id".to_string(),
+                reason: "Worker ID contains invalid characters".to_string(),
+            });
+        }
+
+        Ok(())
+    }
 }
 
 /// Custom validator functions for use with the validator crate
@@ -283,6 +644,30 @@ pub mod validators {
     pub fn validate_duration_seconds(duration: i32) -> Result<(), ValidationError> {
         super::ValidationHelper::validate_duration_seconds(duration)
             .map_err(|_| ValidationError::new("invalid_duration"))
+    }
+
+    /// Validate filename
+    pub fn validate_filename(filename: &str) -> Result<(), ValidationError> {
+        super::ValidationHelper::validate_filename(filename)
+            .map_err(|_| ValidationError::new("invalid_filename"))
+    }
+
+    /// Validate user ID
+    pub fn validate_user_id(user_id: &str) -> Result<(), ValidationError> {
+        super::ValidationHelper::validate_user_id(user_id)
+            .map_err(|_| ValidationError::new("invalid_user_id"))
+    }
+
+    /// Validate session ID
+    pub fn validate_session_id(session_id: &str) -> Result<(), ValidationError> {
+        super::ValidationHelper::validate_session_id(session_id)
+            .map_err(|_| ValidationError::new("invalid_session_id"))
+    }
+
+    /// Validate worker ID
+    pub fn validate_worker_id(worker_id: &str) -> Result<(), ValidationError> {
+        super::ValidationHelper::validate_worker_id(worker_id)
+            .map_err(|_| ValidationError::new("invalid_worker_id"))
     }
 }
 
@@ -348,5 +733,72 @@ mod tests {
 
         assert_eq!(api_error.error, "bad_request");
         assert!(api_error.details.is_some());
+    }
+
+    #[test]
+    fn test_filename_validation() {
+        // Valid filenames
+        assert!(ValidationHelper::validate_filename("file.txt").is_ok());
+        assert!(ValidationHelper::validate_filename("test-file_v2.log").is_ok());
+        assert!(ValidationHelper::validate_filename("data123.json").is_ok());
+
+        // Invalid filenames - path traversal attempts
+        assert!(ValidationHelper::validate_filename("../config").is_err());
+        assert!(ValidationHelper::validate_filename("..\\windows\\file").is_err());
+        assert!(ValidationHelper::validate_filename("subdir/file.txt").is_err());
+        assert!(ValidationHelper::validate_filename("file\\test.txt").is_err());
+
+        // Invalid filenames - control characters
+        assert!(ValidationHelper::validate_filename("file\x00.txt").is_err());
+        assert!(ValidationHelper::validate_filename("file\n.txt").is_err());
+
+        // Invalid filenames - special characters
+        assert!(ValidationHelper::validate_filename("file@test.txt").is_err());
+        assert!(ValidationHelper::validate_filename("file space.txt").is_err());
+        
+        // Empty filename
+        assert!(ValidationHelper::validate_filename("").is_err());
+    }
+
+    #[test]
+    fn test_user_id_validation() {
+        // Valid user IDs
+        assert!(ValidationHelper::validate_user_id("user123").is_ok());
+        assert!(ValidationHelper::validate_user_id("test-user_1").is_ok());
+        assert!(ValidationHelper::validate_user_id("admin").is_ok());
+
+        // Invalid user IDs
+        assert!(ValidationHelper::validate_user_id("").is_err()); // Empty
+        assert!(ValidationHelper::validate_user_id("ab").is_err()); // Too short
+        assert!(ValidationHelper::validate_user_id("a".repeat(70).as_str()).is_err()); // Too long
+        assert!(ValidationHelper::validate_user_id("user@domain.com").is_err()); // Invalid chars
+        assert!(ValidationHelper::validate_user_id("user space").is_err()); // Space
+    }
+
+    #[test]
+    fn test_session_id_validation() {
+        // Valid session IDs
+        assert!(ValidationHelper::validate_session_id("abc123def456ghi789jkl012").is_ok());
+        assert!(ValidationHelper::validate_session_id("session-id_12345678901234567890").is_ok());
+
+        // Invalid session IDs
+        assert!(ValidationHelper::validate_session_id("").is_err()); // Empty
+        assert!(ValidationHelper::validate_session_id("short").is_err()); // Too short
+        assert!(ValidationHelper::validate_session_id("a".repeat(150).as_str()).is_err()); // Too long
+        assert!(ValidationHelper::validate_session_id("session@id").is_err()); // Invalid chars
+    }
+
+    #[test]
+    fn test_worker_id_validation() {
+        // Valid worker IDs
+        assert!(ValidationHelper::validate_worker_id("worker1").is_ok());
+        assert!(ValidationHelper::validate_worker_id("host-1.example.com").is_ok());
+        assert!(ValidationHelper::validate_worker_id("build_worker_123").is_ok());
+
+        // Invalid worker IDs
+        assert!(ValidationHelper::validate_worker_id("").is_err()); // Empty
+        assert!(ValidationHelper::validate_worker_id("ab").is_err()); // Too short
+        assert!(ValidationHelper::validate_worker_id("a".repeat(70).as_str()).is_err()); // Too long
+        assert!(ValidationHelper::validate_worker_id("worker@host").is_err()); // Invalid chars
     }
 }

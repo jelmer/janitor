@@ -12,3 +12,7 @@ pub mod validation;
 mod tests;
 
 pub use content_negotiation::{negotiate_content_type, ContentType};
+pub use validation::{
+    ValidatedCampaign, ValidatedCodebase, ValidatedFilename, ValidatedJson, ValidatedRunId,
+    ValidatedSessionId, ValidatedUserId, ValidatedWorkerId, ValidationHelper,
+};
