@@ -3,6 +3,7 @@ use tower_http::services::ServeDir;
 
 use crate::{
     app::AppState,
+    auth,
     handlers::{pkg, simple},
     webhook,
 };
@@ -53,6 +54,8 @@ pub fn app_routes() -> Router<AppState> {
         .route("/:suite/pkg/:pkg/:run_id/*filename", get(serve_result_file))
         // Webhooks
         .merge(webhook::create_webhook_routes())
+        // Authentication routes
+        .merge(auth::create_auth_routes())
         // Cupboard admin interface
         .merge(cupboard::cupboard_routes())
         .merge(cupboard::cupboard_api_routes())

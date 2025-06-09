@@ -93,11 +93,16 @@ impl ProposalInfoManager {
     }
 
     /// Delete proposal information for a given URL.
+    /// Now uses tombstone approach - marks as deleted instead of actually deleting.
     pub async fn delete_proposal_info(&self, url: &url::Url) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM merge_proposal WHERE url = $1")
-            .bind(url.to_string())
-            .execute(&self.conn)
-            .await?;
+        // Use tombstone approach - mark as deleted instead of actual deletion
+        // This preserves the record for auditing while indicating it's no longer active
+        sqlx::query(
+            "UPDATE merge_proposal SET status = 'deleted', last_scanned = NOW() WHERE url = $1"
+        )
+        .bind(url.to_string())
+        .execute(&self.conn)
+        .await?;
         Ok(())
     }
 
@@ -129,7 +134,8 @@ impl ProposalInfoManager {
             .await?;
 
         if let Some(old_url) = old_url.as_ref() {
-            sqlx::query("DELETE FROM merge_proposal WHERE url = $1")
+            // Use tombstone approach - mark as redirected instead of deleting
+            sqlx::query("UPDATE merge_proposal SET status = 'redirected', last_scanned = NOW() WHERE url = $1")
                 .bind(old_url)
                 .execute(&self.conn)
                 .await?;

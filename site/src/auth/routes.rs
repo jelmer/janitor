@@ -1,15 +1,18 @@
-use axum::{middleware, routing::get, Router};
+use axum::{middleware, routing::{get, post}, Router};
 use std::sync::Arc;
 
 use crate::auth::{
-    handlers::{admin_handler, protected_handler, qa_handler, status_handler},
+    handlers::{admin_handler, callback_handler, login_handler, logout_handler, protected_handler, qa_handler, status_handler},
     middleware::{require_admin, require_login, AuthState},
 };
 
 /// Create authentication routes (placeholder for full implementation)
 pub fn auth_routes(auth_state: Arc<AuthState>) -> Router<Arc<AuthState>> {
     Router::new()
-        // Public authentication routes - simplified for now
+        // Public authentication routes
+        .route("/login", get(login_handler))
+        .route("/auth/callback", get(callback_handler))
+        .route("/logout", post(logout_handler))
         .route("/status", get(status_handler))
         .route("/protected", get(protected_handler))
         .route("/admin", get(admin_handler))
