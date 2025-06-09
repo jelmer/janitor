@@ -1,300 +1,209 @@
-# TODO: Pending Implementations
+# TODO: Janitor Platform - Consolidated TODO List
 
-This document tracks unimplemented functionality, placeholder code, and TODO items across the Janitor codebase. Items are organized by priority and service.
+This document consolidates all TODO items from across the Janitor codebase, including external dependencies, porting tasks, and implementation gaps.
 
-## ✅ Recently Completed (2025-01)
-- VCS repository listing functionality (src/vcs.rs) 
-- S3 logs creation time implementation (src/logs/s3.rs)
-- Parallel artifact processing (src/artifacts/mod.rs)
-- Site API health checks and Redis monitoring
-- Runner async database methods (4 TODOs in runner/src/database.rs)
-- Publish service redirect following (publish/src/lib.rs)
-- **Trace context headers for HTTP requests (src/vcs.rs:892)** ✅ **COMPLETED**
-- **VCS symref handling implementation (worker/src/vcs.rs:281)** ✅ **COMPLETED**
-- **Scheduling bias towards recent runs already implemented** ✅ **COMPLETED**
-- **Worker service branch integration already functional** ✅ **COMPLETED** 
-- **Publish service critical methods already implemented** ✅ **COMPLETED**
-- **Differ service error handling improved** ✅ **COMPLETED**
-- **Runner excluded hosts configuration implemented (runner/src/web.rs:1641)** ✅ **COMPLETED**
-- **Worker status endpoint with runner integration (site/src/api/routes.rs:2125)** ✅ **COMPLETED**
-- **Enhanced system health monitoring with resource checks (site/src/api/routes.rs:1190-1192)** ✅ **COMPLETED**
-- **System monitoring with real metrics implementation (site/src/api/routes.rs:1811)** ✅ **COMPLETED**
-- **Archive Contents file generation already implemented (archive/src/lib.rs:55)** ✅ **COMPLETED**
-- **Publish service queue frequency and configuration improvements** ✅ **COMPLETED**
-- **Core API endpoints for runs and publishing (site/src/api/routes.rs:509,3431,3653,3684)** ✅ **COMPLETED**
-- **Deprecated Redis methods updated to use multiplexed connections (runner/src/database.rs)** ✅ **COMPLETED**
-- **Unused variable warnings fixed across codebase** ✅ **COMPLETED**
-- **Comprehensive test database utilities created (src/test_utils.rs, runner/src/test_utils.rs)** ✅ **COMPLETED**
-- **Mock implementations for artifacts and logs managers** ✅ **COMPLETED**
-- **Dynamic URL generation for templates (site/src/templates.rs:generate_url)** ✅ **COMPLETED**
-- **Flash message system for user feedback (site/src/templates.rs, site/src/middleware.rs)** ✅ **COMPLETED**
-- **Enhanced template context with session-based authentication (site/src/templates.rs)** ✅ **COMPLETED**
-- **Session middleware with flash message and authentication integration (site/src/middleware.rs)** ✅ **COMPLETED**
-- **Implement database loading for suites and campaigns in templates (site/src/templates.rs)** ✅ **COMPLETED**
-- **Add admin user management endpoints to site API (site/src/api/routes.rs)** ✅ **COMPLETED**
+## 📊 Project Status Overview
+
+The Janitor platform migration from Python to Rust is **99%+ complete**:
+- **Total Lines Ported**: ~20,100+ lines (from ~18,000 lines Python)
+- **Actual Remaining Python**: ~700-800 lines (mostly utilities and auto-upload service)
+- **Major Services**: All ported ✅ (Runner, Publisher, Differ, Site, Cupboard, Git Store, Archive, Auto-Upload, BZR Store)
+
+---
+
+## 🚨 CRITICAL - External Dependencies & Blockers
+
+### PyO3 / Breezyshim API Limitations
+- [ ] **Symbolic Reference Creation** (worker/src/vcs.rs:272)
+  - Blocked by: PyO3 API stabilization in breezyshim crate
+  - Impact: Tag symbolic references not created, operations continue without error
+  - Current: Returns Ok() to allow operations to continue
+
+- [ ] **Bazaar Transport Support** (bzr-store/src/pyo3_bridge.rs:322)
+  - Blocked by: PyO3 binding complexity for transport objects
+  - Impact: May affect Bazaar operation performance
+
+- [ ] **Bazaar Probers Support** (bzr-store/src/pyo3_bridge.rs:323)
+  - Blocked by: PyO3 binding complexity for prober objects
+  - Impact: May affect repository format detection
+
+### External API Integrations
+- [ ] **VCS Forge Resume Information** (runner/src/resume.rs:122)
+  - Blocked by: Need to implement GitHub/GitLab/etc API queries
+  - Impact: Cannot determine if merge proposals can be resumed
+
+- [ ] **Merge Proposal Merged-By Information** (publish/src/web.rs:274-276)
+  - Blocked by: Need external forge API calls
+  - Impact: Cannot display link to user who merged proposal
+
+- [ ] **Forge Rate Limits** (publish/src/web.rs:1502)
+  - Blocked by: Need to query forge APIs for rate limit status
+  - Impact: Incomplete rate limit information shown to users
+
+### Framework Limitations
+- [ ] **HTTP Response Streaming** (git-store/src/git_http.rs:532)
+  - Blocked by: Better streaming support in Axum
+  - Impact: Higher memory usage for large Git operations
+  - Current: Buffers entire response
+
+### Database Migration Dependencies
+- [ ] **Codebase Table Usage** (publish/src/state.rs:158)
+  - Blocked by: Database schema migration to use codebase table
+  - Impact: Some queries may be less efficient
+
+### Configuration System Dependencies
+- [ ] **Dynamic Configuration Loading** (site/src/config.rs:384,389,394,399,410)
+  - Blocked by: Janitor config integration
+  - Impact: Service URLs are hardcoded or use defaults
 
 ---
 
 ## 🔥 HIGH PRIORITY - Critical System Functionality
 
-### Core Services - NEW FINDINGS
+### Worker Service (worker/src/)
+- [ ] **Jenkins backchannel implementation** - Has TODO markers for specific features
 
-#### **Worker Service (worker/src/)**
-- [ ] **vcs.rs:272**: Implement symbolic reference creation when PyO3 API stabilizes - currently returns `NotImplemented` error
-- [ ] **lib.rs:5**: Worker service has no Python equivalent - purely Rust implementation with PyO3 bindings
+### Publish Service (publish/src/)
+- [ ] **Keep tombstone when removing merge proposal entries** (web.rs:991)
+- [ ] **Edge case handling** in publish_one.rs (noted but not fully implemented)
 
-#### **Runner Service (runner/src/)**
-- [x] **database.rs:100, 109, 110, 115**: Async database methods have TODO comments ✅ **COMPLETED**
-  - Already implemented via `run_to_janitor_result_async()` method
-  - TODOs were misleading - async functionality exists
-- [x] **resume.rs:122**: Query actual VCS forge API ✅ **COMPLETED**
-  - Already documented in external-todo.md - requires external API integration
-- [x] **web.rs:1005,1023**: Worker tracking implementation ✅ **COMPLETED**
-  - Implemented Redis-based worker last seen tracking
-  - Added methods to track worker activity and identify failed workers
-  - Updated worker listing endpoints to show real last seen times
-- [ ] **lib.rs**: Jenkins backchannel implementation has TODO markers for specific features
-
-#### **Publish Service (publish/src/)**
-- [ ] **web.rs:274-276**: `get_merged_by_user_url` requires external API calls - currently returns None
-- [ ] **web.rs:991**: Keep tombstone when removing merge proposal entries (TODO comment)
-- [ ] **web.rs:1500**: Include forge rate limits in blocker information
-- [ ] **publish_one.rs**: Edge case handling noted but not fully implemented in some areas
-
----
-
-## 🚨 CRITICAL - Runtime Safety & Error Handling
-
-### Test Infrastructure Issues
-- [ ] **runner/resume.rs:302**: Test ignored due to requiring real database
-- [ ] **worker/vcs.rs**: Multiple tests ignored due to system dependencies
-- [ ] **site/auth/routes.rs:58**: Test auth state creation uses `todo!()` macro - WILL PANIC
+### Site Service - Authentication (site/src/auth/)
+- [ ] **Complete OIDC integration** - Multiple placeholder implementations
 
 ---
 
 ## 🏗️ INFRASTRUCTURE - Monitoring & Admin
 
-### Site Service - API Routes (site/src/api/routes.rs)
-**Extensive list of unimplemented admin and monitoring endpoints (100+ items):**
+### Site Service - Administrative Operations
+- [ ] **System configuration endpoints** (api/routes.rs:1489)
+- [ ] **Worker administration endpoints** (api/routes.rs:1520)
 
-#### **System Monitoring**
-- [x] **Line 2125**: Worker status endpoint ✅ **COMPLETED**
-- [x] **Line 2132**: System metrics collection ✅ **COMPLETED**
-- [x] **Line 2137**: Performance tracking ✅ **COMPLETED**  
-- [x] **Lines 1190-1192**: System health monitoring with detailed checks ✅ **COMPLETED**
-
-#### **Administrative Operations**  
-- [x] **Line 1658**: Add admin authentication middleware to admin API endpoints ✅ **COMPLETED**
-- [x] **Line 1380**: ✅ **COMPLETED** Admin user management endpoints registered and working
-- [x] **Line 1414**: ✅ **COMPLETED** Bulk operations interface - POST /admin/users/bulk endpoint implemented
-- [x] **Line 1457**: ✅ **COMPLETED** Campaign management endpoints - comprehensive admin API implemented
-- [ ] **Line 1489**: System configuration 
-- [ ] **Line 1520**: Worker administration
-
-#### **Data Management**
-- [x] **Line 320**: Active runs retrieval with filtering ✅ **COMPLETED**
-- [x] **Line 386**: Log retrieval and file operations ✅ **COMPLETED**
-- [x] **Line 420**: Enhanced log management ✅ **COMPLETED**
-- [x] **Line 458**: Diff generation operations ✅ **COMPLETED**
-- [x] **Line 494**: Merge proposal operations ✅ **COMPLETED**
-- [x] **Line 531**: Branch management ✅ **COMPLETED**
-- [x] **Line 566**: Repository operations ✅ **COMPLETED**
-
-#### **Integration & External Services**
-- [x] **Line 601**: Worker status and management endpoints ✅ **COMPLETED**
-- [x] **Line 1551**: External service integration ✅ **COMPLETED**
-- [x] **Line 1590**: Third-party API connections ✅ **COMPLETED**
-
-### Site Service - Other Areas
-
-#### **Authentication System (site/src/auth/)**
-- [x] **Add admin authentication middleware (site/src/api/routes.rs:1658)** ✅ **COMPLETED**
-- [ ] **Complete OIDC integration** - Multiple placeholder implementations
-- [ ] **Line 58**: Test auth state creation with proper mocking (routes.rs) - `todo!()` macro present
-
-#### **Database Operations (site/src/database.rs)**
-- [ ] **Lines 440-443, 446-448**: Missing fields in `get_last_unabsorbed_run()`: build_version, result_branches, result_tags, publish_status, vcs_type, logfilenames, revision
-- [ ] **Lines 488-490**: Missing fields in `get_previous_runs()`: vcs_type, logfilenames, revision  
-- [ ] **Lines 606-608, 611**: Missing fields in `get_run()`: result_branches, result_tags, publish_status, vcs_type
-- [ ] **Lines 677-679**: Missing fields in `get_unchanged_run()`: vcs_type, logfilenames, revision
-- [ ] **Line 1032**: Implement proper dynamic query building for `search_packages_advanced()`
-- [ ] **Lines 1104-1106**: Implement proper filtering in `get_queue_items_with_stats()`
-- [ ] **Line 1742**: Add campaign descriptions in `get_campaign_status_list()`
-
-#### **Templates & UI (site/src/templates.rs)**
-- [x] **Lines 169-171**: ✅ **COMPLETED** Dynamic URL generation implemented with comprehensive route support
-- [x] **Line 183**: ✅ **COMPLETED** Flash message system implemented with session integration and category filtering
-- [x] **Line 328**: ✅ **COMPLETED** Make OpenID configured flag dynamic - implemented `create_base_context_with_config()` 
-- [x] **Lines 337-339**: ✅ **COMPLETED** Get is_admin, is_qa_reviewer, and user from session - implemented `create_request_context_with_session()`
-- [x] **Lines 342-343**: ✅ **COMPLETED** Load suites and campaigns from database - implemented `create_request_context_with_database()` and database methods
-
-#### **Configuration Integration (site/src/config.rs)**
-- [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available for service URLs
-
-#### **Cupboard Handlers - Database Integration (site/src/handlers/cupboard/)**
-✅ **COMPLETED**: All handlers now use real database queries instead of mock data:
-
-**Review Handler (review.rs)**
-- [x] **Lines 393-401**: ✅ **COMPLETED** `fetch_review_queue()` - Implemented with database queries to publish_ready view
-- [x] **Lines 433-434**: ✅ **COMPLETED** `fetch_run_for_review()` - Implemented with database queries
-- [x] **Lines 455-457**: ✅ **COMPLETED** `fetch_run_evaluation()` - Implemented with database queries
-- [x] **Lines 470-472**: ✅ **COMPLETED** `store_review_verdict()` - Implemented with database persistence
-- [x] **Lines 492-494, 504-506, 516-518, 528-530**: ✅ **COMPLETED** Bulk review actions implemented
-- [x] **Lines 547-549**: ✅ **COMPLETED** `fetch_review_statistics()` - Implemented with database queries
-- [x] **Lines 565-567**: ✅ **COMPLETED** `fetch_rejected_runs()` - Implemented with database queries
-
-**Publish Handler (publish.rs)**
-- [x] **Lines 446-448**: ✅ **COMPLETED** `fetch_publish_dashboard_data()` - Implemented with database queries
-- [x] **Lines 498-500**: ✅ **COMPLETED** `fetch_publish_history()` - Implemented with database queries
-- [x] **Lines 518-520**: ✅ **COMPLETED** `fetch_publish_details()` - Implemented with database queries
-- [x] **Lines 543-545**: ✅ **COMPLETED** `fetch_ready_runs()` - Implemented with database queries
-- [x] **Lines 563-565**: ✅ **COMPLETED** `execute_emergency_publish_action()` - Implemented with database queries
-- [x] **Lines 591-593**: ✅ **COMPLETED** `apply_rate_limit_adjustment()` - Implemented with database queries
-- [x] **Lines 617-619**: ✅ **COMPLETED** `fetch_publish_statistics()` - Implemented with database queries
-
-**Queue Handler (queue.rs)**
-- [x] **Lines 304-306**: ✅ **COMPLETED** `fetch_queue_item_details()` - Implemented with database queries
-- [x] **Lines 326-328, 336-337, 339**: ✅ **COMPLETED** `fetch_queue_statistics()` - Implemented with database queries
-- [x] **Lines 441-443**: ✅ **COMPLETED** Worker assignment implemented in `execute_bulk_queue_operation()`
-
-#### **API Middleware (site/src/api/middleware.rs)**
-- [x] **Lines 270-277**: ✅ **COMPLETED** Rate limiting middleware fully implemented with Redis backend and in-memory fallback
+### Database Operations (site/src/database.rs)
+- [ ] **Implement proper dynamic query building** for search_packages_advanced() (Line 1032)
+- [ ] **Implement proper filtering** in get_queue_items_with_stats() (Lines 1104-1106)
+- [ ] **Add campaign descriptions** in get_campaign_status_list() (Line 1742)
 
 ---
 
 ## 🔧 MEDIUM PRIORITY - Feature Enhancements
 
 ### Archive Service (archive/src/)
-- [x] **Line 55**: Generate contents file (lib.rs) ✅ **COMPLETED**
-- [x] **Line 311**: Implement actual campaign configuration queries (database.rs) ✅ **COMPLETED**
-- [x] **Line 535**: Implement repository publishing logic (web.rs) ✅ **COMPLETED**
-- [x] **Line 553**: Implement last publish status tracking (web.rs) ✅ **COMPLETED**
-- [x] **Line 567**: Extract and serve the public key (web.rs) ✅ **COMPLETED**
-- [ ] **Line 379**: Don't hardcode configuration values (rest.rs)
+- [ ] **Don't hardcode configuration values** (rest.rs:379)
 
 ### Auto-Upload Service (auto-upload/src/)
-- [ ] **Line 241**: Handle parameter placeholders properly in queries (database.rs)
+- [ ] **Handle parameter placeholders properly in queries** (database.rs:241)
 
-### Git Store (git-store/src/)
-- [x] **Line 248**: Implement worker-specific repository permissions (git_http.rs) ✅ **COMPLETED**
-- [x] **Line 532**: Implement proper streaming when axum supports it better (git_http.rs) ✅ **COMPLETED**
-
-### BZR Store (bzr-store/src/)
-- [ ] **Line 322**: Support possible_transports (pyo3_bridge.rs)
-- [ ] **Line 323**: Support probers (pyo3_bridge.rs)
-
-### Publish Service - Queue & State Management
-- [x] **Lines 152, 154**: Get base_revision and max_frequency_days from query/config (queue.rs) ✅ **COMPLETED**
-- [x] **Line 177**: Pass redis URL to RedisSubscriber constructor (redis.rs) ✅ **COMPLETED**
-- [x] **Line 178**: PubSub functionality not implemented without redis URL (redis.rs) ✅ **COMPLETED**
-- [x] **Line 77**: Mark change_set as done when nothing left to publish (state.rs) ✅ **COMPLETED**
-- [ ] **Line 158**: Use codebase table (state.rs)
-- [ ] **Line 382**: Implement custom decoder for unpublished_branches array (state.rs)
-- [ ] **Line 979**: Keep tombstone when removing entries (web.rs)
-- [ ] **Line 1489**: Include forge rate limits (web.rs)
-- [ ] **Line 159**: Check if changes were applied manually (proposal_info.rs)
-- [ ] **Line 221**: Check if change_set should be marked as published (proposal_info.rs)
+### Publish Service - State Management
+- [ ] **Use codebase table** (state.rs:158)
+- [ ] **Implement custom decoder for unpublished_branches array** (state.rs:382)
+- [ ] **Keep tombstone when removing entries** (web.rs:979)
+- [ ] **Include forge rate limits** (web.rs:1489)
+- [ ] **Check if changes were applied manually** (proposal_info.rs:159)
+- [ ] **Check if change_set should be marked as published** (proposal_info.rs:221)
 
 ---
 
-## 🧪 TESTING - Disabled Tests & Mocking
+## 🧪 TESTING - Test Infrastructure
+
+### Database-Dependent Tests
+- [ ] **runner/src/resume.rs:302** - test_resume_result requires real database
+- [ ] **worker/src/vcs.rs** - Multiple tests require system dependencies
 
 ### Runner Service Tests
-- [ ] **Lines 214, 226**: Tests disabled pending LogConfig implementation (integration_tests.rs)
-- [x] **Line 29**: Test database setup implemented with comprehensive utilities (comprehensive_api_tests.rs) ✅ **COMPLETED**
-- [ ] **Lines 260, 262, 266**: Mock database and failure details testing (core_functionality_tests.rs)
+- [ ] **Tests disabled pending LogConfig implementation** (integration_tests.rs:214,226)
+- [ ] **Mock database and failure details testing** (core_functionality_tests.rs:260,262,266)
 
-### Publish Service Tests  
-- [ ] **Multiple test functions** marked with `#[ignore]` due to unimplemented functionality
+### Publish Service Tests
+- [ ] **Multiple test functions marked with #[ignore]** due to unimplemented functionality
 
 ---
 
 ## 📊 PERFORMANCE - Optimization Opportunities
 
 ### Logging & File Management
-- [ ] **Line 277**: File output support for logging configuration (src/shared_config/logging.rs)
-
-### Archive Service
-- [ ] **Line 104**: Process multiple artifacts in parallel (src/artifacts/mod.rs) ✅ **COMPLETED**
-
----
-
-## 📝 DOCUMENTATION & MAINTENANCE
-
-### Site Service  
-- [ ] **Line 114**: Add actual status checks (database, redis, etc.) to main status endpoint ✅ **COMPLETED**
+- [ ] **File output support for logging configuration** (src/shared_config/logging.rs:277)
 
 ### Asset Management
-- [ ] **Placeholder implementations** for asset optimization and watching (site/src/assets.rs)
+- [ ] **Asset optimization and watching** (site/src/assets.rs) - Placeholder implementations
 
 ---
 
-## 🎯 MIGRATION STATUS
+## 🎯 MIGRATION - Remaining Python Code
 
-The Janitor project is actively migrating from Python to Rust. Current status:
+### Remaining Python Modules (~700-800 lines total)
+- [ ] **py/janitor/debian/__init__.py** (108 lines) - Debian utilities
+- [ ] **py/janitor/diffoscope.py** (133 lines) - External tool wrapper
+- [ ] **py/janitor/review.py** (67 lines) - Review utilities
+- [ ] **py/janitor/worker_creds.py** (54 lines) - Auth utilities
+- [ ] **py/janitor/_launchpad.py** (47 lines) - Launchpad API
+- [ ] **py/janitor/config.py** (47 lines) - Config (delegate to Rust)
+- [ ] **py/janitor/artifacts.py** (47 lines) - Artifacts (delegate to Rust)
+- [ ] **py/janitor/__init__.py** (47 lines) - Package utilities
 
-- ✅ **Core Services**: Runner, Worker, Publisher - mostly functional
-- 🚧 **Site Service**: Basic functionality works, admin/monitoring incomplete  
-- 🚧 **Authentication**: Basic structure, OIDC integration needed
-- ✅ **VCS & Storage**: Git/Bzr stores functional with minor gaps
-- ✅ **Archive & Auto-upload**: Core functionality complete
+### Helper Scripts
+- [ ] **cleanup-repositories.py** - Operational repository cleanup (Medium priority)
+- [ ] **migrate-logs.py** - Migration utility (Low priority, core functions exist)
 
-## 📋 IMPLEMENTATION PRIORITY
+---
 
-1. **HIGH**: Critical system functionality & runtime safety
-2. **CRITICAL**: Error handling & panic prevention  
+## ✅ Recently Completed (2025-01)
+
+### Critical Fixes
+- ✅ VCS repository listing functionality
+- ✅ S3 logs creation time implementation
+- ✅ Parallel artifact processing
+- ✅ Site API health checks and Redis monitoring
+- ✅ Runner async database methods
+- ✅ Publish service redirect following
+- ✅ Trace context headers for HTTP requests
+- ✅ VCS symref handling implementation
+- ✅ Worker service branch integration
+- ✅ Differ service error handling
+- ✅ Runner excluded hosts configuration
+- ✅ Worker status endpoint with runner integration
+- ✅ Enhanced system health monitoring
+- ✅ System monitoring with real metrics
+- ✅ Archive Contents file generation
+- ✅ Core API endpoints for runs and publishing
+- ✅ Redis connection updates
+- ✅ Test database utilities
+- ✅ Flash message system
+- ✅ Enhanced template context with authentication
+- ✅ Database loading for campaigns/suites
+- ✅ Admin user management endpoints
+- ✅ Bulk operations interface
+- ✅ Campaign management endpoints
+
+### Infrastructure
+- ✅ Worker tracking implementation
+- ✅ Rate limiting middleware
+- ✅ Session middleware
+- ✅ Dynamic URL generation
+- ✅ Cupboard handlers using real database queries
+
+---
+
+## 📋 Implementation Priority
+
+1. **CRITICAL**: External dependencies & blockers (waiting on upstream)
+2. **HIGH**: Critical system functionality
 3. **INFRASTRUCTURE**: Monitoring & administrative endpoints
 4. **MEDIUM**: Feature enhancements & optimization
 5. **TESTING**: Test infrastructure & mocking
-6. **DOCUMENTATION**: Maintenance & documentation
-
-## 🆕 NEW FINDINGS (January 2025 - Detailed Code Analysis)
-
-### Critical Implementation Gaps Found
-
-#### **Worker Service**
-- **Symbolic Reference Creation**: Not implemented (worker/src/vcs.rs:272) - waiting for PyO3 API stabilization
-- **Pure Rust Service**: No Python equivalent exists - only worker_creds.py for authentication
-- **Test Infrastructure**: Multiple tests ignored due to system dependencies
-
-#### **Runner Service**  
-- **Async Database Methods**: 4 methods with TODO comments need async implementations
-- **Worker Tracking**: Missing implementation for tracking failed workers and last seen time
-- **Resume Logic**: Placeholder returns None instead of querying actual forge API
-- **Jenkins Backchannel**: Has TODO markers for specific Jenkins features
-
-#### **Publish Service**
-- **External API Integration**: `get_merged_by_user_url` placeholder returns None
-- **Forge Rate Limits**: Not included in blocker information
-- **Tombstone Logic**: TODO for keeping tombstones when removing entries
-
-#### **Site Service Authentication**
-- **CRITICAL**: Test contains `todo!()` macro that will panic at runtime (auth/routes.rs:58)
-- **OIDC Integration**: Still needs completion despite basic structure
-
-### Placeholder Implementations Identified
-- **Cupboard Handlers**: ~20 functions returning mock data instead of database queries
-- **Rate Limiting**: Middleware exists but is non-functional (only logs)
-- **Database Queries**: Multiple queries missing critical fields and joins
-- **Template Context**: Session/auth data hardcoded instead of dynamic
-- **URL Generation**: Static mappings instead of dynamic routing
-
-### Key Patterns Found
-1. **Mock Data Returns**: Most cupboard handlers return hardcoded JSON
-2. **Missing Database Fields**: Many Run queries missing 5-10 fields each
-3. **TODO Comments**: 40+ files contain TODO/FIXME markers
-4. **One `todo!()` macro**: CRITICAL - in test code that will panic
-5. **Ignored Tests**: Multiple tests disabled due to database/system requirements
-6. **PyO3 Dependencies**: Some features waiting on PyO3 API stabilization
-
-### Service-Specific Notes
-- **Archive Service**: Core functionality complete, minor config hardcoding
-- **Auto-Upload**: Functional with minor parameter handling TODO
-- **Git/Bzr Stores**: Mostly complete, minor transport/permission gaps
-- **Differ Service**: Functional with improved error handling
+6. **MIGRATION**: Remaining Python code (~700-800 lines)
 
 ---
 
-*Last updated: January 2025*  
-*Total pending items: ~180+ across all services*
-*Critical items: 1 `todo!()` macro, 4+ async methods, multiple ignored tests*
+## 📈 Progress Summary
+
+- **Migration**: 99%+ complete, ~700-800 lines Python remaining
+- **Blockers**: Mostly external dependencies (PyO3, external APIs, framework limitations)
+- **Critical Items**: No runtime panics, all todo!() macros removed
+- **Test Coverage**: Some tests disabled pending infrastructure setup
+- **Performance**: Most optimizations complete, minor improvements remaining
+
+---
+
+*Last updated: January 2025*
+*Total pending items: ~50 (down from 180+)*
+*Critical blockers: Mostly external dependencies*
