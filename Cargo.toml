@@ -8,6 +8,7 @@ license = "GPL-3.0+"
 repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 build = "build.rs"
+include = ["src/**/*", "py/janitor/state.sql", "py/janitor/debian/debian.sql", "README.md"]
 
 [dependencies]
 breezyshim = { workspace = true }
@@ -101,3 +102,4 @@ default = ["gcp", "gcs", "debian"]
 debian = ["dep:debversion"]
 gcp = ["stackdriver_logger", "gcs"]
 gcs = ["dep:google-cloud-storage", "dep:google-cloud-auth"]
+testing = ["sqlx/postgres", "sqlx/runtime-tokio-rustls"]
