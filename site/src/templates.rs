@@ -9,6 +9,7 @@ use url::Url;
 use crate::{
     auth::types::{SessionInfo, User, UserRole},
     config::SiteConfig,
+    database::DatabaseManager,
 };
 
 pub mod helpers;
@@ -628,6 +629,83 @@ pub fn create_request_context_with_session(
     context
 }
 
+pub async fn create_request_context_with_database(
+    base: Context,
+    _request_path: &str,
+    flash_messages: Option<Vec<FlashMessage>>,
+    session_info: Option<&SessionInfo>,
+    admin_group: Option<&str>,
+    qa_reviewer_group: Option<&str>,
+    database: Option<&DatabaseManager>,
+) -> Context {
+    let mut context = base;
+
+    // Add session-based user information
+    if let Some(session) = session_info {
+        let user = &session.user;
+        
+        // User role information
+        context.insert("is_admin", &user.has_role(UserRole::Admin, admin_group, qa_reviewer_group));
+        context.insert("is_qa_reviewer", &user.has_role(UserRole::QaReviewer, admin_group, qa_reviewer_group));
+        
+        // User information
+        let user_display_name = user.name.as_ref()
+            .or(user.preferred_username.as_ref())
+            .unwrap_or(&user.email);
+        context.insert("user", &Some(user_display_name));
+        context.insert("user_email", &user.email);
+        
+        // Add user object for templates that need more details
+        context.insert("user_info", &user);
+    } else {
+        // No session - anonymous user
+        context.insert("is_admin", &false);
+        context.insert("is_qa_reviewer", &false);
+        context.insert("user", &Option::<String>::None);
+        context.insert("user_email", &Option::<String>::None);
+    }
+
+    // Load campaigns and suites from database if available
+    if let Some(db) = database {
+        match db.get_campaigns_and_suites().await {
+            Ok((campaigns, suites)) => {
+                context.insert("campaigns", &campaigns);
+                context.insert("suites", &suites);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load campaigns and suites from database: {}", e);
+                // Fallback to empty arrays
+                context.insert("campaigns", &Vec::<String>::new());
+                context.insert("suites", &Vec::<String>::new());
+            }
+        }
+    } else {
+        // No database - use empty arrays
+        context.insert("campaigns", &Vec::<String>::new());
+        context.insert("suites", &Vec::<String>::new());
+    }
+
+    // Add flash messages if provided
+    if let Some(messages) = flash_messages {
+        let messages_json: Vec<TeraValue> = messages
+            .into_iter()
+            .map(|msg| {
+                let mut map = tera::Map::new();
+                map.insert("category".to_string(), TeraValue::String(msg.category.as_str().to_string()));
+                map.insert("message".to_string(), TeraValue::String(msg.message));
+                map.insert("timestamp".to_string(), TeraValue::String(msg.timestamp.to_rfc3339()));
+                map.insert("dismissible".to_string(), TeraValue::Bool(msg.dismissible));
+                TeraValue::Object(map)
+            })
+            .collect();
+        context.insert("_flash_messages", &messages_json);
+    } else {
+        context.insert("_flash_messages", &Vec::<TeraValue>::new());
+    }
+
+    context
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -957,5 +1035,29 @@ mod tests {
         let config_no_oidc = SiteConfig::default();
         let context_no_oidc = create_base_context_with_config(&config_no_oidc);
         assert_eq!(context_no_oidc.get("openid_configured").unwrap().as_bool().unwrap(), false);
+    }
+
+    #[tokio::test]
+    async fn test_create_request_context_with_database_no_db() {
+        let base_context = create_base_context();
+        
+        let context = create_request_context_with_database(
+            base_context,
+            "/test",
+            None,
+            None, // No session
+            None, // No admin group
+            None, // No QA group
+            None, // No database
+        ).await;
+        
+        // Should use empty arrays when no database is provided
+        assert_eq!(context.get("campaigns").unwrap().as_array().unwrap().len(), 0);
+        assert_eq!(context.get("suites").unwrap().as_array().unwrap().len(), 0);
+        
+        // Should still have anonymous user setup
+        assert_eq!(context.get("is_admin").unwrap().as_bool().unwrap(), false);
+        assert_eq!(context.get("is_qa_reviewer").unwrap().as_bool().unwrap(), false);
+        assert!(context.get("user").unwrap().is_null());
     }
 }

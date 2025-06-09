@@ -2275,6 +2275,55 @@ impl DatabaseManager {
 
         Ok(result.rows_affected() > 0)
     }
+
+    /// Get list of available campaigns from the database
+    pub async fn get_campaigns(&self) -> Result<Vec<String>, DatabaseError> {
+        let query = r#"
+            SELECT name FROM campaigns ORDER BY name
+        "#;
+
+        let rows = sqlx::query(query)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let campaigns: Vec<String> = rows
+            .into_iter()
+            .map(|row| row.try_get("name"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(campaigns)
+    }
+
+    /// Get list of available suites from the database  
+    pub async fn get_suites(&self) -> Result<Vec<String>, DatabaseError> {
+        let query = r#"
+            SELECT DISTINCT suite as name FROM run 
+            WHERE suite IS NOT NULL 
+            ORDER BY suite
+        "#;
+
+        let rows = sqlx::query(query)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let suites: Vec<String> = rows
+            .into_iter()
+            .map(|row| row.try_get("name"))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(suites)
+    }
+
+    /// Get both campaigns and suites for template context
+    pub async fn get_campaigns_and_suites(&self) -> Result<(Vec<String>, Vec<String>), DatabaseError> {
+        // Run both queries concurrently
+        let (campaigns_result, suites_result) = tokio::try_join!(
+            self.get_campaigns(),
+            self.get_suites()
+        )?;
+
+        Ok((campaigns_result, suites_result))
+    }
 }
 
 // Additional types for database results
