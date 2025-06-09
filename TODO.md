@@ -28,6 +28,8 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **Mock implementations for artifacts and logs managers** ✅ **COMPLETED**
 - **Dynamic URL generation for templates (site/src/templates.rs:generate_url)** ✅ **COMPLETED**
 - **Flash message system for user feedback (site/src/templates.rs, site/src/middleware.rs)** ✅ **COMPLETED**
+- **Enhanced template context with session-based authentication (site/src/templates.rs)** ✅ **COMPLETED**
+- **Session middleware with flash message and authentication integration (site/src/middleware.rs)** ✅ **COMPLETED**
 
 ---
 
@@ -120,9 +122,9 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 #### **Templates & UI (site/src/templates.rs)**
 - [x] **Lines 169-171**: ✅ **COMPLETED** Dynamic URL generation implemented with comprehensive route support
 - [x] **Line 183**: ✅ **COMPLETED** Flash message system implemented with session integration and category filtering
-- [ ] **Line 328**: Make OpenID configured flag dynamic (hardcoded as false)
-- [ ] **Lines 337-339**: Get is_admin, is_qa_reviewer, and user from session (all hardcoded)
-- [ ] **Lines 342-343**: Load suites and campaigns from database (returns empty arrays)
+- [x] **Line 328**: ✅ **COMPLETED** Make OpenID configured flag dynamic - implemented `create_base_context_with_config()` 
+- [x] **Lines 337-339**: ✅ **COMPLETED** Get is_admin, is_qa_reviewer, and user from session - implemented `create_request_context_with_session()`
+- [ ] **Lines 342-343**: Load suites and campaigns from database (returns empty arrays) - requires database schema work
 
 #### **Configuration Integration (site/src/config.rs)**
 - [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available for service URLs

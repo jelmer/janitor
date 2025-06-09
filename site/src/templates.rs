@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use tera::{Context, Tera, Value as TeraValue};
 use url::Url;
 
-use crate::config::SiteConfig;
+use crate::{
+    auth::types::{SessionInfo, User, UserRole},
+    config::SiteConfig,
+};
 
 pub mod helpers;
 
@@ -537,9 +540,18 @@ pub fn create_base_context() -> Context {
     let now = Utc::now();
     context.insert("utcnow", &now.to_rfc3339());
 
-    // Add configuration flags
-    context.insert("openid_configured", &false); // TODO: Make this dynamic
+    context
+}
 
+pub fn create_base_context_with_config(config: &SiteConfig) -> Context {
+    let mut context = create_base_context();
+    
+    // Add dynamic configuration flags
+    let openid_configured = config.oidc_client_id.is_some() 
+        && config.oidc_client_secret.is_some() 
+        && (config.oidc_issuer_url.is_some() || config.oidc_base_url.is_some());
+    context.insert("openid_configured", &openid_configured);
+    
     context
 }
 
@@ -552,15 +564,46 @@ pub fn create_request_context_with_flash(
     _request_path: &str,
     flash_messages: Option<Vec<FlashMessage>>
 ) -> Context {
+    create_request_context_with_session(base, _request_path, flash_messages, None, None, None)
+}
+
+pub fn create_request_context_with_session(
+    base: Context,
+    _request_path: &str,
+    flash_messages: Option<Vec<FlashMessage>>,
+    session_info: Option<&SessionInfo>,
+    admin_group: Option<&str>,
+    qa_reviewer_group: Option<&str>,
+) -> Context {
     let mut context = base;
 
-    // Add request-specific variables
-    context.insert("is_admin", &false); // TODO: Get from session
-    context.insert("is_qa_reviewer", &false); // TODO: Get from session
-    context.insert("user", &Option::<String>::None); // TODO: Get from session
+    // Add session-based user information
+    if let Some(session) = session_info {
+        let user = &session.user;
+        
+        // User role information
+        context.insert("is_admin", &user.has_role(UserRole::Admin, admin_group, qa_reviewer_group));
+        context.insert("is_qa_reviewer", &user.has_role(UserRole::QaReviewer, admin_group, qa_reviewer_group));
+        
+        // User information
+        let user_display_name = user.name.as_ref()
+            .or(user.preferred_username.as_ref())
+            .unwrap_or(&user.email);
+        context.insert("user", &Some(user_display_name));
+        context.insert("user_email", &user.email);
+        
+        // Add user object for templates that need more details
+        context.insert("user_info", &user);
+    } else {
+        // No session - anonymous user
+        context.insert("is_admin", &false);
+        context.insert("is_qa_reviewer", &false);
+        context.insert("user", &Option::<String>::None);
+        context.insert("user_email", &Option::<String>::None);
+    }
 
     // Add campaign/suite configuration
-    // TODO: Load from database
+    // TODO: Load from database - for now return empty arrays
     context.insert("suites", &Vec::<String>::new());
     context.insert("campaigns", &Vec::<String>::new());
 
@@ -838,5 +881,81 @@ mod tests {
         let messages = context.get("_flash_messages").unwrap();
         assert!(messages.is_array());
         assert_eq!(messages.as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_create_request_context_with_session() {
+        use crate::auth::types::{SessionInfo, User};
+        use std::collections::HashSet;
+
+        let base_context = create_base_context();
+        
+        // Create test user with admin privileges
+        let mut groups = HashSet::new();
+        groups.insert("admins".to_string());
+        
+        let user = User {
+            email: "admin@example.com".to_string(),
+            name: Some("Admin User".to_string()),
+            preferred_username: Some("admin".to_string()),
+            groups,
+            sub: "admin123".to_string(),
+            additional_claims: serde_json::Map::new(),
+        };
+        
+        let session_info = SessionInfo::new(user);
+        
+        let context = create_request_context_with_session(
+            base_context,
+            "/test",
+            None,
+            Some(&session_info),
+            Some("admins"),
+            Some("qa"),
+        );
+        
+        // Verify user role information
+        assert_eq!(context.get("is_admin").unwrap().as_bool().unwrap(), true);
+        assert_eq!(context.get("is_qa_reviewer").unwrap().as_bool().unwrap(), true); // Admins are also QA reviewers
+        assert_eq!(context.get("user").unwrap().as_str().unwrap(), "Admin User");
+        assert_eq!(context.get("user_email").unwrap().as_str().unwrap(), "admin@example.com");
+    }
+
+    #[test]
+    fn test_create_request_context_anonymous_user() {
+        let base_context = create_base_context();
+        
+        let context = create_request_context_with_session(
+            base_context,
+            "/test",
+            None,
+            None, // No session
+            Some("admins"),
+            Some("qa"),
+        );
+        
+        // Verify anonymous user has no privileges
+        assert_eq!(context.get("is_admin").unwrap().as_bool().unwrap(), false);
+        assert_eq!(context.get("is_qa_reviewer").unwrap().as_bool().unwrap(), false);
+        assert!(context.get("user").unwrap().is_null());
+    }
+
+    #[test]
+    fn test_create_base_context_with_config() {
+        use crate::config::SiteConfig;
+        
+        // Test with OIDC configured
+        let mut config = SiteConfig::default();
+        config.oidc_client_id = Some("test_client".to_string());
+        config.oidc_client_secret = Some("test_secret".to_string());
+        config.oidc_issuer_url = Some("https://oidc.example.com".to_string());
+        
+        let context = create_base_context_with_config(&config);
+        assert_eq!(context.get("openid_configured").unwrap().as_bool().unwrap(), true);
+        
+        // Test without OIDC configured
+        let config_no_oidc = SiteConfig::default();
+        let context_no_oidc = create_base_context_with_config(&config_no_oidc);
+        assert_eq!(context_no_oidc.get("openid_configured").unwrap().as_bool().unwrap(), false);
     }
 }

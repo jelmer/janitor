@@ -9,7 +9,10 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, Tr
 
 use crate::{
     app::AppState,
-    auth::session::{SessionError, SessionManager},
+    auth::{
+        session::{SessionError, SessionManager},
+        types::SessionInfo,
+    },
     templates::{FlashMessage, FLASH_MESSAGES_KEY},
 };
 
@@ -94,6 +97,52 @@ pub async fn flash_middleware(
     next.run(req).await
 }
 
+/// Enhanced middleware that extracts both flash messages and session information
+pub async fn session_middleware(
+    State(state): State<AppState>, 
+    mut req: Request, 
+    next: Next
+) -> Response {
+    let session_id = extract_session_id(&req);
+    
+    // Extract flash messages
+    let flash_messages = match extract_flash_messages(&state, &req).await {
+        Ok(messages) => messages,
+        Err(e) => {
+            tracing::warn!("Failed to extract flash messages: {}", e);
+            Vec::new()
+        }
+    };
+
+    // Extract session information if session ID is available
+    let session_info = if let Some(ref session_id) = session_id {
+        match extract_session_info(&state, session_id).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::debug!("Failed to extract session info for {}: {}", session_id, e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Add to request extensions
+    req.extensions_mut().insert(flash_messages);
+    if let Some(session_info) = session_info {
+        req.extensions_mut().insert(session_info);
+    }
+    if let Some(session_id) = session_id {
+        req.extensions_mut().insert(SessionId(session_id));
+    }
+
+    next.run(req).await
+}
+
+/// Wrapper for session ID in request extensions
+#[derive(Debug, Clone)]
+pub struct SessionId(pub String);
+
 /// Extract flash messages from session and remove them (consume once)
 async fn extract_flash_messages(
     state: &AppState,
@@ -120,6 +169,20 @@ async fn extract_flash_messages(
     }
 
     Ok(messages)
+}
+
+/// Extract session information from database
+async fn extract_session_info(
+    state: &AppState,
+    session_id: &str,
+) -> Result<Option<SessionInfo>, SessionError> {
+    let session_manager = SessionManager::new(state.database.pool().clone());
+    
+    match session_manager.get_session(session_id).await {
+        Ok(session_info) => Ok(Some(session_info)),
+        Err(SessionError::NotFound) | Err(SessionError::Expired) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 /// Extract session ID from request headers or cookies
@@ -223,6 +286,27 @@ impl FlashMessageExtension for axum::http::Extensions {
     }
 }
 
+/// Extension trait for easy session access in handlers
+pub trait SessionExtension {
+    fn session_info(&self) -> Option<&SessionInfo>;
+    fn session_id(&self) -> Option<&str>;
+    fn is_authenticated(&self) -> bool;
+}
+
+impl SessionExtension for axum::http::Extensions {
+    fn session_info(&self) -> Option<&SessionInfo> {
+        self.get::<SessionInfo>()
+    }
+
+    fn session_id(&self) -> Option<&str> {
+        self.get::<SessionId>().map(|s| s.0.as_str())
+    }
+
+    fn is_authenticated(&self) -> bool {
+        self.session_info().is_some()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,5 +402,46 @@ mod tests {
     #[test]
     fn test_flash_messages_key_constant() {
         assert_eq!(FLASH_MESSAGES_KEY, "flash_messages");
+    }
+
+    #[test]
+    fn test_session_id_wrapper() {
+        let session_id = SessionId("test-session-123".to_string());
+        assert_eq!(session_id.0, "test-session-123");
+    }
+
+    #[test]
+    fn test_session_extension() {
+        use crate::auth::types::{SessionInfo, User};
+        use std::collections::HashSet;
+
+        let mut extensions = axum::http::Extensions::new();
+        
+        // Test when no session is present
+        assert!(extensions.session_info().is_none());
+        assert!(extensions.session_id().is_none());
+        assert!(!extensions.is_authenticated());
+        
+        // Add session info
+        let user = User {
+            email: "test@example.com".to_string(),
+            name: Some("Test User".to_string()),
+            preferred_username: Some("testuser".to_string()),
+            groups: HashSet::new(),
+            sub: "test123".to_string(),
+            additional_claims: serde_json::Map::new(),
+        };
+        
+        let session_info = SessionInfo::new(user);
+        let session_id = SessionId("session-456".to_string());
+        
+        extensions.insert(session_info.clone());
+        extensions.insert(session_id);
+        
+        // Test when session is present
+        assert!(extensions.session_info().is_some());
+        assert_eq!(extensions.session_info().unwrap().user.email, "test@example.com");
+        assert_eq!(extensions.session_id().unwrap(), "session-456");
+        assert!(extensions.is_authenticated());
     }
 }
