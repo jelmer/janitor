@@ -5,6 +5,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use std::collections::HashMap;
 
 use crate::{
@@ -443,49 +444,94 @@ async fn fetch_publish_dashboard_data(
     state: &AppState,
     filters: &PublishFilters,
 ) -> anyhow::Result<(Vec<PublishItem>, PublishStatistics)> {
-    // TODO: Implement comprehensive publish dashboard data fetching
-    // This would query the publish table with filtering and statistics
+    // Query publish table for recent publishing activity
+    let mut query = "
+        SELECT 
+            p.id, p.codebase, p.suite, p.branch_name, p.mode, p.result_code,
+            p.description, p.merge_proposal_url, p.timestamp, p.vcs_browse,
+            p.rate_limited, p.retry_after
+        FROM publish p
+        WHERE 1=1
+    ".to_string();
 
-    let items = vec![PublishItem {
-        id: "pub-1".to_string(),
-        codebase: "example-package".to_string(),
-        suite: "lintian-fixes".to_string(),
-        branch_name: Some("debian/lintian-fixes".to_string()),
-        mode: "propose".to_string(),
-        result_code: Some("success".to_string()),
-        description: Some("Successfully created merge proposal".to_string()),
-        merge_proposal_url: Some(
-            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
-        ),
-        timestamp: Utc::now() - chrono::Duration::hours(1),
-        vcs_browse: Some("https://salsa.debian.org/jelmer/example-package".to_string()),
-        rate_limited: false,
-        retry_after: None,
-    }];
+    // Apply filters
+    if let Some(status) = &filters.status {
+        if !status.is_empty() {
+            query.push_str(&format!(" AND p.result_code = '{}'", status.replace("'", "''")));
+        }
+    }
+    if let Some(suite) = &filters.suite {
+        if !suite.is_empty() {
+            query.push_str(&format!(" AND p.suite = '{}'", suite.replace("'", "''")));
+        }
+    }
+    if let Some(result_code) = &filters.result_code {
+        if !result_code.is_empty() {
+            query.push_str(&format!(" AND p.result_code = '{}'", result_code.replace("'", "''")));
+        }
+    }
+    if let Some(mode) = &filters.mode {
+        if !mode.is_empty() {
+            query.push_str(&format!(" AND p.mode = '{}'", mode.replace("'", "''")));
+        }
+    }
+
+    query.push_str(" ORDER BY p.timestamp DESC");
+    let limit = filters.limit.unwrap_or(50);
+    query.push_str(&format!(" LIMIT {}", limit));
+
+    let rows = sqlx::query(&query)
+        .fetch_all(state.database.pool())
+        .await?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(PublishItem {
+            id: row.try_get("id")?,
+            codebase: row.try_get("codebase")?,
+            suite: row.try_get("suite")?,
+            branch_name: row.try_get("branch_name").ok(),
+            mode: row.try_get("mode")?,
+            result_code: row.try_get("result_code").ok(),
+            description: row.try_get("description").ok(),
+            merge_proposal_url: row.try_get("merge_proposal_url").ok(),
+            timestamp: row.try_get("timestamp")?,
+            vcs_browse: row.try_get("vcs_browse").ok(),
+            rate_limited: row.try_get("rate_limited").unwrap_or(false),
+            retry_after: row.try_get("retry_after").ok(),
+        });
+    }
+
+    // Calculate statistics from database
+    let stats_row = sqlx::query(
+        "SELECT 
+            COUNT(*) as total_published,
+            COUNT(*) FILTER (WHERE result_code = 'success') as successful_publishes,
+            COUNT(*) FILTER (WHERE result_code != 'success') as failed_publishes,
+            COUNT(*) FILTER (WHERE rate_limited = true) as rate_limited_publishes,
+            EXTRACT(EPOCH FROM AVG(CASE WHEN result_code = 'success' THEN timestamp - timestamp END)) as avg_publish_time
+        FROM publish 
+        WHERE timestamp > NOW() - INTERVAL '24 hours'"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
+
+    // Get pending queue size from publish_ready
+    let pending_row = sqlx::query(
+        "SELECT COUNT(*) as pending_count FROM publish_ready WHERE publish_status = 'ready'"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
 
     let stats = PublishStatistics {
-        total_published: 150,
-        successful_publishes: 142,
-        failed_publishes: 8,
-        rate_limited_publishes: 3,
-        avg_publish_time: 45.5, // seconds
-        active_publishers: 2,
-        pending_queue_size: 12,
-        rate_limit_status: {
-            let mut limits = HashMap::new();
-            limits.insert(
-                "salsa.debian.org".to_string(),
-                RateLimitInfo {
-                    bucket: "salsa.debian.org".to_string(),
-                    current_requests: 8,
-                    max_requests: 10,
-                    window_seconds: 3600,
-                    reset_time: Some(Utc::now() + chrono::Duration::minutes(45)),
-                    is_limited: false,
-                },
-            );
-            limits
-        },
+        total_published: stats_row.try_get("total_published")?,
+        successful_publishes: stats_row.try_get("successful_publishes")?,
+        failed_publishes: stats_row.try_get("failed_publishes")?,
+        rate_limited_publishes: stats_row.try_get("rate_limited_publishes")?,
+        avg_publish_time: stats_row.try_get("avg_publish_time").unwrap_or(0.0),
+        active_publishers: 0, // TODO: Track active publisher processes
+        pending_queue_size: pending_row.try_get("pending_count")?,
+        rate_limit_status: HashMap::new(), // TODO: Get actual rate limit status from Redis
     };
 
     Ok((items, stats))
@@ -495,44 +541,100 @@ async fn fetch_publish_history(
     state: &AppState,
     filters: &PublishFilters,
 ) -> anyhow::Result<Vec<PublishItem>> {
-    // TODO: Implement publish history fetching
-    // This would query the publish table with date filtering and pagination
+    // Query publish table with date filtering and pagination
+    let mut query = "
+        SELECT 
+            p.id, p.codebase, p.suite, p.branch_name, p.mode, p.result_code,
+            p.description, p.merge_proposal_url, p.timestamp, p.vcs_browse,
+            p.rate_limited, p.retry_after
+        FROM publish p
+        WHERE 1=1
+    ".to_string();
 
-    Ok(vec![PublishItem {
-        id: "pub-hist-1".to_string(),
-        codebase: "historical-package".to_string(),
-        suite: "lintian-fixes".to_string(),
-        branch_name: Some("debian/lintian-fixes".to_string()),
-        mode: "push".to_string(),
-        result_code: Some("success".to_string()),
-        description: Some("Successfully pushed changes".to_string()),
-        merge_proposal_url: None,
-        timestamp: Utc::now() - chrono::Duration::days(1),
-        vcs_browse: Some("https://salsa.debian.org/jelmer/historical-package".to_string()),
-        rate_limited: false,
-        retry_after: None,
-    }])
+    // Apply filters
+    if let Some(suite) = &filters.suite {
+        if !suite.is_empty() {
+            query.push_str(&format!(" AND p.suite = '{}'", suite.replace("'", "''")));
+        }
+    }
+    if let Some(result_code) = &filters.result_code {
+        if !result_code.is_empty() {
+            query.push_str(&format!(" AND p.result_code = '{}'", result_code.replace("'", "''")));
+        }
+    }
+    if let Some(mode) = &filters.mode {
+        if !mode.is_empty() {
+            query.push_str(&format!(" AND p.mode = '{}'", mode.replace("'", "''")));
+        }
+    }
+    if let Some(from_date) = &filters.from_date {
+        if !from_date.is_empty() {
+            query.push_str(&format!(" AND p.timestamp >= '{}'", from_date.replace("'", "''")));
+        }
+    }
+    if let Some(to_date) = &filters.to_date {
+        if !to_date.is_empty() {
+            query.push_str(&format!(" AND p.timestamp <= '{}'", to_date.replace("'", "''")));
+        }
+    }
+
+    query.push_str(" ORDER BY p.timestamp DESC");
+    let limit = filters.limit.unwrap_or(100);
+    let offset = filters.offset.unwrap_or(0);
+    query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+
+    let rows = sqlx::query(&query)
+        .fetch_all(state.database.pool())
+        .await?;
+
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(PublishItem {
+            id: row.try_get("id")?,
+            codebase: row.try_get("codebase")?,
+            suite: row.try_get("suite")?,
+            branch_name: row.try_get("branch_name").ok(),
+            mode: row.try_get("mode")?,
+            result_code: row.try_get("result_code").ok(),
+            description: row.try_get("description").ok(),
+            merge_proposal_url: row.try_get("merge_proposal_url").ok(),
+            timestamp: row.try_get("timestamp")?,
+            vcs_browse: row.try_get("vcs_browse").ok(),
+            rate_limited: row.try_get("rate_limited").unwrap_or(false),
+            retry_after: row.try_get("retry_after").ok(),
+        });
+    }
+
+    Ok(items)
 }
 
 async fn fetch_publish_details(state: &AppState, publish_id: &str) -> anyhow::Result<PublishItem> {
-    // TODO: Implement detailed publish fetching
-    // This would query the publish table for specific publish details
+    // Query publish table for specific publish details
+    let row = sqlx::query(
+        "SELECT 
+            p.id, p.codebase, p.suite, p.branch_name, p.mode, p.result_code,
+            p.description, p.merge_proposal_url, p.timestamp, p.vcs_browse,
+            p.rate_limited, p.retry_after
+        FROM publish p
+        WHERE p.id = $1"
+    )
+    .bind(publish_id)
+    .fetch_one(state.database.pool())
+    .await?;
 
     Ok(PublishItem {
-        id: publish_id.to_string(),
-        codebase: "example-package".to_string(),
-        suite: "lintian-fixes".to_string(),
-        branch_name: Some("debian/lintian-fixes".to_string()),
-        mode: "propose".to_string(),
-        result_code: Some("success".to_string()),
-        description: Some("Successfully created merge proposal".to_string()),
-        merge_proposal_url: Some(
-            "https://salsa.debian.org/jelmer/example-package/-/merge_requests/1".to_string(),
-        ),
-        timestamp: Utc::now() - chrono::Duration::hours(1),
-        vcs_browse: Some("https://salsa.debian.org/jelmer/example-package".to_string()),
-        rate_limited: false,
-        retry_after: None,
+        id: row.try_get("id")?,
+        codebase: row.try_get("codebase")?,
+        suite: row.try_get("suite")?,
+        branch_name: row.try_get("branch_name").ok(),
+        mode: row.try_get("mode")?,
+        result_code: row.try_get("result_code").ok(),
+        description: row.try_get("description").ok(),
+        merge_proposal_url: row.try_get("merge_proposal_url").ok(),
+        timestamp: row.try_get("timestamp")?,
+        vcs_browse: row.try_get("vcs_browse").ok(),
+        rate_limited: row.try_get("rate_limited").unwrap_or(false),
+        retry_after: row.try_get("retry_after").ok(),
     })
 }
 
@@ -540,20 +642,54 @@ async fn fetch_ready_runs(
     state: &AppState,
     filters: &PublishFilters,
 ) -> anyhow::Result<Vec<ReadyRun>> {
-    // TODO: Implement ready runs fetching
-    // This would query the publish_ready table
+    // Query publish_ready view for runs ready to be published
+    let mut query = "
+        SELECT 
+            pr.id, pr.codebase, pr.suite, pr.command, pr.result_code,
+            pr.publish_status, pr.value, pr.finish_time
+        FROM publish_ready pr
+        WHERE pr.publish_status = 'ready'
+    ".to_string();
 
-    Ok(vec![ReadyRun {
-        id: "run-ready-1".to_string(),
-        codebase: "ready-package".to_string(),
-        suite: "lintian-fixes".to_string(),
-        command: Some("fix-lintian-issues".to_string()),
-        result_code: "success".to_string(),
-        publish_status: Some("ready".to_string()),
-        value: Some(90),
-        finish_time: Some(Utc::now() - chrono::Duration::minutes(30)),
-        can_publish: true,
-    }])
+    // Apply filters
+    if let Some(suite) = &filters.suite {
+        if !suite.is_empty() {
+            query.push_str(&format!(" AND pr.suite = '{}'", suite.replace("'", "''")));
+        }
+    }
+    if let Some(result_code) = &filters.result_code {
+        if !result_code.is_empty() {
+            query.push_str(&format!(" AND pr.result_code = '{}'", result_code.replace("'", "''")));
+        }
+    }
+
+    query.push_str(" ORDER BY pr.finish_time DESC");
+    let limit = filters.limit.unwrap_or(50);
+    query.push_str(&format!(" LIMIT {}", limit));
+
+    let rows = sqlx::query(&query)
+        .fetch_all(state.database.pool())
+        .await?;
+
+    let mut ready_runs = Vec::new();
+    for row in rows {
+        let publish_status: Option<String> = row.try_get("publish_status").ok();
+        let can_publish = publish_status.as_ref().map(|s| s == "ready").unwrap_or(false);
+
+        ready_runs.push(ReadyRun {
+            id: row.try_get("id")?,
+            codebase: row.try_get("codebase")?,
+            suite: row.try_get("suite")?,
+            command: row.try_get("command").ok(),
+            result_code: row.try_get("result_code")?,
+            publish_status,
+            value: row.try_get("value").ok(),
+            finish_time: row.try_get("finish_time").ok(),
+            can_publish,
+        });
+    }
+
+    Ok(ready_runs)
 }
 
 async fn execute_emergency_publish_action(
@@ -614,43 +750,66 @@ async fn fetch_publish_statistics(
     state: &AppState,
     filters: &PublishFilters,
 ) -> anyhow::Result<PublishStatistics> {
-    // TODO: Implement comprehensive publish statistics
-    // This would aggregate data from the publish table
+    // Build date filter for statistics
+    let mut date_filter = String::new();
+    if let Some(from_date) = &filters.from_date {
+        if !from_date.is_empty() {
+            date_filter.push_str(&format!(" AND timestamp >= '{}'", from_date.replace("'", "''")));
+        }
+    }
+    if let Some(to_date) = &filters.to_date {
+        if !to_date.is_empty() {
+            date_filter.push_str(&format!(" AND timestamp <= '{}'", to_date.replace("'", "''")));
+        }
+    }
+    if date_filter.is_empty() {
+        date_filter = " AND timestamp > NOW() - INTERVAL '7 days'".to_string();
+    }
+
+    // Get comprehensive statistics from publish table
+    let stats_query = format!(
+        "SELECT 
+            COUNT(*) as total_published,
+            COUNT(*) FILTER (WHERE result_code = 'success') as successful_publishes,
+            COUNT(*) FILTER (WHERE result_code != 'success') as failed_publishes,
+            COUNT(*) FILTER (WHERE rate_limited = true) as rate_limited_publishes,
+            EXTRACT(EPOCH FROM AVG(CASE WHEN result_code = 'success' THEN 
+                timestamp - LAG(timestamp) OVER (ORDER BY timestamp)
+            END)) as avg_publish_time
+        FROM publish 
+        WHERE 1=1{}",
+        date_filter
+    );
+
+    let stats_row = sqlx::query(&stats_query)
+        .fetch_one(state.database.pool())
+        .await?;
+
+    // Get pending queue size
+    let pending_row = sqlx::query(
+        "SELECT COUNT(*) as pending_count FROM publish_ready WHERE publish_status = 'ready'"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
+
+    // Get active publishers count (approximation based on recent activity)
+    let active_publishers_row = sqlx::query(
+        "SELECT COUNT(DISTINCT codebase) as active_count 
+         FROM publish 
+         WHERE timestamp > NOW() - INTERVAL '1 hour'"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
 
     Ok(PublishStatistics {
-        total_published: 1250,
-        successful_publishes: 1180,
-        failed_publishes: 70,
-        rate_limited_publishes: 25,
-        avg_publish_time: 42.3, // seconds
-        active_publishers: 3,
-        pending_queue_size: 18,
-        rate_limit_status: {
-            let mut limits = HashMap::new();
-            limits.insert(
-                "salsa.debian.org".to_string(),
-                RateLimitInfo {
-                    bucket: "salsa.debian.org".to_string(),
-                    current_requests: 5,
-                    max_requests: 10,
-                    window_seconds: 3600,
-                    reset_time: Some(Utc::now() + chrono::Duration::minutes(30)),
-                    is_limited: false,
-                },
-            );
-            limits.insert(
-                "github.com".to_string(),
-                RateLimitInfo {
-                    bucket: "github.com".to_string(),
-                    current_requests: 45,
-                    max_requests: 50,
-                    window_seconds: 3600,
-                    reset_time: Some(Utc::now() + chrono::Duration::minutes(15)),
-                    is_limited: true,
-                },
-            );
-            limits
-        },
+        total_published: stats_row.try_get("total_published")?,
+        successful_publishes: stats_row.try_get("successful_publishes")?,
+        failed_publishes: stats_row.try_get("failed_publishes")?,
+        rate_limited_publishes: stats_row.try_get("rate_limited_publishes")?,
+        avg_publish_time: stats_row.try_get("avg_publish_time").unwrap_or(0.0),
+        active_publishers: active_publishers_row.try_get("active_count")?,
+        pending_queue_size: pending_row.try_get("pending_count")?,
+        rate_limit_status: HashMap::new(), // TODO: Get actual rate limit status from Redis/config
     })
 }
 

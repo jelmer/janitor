@@ -5,6 +5,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
@@ -301,21 +302,35 @@ pub async fn worker_management(
 // This function is no longer needed - we use the database methods directly
 
 async fn fetch_queue_item_details(state: &AppState, item_id: &str) -> anyhow::Result<QueueItem> {
-    // TODO: Implement queue item detail fetching
-    // This would query the database for detailed queue item information
+    // Query the candidate table for queue item details
+    let row = sqlx::query(
+        "SELECT 
+            c.id, c.codebase, c.suite, c.command, c.priority, c.success_chance,
+            c.created_at, c.estimated_duration, r.worker, 
+            CASE 
+                WHEN r.id IS NOT NULL AND r.result_code IS NOT NULL THEN 'completed'
+                WHEN r.id IS NOT NULL THEN 'running'
+                ELSE 'pending'
+            END as status
+        FROM candidate c
+        LEFT JOIN run r ON c.id = r.id
+        WHERE c.id = $1"
+    )
+    .bind(item_id)
+    .fetch_one(state.database.pool())
+    .await?;
 
-    // Placeholder implementation
     Ok(QueueItem {
-        id: item_id.to_string(),
-        codebase: "example-package".to_string(),
-        suite: "lintian-fixes".to_string(),
-        command: Some("fix-lintian-issues".to_string()),
-        priority: 100,
-        success_chance: Some(0.85),
-        created_at: Utc::now() - chrono::Duration::hours(2),
-        estimated_duration: Some(300),
-        worker: None,
-        status: "pending".to_string(),
+        id: row.try_get("id")?,
+        codebase: row.try_get("codebase")?,
+        suite: row.try_get("suite")?,
+        command: row.try_get("command").ok(),
+        priority: row.try_get("priority")?,
+        success_chance: row.try_get("success_chance").ok(),
+        created_at: row.try_get("created_at")?,
+        estimated_duration: row.try_get("estimated_duration").ok(),
+        worker: row.try_get("worker").ok(),
+        status: row.try_get("status")?,
     })
 }
 
@@ -323,20 +338,68 @@ async fn fetch_queue_statistics(
     state: &AppState,
     filters: &QueueFilters,
 ) -> anyhow::Result<QueueStatistics> {
-    // TODO: Implement comprehensive queue statistics
-    // This would aggregate data from the queue and provide real-time metrics
+    // Get basic queue statistics without complex filtering for now
+    // TODO: Add filtering support when needed
+    let stats_row = sqlx::query(
+        "SELECT 
+            COUNT(*) as total_items,
+            COUNT(*) FILTER (WHERE r.id IS NULL) as pending_items,
+            COUNT(*) FILTER (WHERE r.id IS NOT NULL AND r.result_code IS NULL) as in_progress_items,
+            COUNT(*) FILTER (WHERE r.result_code = 'failed') as failed_items,
+            EXTRACT(EPOCH FROM AVG(
+                CASE WHEN r.start_time IS NOT NULL AND c.created_at IS NOT NULL 
+                THEN r.start_time - c.created_at 
+                END
+            )) as average_wait_time
+        FROM candidate c
+        LEFT JOIN run r ON c.id = r.id"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
 
-    // Use database stats as baseline
-    let db_stats = state.database.get_stats().await.unwrap_or_default();
+    // Get worker utilization from recent activity
+    let worker_row = sqlx::query(
+        "SELECT 
+            COUNT(DISTINCT worker) as active_workers,
+            COUNT(*) as active_runs
+        FROM run 
+        WHERE start_time > NOW() - INTERVAL '1 hour' 
+        AND result_code IS NULL"
+    )
+    .fetch_one(state.database.pool())
+    .await?;
+    
+    let active_workers: i64 = worker_row.try_get("active_workers").unwrap_or(0);
+    let active_runs: i64 = worker_row.try_get("active_runs").unwrap_or(0);
+    
+    // Assume each worker can handle 2 concurrent runs for utilization calculation
+    let max_capacity = active_workers * 2;
+    let worker_utilization = if max_capacity > 0 {
+        active_runs as f64 / max_capacity as f64
+    } else {
+        0.0
+    };
+
+    // Estimate completion time based on pending items and current throughput
+    let pending_items: i64 = stats_row.try_get("pending_items")?;
+    let average_wait_time: Option<f64> = stats_row.try_get("average_wait_time").ok();
+    
+    let estimated_completion = if pending_items > 0 && active_workers > 0 {
+        let avg_wait_seconds = average_wait_time.unwrap_or(1800.0); // Default 30 minutes
+        let estimated_seconds = (pending_items as f64 / active_workers as f64) * avg_wait_seconds;
+        Some(Utc::now() + chrono::Duration::seconds(estimated_seconds as i64))
+    } else {
+        None
+    };
 
     Ok(QueueStatistics {
-        total_items: db_stats.get("queue_size").copied().unwrap_or(0),
-        pending_items: db_stats.get("queue_size").copied().unwrap_or(0),
-        in_progress_items: db_stats.get("active_runs").copied().unwrap_or(0),
-        failed_items: 0,        // TODO: Calculate failed items
-        average_wait_time: 300, // TODO: Calculate from historical data
-        estimated_completion: Some(Utc::now() + chrono::Duration::minutes(30)),
-        worker_utilization: 0.0, // TODO: Calculate from worker data
+        total_items: stats_row.try_get("total_items")?,
+        pending_items: stats_row.try_get("pending_items")?,
+        in_progress_items: stats_row.try_get("in_progress_items")?,
+        failed_items: stats_row.try_get("failed_items")?,
+        average_wait_time: average_wait_time.unwrap_or(0.0) as i64,
+        estimated_completion,
+        worker_utilization,
     })
 }
 
